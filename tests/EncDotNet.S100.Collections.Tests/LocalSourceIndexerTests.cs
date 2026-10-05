@@ -261,13 +261,13 @@ public class LocalSourceIndexerTests
         var source = ExchangeSet(root);
 
         var first = await IndexAsync(source);
-        var second = await Indexer.IndexAsync(source, first);
+        var second = await Indexer.IndexAsync(source, first, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Same(first, second);
 
         var cell = Path.Combine(root, "US5WA51M", "US5WA51M.000");
         File.SetLastWriteTimeUtc(cell, File.GetLastWriteTimeUtc(cell).AddMinutes(1));
 
-        var third = await Indexer.IndexAsync(source, first);
+        var third = await Indexer.IndexAsync(source, first, cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotSame(first, third);
         Assert.NotEqual(first.Fingerprint, third.Fingerprint);
     }

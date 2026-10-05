@@ -18,7 +18,7 @@ public class SetViewportToolTests
         var tool = new SetViewportTool(Accessor(host));
 
         var value = AssertOk(await tool.InvokeAsync(new SetViewportRequest(
-            CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000)));
+            CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000), TestContext.Current.CancellationToken));
 
         Assert.Equal("center", value.Mode);
         Assert.Equal(-1.25, value.CenterLongitude);
@@ -39,10 +39,11 @@ public class SetViewportToolTests
     {
         var host = new FakeViewport();
         await new SetViewportTool(Accessor(host)).InvokeAsync(new SetViewportRequest(
-            CenterLongitude: 0, CenterLatitude: 0, ScaleDenominator: 10000));
+            CenterLongitude: 0, CenterLatitude: 0, ScaleDenominator: 10000), TestContext.Current.CancellationToken);
 
         var value = AssertOk(await new SetViewportTool(Accessor(host)).InvokeAsync(
-            new SetViewportRequest(CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000)));
+            new SetViewportRequest(CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000),
+            TestContext.Current.CancellationToken));
 
         Assert.Equal("0,0,10000,0", value.Previous);
     }
@@ -54,7 +55,7 @@ public class SetViewportToolTests
         var tool = new SetViewportTool(Accessor(host));
 
         var value = AssertOk(await tool.InvokeAsync(new SetViewportRequest(
-            MinLongitude: -1.5, MinLatitude: 50.0, MaxLongitude: -1.0, MaxLatitude: 50.5)));
+            MinLongitude: -1.5, MinLatitude: 50.0, MaxLongitude: -1.0, MaxLatitude: 50.5), TestContext.Current.CancellationToken));
 
         Assert.Equal("bounds", value.Mode);
         var bounds = Assert.IsType<BoundingBox>(host.LastBounds);
@@ -74,7 +75,8 @@ public class SetViewportToolTests
         var value = AssertOk(await new SetViewportTool(Accessor(host)).InvokeAsync(
             new SetViewportRequest(
                 MinLongitude: -1.5, MinLatitude: 50.0, MaxLongitude: -1.0, MaxLatitude: 50.5,
-                RotationDegrees: 0)));
+                RotationDegrees: 0),
+            TestContext.Current.CancellationToken));
 
         Assert.Equal("bounds", value.Mode);
         Assert.NotNull(host.LastBounds);
@@ -88,7 +90,7 @@ public class SetViewportToolTests
         var error = Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
             .InvokeAsync(new SetViewportRequest(
                 MinLongitude: -1.5, MinLatitude: 50.0, MaxLongitude: -1.0, MaxLatitude: 50.5,
-                RotationDegrees: 30))));
+                RotationDegrees: 30), TestContext.Current.CancellationToken)));
         Assert.Equal("rotationDegrees", error.Parameter);
         Assert.Null(host.LastBounds); // nothing applied
     }
@@ -100,7 +102,7 @@ public class SetViewportToolTests
 
         Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
             .InvokeAsync(new SetViewportRequest(
-                CenterLongitude: 0, CenterLatitude: 0, ScaleDenominator: 1000, MinLongitude: -1))));
+                CenterLongitude: 0, CenterLatitude: 0, ScaleDenominator: 1000, MinLongitude: -1), TestContext.Current.CancellationToken)));
     }
 
     [Fact]
@@ -109,7 +111,7 @@ public class SetViewportToolTests
         var host = new FakeViewport();
 
         Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
-            .InvokeAsync(new SetViewportRequest())));
+            .InvokeAsync(new SetViewportRequest(), TestContext.Current.CancellationToken)));
     }
 
     [Fact]
@@ -118,7 +120,7 @@ public class SetViewportToolTests
         var host = new FakeViewport();
 
         var error = Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
-            .InvokeAsync(new SetViewportRequest(CenterLongitude: -1.25, CenterLatitude: 50.5))));
+            .InvokeAsync(new SetViewportRequest(CenterLongitude: -1.25, CenterLatitude: 50.5), TestContext.Current.CancellationToken)));
         Assert.Equal("centerLongitude", error.Parameter);
     }
 
@@ -132,7 +134,7 @@ public class SetViewportToolTests
 
         var error = Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
             .InvokeAsync(new SetViewportRequest(
-                CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: scale))));
+                CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: scale), TestContext.Current.CancellationToken)));
         Assert.Equal("scaleDenominator", error.Parameter);
     }
 
@@ -145,7 +147,7 @@ public class SetViewportToolTests
 
         var error = Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
             .InvokeAsync(new SetViewportRequest(
-                CenterLongitude: lon, CenterLatitude: 50.5, ScaleDenominator: 50000))));
+                CenterLongitude: lon, CenterLatitude: 50.5, ScaleDenominator: 50000), TestContext.Current.CancellationToken)));
         Assert.Equal("centerLongitude", error.Parameter);
     }
 
@@ -158,7 +160,7 @@ public class SetViewportToolTests
 
         var error = Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
             .InvokeAsync(new SetViewportRequest(
-                CenterLongitude: -1.25, CenterLatitude: lat, ScaleDenominator: 50000))));
+                CenterLongitude: -1.25, CenterLatitude: lat, ScaleDenominator: 50000), TestContext.Current.CancellationToken)));
         Assert.Equal("centerLatitude", error.Parameter);
         Assert.Null(host.Current); // nothing applied
     }
@@ -170,7 +172,7 @@ public class SetViewportToolTests
 
         Assert.IsType<HostNotReady>(AssertErr(await new SetViewportTool(Accessor(host))
             .InvokeAsync(new SetViewportRequest(
-                MinLongitude: -1.5, MinLatitude: 50.0, MaxLongitude: -1.0, MaxLatitude: 50.5))));
+                MinLongitude: -1.5, MinLatitude: 50.0, MaxLongitude: -1.0, MaxLatitude: 50.5), TestContext.Current.CancellationToken)));
         Assert.True(host.SetToBoundsCalled); // the bounds were applied before the echo failed
     }
 
@@ -184,7 +186,7 @@ public class SetViewportToolTests
         var host = new FakeViewport();
 
         var result = AssertOk(await new SetViewportTool(Accessor(host)).InvokeAsync(new SetViewportRequest(
-            CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000, RotationDegrees: requested)));
+            CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000, RotationDegrees: requested), TestContext.Current.CancellationToken));
 
         Assert.Equal(applied, result.RotationDegrees);
         Assert.Equal(applied, host.Current!.RotationDegrees);
@@ -197,7 +199,7 @@ public class SetViewportToolTests
 
         var error = Assert.IsType<InvalidArgument>(AssertErr(await new SetViewportTool(Accessor(host))
             .InvokeAsync(new SetViewportRequest(
-                CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000, RotationDegrees: double.NaN))));
+                CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000, RotationDegrees: double.NaN), TestContext.Current.CancellationToken)));
         Assert.Equal("rotationDegrees", error.Parameter);
         Assert.Null(host.Current); // nothing applied
     }
@@ -208,7 +210,7 @@ public class SetViewportToolTests
         var host = new FakeViewport();
 
         AssertOk(await new SetViewportTool(Accessor(host)).InvokeAsync(new SetViewportRequest(
-            CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000, RotationDegrees: 0)));
+            CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000, RotationDegrees: 0), TestContext.Current.CancellationToken));
         Assert.NotNull(host.Current);
     }
 
@@ -219,7 +221,7 @@ public class SetViewportToolTests
 
         var error = Assert.IsType<GeometryInvalid>(AssertErr(await new SetViewportTool(Accessor(host))
             .InvokeAsync(new SetViewportRequest(
-                MinLongitude: -1.0, MinLatitude: 50.0, MaxLongitude: -1.5, MaxLatitude: 50.5))));
+                MinLongitude: -1.0, MinLatitude: 50.0, MaxLongitude: -1.5, MaxLatitude: 50.5), TestContext.Current.CancellationToken)));
         Assert.Equal("minLongitude", error.Parameter);
     }
 
@@ -229,7 +231,7 @@ public class SetViewportToolTests
         var tool = new SetViewportTool(new NullCapabilityAccessor<IViewportController>());
 
         Assert.IsType<HostNotReady>(AssertErr(await tool.InvokeAsync(new SetViewportRequest(
-            CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000))));
+            CenterLongitude: -1.25, CenterLatitude: 50.5, ScaleDenominator: 50000), TestContext.Current.CancellationToken)));
     }
 
     private static ICapabilityAccessor<IViewportController> Accessor(IViewportController c)

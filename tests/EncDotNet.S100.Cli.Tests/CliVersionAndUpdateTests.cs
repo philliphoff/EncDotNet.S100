@@ -110,7 +110,7 @@ public sealed class CliVersionAndUpdateTests
         var client = new FakeReleaseClient(new GitHubReleaseInfo("v9.9.9", null));
         var checker = CreateChecker("0.0.0-dev", client, cache);
 
-        var notice = await checker.CheckAsync();
+        var notice = await checker.CheckAsync(TestContext.Current.CancellationToken);
 
         Assert.Null(notice);
         Assert.Equal(0, cache.LoadCount);
@@ -131,8 +131,8 @@ public sealed class CliVersionAndUpdateTests
         var client = new FakeReleaseClient(new GitHubReleaseInfo("v9.9.9", null));
         var checker = CreateChecker("2.4.1", client, cache, now);
 
-        var first = await checker.CheckAsync();
-        var second = await checker.CheckAsync();
+        var first = await checker.CheckAsync(TestContext.Current.CancellationToken);
+        var second = await checker.CheckAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(first);
         Assert.NotNull(second);
@@ -156,7 +156,7 @@ public sealed class CliVersionAndUpdateTests
             new GitHubReleaseInfo("v2.6.0", "https://example.test/v2.6.0"));
         var checker = CreateChecker("2.4.1", client, cache, now);
 
-        var notice = await checker.CheckAsync();
+        var notice = await checker.CheckAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(notice);
         Assert.Equal("2.6.0", notice.LatestVersion);
@@ -181,7 +181,7 @@ public sealed class CliVersionAndUpdateTests
             new GitHubReleaseInfo("v2.5.0", "https://example.test/v2.5.0"));
         var checker = CreateChecker("2.4.1", client, cache, now);
 
-        var notice = await checker.CheckAsync();
+        var notice = await checker.CheckAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(notice);
         Assert.Equal(1, client.CallCount);
@@ -202,8 +202,8 @@ public sealed class CliVersionAndUpdateTests
         var client = new FakeReleaseClient(null);
         var checker = CreateChecker("2.4.1", client, cache, now);
 
-        var first = await checker.CheckAsync();
-        var second = await checker.CheckAsync();
+        var first = await checker.CheckAsync(TestContext.Current.CancellationToken);
+        var second = await checker.CheckAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(first);
         Assert.NotNull(second);
@@ -225,7 +225,7 @@ public sealed class CliVersionAndUpdateTests
         };
         var checker = CreateChecker("2.4.1", new FakeReleaseClient(null), cache, now);
 
-        Assert.Null(await checker.CheckAsync());
+        Assert.Null(await checker.CheckAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -253,7 +253,7 @@ public sealed class CliVersionAndUpdateTests
         httpClient.Dispose();
         var client = new GitHubReleaseClient(httpClient);
 
-        Assert.Null(await client.GetLatestReleaseAsync());
+        Assert.Null(await client.GetLatestReleaseAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -264,13 +264,14 @@ public sealed class CliVersionAndUpdateTests
         try
         {
             var corruptPath = Path.Combine(directory, "corrupt.json");
-            await File.WriteAllTextAsync(corruptPath, "{");
+            await File.WriteAllTextAsync(corruptPath, "{", TestContext.Current.CancellationToken);
             var corruptCache = new JsonCliUpdateCache(corruptPath);
-            Assert.Null(await corruptCache.LoadAsync());
+            Assert.Null(await corruptCache.LoadAsync(TestContext.Current.CancellationToken));
 
             var directoryCache = new JsonCliUpdateCache(directory);
             await directoryCache.SaveAsync(
-                new CliUpdateCacheEntry(DateTimeOffset.UtcNow, "2.5.0", "https://example.test"));
+                new CliUpdateCacheEntry(DateTimeOffset.UtcNow, "2.5.0", "https://example.test"),
+                TestContext.Current.CancellationToken);
             Assert.True(Directory.Exists(directory));
         }
 
@@ -288,8 +289,8 @@ public sealed class CliVersionAndUpdateTests
         var client = new FakeReleaseClient(null);
         var checker = CreateChecker("2.4.1", client, cache, now);
 
-        Assert.Null(await checker.CheckAsync());
-        Assert.Null(await checker.CheckAsync());
+        Assert.Null(await checker.CheckAsync(TestContext.Current.CancellationToken));
+        Assert.Null(await checker.CheckAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(1, client.CallCount);
         Assert.Equal(now, cache.Entry?.CheckedAtUtc);
@@ -309,8 +310,8 @@ public sealed class CliVersionAndUpdateTests
         {
             var cache = new JsonCliUpdateCache(path);
 
-            await cache.SaveAsync(entry);
-            var loaded = await cache.LoadAsync();
+            await cache.SaveAsync(entry, TestContext.Current.CancellationToken);
+            var loaded = await cache.LoadAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(entry, loaded);
         }

@@ -73,7 +73,7 @@ public class S104Dcf8ProcessorTests
             using var processor = (System.IDisposable?)null; // placeholder so analyzers don't complain about disposable processors
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
 
-            var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
+            var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Single(result.Layers);
             var memoryLayer = Assert.IsType<MemoryLayer>(result.Layers[0]);
@@ -107,9 +107,9 @@ public class S104Dcf8ProcessorTests
         {
             var processor = new S104DatasetProcessor(path, IdentityFactory.Instance);
 
-            using var none = await processor.RenderHeadlessAsync(256, 256);
+            using var none = await processor.RenderHeadlessAsync(256, 256, cancellationToken: TestContext.Current.CancellationToken);
             using var offline = await processor.RenderHeadlessAsync(
-                256, 256, new S104RenderContext { Basemap = BasemapKind.Offline });
+                256, 256, new S104RenderContext { Basemap = BasemapKind.Offline }, cancellationToken: TestContext.Current.CancellationToken);
 
             var land = NaturalEarthBasemap.LandFill;
             Assert.Equal(SKColors.White, none.GetPixel(2, 2));
@@ -129,7 +129,7 @@ public class S104Dcf8ProcessorTests
         {
             var processor = new S104DatasetProcessor(path, IdentityFactory.Instance);
 
-            using var bitmap = await processor.RenderHeadlessAsync(256, 256);
+            using var bitmap = await processor.RenderHeadlessAsync(256, 256, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains(
                 Enumerable.Range(0, bitmap.Width).SelectMany(x =>
@@ -172,7 +172,7 @@ public class S104Dcf8ProcessorTests
             // Render at the second time-step; GetFeatureInfo should report
             // the value at the same step (height = 1.5, trend = 2 for Alpha).
             var secondStep = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
-            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new S104RenderContext { TimeStep = secondStep });
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new S104RenderContext { TimeStep = secondStep }, TestContext.Current.CancellationToken);
 
             var info = p.GetFeatureInfo("station:Alpha");
 
@@ -202,7 +202,7 @@ public class S104Dcf8ProcessorTests
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Null(p.GetFeatureInfo("station:Missing"));
             Assert.Null(p.GetFeatureInfo("not-a-station-ref"));

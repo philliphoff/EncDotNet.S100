@@ -13,7 +13,7 @@ public class DescribeFeatureToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("missing"), "f1"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("missing"), "f1"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         var notFound = Assert.IsType<DatasetNotFound>(error);
@@ -30,7 +30,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S122("s122-ds"));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("s122-ds"), "x"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("s122-ds"), "x"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         var notFound = Assert.IsType<FeatureNotFound>(error);
@@ -46,7 +46,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S124("ds", model));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "absent"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "absent"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         var notFound = Assert.IsType<FeatureNotFound>(error);
@@ -64,7 +64,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S124("ds", S124Synth.Dataset(feature)));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "warn-1"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "warn-1"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("NavwarnPart", value.FeatureTypeName);
@@ -88,7 +88,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S124("ds", S124Synth.Dataset(feature)));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "f"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "f"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var complex = value.Attributes.GetProperty("complexAttributes");
@@ -109,7 +109,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S124("ds", S124Synth.Dataset(target, source)));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "source"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "source"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var reference = Assert.Single(value.References);
@@ -129,7 +129,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S124("ds", S124Synth.Dataset(source)));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "source"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "source"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var reference = Assert.Single(value.References);
@@ -150,7 +150,7 @@ public class DescribeFeatureToolTests
             S124Synth.Dataset([source], [info])));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "source"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "source"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var reference = Assert.Single(value.References);
@@ -170,7 +170,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S124("ds-b", S124Synth.Dataset(source)));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds-b"), "source"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds-b"), "source"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var reference = Assert.Single(value.References);
@@ -191,7 +191,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S101("enc-1", ds));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-1"), "12345"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-1"), "12345"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("DEPARE", value.FeatureTypeName);
@@ -212,7 +212,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S101("enc-2", ds));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-2"), "100:42:1"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-2"), "100:42:1"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("73", value.FeatureTypeName);
@@ -228,7 +228,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S101("enc-3", ds));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-3"), "99999"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-3"), "99999"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<FeatureNotFound>(error);
@@ -245,7 +245,7 @@ public class DescribeFeatureToolTests
         var tool = new DescribeFeatureTool(catalog);
 
         // RCNM 110 = spatial point record, not a feature record (100).
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-4"), "110:1"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-4"), "110:1"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<FeatureNotFound>(error);
@@ -262,7 +262,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S101("enc-5", ds));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-5"), "7"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-5"), "7"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         // No feature catalogue → fall back to numeric feature type code string.
@@ -287,7 +287,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S101("enc-geom", ds));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-geom"), "4242"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-geom"), "4242"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("LIGHTS", value.FeatureTypeName);
@@ -320,7 +320,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S101("enc-nogeom", ds));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-nogeom"), "5"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("enc-nogeom"), "5"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(JsonValueKind.Null, value.Attributes.GetProperty("geometry").ValueKind);
@@ -333,7 +333,7 @@ public class DescribeFeatureToolTests
         catalog.Add(LoadedDatasetFactory.S124("ds", S124Synth.Dataset(S124Synth.Feature("f"))));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "f"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "f"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.References);

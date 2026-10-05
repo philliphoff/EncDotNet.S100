@@ -54,7 +54,7 @@ public class S100MapSessionTests
             new S100MapsuiOptions { DatasetRenderer = renderer });
         var id = new MapDatasetId("dataset");
 
-        Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value)));
+        Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken));
         Assert.Single(map.Layers);
     }
 
@@ -70,7 +70,7 @@ public class S100MapSessionTests
         });
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
-        await s100.AddDatasetAsync(Dataset(id), processor);
+        await s100.AddDatasetAsync(Dataset(id), processor, cancellationToken: TestContext.Current.CancellationToken);
 
         s100.Dispose();
 
@@ -88,7 +88,7 @@ public class S100MapSessionTests
         var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
-        await s100.AddDatasetAsync(Dataset(id), processor);
+        await s100.AddDatasetAsync(Dataset(id), processor, cancellationToken: TestContext.Current.CancellationToken);
 
         s100.Dispose();
 
@@ -103,7 +103,7 @@ public class S100MapSessionTests
         using var map = new Map();
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
-        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
         var datasetLayer = Assert.Single(map.Layers);
 
         var overlay = new Mapsui.Layers.MemoryLayer { Name = "overlay" };
@@ -179,7 +179,7 @@ public class S100MapSessionTests
             },
         });
         var id = new MapDatasetId("dataset");
-        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
 
         // The session stamped its redraw action onto the installed vector layer,
         // so a background publish routes through it — here driving the marshal.
@@ -203,7 +203,7 @@ public class S100MapSessionTests
             CrsTransformFactory = new IdentityCrsTransformFactory(),
         });
         var id = new MapDatasetId("dataset");
-        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
 
         var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
         var before = refreshes;
@@ -217,7 +217,7 @@ public class S100MapSessionTests
         using var map = new Map();
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
-        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
         var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
         Assert.NotNull(layer.RequestRedraw);
 
@@ -235,7 +235,7 @@ public class S100MapSessionTests
         using var map = new Map();
         var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
-        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
         var layer = Assert.IsType<InstrumentedMemoryLayer>(Assert.Single(map.Layers));
 
         s100.Dispose();
@@ -263,7 +263,7 @@ public class S100MapSessionTests
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
 
-        var added = await s100.AddDatasetAsync(Dataset(id), processor);
+        var added = await s100.AddDatasetAsync(Dataset(id), processor, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(added);
         Assert.Equal(1, processor.RenderCount);
@@ -277,12 +277,12 @@ public class S100MapSessionTests
         using var map = new Map();
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
-        Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value)));
+        Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken));
 
         // On a duplicate identity the add returns false and does not take
         // ownership, so the caller still owns and must dispose this processor.
         using var duplicate = new StubProcessor(id.Value);
-        var second = await s100.AddDatasetAsync(Dataset(id), duplicate);
+        var second = await s100.AddDatasetAsync(Dataset(id), duplicate, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(second);
         Assert.Single(s100.GetDatasets());
@@ -305,7 +305,7 @@ public class S100MapSessionTests
             Delay = TimeSpan.FromSeconds(30),
         };
 
-        var add = s100.AddDatasetAsync(Dataset(id), processor);
+        var add = s100.AddDatasetAsync(Dataset(id), processor, cancellationToken: TestContext.Current.CancellationToken);
         await renderStarted.Task; // the render is in flight
 
         // Reentrant removal retires the processor before the render installs
@@ -326,7 +326,7 @@ public class S100MapSessionTests
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
-        await s100.AddDatasetAsync(Dataset(id), processor);
+        await s100.AddDatasetAsync(Dataset(id), processor, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(s100.RemoveDataset(id));
 
@@ -341,7 +341,7 @@ public class S100MapSessionTests
         using var map = new Map();
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
-        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
 
         s100.SetVisible(id, false);
 
@@ -355,7 +355,7 @@ public class S100MapSessionTests
         using var map = new Map();
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
-        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
 
         s100.SetActive(id, false);
         s100.SetOpacity(id, 0.25);
@@ -383,9 +383,9 @@ public class S100MapSessionTests
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
-        await s100.AddDatasetAsync(Dataset(id), processor);
+        await s100.AddDatasetAsync(Dataset(id), processor, cancellationToken: TestContext.Current.CancellationToken);
 
-        await s100.SetPresentationAsync(MapPresentationState.Default);
+        await s100.SetPresentationAsync(MapPresentationState.Default, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, processor.RenderCount);
     }
@@ -405,9 +405,10 @@ public class S100MapSessionTests
         };
         await s100.AddDatasetAsync(
             Dataset(id, productSpec: "S-111", availableTimes: times, currentTime: first),
-            processor);
+            processor,
+            cancellationToken: TestContext.Current.CancellationToken);
 
-        await s100.SetTimeAsync(first.AddMinutes(20));
+        await s100.SetTimeAsync(first.AddMinutes(20), TestContext.Current.CancellationToken);
 
         Assert.Equal(first.AddMinutes(20), s100.GetTimeSnapshot().Current);
     }
@@ -418,7 +419,7 @@ public class S100MapSessionTests
         using var map = new Map();
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
-        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
 
         s100.ZoomToDataset(new MapDatasetId("missing")); // no throw
         Assert.NotNull(s100.GetDataset(id)!.Extent); // the extent ZoomToDataset uses
@@ -434,7 +435,7 @@ public class S100MapSessionTests
         var kinds = new List<MapSessionRenderKind>();
         s100.DatasetRenderCompleted += (_, e) => kinds.Add(e.Kind);
 
-        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal([MapSessionRenderKind.Render], kinds);
     }
@@ -446,7 +447,7 @@ public class S100MapSessionTests
         var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
-        await s100.AddDatasetAsync(Dataset(id), processor);
+        await s100.AddDatasetAsync(Dataset(id), processor, cancellationToken: TestContext.Current.CancellationToken);
 
         s100.Dispose();
 
@@ -465,7 +466,7 @@ public class S100MapSessionTests
         // No DatasetPipelineFactory in options; the factory guard fires before
         // the path is touched.
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => s100.Datasets.LoadAsync("missing.000"));
+            () => s100.Datasets.LoadAsync("missing.000", cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -482,7 +483,7 @@ public class S100MapSessionTests
             DatasetPipelineFactory = CreateFactory(),
         });
 
-        var id = await s100.Datasets.LoadAsync(basePath!);
+        var id = await s100.Datasets.LoadAsync(basePath!, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(Path.GetFileName(basePath!), id.Value);
         Assert.NotNull(s100.GetDataset(id));
@@ -491,7 +492,7 @@ public class S100MapSessionTests
         // Re-loading the same path resolves to the same identity, which is
         // already present, so the add is rejected.
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => s100.Datasets.LoadAsync(basePath!));
+            () => s100.Datasets.LoadAsync(basePath!, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -507,7 +508,7 @@ public class S100MapSessionTests
         using var s100 = factory.Create(map);
         var id = new MapDatasetId("dataset");
 
-        Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value)));
+        Assert.True(await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken));
         Assert.Single(map.Layers);
     }
 
@@ -537,7 +538,7 @@ public class S100MapSessionTests
         var s100 = factory.Create(map);
         var id = new MapDatasetId("dataset");
         var processor = new StubProcessor(id.Value);
-        await s100.AddDatasetAsync(Dataset(id), processor);
+        await s100.AddDatasetAsync(Dataset(id), processor, cancellationToken: TestContext.Current.CancellationToken);
 
         s100.Dispose();
 
@@ -606,14 +607,17 @@ public class S100MapSessionTests
         var topId = new MapDatasetId("top");
         await s100.AddDatasetAsync(
             Dataset(bottomId),
-            new StubProcessor(bottomId.Value) { Hits = [Hit(0, "b", S100GeometryType.Surface)] });
+            new StubProcessor(bottomId.Value) { Hits = [Hit(0, "b", S100GeometryType.Surface)] },
+            cancellationToken: TestContext.Current.CancellationToken);
         await s100.AddDatasetAsync(
             Dataset(topId),
-            new StubProcessor(topId.Value) { Hits = [Hit(0, "t", S100GeometryType.Surface)] });
+            new StubProcessor(topId.Value) { Hits = [Hit(0, "t", S100GeometryType.Surface)] },
+            cancellationToken: TestContext.Current.CancellationToken);
         s100.SetOrder([bottomId, topId]); // top painted last = topmost
 
         var picks = await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0 });
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal([topId, bottomId], picks.Select(p => p.DatasetId));
     }
@@ -633,10 +637,12 @@ public class S100MapSessionTests
                     Hit(0, "area", S100GeometryType.Surface),
                     Hit(1, "point", S100GeometryType.Point),
                 ],
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var picks = await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0 });
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(["point", "area"], picks.Select(p => p.Info.FeatureRef));
     }
@@ -651,18 +657,22 @@ public class S100MapSessionTests
         var inactiveId = new MapDatasetId("inactive");
         await s100.AddDatasetAsync(
             Dataset(shownId),
-            new StubProcessor(shownId.Value) { Hits = [Hit(0, "s", S100GeometryType.Point)] });
+            new StubProcessor(shownId.Value) { Hits = [Hit(0, "s", S100GeometryType.Point)] },
+            cancellationToken: TestContext.Current.CancellationToken);
         await s100.AddDatasetAsync(
             Dataset(hiddenId),
-            new StubProcessor(hiddenId.Value) { Hits = [Hit(0, "h", S100GeometryType.Point)] });
+            new StubProcessor(hiddenId.Value) { Hits = [Hit(0, "h", S100GeometryType.Point)] },
+            cancellationToken: TestContext.Current.CancellationToken);
         await s100.AddDatasetAsync(
             Dataset(inactiveId),
-            new StubProcessor(inactiveId.Value) { Hits = [Hit(0, "i", S100GeometryType.Point)] });
+            new StubProcessor(inactiveId.Value) { Hits = [Hit(0, "i", S100GeometryType.Point)] },
+            cancellationToken: TestContext.Current.CancellationToken);
         s100.SetVisible(hiddenId, false);
         s100.SetActive(inactiveId, false);
 
         var picks = await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0 });
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(shownId, Assert.Single(picks).DatasetId);
     }
@@ -675,11 +685,13 @@ public class S100MapSessionTests
         var id = new MapDatasetId("dataset");
         await s100.AddDatasetAsync(
             Dataset(id),
-            new StubProcessor(id.Value) { Hits = [Hit(0, "x", S100GeometryType.Point)] });
+            new StubProcessor(id.Value) { Hits = [Hit(0, "x", S100GeometryType.Point)] },
+            cancellationToken: TestContext.Current.CancellationToken);
         s100.SetOpacity(id, 0.0);
 
         Assert.Empty(await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0 }));
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 },
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -696,10 +708,12 @@ public class S100MapSessionTests
             {
                 CellMinimumDisplayScale = 50_000,
                 Hits = [Hit(0, "x", S100GeometryType.Point)],
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0, Resolution = 100_000 }));
+            new GeographicPickQuery { Latitude = 0, Longitude = 0, Resolution = 100_000 },
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -714,11 +728,13 @@ public class S100MapSessionTests
             {
                 CellMinimumDisplayScale = 50_000,
                 Hits = [Hit(0, "x", S100GeometryType.Point)],
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         // A resolution finer (zoomed in) than the cutoff keeps the cell drawn.
         var picks = await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0, Resolution = 0.001 });
+            new GeographicPickQuery { Latitude = 0, Longitude = 0, Resolution = 0.001 },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(id, Assert.Single(picks).DatasetId);
     }
@@ -735,12 +751,14 @@ public class S100MapSessionTests
             {
                 CellMinimumDisplayScale = 50_000,
                 Hits = [Hit(0, "x", S100GeometryType.Point)],
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         // Omitting Resolution disables scale filtering, so the same cell that a
         // coarse resolution would exclude still participates (prior behavior).
         var picks = await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0 });
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(id, Assert.Single(picks).DatasetId);
     }
@@ -755,10 +773,12 @@ public class S100MapSessionTests
         // a very coarse resolution.
         await s100.AddDatasetAsync(
             Dataset(id),
-            new StubProcessor(id.Value) { Hits = [Hit(0, "x", S100GeometryType.Point)] });
+            new StubProcessor(id.Value) { Hits = [Hit(0, "x", S100GeometryType.Point)] },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var picks = await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0, Resolution = 100_000 });
+            new GeographicPickQuery { Latitude = 0, Longitude = 0, Resolution = 100_000 },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(id, Assert.Single(picks).DatasetId);
     }
@@ -780,10 +800,12 @@ public class S100MapSessionTests
                     FeatureType = "WaterLevel",
                     Attributes = [],
                 },
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var picks = await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0 });
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 },
+            TestContext.Current.CancellationToken);
 
         var pick = Assert.Single(picks);
         Assert.True(pick.IsCoverage);
@@ -809,10 +831,12 @@ public class S100MapSessionTests
             {
                 Hits = [Hit(0, "x", S100GeometryType.Point)],
                 FeatureGeometry = geometry,
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var pick = Assert.Single(await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0 }));
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 },
+            TestContext.Current.CancellationToken));
 
         Assert.NotNull(pick.Geometry);
         Assert.Equal(S100GeometryType.Point, pick.Geometry!.Primitive);
@@ -835,10 +859,12 @@ public class S100MapSessionTests
                 Hits = [Hit(0, "ice", S100GeometryType.Surface)],
                 HitsAtLongitude = longitude => Math.Abs(longitude - 190.0) < 1e-9,
                 Extent = new BoundingBox(60, 175, 75, 225),
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var pick = Assert.Single(await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 72, Longitude = -170 }));
+            new GeographicPickQuery { Latitude = 72, Longitude = -170 },
+            TestContext.Current.CancellationToken));
 
         Assert.Equal("ice", pick.Info.FeatureRef);
     }
@@ -864,10 +890,12 @@ public class S100MapSessionTests
                     return false;
                 },
                 Extent = new BoundingBox(50, -10, 60, 10),
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 55, Longitude = -170 }));
+            new GeographicPickQuery { Latitude = 55, Longitude = -170 },
+            TestContext.Current.CancellationToken));
         Assert.Equal([-170.0], tried);
     }
 
@@ -886,10 +914,12 @@ public class S100MapSessionTests
                     Hit(0, "a", S100GeometryType.Point),
                     Hit(1, "b", S100GeometryType.Point),
                 ],
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var picks = await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0, MaxResults = 1 });
+            new GeographicPickQuery { Latitude = 0, Longitude = 0, MaxResults = 1 },
+            TestContext.Current.CancellationToken);
 
         Assert.Single(picks);
     }
@@ -900,10 +930,11 @@ public class S100MapSessionTests
         using var map = new Map();
         using var s100 = IdentitySession(map);
         var id = new MapDatasetId("dataset");
-        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value));
+        await s100.AddDatasetAsync(Dataset(id), new StubProcessor(id.Value), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = 0, Longitude = 0 }));
+            new GeographicPickQuery { Latitude = 0, Longitude = 0 },
+            TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -919,7 +950,7 @@ public class S100MapSessionTests
             CrsTransformFactory = new ProjNetCrsTransformFactory(),
             DatasetPipelineFactory = CreateFactory(),
         });
-        var id = await s100.Datasets.LoadAsync(basePath!);
+        var id = await s100.Datasets.LoadAsync(basePath!, cancellationToken: TestContext.Current.CancellationToken);
 
         // Pick at the cell's extent centroid — a dense S-101 cell's area coverage
         // (e.g. depth areas) all but guarantees a hit there.
@@ -928,7 +959,8 @@ public class S100MapSessionTests
             extent.Centroid.X, extent.Centroid.Y);
 
         var picks = await s100.Query.PickAsync(
-            new GeographicPickQuery { Latitude = latitude, Longitude = longitude });
+            new GeographicPickQuery { Latitude = latitude, Longitude = longitude },
+            TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(picks);
         Assert.All(picks, p => Assert.Equal(id, p.DatasetId));

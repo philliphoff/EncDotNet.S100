@@ -116,7 +116,7 @@ public class DigitalSignatureTests
         source.AddFile("test.000", "hello"u8.ToArray());
 
         var verifier = new ExchangeSetVerifier();
-        var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+        var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsUnsigned);
         Assert.Single(result.FileResults);
@@ -174,7 +174,7 @@ public class DigitalSignatureTests
             AllowUntrustedCertificates = false,
         };
 
-        var result = await verifier.VerifyAsync(source, catalogue, trustAnchors);
+        var result = await verifier.VerifyAsync(source, catalogue, trustAnchors, TestContext.Current.CancellationToken);
 
         Assert.True(result.AllValid);
         Assert.Single(result.FileResults);
@@ -224,7 +224,7 @@ public class DigitalSignatureTests
         source.AddFile("test.000", "tampered content"u8.ToArray());
 
         var verifier = new ExchangeSetVerifier();
-        var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+        var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         Assert.True(result.HasInvalidSignatures);
         Assert.Equal(VerificationOutcome.SignatureInvalid, result.FileResults[0].Outcome);
@@ -279,7 +279,7 @@ public class DigitalSignatureTests
         var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions
         {
             TrustedRoots = [otherCert],
-        });
+        }, TestContext.Current.CancellationToken);
 
         Assert.Equal(VerificationOutcome.CertificateUntrusted, result.FileResults[0].Outcome);
     }
@@ -321,7 +321,7 @@ public class DigitalSignatureTests
         var source = new InMemoryAssetSource();
 
         var verifier = new ExchangeSetVerifier();
-        var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+        var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         Assert.Equal(VerificationOutcome.FileMissing, result.FileResults[0].Outcome);
         Assert.Equal(
@@ -358,7 +358,7 @@ public class DigitalSignatureTests
         source.AddFile("test.000", "content"u8.ToArray());
 
         var verifier = new ExchangeSetVerifier();
-        var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+        var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         Assert.Equal(VerificationOutcome.CertificateNotFound, result.FileResults[0].Outcome);
     }
@@ -404,7 +404,7 @@ public class DigitalSignatureTests
         source.AddFile("file2.000", "file2"u8.ToArray());
 
         var verifier = new ExchangeSetVerifier();
-        var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+        var result = await verifier.VerifyAsync(source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.FileResults.Count);
         Assert.Equal(VerificationOutcome.Ok, result.FileResults[0].Outcome);

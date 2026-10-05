@@ -68,7 +68,7 @@ public class S57DatasetProcessorInlandTests
             var processor = CreateProcessor(
                 SyntheticS57Cell.Write(dir, "U37TEST.000", productSpecification));
 
-            var result = await processor.BuildVectorPortrayalAsync(new S101RenderContext());
+            var result = await processor.BuildVectorPortrayalAsync(new S101RenderContext(), TestContext.Current.CancellationToken);
 
             Assert.Equal("S-57", result.Spec.Name);
             Assert.Contains($"(S-57 → {expectedSpec})", result.Info);

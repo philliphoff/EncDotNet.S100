@@ -74,7 +74,7 @@ public class QueryFeaturesToolTests
         var tool = new QueryFeaturesTool(catalog);
 
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
-            new GeoQuery.Point(new GeoPoint(0, 0))));
+            new GeoQuery.Point(new GeoPoint(0, 0))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Features);
@@ -100,7 +100,7 @@ public class QueryFeaturesToolTests
         // feature at (5,5) is exactly the query point and matches; the
         // 'outside' feature at (9,9) does not.
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
-            new GeoQuery.Point(new GeoPoint(5, 5))));
+            new GeoQuery.Point(new GeoPoint(5, 5))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Features);
@@ -134,7 +134,7 @@ public class QueryFeaturesToolTests
 
         var tool = new QueryFeaturesTool(catalog);
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
-            new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10))));
+            new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(2, value.TotalCount);
@@ -162,7 +162,7 @@ public class QueryFeaturesToolTests
 
         var tool = new QueryFeaturesTool(catalog);
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
-            new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10))));
+            new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Features);
@@ -195,7 +195,7 @@ public class QueryFeaturesToolTests
         // of that spec name.
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10)),
-            Spec: new SpecRef("S-122", default)));
+            Spec: new SpecRef("S-122", default)), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Features);
@@ -216,7 +216,7 @@ public class QueryFeaturesToolTests
         var tool = new QueryFeaturesTool(catalog);
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10)),
-            FeatureType: "NavwarnPart"));
+            FeatureType: "NavwarnPart"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Features);
@@ -240,7 +240,7 @@ public class QueryFeaturesToolTests
         var page0 = await tool.InvokeAsync(new QueryFeaturesRequest(
             new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10)),
             Page: 0,
-            PageSize: 2));
+            PageSize: 2), TestContext.Current.CancellationToken);
         Assert.True(page0.TryGetValue(out var p0));
         Assert.Equal(5, p0.TotalCount);
         Assert.Equal(2, p0.Features.Count);
@@ -249,7 +249,7 @@ public class QueryFeaturesToolTests
         var page2 = await tool.InvokeAsync(new QueryFeaturesRequest(
             new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10)),
             Page: 2,
-            PageSize: 2));
+            PageSize: 2), TestContext.Current.CancellationToken);
         Assert.True(page2.TryGetValue(out var p2));
         Assert.Single(p2.Features);
         Assert.False(p2.HasMore);
@@ -268,7 +268,7 @@ public class QueryFeaturesToolTests
             new GeoPoint(1, 1)]);
 
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
-            new GeoQuery.Polygon(open)));
+            new GeoQuery.Polygon(open)), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         Assert.True(result.TryGetError(out var err));
@@ -283,7 +283,7 @@ public class QueryFeaturesToolTests
         var tool = new QueryFeaturesTool(catalog);
 
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
-            new GeoQuery.Box(new GeoBoundingBox(-1, -1, 1, 1))));
+            new GeoQuery.Box(new GeoBoundingBox(-1, -1, 1, 1))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Features);
@@ -312,11 +312,11 @@ public class QueryFeaturesToolTests
 
         var query = new GeoQuery.Point(new GeoPoint(1.5, 1.5));
 
-        var coarse = await tool.InvokeAsync(new QueryFeaturesRequest(query));
+        var coarse = await tool.InvokeAsync(new QueryFeaturesRequest(query), TestContext.Current.CancellationToken);
         Assert.True(coarse.TryGetValue(out var coarseValue));
         Assert.Single(coarseValue.Features);
 
-        var precise = await tool.InvokeAsync(new QueryFeaturesRequest(query, Precise: true));
+        var precise = await tool.InvokeAsync(new QueryFeaturesRequest(query, Precise: true), TestContext.Current.CancellationToken);
         Assert.True(precise.TryGetValue(out var preciseValue));
         Assert.Empty(preciseValue.Features);
     }
@@ -343,7 +343,7 @@ public class QueryFeaturesToolTests
         var leg = new GeoQuery.Polyline(new GeoPolyline([
             new GeoPoint(0, -5), new GeoPoint(0, 5)]));
 
-        var precise = await tool.InvokeAsync(new QueryFeaturesRequest(leg, Precise: true));
+        var precise = await tool.InvokeAsync(new QueryFeaturesRequest(leg, Precise: true), TestContext.Current.CancellationToken);
         Assert.True(precise.TryGetValue(out var value));
         Assert.Equal("area", Assert.Single(value.Features).FeatureId);
     }
@@ -366,7 +366,7 @@ public class QueryFeaturesToolTests
             [new GeoPoint(0, 0), new GeoPoint(0, 1), new GeoPoint(1, 1)],
             CorridorWidthMeters: 500));
 
-        var result = await tool.InvokeAsync(new QueryFeaturesRequest(route));
+        var result = await tool.InvokeAsync(new QueryFeaturesRequest(route), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(

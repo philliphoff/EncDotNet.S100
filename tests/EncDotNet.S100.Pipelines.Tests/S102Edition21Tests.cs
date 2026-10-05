@@ -128,7 +128,7 @@ public class S102Edition21Tests
 
         try
         {
-            using var bitmap = await processor.RenderHeadlessAsync(256, 256);
+            using var bitmap = await processor.RenderHeadlessAsync(256, 256, cancellationToken: TestContext.Current.CancellationToken);
             AssertNonBlank(bitmap);
         }
         finally

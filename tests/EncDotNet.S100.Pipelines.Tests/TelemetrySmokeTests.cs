@@ -95,7 +95,7 @@ public sealed class TelemetrySmokeTests
             [new PortrayalRule { Name = "R", Type = PortrayalRuleType.Xslt, ExecutionOrder = 1, AppliesTo = ["Buoy"] }],
             xsltRules: new() { ["R"] = xslt });
 
-        await new VectorPipeline().ProcessAsync(source, catalogue);
+        await new VectorPipeline().ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(observed, a => a.OperationName == "s100.pipeline.vector.process");
         Assert.Contains(observed, a => a.OperationName == "s100.pipeline.vector.stage.feature_xml");
@@ -132,7 +132,7 @@ public sealed class TelemetrySmokeTests
             [new PortrayalRule { Name = "R", Type = PortrayalRuleType.Xslt, ExecutionOrder = 1, AppliesTo = ["Buoy"] }],
             xsltRules: new() { ["R"] = xslt });
 
-        await new VectorPipeline().ProcessAsync(source, catalogue);
+        await new VectorPipeline().ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         var pipelineSpan = observed.First(a => a.OperationName == "s100.pipeline.vector.process");
         Assert.NotNull(pipelineSpan.GetTagItem("gc.gen0.delta"));
@@ -179,7 +179,7 @@ public sealed class TelemetrySmokeTests
         using var root = testSource.StartActivity("test-root");
         Assert.NotNull(root);
 
-        await new VectorPipeline().ProcessAsync(source, catalogue);
+        await new VectorPipeline().ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         // Only consider the XSLT transform span belonging to this test's own
         // activity tree (same TraceId as the root we started above).

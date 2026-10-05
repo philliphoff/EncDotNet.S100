@@ -74,10 +74,10 @@ public class S111CoverageSourceTests : IDisposable
         Assert.True(times.Count >= 2);
 
         source.SelectTime(times[0]);
-        var sample0 = source.Sample(GridRegion.Full);
+        var sample0 = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
 
         source.SelectTime(times[^1]);
-        var sampleLast = source.Sample(GridRegion.Full);
+        var sampleLast = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
 
         // Same grid size, but likely different speed values
         var speed0 = sample0.GetField("surfaceCurrentSpeed");
@@ -93,7 +93,7 @@ public class S111CoverageSourceTests : IDisposable
         SkipIfNoTestData();
 
         var source = new S111CoverageSource(_dataset!);
-        var sampled = source.Sample(GridRegion.Full);
+        var sampled = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
 
         var coverage = _dataset!.Coverages[0];
         var speed = sampled.GetField("surfaceCurrentSpeed");
@@ -111,7 +111,7 @@ public class S111CoverageSourceTests : IDisposable
         SkipIfNoTestData();
 
         var source = new S111CoverageSource(_dataset!);
-        var sampled = source.Sample(new GridRegion(0, 2, 0, 2, 3, 3));
+        var sampled = source.Sample(new GridRegion(0, 2, 0, 2, 3, 3), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, sampled.Metadata.NumRows);
         Assert.Equal(1, sampled.Metadata.NumColumns);
@@ -126,7 +126,7 @@ public class S111CoverageSourceTests : IDisposable
         Assert.SkipUnless(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
 
         var source = FileSystemAssetSource.Create(portrayalPath);
-        using var provider = await PortrayalCatalogueProvider.OpenAsync(source);
+        using var provider = await PortrayalCatalogueProvider.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new S111PortrayalCatalogue(provider);
 
         var scheme = catalogue.ResolveColorScheme(MarinerSettings.Default);
@@ -149,13 +149,13 @@ public class S111CoverageSourceTests : IDisposable
         Assert.SkipUnless(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
 
         var assetSource = FileSystemAssetSource.Create(portrayalPath);
-        using var provider = await PortrayalCatalogueProvider.OpenAsync(assetSource);
+        using var provider = await PortrayalCatalogueProvider.OpenAsync(assetSource, cancellationToken: TestContext.Current.CancellationToken);
 
         var source = new S111CoverageSource(_dataset!);
         var catalogue = new S111PortrayalCatalogue(provider);
         var pipeline = new CoveragePipeline();
 
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         // Pipeline assembled the styled layer from the source's metadata.
         Assert.Equal(source.Metadata.NoDataValue, layer.NoDataValue);
@@ -175,9 +175,9 @@ public class S111CoverageSourceTests : IDisposable
         Assert.SkipUnless(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
 
         var source = FileSystemAssetSource.Create(portrayalPath);
-        using var provider = await PortrayalCatalogueProvider.OpenAsync(source);
+        using var provider = await PortrayalCatalogueProvider.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new S111PortrayalCatalogue(provider);
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
 
         var scheme = catalogue.ResolveSymbolScheme(MarinerSettings.Default);
 

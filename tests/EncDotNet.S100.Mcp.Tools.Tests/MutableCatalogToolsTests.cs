@@ -23,7 +23,7 @@ public class MutableCatalogToolsTests
         using var file = new TempFile();
 
         var value = AssertOk(await new OpenDatasetTool(catalog)
-            .InvokeAsync(new OpenDatasetRequest(file.Path)));
+            .InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken));
 
         Assert.Equal("file", value.Kind);
         Assert.Equal(1, value.Count);
@@ -45,7 +45,7 @@ public class MutableCatalogToolsTests
         using var file = new TempFile();
 
         var error = Assert.IsType<HostNotReady>(
-            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path))));
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken)));
         Assert.Contains("not ready", error.What);
     }
 
@@ -56,7 +56,7 @@ public class MutableCatalogToolsTests
         using var file = new TempFile();
 
         Assert.IsType<DatasetLoadFailed>(
-            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path))));
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken)));
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class MutableCatalogToolsTests
         using var file = new TempFile();
 
         var error = Assert.IsType<DatasetLoadFailed>(
-            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path))));
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken)));
         Assert.StartsWith("the exchange set contained no datasets the host can portray (", error.Reason);
         Assert.Contains("dataStatus", error.Reason);
         Assert.Contains("unsupported product 'S-128'", error.Reason);
@@ -93,7 +93,7 @@ public class MutableCatalogToolsTests
         using var file = new TempFile();
 
         var error = Assert.IsType<DatasetLoadFailed>(
-            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path))));
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken)));
         Assert.Contains("problem 5; and 3 more)", error.Reason);
         Assert.DoesNotContain("problem 6", error.Reason);
     }
@@ -105,7 +105,7 @@ public class MutableCatalogToolsTests
         var missing = Path.Combine(Path.GetTempPath(), $"nope-{Guid.NewGuid():N}.000");
 
         var error = Assert.IsType<InvalidArgument>(
-            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(missing))));
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(missing), TestContext.Current.CancellationToken)));
         Assert.Equal("path", error.Parameter);
         Assert.Equal(0, catalog.LoadCount);
     }
@@ -118,7 +118,7 @@ public class MutableCatalogToolsTests
         var catalog = new FakeMutableDatasetCatalog();
 
         Assert.IsType<InvalidArgument>(
-            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(path))));
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(path), TestContext.Current.CancellationToken)));
     }
 
     // ---- close_dataset --------------------------------------------------
@@ -132,11 +132,11 @@ public class MutableCatalogToolsTests
         };
         using (var file = new TempFile())
         {
-            await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path));
+            await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken);
         }
 
         var value = AssertOk(await new CloseDatasetTool(catalog)
-            .InvokeAsync(new CloseDatasetRequest("cell.000")));
+            .InvokeAsync(new CloseDatasetRequest("cell.000"), TestContext.Current.CancellationToken));
 
         Assert.True(value.Removed);
         Assert.Equal(1, value.Count);
@@ -150,7 +150,7 @@ public class MutableCatalogToolsTests
         var catalog = new FakeMutableDatasetCatalog();
 
         var value = AssertOk(await new CloseDatasetTool(catalog)
-            .InvokeAsync(new CloseDatasetRequest("ghost")));
+            .InvokeAsync(new CloseDatasetRequest("ghost"), TestContext.Current.CancellationToken));
 
         Assert.False(value.Removed);
         Assert.Equal(0, value.Count);
@@ -163,7 +163,7 @@ public class MutableCatalogToolsTests
         var catalog = new FakeMutableDatasetCatalog();
 
         Assert.IsType<InvalidArgument>(
-            AssertErr(await new CloseDatasetTool(catalog).InvokeAsync(new CloseDatasetRequest("  "))));
+            AssertErr(await new CloseDatasetTool(catalog).InvokeAsync(new CloseDatasetRequest("  "), TestContext.Current.CancellationToken)));
     }
 
     // ---- close_all_datasets --------------------------------------------
@@ -181,10 +181,10 @@ public class MutableCatalogToolsTests
         };
         using (var file = new TempFile())
         {
-            await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path));
+            await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken);
         }
 
-        var value = AssertOk(await new CloseAllDatasetsTool(catalog).InvokeAsync());
+        var value = AssertOk(await new CloseAllDatasetsTool(catalog).InvokeAsync(TestContext.Current.CancellationToken));
 
         Assert.True(value.Removed);
         Assert.Equal(2, value.Count);
@@ -197,7 +197,7 @@ public class MutableCatalogToolsTests
     {
         var catalog = new FakeMutableDatasetCatalog();
 
-        var value = AssertOk(await new CloseAllDatasetsTool(catalog).InvokeAsync());
+        var value = AssertOk(await new CloseAllDatasetsTool(catalog).InvokeAsync(TestContext.Current.CancellationToken));
 
         Assert.False(value.Removed);
         Assert.Equal(0, value.Count);

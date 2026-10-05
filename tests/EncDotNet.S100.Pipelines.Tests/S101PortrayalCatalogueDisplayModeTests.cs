@@ -18,7 +18,7 @@ public class S101PortrayalCatalogueDisplayModeTests
     public async Task DisplayBase_ResolvedMembership_NonEmpty_AndDrivesViewingGroups()
     {
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
-        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new S101PortrayalCatalogue(provider);
 
         // The bundled S-101 PC must declare the three ECDIS modes.
@@ -55,7 +55,7 @@ public class S101PortrayalCatalogueDisplayModeTests
     public async Task StandardDisplay_IsSupersetOf_DisplayBase()
     {
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
-        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource, cancellationToken: TestContext.Current.CancellationToken);
 
         var baseSet = DisplayModeMembership.Resolve(provider.Catalogue, "DisplayBase");
         var stdSet = DisplayModeMembership.Resolve(provider.Catalogue, "StandardDisplay");

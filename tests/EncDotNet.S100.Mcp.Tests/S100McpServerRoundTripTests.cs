@@ -19,9 +19,9 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var tools = await client.ListToolsAsync();
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         var names = tools.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
 
         Assert.Equal(
@@ -59,13 +59,13 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-1"));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("list_datasets", new Dictionary<string, object?>
         {
             ["page"] = 0,
             ["pageSize"] = 50,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"list_datasets returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -93,13 +93,13 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-1", model: dataset));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("describe_feature", new Dictionary<string, object?>
         {
             ["datasetId"] = "synth-warn-1",
             ["featureId"] = "feat-1",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"describe_feature returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -117,14 +117,14 @@ public class S100McpServerRoundTripTests
                 source: S102Synth.Source(S102Synth.Dataset(depth: 17.5f, uncertainty: 0.5f))));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
         {
             ["spec"] = "S-102/2.1.0",
             ["latitude"] = 0.01,
             ["longitude"] = 0.01,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"sample_coverage returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -137,13 +137,13 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("describe_feature", new Dictionary<string, object?>
         {
             ["datasetId"] = "missing",
             ["featureId"] = "x",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError ?? false, "Expected isError=true for unknown dataset.");
         var payload = ParseSingleJson(result);
@@ -159,13 +159,13 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("warn-elsewhere", bounds: LoadedDatasetFactory.Box(50, 50, 60, 60)));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("find_at", new Dictionary<string, object?>
         {
             ["latitude"] = 5.0,
             ["longitude"] = 5.0,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"find_at returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -180,13 +180,13 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("find_at", new Dictionary<string, object?>
         {
             ["latitude"] = 95.0,
             ["longitude"] = 0.0,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError ?? false, "Expected isError=true for out-of-range latitude.");
         var payload = ParseSingleJson(result);
@@ -215,9 +215,9 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-1", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("count_features", new Dictionary<string, object?>());
+        var result = await client.CallToolAsync("count_features", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"count_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -259,13 +259,13 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-2", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("identify_features", new Dictionary<string, object?>
         {
             ["latitude"] = 5.0,
             ["longitude"] = 5.0,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"identify_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -303,13 +303,13 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-alaska", bounds: LoadedDatasetFactory.Box(70, 180, 75, 220), model: S124Synth.Dataset(area)));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("identify_features", new Dictionary<string, object?>
         {
             ["latitude"] = 72.5,
             ["longitude"] = longitude,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"identify_features returned an error: {DumpText(result)}");
         var feature = Assert.Single(ParseSingleJson(result)["features"]!.AsArray());
@@ -321,13 +321,13 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("identify_features", new Dictionary<string, object?>
         {
             ["latitude"] = 0.0,
             ["longitude"] = 600.0,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError ?? false);
     }
@@ -360,13 +360,13 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-3", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("nearest_features", new Dictionary<string, object?>
         {
             ["latitude"] = 5.0,
             ["longitude"] = 5.0,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"nearest_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -384,13 +384,13 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("nearest_features", new Dictionary<string, object?>
         {
             ["latitude"] = 120.0,
             ["longitude"] = 0.0,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError ?? false);
         Assert.Contains("latitude", DumpText(result), StringComparison.OrdinalIgnoreCase);
@@ -417,14 +417,14 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-4", bounds: LoadedDatasetFactory.Box(-1, -1, 3, 3), model: dataset));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var pointQuery = "{\"kind\":\"point\",\"latitude\":1.5,\"longitude\":1.5}";
 
         var coarse = await client.CallToolAsync("query_features", new Dictionary<string, object?>
         {
             ["query"] = pointQuery,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(coarse.IsError ?? false, $"query_features returned an error: {DumpText(coarse)}");
         Assert.Equal(1, ParseSingleJson(coarse)["totalCount"]!.GetValue<int>());
 
@@ -432,7 +432,7 @@ public class S100McpServerRoundTripTests
         {
             ["query"] = pointQuery,
             ["precise"] = true,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(precise.IsError ?? false, $"query_features returned an error: {DumpText(precise)}");
         Assert.Equal(0, ParseSingleJson(precise)["totalCount"]!.GetValue<int>());
     }
@@ -442,12 +442,12 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
         {
             ["spec"] = "S-124",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"describe_feature_type returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -460,12 +460,12 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
         {
             ["spec"] = "s124/1.5.0",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"describe_feature_type returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -477,14 +477,14 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         // S-100 is a valid spec-name pattern but is the framework, not a
         // product spec, so it has no bundled Feature Catalogue.
         var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
         {
             ["spec"] = "S-100",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError ?? false, "Expected isError=true for a spec without a bundled Feature Catalogue.");
         var payload = ParseSingleJson(result);
@@ -498,12 +498,12 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
         {
             ["spec"] = "bathymetry",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError ?? false, "Expected isError=true for an unrecognised spec name.");
         var payload = ParseSingleJson(result);
@@ -519,7 +519,7 @@ public class S100McpServerRoundTripTests
         // opaque "An error occurred invoking" message.
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("describe_feature_type", new Dictionary<string, object?>
         {
@@ -528,7 +528,7 @@ public class S100McpServerRoundTripTests
                 ["name"] = "S-124",
                 ["edition"] = new Dictionary<string, object?> { ["major"] = 1, ["minor"] = 5, ["clarification"] = 0 },
             },
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"describe_feature_type returned an error: {DumpText(result)}");
         Assert.True(ParseSingleJson(result)["totalFeatureTypeCount"]!.GetValue<int>() > 0);
@@ -541,16 +541,16 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S102("synth-bathy-1"),
             LoadedDatasetFactory.S124("synth-warn-1"));
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var all = ParseSingleJson(await client.CallToolAsync("list_datasets", new Dictionary<string, object?>()));
+        var all = ParseSingleJson(await client.CallToolAsync("list_datasets", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken));
         var warnSpec = all["datasets"]!.AsArray()
             .Single(d => d!["id"]!.GetValue<string>() == "synth-warn-1")!["spec"]!.DeepClone();
 
         var filtered = await client.CallToolAsync("list_datasets", new Dictionary<string, object?>
         {
             ["spec"] = warnSpec,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(filtered.IsError ?? false, $"list_datasets returned an error: {DumpText(filtered)}");
         var ids = ParseSingleJson(filtered)["datasets"]!.AsArray().Select(d => d!["id"]!.GetValue<string>());
@@ -562,14 +562,14 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
         {
             ["spec"] = 42,
             ["latitude"] = 0.0,
             ["longitude"] = 0.0,
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError ?? false, "Expected isError=true for a numeric spec.");
         var payload = ParseSingleJson(result);
@@ -598,12 +598,12 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-1", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
         {
             ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -652,13 +652,13 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-attr", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
         {
             ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
             ["attributes"] = """{"navwarnTypeGeneral":"1"}""",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -701,13 +701,13 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-depth", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
         {
             ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
             ["attributes"] = """[{"attribute":"valueOfDepth","op":"ge","value":"10"}]""",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -750,12 +750,12 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-named", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("search_features", new Dictionary<string, object?>
         {
             ["text"] = "nab tower",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"search_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -771,12 +771,12 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("search_features", new Dictionary<string, object?>
         {
             ["text"] = "   ",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError ?? false, "Expected isError=true for blank search text.");
         var payload = ParseSingleJson(result);
@@ -788,12 +788,12 @@ public class S100McpServerRoundTripTests
     {
         var catalog = McpTestHelpers.NewCatalog();
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
         {
             ["query"] = """{"kind":"unknown"}""",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError ?? false, "Expected isError=true for unknown query kind.");
         var payload = ParseSingleJson(result);
@@ -822,13 +822,13 @@ public class S100McpServerRoundTripTests
         var catalog = McpTestHelpers.NewCatalog(loaded);
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
         {
             ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
             ["times"] = """{"kind":"instant","t":"2024-06-15T12:00:00Z"}""",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -868,13 +868,13 @@ public class S100McpServerRoundTripTests
                 source: S102Synth.Source(S102Synth.Dataset(depth: 17.5f, uncertainty: 0.5f))));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("sample_coverage_along", new Dictionary<string, object?>
         {
             ["spec"] = "S-102/2.1.0",
             ["polyline"] = """{"vertices":[[0.01,0.01],[0.02,0.02],[50.0,50.0]]}""",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"sample_coverage_along returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -895,9 +895,9 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-1"));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("list_specs", new Dictionary<string, object?>());
+        var result = await client.CallToolAsync("list_specs", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"list_specs returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -922,11 +922,12 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S104("wl-1"));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync(
             "list_time_steps",
-            new Dictionary<string, object?> { ["datasetId"] = "wl-1" });
+            new Dictionary<string, object?> { ["datasetId"] = "wl-1" },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"list_time_steps returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -945,7 +946,7 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S104("wl-series"));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("sample_coverage", new Dictionary<string, object?>
         {
@@ -953,7 +954,7 @@ public class S100McpServerRoundTripTests
             ["latitude"] = 0.01,
             ["longitude"] = 0.01,
             ["times"] = """{"kind":"range","from":"2024-01-01T00:00:00Z","to":"2024-01-01T02:00:00Z"}""",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"sample_coverage returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -976,7 +977,7 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("warn-elsewhere", bounds: LoadedDatasetFactory.Box(50, 50, 60, 60)));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("find_at", new Dictionary<string, object?>
         {
@@ -984,7 +985,7 @@ public class S100McpServerRoundTripTests
             ["latitude"] = 0.0,
             ["longitude"] = 0.0,
             ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"find_at returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -1002,7 +1003,7 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("synth-warn-struct", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: dataset));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         // Pass the query envelope as a structured JSON object (the ergonomic
         // form an agent intuitively reaches for) rather than a stringified
@@ -1017,7 +1018,7 @@ public class S100McpServerRoundTripTests
                 ["north"] = 15,
                 ["east"] = 15,
             },
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -1036,13 +1037,13 @@ public class S100McpServerRoundTripTests
             LoadedDatasetFactory.S124("ds-b", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10), model: b));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync("query_features", new Dictionary<string, object?>
         {
             ["query"] = """{"kind":"box","south":-5,"west":-5,"north":15,"east":15}""",
             ["datasetId"] = "ds-b",
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError ?? false, $"query_features returned an error: {DumpText(result)}");
         var payload = ParseSingleJson(result);
@@ -1060,7 +1061,7 @@ public class S100McpServerRoundTripTests
                 model: S124Synth.Dataset(MakeNavwarn("f", 5.0, 5.0))));
 
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         // A query object missing the required "kind" discriminator should
         // surface a structured invalid_argument error, not an opaque
@@ -1077,7 +1078,7 @@ public class S100McpServerRoundTripTests
                     ["east"] = 15,
                 },
             },
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError ?? false, "expected an error for a malformed query.");
         var payload = ParseSingleJson(result);

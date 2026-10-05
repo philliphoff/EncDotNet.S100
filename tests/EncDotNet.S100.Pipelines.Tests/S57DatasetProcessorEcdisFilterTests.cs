@@ -37,11 +37,14 @@ public class S57DatasetProcessorEcdisFilterTests
             fixturePath, catalogueManager, luaEngine, featureCatalogueManager);
 
         var all = InstructionCount(await processor.BuildVectorPortrayalAsync(
-            new S101RenderContext { EcdisDisplay = new EcdisDisplaySettings { Category = EcdisDisplayCategory.All } }));
+            new S101RenderContext { EcdisDisplay = new EcdisDisplaySettings { Category = EcdisDisplayCategory.All } },
+            TestContext.Current.CancellationToken));
         var standard = InstructionCount(await processor.BuildVectorPortrayalAsync(
-            new S101RenderContext { EcdisDisplay = new EcdisDisplaySettings { Category = EcdisDisplayCategory.Standard } }));
+            new S101RenderContext { EcdisDisplay = new EcdisDisplaySettings { Category = EcdisDisplayCategory.Standard } },
+            TestContext.Current.CancellationToken));
         var displayBase = InstructionCount(await processor.BuildVectorPortrayalAsync(
-            new S101RenderContext { EcdisDisplay = new EcdisDisplaySettings { Category = EcdisDisplayCategory.DisplayBase } }));
+            new S101RenderContext { EcdisDisplay = new EcdisDisplaySettings { Category = EcdisDisplayCategory.DisplayBase } },
+            TestContext.Current.CancellationToken));
 
         // Narrowing the display category must never add instructions. Before
         // the fix all three were identical (the unfiltered set), so this holds

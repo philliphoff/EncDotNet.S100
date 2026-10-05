@@ -65,11 +65,11 @@ public class CatalogueFormatDetectorTests
     {
         var client = new HttpClient(new Server(File.ReadAllBytes(TestPaths.Fixture("chartcatalogs-list.xml"))));
 
-        var probe = await CatalogueFormatDetector.ProbeAsync(client, new Uri("https://example.test/list.xml"));
+        var probe = await CatalogueFormatDetector.ProbeAsync(client, new Uri("https://example.test/list.xml"), TestContext.Current.CancellationToken);
 
         Assert.Equal(KnownCatalogueFormat.ChartCatalogs, probe.Format);
         await Assert.ThrowsAsync<HttpRequestException>(() =>
-            CatalogueFormatDetector.ProbeAsync(new HttpClient(new Server(null)), new Uri("https://example.test/gone.xml")));
+            CatalogueFormatDetector.ProbeAsync(new HttpClient(new Server(null)), new Uri("https://example.test/gone.xml"), TestContext.Current.CancellationToken));
     }
 
     [Fact]

@@ -62,7 +62,7 @@ public class SampleCoverageToolS111StationSeriesTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1));
+            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);
@@ -85,7 +85,7 @@ public class SampleCoverageToolS111StationSeriesTests
 
         var requested = new DateTimeOffset(2023, 12, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1, Time: requested));
+            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1, Time: requested), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);
@@ -103,7 +103,7 @@ public class SampleCoverageToolS111StationSeriesTests
 
         var requested = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1, Time: requested));
+            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1, Time: requested), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);
@@ -122,7 +122,7 @@ public class SampleCoverageToolS111StationSeriesTests
         // 01:40 → rounds to 02:00 (index 2).
         var requested = new DateTimeOffset(2024, 1, 1, 1, 40, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1, Time: requested));
+            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1, Time: requested), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);
@@ -140,7 +140,7 @@ public class SampleCoverageToolS111StationSeriesTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: -80.0, Longitude: 0.0));
+            LoadedDatasetFactory.S111Spec, Latitude: -80.0, Longitude: 0.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);

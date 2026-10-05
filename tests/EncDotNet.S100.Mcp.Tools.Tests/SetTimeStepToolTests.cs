@@ -23,7 +23,7 @@ public class SetTimeStepToolTests
         var host = new FakeTime(Steps);
         var tool = new SetTimeStepTool(Accessor(host));
 
-        var value = AssertOk(await tool.InvokeAsync(new SetTimeStepRequest(Index: 2)));
+        var value = AssertOk(await tool.InvokeAsync(new SetTimeStepRequest(Index: 2), TestContext.Current.CancellationToken));
 
         Assert.Equal("index", value.Mode);
         Assert.Equal(2, value.Index);
@@ -37,11 +37,11 @@ public class SetTimeStepToolTests
     public async Task SetByTimestamp_SnapsToNearestStepAndReportsPrevious()
     {
         var host = new FakeTime(Steps);
-        await new SetTimeStepTool(Accessor(host)).InvokeAsync(new SetTimeStepRequest(Index: 0));
+        await new SetTimeStepTool(Accessor(host)).InvokeAsync(new SetTimeStepRequest(Index: 0), TestContext.Current.CancellationToken);
 
         // 08:00 is closer to the 06:00 step than to 12:00.
         var value = AssertOk(await new SetTimeStepTool(Accessor(host))
-            .InvokeAsync(new SetTimeStepRequest(Timestamp: "2026-08-01T08:00:00Z")));
+            .InvokeAsync(new SetTimeStepRequest(Timestamp: "2026-08-01T08:00:00Z"), TestContext.Current.CancellationToken));
 
         Assert.Equal("timestamp", value.Mode);
         Assert.Equal(1, value.Index);
@@ -58,7 +58,7 @@ public class SetTimeStepToolTests
 
         var error = Assert.IsType<InvalidArgument>(
             AssertErr(await new SetTimeStepTool(Accessor(host))
-                .InvokeAsync(new SetTimeStepRequest(Index: index))));
+                .InvokeAsync(new SetTimeStepRequest(Index: index), TestContext.Current.CancellationToken)));
         Assert.Equal("index", error.Parameter);
     }
 
@@ -69,7 +69,7 @@ public class SetTimeStepToolTests
 
         Assert.IsType<InvalidArgument>(
             AssertErr(await new SetTimeStepTool(Accessor(host))
-                .InvokeAsync(new SetTimeStepRequest())));
+                .InvokeAsync(new SetTimeStepRequest(), TestContext.Current.CancellationToken)));
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class SetTimeStepToolTests
 
         Assert.IsType<InvalidArgument>(
             AssertErr(await new SetTimeStepTool(Accessor(host))
-                .InvokeAsync(new SetTimeStepRequest(Index: 0, Timestamp: "2026-08-01T00:00:00Z"))));
+                .InvokeAsync(new SetTimeStepRequest(Index: 0, Timestamp: "2026-08-01T00:00:00Z"), TestContext.Current.CancellationToken)));
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class SetTimeStepToolTests
 
         var error = Assert.IsType<InvalidArgument>(
             AssertErr(await new SetTimeStepTool(Accessor(host))
-                .InvokeAsync(new SetTimeStepRequest(Timestamp: "not-a-date"))));
+                .InvokeAsync(new SetTimeStepRequest(Timestamp: "not-a-date"), TestContext.Current.CancellationToken)));
         Assert.Equal("timestamp", error.Parameter);
     }
 
@@ -100,7 +100,7 @@ public class SetTimeStepToolTests
 
         Assert.IsType<HostNotReady>(
             AssertErr(await new SetTimeStepTool(Accessor(host))
-                .InvokeAsync(new SetTimeStepRequest(Index: 0))));
+                .InvokeAsync(new SetTimeStepRequest(Index: 0), TestContext.Current.CancellationToken)));
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public class SetTimeStepToolTests
         var tool = new SetTimeStepTool(new NullCapabilityAccessor<ITimeController>());
 
         Assert.IsType<HostNotReady>(
-            AssertErr(await tool.InvokeAsync(new SetTimeStepRequest(Index: 0))));
+            AssertErr(await tool.InvokeAsync(new SetTimeStepRequest(Index: 0), TestContext.Current.CancellationToken)));
     }
 
     private static ICapabilityAccessor<ITimeController> Accessor(ITimeController c)

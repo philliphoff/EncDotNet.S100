@@ -101,7 +101,7 @@ public class DescribeFeatureTypeToolTests
     [Fact]
     public async Task Lists_every_feature_type_when_no_type_requested()
     {
-        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(Synth));
+        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(Synth), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("Synthetic FC", value.CatalogueName);
@@ -123,7 +123,7 @@ public class DescribeFeatureTypeToolTests
     [Fact]
     public async Task Returns_full_attribute_detail_for_a_requested_type()
     {
-        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(Synth, "TestBuoy"));
+        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(Synth, "TestBuoy"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var ft = Assert.Single(value.FeatureTypes);
@@ -158,7 +158,8 @@ public class DescribeFeatureTypeToolTests
     public async Task IncludeListedValues_false_omits_enumerations_but_keeps_permitted_subset()
     {
         var result = await Tool().InvokeAsync(
-            new DescribeFeatureTypeRequest(Synth, "TestBuoy", IncludeListedValues: false));
+            new DescribeFeatureTypeRequest(Synth, "TestBuoy", IncludeListedValues: false),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var category = value.FeatureTypes[0].Attributes.Single(a => a.Code == "categoryOfThing");
@@ -169,11 +170,11 @@ public class DescribeFeatureTypeToolTests
     [Fact]
     public async Task Feature_type_match_is_case_insensitive_and_accepts_name()
     {
-        var byLowerCode = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(Synth, "testbuoy"));
+        var byLowerCode = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(Synth, "testbuoy"), TestContext.Current.CancellationToken);
         Assert.True(byLowerCode.TryGetValue(out var a));
         Assert.Equal("TestBuoy", a.FeatureTypes[0].Code);
 
-        var byName = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(Synth, "Test Buoy"));
+        var byName = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(Synth, "Test Buoy"), TestContext.Current.CancellationToken);
         Assert.True(byName.TryGetValue(out var b));
         Assert.Equal("TestBuoy", b.FeatureTypes[0].Code);
     }
@@ -181,7 +182,7 @@ public class DescribeFeatureTypeToolTests
     [Fact]
     public async Task Unknown_feature_type_returns_feature_type_not_found()
     {
-        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(Synth, "Nope"));
+        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(Synth, "Nope"), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         var err = Assert.IsType<ToolResult<DescribeFeatureTypeResult>.ErrResult>(result);
@@ -191,7 +192,7 @@ public class DescribeFeatureTypeToolTests
     [Fact]
     public async Task Spec_without_a_bundled_catalogue_returns_not_available()
     {
-        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(new SpecRef("S-102", default)));
+        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(new SpecRef("S-102", default)), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         var err = Assert.IsType<ToolResult<DescribeFeatureTypeResult>.ErrResult>(result);
@@ -201,7 +202,7 @@ public class DescribeFeatureTypeToolTests
     [Fact]
     public async Task Not_available_error_lists_the_accepted_spec_names()
     {
-        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(new SpecRef("S-102", default)));
+        var result = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(new SpecRef("S-102", default)), TestContext.Current.CancellationToken);
 
         var err = Assert.IsType<ToolResult<DescribeFeatureTypeResult>.ErrResult>(result);
         var notAvailable = Assert.IsType<FeatureCatalogueNotAvailable>(err.Error);
@@ -215,7 +216,7 @@ public class DescribeFeatureTypeToolTests
     {
         // "s101" (mis-cased) and an edition suffix both normalise to S-101,
         // which has a bundled catalogue, so the call resolves successfully.
-        var byCasing = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(SpecRef.Parse("s101/1.2.0")));
+        var byCasing = await Tool().InvokeAsync(new DescribeFeatureTypeRequest(SpecRef.Parse("s101/1.2.0")), TestContext.Current.CancellationToken);
 
         Assert.True(byCasing.TryGetValue(out var value));
         Assert.Equal("Synthetic FC", value.CatalogueName);
@@ -228,7 +229,7 @@ public class DescribeFeatureTypeToolTests
         // bundled catalogues; S-102 has no FC so the error names the real ones.
         var tool = new DescribeFeatureTypeTool();
 
-        var result = await tool.InvokeAsync(new DescribeFeatureTypeRequest(new SpecRef("S-100", default)));
+        var result = await tool.InvokeAsync(new DescribeFeatureTypeRequest(new SpecRef("S-100", default)), TestContext.Current.CancellationToken);
 
         var err = Assert.IsType<ToolResult<DescribeFeatureTypeResult>.ErrResult>(result);
         var notAvailable = Assert.IsType<FeatureCatalogueNotAvailable>(err.Error);
@@ -241,7 +242,7 @@ public class DescribeFeatureTypeToolTests
         // Exercises the real default resolver over the bundled catalogues.
         var tool = new DescribeFeatureTypeTool();
 
-        var result = await tool.InvokeAsync(new DescribeFeatureTypeRequest(new SpecRef("S-124", default)));
+        var result = await tool.InvokeAsync(new DescribeFeatureTypeRequest(new SpecRef("S-124", default)), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.True(value.TotalFeatureTypeCount > 0);

@@ -93,7 +93,7 @@ public sealed class UsaceIencFeedIndexerTests : IDisposable
     [Fact]
     public async Task Indexes_cells_as_online_items_with_bounds_and_titles()
     {
-        var index = await _indexer.IndexAsync(Feed());
+        var index = await _indexer.IndexAsync(Feed(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(["U37AG001", "U37AR001", "U37OH001", "U37OH012"], index.Items.Select(i => i.Name));
         var item = index.Items[0];
@@ -112,9 +112,9 @@ public sealed class UsaceIencFeedIndexerTests : IDisposable
     public async Task River_filter_selects_cells_and_changing_it_does_not_redownload()
     {
         var source = Feed();
-        var all = await _indexer.IndexAsync(source);
+        var all = await _indexer.IndexAsync(source, cancellationToken: TestContext.Current.CancellationToken);
 
-        var ohio = await _indexer.IndexAsync(source with { Filter = new UsaceIencFilter { Rivers = ["ohio"] } }, all);
+        var ohio = await _indexer.IndexAsync(source with { Filter = new UsaceIencFilter { Rivers = ["ohio"] } }, all, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(["U37OH001", "U37OH012"], ohio.Items.Select(i => i.Name));
         Assert.Equal(1, _server.Requests);
@@ -123,7 +123,7 @@ public sealed class UsaceIencFeedIndexerTests : IDisposable
     [Fact]
     public async Task Rivers_facet_counts_cells_and_sizes()
     {
-        var catalog = await _feeds.GetCatalogAsync(UsaceIencFeedSource.RiversCatalogUri);
+        var catalog = await _feeds.GetCatalogAsync(UsaceIencFeedSource.RiversCatalogUri, cancellationToken: TestContext.Current.CancellationToken);
 
         var rivers = UsaceIencFeedIndexer.Rivers(catalog);
 
@@ -161,7 +161,7 @@ public sealed class UsaceIencFeedIndexerTests : IDisposable
             {
                 await using var from = source.GetEntry("ENC_ROOT/US4OH1MK/US4OH1MK.000")!.Open();
                 await using var to = archive.CreateEntry(cell).Open();
-                await from.CopyToAsync(to);
+                await from.CopyToAsync(to, TestContext.Current.CancellationToken);
             }
             using var writer = new StreamWriter(archive.CreateEntry(catalogue).Open());
             await writer.WriteAsync("catalogue");
@@ -177,7 +177,7 @@ public sealed class UsaceIencFeedIndexerTests : IDisposable
             Location = new RemoteItemLocation(new Uri($"https://ienccloud.us/x/{name}.zip")),
         };
 
-        var downloaded = await downloader.DownloadAsync(item);
+        var downloaded = await downloader.DownloadAsync(item, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(Path.Combine(downloads.Path, name, root.Replace('/', Path.DirectorySeparatorChar)), downloaded.Location.RootPath);
         Assert.Equal(relative, downloaded.Location.RelativePath);

@@ -33,8 +33,8 @@ public sealed class UiAutomationToolsTests
     {
         var tool = new UiActionTool(new RecordingAutomation(), UiAction.Invoke);
 
-        Assert.True((await tool.InvokeAsync(new UiActionRequest(null, null, null, null))).TryGetError(out var neither));
-        Assert.True((await tool.InvokeAsync(new UiActionRequest("A.B", "e1", null, null))).TryGetError(out var both));
+        Assert.True((await tool.InvokeAsync(new UiActionRequest(null, null, null, null), TestContext.Current.CancellationToken)).TryGetError(out var neither));
+        Assert.True((await tool.InvokeAsync(new UiActionRequest("A.B", "e1", null, null), TestContext.Current.CancellationToken)).TryGetError(out var both));
 
         Assert.Equal("invalid_argument", neither!.Code);
         Assert.Equal("invalid_argument", both!.Code);
@@ -46,10 +46,10 @@ public sealed class UiAutomationToolsTests
         var automation = new RecordingAutomation();
         var tool = new UiActionTool(automation, UiAction.SetValue);
 
-        Assert.True((await tool.InvokeAsync(new UiActionRequest("Library.Filter", null, null, null))).TryGetError(out var missing));
+        Assert.True((await tool.InvokeAsync(new UiActionRequest("Library.Filter", null, null, null), TestContext.Current.CancellationToken)).TryGetError(out var missing));
         Assert.Equal("invalid_argument", missing!.Code);
 
-        Assert.True((await tool.InvokeAsync(new UiActionRequest("Library.Filter", null, null, ""))).TryGetValue(out _));
+        Assert.True((await tool.InvokeAsync(new UiActionRequest("Library.Filter", null, null, ""), TestContext.Current.CancellationToken)).TryGetValue(out _));
         Assert.Equal((new UiTarget("Library.Filter", null), UiAction.SetValue, ""), automation.Calls.Single());
     }
 
@@ -59,7 +59,8 @@ public sealed class UiAutomationToolsTests
         var automation = new RecordingAutomation();
 
         await new UiActionTool(automation, UiAction.Invoke).InvokeAsync(
-            new UiActionRequest(" Datasets.Row.Remove ", null, " e12 ", null));
+            new UiActionRequest(" Datasets.Row.Remove ", null, " e12 ", null),
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(new UiTarget("Datasets.Row.Remove", null, "e12"), automation.Calls.Single().Target);
     }
@@ -73,7 +74,7 @@ public sealed class UiAutomationToolsTests
     {
         var automation = new RecordingAutomation();
 
-        await new UiTreeTool(automation).InvokeAsync(new UiTreeRequest(root, null, null, null));
+        await new UiTreeTool(automation).InvokeAsync(new UiTreeRequest(root, null, null, null), TestContext.Current.CancellationToken);
 
         Assert.Equal(new UiTarget(id, reference), automation.Queries.Single().Root);
     }
@@ -84,7 +85,7 @@ public sealed class UiAutomationToolsTests
     [InlineData("everything", null, null)]
     public async Task Tree_arguments_are_checked(string? filter, int? depth, int? maxNodes)
     {
-        var result = await new UiTreeTool(new RecordingAutomation()).InvokeAsync(new UiTreeRequest(null, depth, filter, maxNodes));
+        var result = await new UiTreeTool(new RecordingAutomation()).InvokeAsync(new UiTreeRequest(null, depth, filter, maxNodes), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.Equal("invalid_argument", error!.Code);
@@ -95,7 +96,7 @@ public sealed class UiAutomationToolsTests
     {
         var automation = new RecordingAutomation();
 
-        await new UiTreeTool(automation).InvokeAsync(new UiTreeRequest(null, null, null, null));
+        await new UiTreeTool(automation).InvokeAsync(new UiTreeRequest(null, null, null, null), TestContext.Current.CancellationToken);
 
         Assert.Equal(new UiTreeQuery(null, UiTreeTool.DefaultDepth, InteractiveOnly: true, UiTreeTool.DefaultMaxNodes), automation.Queries.Single());
     }
@@ -113,7 +114,7 @@ public sealed class UiAutomationToolsTests
             Throw = new UiAutomationException(Enum.Parse<UiFailure>(failure), "Some.Id", "message"),
         };
 
-        var result = await new UiActionTool(automation, UiAction.Toggle).InvokeAsync(new UiActionRequest("Some.Id", null, null, "on"));
+        var result = await new UiActionTool(automation, UiAction.Toggle).InvokeAsync(new UiActionRequest("Some.Id", null, null, "on"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.Equal(code, error!.Code);
@@ -131,7 +132,7 @@ public sealed class UiAutomationToolsTests
         };
         var tool = new UiActionTool(automation, UiAction.Invoke);
 
-        var json = Wire(await tool.InvokeAsync(new UiActionRequest("Datasets.Row.Remove", null, null, null)));
+        var json = Wire(await tool.InvokeAsync(new UiActionRequest("Datasets.Row.Remove", null, null, null), TestContext.Current.CancellationToken));
 
         Assert.Equal("ui_element_ambiguous", (string?)json["code"]);
         var candidates = json["details"]!["candidates"]!.AsArray();
@@ -145,7 +146,7 @@ public sealed class UiAutomationToolsTests
         var automation = new RecordingAutomation();
         var tool = new UiActionTool(automation, UiAction.Toggle);
 
-        var json = Wire(await tool.InvokeAsync(new UiActionRequest("CatalogueScope.Option", null, null, "on")));
+        var json = Wire(await tool.InvokeAsync(new UiActionRequest("CatalogueScope.Option", null, null, "on"), TestContext.Current.CancellationToken));
 
         Assert.Equal("e1", (string?)json["ref"]);
         Assert.Equal("checkBox", (string?)json["role"]);

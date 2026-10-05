@@ -88,7 +88,7 @@ public sealed class S100FeedTests : IDisposable
         {
             var location = (LocalItemLocation)item.Location;
             using var buffer = new MemoryStream();
-            await S100FeedPackager.WriteZipAsync(buffer, location);
+            await S100FeedPackager.WriteZipAsync(buffer, location, TestContext.Current.CancellationToken);
             buffer.Position = 0;
 
             using var zip = new ZipArchive(buffer);
@@ -117,7 +117,7 @@ public sealed class S100FeedTests : IDisposable
 
         var downloader = new EncCellDownloader(
             new HttpClient(new PackagerServer((LocalItemLocation)source.Location)), Path.Combine(_temp.Path, "downloads"));
-        var downloaded = await downloader.DownloadAsync(item);
+        var downloaded = await downloader.DownloadAsync(item, cancellationToken: TestContext.Current.CancellationToken);
 
         var remote = (RemoteItemLocation)item.Location;
         Assert.False(downloaded.IsPackage);
@@ -147,7 +147,7 @@ public sealed class S100FeedTests : IDisposable
         var downloader = new EncCellDownloader(
             new HttpClient(new PackagerServer((LocalItemLocation)source.Location)), Path.Combine(_temp.Path, "downloads"));
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => downloader.DownloadAsync(item));
+        await Assert.ThrowsAsync<InvalidDataException>(() => downloader.DownloadAsync(item, cancellationToken: TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(Path.Combine(_temp.Path, "escape")));
     }
 

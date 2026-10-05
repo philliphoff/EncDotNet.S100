@@ -12,7 +12,7 @@ public class ListTimeStepsToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new ListTimeStepsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListTimeStepsRequest(new DatasetId("nope")));
+        var result = await tool.InvokeAsync(new ListTimeStepsRequest(new DatasetId("nope")), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         Assert.True(result.TryGetError(out var error));
@@ -27,7 +27,7 @@ public class ListTimeStepsToolTests
         catalog.Add(ds);
         var tool = new ListTimeStepsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id));
+        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Times);
@@ -45,7 +45,7 @@ public class ListTimeStepsToolTests
         catalog.Add(ds);
         var tool = new ListTimeStepsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id));
+        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(3, value.Times.Count);
@@ -67,7 +67,7 @@ public class ListTimeStepsToolTests
         catalog.Add(ds);
         var tool = new ListTimeStepsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id));
+        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(5, value.Times.Count);
@@ -84,7 +84,7 @@ public class ListTimeStepsToolTests
         catalog.Add(ds);
         var tool = new ListTimeStepsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id));
+        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.NotEmpty(value.Times);
@@ -106,7 +106,7 @@ public class ListTimeStepsToolTests
         catalog.Add(ds);
         var tool = new ListTimeStepsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id));
+        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(3, value.Times.Count);
@@ -121,7 +121,7 @@ public class ListTimeStepsToolTests
         catalog.Add(ds);
         var tool = new ListTimeStepsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id));
+        var result = await tool.InvokeAsync(new ListTimeStepsRequest(ds.Id), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         Assert.True(result.TryGetError(out var error));

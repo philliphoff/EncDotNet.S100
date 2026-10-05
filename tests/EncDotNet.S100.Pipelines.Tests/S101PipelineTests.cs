@@ -68,7 +68,7 @@ public class S101PipelineTests
         xsltRules: new() { ["BOYLAT"] = xslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<PointInstruction>(layer.Instructions[0]);
@@ -131,7 +131,7 @@ public class S101PipelineTests
         xsltRules: new() { ["DEPARE"] = xslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<AreaInstruction>(layer.Instructions[0]);
@@ -187,7 +187,7 @@ public class S101PipelineTests
         xsltRules: new() { ["All"] = xslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(3, layer.Instructions.Count);
         // S-100 Part 9: area → line → point within same priority

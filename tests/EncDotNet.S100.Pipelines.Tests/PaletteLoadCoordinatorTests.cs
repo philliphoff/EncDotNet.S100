@@ -26,7 +26,7 @@ public class PaletteLoadCoordinatorTests
 
         for (var i = 0; i < 5; i++)
         {
-            await PaletteLoadCoordinator.EnsureLoadedAsync(cache, Load, () => appliedCount++);
+            await PaletteLoadCoordinator.EnsureLoadedAsync(cache, Load, () => appliedCount++, TestContext.Current.CancellationToken);
         }
 
         Assert.Equal(1, loadCount);
@@ -61,7 +61,7 @@ public class PaletteLoadCoordinatorTests
         Assert.False(cache.PalettesLoaded);
 
         // A subsequent (uncancelled) load succeeds and commits.
-        await PaletteLoadCoordinator.EnsureLoadedAsync(cache, Load, () => { });
+        await PaletteLoadCoordinator.EnsureLoadedAsync(cache, Load, () => { }, TestContext.Current.CancellationToken);
 
         Assert.True(cache.PalettesLoaded);
         Assert.Equal(2, attempts);

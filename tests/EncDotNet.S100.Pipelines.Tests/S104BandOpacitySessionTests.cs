@@ -34,7 +34,7 @@ public sealed class S104BandOpacitySessionTests
         var id = new MapDatasetId("s104.h5");
         Assert.True(owner.TryRegister(id, new BandProcessor(BandOpacity)));
         session.SetDataset(Dataset(id, "S-104"));
-        await session.RenderAsync(id, MapPresentationState.Default);
+        await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
 
         Assert.Equal(BandOpacity, Band(session).Opacity, precision: 10);
 
@@ -58,7 +58,7 @@ public sealed class S104BandOpacitySessionTests
         var id = new MapDatasetId("s102.h5");
         Assert.True(owner.TryRegister(id, new BandProcessor(opacity: 1.0, productSpec: "S-102")));
         session.SetDataset(Dataset(id, "S-102"));
-        await session.RenderAsync(id, MapPresentationState.Default);
+        await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
 
         Assert.Equal(1.0, Band(session).Opacity, precision: 10);
     }
@@ -75,8 +75,8 @@ public sealed class S104BandOpacitySessionTests
         Assert.True(owner.TryRegister(band, new BandProcessor(BandOpacity)));
         session.SetDataset(Dataset(enc, "S-101"));
         session.SetDataset(Dataset(band, "S-104"));
-        await session.RenderAsync(enc, MapPresentationState.Default);
-        await session.RenderAsync(band, MapPresentationState.Default);
+        await session.RenderAsync(enc, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        await session.RenderAsync(band, MapPresentationState.Default, TestContext.Current.CancellationToken);
 
         // R-101-104-B attached the ENC land to the band, so the stack holds a
         // rebuilt layer rather than the processor's original one.

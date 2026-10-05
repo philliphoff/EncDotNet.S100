@@ -30,7 +30,8 @@ public class PermitSignatureTests
             permitStream,
             signatureContent: null,
             "PERMIT.XML",
-            fixture.TrustAnchors);
+            fixture.TrustAnchors,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsAuthenticated);
         Assert.Null(result.PermitFile);
@@ -62,7 +63,8 @@ public class PermitSignatureTests
             permitStream,
             signatureStream,
             "PERMIT.XML",
-            new TrustAnchorOptions());
+            new TrustAnchorOptions(),
+            TestContext.Current.CancellationToken);
 
         Assert.False(result.IsAuthenticated);
         Assert.Equal(VerificationOutcome.CertificateUntrusted, result.Verification.Outcome);
@@ -79,7 +81,8 @@ public class PermitSignatureTests
             permitStream,
             signatureStream,
             "PERMIT.XML",
-            new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
 
         Assert.False(result.IsAuthenticated);
         Assert.Equal(VerificationOutcome.CertificateUntrusted, result.Verification.Outcome);
@@ -175,7 +178,8 @@ public class PermitSignatureTests
             permitStream,
             signatureStream,
             "PERMIT.XML",
-            fixture.TrustAnchors);
+            fixture.TrustAnchors,
+            TestContext.Current.CancellationToken);
 
         Assert.False(result.IsAuthenticated);
         Assert.Equal(VerificationOutcome.Error, result.Verification.Outcome);

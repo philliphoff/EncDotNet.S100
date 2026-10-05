@@ -22,7 +22,7 @@ public sealed class S102ShoalAwareSamplingTests
                 row == 2 && col == 2 ? 9f : 0.5f));
         var region = new GridRegion(0, 6, 0, 6, rowStride: 3, colStride: 3);
 
-        var sampled = source.Sample(region);
+        var sampled = source.Sample(region, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, sampled.Metadata.NumRows);
         Assert.Equal(2, sampled.Metadata.NumColumns);
@@ -49,7 +49,7 @@ public sealed class S102ShoalAwareSamplingTests
                 0.5f));
         var region = new GridRegion(0, 5, 0, 5, rowStride: 3, colStride: 3);
 
-        var sampled = source.Sample(region);
+        var sampled = source.Sample(region, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, sampled.Metadata.NumRows);
         Assert.Equal(2, sampled.Metadata.NumColumns);
@@ -71,7 +71,7 @@ public sealed class S102ShoalAwareSamplingTests
                 0.5f));
         var region = new GridRegion(0, 5, 0, 5, rowStride: 3, colStride: 3);
 
-        var sampled = source.Sample(region);
+        var sampled = source.Sample(region, TestContext.Current.CancellationToken);
 
         Assert.Equal(40f, sampled.GetField("depth")[0, 0]);
         Assert.Equal(40f, sampled.GetField("depth")[0, 1]);
@@ -91,7 +91,7 @@ public sealed class S102ShoalAwareSamplingTests
         source.SelectOverviewLevel(1);
         var region = new GridRegion(0, 4, 0, 4, rowStride: 2, colStride: 2);
 
-        var sampled = source.Sample(region);
+        var sampled = source.Sample(region, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, sampled.Metadata.NumRows);
         Assert.Equal(2, sampled.Metadata.NumColumns);
@@ -113,7 +113,7 @@ public sealed class S102ShoalAwareSamplingTests
                     S102CoverageSource.FillValue));
         var region = new GridRegion(0, 2, 0, 4, rowStride: 2, colStride: 2);
 
-        var sampled = source.Sample(region);
+        var sampled = source.Sample(region, TestContext.Current.CancellationToken);
 
         Assert.Equal(7f, sampled.GetField("depth")[0, 0]);
         Assert.Equal(2f, sampled.GetField("uncertainty")[0, 0]);
@@ -131,7 +131,7 @@ public sealed class S102ShoalAwareSamplingTests
         using var activity = new Activity("test");
         activity.Start();
 
-        source.Sample(new GridRegion(0, 2, 0, 2, rowStride: 2, colStride: 2));
+        source.Sample(new GridRegion(0, 2, 0, 2, rowStride: 2, colStride: 2), TestContext.Current.CancellationToken);
 
         Assert.Equal("min", activity.GetTagItem(TelemetryTags.CoverageReducer));
     }
@@ -153,7 +153,7 @@ public sealed class S102ShoalAwareSamplingTests
             rowStride: 50_000,
             colStride: 50_000);
 
-        var sampled = source.Sample(region);
+        var sampled = source.Sample(region, TestContext.Current.CancellationToken);
 
         Assert.Equal(1, sampled.Metadata.NumRows);
         Assert.Equal(1, sampled.Metadata.NumColumns);

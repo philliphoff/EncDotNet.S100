@@ -149,7 +149,8 @@ public class Part15DigitalSignatureTests
         var result = await verifier.VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
 
         var file = Assert.Single(result.FileResults);
         Assert.Equal(VerificationOutcome.Ok, file.Outcome);
@@ -185,7 +186,8 @@ public class Part15DigitalSignatureTests
         var result = await new ExchangeSetVerifier().VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
 
         var file = Assert.Single(result.FileResults);
         Assert.Equal(VerificationOutcome.Ok, file.Outcome);
@@ -217,7 +219,8 @@ public class Part15DigitalSignatureTests
         var result = await new ExchangeSetVerifier().VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(
             VerificationOutcome.Ok,
@@ -243,7 +246,8 @@ public class Part15DigitalSignatureTests
         var result = await new ExchangeSetVerifier().VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
 
         var signatureResult = Assert.Single(Assert.Single(result.FileResults).SignatureResults);
         Assert.Equal(VerificationOutcome.Error, signatureResult.Outcome);
@@ -272,7 +276,8 @@ public class Part15DigitalSignatureTests
         var result = await new ExchangeSetVerifier().VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(
             VerificationOutcome.Ok,
@@ -357,7 +362,8 @@ public class Part15DigitalSignatureTests
         var result = await new ExchangeSetVerifier().VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(
             SignatureFailureReason.UnsupportedAlgorithm,
@@ -391,7 +397,8 @@ public class Part15DigitalSignatureTests
         var result = await new ExchangeSetVerifier().VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(
             SignatureFailureReason.UnsupportedAlgorithm,
@@ -427,7 +434,8 @@ public class Part15DigitalSignatureTests
         var result = await new ExchangeSetVerifier().VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { TrustedRoots = [certificate] });
+            new TrustAnchorOptions { TrustedRoots = [certificate] },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(
             VerificationOutcome.Ok,
@@ -489,7 +497,8 @@ public class Part15DigitalSignatureTests
         var result = await new ExchangeSetVerifier().VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { TrustedRoots = [root] });
+            new TrustAnchorOptions { TrustedRoots = [root] },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(
             VerificationOutcome.Ok,
@@ -521,7 +530,8 @@ public class Part15DigitalSignatureTests
         var result = await new ExchangeSetVerifier().VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(
             SignatureFailureReason.CrossResourceReference,
@@ -554,7 +564,8 @@ public class Part15DigitalSignatureTests
         var result = await new ExchangeSetVerifier().VerifyAsync(
             source,
             catalogue,
-            new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(
             SignatureFailureReason.ContentUnavailable,

@@ -61,7 +61,7 @@ public class IdentifyFeaturesToolTests
             Point("pt", 0.0, 0.0))));
         var tool = new IdentifyFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0));
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(4, value.TotalMatched);
@@ -90,11 +90,11 @@ public class IdentifyFeaturesToolTests
             Square("donut", 0.5, Hole(0.2)))));
         var tool = new IdentifyFeaturesTool(catalog);
 
-        var inHole = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0));
+        var inHole = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0), TestContext.Current.CancellationToken);
         Assert.True(inHole.TryGetValue(out var holeValue));
         Assert.Empty(holeValue.Features);
 
-        var inRing = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.35, 0.0));
+        var inRing = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.35, 0.0), TestContext.Current.CancellationToken);
         Assert.True(inRing.TryGetValue(out var ringValue));
         var match = Assert.Single(ringValue.Features);
         Assert.Equal("donut", match.FeatureId);
@@ -109,12 +109,12 @@ public class IdentifyFeaturesToolTests
             Point("near", 0.0003, 0.0))));
         var tool = new IdentifyFeaturesTool(catalog);
 
-        var wide = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: 50));
+        var wide = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: 50), TestContext.Current.CancellationToken);
         Assert.True(wide.TryGetValue(out var wideValue));
         Assert.Single(wideValue.Features);
         Assert.True(wideValue.Features[0].DistanceMeters > 0);
 
-        var tight = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: 10));
+        var tight = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: 10), TestContext.Current.CancellationToken);
         Assert.True(tight.TryGetValue(out var tightValue));
         Assert.Empty(tightValue.Features);
     }
@@ -130,7 +130,7 @@ public class IdentifyFeaturesToolTests
             Curve("far", new GeoPosition(0.0, -0.5), new GeoPosition(0.0, 0.5)))));
         var tool = new IdentifyFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: 50));
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: 50), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Features);
@@ -143,7 +143,7 @@ public class IdentifyFeaturesToolTests
         catalog.Add(LoadedDatasetFactory.S124("warn", S124Synth.Dataset(Point("pt", 0.0, 0.0))));
         var tool = new IdentifyFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: double.NaN));
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, RadiusMeters: double.NaN), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         Assert.True(result.TryGetError(out var err));
@@ -162,7 +162,7 @@ public class IdentifyFeaturesToolTests
         var tool = new IdentifyFeaturesTool(catalog);
 
         var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(
-            0.0, 0.0, Spec: new SpecRef("S-124", default)));
+            0.0, 0.0, Spec: new SpecRef("S-124", default)), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.All(value.Features, f => Assert.Equal("S-124", f.Spec.Name));
@@ -180,7 +180,7 @@ public class IdentifyFeaturesToolTests
             new Dictionary<ushort, string> { [75] = "LIGHTS" }.ToDictionary())));
         var tool = new IdentifyFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0));
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Contains(value.Features, f => f.Spec.Name == "S-101" && f.Geometry == "point");
@@ -199,7 +199,7 @@ public class IdentifyFeaturesToolTests
             Point("pt", 0.0, 0.0))));
         var tool = new IdentifyFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, MaxResults: 1));
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0, MaxResults: 1), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Features);
@@ -215,7 +215,7 @@ public class IdentifyFeaturesToolTests
         catalog.Add(LoadedDatasetFactory.S102("depth"));
         var tool = new IdentifyFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0));
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(0.0, 0.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Features);
@@ -228,7 +228,7 @@ public class IdentifyFeaturesToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new IdentifyFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(120.0, 0.0));
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(120.0, 0.0), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
     }
@@ -251,7 +251,7 @@ public class IdentifyFeaturesToolTests
             LoadedDatasetFactory.Box(-1, -1, 2, 5)));
         var tool = new IdentifyFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(lat, lon));
+        var result = await tool.InvokeAsync(new IdentifyFeaturesRequest(lat, lon), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(expected, value.Features.Any(f => f.FeatureType == "DepthArea"));

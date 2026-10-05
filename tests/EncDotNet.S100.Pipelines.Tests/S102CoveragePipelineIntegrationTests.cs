@@ -56,7 +56,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var catalogue = CreateCatalogue();
         var pipeline = new CoveragePipeline();
 
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         // 31 rows × 21 columns = 651 cells in the sampled grid
         Assert.Equal(31, layer.Coverage.Metadata.NumRows);
@@ -81,7 +81,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         };
 
         var pipeline = new CoveragePipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue, mariner: mariner);
+        var layer = await pipeline.ProcessAsync(source, catalogue, mariner: mariner, cancellationToken: TestContext.Current.CancellationToken);
 
         // The test file has real depths 4.44–8m — all in [ShallowContour=2, SafetyContour=30) → DEPMS.
         // Walk the depth field and verify each non-fill cell maps to DEPMS via the resolved scheme.
@@ -111,7 +111,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var catalogue = CreateCatalogue();
         var pipeline = new CoveragePipeline();
 
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         // S-102 uses the sentinel fill value 1,000,000f (not NaN).
         Assert.Equal(S102CoverageSource.FillValue, layer.NoDataValue);
@@ -139,7 +139,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         var catalogue = CreateCatalogue();
         var pipeline = new CoveragePipeline();
 
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         var grid = layer.Coverage.Metadata;
         Assert.Equal(31, grid.NumRows);
@@ -162,7 +162,7 @@ public class S102CoveragePipelineIntegrationTests : IDisposable
         };
 
         var pipeline = new CoveragePipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue, mariner: mariner);
+        var layer = await pipeline.ProcessAsync(source, catalogue, mariner: mariner, cancellationToken: TestContext.Current.CancellationToken);
 
         // Two-shade: depths [0, 30) → DEPVS, ≥30 → DEPDW. All real values 4–8m → DEPVS.
         Assert.NotNull(layer.ColorScheme);

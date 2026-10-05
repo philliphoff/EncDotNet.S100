@@ -70,7 +70,7 @@ public class CaptureAppScreenshotToolTests
         var provider = new FakeAppScreenshotProvider(png);
         var tool = new CaptureAppScreenshotTool(provider);
 
-        var result = await tool.InvokeAsync();
+        var result = await tool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(1, provider.Calls);
@@ -91,7 +91,7 @@ public class CaptureAppScreenshotToolTests
         var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(2200, 1400));
         var tool = new CaptureAppScreenshotTool(provider);
 
-        var result = await tool.InvokeAsync(scale);
+        var result = await tool.InvokeAsync(scale, TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out _));
         Assert.Equal(expected, provider.LastScale);
@@ -103,7 +103,7 @@ public class CaptureAppScreenshotToolTests
         var provider = new FakeAppScreenshotProvider(png: null);
         var tool = new CaptureAppScreenshotTool(provider);
 
-        var result = await tool.InvokeAsync();
+        var result = await tool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         Assert.True(result.TryGetError(out var err));
@@ -117,7 +117,7 @@ public class CaptureAppScreenshotToolTests
         var provider = new FakeAppScreenshotProvider(png: Array.Empty<byte>());
         var tool = new CaptureAppScreenshotTool(provider);
 
-        var result = await tool.InvokeAsync();
+        var result = await tool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<WindowNotReady>(err);
@@ -129,7 +129,7 @@ public class CaptureAppScreenshotToolTests
         var provider = new FakeAppScreenshotProvider(toThrow: new InvalidOperationException("boom"));
         var tool = new CaptureAppScreenshotTool(provider);
 
-        var result = await tool.InvokeAsync();
+        var result = await tool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<WindowNotReady>(err);
@@ -152,7 +152,7 @@ public class CaptureAppScreenshotToolTests
         var provider = new FakeAppScreenshotProvider(png: junk);
         var tool = new CaptureAppScreenshotTool(provider);
 
-        var result = await tool.InvokeAsync();
+        var result = await tool.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(0, value!.Width);

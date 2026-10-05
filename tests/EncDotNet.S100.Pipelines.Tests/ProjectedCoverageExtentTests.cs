@@ -151,7 +151,7 @@ public class ProjectedCoverageExtentTests
         using var processor = new S102DatasetProcessor(path, manager, new MoonSharpLuaEngine(), Factory);
         try
         {
-            var result = await processor.BuildCoveragePortrayalAsync();
+            var result = await processor.BuildCoveragePortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             var grid = Assert.IsType<GridCoverageSubLayer>(Assert.Single(result.SubLayers));
             AssertViewportNearLakeErie(grid.Viewport);
@@ -171,7 +171,7 @@ public class ProjectedCoverageExtentTests
         var processor = new S104DatasetProcessor(path, Factory);
         try
         {
-            var result = await processor.BuildCoveragePortrayalAsync();
+            var result = await processor.BuildCoveragePortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             var grid = result.SubLayers.OfType<GridCoverageSubLayer>().Single();
             AssertViewportNearLakeErie(grid.Viewport);
@@ -189,7 +189,7 @@ public class ProjectedCoverageExtentTests
         var processor = new S104DatasetProcessor(path, Factory);
         try
         {
-            using var bitmap = await processor.RenderHeadlessAsync(128, 128);
+            using var bitmap = await processor.RenderHeadlessAsync(128, 128, cancellationToken: TestContext.Current.CancellationToken);
             AssertNonBlank(bitmap);
         }
         finally
@@ -226,7 +226,7 @@ public class ProjectedCoverageExtentTests
         var processor = new S111DatasetProcessor(path, manager, Factory);
         try
         {
-            var result = await processor.BuildCoveragePortrayalAsync();
+            var result = await processor.BuildCoveragePortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             var arrows = result.SubLayers.OfType<ArrowCoverageSubLayer>().Single();
             AssertViewportNearLakeErie(arrows.Viewport);

@@ -145,7 +145,7 @@ public class S401SpecificationTests
         // loaders' requested directory resolves without the case-insensitive
         // fallback.
         using var source = Specification.CreatePortrayalCatalogueSource("S-401");
-        using var stream = await source.OpenAsync("LineStyles/ACHARE51.xml");
+        using var stream = await source.OpenAsync("LineStyles/ACHARE51.xml", TestContext.Current.CancellationToken);
         Assert.True(stream.Length > 0);
     }
 }

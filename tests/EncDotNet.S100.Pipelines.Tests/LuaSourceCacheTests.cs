@@ -23,7 +23,7 @@ public class LuaSourceCacheTests
         using var inner = Specification.CreatePortrayalCatalogueSource("S-101");
         using var counting = new CountingAssetSource(inner);
 
-        var provider = await PortrayalCatalogueProvider.OpenAsync(counting);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(counting, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new S101PortrayalCatalogue(provider);
 
         // Prime the path counters: snapshot the open count for "Rules/main.lua"
@@ -31,9 +31,9 @@ public class LuaSourceCacheTests
         // not leak in.
         var openCountBefore = counting.GetOpenCount("Rules/main.lua");
 
-        var first = await catalogue.GetLuaSourceAsync("main.lua");
-        var second = await catalogue.GetLuaSourceAsync("main.lua");
-        var third = await catalogue.GetLuaSourceAsync("main.lua");
+        var first = await catalogue.GetLuaSourceAsync("main.lua", TestContext.Current.CancellationToken);
+        var second = await catalogue.GetLuaSourceAsync("main.lua", TestContext.Current.CancellationToken);
+        var third = await catalogue.GetLuaSourceAsync("main.lua", TestContext.Current.CancellationToken);
 
         Assert.NotNull(first);
         Assert.NotEmpty(first!);
@@ -53,15 +53,15 @@ public class LuaSourceCacheTests
         using var inner = Specification.CreatePortrayalCatalogueSource("S-101");
         using var counting = new CountingAssetSource(inner);
 
-        var provider = await PortrayalCatalogueProvider.OpenAsync(counting);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(counting, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new S101PortrayalCatalogue(provider);
 
         const string missing = "definitely-not-a-real-rule.lua";
         var openCountBefore = counting.GetOpenCount($"Rules/{missing}");
 
-        var a = await catalogue.GetLuaSourceAsync(missing);
-        var b = await catalogue.GetLuaSourceAsync(missing);
-        var c = await catalogue.GetLuaSourceAsync(missing);
+        var a = await catalogue.GetLuaSourceAsync(missing, TestContext.Current.CancellationToken);
+        var b = await catalogue.GetLuaSourceAsync(missing, TestContext.Current.CancellationToken);
+        var c = await catalogue.GetLuaSourceAsync(missing, TestContext.Current.CancellationToken);
 
         Assert.Null(a);
         Assert.Null(b);
@@ -80,14 +80,14 @@ public class LuaSourceCacheTests
         using var inner = Specification.CreatePortrayalCatalogueSource("S-131");
         using var counting = new CountingAssetSource(inner);
 
-        var provider = await PortrayalCatalogueProvider.OpenAsync(counting);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(counting, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new S131PortrayalCatalogue(provider);
 
         var openCountBefore = counting.GetOpenCount("Rules/main.lua");
 
-        var first = await catalogue.GetLuaSourceAsync("main.lua");
-        var second = await catalogue.GetLuaSourceAsync("main.lua");
-        var third = await catalogue.GetLuaSourceAsync("main.lua");
+        var first = await catalogue.GetLuaSourceAsync("main.lua", TestContext.Current.CancellationToken);
+        var second = await catalogue.GetLuaSourceAsync("main.lua", TestContext.Current.CancellationToken);
+        var third = await catalogue.GetLuaSourceAsync("main.lua", TestContext.Current.CancellationToken);
 
         Assert.NotNull(first);
         Assert.NotEmpty(first!);
@@ -108,16 +108,16 @@ public class LuaSourceCacheTests
         // does not.)
         using var innerA = Specification.CreatePortrayalCatalogueSource("S-101");
         using var countingA = new CountingAssetSource(innerA);
-        var providerA = await PortrayalCatalogueProvider.OpenAsync(countingA);
+        var providerA = await PortrayalCatalogueProvider.OpenAsync(countingA, cancellationToken: TestContext.Current.CancellationToken);
         var catalogueA = new S101PortrayalCatalogue(providerA);
 
         using var innerB = Specification.CreatePortrayalCatalogueSource("S-101");
         using var countingB = new CountingAssetSource(innerB);
-        var providerB = await PortrayalCatalogueProvider.OpenAsync(countingB);
+        var providerB = await PortrayalCatalogueProvider.OpenAsync(countingB, cancellationToken: TestContext.Current.CancellationToken);
         var catalogueB = new S101PortrayalCatalogue(providerB);
 
-        var srcA = await catalogueA.GetLuaSourceAsync("main.lua");
-        var srcB = await catalogueB.GetLuaSourceAsync("main.lua");
+        var srcA = await catalogueA.GetLuaSourceAsync("main.lua", TestContext.Current.CancellationToken);
+        var srcB = await catalogueB.GetLuaSourceAsync("main.lua", TestContext.Current.CancellationToken);
 
         Assert.NotNull(srcA);
         Assert.NotNull(srcB);

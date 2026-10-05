@@ -44,9 +44,9 @@ public class S57DatasetProcessorBasemapTests
             fixturePath, catalogueManager, new MoonSharpLuaEngine(), featureCatalogueManager);
 
         using var none = await processor.RenderHeadlessAsync(
-            300, 300, new S101RenderContext { Viewport = MassachusettsViewport, Basemap = BasemapKind.None });
+            300, 300, new S101RenderContext { Viewport = MassachusettsViewport, Basemap = BasemapKind.None }, cancellationToken: TestContext.Current.CancellationToken);
         using var offline = await processor.RenderHeadlessAsync(
-            300, 300, new S101RenderContext { Viewport = MassachusettsViewport, Basemap = BasemapKind.Offline });
+            300, 300, new S101RenderContext { Viewport = MassachusettsViewport, Basemap = BasemapKind.Offline }, cancellationToken: TestContext.Current.CancellationToken);
 
         // About 72.8°W, 42.5°N: inland, west of the cell.
         const int x = 70, y = 150;

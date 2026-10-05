@@ -58,7 +58,7 @@ public class S201FeatureXmlSourceTests
     {
         var source = new S201FeatureXmlSource(BuildDataset());
 
-        var doc = XDocument.Load(source.GetFeatureXml());
+        var doc = XDocument.Load(source.GetFeatureXml(TestContext.Current.CancellationToken));
         var root = doc.Root!;
 
         Assert.Equal("Dataset", root.Name.LocalName);

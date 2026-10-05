@@ -16,7 +16,7 @@ public class S100McpServerLifecycleTests
         Assert.Null(server.Port);
         Assert.Null(server.Endpoint);
 
-        await server.StartAsync();
+        await server.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.True(server.IsRunning);
         Assert.NotNull(server.Port);
@@ -31,10 +31,10 @@ public class S100McpServerLifecycleTests
         var server = new S100McpServer(
             new FakeDatasetCatalog(),
             new S100McpServerOptions { BindAddress = IPAddress.Loopback, Port = 0 });
-        await server.StartAsync();
+        await server.StartAsync(TestContext.Current.CancellationToken);
         Assert.True(server.IsRunning);
 
-        await server.StopAsync();
+        await server.StopAsync(TestContext.Current.CancellationToken);
 
         Assert.False(server.IsRunning);
         Assert.Null(server.Port);
@@ -47,7 +47,7 @@ public class S100McpServerLifecycleTests
         var server = new S100McpServer(
             new FakeDatasetCatalog(),
             new S100McpServerOptions { BindAddress = IPAddress.Loopback, Port = 0 });
-        await server.StartAsync();
+        await server.StartAsync(TestContext.Current.CancellationToken);
 
         await server.DisposeAsync();
 
@@ -60,7 +60,7 @@ public class S100McpServerLifecycleTests
         await using var server = new S100McpServer(
             new FakeDatasetCatalog(),
             new S100McpServerOptions { BindAddress = IPAddress.Loopback, Port = 0 });
-        await server.StartAsync();
+        await server.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(server.Endpoint);
         var host = server.Endpoint!.Host;
@@ -77,8 +77,8 @@ public class S100McpServerLifecycleTests
             new S100McpServerOptions { BindAddress = IPAddress.Loopback, Port = 0 });
         server.StateChanged += (_, _) => Interlocked.Increment(ref fired);
 
-        await server.StartAsync();
-        await server.StopAsync();
+        await server.StartAsync(TestContext.Current.CancellationToken);
+        await server.StopAsync(TestContext.Current.CancellationToken);
 
         Assert.True(fired >= 2, $"StateChanged fired {fired} times; expected ≥ 2.");
     }

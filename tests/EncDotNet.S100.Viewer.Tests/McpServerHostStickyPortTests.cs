@@ -39,7 +39,7 @@ public class McpServerHostStickyPortTests
         var settings = NewSettings();
         await using var host = new McpServerHost(new EmptyCatalog(), settings);
 
-        await host.Apply();
+        await host.Apply(TestContext.Current.CancellationToken);
 
         Assert.NotNull(host.Server);
         Assert.True(host.Server!.IsRunning);
@@ -76,7 +76,7 @@ public class McpServerHostStickyPortTests
             int? conflictPort = null;
             host.McpPortConflict += (_, e) => conflictPort = e.Port;
 
-            await host.Apply();
+            await host.Apply(TestContext.Current.CancellationToken);
 
             Assert.Equal(port, conflictPort);
             // Server must NOT come up — the user has to opt in to recovery.
@@ -107,10 +107,10 @@ public class McpServerHostStickyPortTests
             settings.McpPort = port;
 
             await using var host = new McpServerHost(new EmptyCatalog(), settings);
-            await host.Apply(); // conflict, no server
+            await host.Apply(TestContext.Current.CancellationToken); // conflict, no server
             Assert.Null(host.Server);
 
-            var newPort = await host.ResetPortAsync();
+            var newPort = await host.ResetPortAsync(TestContext.Current.CancellationToken);
 
             Assert.NotNull(newPort);
             Assert.NotEqual(port, newPort);
@@ -134,11 +134,11 @@ public class McpServerHostStickyPortTests
         var settings = NewSettings();
         await using var host = new McpServerHost(new EmptyCatalog(), settings);
 
-        await host.Apply();
+        await host.Apply(TestContext.Current.CancellationToken);
         var firstPort = host.Server?.Port;
         var firstServer = host.Server;
 
-        await host.Apply();
+        await host.Apply(TestContext.Current.CancellationToken);
 
         Assert.Same(firstServer, host.Server);
         Assert.Equal(firstPort, host.Server?.Port);

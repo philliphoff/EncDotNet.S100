@@ -107,7 +107,7 @@ public class DatasetLoadGatewayTests
         var entry = datasets.Add("/tmp/chart.000", "S-101");
         Assert.Contains(entry, datasets.Entries);
 
-        var removed = await gateway.RemoveAsync(entry.DisplayName);
+        var removed = await gateway.RemoveAsync(entry.DisplayName, TestContext.Current.CancellationToken);
 
         Assert.Equal(1, removed);
         Assert.DoesNotContain(entry, datasets.Entries);
@@ -122,7 +122,7 @@ public class DatasetLoadGatewayTests
         var gateway = Make(out var datasets, out _);
         datasets.Add("/tmp/chart.000", "S-101");
 
-        var removed = await gateway.RemoveAsync("not-loaded.000");
+        var removed = await gateway.RemoveAsync("not-loaded.000", TestContext.Current.CancellationToken);
 
         Assert.Equal(0, removed);
         Assert.Single(datasets.Entries);
@@ -137,7 +137,7 @@ public class DatasetLoadGatewayTests
         datasets.Add("/a/chart.000", "S-101");
         datasets.Add("/b/chart.000", "S-101");
 
-        var removed = await gateway.RemoveAsync("chart.000");
+        var removed = await gateway.RemoveAsync("chart.000", TestContext.Current.CancellationToken);
 
         Assert.Equal(2, removed);
         Assert.Empty(datasets.Entries);
@@ -150,7 +150,7 @@ public class DatasetLoadGatewayTests
         loader.LoadHook = (_, _) => throw new InvalidOperationException("boom");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => gateway.LoadFileAsync("/tmp/chart.000", specHint: "S-101"));
+            () => gateway.LoadFileAsync("/tmp/chart.000", specHint: "S-101", cancellationToken: TestContext.Current.CancellationToken));
 
         // No stale half-loaded entry left behind.
         Assert.Empty(datasets.Entries);
@@ -163,7 +163,7 @@ public class DatasetLoadGatewayTests
         DatasetEntry? loaded = null;
         loader.LoadHook = (e, _) => { loaded = e; return Task.CompletedTask; };
 
-        var ok = await gateway.LoadFileAsync("/tmp/chart.000", specHint: "S-101");
+        var ok = await gateway.LoadFileAsync("/tmp/chart.000", specHint: "S-101", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(ok);
         Assert.NotNull(loaded);

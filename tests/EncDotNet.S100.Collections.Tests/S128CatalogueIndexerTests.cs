@@ -12,7 +12,7 @@ public class S128CatalogueIndexerTests
         var expected = S128Dataset.Open(path).Entries;
 
         var index = await CollectionIndexer.CreateDefault()
-            .IndexAsync(new S128CatalogueSource(Guid.NewGuid(), null, path));
+            .IndexAsync(new S128CatalogueSource(Guid.NewGuid(), null, path), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(index.Items);
         Assert.Equal(expected.Count, index.Items.Count);
@@ -36,7 +36,7 @@ public class S128CatalogueIndexerTests
     public async Task Missing_file_reports_an_error()
     {
         var index = await CollectionIndexer.CreateDefault()
-            .IndexAsync(new S128CatalogueSource(Guid.NewGuid(), null, "/nonexistent/catalogue.gml"));
+            .IndexAsync(new S128CatalogueSource(Guid.NewGuid(), null, "/nonexistent/catalogue.gml"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(index.Items);
         Assert.Null(index.Fingerprint);

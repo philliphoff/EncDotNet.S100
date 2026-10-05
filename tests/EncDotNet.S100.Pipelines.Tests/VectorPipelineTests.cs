@@ -52,7 +52,7 @@ public class VectorPipelineTests
         xsltRules: new() { ["BuoyRule"] = xslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<PointInstruction>(layer.Instructions[0]);
@@ -101,7 +101,7 @@ public class VectorPipelineTests
         xsltRules: new() { ["ContourRule"] = xslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<LineInstruction>(layer.Instructions[0]);
@@ -146,7 +146,7 @@ public class VectorPipelineTests
         xsltRules: new() { ["LandRule"] = xslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<AreaInstruction>(layer.Instructions[0]);
@@ -191,7 +191,7 @@ public class VectorPipelineTests
         xsltRules: new() { ["SoundingRule"] = xslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(layer.Instructions);
         var inst = Assert.IsType<TextInstruction>(layer.Instructions[0]);
@@ -248,7 +248,7 @@ public class VectorPipelineTests
         xsltRules: new() { ["BuoyRule"] = buoyXslt, ["LandRule"] = landXslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         // Only the land rule should have produced output
         Assert.Single(layer.Instructions);
@@ -293,7 +293,7 @@ public class VectorPipelineTests
         xsltRules: new() { ["MetaRule"] = metaXslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(layer.Instructions);
         Assert.Equal("meta", layer.Instructions[0].FeatureReference);
@@ -329,7 +329,7 @@ public class VectorPipelineTests
         viewingGroups: viewingGroups);
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(layer.Instructions);
     }
@@ -379,7 +379,7 @@ public class VectorPipelineTests
         xsltRules: new() { ["BuoyRule"] = xslt },
         viewingGroups: viewingGroups);
 
-        var layer = await new VectorPipeline().ProcessAsync(source, catalogue);
+        var layer = await new VectorPipeline().ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(
             expectedSymbols,
@@ -445,7 +445,7 @@ public class VectorPipelineTests
         xsltRules: new() { ["All"] = xslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(5, layer.Instructions.Count);
 
@@ -474,7 +474,7 @@ public class VectorPipelineTests
         xsltRules: new());
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(layer.Instructions);
     }
@@ -526,7 +526,7 @@ public class VectorPipelineTests
         xsltRules: new() { ["BuoyRule"] = buoyXslt, ["LandRule"] = landXslt });
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, layer.Instructions.Count);
         // Sorted: UnderRadar area first, then OverRadar point
@@ -596,7 +596,7 @@ public class VectorPipelineTests
         catalogue.DisplayPlanes.SetVisible(DisplayPlane.OverRadar, false);
 
         var pipeline = new VectorPipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         // Only the UnderRadar area should remain
         Assert.Single(layer.Instructions);

@@ -258,7 +258,7 @@ public sealed class TimelineLanesTests
             action => { action(); return Task.CompletedTask; });
         var tool = new SetTimelineViewTool(controller);
 
-        Assert.True((await new GetTimelineStateTool(controller).InvokeAsync()).TryGetValue(out var state));
+        Assert.True((await new GetTimelineStateTool(controller).InvokeAsync(TestContext.Current.CancellationToken)).TryGetValue(out var state));
         Assert.True(state!.InMapView);
         Assert.Equal("lanes", state.Layout);
         Assert.Equal(["cbofs", "dbofs"], state.Lanes.Where(l => l.Listed).Select(l => l.Label));
@@ -266,17 +266,17 @@ public sealed class TimelineLanesTests
         Assert.Equal("S-111 Surface currents", state.Lanes[0].Group);
         Assert.Equal("S-111 Surface currents", state.Lanes[^1].Group);
 
-        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, null, null, InMapView: false, Layout: "strip"))).TryGetValue(out var off));
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, null, null, InMapView: false, Layout: "strip"), TestContext.Current.CancellationToken)).TryGetValue(out var off));
         Assert.False(off!.InMapView);
         Assert.Equal("strip", off.Layout);
         Assert.All(off.Lanes, l => Assert.True(l.Listed));
 
-        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest("in_view", null, null, null, InMapView: true))).TryGetValue(out var inView));
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest("in_view", null, null, null, InMapView: true), TestContext.Current.CancellationToken)).TryGetValue(out var inView));
         Assert.Equal("In view", inView!.Preset);
 
-        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, null, null))).TryGetError(out var none));
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, null, null), TestContext.Current.CancellationToken)).TryGetError(out var none));
         Assert.Equal("preset", Assert.IsType<InvalidArgument>(none).Parameter);
-        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, null, null, Layout: "grid"))).TryGetError(out var bad));
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, null, null, Layout: "grid"), TestContext.Current.CancellationToken)).TryGetError(out var bad));
         Assert.Equal("layout", Assert.IsType<InvalidArgument>(bad).Parameter);
     }
 
@@ -429,7 +429,7 @@ public sealed class TimelineLanesTests
             service, timeline, new DatasetsViewModel(new FakeDatasetLoaderService()), new FakeTimeProvider(new DateTimeOffset(Run)),
             action => { action(); return Task.CompletedTask; });
 
-        Assert.True((await new GetTimelineStateTool(controller).InvokeAsync()).TryGetValue(out var state));
+        Assert.True((await new GetTimelineStateTool(controller).InvokeAsync(TestContext.Current.CancellationToken)).TryGetValue(out var state));
         Assert.True(state!.ShowOnline);
         var cbofs = state.Lanes[0];
         Assert.True(cbofs.NewRun);
@@ -440,7 +440,7 @@ public sealed class TimelineLanesTests
         Assert.Equal("library:S-111/dbofs", dbofs.Id);
         Assert.All(dbofs.Windows, w => Assert.StartsWith("feed:", w.ItemId, StringComparison.Ordinal));
 
-        Assert.True((await new SetTimelineViewTool(controller).InvokeAsync(new SetTimelineViewRequest(null, null, null, null, ShowOnline: false))).TryGetValue(out var off));
+        Assert.True((await new SetTimelineViewTool(controller).InvokeAsync(new SetTimelineViewRequest(null, null, null, null, ShowOnline: false), TestContext.Current.CancellationToken)).TryGetValue(out var off));
         Assert.False(off!.ShowOnline);
         Assert.Single(off.Lanes);
     }

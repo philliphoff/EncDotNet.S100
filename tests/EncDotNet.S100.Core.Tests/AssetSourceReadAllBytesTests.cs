@@ -17,7 +17,7 @@ public class AssetSourceReadAllBytesTests
             ["foo/bar.bin"] = payload,
         });
 
-        AssetBytes bytes = await source.ReadAllBytesAsync("foo/bar.bin");
+        AssetBytes bytes = await source.ReadAllBytesAsync("foo/bar.bin", TestContext.Current.CancellationToken);
 
         Assert.Equal(payload, bytes.Bytes.ToArray());
         Assert.Equal("foo/bar.bin", bytes.RelativePath);
@@ -29,7 +29,7 @@ public class AssetSourceReadAllBytesTests
         var stream = new TrackingMemoryStream([7, 8, 9]);
         IAssetSource source = new SingleStreamAssetSource(stream);
 
-        AssetBytes bytes = await source.ReadAllBytesAsync("path");
+        AssetBytes bytes = await source.ReadAllBytesAsync("path", TestContext.Current.CancellationToken);
 
         Assert.Equal(new byte[] { 7, 8, 9 }, bytes.Bytes.ToArray());
         Assert.True(stream.Disposed);
@@ -41,7 +41,7 @@ public class AssetSourceReadAllBytesTests
         IAssetSource source = new InMemoryAssetSource(new());
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => source.ReadAllBytesAsync(""));
+            () => source.ReadAllBytesAsync("", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -56,8 +56,8 @@ public class AssetSourceReadAllBytesTests
         // Reached through the interface, the cache's override serves the
         // memoised bytes directly rather than falling back to the default
         // (which would re-open the stream on every call).
-        AssetBytes first = await source.ReadAllBytesAsync("a.txt");
-        AssetBytes second = await source.ReadAllBytesAsync("a.txt");
+        AssetBytes first = await source.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+        AssetBytes second = await source.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
 
         Assert.Equal(new byte[] { 1, 2, 3 }, first.Bytes.ToArray());
         Assert.Equal(new byte[] { 1, 2, 3 }, second.Bytes.ToArray());

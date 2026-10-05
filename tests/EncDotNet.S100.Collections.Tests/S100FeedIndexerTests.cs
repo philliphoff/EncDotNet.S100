@@ -45,7 +45,7 @@ public sealed class S100FeedIndexerTests : IDisposable
         var server = new FeedServer(await FeedJsonAsync());
         var indexer = CollectionIndexer.CreateDefault(feeds: [new S100FeedIndexer(new HttpClient(server), _temp.Path)]);
 
-        var index = await indexer.IndexAsync(Source());
+        var index = await indexer.IndexAsync(Source(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(index.Diagnostics);
         var cell = index.Items.Single(i => i.Name == "US4OH1MK");
@@ -60,7 +60,7 @@ public sealed class S100FeedIndexerTests : IDisposable
         Assert.IsType<NoItemLocation>(index.Items.Single(i => i.Name == "ODD").Location);
 
         // Unchanged (a 304): the previous index is reused.
-        var again = await indexer.IndexAsync(Source() with { Id = index.SourceId }, index);
+        var again = await indexer.IndexAsync(Source() with { Id = index.SourceId }, index, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Same(index, again);
     }
 
@@ -71,21 +71,21 @@ public sealed class S100FeedIndexerTests : IDisposable
         var feeds = new S100FeedIndexer(new HttpClient(server), _temp.Path, new FeedCacheOptions { RevalidationInterval = TimeSpan.Zero });
         Assert.Null(feeds.HealthOf(FeedUri));
 
-        await feeds.GetFeedAsync(FeedUri);
+        await feeds.GetFeedAsync(FeedUri, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(feeds.HealthOf(FeedUri)!.IsReachable);
 
         server.Down = true;
-        await feeds.GetFeedAsync(FeedUri);  // served from the cached copy
+        await feeds.GetFeedAsync(FeedUri, cancellationToken: TestContext.Current.CancellationToken);  // served from the cached copy
         var failing = feeds.HealthOf(FeedUri)!;
         Assert.False(failing.IsReachable);
         Assert.NotNull(failing.CopyFetchedAt);
         Assert.NotNull(failing.FailingSince);
 
-        await feeds.GetFeedAsync(FeedUri);
+        await feeds.GetFeedAsync(FeedUri, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(failing.FailingSince, feeds.HealthOf(FeedUri)!.FailingSince);  // the run of failures began earlier
 
         server.Down = false;
-        await feeds.GetFeedAsync(FeedUri);
+        await feeds.GetFeedAsync(FeedUri, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(feeds.HealthOf(FeedUri)!.IsReachable);
     }
 
@@ -96,8 +96,8 @@ public sealed class S100FeedIndexerTests : IDisposable
         var feeds = new S100FeedIndexer(new HttpClient(server), _temp.Path);
 
         var index = await CollectionIndexer.CreateDefault(feeds: [feeds])
-            .IndexAsync(Source(new S100FeedFilter { ProductSpecs = ["s-57"] }));
-        var products = S100FeedIndexer.Products(await feeds.GetFeedAsync(FeedUri));
+            .IndexAsync(Source(new S100FeedFilter { ProductSpecs = ["s-57"] }), cancellationToken: TestContext.Current.CancellationToken);
+        var products = S100FeedIndexer.Products(await feeds.GetFeedAsync(FeedUri, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("US4OH1MK", Assert.Single(index.Items).Name);
         Assert.Equal(["S-102", "S-57"], products.Select(p => p.Value));

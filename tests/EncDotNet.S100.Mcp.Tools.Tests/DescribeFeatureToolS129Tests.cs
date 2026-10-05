@@ -21,7 +21,7 @@ public class DescribeFeatureToolS129Tests
         catalog.Add(LoadedDatasetFactory.S129("ds", dataset));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "PLAN_1"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "PLAN_1"), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("UnderKeelClearancePlan", value.FeatureTypeName);
         Assert.Equal("S-129", value.Spec.Name);
@@ -63,7 +63,7 @@ public class DescribeFeatureToolS129Tests
         catalog.Add(LoadedDatasetFactory.S129("ds", dataset));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "PLAN_AREA_1"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "PLAN_AREA_1"), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("UnderKeelClearancePlanArea", value.FeatureTypeName);
 
@@ -88,7 +88,7 @@ public class DescribeFeatureToolS129Tests
         catalog.Add(LoadedDatasetFactory.S129("ds", dataset));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "CP_01"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "CP_01"), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("UnderKeelClearanceControlPoint", value.FeatureTypeName);
 
@@ -113,7 +113,7 @@ public class DescribeFeatureToolS129Tests
         catalog.Add(LoadedDatasetFactory.S129("ds", dataset));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "NN_1"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "NN_1"), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("UnderKeelClearanceNonNavigableArea", value.FeatureTypeName);
         var attrs = value.Attributes;
@@ -130,7 +130,7 @@ public class DescribeFeatureToolS129Tests
         catalog.Add(LoadedDatasetFactory.S129("ds", dataset));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "does-not-exist"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "does-not-exist"), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<FeatureNotFound>(err);
     }
@@ -148,7 +148,7 @@ public class DescribeFeatureToolS129Tests
             s101.Data));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "PLAN_1"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "PLAN_1"), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         var unsupported = Assert.IsType<SpecNotSupportedForTool>(err);
         Assert.Equal("S-129", unsupported.Spec.Name);
@@ -165,7 +165,7 @@ public class DescribeFeatureToolS129Tests
         catalog.Add(LoadedDatasetFactory.S129("ds", dataset));
         var tool = new DescribeFeatureTool(catalog);
 
-        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "PLAN_AREA_1"));
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(new DatasetId("ds"), "PLAN_AREA_1"), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("UnderKeelClearancePlanArea", value.FeatureTypeName);
         var attrs = value.Attributes;

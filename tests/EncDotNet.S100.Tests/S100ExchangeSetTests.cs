@@ -31,7 +31,7 @@ public sealed class S100ExchangeSetTests
     {
         using var source = FileSystemAssetSource.Create(TestData);
 
-        using var dataset = await S100Dataset.OpenAsync(source, relativePath);
+        using var dataset = await S100Dataset.OpenAsync(source, relativePath, TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedSpec, dataset.Spec.Name);
     }
@@ -41,7 +41,7 @@ public sealed class S100ExchangeSetTests
     {
         using var source = FileSystemAssetSource.Create(TestData);
 
-        using var dataset = await S100Dataset.OpenAsync(source, "S111/111US00_DBOFS_20260320T18Z_US4DE1BB.h5");
+        using var dataset = await S100Dataset.OpenAsync(source, "S111/111US00_DBOFS_20260320T18Z_US4DE1BB.h5", TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(dataset.AvailableTimes);
     }
@@ -51,7 +51,7 @@ public sealed class S100ExchangeSetTests
     {
         using var source = ZipAssetSource.Create(S101Zip);
 
-        using var dataset = await S100Dataset.OpenAsync(source, "S-101/DATASET_FILES/101AA00DS0019.000");
+        using var dataset = await S100Dataset.OpenAsync(source, "S-101/DATASET_FILES/101AA00DS0019.000", TestContext.Current.CancellationToken);
 
         Assert.Equal("S-101", dataset.Spec.Name);
     }
@@ -62,7 +62,7 @@ public sealed class S100ExchangeSetTests
         using var source = FileSystemAssetSource.Create(TestData);
 
         await Assert.ThrowsAnyAsync<IOException>(
-            () => S100Dataset.OpenAsync(source, "S124/does-not-exist.gml"));
+            () => S100Dataset.OpenAsync(source, "S124/does-not-exist.gml", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -71,20 +71,20 @@ public sealed class S100ExchangeSetTests
         using var source = FileSystemAssetSource.Create(Renderable);
 
         await Assert.ThrowsAsync<NotSupportedException>(
-            () => S100Dataset.OpenAsync(source, "Unsupported/placeholder.dat"));
+            () => S100Dataset.OpenAsync(source, "Unsupported/placeholder.dat", TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task OpenAsync_Dataset_RendersAndEnumeratesFeatures()
     {
         using var source = FileSystemAssetSource.Create(TestData);
-        using var dataset = await S100Dataset.OpenAsync(source, "S124/navwarn_surface.gml");
+        using var dataset = await S100Dataset.OpenAsync(source, "S124/navwarn_surface.gml", TestContext.Current.CancellationToken);
 
         using var featureCatalogue = S100FeatureCatalogue.Bundled(dataset.Spec.Name);
         Assert.NotEmpty(featureCatalogue.EnumerateFeatures(dataset));
 
         using var renderer = new PngS100DatasetRenderer();
-        var png = await renderer.RenderAsync(dataset);
+        var png = await renderer.RenderAsync(dataset, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(PngSignature, png.Take(PngSignature.Length));
     }
 
@@ -93,13 +93,13 @@ public sealed class S100ExchangeSetTests
     [Fact]
     public async Task ExchangeSet_OpenFolder_ListsAndOpensDatasets()
     {
-        await using var exchangeSet = await S100ExchangeSet.OpenAsync(Renderable);
+        await using var exchangeSet = await S100ExchangeSet.OpenAsync(Renderable, TestContext.Current.CancellationToken);
 
         Assert.Equal("SYNTH_RENDERABLE_v1", exchangeSet.Catalogue.Identifier.Identifier);
         Assert.Equal(3, exchangeSet.Datasets.Count);
 
         var s124 = exchangeSet.Datasets.Single(d => d.Metadata.FileName == "S124/navwarn_surface.gml");
-        using var dataset = await s124.OpenAsync();
+        using var dataset = await s124.OpenAsync(TestContext.Current.CancellationToken);
         Assert.Equal("S-124", dataset.Spec.Name);
         Assert.Empty(s124.Updates);
     }
@@ -107,29 +107,29 @@ public sealed class S100ExchangeSetTests
     [Fact]
     public async Task ExchangeSet_OpenCatalogueFile_MatchesFolder()
     {
-        await using var exchangeSet = await S100ExchangeSet.OpenAsync(Path.Combine(Renderable, "CATALOG.XML"));
+        await using var exchangeSet = await S100ExchangeSet.OpenAsync(Path.Combine(Renderable, "CATALOG.XML"), TestContext.Current.CancellationToken);
 
         var s125 = exchangeSet.Datasets.Single(d => d.Metadata.FileName == "S125/aton_point.gml");
-        using var dataset = await s125.OpenAsync();
+        using var dataset = await s125.OpenAsync(TestContext.Current.CancellationToken);
         Assert.Equal("S-125", dataset.Spec.Name);
     }
 
     [Fact]
     public async Task ExchangeSet_UnsupportedEntry_ThrowsNotSupportedOnOpen()
     {
-        await using var exchangeSet = await S100ExchangeSet.OpenAsync(Renderable);
+        await using var exchangeSet = await S100ExchangeSet.OpenAsync(Renderable, TestContext.Current.CancellationToken);
 
         var unsupported = exchangeSet.Datasets.Single(d => d.Metadata.FileName.StartsWith("Unsupported/", StringComparison.Ordinal));
-        await Assert.ThrowsAsync<NotSupportedException>(() => unsupported.OpenAsync());
+        await Assert.ThrowsAsync<NotSupportedException>(() => unsupported.OpenAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task ExchangeSet_OpenZip_OpensS101Cell()
     {
-        await using var exchangeSet = await S100ExchangeSet.OpenAsync(S101Zip);
+        await using var exchangeSet = await S100ExchangeSet.OpenAsync(S101Zip, TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(exchangeSet.Datasets);
-        using var dataset = await exchangeSet.Datasets[0].OpenAsync();
+        using var dataset = await exchangeSet.Datasets[0].OpenAsync(TestContext.Current.CancellationToken);
         Assert.Equal("S-101", dataset.Spec.Name);
     }
 
@@ -137,14 +137,14 @@ public sealed class S100ExchangeSetTests
     public async Task ExchangeSet_MissingPath_ThrowsFileNotFound()
     {
         await Assert.ThrowsAsync<FileNotFoundException>(
-            () => S100ExchangeSet.OpenAsync(Path.Combine(TestData, "no-such-exchange-set")));
+            () => S100ExchangeSet.OpenAsync(Path.Combine(TestData, "no-such-exchange-set"), TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task ExchangeSet_FolderWithoutCatalogue_ThrowsFileNotFound()
     {
         await Assert.ThrowsAsync<FileNotFoundException>(
-            () => S100ExchangeSet.OpenAsync(Path.Combine(TestData, "S124")));
+            () => S100ExchangeSet.OpenAsync(Path.Combine(TestData, "S124"), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class S100ExchangeSetTests
     {
         var source = new TrackingAssetSource(FileSystemAssetSource.Create(Renderable));
 
-        var exchangeSet = await S100ExchangeSet.OpenAsync(source);
+        var exchangeSet = await S100ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         await exchangeSet.DisposeAsync();
 
         Assert.False(source.IsDisposed);
@@ -163,7 +163,8 @@ public sealed class S100ExchangeSetTests
     public async Task ExchangeSet_S101Updates_AreGroupedWithTheirBaseCell()
     {
         await using var exchangeSet = await S100ExchangeSet.OpenAsync(
-            Path.Combine(TestData, "ExchangeSets", "Synthetic-S101Updates"));
+            Path.Combine(TestData, "ExchangeSets", "Synthetic-S101Updates"),
+            TestContext.Current.CancellationToken);
 
         var cell = Assert.Single(exchangeSet.Datasets);
         Assert.Equal("S-101/SYNTH101.000", cell.Metadata.FileName);
@@ -174,20 +175,21 @@ public sealed class S100ExchangeSetTests
     public async Task ExchangeSet_OrphanUpdate_ThrowsInvalidOperationOnOpen()
     {
         await using var exchangeSet = await S100ExchangeSet.OpenAsync(
-            Path.Combine(TestData, "ExchangeSets", "Synthetic-S101Orphan"));
+            Path.Combine(TestData, "ExchangeSets", "Synthetic-S101Orphan"),
+            TestContext.Current.CancellationToken);
 
         var orphan = Assert.Single(exchangeSet.Datasets);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => orphan.OpenAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => orphan.OpenAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task ExchangeSet_DatasetOpenAfterDispose_Throws()
     {
-        var exchangeSet = await S100ExchangeSet.OpenAsync(Renderable);
+        var exchangeSet = await S100ExchangeSet.OpenAsync(Renderable, TestContext.Current.CancellationToken);
         var entry = exchangeSet.Datasets[0];
         exchangeSet.Dispose();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => entry.OpenAsync());
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => entry.OpenAsync(TestContext.Current.CancellationToken));
     }
 
     // --- Part 15 decryption -------------------------------------------------
@@ -197,7 +199,7 @@ public sealed class S100ExchangeSetTests
     {
         const string datasetPath = "S124/navwarn_surface.gml";
         var cellKey = Enumerable.Range(1, 16).Select(i => (byte)i).ToArray();
-        var plaintext = await File.ReadAllBytesAsync(Path.Combine(Renderable, datasetPath));
+        var plaintext = await File.ReadAllBytesAsync(Path.Combine(Renderable, datasetPath), TestContext.Current.CancellationToken);
 
         using var source = new InMemoryAssetSource(new Dictionary<string, byte[]>
         {
@@ -205,10 +207,10 @@ public sealed class S100ExchangeSetTests
             [datasetPath] = S100Cipher.EncryptDataset(plaintext, cellKey),
         });
 
-        await using var exchangeSet = await S100ExchangeSet.OpenAsync(source);
+        await using var exchangeSet = await S100ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         await using var decrypted = exchangeSet.WithDecryption(new SingleKeyProvider("navwarn_surface", cellKey));
 
-        using var dataset = await decrypted.Datasets.Single().OpenAsync();
+        using var dataset = await decrypted.Datasets.Single().OpenAsync(TestContext.Current.CancellationToken);
         Assert.Equal("S-124", dataset.Spec.Name);
         using var featureCatalogue = S100FeatureCatalogue.Bundled(dataset.Spec.Name);
         Assert.NotEmpty(featureCatalogue.EnumerateFeatures(dataset));
@@ -220,7 +222,7 @@ public sealed class S100ExchangeSetTests
     {
         const string datasetPath = "S124/navwarn_surface.gml";
         var cellKey = Enumerable.Range(1, 16).Select(i => (byte)i).ToArray();
-        var plaintext = await File.ReadAllBytesAsync(Path.Combine(Renderable, datasetPath));
+        var plaintext = await File.ReadAllBytesAsync(Path.Combine(Renderable, datasetPath), TestContext.Current.CancellationToken);
 
         // A permit unwrapped with the wrong hardware id yields a different key.
         var hardwareId = Enumerable.Range(0x40, 16).Select(i => (byte)i).ToArray();
@@ -233,12 +235,12 @@ public sealed class S100ExchangeSetTests
             [datasetPath] = EncryptRejectedBy(plaintext, cellKey, wrongCellKey),
         });
 
-        await using var exchangeSet = await S100ExchangeSet.OpenAsync(source);
+        await using var exchangeSet = await S100ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         await using var decrypted = exchangeSet.WithDecryption(new SingleKeyProvider("navwarn_surface", wrongCellKey));
 
         var exception = await Assert.ThrowsAsync<DatasetDecryptionException>(async () =>
         {
-            using var dataset = await decrypted.Datasets.Single().OpenAsync();
+            using var dataset = await decrypted.Datasets.Single().OpenAsync(TestContext.Current.CancellationToken);
             _ = dataset.Spec;
         });
         Assert.Equal(datasetPath, exception.DatasetPath);
@@ -250,7 +252,7 @@ public sealed class S100ExchangeSetTests
     {
         const string datasetPath = "S124/navwarn_surface.gml";
         var cellKey = Enumerable.Range(1, 16).Select(i => (byte)i).ToArray();
-        var plaintext = await File.ReadAllBytesAsync(Path.Combine(Renderable, datasetPath));
+        var plaintext = await File.ReadAllBytesAsync(Path.Combine(Renderable, datasetPath), TestContext.Current.CancellationToken);
 
         using var source = new InMemoryAssetSource(new Dictionary<string, byte[]>
         {
@@ -258,11 +260,11 @@ public sealed class S100ExchangeSetTests
             [datasetPath] = S100Cipher.EncryptDataset(plaintext, cellKey),
         });
 
-        await using var exchangeSet = await S100ExchangeSet.OpenAsync(source);
+        await using var exchangeSet = await S100ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
 
         // The catalogue declares S-124, so the dataset opens lazily; parsing the
         // ciphertext then fails on first use.
-        using var dataset = await exchangeSet.Datasets.Single().OpenAsync();
+        using var dataset = await exchangeSet.Datasets.Single().OpenAsync(TestContext.Current.CancellationToken);
         Assert.ThrowsAny<Exception>(() => dataset.Spec);
     }
 

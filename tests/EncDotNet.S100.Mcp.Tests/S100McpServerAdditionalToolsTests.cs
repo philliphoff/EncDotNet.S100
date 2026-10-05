@@ -20,10 +20,10 @@ public class S100McpServerAdditionalToolsTests
             Port = 0,
             AdditionalTools = new[] { extra },
         });
-        await server.StartAsync();
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await server.StartAsync(TestContext.Current.CancellationToken);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var tools = await client.ListToolsAsync();
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(tools, t => t.Name == "extra_echo");
         Assert.Contains(tools, t => t.Name == "list_datasets");
     }
@@ -38,10 +38,10 @@ public class S100McpServerAdditionalToolsTests
             Port = 0,
             AdditionalTools = null,
         });
-        await server.StartAsync();
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await server.StartAsync(TestContext.Current.CancellationToken);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var tools = await client.ListToolsAsync();
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(tools, t => t.Name == "list_datasets");
     }
 }

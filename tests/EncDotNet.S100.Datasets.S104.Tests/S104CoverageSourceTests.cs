@@ -77,10 +77,10 @@ public class S104CoverageSourceTests : IDisposable
         Assert.True(times.Count >= 2);
 
         source.SelectTime(times[0]);
-        var sample0 = source.Sample(GridRegion.Full);
+        var sample0 = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
 
         source.SelectTime(times[^1]);
-        var sampleLast = source.Sample(GridRegion.Full);
+        var sampleLast = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
 
         // Same grid size, but likely different height values
         var height0 = sample0.GetField("waterLevelHeight");
@@ -96,7 +96,7 @@ public class S104CoverageSourceTests : IDisposable
         SkipIfNoTestData();
 
         var source = new S104CoverageSource(_dataset!);
-        var sampled = source.Sample(GridRegion.Full);
+        var sampled = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
 
         var coverage = _dataset!.Coverages[0];
         var height = sampled.GetField("waterLevelHeight");
@@ -114,7 +114,7 @@ public class S104CoverageSourceTests : IDisposable
         SkipIfNoTestData();
 
         var source = new S104CoverageSource(_dataset!);
-        var sampled = source.Sample(new GridRegion(0, 2, 0, 2, 3, 3));
+        var sampled = source.Sample(new GridRegion(0, 2, 0, 2, 3, 3), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, sampled.Metadata.NumRows);
         Assert.Equal(1, sampled.Metadata.NumColumns);

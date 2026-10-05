@@ -34,7 +34,7 @@ public class CoveragePipelineTests
         var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
         var pipeline = new CoveragePipeline();
 
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         // Color scheme is the catalogue's resolved scheme
         Assert.Same(DepthColorScheme, layer.ColorScheme);
@@ -83,7 +83,7 @@ public class CoveragePipelineTests
         var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
         var pipeline = new CoveragePipeline();
 
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         // Georeferencer's metadata should match the sampled subset (origin
         // shifted by rowStart*Spacing, spacing scaled by stride).
@@ -211,7 +211,7 @@ public class CoveragePipelineTests
         var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme, symbolScheme: symbolScheme);
 
         var pipeline = new CoveragePipeline();
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Same(symbolScheme, layer.SymbolScheme);
     }
@@ -234,7 +234,7 @@ public class CoveragePipelineTests
         var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
 
         var pipeline = new CoveragePipeline();
-        await pipeline.ProcessAsync(source, catalogue, mariner: mariner);
+        await pipeline.ProcessAsync(source, catalogue, mariner: mariner, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Same(mariner, catalogue.LastSettings);
     }
@@ -251,7 +251,7 @@ public class CoveragePipelineTests
         var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
 
         var pipeline = new CoveragePipeline();
-        await pipeline.ProcessAsync(source, catalogue);
+        await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(catalogue.LastSettings);
     }
@@ -270,7 +270,7 @@ public class CoveragePipelineTests
         var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
         var pipeline = new CoveragePipeline();
 
-        var layer = await pipeline.ProcessAsync(source, catalogue);
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(noData, layer.NoDataValue);
     }

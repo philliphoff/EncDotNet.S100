@@ -47,7 +47,7 @@ public class StationSeriesHeadlessTests
             using var catalogues = S111TestCatalogues.Create();
             var processor = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            using var bitmap = await processor.RenderHeadlessAsync(256, 256);
+            using var bitmap = await processor.RenderHeadlessAsync(256, 256, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.True(CountNonWhite(bitmap) > 0, "expected node glyphs to be painted");
         }
@@ -79,7 +79,7 @@ public class StationSeriesHeadlessTests
             };
 
             var portrayal = await ((ICoveragePortrayalSource)processor)
-                .BuildCoveragePortrayalAsync(context with { Viewport = viewport });
+                .BuildCoveragePortrayalAsync(context with { Viewport = viewport }, TestContext.Current.CancellationToken);
             using var bitmap = new HeadlessCompositor(new ProjNetCrsTransformFactory()).Render(
                 [HeadlessCompositeInput.ForCoverage(portrayal)],
                 new HeadlessCompositeOptions { Viewport = viewport });

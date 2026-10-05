@@ -40,7 +40,7 @@ public sealed class LibraryLoadServiceTests : IDisposable
         var changes = 0;
         loader.Changed += (_, _) => changes++;
 
-        var result = await loader.LoadAsync(items, defer: false);
+        var result = await loader.LoadAsync(items, defer: false, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(new LibraryLoadResult(2, 0), result);
         Assert.Equal(2, datasets.Entries.Count);
@@ -67,7 +67,7 @@ public sealed class LibraryLoadServiceTests : IDisposable
             Clone(items[1], new RemoteItemLocation(new Uri("https://example.test/cell.zip"))),
             Clone(items[1], NoItemLocation.Instance),
             Clone(items[1], ((LocalItemLocation)items[1].Location) with { RelativePath = "GONE/GONE.000" }),
-        ], defer: false);
+        ], defer: false, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(new LibraryLoadResult(1, 3), result);
         Assert.Single(datasets.Entries);
@@ -80,7 +80,7 @@ public sealed class LibraryLoadServiceTests : IDisposable
         var (datasets, service, loader) = CreateSystem();
         using var _ = service;
         using var __ = loader;
-        await loader.LoadAsync(items, defer: false);
+        await loader.LoadAsync(items, defer: false, cancellationToken: TestContext.Current.CancellationToken);
         datasets.Entries[0].IsLoaded = true;
 
         datasets.Entries.RemoveAt(0);

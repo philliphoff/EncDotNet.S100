@@ -151,11 +151,11 @@ public class DeferredAisFeatureSourceTests
         // Wait deterministically for the single trailing debounced call to
         // land rather than racing a fixed delay (issue #215).
         Assert.True(
-            await fakeSub.AreaUpdatedSignal.WaitAsync(TimeSpan.FromSeconds(5)),
+            await fakeSub.AreaUpdatedSignal.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken),
             "Debounced UpdateArea did not fire within 5 s");
         // A short margin to surface any (incorrect) extra debounced fire
         // before asserting that the burst coalesced to exactly one call.
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
 
         Assert.Single(fakeSub.AreaUpdates);
     }

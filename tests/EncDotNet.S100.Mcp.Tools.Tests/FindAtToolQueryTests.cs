@@ -18,7 +18,7 @@ public class FindAtToolQueryTests
         var result = await tool.InvokeAsync(new FindAtRequest(
             Latitude: 0,
             Longitude: 0,
-            Query: new GeoQuery.Point(new GeoPoint(5, 5))));
+            Query: new GeoQuery.Point(new GeoPoint(5, 5))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Datasets);
@@ -37,7 +37,7 @@ public class FindAtToolQueryTests
         var result = await tool.InvokeAsync(new FindAtRequest(
             Latitude: 0,
             Longitude: 0,
-            Query: new GeoQuery.Box(new GeoBoundingBox(3, 3, 12, 12))));
+            Query: new GeoQuery.Box(new GeoBoundingBox(3, 3, 12, 12))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(2, value.Datasets.Count);
@@ -60,12 +60,12 @@ public class FindAtToolQueryTests
             CorridorWidthMeters: 111_320.0);
 
         var withCorridor = await tool.InvokeAsync(new FindAtRequest(
-            0, 0, Query: new GeoQuery.Polyline(line)));
+            0, 0, Query: new GeoQuery.Polyline(line)), TestContext.Current.CancellationToken);
         Assert.True(withCorridor.TryGetValue(out var withVal));
         Assert.Single(withVal.Datasets);
 
         var withoutCorridor = await tool.InvokeAsync(new FindAtRequest(
-            0, 0, Query: new GeoQuery.Polyline(line with { CorridorWidthMeters = null })));
+            0, 0, Query: new GeoQuery.Polyline(line with { CorridorWidthMeters = null })), TestContext.Current.CancellationToken);
         Assert.True(withoutCorridor.TryGetValue(out var withoutVal));
         Assert.Empty(withoutVal.Datasets);
     }
@@ -82,7 +82,7 @@ public class FindAtToolQueryTests
             new GeoPoint(1, 1),
             new GeoPoint(1, 0)]); // unclosed
         var result = await tool.InvokeAsync(new FindAtRequest(
-            0, 0, Query: new GeoQuery.Polygon(open)));
+            0, 0, Query: new GeoQuery.Polygon(open)), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<GeometryInvalid>(err);
@@ -95,7 +95,7 @@ public class FindAtToolQueryTests
         var tool = new FindAtTool(catalog);
 
         var result = await tool.InvokeAsync(new FindAtRequest(
-            0, 0, Query: new GeoQuery.Point(new GeoPoint(91, 0))));
+            0, 0, Query: new GeoQuery.Point(new GeoPoint(91, 0))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
@@ -113,7 +113,7 @@ public class FindAtToolQueryTests
         var result = await tool.InvokeAsync(new FindAtRequest(
             Latitude: 1000,
             Longitude: 1000,
-            Query: new GeoQuery.Point(new GeoPoint(55, 55))));
+            Query: new GeoQuery.Point(new GeoPoint(55, 55))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Datasets);

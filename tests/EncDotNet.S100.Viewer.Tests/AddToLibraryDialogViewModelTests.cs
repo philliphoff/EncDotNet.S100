@@ -87,7 +87,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
         Assert.False(vm.ConfirmCommand.CanExecute(null));
 
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.True(vm.ConfirmCommand.CanExecute(null));
         var alaska = vm.States.Single(s => s.Value == "AK");
@@ -119,7 +119,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         var group = Assert.Single(vm.FacetGroups);
         Assert.Equal("Rivers", group.Title);
 
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(["Allegheny", "Arkansas", "Ohio"], vm.Rivers.Select(r => r.Value));
         Assert.Contains("All 4 datasets", vm.SelectionSummary);
@@ -141,7 +141,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     {
         var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
         vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         vm.ConfirmCommand.Execute(null);
 
@@ -173,7 +173,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         });
 
         vm.Initialize(buoys, targetCollectionId: null);
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(UsaceIencFeedSource.BuoysCatalogUri, requested);
         Assert.Equal(buoys.Name, vm.Title);
@@ -200,7 +200,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         vm.Initialize(AddToLibraryKind.UsaceFeed, null, null);
 
         Assert.Null(vm.CatalogueDateText);
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.Contains("2026-09-17", vm.CatalogueDateText);
         Assert.Equal(stale, vm.IsCatalogueStale);
@@ -219,7 +219,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         Assert.True(vm.IsSearchable);
         Assert.Equal("Packages", Assert.Single(vm.FacetGroups).Title);
 
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         // The repeated entry is listed once.
         Assert.Equal(["Base1", "Base2", "XX5RIV01"], vm.Charts.Select(c => c.Value));
@@ -268,7 +268,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         Assert.Equal("Shared charts", vm.NewCollectionName);
         Assert.Equal("Products", Assert.Single(vm.FacetGroups).Title);
 
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(["S-101", "S-57"], vm.Products.Select(p => p.Value));
         Assert.StartsWith("2 datasets", vm.Products[0].Detail);
@@ -318,7 +318,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         Assert.True(vm.IsOnlineFeed);
         Assert.True(vm.HasReviewUse);
 
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.True(vm.IsRegionPicker);
         Assert.False(vm.HasFacetTabs);
@@ -367,7 +367,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     {
         var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
         vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
         Assert.True(vm.IncludeAll);
         Assert.Equal("Everything", vm.ScopeDescription);
         Assert.Equal("Nothing selected yet", vm.OnlySelectedSummary);
@@ -394,7 +394,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     {
         var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
         vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
         var alaska = vm.States.Single(s => s.Value == "AK");
         alaska.IsSelected = true;
         Assert.Equal("NOAA ENC — Alaska", vm.NewCollectionName);
@@ -419,7 +419,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         var existing = _library.AddCollection("Mine", []);
         var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
         vm.Initialize(AddToLibraryKind.NoaaFeed, null, existing.Id);
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
         Assert.True(vm.AddToExisting);
         Assert.Equal("Mine", vm.TargetDescription);
         Assert.Equal("Follows your selection until you type your own.", vm.NameHint);
@@ -447,7 +447,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         vm.Initialize(buoys, targetCollectionId: null);
         Assert.False(vm.IsSingleEntry);
 
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.True(vm.IsSingleEntry);
         Assert.False(vm.ShowsChoices);
@@ -462,7 +462,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         var vm = new AddToLibraryDialogViewModel(_library, (_, _) => throw new HttpRequestException("offline"));
         vm.Initialize(AddToLibraryKind.NoaaFeed, null, null);
 
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.True(vm.HasLoadError);
         Assert.Equal("offline", vm.LoadError);

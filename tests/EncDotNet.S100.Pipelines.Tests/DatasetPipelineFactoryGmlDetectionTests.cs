@@ -58,7 +58,7 @@ public class DatasetPipelineFactoryGmlDetectionTests
         using var source = FileSystemAssetSource.Create(directory);
 
         var spec = await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(
-            source, Path.GetFileName(gmlPath));
+            source, Path.GetFileName(gmlPath), TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedSpec, spec);
     }

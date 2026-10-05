@@ -46,7 +46,7 @@ public class S101NativeCellVisibilityTests
         using var lifetime = processor as IDisposable;
         var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
 
-        var result = await renderer.RenderAsync(processor);
+        var result = await renderer.RenderAsync(processor, cancellationToken: TestContext.Current.CancellationToken);
 
         var cellMinimum = Assert.IsType<int>(result.CellMinimumDisplayScale);
         Assert.True(
@@ -78,7 +78,7 @@ public class S101NativeCellVisibilityTests
         using var lifetime = processor as IDisposable;
         var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
 
-        var result = await renderer.RenderAsync(processor);
+        var result = await renderer.RenderAsync(processor, cancellationToken: TestContext.Current.CancellationToken);
 
         // Apply the whole-cell zoom-out window exactly as the viewer's layer
         // session does, so a wrong cell band hides the layers here too.
@@ -140,7 +140,7 @@ public class S101NativeCellVisibilityTests
         using var lifetime = processor as IDisposable;
         var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
 
-        var result = await renderer.RenderAsync(processor);
+        var result = await renderer.RenderAsync(processor, cancellationToken: TestContext.Current.CancellationToken);
 
         // S-101 PS §4.6: the band includes minimumDisplayScale itself. The live
         // map snaps to the log-nearest band, whose own scale may lie past the

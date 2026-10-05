@@ -10,7 +10,7 @@ public class ListSpecsToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new ListSpecsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListSpecsRequest());
+        var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var names = value.Specs.Select(s => s.Name).ToArray();
@@ -32,7 +32,7 @@ public class ListSpecsToolTests
         catalog.Add(LoadedDatasetFactory.S122("c"));
         var tool = new ListSpecsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListSpecsRequest());
+        var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var s124 = value.Specs.Single(s => s.Name == "S-124");
@@ -49,7 +49,7 @@ public class ListSpecsToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new ListSpecsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListSpecsRequest());
+        var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var s102 = value.Specs.Single(s => s.Name == "S-102");

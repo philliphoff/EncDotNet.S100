@@ -48,7 +48,7 @@ public class PortrayalAssetCacheConcurrencyTests
                         exceptions.Add(ex);
                     }
                 }
-            });
+            }, TestContext.Current.CancellationToken);
         }
 
         await Task.WhenAll(tasks);

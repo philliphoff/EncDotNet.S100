@@ -21,12 +21,14 @@ public class DescribeFeatureToolS57Tests
 
         var query = await new QueryFeaturesTool(catalog).InvokeAsync(
             new QueryFeaturesRequest(
-                new GeoQuery.Box(new GeoBoundingBox(b.SouthLatitude, b.WestLongitude, b.NorthLatitude, b.EastLongitude))));
+                new GeoQuery.Box(new GeoBoundingBox(b.SouthLatitude, b.WestLongitude, b.NorthLatitude, b.EastLongitude))),
+            TestContext.Current.CancellationToken);
         Assert.True(query.TryGetValue(out var matches));
         var feature = Assert.IsType<FeatureMatch>(matches.Features.FirstOrDefault());
 
         var result = await new DescribeFeatureTool(catalog).InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("US5MA1BO"), feature.FeatureId));
+            new DescribeFeatureRequest(new DatasetId("US5MA1BO"), feature.FeatureId),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value), "describe_feature should support S-57 cells");
         Assert.Equal(feature.FeatureType, value.FeatureTypeName);

@@ -119,7 +119,7 @@ public class S102CoveragePyramidTests
             Assert.Equal(8, source.Metadata.GridMetadata.NumColumns);
             Assert.Equal(0.01, source.Metadata.GridMetadata.SpacingLatitudinal, precision: 6);
 
-            var sampled = source.Sample(GridRegion.Full);
+            var sampled = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
             Assert.Equal(8 * 8, sampled.Values["depth"].Length);
             // Cell (r=0,c=0) = shoalest = 10.0
             Assert.Equal(10.0f, sampled.Values["depth"][0]);
@@ -144,7 +144,7 @@ public class S102CoveragePyramidTests
             Assert.Equal(-0.995, meta.GridMetadata.OriginLongitude, precision: 6);
             Assert.Equal(0.02, meta.GridMetadata.SpacingLatitudinal, precision: 6);
 
-            var sampled = source.Sample(GridRegion.Full);
+            var sampled = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
             Assert.Equal(16, sampled.Values["depth"].Length);
 
             // Depth safety: pooled cell must never look safer (deeper)
@@ -164,7 +164,7 @@ public class S102CoveragePyramidTests
         {
             var source = OpenSource(path);
             source.SelectOverviewLevel(1);
-            var sampled = source.Sample(GridRegion.Full);
+            var sampled = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
             // All base uncertainties = 0.1; max = 0.1 for every pool.
             foreach (var u in sampled.Values["uncertainty"])
                 Assert.Equal(0.1f, u, precision: 5);
@@ -201,7 +201,7 @@ public class S102CoveragePyramidTests
                 viewport,
                 metadata.GridMetadata,
                 metadata.HorizontalCRS);
-            var sampled = source.Sample(region);
+            var sampled = source.Sample(region, TestContext.Current.CancellationToken);
 
             Assert.Equal(0, region.ColStart);
             Assert.Equal(1f, sampled.GetField("depth")[0, 0]);
@@ -250,7 +250,7 @@ public class S102CoveragePyramidTests
             Assert.Equal(0, source.SelectedOverviewLevel);
             Assert.Equal(8, source.Metadata.GridMetadata.NumRows);
 
-            var sampled = source.Sample(GridRegion.Full);
+            var sampled = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
             Assert.Equal(8 * 8, sampled.Values["depth"].Length);
             Assert.Equal(10.0f, sampled.Values["depth"][0]);
         }
@@ -284,7 +284,7 @@ public class S102CoveragePyramidTests
                 },
             };
 
-            var result = await processor.BuildCoveragePortrayalAsync(context);
+            var result = await processor.BuildCoveragePortrayalAsync(context, TestContext.Current.CancellationToken);
 
             var subLayer = Assert.IsType<GridCoverageSubLayer>(Assert.Single(result.SubLayers));
             Assert.Equal(2, subLayer.Coverage.Coverage.Metadata.NumRows);

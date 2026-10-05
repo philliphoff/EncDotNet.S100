@@ -23,7 +23,8 @@ public class DescribeFeatureToolS102Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("s102-ds"), "BathymetryCoverage.01"));
+            new DescribeFeatureRequest(new DatasetId("s102-ds"), "BathymetryCoverage.01"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("S-102", value.Spec.Name);
@@ -72,7 +73,8 @@ public class DescribeFeatureToolS102Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("utm"), "BathymetryCoverage.01"));
+            new DescribeFeatureRequest(new DatasetId("utm"), "BathymetryCoverage.01"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var attrs = value.Attributes;
@@ -99,7 +101,8 @@ public class DescribeFeatureToolS102Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "BathymetryCoverage"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "BathymetryCoverage"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("BathymetryCoverage", value.FeatureTypeName);
@@ -113,7 +116,8 @@ public class DescribeFeatureToolS102Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "BathymetryCoverage.99"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "BathymetryCoverage.99"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         var nf = Assert.IsType<FeatureNotFound>(err);
@@ -128,7 +132,8 @@ public class DescribeFeatureToolS102Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "NotARealId"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "NotARealId"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<FeatureNotFound>(err);
@@ -162,7 +167,8 @@ public class DescribeFeatureToolS102Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "BathymetryCoverage.01"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "BathymetryCoverage.01"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var dr = value.Attributes.GetProperty("depthRange");
@@ -188,7 +194,8 @@ public class DescribeFeatureToolS102Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "BathymetryCoverage.01"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "BathymetryCoverage.01"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         var unsupported = Assert.IsType<SpecNotSupportedForTool>(err);

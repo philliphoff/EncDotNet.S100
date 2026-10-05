@@ -204,7 +204,7 @@ public class S100DynamicSourceHostTests
         }
         Volatile.Write(ref burstRaised, 1);
 
-        await rebuildApplied.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await rebuildApplied.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         var layer = (MemoryLayer)host.OverlayLayers[0];
         // Trailing rebuild should reflect the final feature set

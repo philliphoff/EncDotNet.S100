@@ -27,7 +27,7 @@ public class SampleCoverageToolWindowedTests
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec,
             Latitude: 0.02, Longitude: 0.02,
-            Times: TimeQuery.At(t)));
+            Times: TimeQuery.At(t)), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var v));
         Assert.Null(v!.Series); // Instant → series stays null
@@ -48,7 +48,7 @@ public class SampleCoverageToolWindowedTests
             Latitude: 0.02, Longitude: 0.02,
             Times: TimeQuery.Between(
                 new DateTimeOffset(2024, 1, 1, 1, 0, 0, TimeSpan.Zero),
-                new DateTimeOffset(2024, 1, 1, 2, 30, 0, TimeSpan.Zero))));
+                new DateTimeOffset(2024, 1, 1, 2, 30, 0, TimeSpan.Zero))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var v));
         Assert.NotNull(v!.Series);
@@ -73,7 +73,7 @@ public class SampleCoverageToolWindowedTests
             Times: TimeQuery.Every(
                 new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero),
                 new DateTimeOffset(2024, 1, 1, 3, 0, 0, TimeSpan.Zero),
-                TimeSpan.FromMinutes(30))));
+                TimeSpan.FromMinutes(30))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var v));
         Assert.NotNull(v!.Series);
@@ -97,7 +97,7 @@ public class SampleCoverageToolWindowedTests
             Latitude: 0.02, Longitude: 0.02,
             Times: TimeQuery.Between(
                 new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero),
-                new DateTimeOffset(2025, 1, 1, 6, 0, 0, TimeSpan.Zero))));
+                new DateTimeOffset(2025, 1, 1, 6, 0, 0, TimeSpan.Zero))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         var oor = Assert.IsType<TimeOutOfRange>(err);
@@ -119,7 +119,7 @@ public class SampleCoverageToolWindowedTests
             Latitude: 0.02, Longitude: 0.02,
             Times: TimeQuery.Between(
                 new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero),
-                new DateTimeOffset(2024, 1, 1, 6, 0, 0, TimeSpan.Zero))));
+                new DateTimeOffset(2024, 1, 1, 6, 0, 0, TimeSpan.Zero))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<NotSupportedYet>(err);
@@ -139,7 +139,7 @@ public class SampleCoverageToolWindowedTests
             Latitude: 0.02, Longitude: 0.02,
             Times: TimeQuery.Between(
                 new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero),
-                new DateTimeOffset(2024, 1, 1, 3, 0, 0, TimeSpan.Zero))));
+                new DateTimeOffset(2024, 1, 1, 3, 0, 0, TimeSpan.Zero))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var v));
         Assert.NotNull(v!.Series);

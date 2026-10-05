@@ -24,7 +24,7 @@ public sealed class S100DatasetValidationTests
     public async Task Validate_DatasetOpenedFromSource_ReturnsReport()
     {
         using var zip = ZipAssetSource.Create(Path.Combine(TestData, "S101.zip"));
-        using var dataset = await S100Dataset.OpenAsync(zip, "S-101/DATASET_FILES/101AA00DS0019.000");
+        using var dataset = await S100Dataset.OpenAsync(zip, "S-101/DATASET_FILES/101AA00DS0019.000", TestContext.Current.CancellationToken);
 
         var report = dataset.Validate();
 

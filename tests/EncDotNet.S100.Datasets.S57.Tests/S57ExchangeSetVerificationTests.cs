@@ -148,7 +148,7 @@ public sealed class S57ExchangeSetVerificationTests
     public async Task VerifyAsync_NullOrEmptyRoot_Throws()
     {
         await Assert.ThrowsAsync<ArgumentException>(
-            () => S57ExchangeSetVerification.VerifyAsync(string.Empty));
+            () => S57ExchangeSetVerification.VerifyAsync(string.Empty, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -167,7 +167,7 @@ public sealed class S57ExchangeSetVerificationTests
             $"No CATALOG.031 in {root}.");
 
         ExchangeSetVerificationResult result =
-            await S57ExchangeSetVerification.VerifyAsync(root!);
+            await S57ExchangeSetVerification.VerifyAsync(root!, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(result.FileResults);
         // A pristine, freshly-downloaded set should have no corrupt files.

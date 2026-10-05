@@ -14,7 +14,7 @@ public class FileSystemExchangeSetTests
     public async Task Create_ReturnsProvider()
     {
         using var source = FileSystemAssetSource.Create(GetExchangeSetPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(provider);
     }
@@ -23,7 +23,7 @@ public class FileSystemExchangeSetTests
     public async Task Create_ParsesCatalogue()
     {
         using var source = FileSystemAssetSource.Create(GetExchangeSetPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("IHO_V12", provider.Catalogue.Identifier.Identifier);
         Assert.Equal(19, provider.Catalogue.DatasetDiscoveryMetadata.Count);
@@ -33,10 +33,10 @@ public class FileSystemExchangeSetTests
     public async Task FetchDatasetAsync_ReturnsStream()
     {
         using var source = FileSystemAssetSource.Create(GetExchangeSetPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         var dataset = provider.Catalogue.DatasetDiscoveryMetadata[0];
 
-        await using var stream = await provider.FetchDatasetAsync(dataset);
+        await using var stream = await provider.FetchDatasetAsync(dataset, TestContext.Current.CancellationToken);
 
         Assert.NotNull(stream);
         Assert.True(stream.CanRead);
@@ -47,11 +47,11 @@ public class FileSystemExchangeSetTests
     public async Task FetchDatasetAsync_AllDatasets_Readable()
     {
         using var source = FileSystemAssetSource.Create(GetExchangeSetPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
 
         foreach (var dataset in provider.Catalogue.DatasetDiscoveryMetadata)
         {
-            await using var stream = await provider.FetchDatasetAsync(dataset);
+            await using var stream = await provider.FetchDatasetAsync(dataset, TestContext.Current.CancellationToken);
             Assert.True(stream.Length > 0, $"Dataset {dataset.FileName} should have content.");
         }
     }
@@ -60,10 +60,10 @@ public class FileSystemExchangeSetTests
     public async Task FetchDatasetAsync_PathTraversal_Throws()
     {
         using var source = FileSystemAssetSource.Create(GetExchangeSetPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         var malicious = new DatasetDiscoveryMetadata { FileName = "../../etc/passwd" };
 
-        await Assert.ThrowsAsync<ArgumentException>(() => provider.FetchDatasetAsync(malicious));
+        await Assert.ThrowsAsync<ArgumentException>(() => provider.FetchDatasetAsync(malicious, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class FileSystemExchangeSetTests
         try
         {
             using var source = FileSystemAssetSource.Create(tempDir);
-            await Assert.ThrowsAnyAsync<Exception>(() => ExchangeSet.OpenAsync(source));
+            await Assert.ThrowsAnyAsync<Exception>(() => ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -88,7 +88,7 @@ public class FileSystemExchangeSetTests
     {
         // The default is CATALOG.XML — verify it works explicitly
         using var source = FileSystemAssetSource.Create(GetExchangeSetPath());
-        using var provider = await ExchangeSet.OpenAsync(source, "CATALOG.XML");
+        using var provider = await ExchangeSet.OpenAsync(source, "CATALOG.XML", TestContext.Current.CancellationToken);
 
         Assert.NotNull(provider.Catalogue);
     }

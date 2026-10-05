@@ -22,7 +22,7 @@ public sealed class HeadlessMutableCatalogParseOnceTests
         using var counting = new CountingProcessorFactory(BundledDatasetProcessorFactory.Create());
         using var catalog = new HeadlessMutableCatalog(transforms: null, factory: counting);
 
-        var outcome = await catalog.LoadAsync(FixturePath);
+        var outcome = await catalog.LoadAsync(FixturePath, cancellationToken: TestContext.Current.CancellationToken);
         Assert.SkipWhen(outcome.Added.Count == 0, "The cell could not be loaded into the catalog.");
 
         // One dataset loaded → exactly one processor built. The read model was
@@ -38,8 +38,8 @@ public sealed class HeadlessMutableCatalogParseOnceTests
         using var session = new HeadlessS100Session(catalog);
         var renderer = (IImageRenderer)session;
 
-        Assert.NotNull(await renderer.RenderToPngAsync(128, 128, pixelDensity: 1.0));
-        Assert.NotNull(await renderer.RenderToPngAsync(128, 128, pixelDensity: 1.0));
+        Assert.NotNull(await renderer.RenderToPngAsync(128, 128, pixelDensity: 1.0, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.NotNull(await renderer.RenderToPngAsync(128, 128, pixelDensity: 1.0, cancellationToken: TestContext.Current.CancellationToken));
 
         // Two renders, still one processor: renders composite the resident
         // processor rather than re-creating one from the path.

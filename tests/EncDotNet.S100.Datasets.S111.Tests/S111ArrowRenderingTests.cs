@@ -155,11 +155,11 @@ public sealed class S111ArrowRenderingTests : IDisposable
     {
         var renderer = CreateRenderer();
 
-        await _catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await _catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
         renderer.Palette = _catalogue.ActivePalette;
         var daySvg = renderer.GetResolvedSvg("SCAROW01");
 
-        await _catalogue.SwitchPaletteAsync(PaletteType.Night);
+        await _catalogue.SwitchPaletteAsync(PaletteType.Night, TestContext.Current.CancellationToken);
         renderer.Palette = _catalogue.ActivePalette;
         var nightSvg = renderer.GetResolvedSvg("SCAROW01");
 

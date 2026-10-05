@@ -56,7 +56,7 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
     public async Task Day_palette_loads_all_nine_speed_band_tokens()
     {
         var catalogue = CreateCatalogue();
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
 
         for (int i = 1; i <= 9; i++)
         {
@@ -71,10 +71,10 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
     public async Task Dusk_palette_loads_and_differs_from_Day_for_at_least_one_band()
     {
         var catalogue = CreateCatalogue();
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
         var dayColors = ReadBandColors(catalogue);
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Dusk);
+        await catalogue.SwitchPaletteAsync(PaletteType.Dusk, TestContext.Current.CancellationToken);
         var duskColors = ReadBandColors(catalogue);
 
         Assert.Equal(dayColors.Count, duskColors.Count);
@@ -88,10 +88,10 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
     public async Task Night_palette_loads_and_differs_from_Day_for_at_least_one_band()
     {
         var catalogue = CreateCatalogue();
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
         var dayColors = ReadBandColors(catalogue);
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Night);
+        await catalogue.SwitchPaletteAsync(PaletteType.Night, TestContext.Current.CancellationToken);
         var nightColors = ReadBandColors(catalogue);
 
         Assert.Equal(dayColors.Count, nightColors.Count);
@@ -143,10 +143,10 @@ public sealed class S111PortrayalCatalogueTests : IDisposable
     public async Task SwitchPalette_to_Night_then_ActivePalette_reflects_change()
     {
         var catalogue = CreateCatalogue();
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
         Assert.True(catalogue.ActivePalette.TryResolve("SCBN1", out var dayBand1));
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Night);
+        await catalogue.SwitchPaletteAsync(PaletteType.Night, TestContext.Current.CancellationToken);
         Assert.True(catalogue.ActivePalette.TryResolve("SCBN1", out var nightBand1));
 
         Assert.NotEqual(dayBand1, nightBand1);

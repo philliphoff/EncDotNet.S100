@@ -125,7 +125,7 @@ public sealed class UpdateServiceTests
         var time = new FakeTimeProvider();
         var service = CreateService(client, "0.0.0-dev", InMemorySettings(), time);
 
-        var status = await service.CheckForUpdatesAsync(force: true);
+        var status = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(UpdateAvailability.Disabled, status.Availability);
         Assert.Equal(0, client.CallCount);
@@ -142,7 +142,7 @@ public sealed class UpdateServiceTests
             var time = new FakeTimeProvider();
             var service = CreateService(client, "0.0.0-dev", InMemorySettings(), time);
 
-            var status = await service.CheckForUpdatesAsync(force: true);
+            var status = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(UpdateAvailability.UpdateAvailable, status.Availability);
             Assert.Equal(1, client.CallCount);
@@ -160,7 +160,7 @@ public sealed class UpdateServiceTests
         var time = new FakeTimeProvider();
         var service = CreateService(client, "2.4.1", InMemorySettings(), time);
 
-        var status = await service.CheckForUpdatesAsync(force: true);
+        var status = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(UpdateAvailability.UpdateAvailable, status.Availability);
         Assert.Equal("2.5.0", status.LatestVersion);
@@ -173,7 +173,7 @@ public sealed class UpdateServiceTests
         var time = new FakeTimeProvider();
         var service = CreateService(client, "2.4.1", InMemorySettings(), time);
 
-        var status = await service.CheckForUpdatesAsync(force: true);
+        var status = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(UpdateAvailability.UpToDate, status.Availability);
     }
@@ -185,7 +185,7 @@ public sealed class UpdateServiceTests
         var time = new FakeTimeProvider();
         var service = CreateService(client, "2.4.1", InMemorySettings(), time);
 
-        var status = await service.CheckForUpdatesAsync(force: true);
+        var status = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(UpdateAvailability.CheckFailed, status.Availability);
     }
@@ -197,7 +197,7 @@ public sealed class UpdateServiceTests
         var time = new FakeTimeProvider();
         var service = CreateService(client, "2.4.1", InMemorySettings(), time);
 
-        var status = await service.CheckForUpdatesAsync(force: true);
+        var status = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(UpdateAvailability.CheckFailed, status.Availability);
     }
@@ -210,7 +210,7 @@ public sealed class UpdateServiceTests
 
         // 2.5.0 is available; user skips it.
         var service = CreateService(new FakeReleaseClient(Release("v2.5.0")), "2.4.1", settings, time);
-        var available = await service.CheckForUpdatesAsync(force: true);
+        var available = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(UpdateAvailability.UpdateAvailable, available.Availability);
         Assert.False(available.IsSkipped);
 
@@ -219,13 +219,13 @@ public sealed class UpdateServiceTests
 
         // Re-checking 2.5.0 still reports it as available (the dialog stays
         // truthful), but flagged as skipped so notifications stay muted.
-        var afterSkip = await service.CheckForUpdatesAsync(force: true);
+        var afterSkip = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(UpdateAvailability.UpdateAvailable, afterSkip.Availability);
         Assert.True(afterSkip.IsSkipped);
 
         // A later release is available and not skipped.
         var newerService = CreateService(new FakeReleaseClient(Release("v2.6.0")), "2.4.1", settings, time);
-        var newer = await newerService.CheckForUpdatesAsync(force: true);
+        var newer = await newerService.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(UpdateAvailability.UpdateAvailable, newer.Availability);
         Assert.False(newer.IsSkipped);
         Assert.Equal("2.6.0", newer.LatestVersion);
@@ -242,7 +242,7 @@ public sealed class UpdateServiceTests
         service.SetUpdateChecksEnabled(false);
 
         Assert.False(settings.UpdateCheckEnabled);
-        var status = await service.CheckForUpdatesAsync(force: true);
+        var status = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(UpdateAvailability.Disabled, status.Availability);
         Assert.Equal(0, client.CallCount);
     }
@@ -255,17 +255,17 @@ public sealed class UpdateServiceTests
         var client = new FakeReleaseClient(Release("v2.5.0"));
         var service = CreateService(client, "2.4.1", settings, time);
 
-        await service.CheckForUpdatesAsync(force: true);
+        await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(1, client.CallCount);
 
         // Within the throttle window, a non-forced check reuses the cache.
         time.Advance(TimeSpan.FromHours(1));
-        await service.CheckForUpdatesAsync(force: false);
+        await service.CheckForUpdatesAsync(force: false, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(1, client.CallCount);
 
         // Past the window, a non-forced check hits the network again.
         time.Advance(UpdateService.ThrottleWindow);
-        await service.CheckForUpdatesAsync(force: false);
+        await service.CheckForUpdatesAsync(force: false, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(2, client.CallCount);
     }
 
@@ -284,7 +284,7 @@ public sealed class UpdateServiceTests
             settings,
             new FakeTimeProvider(now.AddHours(1)));
 
-        var status = await service.CheckForUpdatesAsync(force: false);
+        var status = await service.CheckForUpdatesAsync(force: false, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(UpdateAvailability.UpdateAvailable, status.Availability);
         Assert.Equal("2.5.0", status.LatestVersion);
@@ -307,7 +307,7 @@ public sealed class UpdateServiceTests
             settings,
             new FakeTimeProvider(now.AddHours(1)));
 
-        var status = await service.CheckForUpdatesAsync(force: false);
+        var status = await service.CheckForUpdatesAsync(force: false, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(UpdateAvailability.CheckFailed, status.Availability);
         Assert.True(status.IsCached);
@@ -328,7 +328,7 @@ public sealed class UpdateServiceTests
             settings,
             new FakeTimeProvider(now.AddHours(1)));
 
-        var status = await service.CheckForUpdatesAsync(force: true);
+        var status = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(UpdateAvailability.UpdateAvailable, status.Availability);
         Assert.Equal("2.6.0", status.LatestVersion);
@@ -346,7 +346,7 @@ public sealed class UpdateServiceTests
         var client = new FakeReleaseClient(Release("v2.6.0"));
         var service = CreateService(client, "2.4.1", settings, new FakeTimeProvider(now));
 
-        var status = await service.CheckForUpdatesAsync(force: false);
+        var status = await service.CheckForUpdatesAsync(force: false, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("2.6.0", status.LatestVersion);
         Assert.False(status.IsCached);
@@ -363,9 +363,9 @@ public sealed class UpdateServiceTests
             InMemorySettings(),
             new FakeTimeProvider(DateTimeOffset.UtcNow));
 
-        var first = service.CheckForUpdatesAsync(force: false);
+        var first = service.CheckForUpdatesAsync(force: false, cancellationToken: TestContext.Current.CancellationToken);
         await client.Entered;
-        var second = service.CheckForUpdatesAsync(force: false);
+        var second = service.CheckForUpdatesAsync(force: false, cancellationToken: TestContext.Current.CancellationToken);
         client.Complete();
 
         var statuses = await Task.WhenAll(first, second);

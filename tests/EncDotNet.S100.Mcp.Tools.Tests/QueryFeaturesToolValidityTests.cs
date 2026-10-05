@@ -77,7 +77,7 @@ public class QueryFeaturesToolValidityTests
 
         var tool = new QueryFeaturesTool(BuildCatalog(inWindow, outOfWindow, noMetadata));
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
-            new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10))));
+            new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(3, value.TotalCount);
@@ -92,7 +92,7 @@ public class QueryFeaturesToolValidityTests
         var tool = new QueryFeaturesTool(BuildCatalog(inWindow, outOfWindow));
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10)),
-            Times: TimeQuery.At(DateTimeOffset.Parse("2024-06-15T12:00:00Z"))));
+            Times: TimeQuery.At(DateTimeOffset.Parse("2024-06-15T12:00:00Z"))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(1, value.TotalCount);
@@ -110,7 +110,7 @@ public class QueryFeaturesToolValidityTests
             new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10)),
             Times: TimeQuery.Between(
                 DateTimeOffset.Parse("2024-12-01T00:00:00Z"),
-                DateTimeOffset.Parse("2025-02-01T00:00:00Z"))));
+                DateTimeOffset.Parse("2025-02-01T00:00:00Z"))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(2, value.TotalCount);
@@ -125,7 +125,7 @@ public class QueryFeaturesToolValidityTests
         var tool = new QueryFeaturesTool(BuildCatalog(noMetadata, outOfWindow));
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10)),
-            Times: TimeQuery.At(DateTimeOffset.Parse("2024-06-15T12:00:00Z"))));
+            Times: TimeQuery.At(DateTimeOffset.Parse("2024-06-15T12:00:00Z"))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(1, value.TotalCount);
@@ -140,7 +140,7 @@ public class QueryFeaturesToolValidityTests
         var tool = new QueryFeaturesTool(BuildCatalog(openEnded));
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             new GeoQuery.Box(new GeoBoundingBox(0, 0, 10, 10)),
-            Times: TimeQuery.At(DateTimeOffset.Parse("2050-01-01T00:00:00Z"))));
+            Times: TimeQuery.At(DateTimeOffset.Parse("2050-01-01T00:00:00Z"))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(1, value.TotalCount);

@@ -147,7 +147,7 @@ public class RenderActivityMonitorTests
     {
         var m = new RenderActivityMonitor();
         var result = await m.WaitForIdleAsync(
-            TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(2));
+            TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
         Assert.True(result.WentIdle);
         Assert.False(result.TimedOut);
@@ -184,7 +184,7 @@ public class RenderActivityMonitorTests
         };
 
         var result = await m.WaitForIdleAsync(
-            TimeSpan.FromMilliseconds(40), TimeSpan.FromSeconds(5));
+            TimeSpan.FromMilliseconds(40), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         Assert.True(result.WentIdle);
         Assert.Equal(1, result.PaintsObserved);
@@ -199,7 +199,7 @@ public class RenderActivityMonitorTests
         // idle (recency-gated busy veto).
         var m = new RenderActivityMonitor { BusyProbe = () => true };
         var result = await m.WaitForIdleAsync(
-            TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(150));
+            TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(150), TestContext.Current.CancellationToken);
 
         Assert.True(result.WentIdle);
         Assert.False(result.TimedOut);
@@ -222,9 +222,9 @@ public class RenderActivityMonitorTests
         // ReSharper disable once AccessToModifiedClosure
         var m = new RenderActivityMonitor { BusyProbe = () => Volatile.Read(ref busy) };
         var waitTask = m.WaitForIdleAsync(
-            TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(5));
+            TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
-        await Task.Delay(60);
+        await Task.Delay(60, TestContext.Current.CancellationToken);
         Volatile.Write(ref busy, false);
         m.NotifyActivity(); // wake the waiter promptly
 
@@ -240,7 +240,7 @@ public class RenderActivityMonitorTests
         var waitTask = m.WaitForIdleAsync(
             TimeSpan.FromMilliseconds(50), TimeSpan.FromSeconds(30), cts.Token);
 
-        await Task.Delay(20);
+        await Task.Delay(20, TestContext.Current.CancellationToken);
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waitTask);
@@ -251,7 +251,7 @@ public class RenderActivityMonitorTests
     {
         var m = new RenderActivityMonitor { BusyProbe = () => throw new InvalidOperationException() };
         var result = await m.WaitForIdleAsync(
-            TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(2));
+            TimeSpan.FromMilliseconds(20), TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
         Assert.True(result.WentIdle);
     }
 }

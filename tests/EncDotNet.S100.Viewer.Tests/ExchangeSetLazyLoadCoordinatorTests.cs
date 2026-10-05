@@ -102,7 +102,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         coordinator.Register(new[] { farCell });
         notifier.Publish(Viewport(40, -75, 41, -74));
 
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
         Assert.DoesNotContain(farCell, loaded);
         Assert.True(farCell.IsDeferred);
     }
@@ -136,7 +136,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         coordinator.Register(new[] { harbourCell });
         notifier.Publish(Viewport(30, -85, 50, -65, resolution: 3000.0));
 
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
         Assert.DoesNotContain(harbourCell, loaded);
     }
 
@@ -236,7 +236,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
 
         // Give the pump time to run its finally block, then flush finalizers to
         // surface any unobserved task exception.
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
@@ -267,7 +267,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         // A later viewport tick that still intersects the (now-unregistered)
         // footprint must not resurrect it into the LRU.
         notifier.Publish(Viewport(40, -75, 41, -74));
-        await Task.Delay(50);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
         Assert.Equal(0, coordinator.LoadedCount);
     }
 
@@ -296,7 +296,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         Assert.False(cell.IsDeferred);
 
         // Give any stale continuation the chance to (incorrectly) re-run.
-        await Task.Delay(80);
+        await Task.Delay(80, TestContext.Current.CancellationToken);
         Assert.Single(loaded);
     }
 
@@ -372,7 +372,7 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         release.SetResult();
 
         Assert.True(await WaitUntilAsync(() => loaded.Contains(blocker!)));
-        await Task.Delay(50);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
 
         // The queued cell's load never ran (not added to loaded), and since no
         // layers were built it is not unwound either.
