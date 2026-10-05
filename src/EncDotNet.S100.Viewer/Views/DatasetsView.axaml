@@ -341,6 +341,7 @@
                                    Header="{x:Static loc:Strings.Datasets_EmptyTitle}"
                                    Description="{x:Static loc:Strings.Datasets_EmptyDescription}" />
             <Button x:Name="EmptyAddButton"
+                    AutomationProperties.AutomationId="Datasets.Empty.Open"
                     Classes="Outline"
                     Content="{x:Static loc:Strings.Button_OpenDataset}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenDataset}"
@@ -372,6 +373,7 @@
                         <Grid DockPanel.Dock="Top"
                               Margin="8,0,8,6">
                             <Button x:Name="SourcesAddButton"
+                                    AutomationProperties.AutomationId="Datasets.Sources.Add"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_AddSource}"
                                     Classes="Icon"
                                     HorizontalAlignment="Left"
@@ -396,6 +398,7 @@
                              is a cross-source concern and lives in the
                              Datasets tab, so there is no reordering here. -->
                         <TreeView IsVisible="{Binding HasExchangeSets}"
+                                  AutomationProperties.AutomationId="Datasets.Sources"
                                   Classes="accentTree"
                                   ItemsSource="{Binding ExchangeSetHeaders}"
                                   SelectedItem="{Binding SelectedSourceNode, Mode=TwoWay}"
@@ -411,6 +414,7 @@
                                     <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
                                           ColumnSpacing="6">
                                         <Button Grid.Column="0"
+                                                AutomationProperties.AutomationId="Datasets.Source.ToggleVisibility"
                                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleExchangeSetVisibility}"
                                                 Classes="Icon"
                                                 Command="{Binding ToggleVisibilityCommand}"
@@ -454,6 +458,7 @@
                                                            Icon="Shield" IconVariant="Regular" Opacity="0.4" />
                                         </Panel>
                                         <Button Grid.Column="4"
+                                                AutomationProperties.AutomationId="Datasets.Source.Close"
                                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CloseExchangeSet}"
                                                 Classes="Icon"
                                                 VerticalAlignment="Center"
@@ -468,6 +473,7 @@
                                     <Grid ColumnDefinitions="Auto,*,Auto"
                                           ColumnSpacing="6">
                                         <Button Grid.Column="0"
+                                                AutomationProperties.AutomationId="Datasets.Source.Dataset.ToggleVisibility"
                                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
                                                 Classes="Icon"
                                                 Command="{Binding ToggleVisibilityCommand}"
@@ -486,6 +492,7 @@
                                                        TextTrimming="CharacterEllipsis" />
                                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasLayerTime}">
                                             <Button Grid.Column="0"
+                                                    AutomationProperties.AutomationId="Datasets.Source.Dataset.LayerTime"
                                                     AutomationProperties.Name="{Binding LayerTimeText}"
                                                     Classes="LayerTime"
                                                     Classes.hidden="{Binding IsLayerHidden}"
@@ -528,24 +535,28 @@
                                     Spacing="4"
                                     Margin="8,0,8,4">
                             <Button Classes="Icon"
+                                    AutomationProperties.AutomationId="Datasets.Toolbar.Add"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_AddDataset}"
                                     x:Name="ToolbarAddButton"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddDataset}">
                                 <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="14" />
                             </Button>
                             <Button Classes="Icon"
+                                    AutomationProperties.AutomationId="Datasets.Toolbar.ShowAll"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ShowAllDatasets}"
                                     Command="{Binding ShowAllCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowAllDatasets}">
                                 <ic:FluentIcon Icon="Eye" IconVariant="Regular" FontSize="14" />
                             </Button>
                             <Button Classes="Icon"
+                                    AutomationProperties.AutomationId="Datasets.Toolbar.HideAll"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_HideAllDatasets}"
                                     Command="{Binding HideAllCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_HideAllDatasets}">
                                 <ic:FluentIcon Icon="EyeOff" IconVariant="Regular" FontSize="14" />
                             </Button>
                             <Button Classes="Icon"
+                                    AutomationProperties.AutomationId="Datasets.Toolbar.ResetOpacity"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ResetDatasetOpacity}"
                                     Command="{Binding ResetOpacityCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetDatasetOpacity}">
@@ -581,19 +592,24 @@
                             <Border.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="{x:Static loc:Strings.Menu_BringDatasetToFront}"
+                                              AutomationProperties.AutomationId="Datasets.RowMenu.BringToFront"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).BringToFrontCommand}"
                                               CommandParameter="{Binding}" />
                                     <MenuItem Header="{x:Static loc:Strings.Menu_MoveDatasetUp}"
+                                              AutomationProperties.AutomationId="Datasets.RowMenu.MoveUp"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
                                               CommandParameter="{Binding}" />
                                     <MenuItem Header="{x:Static loc:Strings.Menu_MoveDatasetDown}"
+                                              AutomationProperties.AutomationId="Datasets.RowMenu.MoveDown"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
                                               CommandParameter="{Binding}" />
                                     <MenuItem Header="{x:Static loc:Strings.Menu_SendDatasetToBack}"
+                                              AutomationProperties.AutomationId="Datasets.RowMenu.SendToBack"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).SendToBackCommand}"
                                               CommandParameter="{Binding}" />
                                     <Separator />
                                     <MenuItem Header="{x:Static loc:Strings.Menu_IsolateDataset}"
+                                              AutomationProperties.AutomationId="Datasets.RowMenu.Isolate"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).IsolateCommand}"
                                               CommandParameter="{Binding}" />
                                 </ContextMenu>
@@ -629,6 +645,7 @@
                                                Opacity="0.6" />
                                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasLayerTime}">
                                         <Button Grid.Column="0"
+                                                AutomationProperties.AutomationId="Datasets.Row.LayerTime"
                                                 AutomationProperties.Name="{Binding LayerTimeText}"
                                                 Classes="LayerTime"
                                                 Classes.hidden="{Binding IsLayerHidden}"
@@ -838,6 +855,8 @@
                                                    FontWeight="SemiBold"
                                                    Opacity="0.8" />
                                         <Slider Minimum="0"
+                                                AutomationProperties.AutomationId="Datasets.Inspector.Opacity"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Pane_DatasetOpacity}"
                                                 Maximum="1"
                                                 SmallChange="0.05"
                                                 LargeChange="0.1"
@@ -874,6 +893,7 @@
                                                 <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto"
                                                       ColumnSpacing="6">
                                                     <Button Grid.Row="0" Grid.Column="0"
+                                                            AutomationProperties.AutomationId="Datasets.Inspector.SubLayer.ToggleVisibility"
                                                             AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleSubLayerVisibility}"
                                                             Classes="Icon"
                                                             Command="{Binding ToggleVisibilityCommand}"
@@ -895,6 +915,8 @@
                                                                FontSize="12"
                                                                VerticalAlignment="Center" />
                                                     <Slider Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                                            AutomationProperties.AutomationId="Datasets.Inspector.SubLayer.Opacity"
+                                                            AutomationProperties.Name="{x:Static loc:Strings.Pane_DatasetOpacity}"
                                                             Minimum="0"
                                                             Maximum="1"
                                                             SmallChange="0.05"
@@ -959,6 +981,7 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:ValidationFindingViewModel">
                                                     <Button Classes="FindingRow"
+                                                            AutomationProperties.AutomationId="Datasets.Inspector.Finding"
                                                             AutomationProperties.Name="{Binding ZoomTooltip}"
                                                             Command="{Binding ZoomToFindingCommand}"
                                                             IsEnabled="{Binding HasSpatialLocation}"

@@ -35,7 +35,6 @@ public sealed class AccessibilityGuardTests
         "AddToLibraryDialogView.axaml",
         "CatalogueDirectoryDialogView.axaml",
         "CatalogueScopeStepView.axaml",
-        "DatasetsView.axaml",
         "DisplayModeSelectorView.axaml",
         "EcdisDisplayPanelView.axaml",
         "FeatureCataloguesView.axaml",
@@ -43,12 +42,9 @@ public sealed class AccessibilityGuardTests
         "FeedbackDialogView.axaml",
         "HelmView.axaml",
         "LayerStackView.axaml",
-        "LibraryPanelView.axaml",
         "PickReportView.axaml",
         "PortrayalCataloguesView.axaml",
-        "RoutesView.axaml",
         "SharedFeedDialogView.axaml",
-        "TimelineView.axaml",
         "VesselListView.axaml",
     ];
 

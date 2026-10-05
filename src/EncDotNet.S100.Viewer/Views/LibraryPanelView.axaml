@@ -241,43 +241,49 @@
         <!-- The "Add to Library" menu, shared by the toolbar and the empty state,
              grouped by where the data is. -->
         <MenuFlyout x:Key="AddMenu" Placement="BottomEdgeAlignedLeft">
-            <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_ThisComputer}" Classes="libraryMenuHeader" IsEnabled="False" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryFolder}" Command="{Binding AddFolderCommand}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryExchangeSetZip}" Command="{Binding AddExchangeSetZipCommand}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryS128}" Command="{Binding AddS128CatalogueCommand}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryManifest}" Command="{Binding AddCollectionManifestCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_ThisComputer}" Classes="libraryMenuHeader" IsEnabled="False"  AutomationProperties.AutomationId="Library.AddMenu.ThisComputer"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryFolder}" Command="{Binding AddFolderCommand}"  AutomationProperties.AutomationId="Library.AddMenu.Folder"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryExchangeSetZip}" Command="{Binding AddExchangeSetZipCommand}"  AutomationProperties.AutomationId="Library.AddMenu.ExchangeSet"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryS128}" Command="{Binding AddS128CatalogueCommand}"  AutomationProperties.AutomationId="Library.AddMenu.S128Catalogue"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryManifest}" Command="{Binding AddCollectionManifestCommand}"  AutomationProperties.AutomationId="Library.AddMenu.Manifest"/>
             <Separator />
-            <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_Online}" Classes="libraryMenuHeader" IsEnabled="False" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryOnlineCatalogue}" Command="{Binding AddOnlineCatalogueCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_Online}" Classes="libraryMenuHeader" IsEnabled="False"  AutomationProperties.AutomationId="Library.AddMenu.Online"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryOnlineCatalogue}" Command="{Binding AddOnlineCatalogueCommand}"  AutomationProperties.AutomationId="Library.AddMenu.OnlineCatalogue"/>
             <Separator />
-            <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_AnotherComputer}" Classes="libraryMenuHeader" IsEnabled="False" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibrarySharedFeed}" Command="{Binding AddSharedFeedCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_AnotherComputer}" Classes="libraryMenuHeader" IsEnabled="False"  AutomationProperties.AutomationId="Library.AddMenu.AnotherComputer"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibrarySharedFeed}" Command="{Binding AddSharedFeedCommand}"  AutomationProperties.AutomationId="Library.AddMenu.SharedFeed"/>
         </MenuFlyout>
 
         <!-- Rarely used, destructive actions live here rather than on the toolbar. -->
         <MenuFlyout x:Key="MoreMenu" Placement="BottomEdgeAlignedRight">
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefreshAll}" Command="{Binding RefreshAllCommand}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefreshAll}" Command="{Binding RefreshAllCommand}"  AutomationProperties.AutomationId="Library.MoreMenu.RefreshAll"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}"  AutomationProperties.AutomationId="Library.MoreMenu.Rename"/>
             <Separator />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}"  AutomationProperties.AutomationId="Library.MoreMenu.Remove"/>
         </MenuFlyout>
 
         <!-- The tree's context menu acts on the selected node; the tree selects a node on right-press, so that is the one right-clicked. -->
         <ContextMenu x:Key="NodeMenu">
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryKeep}" Command="{Binding KeepInLibraryCommand}"
+                      AutomationProperties.AutomationId="Library.NodeMenu.Keep"
                       IsVisible="{Binding SelectedNode.CanKeep, FallbackValue=False}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefresh}" Command="{Binding RefreshCommand}"
+                      AutomationProperties.AutomationId="Library.NodeMenu.Refresh"
                       IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefreshSource}" Command="{Binding RefreshCommand}"
+                      AutomationProperties.AutomationId="Library.NodeMenu.RefreshSource"
                       IsVisible="{Binding SelectedNode.IsGroup, FallbackValue=False}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryChooseGroups}" Command="{Binding ChooseGroupsCommand}"
+                      AutomationProperties.AutomationId="Library.NodeMenu.ChooseGroups"
                       IsVisible="{Binding SelectedNode.CanChooseGroups, FallbackValue=False}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryAddCurrents}" Command="{Binding AddCurrentsForAreaCommand}"
+                      AutomationProperties.AutomationId="Library.NodeMenu.AddCurrents"
                       IsVisible="{Binding CanAddCurrentsForArea}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}"
                       AutomationProperties.AutomationId="Library.NodeMenu.Rename"
                       IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryCopyUrl}" Click="OnCopySourceUrl"
+                      AutomationProperties.AutomationId="Library.NodeMenu.CopyUrl"
                       IsVisible="{Binding SelectedNode.HasSourceUrl, FallbackValue=False}" />
             <Separator IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}"
@@ -356,18 +362,21 @@
             <DockPanel Grid.Row="0" Margin="6,4">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2">
                     <Button Classes="Icon libraryIcon"
+                            AutomationProperties.AutomationId="Library.Refresh"
                             AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RefreshLibrary}"
                             Command="{Binding RefreshCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_RefreshLibrary}">
                         <ic:FluentIcon Icon="ArrowSync" FontSize="16" />
                     </Button>
                     <ToggleButton Classes="Icon libraryIcon coverageToggle"
+                                  AutomationProperties.AutomationId="Library.ShowCoverage"
                                   AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ShowCoverage}"
                                   IsChecked="{Binding ShowCoverage}"
                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowCoverage}">
                         <ic:FluentIcon Icon="Map" FontSize="16" />
                     </ToggleButton>
                     <Button Classes="Icon libraryIcon"
+                            AutomationProperties.AutomationId="Library.More"
                             AutomationProperties.Name="{x:Static loc:Strings.Tooltip_LibraryMore}"
                             Flyout="{StaticResource MoreMenu}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryMore}">
@@ -375,6 +384,7 @@
                     </Button>
                 </StackPanel>
                 <Button Classes="Secondary" HorizontalAlignment="Left"
+                        AutomationProperties.AutomationId="Library.Add"
                         AutomationProperties.Name="{x:Static loc:Strings.Tooltip_AddToLibrary}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddToLibrary}"
                         Flyout="{StaticResource AddMenu}">
@@ -484,12 +494,15 @@
                                 <Run Text="{Binding TapPositionText}" />
                             </TextBlock>
                             <Button Grid.Column="2" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                    AutomationProperties.AutomationId="Library.Tap.Next"
                                     Content="{x:Static loc:Strings.Library_LocationNext}"
                                     Command="{Binding NextTapHitCommand}" />
                             <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                    AutomationProperties.AutomationId="Library.Tap.ListAll"
                                     Content="{x:Static loc:Strings.Library_TapListThese}"
                                     Command="{Binding ListTapHitsCommand}" />
                             <Button Grid.Column="4" Classes="Icon" Padding="2" Command="{Binding ClearTapCommand}"
+                                    AutomationProperties.AutomationId="Library.Tap.Clear"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ClearTap}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearTap}">
                                 <ic:FluentIcon Icon="Dismiss" FontSize="12" />
@@ -511,9 +524,11 @@
                             <TextBlock Grid.Column="2" Text="{Binding LocationPositionText}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
                                        FontFamily="{StaticResource LibraryMonoFont}" VerticalAlignment="Center" />
                             <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                    AutomationProperties.AutomationId="Library.Location.Next"
                                     Content="{x:Static loc:Strings.Library_LocationNext}"
                                     Command="{Binding NextAtLocationCommand}" />
                             <Button Grid.Column="4" Classes="Icon" Padding="2" Command="{Binding ClearLocationCommand}"
+                                    AutomationProperties.AutomationId="Library.Location.Clear"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ClearLocation}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearLocation}">
                                 <ic:FluentIcon Icon="Dismiss" FontSize="12" />
@@ -531,6 +546,7 @@
                         </TextBox>
                         <!-- #711 G2: only data valid at the Timeline's view time (with any segment). -->
                         <ToggleButton Grid.Column="1" Classes="Icon libraryIcon coverageToggle"
+                                      AutomationProperties.AutomationId="Library.AtViewTime"
                                       IsVisible="{Binding HasViewTime}"
                                       IsChecked="{Binding IsAtViewTime}"
                                       ToolTip.Tip="{Binding AtViewTimeTooltip}"
@@ -538,11 +554,13 @@
                             <ic:FluentIcon Icon="Clock" FontSize="16" />
                         </ToggleButton>
                         <Button Grid.Column="2" Classes="Icon libraryIcon"
+                                AutomationProperties.AutomationId="Library.FilterOptions"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_LibraryFilterOptions}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryFilterOptions}">
                             <Button.Flyout>
                                 <Flyout Placement="BottomEdgeAlignedRight">
                                     <CheckBox IsChecked="{Binding ShowCancelled}"
+                                              AutomationProperties.AutomationId="Library.FilterOptions.ShowCancelled"
                                               Content="{x:Static loc:Strings.Library_ShowCancelled}" />
                                 </Flyout>
                             </Button.Flyout>
@@ -552,25 +570,25 @@
                     <!-- State segments: what do I have, what can I get, what is new. -->
                     <Border Classes="librarySegments">
                         <UniformGrid Rows="1">
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateAll}">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateAll}" AutomationProperties.AutomationId="Library.State.All">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_All}" />
                                     <TextBlock Text="{Binding AllCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateLocal}">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateLocal}" AutomationProperties.AutomationId="Library.State.Local">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Local}" />
                                     <TextBlock Text="{Binding LocalCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateOnline}">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateOnline}" AutomationProperties.AutomationId="Library.State.Online">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Online}" />
                                     <TextBlock Text="{Binding OnlineCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateUpdates}">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateUpdates}" AutomationProperties.AutomationId="Library.State.Updates">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Updates}" />
                                     <TextBlock Text="{Binding UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
@@ -590,24 +608,29 @@
                             </StackPanel>
                             <Panel Grid.Column="1" VerticalAlignment="Center">
                                 <Button Classes="Primary libraryCompact"
+                                        AutomationProperties.AutomationId="Library.Bulk.Download"
                                         IsVisible="{Binding HasDownloadable}"
                                         Content="{Binding DownloadListedText}"
                                         Command="{Binding DownloadListedCommand}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DownloadListed}" />
                                 <Button Classes="Primary libraryCompact"
+                                        AutomationProperties.AutomationId="Library.Bulk.CheckForRuns"
                                         IsVisible="{Binding IsCheckForRuns}"
                                         Content="{x:Static loc:Strings.Library_BulkCheckForRuns}"
                                         Command="{Binding RefreshCommand}" />
                                 <Button Classes="Primary libraryCompact" IsEnabled="False"
+                                        AutomationProperties.AutomationId="Library.Bulk.Update"
                                         IsVisible="{Binding IsBulkOffline}"
                                         Content="{x:Static loc:Strings.Library_BulkUpdate}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_BulkOffline}" />
                                 <Button Classes="Primary libraryCompact"
+                                        AutomationProperties.AutomationId="Library.Bulk.Cancel"
                                         IsVisible="{Binding IsBulkDownloading}"
                                         Content="{x:Static loc:Strings.Button_Cancel}"
                                         Command="{Binding CancelDownloadsCommand}" />
                             </Panel>
                             <Button Grid.Column="2" Classes="Outline libraryCompact"
+                                    AutomationProperties.AutomationId="Library.Bulk.LoadAsYouPan"
                                     Content="{x:Static loc:Strings.Library_BulkOnPan}"
                                     Command="{Binding LoadAsYouPanCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadAsYouPan}" />
@@ -640,6 +663,7 @@
                                                          Width="18" IsVisible="{Binding !IsGroupHeader}"
                                                          VerticalAlignment="Center" />
                                     <Button Grid.Row="0" Grid.Column="0" Classes="Icon" Padding="0" Width="18" Height="20" MinHeight="0"
+                                            AutomationProperties.AutomationId="Library.Row.ToggleGroup"
                                             AutomationProperties.Name="{x:Static loc:Strings.Library_ToggleGroup}"
                                             IsVisible="{Binding IsGroupHeader}" VerticalAlignment="Center"
                                             Command="{Binding ToggleCommand}">
@@ -696,6 +720,7 @@
                                                    FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
                                                    FontFamily="{StaticResource LibraryMonoFont}" VerticalAlignment="Center" />
                                         <Button Grid.Column="2" Classes="Ghost" Padding="6,0" Height="24" MinHeight="0"
+                                                AutomationProperties.AutomationId="Library.Row.CancelDownload"
                                                 FontSize="{StaticResource LibrarySecondaryFontSize}"
                                                 Content="{x:Static loc:Strings.Library_CancelDownload}"
                                                 Command="{Binding CancelDownloadCommand}" />
@@ -848,6 +873,7 @@
                                                FontSize="{StaticResource LibrarySecondaryFontSize}" />
                                 </StackPanel>
                                 <Button Grid.Column="2" Classes="Outline libraryCompact" VerticalAlignment="Center"
+                                        AutomationProperties.AutomationId="Library.Details.GetPairing"
                                         Content="{x:Static loc:Strings.Library_Pairing_Get}"
                                         Command="{Binding Pairing.GetCommand, FallbackValue={x:Null}}"
                                         IsVisible="{Binding Pairing.CanGet, FallbackValue=False}" />
