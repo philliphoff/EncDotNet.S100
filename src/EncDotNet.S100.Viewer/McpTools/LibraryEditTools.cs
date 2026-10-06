@@ -123,7 +123,7 @@ internal sealed class RemoveLibrarySourceTool(IViewerLibraryEditor editor)
     }
 }
 
-/// <summary>Waits for Library indexing and downloads (MCP <c>await_library_idle</c>).</summary>
+/// <summary>Waits for Library indexing, downloads and dataset opens (MCP <c>await_library_idle</c>).</summary>
 internal sealed class AwaitLibraryIdleTool(IViewerLibraryEditor editor)
 {
     /// <summary>The MCP tool name.</summary>

@@ -102,7 +102,7 @@ internal static class LibraryEditMcpAdapters
             "Acts on Library items as the panel's buttons do. Select items by id or with the query_library_items "
             + "filters; items the action does not apply to are skipped and counted by state. Downloads can be large: "
             + "call with dryRun: true first to see the count and bytes, confirm with the user, and pass maxBytes. "
-            + "Downloads continue in the background (await_library_idle waits for them); load returns how many "
+            + "Downloads (and the loads after them) continue in the background (await_library_idle waits for them); load returns how many "
             + "datasets opened. Mutating; viewer-injected tool.");
     }
 
@@ -130,9 +130,11 @@ internal static class LibraryEditMcpAdapters
             CancellationToken ct = default) =>
             McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(timeoutMs, ct));
         return Tool(del, AwaitLibraryIdleTool.Name,
-            "Waits until the Library is idle: no source indexing and no download running. Returns whether it is "
-            + "idle, whether the wait timed out, and the running download batch's progress (items and bytes done, "
-            + "failed). Use after add_library_source, refresh_library_source or a library_action download. "
+            "Waits until the Library is idle: no source indexing, no download running, and every dataset a "
+            + "library_action download or load opens is open. Returns whether it is idle, whether the wait timed out, "
+            + "loading (datasets still to open, including any still downloading) and the running download batch's "
+            + "progress (items and bytes done, failed). Use after add_library_source, refresh_library_source or a "
+            + "library_action download. "
             + "Read-only; viewer-injected tool.");
     }
 

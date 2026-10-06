@@ -225,7 +225,53 @@ public sealed class LibraryEditToolsTests : IDisposable
         Assert.True((await new AwaitLibraryIdleTool(_editor).InvokeAsync(1_000, TestContext.Current.CancellationToken)).TryGetValue(out var idle));
 
         Assert.True(idle!.Idle);
+        Assert.Equal(0, idle.Loading);
         Assert.Null(idle.Downloads);
+    }
+
+    [Fact]
+    public async Task Idle_waits_until_downloaded_items_are_loaded()
+    {
+        // #790: the download batch's progress clears before its datasets open.
+        var online = await OnlineAsync();
+        var gate = _loader.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Assert.True((await new LibraryActionTool(_editor).InvokeAsync(Act("download", sourceId: online.ToString()), TestContext.Current.CancellationToken)).TryGetValue(out var started));
+        Assert.True(started!.Started);
+        Assert.Equal(2, started.Eligible);
+        _ = Task.Delay(500, TestContext.Current.CancellationToken).ContinueWith(_ => gate.TrySetResult(), TaskScheduler.Default);
+
+        Assert.True((await new AwaitLibraryIdleTool(_editor).InvokeAsync(10_000, TestContext.Current.CancellationToken)).TryGetValue(out var idle));
+
+        Assert.True(idle!.Idle);
+        Assert.False(idle.TimedOut);
+        Assert.Equal(0, idle.Loading);
+        Assert.Equal(2, _loader.Loaded);
+        Assert.True((await new QueryLibraryItemsTool(new ViewerLibraryController(_panel, null, a => { a(); return Task.CompletedTask; }))
+            .InvokeAsync(new QueryLibraryItemsRequest(online.ToString(), null, null, null, null, null, null, null, null, null, null, null), TestContext.Current.CancellationToken))
+            .TryGetValue(out var page));
+        Assert.Equal(2, page!.Items.Count);
+        Assert.All(page.Items, item => Assert.Equal("loaded", item.State));
+    }
+
+    [Fact]
+    public async Task Idle_reports_the_datasets_still_loading()
+    {
+        var online = await OnlineAsync();
+        var gate = _loader.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Assert.True((await new LibraryActionTool(_editor).InvokeAsync(Act("download", sourceId: online.ToString()), TestContext.Current.CancellationToken)).TryGetValue(out _));
+        Assert.True((await new AwaitLibraryIdleTool(_editor).InvokeAsync(0, TestContext.Current.CancellationToken)).TryGetValue(out var busy));
+
+        Assert.False(busy!.Idle);
+        Assert.True(busy.TimedOut);
+        Assert.Equal(2, busy.Loading);
+        Assert.Equal(0, _loader.Loaded);
+
+        gate.SetResult();
+        Assert.True((await new AwaitLibraryIdleTool(_editor).InvokeAsync(10_000, TestContext.Current.CancellationToken)).TryGetValue(out var idle));
+        Assert.True(idle!.Idle);
+        Assert.Equal(0, idle.Loading);
     }
 
     [Fact]
@@ -266,18 +312,29 @@ public sealed class LibraryEditToolsTests : IDisposable
         }
     }
 
+    /// <summary>Records loads; with a <see cref="Gate"/>, opens them only once it is released, as a slow dataset open.</summary>
     private sealed class RecordingLoader : ILibraryLoader
     {
-        public int Loaded { get; private set; }
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _loaded = new(StringComparer.Ordinal);
+        private int _count;
+
+        public int Loaded => Volatile.Read(ref _count);
+
+        public TaskCompletionSource? Gate { get; set; }
 
         public event EventHandler? Changed { add { } remove { } }
 
-        public LibraryLoadState StateOf(CollectionItem item) => LibraryLoadState.None;
+        public LibraryLoadState StateOf(CollectionItem item) =>
+            _loaded.ContainsKey(item.Key) ? LibraryLoadState.Loaded : LibraryLoadState.None;
 
-        public Task<LibraryLoadResult> LoadAsync(IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default)
+        public async Task<LibraryLoadResult> LoadAsync(IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default)
         {
-            Loaded += items.Count;
-            return Task.FromResult(new LibraryLoadResult(items.Count, 0));
+            if (Gate is { } gate)
+                await gate.Task.WaitAsync(cancellationToken);
+            foreach (var item in items)
+                _loaded[item.Key] = 0;
+            Interlocked.Add(ref _count, items.Count);
+            return new LibraryLoadResult(items.Count, 0);
         }
     }
 
