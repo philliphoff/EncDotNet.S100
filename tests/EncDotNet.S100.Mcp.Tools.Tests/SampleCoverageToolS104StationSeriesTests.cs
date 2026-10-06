@@ -70,7 +70,7 @@ public class SampleCoverageToolS104StationSeriesTests
     }
 
     [Fact]
-    public async Task ClampsTimeBeforeStart_ToFirstStep()
+    public async Task NearestPolicy_TimeBeforeStart_SamplesFirstStep()
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S104Stations("dcf8", Synth()));
@@ -78,9 +78,10 @@ public class SampleCoverageToolS104StationSeriesTests
 
         var requested = new DateTimeOffset(2023, 12, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1, Time: requested), TestContext.Current.CancellationToken);
+            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1, Time: requested, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(SampleTimeStatus.BeforeStart, value.TimeStatus);
         var sample = Assert.IsType<WaterLevelStationSample>(value.Value);
         Assert.Equal(1.0, sample.WaterLevelHeight, 5);
         Assert.Equal(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), sample.SampleTime);
@@ -88,7 +89,7 @@ public class SampleCoverageToolS104StationSeriesTests
     }
 
     [Fact]
-    public async Task ClampsTimeAfterEnd_ToLastStep()
+    public async Task NearestPolicy_TimeAfterEnd_SamplesLastStep()
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S104Stations("dcf8", Synth()));
@@ -96,9 +97,10 @@ public class SampleCoverageToolS104StationSeriesTests
 
         var requested = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1, Time: requested), TestContext.Current.CancellationToken);
+            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1, Time: requested, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(SampleTimeStatus.AfterEnd, value.TimeStatus);
         var sample = Assert.IsType<WaterLevelStationSample>(value.Value);
         Assert.Equal(1.5, sample.WaterLevelHeight, 5);
         Assert.Equal("decreasing", sample.Trend);

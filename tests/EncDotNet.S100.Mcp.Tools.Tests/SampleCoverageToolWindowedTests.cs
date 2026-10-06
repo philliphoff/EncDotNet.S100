@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.Pipelines.Time;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
@@ -102,8 +103,11 @@ public class SampleCoverageToolWindowedTests
         Assert.True(result.TryGetError(out var err));
         var oor = Assert.IsType<TimeOutOfRange>(err);
         Assert.Equal("times", oor.Parameter);
-        Assert.NotNull(oor.DatasetFirstTime);
-        Assert.NotNull(oor.DatasetLastTime);
+        Assert.Null(oor.RequestedTime);
+        Assert.Equal(new DatasetId("s104-1"), oor.DatasetId);
+        Assert.Equal(HourlyTimes[0], oor.ValidFrom.UtcDateTime);
+        Assert.Equal(HourlyTimes[^1], oor.ValidTo.UtcDateTime);
+        Assert.Equal(HourlyTimes[^1], oor.NearestStep.UtcDateTime);
     }
 
     [Fact]

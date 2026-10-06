@@ -15,8 +15,9 @@ namespace EncDotNet.S100.Datasets.Pipelines.Query;
 /// <param name="Time">
 /// Optional time selector for time-varying products (S-104, S-111). Ignored for S-102
 /// (which has no time dimension). When null on a time-varying product the first time
-/// step of the matched coverage is used. When supplied, the nearest time step is
-/// selected; times outside the dataset's range clamp to the first or last step.
+/// step of the matched coverage is used. When supplied, the nearest time step of a
+/// dataset whose range contains the time is selected; a time outside every covering
+/// dataset's range is handled per <paramref name="OutOfRange"/>.
 /// </param>
 /// <param name="Times">
 /// Optional richer temporal query. Takes precedence over <paramref name="Time"/>
@@ -25,12 +26,52 @@ namespace EncDotNet.S100.Datasets.Pipelines.Query;
 /// per-step entry. Currently honoured for gridded S-104 and S-111; ignored
 /// elsewhere.
 /// </param>
+/// <param name="OutOfRange">
+/// What to do when a single requested instant lies outside the time range of every
+/// dataset covering the point: <see cref="TimeOutOfRangePolicy.Error"/> (the default)
+/// returns <see cref="TimeOutOfRange"/>; <see cref="TimeOutOfRangePolicy.Nearest"/>
+/// samples the nearest step and flags it in <see cref="SampleCoverageResult.TimeStatus"/>.
+/// Windowed queries are unaffected.
+/// </param>
 public sealed record SampleCoverageRequest(
     [property: Description("Spec of the coverage to sample (S-102, S-104, or S-111).")] SpecRef Spec,
     [property: Description("Sample latitude in decimal degrees, WGS-84, range -90..+90.")] double Latitude,
     [property: Description("Sample longitude in decimal degrees, WGS-84, range -180..+180.")] double Longitude,
-    [property: Description("UTC ISO-8601 time selector for time-varying products; ignored for S-102. Null selects the first time step; non-null selects the nearest step (clamped to the dataset range).")] DateTimeOffset? Time = null,
-    [property: Description("Optional TimeQuery (instant / range / series). Takes precedence over 'Time'. Range/Series populate the result's 'Series' field with one entry per dataset step in window.")] TimeQuery? Times = null);
+    [property: Description("UTC ISO-8601 time selector for time-varying products; ignored for S-102. Null selects the first time step; non-null selects the nearest step of a dataset whose range contains the time (see OutOfRange).")] DateTimeOffset? Time = null,
+    [property: Description("Optional TimeQuery (instant / range / series). Takes precedence over 'Time'. Range/Series populate the result's 'Series' field with one entry per dataset step in window.")] TimeQuery? Times = null,
+    [property: Description("Handling of a single instant outside every covering dataset's time range: Error (default) returns time_out_of_range; Nearest samples the nearest step and sets TimeStatus.")] TimeOutOfRangePolicy OutOfRange = TimeOutOfRangePolicy.Error);
+
+/// <summary>
+/// How <see cref="SampleCoverageService"/> treats a single requested instant
+/// that falls outside the time range of every dataset covering the point.
+/// </summary>
+public enum TimeOutOfRangePolicy
+{
+    /// <summary>Return a <see cref="TimeOutOfRange"/> error (the default).</summary>
+    Error,
+
+    /// <summary>
+    /// Sample the nearest available step and mark the result with
+    /// <see cref="SampleTimeStatus.BeforeStart"/> or <see cref="SampleTimeStatus.AfterEnd"/>.
+    /// </summary>
+    Nearest,
+}
+
+/// <summary>
+/// Values of <see cref="SampleCoverageResult.TimeStatus"/>: where the requested
+/// instant fell relative to the sampled dataset's time range.
+/// </summary>
+public static class SampleTimeStatus
+{
+    /// <summary>The requested time is within the dataset's range (allowing one time-step interval at either end).</summary>
+    public const string InRange = "in_range";
+
+    /// <summary>The requested time precedes the dataset's first step; the first step was sampled.</summary>
+    public const string BeforeStart = "before_start";
+
+    /// <summary>The requested time follows the dataset's last step; the last step was sampled.</summary>
+    public const string AfterEnd = "after_end";
+}
 
 /// <summary>Result of <see cref="SampleCoverageService"/>.</summary>
 /// <param name="DatasetId">Dataset that produced the sample.</param>
@@ -44,12 +85,30 @@ public sealed record SampleCoverageRequest(
 /// single-instant queries, for S-102, and for station-series datasets (which
 /// currently honour only single-instant time selection).
 /// </param>
+/// <param name="TimeStatus">
+/// For a single-instant request on a time-varying product, where the requested
+/// time fell relative to the sampled dataset's range — one of the
+/// <see cref="SampleTimeStatus"/> values. <c>before_start</c> / <c>after_end</c>
+/// only appear when the request opted into <see cref="TimeOutOfRangePolicy.Nearest"/>.
+/// Null when no time was requested, for S-102, and for windowed queries.
+/// </param>
+/// <param name="Truncated">
+/// For windowed queries, <c>true</c> when the requested window reaches past the
+/// sampled dataset's time range so the series is shorter than requested. Null for
+/// single-instant queries.
+/// </param>
+/// <param name="CoveredFrom">For windowed queries, the start of the requested window clipped to the dataset's range.</param>
+/// <param name="CoveredTo">For windowed queries, the end of the requested window clipped to the dataset's range.</param>
 public sealed record SampleCoverageResult(
     [property: Description("Identifier of the dataset that produced the sample.")] DatasetId DatasetId,
     [property: Description("Latitude that was requested, echoed back in decimal degrees, WGS-84.")] double Latitude,
     [property: Description("Longitude that was requested, echoed back in decimal degrees, WGS-84.")] double Longitude,
     [property: Description("Typed sample payload; the JSON \"$kind\" discriminator selects the variant.")] SampledValue Value,
-    [property: Description("Optional per-step series; populated when the request's Times is Range/Series and the dataset is gridded S-104 or S-111.")] IReadOnlyList<TimedSampledValue>? Series = null);
+    [property: Description("Optional per-step series; populated when the request's Times is Range/Series and the dataset is gridded S-104 or S-111.")] IReadOnlyList<TimedSampledValue>? Series = null,
+    [property: Description("Single-instant requests only: \"in_range\", or \"before_start\" / \"after_end\" when outOfRange=nearest sampled the dataset's first / last step instead. Null when no time was requested.")] string? TimeStatus = null,
+    [property: Description("Windowed requests only: true when the requested window extends past the dataset's time range, so the series covers only part of it.")] bool? Truncated = null,
+    [property: Description("Windowed requests only: start of the requested window clipped to the dataset's time range, UTC ISO-8601.")] DateTimeOffset? CoveredFrom = null,
+    [property: Description("Windowed requests only: end of the requested window clipped to the dataset's time range, UTC ISO-8601.")] DateTimeOffset? CoveredTo = null);
 
 /// <summary>
 /// A single entry in a <see cref="SampleCoverageResult.Series"/>: the
@@ -187,10 +246,29 @@ public sealed record SurfaceCurrentStationSample(
 /// (surface current speed + direction, nearest time step).
 /// </summary>
 /// <remarks>
+/// <para>
 /// "Nearest cell" semantics: the cell whose centre is closest to the
 /// requested point. No interpolation is performed. For time-varying
 /// products the nearest time step is selected; ties round to the earlier
-/// step, and times outside the dataset clamp to the first/last step.
+/// step.
+/// </para>
+/// <para>
+/// Dataset selection is time-aware: of the datasets covering the point,
+/// those whose time range contains the requested time are preferred, and
+/// the finest grid (or nearest station) among them wins; equally fine
+/// candidates prefer the newest run. A request within one time-step
+/// interval of either end of a dataset's range counts as in range.
+/// </para>
+/// <para>
+/// A single instant outside every candidate's range returns
+/// <see cref="TimeOutOfRange"/> unless the request opts into
+/// <see cref="TimeOutOfRangePolicy.Nearest"/>, in which case the nearest
+/// step is returned and <see cref="SampleCoverageResult.TimeStatus"/> says
+/// which end was used. Windowed queries return the covered part of the
+/// window, flagged <see cref="SampleCoverageResult.Truncated"/> when the
+/// data does not reach across the whole window, and error only when there
+/// is no overlap at all (issue #789).
+/// </para>
 /// </remarks>
 public sealed class SampleCoverageService
 {
@@ -200,6 +278,11 @@ public sealed class SampleCoverageService
     // S-111 encodes surfaceCurrentSpeed in knots; the MCP contract also
     // reports m/s. 1 knot = 1852 m / 3600 s ≈ 0.514444 m/s.
     private const double KnotsToMetresPerSecond = 1852.0 / 3600.0;
+
+    // Stations within this distance of the nearest one are treated as the
+    // same site (e.g. one station reported by two runs), so time decides
+    // between them rather than a sub-metre position difference.
+    private const double CoLocatedStationMetres = 1.0;
 
     private readonly IDatasetCatalog _catalog;
     private readonly ICrsTransformFactory _transforms;
@@ -232,9 +315,11 @@ public sealed class SampleCoverageService
         // it onto the legacy 'Time' field so the existing single-instant
         // paths apply unchanged. Range/Series dispatch to a windowed path.
         var effective = request;
+        var timeParameter = "time";
         if (request.Times is TimeQuery.Instant inst)
         {
             effective = request with { Time = inst.Value, Times = null };
+            timeParameter = "times";
         }
 
         if (effective.Times is TimeQuery.Range or TimeQuery.Series)
@@ -253,8 +338,8 @@ public sealed class SampleCoverageService
         return Task.FromResult(effective.Spec.Name switch
         {
             "S-102" => SampleS102(effective),
-            "S-104" => SampleS104(effective),
-            "S-111" => SampleS111(effective),
+            "S-104" => SampleS104(effective, timeParameter),
+            "S-111" => SampleS111(effective, timeParameter),
             _ => ToolResult<SampleCoverageResult>.Err(
                 new SpecNotSupportedForTool(effective.Spec, Name)),
         });
@@ -331,58 +416,31 @@ public sealed class SampleCoverageService
             new NoDatasetCoversPoint(request.Latitude, request.Longitude));
     }
 
-    private ToolResult<SampleCoverageResult> SampleS104(SampleCoverageRequest request)
+    private ToolResult<SampleCoverageResult> SampleS104(SampleCoverageRequest request, string timeParameter)
     {
         var snapshot = _catalog.Datasets;
 
-        // First: prefer dcf2 gridded coverage whose bounds contain the
+        // First: prefer dcf2 gridded coverage whose grid contains the
         // point. This preserves existing behaviour where a colocated
         // gridded forecast wins over a sparse station file.
-        LoadedDataset? bestDataset = null;
-        S104CoverageSource? bestSource = null;
-        S104Dataset? bestModel = null;
-        WaterLevelCoverage? bestCoverage = null;
-        double bestArea = double.PositiveInfinity;
-        bool anyS104Gridded = false;
-        bool anyS104StationSeries = false;
-        foreach (var dataset in snapshot)
+        var candidates = S104GridCandidates(snapshot, request, out var anyS104Gridded);
+        if (candidates.Count > 0)
         {
-            switch (dataset.Data)
+            var (chosen, status) = ChooseForInstant(candidates, request.Time);
+            if (IsOutOfRange(status) && request.OutOfRange == TimeOutOfRangePolicy.Error)
             {
-                case S104CoverageData s104:
-                    {
-                        anyS104Gridded = true;
-                        var model = s104.Source.Dataset;
-                        if (model.Coverages.Count == 0) break;
-                        var probe = model.Coverages[0];
-                        if (!CoverageContains(probe, request.Latitude, request.Longitude)) break;
-                        var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
-                        if (area < bestArea)
-                        {
-                            bestArea = area;
-                            bestDataset = dataset;
-                            bestSource = s104.Source;
-                            bestModel = model;
-                            bestCoverage = probe;
-                        }
-                        break;
-                    }
-                case S104StationSeriesData:
-                    anyS104StationSeries = true;
-                    break;
+                return ToolResult<SampleCoverageResult>.Err(
+                    InstantOutOfRange(timeParameter, request.Time!.Value, chosen, status!, candidates));
             }
-        }
 
-        if (bestDataset is not null && bestModel is not null && bestCoverage is not null && bestSource is not null)
-        {
-            return SampleS104Gridded(request, bestDataset, bestSource, bestModel, bestCoverage);
+            return SampleS104Gridded(request, chosen.Dataset, chosen.Payload, status);
         }
 
         // No gridded match. Fall back to nearest-station across all
         // loaded dcf8 station-series datasets (no max-distance cap).
-        if (anyS104StationSeries)
+        if (snapshot.Any(d => d.Data is S104StationSeriesData))
         {
-            return SampleS104StationSeries(request, snapshot);
+            return SampleS104StationSeries(request, timeParameter, snapshot);
         }
 
         return ToolResult<SampleCoverageResult>.Err(anyS104Gridded
@@ -390,12 +448,36 @@ public sealed class SampleCoverageService
             : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
     }
 
+    private static List<Candidate<S104Dataset>> S104GridCandidates(
+        IReadOnlyList<LoadedDataset> snapshot,
+        SampleCoverageRequest request,
+        out bool anyGridded)
+    {
+        anyGridded = false;
+        var candidates = new List<Candidate<S104Dataset>>();
+        foreach (var dataset in snapshot)
+        {
+            if (dataset.Data is not S104CoverageData s104) continue;
+            anyGridded = true;
+            var model = s104.Source.Dataset;
+            if (model.Coverages.Count == 0) continue;
+            var probe = model.Coverages[0];
+            if (!CoverageContains(probe, request.Latitude, request.Longitude)) continue;
+            candidates.Add(new Candidate<S104Dataset>(
+                dataset,
+                model,
+                StepWindow.FromSteps(model.Coverages.Select(c => c.TimePoint)),
+                probe.SpacingLatitudinal * probe.SpacingLongitudinal,
+                S100IssueTime.Parse(model.IssueDate, model.IssueTime)));
+        }
+        return candidates;
+    }
+
     private static ToolResult<SampleCoverageResult> SampleS104Gridded(
         SampleCoverageRequest request,
         LoadedDataset bestDataset,
-        S104CoverageSource bestSource,
         S104Dataset bestModel,
-        WaterLevelCoverage bestCoverage)
+        string? timeStatus)
     {
         if (bestModel.DataCodingFormat != 2)
         {
@@ -436,7 +518,8 @@ public sealed class SampleCoverageService
                     row,
                     col,
                     cellLat,
-                    cellLon)));
+                    cellLon),
+                TimeStatus: timeStatus));
         }
         catch (ObjectDisposedException)
         {
@@ -450,63 +533,62 @@ public sealed class SampleCoverageService
     /// §10.2.3 / §10.2.7). Finds the nearest station across every loaded
     /// dcf8 dataset by great-circle distance with no max-distance cap,
     /// then picks the nearest time step within that station's series.
+    /// When several runs report the same station, the one whose series
+    /// covers the requested time wins.
     /// </summary>
     private static ToolResult<SampleCoverageResult> SampleS104StationSeries(
         SampleCoverageRequest request,
+        string timeParameter,
         IReadOnlyList<LoadedDataset> snapshot)
     {
-        LoadedDataset? bestDataset = null;
-        WaterLevelStation? bestStation = null;
-        double bestDistance = double.PositiveInfinity;
-
+        var candidates = new List<Candidate<WaterLevelStation>>();
         foreach (var dataset in snapshot)
         {
             if (dataset.Data is not S104StationSeriesData ss) continue;
-            foreach (var station in ss.Dataset.Stations)
+            var run = S100IssueTime.Parse(ss.Dataset.IssueDate, ss.Dataset.IssueTime);
+            foreach (var s in ss.Dataset.Stations)
             {
-                var d = GreatCircleMetres(request.Latitude, request.Longitude, station.Latitude, station.Longitude);
-                if (d < bestDistance)
-                {
-                    bestDistance = d;
-                    bestStation = station;
-                    bestDataset = dataset;
-                }
+                candidates.Add(new Candidate<WaterLevelStation>(
+                    dataset,
+                    s,
+                    StepWindow.FromStation(s.StartTime, s.EndTime, s.TimeRecordInterval, s.SampleTimes),
+                    GreatCircleMetres(request.Latitude, request.Longitude, s.Latitude, s.Longitude),
+                    run));
             }
         }
 
-        if (bestDataset is null || bestStation is null)
+        var coLocated = CoLocated(candidates);
+        if (coLocated.Count == 0)
         {
             return ToolResult<SampleCoverageResult>.Err(
                 new NoDatasetCoversPoint(request.Latitude, request.Longitude));
         }
 
-        var requestedAsUtc = request.Time?.UtcDateTime;
-        DateTime sampleTime;
-        int idx;
-        if (requestedAsUtc is null)
+        var (chosen, status) = ChooseForInstant(coLocated, request.Time);
+        if (IsOutOfRange(status) && request.OutOfRange == TimeOutOfRangePolicy.Error)
         {
-            idx = 0;
-            sampleTime = bestStation.StartTime;
-        }
-        else
-        {
-            idx = bestStation.NearestTimeIndex(requestedAsUtc.Value);
-            sampleTime = bestStation.TimeAt(idx);
+            return ToolResult<SampleCoverageResult>.Err(
+                InstantOutOfRange(timeParameter, request.Time!.Value, chosen, status!, coLocated));
         }
 
+        var station = chosen.Payload;
+        var idx = request.Time is { } requested ? station.NearestTimeIndex(requested.UtcDateTime) : 0;
+        var sampleTime = request.Time is null ? station.StartTime : station.TimeAt(idx);
+
         return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
-            bestDataset.Id,
+            chosen.Dataset.Id,
             request.Latitude,
             request.Longitude,
             new WaterLevelStationSample(
-                bestStation.Identifier,
-                bestDistance,
-                bestStation.Heights[idx],
-                DecodeWaterLevelTrend(bestStation.Trends[idx]),
+                station.Identifier,
+                chosen.Rank,
+                station.Heights[idx],
+                DecodeWaterLevelTrend(station.Trends[idx]),
                 DateTime.SpecifyKind(sampleTime, DateTimeKind.Utc),
                 request.Time,
-                bestStation.Latitude,
-                bestStation.Longitude)));
+                station.Latitude,
+                station.Longitude),
+            TimeStatus: status));
     }
 
     // Spherical-earth great-circle distance, matching the accuracy bar
@@ -526,53 +608,26 @@ public sealed class SampleCoverageService
         return EarthRadiusMetres * c;
     }
 
-    private ToolResult<SampleCoverageResult> SampleS111(SampleCoverageRequest request)
+    private ToolResult<SampleCoverageResult> SampleS111(SampleCoverageRequest request, string timeParameter)
     {
         var snapshot = _catalog.Datasets;
 
-        LoadedDataset? bestDataset = null;
-        S111CoverageSource? bestSource = null;
-        S111Dataset? bestModel = null;
-        SurfaceCurrentCoverage? bestCoverage = null;
-        double bestArea = double.PositiveInfinity;
-        bool anyS111Gridded = false;
-        bool anyS111StationSeries = false;
-        foreach (var dataset in snapshot)
+        var candidates = S111GridCandidates(snapshot, request, out var anyS111Gridded);
+        if (candidates.Count > 0)
         {
-            switch (dataset.Data)
+            var (chosen, status) = ChooseForInstant(candidates, request.Time);
+            if (IsOutOfRange(status) && request.OutOfRange == TimeOutOfRangePolicy.Error)
             {
-                case S111CoverageData s111:
-                    {
-                        anyS111Gridded = true;
-                        var model = s111.Source.Dataset;
-                        if (model.Coverages.Count == 0) break;
-                        var probe = model.Coverages[0];
-                        if (!CoverageContains(probe, request.Latitude, request.Longitude)) break;
-                        var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
-                        if (area < bestArea)
-                        {
-                            bestArea = area;
-                            bestDataset = dataset;
-                            bestSource = s111.Source;
-                            bestModel = model;
-                            bestCoverage = probe;
-                        }
-                        break;
-                    }
-                case S111StationSeriesData:
-                    anyS111StationSeries = true;
-                    break;
+                return ToolResult<SampleCoverageResult>.Err(
+                    InstantOutOfRange(timeParameter, request.Time!.Value, chosen, status!, candidates));
             }
+
+            return SampleS111Gridded(request, chosen.Dataset, chosen.Payload, status);
         }
 
-        if (bestDataset is not null && bestModel is not null && bestCoverage is not null && bestSource is not null)
+        if (snapshot.Any(d => d.Data is S111StationSeriesData))
         {
-            return SampleS111Gridded(request, bestDataset, bestSource, bestModel, bestCoverage);
-        }
-
-        if (anyS111StationSeries)
-        {
-            return SampleS111StationSeries(request, snapshot);
+            return SampleS111StationSeries(request, timeParameter, snapshot);
         }
 
         return ToolResult<SampleCoverageResult>.Err(anyS111Gridded
@@ -580,12 +635,36 @@ public sealed class SampleCoverageService
             : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
     }
 
+    private static List<Candidate<S111Dataset>> S111GridCandidates(
+        IReadOnlyList<LoadedDataset> snapshot,
+        SampleCoverageRequest request,
+        out bool anyGridded)
+    {
+        anyGridded = false;
+        var candidates = new List<Candidate<S111Dataset>>();
+        foreach (var dataset in snapshot)
+        {
+            if (dataset.Data is not S111CoverageData s111) continue;
+            anyGridded = true;
+            var model = s111.Source.Dataset;
+            if (model.Coverages.Count == 0) continue;
+            var probe = model.Coverages[0];
+            if (!CoverageContains(probe, request.Latitude, request.Longitude)) continue;
+            candidates.Add(new Candidate<S111Dataset>(
+                dataset,
+                model,
+                StepWindow.FromSteps(model.Coverages.Select(c => c.TimePoint)),
+                probe.SpacingLatitudinal * probe.SpacingLongitudinal,
+                S100IssueTime.Parse(model.IssueDate, model.IssueTime)));
+        }
+        return candidates;
+    }
+
     private static ToolResult<SampleCoverageResult> SampleS111Gridded(
         SampleCoverageRequest request,
         LoadedDataset bestDataset,
-        S111CoverageSource bestSource,
         S111Dataset bestModel,
-        SurfaceCurrentCoverage bestCoverage)
+        string? timeStatus)
     {
         if (bestModel.DataCodingFormat != 2)
         {
@@ -626,7 +705,8 @@ public sealed class SampleCoverageService
                     row,
                     col,
                     cellLat,
-                    cellLon)));
+                    cellLon),
+                TimeStatus: timeStatus));
         }
         catch (ObjectDisposedException)
         {
@@ -640,65 +720,64 @@ public sealed class SampleCoverageService
     /// 2.0.0 §10.2.3 / §10.2.7). Finds the nearest station across every
     /// loaded dcf8 dataset by great-circle distance with no max-distance
     /// cap, then picks the nearest time step within that station's series.
+    /// When several runs report the same station, the one whose series
+    /// covers the requested time wins.
     /// </summary>
     private static ToolResult<SampleCoverageResult> SampleS111StationSeries(
         SampleCoverageRequest request,
+        string timeParameter,
         IReadOnlyList<LoadedDataset> snapshot)
     {
-        LoadedDataset? bestDataset = null;
-        SurfaceCurrentStation? bestStation = null;
-        double bestDistance = double.PositiveInfinity;
-
+        var candidates = new List<Candidate<SurfaceCurrentStation>>();
         foreach (var dataset in snapshot)
         {
             if (dataset.Data is not S111StationSeriesData ss) continue;
-            foreach (var station in ss.Dataset.Stations)
+            var run = S100IssueTime.Parse(ss.Dataset.IssueDate, ss.Dataset.IssueTime);
+            foreach (var s in ss.Dataset.Stations)
             {
-                var d = GreatCircleMetres(request.Latitude, request.Longitude, station.Latitude, station.Longitude);
-                if (d < bestDistance)
-                {
-                    bestDistance = d;
-                    bestStation = station;
-                    bestDataset = dataset;
-                }
+                candidates.Add(new Candidate<SurfaceCurrentStation>(
+                    dataset,
+                    s,
+                    StepWindow.FromStation(s.StartTime, s.EndTime, s.TimeRecordInterval, s.SampleTimes),
+                    GreatCircleMetres(request.Latitude, request.Longitude, s.Latitude, s.Longitude),
+                    run));
             }
         }
 
-        if (bestDataset is null || bestStation is null)
+        var coLocated = CoLocated(candidates);
+        if (coLocated.Count == 0)
         {
             return ToolResult<SampleCoverageResult>.Err(
                 new NoDatasetCoversPoint(request.Latitude, request.Longitude));
         }
 
-        var requestedAsUtc = request.Time?.UtcDateTime;
-        DateTime sampleTime;
-        int idx;
-        if (requestedAsUtc is null)
+        var (chosen, status) = ChooseForInstant(coLocated, request.Time);
+        if (IsOutOfRange(status) && request.OutOfRange == TimeOutOfRangePolicy.Error)
         {
-            idx = 0;
-            sampleTime = bestStation.StartTime;
-        }
-        else
-        {
-            idx = bestStation.NearestTimeIndex(requestedAsUtc.Value);
-            sampleTime = bestStation.TimeAt(idx);
+            return ToolResult<SampleCoverageResult>.Err(
+                InstantOutOfRange(timeParameter, request.Time!.Value, chosen, status!, coLocated));
         }
 
-        var speed = bestStation.SpeedsKnots[idx];
+        var station = chosen.Payload;
+        var idx = request.Time is { } requested ? station.NearestTimeIndex(requested.UtcDateTime) : 0;
+        var sampleTime = request.Time is null ? station.StartTime : station.TimeAt(idx);
+
+        var speed = station.SpeedsKnots[idx];
         return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
-            bestDataset.Id,
+            chosen.Dataset.Id,
             request.Latitude,
             request.Longitude,
             new SurfaceCurrentStationSample(
-                bestStation.Identifier,
-                bestDistance,
+                station.Identifier,
+                chosen.Rank,
                 speed * KnotsToMetresPerSecond,
                 speed,
-                bestStation.DirectionsDegreesTrue[idx],
+                station.DirectionsDegreesTrue[idx],
                 DateTime.SpecifyKind(sampleTime, DateTimeKind.Utc),
                 request.Time,
-                bestStation.Latitude,
-                bestStation.Longitude)));
+                station.Latitude,
+                station.Longitude),
+            TimeStatus: status));
     }
 
     /// <summary>
@@ -709,37 +788,21 @@ public sealed class SampleCoverageService
     /// </summary>
     private ToolResult<SampleCoverageResult> SampleS104Windowed(SampleCoverageRequest request)
     {
-        var snapshot = _catalog.Datasets;
-        LoadedDataset? bestDataset = null;
-        S104Dataset? bestModel = null;
-        WaterLevelCoverage? bestCoverage = null;
-        double bestArea = double.PositiveInfinity;
-        bool anyS104Gridded = false;
-        foreach (var dataset in snapshot)
-        {
-            if (dataset.Data is not S104CoverageData s104) continue;
-            anyS104Gridded = true;
-            var model = s104.Source.Dataset;
-            if (model.Coverages.Count == 0) continue;
-            var probe = model.Coverages[0];
-            if (!CoverageContains(probe, request.Latitude, request.Longitude)) continue;
-            var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
-            if (area < bestArea)
-            {
-                bestArea = area;
-                bestDataset = dataset;
-                bestModel = model;
-                bestCoverage = probe;
-            }
-        }
-
-        if (bestDataset is null || bestModel is null || bestCoverage is null)
+        var candidates = S104GridCandidates(_catalog.Datasets, request, out var anyS104Gridded);
+        if (candidates.Count == 0)
         {
             return ToolResult<SampleCoverageResult>.Err(anyS104Gridded
                 ? new NotSupportedYet(request.Spec, Name, "windowed time queries are only supported for gridded S-104 (dcf=2); no in-bounds gridded dataset was found")
                 : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
         }
 
+        if (!TryChooseForWindow(candidates, m => m.Coverages, request.Times!, out var chosen, out var fit, out var error))
+        {
+            return ToolResult<SampleCoverageResult>.Err(error!);
+        }
+
+        var bestDataset = chosen!.Dataset;
+        var bestModel = chosen.Payload;
         if (bestModel.DataCodingFormat != 2)
         {
             return ToolResult<SampleCoverageResult>.Err(new NotSupportedYet(
@@ -747,16 +810,8 @@ public sealed class SampleCoverageService
                 $"data coding format {bestModel.DataCodingFormat} is not yet supported (only dcf=2 / regular grid)"));
         }
 
-        var instants = ResolveStepIndices(bestModel.Coverages, request.Times!, out var firstStep, out var lastStep);
-        if (instants.Count == 0)
-        {
-            var (from, to) = request.Times!.GetWindow();
-            return ToolResult<SampleCoverageResult>.Err(new TimeOutOfRange(
-                "times", from, to,
-                firstStep is null ? null : new DateTimeOffset(DateTime.SpecifyKind(firstStep.Value, DateTimeKind.Utc)),
-                lastStep is null ? null : new DateTimeOffset(DateTime.SpecifyKind(lastStep.Value, DateTimeKind.Utc))));
-        }
-
+        var instants = fit!.Entries;
+        var bestCoverage = bestModel.Coverages[0];
         try
         {
             var (row, col) = NearestCellInCoverage(bestCoverage, request.Latitude, request.Longitude);
@@ -810,7 +865,10 @@ public sealed class SampleCoverageService
                 request.Latitude,
                 request.Longitude,
                 firstValue,
-                series));
+                series,
+                Truncated: fit.Truncated,
+                CoveredFrom: fit.CoveredFrom,
+                CoveredTo: fit.CoveredTo));
         }
         catch (ObjectDisposedException)
         {
@@ -824,37 +882,21 @@ public sealed class SampleCoverageService
     /// </summary>
     private ToolResult<SampleCoverageResult> SampleS111Windowed(SampleCoverageRequest request)
     {
-        var snapshot = _catalog.Datasets;
-        LoadedDataset? bestDataset = null;
-        S111Dataset? bestModel = null;
-        SurfaceCurrentCoverage? bestCoverage = null;
-        double bestArea = double.PositiveInfinity;
-        bool anyS111Gridded = false;
-        foreach (var dataset in snapshot)
-        {
-            if (dataset.Data is not S111CoverageData s111) continue;
-            anyS111Gridded = true;
-            var model = s111.Source.Dataset;
-            if (model.Coverages.Count == 0) continue;
-            var probe = model.Coverages[0];
-            if (!CoverageContains(probe, request.Latitude, request.Longitude)) continue;
-            var area = probe.SpacingLatitudinal * probe.SpacingLongitudinal;
-            if (area < bestArea)
-            {
-                bestArea = area;
-                bestDataset = dataset;
-                bestModel = model;
-                bestCoverage = probe;
-            }
-        }
-
-        if (bestDataset is null || bestModel is null || bestCoverage is null)
+        var candidates = S111GridCandidates(_catalog.Datasets, request, out var anyS111Gridded);
+        if (candidates.Count == 0)
         {
             return ToolResult<SampleCoverageResult>.Err(anyS111Gridded
                 ? new NotSupportedYet(request.Spec, Name, "windowed time queries are only supported for gridded S-111 (dcf=2); no in-bounds gridded dataset was found")
                 : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
         }
 
+        if (!TryChooseForWindow(candidates, m => m.Coverages, request.Times!, out var chosen, out var fit, out var error))
+        {
+            return ToolResult<SampleCoverageResult>.Err(error!);
+        }
+
+        var bestDataset = chosen!.Dataset;
+        var bestModel = chosen.Payload;
         if (bestModel.DataCodingFormat != 2)
         {
             return ToolResult<SampleCoverageResult>.Err(new NotSupportedYet(
@@ -862,16 +904,8 @@ public sealed class SampleCoverageService
                 $"data coding format {bestModel.DataCodingFormat} is not yet supported (only dcf=2 / regular grid)"));
         }
 
-        var instants = ResolveStepIndices(bestModel.Coverages, request.Times!, out var firstStep, out var lastStep);
-        if (instants.Count == 0)
-        {
-            var (from, to) = request.Times!.GetWindow();
-            return ToolResult<SampleCoverageResult>.Err(new TimeOutOfRange(
-                "times", from, to,
-                firstStep is null ? null : new DateTimeOffset(DateTime.SpecifyKind(firstStep.Value, DateTimeKind.Utc)),
-                lastStep is null ? null : new DateTimeOffset(DateTime.SpecifyKind(lastStep.Value, DateTimeKind.Utc))));
-        }
-
+        var instants = fit!.Entries;
+        var bestCoverage = bestModel.Coverages[0];
         try
         {
             var (row, col) = NearestCellInCoverage(bestCoverage, request.Latitude, request.Longitude);
@@ -925,7 +959,10 @@ public sealed class SampleCoverageService
                 request.Latitude,
                 request.Longitude,
                 firstValue,
-                series));
+                series,
+                Truncated: fit.Truncated,
+                CoveredFrom: fit.CoveredFrom,
+                CoveredTo: fit.CoveredTo));
         }
         catch (ObjectDisposedException)
         {
@@ -935,70 +972,247 @@ public sealed class SampleCoverageService
     }
 
     /// <summary>
+    /// A dataset (or station within one) that could answer the request,
+    /// with the time span its samples cover. <paramref name="Rank"/> orders
+    /// candidates that all cover the requested time: grid cell area for
+    /// gridded coverages (finest wins), distance in metres for stations.
+    /// </summary>
+    private sealed record Candidate<T>(LoadedDataset Dataset, T Payload, StepWindow Window, double Rank, DateTime? Run);
+
+    /// <summary>
+    /// The first and last sample times of a candidate, with the tolerance
+    /// (one time-step interval) within which a request beyond either end
+    /// still counts as in range.
+    /// </summary>
+    private readonly record struct StepWindow(DateTime First, DateTime Last, TimeSpan Tolerance)
+    {
+        public bool Covers(DateTime t) => t >= First - Tolerance && t <= Last + Tolerance;
+
+        public TimeSpan DistanceTo(DateTime t) =>
+            t < First ? First - t : t > Last ? t - Last : TimeSpan.Zero;
+
+        public static StepWindow FromSteps(IEnumerable<DateTime> steps)
+        {
+            var sorted = steps.Order().ToArray();
+            return new StepWindow(sorted[0], sorted[^1], SmallestGap(sorted));
+        }
+
+        public static StepWindow FromStation(DateTime start, DateTime end, TimeSpan interval, IReadOnlyList<DateTime> sampleTimes)
+        {
+            if (sampleTimes.Count > 0)
+            {
+                var sorted = sampleTimes.Order().ToArray();
+                return new StepWindow(sorted[0], sorted[^1], interval > TimeSpan.Zero ? interval : SmallestGap(sorted));
+            }
+            return new StepWindow(start, end, interval > TimeSpan.Zero ? interval : TimeSpan.Zero);
+        }
+
+        private static TimeSpan SmallestGap(DateTime[] sorted)
+        {
+            var gap = TimeSpan.Zero;
+            for (int i = 1; i < sorted.Length; i++)
+            {
+                var d = sorted[i] - sorted[i - 1];
+                if (d > TimeSpan.Zero && (gap == TimeSpan.Zero || d < gap)) gap = d;
+            }
+            return gap;
+        }
+    }
+
+    /// <summary>The steps a windowed query resolved to on one candidate, and how much of the window they cover.</summary>
+    private sealed record WindowFit(
+        IReadOnlyList<(DateTimeOffset RequestedTime, int StepIndex)> Entries,
+        bool Truncated,
+        DateTimeOffset? CoveredFrom,
+        DateTimeOffset? CoveredTo);
+
+    private static Candidate<T> Best<T>(IEnumerable<Candidate<T>> candidates) =>
+        candidates
+            .OrderBy(c => c.Rank)
+            .ThenByDescending(c => c.Run ?? DateTime.MinValue)
+            .ThenByDescending(c => c.Window.Last)
+            .First();
+
+    private static bool IsOutOfRange(string? status) =>
+        status is SampleTimeStatus.BeforeStart or SampleTimeStatus.AfterEnd;
+
+    /// <summary>
+    /// Picks the candidate for a single-instant request. With no requested
+    /// time the best-ranked candidate wins (and the status is null). Otherwise
+    /// candidates whose range covers the time are preferred; when none do,
+    /// the candidate whose range ends nearest the requested time is returned
+    /// with a <c>before_start</c> / <c>after_end</c> status.
+    /// </summary>
+    private static (Candidate<T> Chosen, string? Status) ChooseForInstant<T>(
+        IReadOnlyList<Candidate<T>> candidates,
+        DateTimeOffset? requested)
+    {
+        if (requested is null) return (Best(candidates), null);
+        var t = requested.Value.UtcDateTime;
+
+        var covering = candidates.Where(c => c.Window.Covers(t)).ToList();
+        if (covering.Count > 0) return (Best(covering), SampleTimeStatus.InRange);
+
+        var nearest = candidates
+            .OrderBy(c => c.Window.DistanceTo(t))
+            .ThenBy(c => c.Rank)
+            .ThenByDescending(c => c.Run ?? DateTime.MinValue)
+            .First();
+        return (nearest, t < nearest.Window.First ? SampleTimeStatus.BeforeStart : SampleTimeStatus.AfterEnd);
+    }
+
+    /// <summary>
+    /// Picks the candidate for a windowed request: one whose data spans the
+    /// whole window beats one that covers only part of it; within a tier the
+    /// best-ranked wins. Fails with <see cref="TimeOutOfRange"/> when no
+    /// candidate has a single step in the window.
+    /// </summary>
+    private static bool TryChooseForWindow<T, TCoverage>(
+        IReadOnlyList<Candidate<T>> candidates,
+        Func<T, IReadOnlyList<TCoverage>> coverages,
+        TimeQuery query,
+        out Candidate<T>? chosen,
+        out WindowFit? fit,
+        out TimeOutOfRange? error)
+        where TCoverage : class
+    {
+        var fits = candidates
+            .Select(c => (Candidate: c, Fit: ResolveWindow(coverages(c.Payload), c.Window, query)))
+            .Where(x => x.Fit.Entries.Count > 0)
+            .ToList();
+
+        if (fits.Count == 0)
+        {
+            var (from, to) = query.GetWindow();
+            var nearest = candidates
+                .OrderBy(c => WindowDistance(c.Window, from.UtcDateTime, to.UtcDateTime))
+                .ThenBy(c => c.Rank)
+                .First();
+            chosen = null;
+            fit = null;
+            error = new TimeOutOfRange(
+                "times",
+                RequestedTime: null,
+                from,
+                to,
+                nearest.Dataset.Id,
+                Utc(nearest.Window.First),
+                Utc(nearest.Window.Last),
+                Utc(to.UtcDateTime < nearest.Window.First ? nearest.Window.First : nearest.Window.Last),
+                nearest.Run is { } run ? Utc(run) : null,
+                Ranges(candidates));
+            return false;
+        }
+
+        var tier = fits.Where(x => !x.Fit.Truncated).ToList();
+        if (tier.Count == 0) tier = fits;
+        var best = Best(tier.Select(x => x.Candidate));
+        chosen = best;
+        fit = tier.First(x => ReferenceEquals(x.Candidate, best)).Fit;
+        error = null;
+        return true;
+    }
+
+    private static TimeSpan WindowDistance(StepWindow w, DateTime from, DateTime to) =>
+        to < w.First ? w.First - to : from > w.Last ? from - w.Last : TimeSpan.Zero;
+
+    private static TimeOutOfRange InstantOutOfRange<T>(
+        string parameter,
+        DateTimeOffset requested,
+        Candidate<T> nearest,
+        string status,
+        IReadOnlyList<Candidate<T>> candidates) =>
+        new(
+            parameter,
+            requested,
+            requested,
+            requested,
+            nearest.Dataset.Id,
+            Utc(nearest.Window.First),
+            Utc(nearest.Window.Last),
+            Utc(status == SampleTimeStatus.BeforeStart ? nearest.Window.First : nearest.Window.Last),
+            nearest.Run is { } run ? Utc(run) : null,
+            Ranges(candidates));
+
+    private static IReadOnlyList<DatasetTimeRange> Ranges<T>(IReadOnlyList<Candidate<T>> candidates) =>
+        candidates
+            .Select(c => new DatasetTimeRange(
+                c.Dataset.Id,
+                Utc(c.Window.First),
+                Utc(c.Window.Last),
+                c.Run is { } run ? Utc(run) : null))
+            .Distinct()
+            .ToList();
+
+    private static DateTimeOffset Utc(DateTime t) => new(DateTime.SpecifyKind(t, DateTimeKind.Utc));
+
+    /// <summary>
+    /// The nearest station and any others at the same site (within
+    /// <see cref="CoLocatedStationMetres"/>), so that two runs reporting one
+    /// station are chosen between by time rather than by position noise.
+    /// </summary>
+    private static List<Candidate<T>> CoLocated<T>(List<Candidate<T>> stations)
+    {
+        if (stations.Count == 0) return stations;
+        var nearest = stations.Min(c => c.Rank);
+        return stations.Where(c => c.Rank <= nearest + CoLocatedStationMetres).ToList();
+    }
+
+    /// <summary>
     /// Resolves the time-step indices for a windowed <see cref="TimeQuery"/>:
     /// <list type="bullet">
     /// <item><description><see cref="TimeQuery.Range"/>: every dataset step whose
     /// <c>TimePoint</c> falls within the window, with the step's own time used as
     /// the requested-time echo.</description></item>
     /// <item><description><see cref="TimeQuery.Series"/>: one entry per enumerated
-    /// instant, snapped to the nearest dataset step; consecutive duplicates are
-    /// suppressed but the agent's requested instants are preserved.</description></item>
+    /// instant within the dataset's range (allowing one step of tolerance at
+    /// either end), snapped to the nearest dataset step; instants beyond the
+    /// range are dropped rather than clamped.</description></item>
     /// </list>
-    /// Returns an empty array when no overlap exists.
+    /// The fit is <c>Truncated</c> when the window reaches past the dataset's
+    /// range (beyond the tolerance) on either side; <c>CoveredFrom</c> /
+    /// <c>CoveredTo</c> are the window clipped to the dataset's range.
     /// </summary>
-    private static IReadOnlyList<(DateTimeOffset RequestedTime, int StepIndex)> ResolveStepIndices<TCoverage>(
+    private static WindowFit ResolveWindow<TCoverage>(
         IReadOnlyList<TCoverage> coverages,
-        TimeQuery query,
-        out DateTime? firstStep,
-        out DateTime? lastStep)
+        StepWindow window,
+        TimeQuery query)
         where TCoverage : class
     {
-        firstStep = coverages.Count == 0 ? null : GetTimePoint(coverages[0]);
-        lastStep = coverages.Count == 0 ? null : GetTimePoint(coverages[coverages.Count - 1]);
-        if (coverages.Count == 0)
-        {
-            return [];
-        }
+        var (from, to) = query.GetWindow();
+        var fromUtc = from.UtcDateTime;
+        var toUtc = to.UtcDateTime;
+        var builder = new List<(DateTimeOffset, int)>();
 
         switch (query)
         {
-            case TimeQuery.Range r:
+            case TimeQuery.Range:
+                for (int i = 0; i < coverages.Count; i++)
                 {
-                    var fromUtc = r.From.UtcDateTime;
-                    var toUtc = r.To.UtcDateTime;
-                    var builder = new List<(DateTimeOffset, int)>();
-                    for (int i = 0; i < coverages.Count; i++)
+                    var tp = GetTimePoint(coverages[i]);
+                    if (tp >= fromUtc && tp <= toUtc)
                     {
-                        var tp = GetTimePoint(coverages[i]);
-                        if (tp >= fromUtc && tp <= toUtc)
-                        {
-                            builder.Add((new DateTimeOffset(DateTime.SpecifyKind(tp, DateTimeKind.Utc)), i));
-                        }
+                        builder.Add((Utc(tp), i));
                     }
-                    return builder;
                 }
+                break;
             case TimeQuery.Series s:
+                foreach (var instant in s.Enumerate())
                 {
-                    var enumerated = s.Enumerate();
-                    var builder = new List<(DateTimeOffset, int)>(enumerated.Count);
-                    int? lastIndex = null;
-                    foreach (var instant in enumerated)
-                    {
-                        var idx = SelectTimeStep(coverages, instant);
-                        if (lastIndex == idx)
-                        {
-                            // Preserve the requested-time echo but skip duplicate dataset rows.
-                            builder.Add((instant, idx));
-                            continue;
-                        }
-                        builder.Add((instant, idx));
-                        lastIndex = idx;
-                    }
-                    return builder;
+                    if (!window.Covers(instant.UtcDateTime)) continue;
+                    // Consecutive instants may snap to the same step; each keeps
+                    // its own requested-time echo.
+                    builder.Add((instant, SelectTimeStep(coverages, instant)));
                 }
-            default:
-                return [];
+                break;
         }
+
+        var truncated = fromUtc < window.First - window.Tolerance || toUtc > window.Last + window.Tolerance;
+        var coveredFrom = fromUtc > window.First ? fromUtc : window.First;
+        var coveredTo = toUtc < window.Last ? toUtc : window.Last;
+        return builder.Count == 0
+            ? new WindowFit(builder, truncated, null, null)
+            : new WindowFit(builder, truncated, Utc(coveredFrom), Utc(coveredTo));
     }
 
     /// <summary>
@@ -1006,7 +1220,8 @@ public sealed class SampleCoverageService
     /// to <paramref name="requested"/>. Returns 0 when <paramref name="requested"/>
     /// is <c>null</c>. Times outside the dataset's range clamp to the first
     /// or last step (per S-100 Part 10c §10.2.1.1: time-step indices are in
-    /// <c>[0, numberOfTimes - 1]</c>).
+    /// <c>[0, numberOfTimes - 1]</c>); callers decide beforehand whether an
+    /// out-of-range request may be sampled at all.
     /// </summary>
     internal static int SelectTimeStep<TCoverage>(
         IReadOnlyList<TCoverage> coverages,
@@ -1099,6 +1314,7 @@ public sealed class SampleCoverageService
         col = Math.Clamp(col, 0, cov.NumPointsLongitudinal - 1);
         return (row, col);
     }
+
 
     /// <summary>
     /// Decodes the S-104 waterLevelTrend enumeration (S-104 Edition 2.0.0
