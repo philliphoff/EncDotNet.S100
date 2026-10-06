@@ -150,14 +150,16 @@
                            VerticalAlignment="Center" />
                 <Border Classes="HudSeparator" />
                 <Button Classes="Icon HudIcon"
-                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_PreviousStep}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}"
                         Command="{Binding PreviousStepCommand}"
                         AutomationProperties.AutomationId="TimeHud.Previous"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
                     <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
                 </Button>
                 <Button Classes="Icon HudIcon"
-                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelineNextStep}"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_NextStep}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelineNextStep}"
                         Command="{Binding NextStepCommand}"
                         AutomationProperties.AutomationId="TimeHud.Next"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
@@ -173,7 +175,9 @@
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNow}" />
                 <Border Classes="HudSeparator" />
                 <Button x:Name="DockToggle"
-                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimeHudOpenTimeline}"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_OpenTimeline}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimeHudOpenTimeline}"
+                        AutomationProperties.AcceleratorKey="T"
                         AutomationProperties.AutomationId="TimeHud.DockToggle"
                         Classes="Icon HudIcon"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimeHudOpenTimeline}">

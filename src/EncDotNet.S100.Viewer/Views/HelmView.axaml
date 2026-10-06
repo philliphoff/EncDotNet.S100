@@ -72,7 +72,8 @@
                 <UniformGrid Columns="2">
                     <ToggleButton IsChecked="{Binding IsHeld, Mode=OneWay}"
                                   AutomationProperties.AutomationId="Helm.HoldResume"
-                                  AutomationProperties.Name="{x:Static loc:Strings.Tooltip_Helm_HoldResume}"
+                                  AutomationProperties.Name="{x:Static loc:Strings.Label_HoldResume}"
+                                  AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_Helm_HoldResume}"
                                   Command="{Binding HoldResumeCommand}"
                                   HorizontalAlignment="Stretch"
                                   HorizontalContentAlignment="Center"
