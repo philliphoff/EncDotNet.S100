@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -9,7 +10,7 @@ using EncDotNet.S100.Viewer.Views;
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// The real Library panel over a real <see cref="LibraryService"/>, driven by
+/// The real Library panel over a real <see cref="CollectionLibrary"/>, driven by
 /// pointer and keyboard input. <see cref="LibraryPanelViewModelTests"/> covers
 /// the panel's logic; these cover the view's wiring to it: the empty-state
 /// actions, tree and list selection, the filter box, the details pane, and the
@@ -18,7 +19,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 public sealed class LibraryPanelViewTests : IDisposable
 {
     private readonly LibraryTestContext _context = new();
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
     private readonly RecordingLibraryImporter _importer = new();
     private readonly FakeLibraryLoader _loader = new();
     private readonly FakeLibraryDownloader _downloader = new();

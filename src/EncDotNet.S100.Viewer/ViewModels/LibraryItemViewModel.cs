@@ -1,6 +1,7 @@
 using System.Globalization;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -19,7 +20,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     private readonly Func<LibraryItemViewModel, Task>? _download;
     private LibraryDownloadItemStatus? _lastDownloadStatus;
     private LibraryAvailability? _availability;
-    private CollectionItem? _effective;
+    private LibraryItemState? _state;
     private readonly TimeProvider _time;
     private readonly Func<TimeFormat>? _timeFormat;
     private IReadOnlyList<LibraryItemViewModel> _members = [];
@@ -97,7 +98,13 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// downloaded, with its downloaded (local) location; otherwise
     /// <see cref="Item"/>.
     /// </summary>
-    public CollectionItem EffectiveItem => _effective ??= _downloader?.Localize(Item) ?? Item;
+    public CollectionItem EffectiveItem => State.EffectiveItem;
+
+    /// <summary>
+    /// The item's state as the Library core resolves it (availability, the
+    /// copy that opens, the time it covers); recreated by <see cref="RefreshAvailability"/>.
+    /// </summary>
+    internal LibraryItemState State => _state ??= new LibraryItemState(Item, Source, _downloader, _loadState, _time);
 
     /// <summary>The indexed item.</summary>
     public CollectionItem Item { get; }
@@ -279,16 +286,13 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>The run of this row's downloaded copy (a model's: of its first downloaded tile), if any.</summary>
     private DateTimeOffset? LocalRun => IsModelHeader
         ? _members.Select(m => m.LocalRun).FirstOrDefault(r => r is not null)
-        : _downloader?.LocalPublishedAtOf(Item);
+        : State.LocalRun;
 
     /// <summary>The run shown: the downloaded copy's, else the catalogue's latest.</summary>
     private DateTimeOffset? ShownRun => LocalRun ?? S100ForecastFeedIndexer.RunOf(Item);
 
     /// <summary>The end of the shown run's valid window.</summary>
-    private DateTimeOffset? ShownValidTo => ShownRun is { } run && ForecastRuns.Horizon(Item) is { } horizon ? run + horizon : null;
-
-    /// <summary>True when the downloaded copy's run has ended (whatever is online).</summary>
-    private bool IsRunEnded => LocalRun is not null && ShownValidTo is { } end && end <= _time.GetUtcNow();
+    private DateTimeOffset? ShownValidTo => ForecastRuns.ShownWindow(Item, LocalRun)?.ValidTo;
 
     /// <summary>
     /// The time the item's data covers (#711): a forecast run's valid window
@@ -298,28 +302,16 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     internal (DateTime Start, DateTime End)? ValidWindow =>
         IsForecast
             ? ShownRun is { } run && ShownValidTo is { } end ? (run.UtcDateTime, end.UtcDateTime) : null
-            : TimeCoverage(Item);
+            : LibraryItemState.TimeCoverage(Item);
 
     /// <summary>The run of the downloaded copy, if any (UTC).</summary>
     internal DateTime? LocalRunTime => LocalRun?.UtcDateTime;
 
     /// <summary>The catalogue's latest run and its valid window, for a forecast (UTC).</summary>
-    internal (DateTime Run, DateTime End)? CatalogueRun =>
-        S100ForecastFeedIndexer.RunOf(Item) is { } run && S100ForecastFeedIndexer.ValidToOf(Item) is { } end
-            ? (run.UtcDateTime, end.UtcDateTime)
-            : null;
+    internal (DateTime Run, DateTime End)? CatalogueRun => State.CatalogueRun;
 
     /// <summary>True when the item's downloaded copy is loaded on the map now.</summary>
-    internal bool IsLoadedNow => _loadState?.Invoke(EffectiveItem) == LibraryLoadState.Loaded;
-
-    /// <summary>A dataset's own time coverage, as a local index records it (<c>timeStart</c>/<c>timeEnd</c>).</summary>
-    internal static (DateTime Start, DateTime End)? TimeCoverage(CollectionItem item) =>
-        item.Properties.TryGetValue("timeStart", out var start) && item.Properties.TryGetValue("timeEnd", out var end)
-        && DateTimeOffset.TryParse(start, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var s)
-        && DateTimeOffset.TryParse(end, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var e)
-        && e >= s
-            ? (s.UtcDateTime, e.UtcDateTime)
-            : null;
+    internal bool IsLoadedNow => State.IsLoadedNow;
 
     /// <summary>True when a forecast run row shows its valid window as a bar.</summary>
     public bool HasForecastWindow => IsForecastRunRow && ShownValidTo is not null;
@@ -333,14 +325,14 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     public double WindowRemaining => 1 - WindowElapsed;
 
     /// <summary>"39 h left", or "Ended 9 h ago".</summary>
-    public string? TimeLeftText => ShownValidTo is { } end ? ForecastRuns.TimeLeft(end, _time.GetUtcNow()) : null;
+    public string? TimeLeftText => ShownValidTo is { } end ? ForecastRunText.TimeLeft(end, _time.GetUtcNow()) : null;
 
     /// <summary>True when the shown run's window has ended.</summary>
     public bool IsWindowEnded => ShownValidTo is { } end && end <= _time.GetUtcNow();
 
     /// <summary>A run time as the user reads it: their Local/UTC setting (#730); UTC without one.</summary>
     private string FormatRun(DateTimeOffset time) =>
-        ForecastRuns.FormatRun(time, _timeFormat?.Invoke() ?? TimeFormat.Utc, _time.LocalTimeZone);
+        ForecastRunText.FormatRun(time, _timeFormat?.Invoke() ?? TimeFormat.Utc, _time.LocalTimeZone);
 
     /// <summary>Re-reads the run times after the user's Local/UTC setting changed (#730).</summary>
     internal void RefreshTimeFormat()
@@ -359,7 +351,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         if (_availability is not null)
         {
             _availability = null;
-            _effective = null;
+            _state = null;
             OnPropertyChanged(nameof(Availability));
             OnPropertyChanged(nameof(PrimaryAvailability));
             OnPropertyChanged(nameof(Tags));
@@ -521,15 +513,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     public LibraryAvailability Availability => _availability ??=
         IsModelHeader ? Aggregate(_members)
         : IsGroupHeader ? LibraryAvailability.Local
-        : IsForecast && _downloader?.IsOutdated(Item) == true ? LibraryAvailability.Outdated
-        : IsForecast && IsRunEnded ? LibraryAvailability.Expired
-        : (_loadState?.Invoke(EffectiveItem)) switch
-        {
-            LibraryLoadState.Loaded => LibraryAvailability.Loaded,
-            LibraryLoadState.Deferred => LibraryAvailability.Deferred,
-            _ when _downloader?.IsOutdated(Item) == true => LibraryAvailability.Outdated,
-            _ => LibraryAvailabilityResolver.Resolve(EffectiveItem),
-        };
+        : State.Availability;
 
     /// <summary>True when the item can be opened from disk (local, not already loaded).</summary>
     public bool CanLoad => !IsGroupHeader
@@ -546,7 +530,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         if (_availability is null)
             return;  // never shown; resolved lazily on first display
         _availability = null;
-        _effective = null;
+        _state = null;
         OnPropertyChanged(nameof(Availability));
         OnPropertyChanged(nameof(AvailabilityText));
         OnPropertyChanged(nameof(PrimaryAvailability));
@@ -704,9 +688,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     public bool IsCancelled => Item.Status == CollectionItemStatus.Cancelled;
 
     /// <summary>True when the source flags the item not for navigation.</summary>
-    public bool NotForNavigation =>
-        Item.Properties.TryGetValue("notForNavigation", out var value)
-        && string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    public bool NotForNavigation => State.NotForNavigation;
 
     /// <summary>True when the item has geographic bounds.</summary>
     public bool HasBounds => Item.Bounds is not null;
@@ -885,9 +867,5 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// True when the item matches a free-text filter (name, title, spec, or a
     /// property value such as a state code), case-insensitively.
     /// </summary>
-    public bool Matches(string filter) =>
-        Item.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)
-        || (Item.Title?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false)
-        || Item.ProductSpec.Contains(filter, StringComparison.OrdinalIgnoreCase)
-        || Item.Properties.Values.Any(v => v.Contains(filter, StringComparison.OrdinalIgnoreCase));
+    public bool Matches(string filter) => State.Matches(filter);
 }

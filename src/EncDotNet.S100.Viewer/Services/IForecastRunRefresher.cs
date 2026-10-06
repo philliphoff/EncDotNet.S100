@@ -1,4 +1,5 @@
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Library;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -17,9 +18,9 @@ internal interface IForecastRunRefresher
 }
 
 /// <summary>Default <see cref="IForecastRunRefresher"/> over the Library's forecast feeds.</summary>
-internal sealed class LibraryForecastRunRefresher(LibraryService library) : IForecastRunRefresher
+internal sealed class LibraryForecastRunRefresher(CollectionLibrary library) : IForecastRunRefresher
 {
-    private readonly LibraryService _library = library ?? throw new ArgumentNullException(nameof(library));
+    private readonly CollectionLibrary _library = library ?? throw new ArgumentNullException(nameof(library));
 
     /// <inheritdoc />
     public bool HasForecastSources => ForecastSources().Any();

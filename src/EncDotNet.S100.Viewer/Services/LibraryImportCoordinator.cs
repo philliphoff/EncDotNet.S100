@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Manifests;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -22,7 +23,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     /// <summary>The Library activity tab id.</summary>
     public const string LibraryPanelId = "Library";
 
-    private readonly Library.LibraryService _library;
+    private readonly CollectionLibrary _library;
     private readonly IFileDialogService _fileDialogs;
     private readonly DialogManager _dialogManager;
     private readonly Func<AddToLibraryDialogViewModel> _dialogFactory;
@@ -32,7 +33,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     private readonly Notifications.INotificationService? _notifications;
 
     public LibraryImportCoordinator(
-        Library.LibraryService library,
+        CollectionLibrary library,
         IFileDialogService fileDialogs,
         DialogManager dialogManager,
         Func<AddToLibraryDialogViewModel> dialogFactory,

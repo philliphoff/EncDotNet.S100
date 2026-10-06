@@ -1,6 +1,4 @@
-using EncDotNet.S100.Collections;
-
-namespace EncDotNet.S100.Viewer.Library;
+namespace EncDotNet.S100.Collections.Library;
 
 /// <summary>
 /// An immutable view of one collection in the library, with the current
@@ -12,7 +10,7 @@ namespace EncDotNet.S100.Viewer.Library;
 /// True for the transient "Session" collection holding S-128 datasets loaded
 /// this session; it is never persisted.
 /// </param>
-internal sealed record LibraryCollection(
+public sealed record LibraryCollection(
     DatasetCollection Definition,
     IReadOnlyList<LibrarySource> Sources,
     bool IsSession = false)
@@ -32,7 +30,7 @@ internal sealed record LibraryCollection(
 /// <param name="Index">The latest index, or <see langword="null"/> before the first one completes.</param>
 /// <param name="State">The indexing state.</param>
 /// <param name="Error">Why the last indexing attempt failed, when <see cref="State"/> is <see cref="LibrarySourceState.Failed"/>.</param>
-internal sealed record LibrarySource(
+public sealed record LibrarySource(
     CollectionSource Definition,
     SourceIndex? Index,
     LibrarySourceState State,
@@ -43,7 +41,7 @@ internal sealed record LibrarySource(
 }
 
 /// <summary>The indexing state of a <see cref="LibrarySource"/>.</summary>
-internal enum LibrarySourceState
+public enum LibrarySourceState
 {
     /// <summary>Waiting for its first index.</summary>
     Pending,

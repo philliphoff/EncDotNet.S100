@@ -7,19 +7,20 @@ using EncDotNet.S100.Datasets.S128;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace EncDotNet.S100.Viewer.Library;
+namespace EncDotNet.S100.Collections.Library;
 
 /// <summary>
-/// Owns the user's dataset collections (issue #655): persists their
-/// definitions to <c>collections.json</c>, keeps each source's index cached
-/// on disk, and re-indexes sources in the background without loading any
-/// dataset.
+/// Owns a set of dataset collections (issue #655): persists their
+/// definitions to a store file (<c>collections.json</c>), keeps each source's
+/// index cached on disk, and re-indexes sources in the background without
+/// loading any dataset. UI-free, so the viewer's Library and a headless host
+/// (#792) share it.
 /// </summary>
 /// <remarks>
 /// <para>
 /// State is exposed as immutable <see cref="Collections"/> snapshots plus a
 /// coarse <see cref="Changed"/> event, raised on whichever thread made the
-/// change; UI consumers marshal to the UI thread themselves.
+/// change; UI consumers marshal to their UI thread themselves.
 /// </para>
 /// <para>
 /// Indexing runs one source at a time on a background worker. At start-up the
@@ -28,12 +29,12 @@ namespace EncDotNet.S100.Viewer.Library;
 /// fingerprint check.
 /// </para>
 /// <para>
-/// S-128 datasets loaded this session appear in a transient "Session"
-/// collection (it replaces the former Catalog panel); <see cref="KeepSessionCatalogue"/>
-/// turns one into a persisted collection.
+/// S-128 datasets loaded this session appear in a transient session
+/// collection (<see cref="CollectionLibraryOptions.SessionCollectionName"/>);
+/// <see cref="KeepSessionCatalogue"/> turns one into a persisted collection.
 /// </para>
 /// </remarks>
-internal sealed class LibraryService : IDisposable
+public sealed class CollectionLibrary : IDisposable
 {
     /// <summary>The fixed id of the transient session collection.</summary>
     public static readonly Guid SessionCollectionId = new("5e5510a0-0000-4000-8000-000000000128");
@@ -42,6 +43,7 @@ internal sealed class LibraryService : IDisposable
     private readonly string _storePath;
     private readonly string _indexCacheDirectory;
     private readonly bool _readOnly;
+    private readonly string _sessionCollectionName;
     private readonly ILogger _logger;
     private readonly TimeProvider _time;
 
@@ -58,31 +60,28 @@ internal sealed class LibraryService : IDisposable
     private int _pending;
     private TaskCompletionSource _idle = CreateIdleSource(completed: true);
 
-    public LibraryService(
+    /// <summary>Creates a library over the store and index cache named by <paramref name="options"/>.</summary>
+    /// <param name="indexer">Indexes each source.</param>
+    /// <param name="options">Where the library persists, and how.</param>
+    /// <param name="logger">Logs store, cache and indexing failures.</param>
+    /// <param name="timeProvider">The clock for creation and index times (tests).</param>
+    public CollectionLibrary(
         CollectionIndexer indexer,
-        ViewerDataPaths paths,
-        ViewerSettings settings,
-        ILogger<LibraryService>? logger = null)
-        : this(indexer, paths.CollectionsFilePath, paths.CollectionIndexCacheDirectory, settings.IsReadOnly, logger, null)
-    {
-    }
-
-    internal LibraryService(
-        CollectionIndexer indexer,
-        string storePath,
-        string indexCacheDirectory,
-        bool readOnly,
+        CollectionLibraryOptions options,
         ILogger? logger = null,
         TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(indexer);
-        ArgumentException.ThrowIfNullOrEmpty(storePath);
-        ArgumentException.ThrowIfNullOrEmpty(indexCacheDirectory);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrEmpty(options.StorePath);
+        ArgumentException.ThrowIfNullOrEmpty(options.IndexCacheDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.SessionCollectionName);
 
         _indexer = indexer;
-        _storePath = storePath;
-        _indexCacheDirectory = indexCacheDirectory;
-        _readOnly = readOnly;
+        _storePath = options.StorePath;
+        _indexCacheDirectory = options.IndexCacheDirectory;
+        _readOnly = options.ReadOnly;
+        _sessionCollectionName = options.SessionCollectionName;
         _logger = logger ?? NullLogger.Instance;
         _time = timeProvider ?? TimeProvider.System;
     }
@@ -409,6 +408,7 @@ internal sealed class LibraryService : IDisposable
         return AddCollection(name, [new S128CatalogueSource(Guid.NewGuid(), null, catalogue.Source.Path)]);
     }
 
+    /// <summary>Stops the background indexing worker.</summary>
     public void Dispose()
     {
         _shutdown.Cancel();
@@ -531,7 +531,7 @@ internal sealed class LibraryService : IDisposable
                 .Select(c => new LibrarySource(c.Source, c.Index, LibrarySourceState.Ready))
                 .ToArray();
             result.Add(new LibraryCollection(
-                new DatasetCollection(SessionCollectionId, Resources.Strings.Library_SessionCollectionName,
+                new DatasetCollection(SessionCollectionId, _sessionCollectionName,
                     sources.Select(s => s.Definition).ToArray(), DateTimeOffset.MinValue),
                 sources,
                 IsSession: true));
@@ -669,4 +669,16 @@ internal sealed class LibraryService : IDisposable
     }
 
     private sealed record SessionCatalogue(S128CatalogueSource Source, SourceIndex Index);
+}
+
+/// <summary>Where a <see cref="CollectionLibrary"/> persists, and how.</summary>
+/// <param name="StorePath">The collection store file (<c>collections.json</c>).</param>
+/// <param name="IndexCacheDirectory">The folder holding each source's cached index (<c>&lt;id&gt;.index.json.gz</c>).</param>
+public sealed record CollectionLibraryOptions(string StorePath, string IndexCacheDirectory)
+{
+    /// <summary>True to never write the store (indexes are still cached).</summary>
+    public bool ReadOnly { get; init; }
+
+    /// <summary>The display name of the transient collection holding S-128 catalogues loaded this session.</summary>
+    public string SessionCollectionName { get; init; } = "Session";
 }

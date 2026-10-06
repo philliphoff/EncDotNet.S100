@@ -2,25 +2,13 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Library;
-
-/// <summary>Whether a library item is open in the session.</summary>
-internal enum LibraryLoadState
-{
-    /// <summary>Not opened from the library.</summary>
-    None,
-
-    /// <summary>Registered to load as it comes into view.</summary>
-    Deferred,
-
-    /// <summary>Loaded on the map.</summary>
-    Loaded,
-}
 
 /// <summary>The outcome of <see cref="ILibraryLoader.LoadAsync"/>.</summary>
 /// <param name="Opened">Items opened (loaded or registered to load as you pan).</param>

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -16,7 +17,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         """;
 
     private readonly LibraryTestContext _context = new();
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
 
     public CollectionManifestLibraryTests()
     {

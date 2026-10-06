@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Noaa;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -10,7 +11,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 {
     private readonly LibraryTestContext _context = new();
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
     private readonly List<Uri> _loads = [];
     private Func<Uri, NoaaEncProductCatalog> _read;
 

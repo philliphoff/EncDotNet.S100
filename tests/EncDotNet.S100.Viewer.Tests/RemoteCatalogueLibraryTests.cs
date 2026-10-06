@@ -1,5 +1,6 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.RemoteCatalogues;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Services;
@@ -18,7 +19,7 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
 
     private readonly LibraryTestContext _context = new();
     private readonly TileDownloader _downloader;
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
     private FeedHealth? _health;
 
     public RemoteCatalogueLibraryTests()

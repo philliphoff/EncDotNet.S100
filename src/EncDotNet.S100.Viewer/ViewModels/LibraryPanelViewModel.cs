@@ -4,6 +4,7 @@ using System.Windows.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
@@ -35,7 +36,7 @@ internal enum LibraryStateFilter
 /// </summary>
 internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 {
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
     private readonly ILibraryImporter _importer;
     private readonly ILibraryLoader _loader;
     private readonly ILibraryDownloader _downloader;
@@ -73,7 +74,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private bool _selectingTapHit;
 
     public LibraryPanelViewModel(
-        LibraryService library,
+        CollectionLibrary library,
         ILibraryImporter importer,
         ILibraryLoader loader,
         ILibraryDownloader downloader,
@@ -87,7 +88,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     internal LibraryPanelViewModel(
-        LibraryService library,
+        CollectionLibrary library,
         ILibraryImporter importer,
         ILibraryLoader loader,
         ILibraryDownloader downloader,
@@ -1450,12 +1451,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// detailed (highest usage band, then smallest extent) first.
     /// </summary>
     internal List<LibraryItemViewModel> HitsAt(GeoPosition position) =>
-        _library.Collections
-            .SelectMany(c => c.Sources)
-            .SelectMany(s => (s.Index?.Items ?? []).Select(i => (Item: i, Source: s)))
-            .Where(p => CoverageGeometry.Contains(p.Item, position))
-            .OrderByDescending(p => p.Item.UsageBand ?? 0)
-            .ThenBy(p => CoverageGeometry.Area(p.Item))
+        LibraryQuery.HitsAt(_library.Collections, position)
             .Select(p => CreateItem(p.Item, p.Source))
             .ToList();
 

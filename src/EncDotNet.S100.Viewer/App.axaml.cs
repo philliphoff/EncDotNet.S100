@@ -328,7 +328,7 @@ public partial class App : Application
 
             // Load the dataset collections and start background re-indexing
             // (cached indexes appear immediately; nothing is loaded).
-            var library = _services.GetRequiredService<Library.LibraryService>();
+            var library = _services.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>();
             library.Initialize();
 
             desktop.MainWindow = _services.GetRequiredService<MainWindow>();
@@ -423,7 +423,18 @@ public partial class App : Application
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>(),
                 ]);
         });
-        services.AddSingleton<Library.LibraryService>();
+        services.AddSingleton(sp =>
+        {
+            var paths = sp.GetRequiredService<ViewerDataPaths>();
+            return new EncDotNet.S100.Collections.Library.CollectionLibrary(
+                sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.CollectionIndexer>(),
+                new EncDotNet.S100.Collections.Library.CollectionLibraryOptions(paths.CollectionsFilePath, paths.CollectionIndexCacheDirectory)
+                {
+                    ReadOnly = sp.GetRequiredService<ViewerSettings>().IsReadOnly,
+                    SessionCollectionName = EncDotNet.S100.Viewer.Resources.Strings.Library_SessionCollectionName,
+                },
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Collections.Library.CollectionLibrary>>());
+        });
         services.AddSingleton<Library.UserCatalogueStore>();
         services.AddSingleton<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(_ =>
         {
@@ -460,7 +471,7 @@ public partial class App : Application
             var s100Catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
             var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
             return new AddToLibraryDialogViewModel(
-                sp.GetRequiredService<Library.LibraryService>(),
+                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 (uri, ct) => feeds.GetCatalogAsync(uri, cancellationToken: ct),
                 (uri, ct) => usace.GetCatalogAsync(uri, cancellationToken: ct),
                 loadCommunityCatalog: (uri, ct) => community.GetCatalogAsync(uri, cancellationToken: ct),
@@ -487,7 +498,7 @@ public partial class App : Application
             sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>()));
         services.AddSingleton<Func<SharedFeedDialogViewModel>>(sp => sp.GetRequiredService<SharedFeedDialogViewModel>);
         services.AddSingleton<ILibraryImporter>(sp => new LibraryImportCoordinator(
-            sp.GetRequiredService<Library.LibraryService>(),
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
             sp.GetRequiredService<IFileDialogService>(),
             sp.GetRequiredService<ShadUI.DialogManager>(),
             sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
@@ -904,7 +915,7 @@ public partial class App : Application
             sp.GetRequiredService<ViewerLibraryController>(),
             new ViewerLibraryEditor(
                 sp.GetRequiredService<LibraryPanelViewModel>(),
-                sp.GetRequiredService<Library.LibraryService>(),
+                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 sp.GetRequiredService<ViewerLibraryController>(),
                 sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
                 sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
@@ -929,7 +940,7 @@ public partial class App : Application
             var catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
             var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
             return new LibraryPanelViewModel(
-                sp.GetRequiredService<Library.LibraryService>(),
+                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 sp.GetRequiredService<ILibraryImporter>(),
                 sp.GetRequiredService<Library.ILibraryLoader>(),
                 sp.GetRequiredService<Library.ILibraryDownloader>(),
@@ -946,7 +957,7 @@ public partial class App : Application
         });
         services.AddSingleton<LibraryTimeSource>(sp => new LibraryTimeSource(
             sp.GetRequiredService<LibraryPanelViewModel>(),
-            sp.GetRequiredService<Library.LibraryService>(),
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
             sp.GetRequiredService<Library.ILibraryLoader>(),
             sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<ILibraryTimeSource>(sp => sp.GetRequiredService<LibraryTimeSource>());
@@ -970,7 +981,7 @@ public partial class App : Application
             sp.GetService<IMarinerSettingsProvider>(),
             sp.GetService<IUrlOpener>(),
             sp.GetService<IS100ExaminerLinkBuilder>()));
-        services.AddSingleton<IForecastRunRefresher>(sp => new LibraryForecastRunRefresher(sp.GetRequiredService<Library.LibraryService>()));
+        services.AddSingleton<IForecastRunRefresher>(sp => new LibraryForecastRunRefresher(sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>()));
         services.AddSingleton<TimelineMapScope>(sp => new TimelineMapScope(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
             sp.GetRequiredService<DatasetsViewModel>()));
