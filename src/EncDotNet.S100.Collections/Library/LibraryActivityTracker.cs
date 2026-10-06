@@ -1,13 +1,14 @@
-namespace EncDotNet.S100.Viewer.Library;
+namespace EncDotNet.S100.Collections.Library;
 
 /// <summary>
-/// Counts Library work that outlives the downloader's progress (issue #790):
-/// a <c>library_action</c> download runs on through re-indexing and opening
-/// its datasets after the batch's progress clears, and a load opens datasets
-/// after its call starts. Each piece of work holds a scope from start to
-/// finish, so "idle" can wait for all of it. Thread-safe and UI-free.
+/// Counts Library work that outlives a download batch's progress (issue #790):
+/// a download goes on to re-index its source and open its datasets after the
+/// batch's progress clears, and a load opens datasets after its call starts.
+/// Each piece of work holds a scope from start to finish, so a host's "idle"
+/// check (the <c>await_library_idle</c> MCP tool) can wait for all of it.
+/// Thread-safe and UI-free, so the viewer and a headless host (#792) share it.
 /// </summary>
-internal sealed class LibraryActivityTracker
+public sealed class LibraryActivityTracker
 {
     private readonly object _gate = new();
     private int _active;
