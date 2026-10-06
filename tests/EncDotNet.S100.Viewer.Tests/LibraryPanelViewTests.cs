@@ -2,7 +2,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
-using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;

@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Threading.Channels;
-using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.Persistence;
 using EncDotNet.S100.Datasets.S128;

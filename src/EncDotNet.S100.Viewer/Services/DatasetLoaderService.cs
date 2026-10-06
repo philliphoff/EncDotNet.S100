@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia.Input.Platform;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
@@ -12,7 +13,6 @@ using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
-using EncDotNet.S100.Collections.Library;
 
 namespace EncDotNet.S100.Viewer.Services;
 

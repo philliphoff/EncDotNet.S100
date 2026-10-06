@@ -1,6 +1,5 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
-using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 

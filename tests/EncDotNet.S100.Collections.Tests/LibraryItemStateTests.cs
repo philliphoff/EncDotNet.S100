@@ -1,6 +1,5 @@
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.Library;
-using EncDotNet.S100.DataModel;
 using Microsoft.Extensions.Time.Testing;
 
 namespace EncDotNet.S100.Collections.Tests;

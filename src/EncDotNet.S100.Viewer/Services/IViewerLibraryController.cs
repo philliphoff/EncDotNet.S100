@@ -5,7 +5,6 @@ using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
