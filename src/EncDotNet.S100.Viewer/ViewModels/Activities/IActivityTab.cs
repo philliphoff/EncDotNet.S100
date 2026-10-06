@@ -53,6 +53,14 @@ internal interface IActivityTab : System.ComponentModel.INotifyPropertyChanged
     string Title { get; }
 
     /// <summary>
+    /// The accessible name of the tab's activity-bar button (already
+    /// localised): a short label in sentence case, since some
+    /// <see cref="Title"/>s are capitalised for display and a screen reader
+    /// may spell those out. Defaults to <see cref="Title"/>.
+    /// </summary>
+    string Name => Title;
+
+    /// <summary>
     /// Creates a fresh icon control for this tab. Called by the
     /// <c>ItemsControl</c> item template — Avalonia controls have a single
     /// parent so each consumer gets its own instance.

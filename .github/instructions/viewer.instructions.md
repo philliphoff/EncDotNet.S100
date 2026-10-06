@@ -59,7 +59,11 @@ conventions.
   `FluentIcons.Avalonia.FluentIcon`), so set `AutomationProperties.Name`.
   Inside a data template, bind it to the row's own text (e.g.
   `{Binding Label}`).
-- **Keep names short** ("Move up", "Zoom in"). Put a longer description in
+- **Keep names short** ("Move up", "Zoom in"), in sentence case: a name in
+  capitals ("DATASETS") may be spelled out letter by letter, and a
+  placeholder ("Filter by name, title, product…") is not a name. A new
+  activity tab passes `name:` (a `Label_Activity_*` string) to
+  `AddActivityTab`, since some pane titles are in capitals. Put a longer description in
   the tooltip and in `AutomationProperties.HelpText`, and a keyboard
   shortcut in `AutomationProperties.AcceleratorKey`, not in the name. An
   icon button whose tooltip is a sentence gets its own short `Label_*`
@@ -77,7 +81,8 @@ conventions.
   (a `Button`, `ToggleButton`, list selection…).
 - **Run the guard.** `UiAutomation/AccessibilityGuardTests` in
   `tests/EncDotNet.S100.Viewer.Tests` fails on any button or input without
-  an accessible name, any name longer than a short label, and any
+  an accessible name, any name longer than a short label or in capitals,
+  any activity tab without its own `name:`, and any
   interactive control without an automation id, in every view. There is no allow-list: new UI must pass it as written.
 - **Test new UI through its ids.** Add an `[AvaloniaFact]` view test that
   drives the new UI with `ViewHost` and finds controls by automation id,

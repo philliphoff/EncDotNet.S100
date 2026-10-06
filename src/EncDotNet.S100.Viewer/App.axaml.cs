@@ -1012,36 +1012,42 @@ public partial class App : Application
             id: "Datasets",
             order: 10,
             title: Strings.Pane_Datasets,
+            name: Strings.Label_Activity_Datasets,
             tooltip: Strings.Tooltip_Datasets,
             iconFactory: static () => new FluentIcon { Icon = Icon.Layer, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<LibraryPanelViewModel, LibraryPanelView>(
             id: LibraryImportCoordinator.LibraryPanelId,
             order: 20,
             title: Strings.Pane_Library,
+            name: Strings.Label_Activity_Library,
             tooltip: Strings.Tooltip_Library,
             iconFactory: static () => new FluentIcon { Icon = Icon.Library, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<EcdisDisplayPanelViewModel, EcdisDisplayPanelView>(
             id: "EcdisDisplay",
             order: 30,
             title: Strings.Pane_EcdisDisplay,
+            name: Strings.Label_Activity_EcdisDisplay,
             tooltip: Strings.Tooltip_EcdisDisplay,
             iconFactory: static () => new FluentIcon { Icon = Icon.Eye, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<LayerStackViewModel, LayerStackView>(
             id: "LayerStack",
             order: 40,
             title: Strings.Pane_LayerStack,
+            name: Strings.Label_Activity_LayerStack,
             tooltip: Strings.Tooltip_LayerStack,
             iconFactory: static () => new FluentIcon { Icon = Icon.Stack, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<FeatureSearchViewModel, FeatureSearchView>(
             id: "Search",
             order: 50,
             title: Strings.Pane_Search,
+            name: Strings.Label_Activity_Search,
             tooltip: Strings.Tooltip_Search,
             iconFactory: static () => new FluentIcon { Icon = Icon.Search, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<RoutesPanelViewModel, RoutesView>(
             id: "Routes",
             order: 55,
             title: Strings.Pane_Routes,
+            name: Strings.Label_Activity_Routes,
             tooltip: Strings.Tooltip_RoutesPanel,
             iconFactory: static () => new FluentIcon { Icon = Icon.Flow, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false);
@@ -1051,6 +1057,7 @@ public partial class App : Application
             id: "Vessels",
             order: 60,
             title: Strings.Pane_Vessels,
+            name: Strings.Label_Activity_Vessels,
             tooltip: Strings.Tooltip_Vessels,
             iconFactory: static () => new FluentIcon { Icon = Icon.VehicleShip, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,
@@ -1063,6 +1070,7 @@ public partial class App : Application
             id: "Helm",
             order: 70,
             title: Strings.Pane_Helm,
+            name: Strings.Label_Activity_Helm,
             tooltip: Strings.Tooltip_Helm,
             iconFactory: static () => new FluentIcon { Icon = Icon.TopSpeed, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,
@@ -1073,18 +1081,21 @@ public partial class App : Application
             id: "FeatureCatalogues",
             order: 80,
             title: Strings.Pane_FeatureCatalogues,
+            name: Strings.Label_Activity_FeatureCatalogues,
             tooltip: Strings.Tooltip_FeatureCatalogues,
             iconFactory: static () => new FluentIcon { Icon = Icon.BookOpen, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<PortrayalCataloguesViewModel, PortrayalCataloguesView>(
             id: "PortrayalCatalogues",
             order: 90,
             title: Strings.Pane_PortrayalCatalogues,
+            name: Strings.Label_Activity_PortrayalCatalogues,
             tooltip: Strings.Tooltip_PortrayalCatalogues,
             iconFactory: static () => new FluentIcon { Icon = Icon.PaintBrush, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<SettingsViewModel, SettingsView>(
             id: "Settings",
             order: 1000,
             title: Strings.Pane_Settings,
+            name: Strings.Label_Activity_Settings,
             tooltip: Strings.Tooltip_Settings,
             iconFactory: static () => new FluentIcon { Icon = Icon.Settings, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false);
@@ -1096,6 +1107,7 @@ public partial class App : Application
             id: "PickReport",
             order: 10,
             title: Strings.Pick_PanelTitle,
+            name: Strings.Label_Activity_PickReport,
             tooltip: Strings.Pick_PanelTitle,
             iconFactory: static () => new FluentIcon { Icon = Icon.Cursor, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,
@@ -1108,6 +1120,7 @@ public partial class App : Application
             id: "Timeline",
             order: 10,
             title: Strings.TimelinePanel_Title,
+            name: Strings.Label_Activity_Timeline,
             tooltip: Strings.TimelinePanel_Title,
             iconFactory: static () => new FluentIcon { Icon = Icon.Clock, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,

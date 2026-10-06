@@ -3064,6 +3064,48 @@
   <data name="Library_ToggleGroup" xml:space="preserve">
     <value>Show or hide the datasets in this package</value>
   </data>
+  <data name="Label_Activity_Datasets" xml:space="preserve">
+    <value>Datasets</value>
+  </data>
+  <data name="Label_Activity_EcdisDisplay" xml:space="preserve">
+    <value>Display controls</value>
+  </data>
+  <data name="Label_Activity_FeatureCatalogues" xml:space="preserve">
+    <value>Feature catalogues</value>
+  </data>
+  <data name="Label_Activity_Helm" xml:space="preserve">
+    <value>Helm</value>
+  </data>
+  <data name="Label_Activity_LayerStack" xml:space="preserve">
+    <value>Layer stack</value>
+  </data>
+  <data name="Label_Activity_Library" xml:space="preserve">
+    <value>Library</value>
+  </data>
+  <data name="Label_Activity_PickReport" xml:space="preserve">
+    <value>Object information</value>
+  </data>
+  <data name="Label_Activity_PortrayalCatalogues" xml:space="preserve">
+    <value>Portrayal catalogues</value>
+  </data>
+  <data name="Label_Activity_Routes" xml:space="preserve">
+    <value>Routes</value>
+  </data>
+  <data name="Label_Activity_Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Label_Activity_Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Label_Activity_Timeline" xml:space="preserve">
+    <value>Timeline</value>
+  </data>
+  <data name="Label_Activity_Vessels" xml:space="preserve">
+    <value>Vessels</value>
+  </data>
+  <data name="Label_Filter" xml:space="preserve">
+    <value>Filter</value>
+  </data>
   <data name="Label_AddRoute" xml:space="preserve">
     <value>Add route</value>
   </data>
