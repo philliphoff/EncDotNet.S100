@@ -96,6 +96,8 @@ internal sealed record UiRootSnapshot(string Kind, string? Title, UiElementSnaps
 /// <param name="Role">The automation control type, e.g. "button", "listItem", "edit".</param>
 /// <param name="ClassName">The control class, e.g. "Button".</param>
 /// <param name="Name">The automation name (a button's caption, a text block's text), or null.</param>
+/// <param name="HelpText">A longer description than the name (usually the tooltip's text), or null.</param>
+/// <param name="AcceleratorKey">The keyboard shortcut that does the same thing, e.g. "Alt+Right", or null.</param>
 /// <param name="Text">For an element without a name (a list row, a templated button), its visible text, or null.</param>
 /// <param name="Enabled">Whether it is enabled.</param>
 /// <param name="Focused">Whether it has keyboard focus.</param>
@@ -112,6 +114,8 @@ internal sealed record UiElementSnapshot(
     string Role,
     string ClassName,
     string? Name,
+    string? HelpText,
+    string? AcceleratorKey,
     string? Text,
     bool Enabled,
     bool Focused,

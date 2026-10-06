@@ -167,6 +167,8 @@ internal sealed partial class ViewerUiAutomation : IViewerUiAutomation
             Role: Camel(peer.GetAutomationControlType().ToString()),
             ClassName: peer.GetClassName(),
             Name: name,
+            HelpText: NullIfEmpty(peer.GetHelpText()),
+            AcceleratorKey: NullIfEmpty(peer.GetAcceleratorKey()),
             Text: name is null ? VisibleText(control) ?? ToolTipText(control) : null,
             Enabled: peer.IsEnabled(),
             Focused: peer.HasKeyboardFocus(),
