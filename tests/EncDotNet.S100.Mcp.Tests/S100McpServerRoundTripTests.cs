@@ -133,6 +133,49 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
+    public async Task SampleCoverage_time_out_of_range_round_trips_details_and_nearest_opt_in()
+    {
+        // S111Synth's default run has hourly steps 2024-01-01T00:00Z .. 02:00Z.
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S111("sfbofs", source: S111Synth.Source()));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["spec"] = "S-111",
+            ["latitude"] = 0.02,
+            ["longitude"] = 0.02,
+            ["time"] = "2024-01-03T22:00:00Z",
+        };
+
+        var strict = await client.CallToolAsync("sample_coverage", args, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(strict.IsError ?? false, "Expected time_out_of_range by default.");
+        var error = ParseSingleJson(strict);
+        Assert.Equal("time_out_of_range", error["code"]!.GetValue<string>());
+        var details = error["details"]!;
+        Assert.Equal("sfbofs", details["datasetId"]!.GetValue<string>());
+        Assert.StartsWith("2024-01-03T22:00:00", details["requestedTime"]!.GetValue<string>());
+        Assert.StartsWith("2024-01-01T00:00:00", details["validFrom"]!.GetValue<string>());
+        Assert.StartsWith("2024-01-01T02:00:00", details["validTo"]!.GetValue<string>());
+        Assert.StartsWith("2024-01-01T02:00:00", details["nearestStep"]!.GetValue<string>());
+        Assert.Single(details["candidates"]!.AsArray());
+
+        args["outOfRange"] = "nearest";
+        var nearest = await client.CallToolAsync("sample_coverage", args, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.False(nearest.IsError ?? false, $"sample_coverage returned an error: {DumpText(nearest)}");
+        var payload = ParseSingleJson(nearest);
+        Assert.Equal("after_end", payload["timeStatus"]!.GetValue<string>());
+        Assert.StartsWith("2024-01-01T02:00:00", payload["value"]!["sampleTime"]!.GetValue<string>());
+
+        args["outOfRange"] = "clamp";
+        var invalid = await client.CallToolAsync("sample_coverage", args, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(invalid.IsError ?? false);
+        Assert.Equal("invalid_argument", ParseSingleJson(invalid)["code"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task DescribeFeature_unknown_dataset_returns_structured_error()
     {
         var catalog = McpTestHelpers.NewCatalog();

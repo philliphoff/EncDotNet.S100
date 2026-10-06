@@ -77,7 +77,7 @@ public class SampleCoverageToolS111StationSeriesTests
     }
 
     [Fact]
-    public async Task ClampsTimeBeforeStart_ToFirstStep()
+    public async Task NearestPolicy_TimeBeforeStart_SamplesFirstStep()
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("dcf8", Synth()));
@@ -85,9 +85,10 @@ public class SampleCoverageToolS111StationSeriesTests
 
         var requested = new DateTimeOffset(2023, 12, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1, Time: requested), TestContext.Current.CancellationToken);
+            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1, Time: requested, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(SampleTimeStatus.BeforeStart, value.TimeStatus);
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);
         Assert.Equal(0.5, sample.SpeedKnots, 5);
         Assert.Equal(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc), sample.SampleTime);
@@ -95,7 +96,7 @@ public class SampleCoverageToolS111StationSeriesTests
     }
 
     [Fact]
-    public async Task ClampsTimeAfterEnd_ToLastStep()
+    public async Task NearestPolicy_TimeAfterEnd_SamplesLastStep()
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("dcf8", Synth()));
@@ -103,9 +104,10 @@ public class SampleCoverageToolS111StationSeriesTests
 
         var requested = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1, Time: requested), TestContext.Current.CancellationToken);
+            LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1, Time: requested, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(SampleTimeStatus.AfterEnd, value.TimeStatus);
         var sample = Assert.IsType<SurfaceCurrentStationSample>(value.Value);
         Assert.Equal(1.0, sample.SpeedKnots, 5);
         Assert.Equal(60.0, sample.DirectionDegreesTrue, 5);
