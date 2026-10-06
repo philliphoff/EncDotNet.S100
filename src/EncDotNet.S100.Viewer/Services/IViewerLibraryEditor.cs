@@ -31,7 +31,10 @@ internal interface IViewerLibraryEditor
     /// <summary>Removes a collection or source from the Library.</summary>
     Task<EditOutcome<RemoveSourceResult>> RemoveAsync(Guid id, CancellationToken ct = default);
 
-    /// <summary>Waits until no source is indexing and no download is running.</summary>
+    /// <summary>
+    /// Waits until no source is indexing, no download is running, and every
+    /// dataset a Library action opens has opened.
+    /// </summary>
     Task<LibraryIdleResult> AwaitIdleAsync(TimeSpan timeout, CancellationToken ct = default);
 
     /// <summary>Cancels every running download, as the bulk bar's Cancel does.</summary>
@@ -148,12 +151,13 @@ internal sealed record RemoveSourceResult(
     [property: Description("How many items it listed.")] int ItemCount);
 
 /// <summary>The Library's background work.</summary>
-[Description("Whether the Library is busy indexing or downloading.")]
+[Description("Whether the Library is busy indexing, downloading or opening datasets.")]
 internal sealed record LibraryIdleResult(
-    [property: Description("True when nothing is indexing or downloading.")] bool Idle,
+    [property: Description("True when nothing is indexing, downloading or opening datasets.")] bool Idle,
     [property: Description("True when the wait ended before the Library was idle.")] bool TimedOut,
     [property: Description("How long the call waited, in milliseconds.")] long WaitedMs,
     [property: Description("True while a source is indexing.")] bool Indexing,
+    [property: Description("Datasets a library_action download or load has yet to open (including any still downloading).")] int Loading,
     [property: Description("The running download batch, or null.")] LibraryDownloadInfo? Downloads);
 
 /// <summary>A running download batch.</summary>
@@ -186,6 +190,7 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
     private readonly Func<Uri, CancellationToken, Task<CatalogueProbe>>? _probe;
     private readonly Func<IReadOnlyList<KnownCatalogueSource>> _userCatalogues;
     private readonly Func<Func<Task>, Task> _dispatch;
+    private readonly LibraryActivityTracker _activity;
 
     public ViewerLibraryEditor(
         LibraryPanelViewModel panel,
@@ -194,7 +199,8 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
         Func<AddToLibraryDialogViewModel> dialogs,
         Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe = null,
         Func<IReadOnlyList<KnownCatalogueSource>>? userCatalogues = null,
-        Func<Func<Task>, Task>? dispatch = null)
+        Func<Func<Task>, Task>? dispatch = null,
+        LibraryActivityTracker? activity = null)
     {
         ArgumentNullException.ThrowIfNull(panel);
         ArgumentNullException.ThrowIfNull(library);
@@ -207,6 +213,7 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
         _probe = probe;
         _userCatalogues = userCatalogues ?? (() => []);
         _dispatch = dispatch ?? (work => Dispatcher.UIThread.InvokeAsync(work));
+        _activity = activity ?? new LibraryActivityTracker();
     }
 
     // ── add ─────────────────────────────────────────────────────────────
@@ -537,21 +544,28 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
         switch (action)
         {
             case "load" or "load_as_you_pan":
-                var loaded = await _panel.LoadRowsAsync(chosen, defer: action == "load_as_you_pan").ConfigureAwait(true);
-                return EditOutcome<LibraryActionResult>.Ok(Result(loaded.Opened, false));
+                // Tracked so a concurrent await_library_idle waits for the opens (#790).
+                using (_activity.Begin(action == "load" ? chosen.Count : 0))
+                {
+                    var loaded = await _panel.LoadRowsAsync(chosen, defer: action == "load_as_you_pan").ConfigureAwait(true);
+                    return EditOutcome<LibraryActionResult>.Ok(Result(loaded.Opened, false));
+                }
             case "cancel":
                 foreach (var row in chosen)
                     row.CancelDownloadCommand.Execute(null);
                 return EditOutcome<LibraryActionResult>.Ok(Result(null, false));
             default:
-                // Downloads run on in the background, as from the panel; await_library_idle waits for them.
-                _ = RunDownloadAsync(chosen, load: action == "download");
+                // Downloads run on in the background, as from the panel; await_library_idle waits for
+                // them and for what follows (re-indexing, opening) until RunDownloadAsync ends (#790).
+                var load = action == "download";
+                _ = RunDownloadAsync(chosen, load, _activity.Begin(load ? chosen.Count : 0));
                 return EditOutcome<LibraryActionResult>.Ok(Result(null, true));
         }
     }
 
-    private async Task RunDownloadAsync(IReadOnlyList<LibraryItemViewModel> rows, bool load)
+    private async Task RunDownloadAsync(IReadOnlyList<LibraryItemViewModel> rows, bool load, IDisposable activity)
     {
+        using var scope = activity;
         try
         {
             await _panel.DownloadRowsAsync(rows, load).ConfigureAwait(true);
@@ -621,14 +635,17 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
         {
             bool indexing = false;
             LibraryDownloadProgress? progress = null;
+            int active = 0, loading = 0;
             await _dispatch(() =>
             {
                 indexing = _library.Collections.Any(c => c.IsIndexing);
                 progress = _panel.Downloader.Progress;
+                active = _activity.Active;
+                loading = _activity.PendingDatasets;
                 return Task.CompletedTask;
             }).ConfigureAwait(false);
 
-            var idle = !indexing && progress is null;
+            var idle = !indexing && progress is null && active == 0;
             var timedOut = !idle && clock.Elapsed >= timeout;
             if (idle || timedOut)
             {
@@ -637,6 +654,7 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
                     timedOut,
                     clock.ElapsedMilliseconds,
                     indexing,
+                    loading,
                     progress is { } p ? new LibraryDownloadInfo(p.Completed, p.Failed, p.Total, p.BytesDone, p.BytesTotal) : null);
             }
             await Task.Delay(TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
