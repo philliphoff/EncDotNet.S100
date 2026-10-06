@@ -24,18 +24,22 @@
                                LetterSpacing="0.5"
                                Opacity="0.7" />
                     <RadioButton Content="{x:Static loc:Strings.DisplayCategory_DisplayBase}"
+                                 AutomationProperties.AutomationId="Ecdis.Category.Base"
                                  IsChecked="{Binding IsDisplayBase, Mode=OneWay}"
                                  Command="{Binding SetDisplayBaseCommand}"
                                  GroupName="DisplayCategory" />
                     <RadioButton Content="{x:Static loc:Strings.DisplayCategory_Standard}"
+                                 AutomationProperties.AutomationId="Ecdis.Category.Standard"
                                  IsChecked="{Binding IsStandard, Mode=OneWay}"
                                  Command="{Binding SetStandardCommand}"
                                  GroupName="DisplayCategory" />
                     <RadioButton Content="{x:Static loc:Strings.DisplayCategory_OtherInformation}"
+                                 AutomationProperties.AutomationId="Ecdis.Category.Other"
                                  IsChecked="{Binding IsOtherInformation, Mode=OneWay}"
                                  Command="{Binding SetOtherInformationCommand}"
                                  GroupName="DisplayCategory" />
                     <RadioButton Content="{x:Static loc:Strings.DisplayCategory_All}"
+                                 AutomationProperties.AutomationId="Ecdis.Category.All"
                                  IsChecked="{Binding IsAll, Mode=OneWay}"
                                  Command="{Binding SetAllCommand}"
                                  GroupName="DisplayCategory" />
@@ -51,17 +55,18 @@
                     <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayPlane_UnderRadar}">
                         <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.DisplayPlane_UnderRadar}" />
-                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsUnderRadarVisible}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsUnderRadarVisible}"  AutomationProperties.AutomationId="Ecdis.UnderRadar" AutomationProperties.Name="{x:Static loc:Strings.DisplayPlane_UnderRadar}"/>
                     </Grid>
                     <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayPlane_OverRadar}">
                         <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.DisplayPlane_OverRadar}" />
-                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsOverRadarVisible}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsOverRadarVisible}"  AutomationProperties.AutomationId="Ecdis.OverRadar" AutomationProperties.Name="{x:Static loc:Strings.DisplayPlane_OverRadar}"/>
                     </Grid>
                 </StackPanel>
 
                 <!-- Global reset -->
                 <Button Content="{x:Static loc:Strings.Button_ResetAllOverrides}"
+                        AutomationProperties.AutomationId="Ecdis.ResetAllOverrides"
                         Command="{Binding ResetAllOverridesCommand}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetAllOverrides}"
                         HorizontalAlignment="Left"
@@ -80,6 +85,7 @@
                                     <!-- Spec header -->
                                     <DockPanel>
                                         <Button DockPanel.Dock="Right"
+                                                AutomationProperties.AutomationId="Ecdis.ResetOverrides"
                                                 Content="{x:Static loc:Strings.Button_ResetOverrides}"
                                                 Command="{Binding ResetOverridesCommand}"
                                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetOverrides}"
@@ -123,6 +129,8 @@
                                                                                TextWrapping="NoWrap"
                                                                                TextTrimming="CharacterEllipsis" />
                                                                     <ToggleSwitch Grid.Column="1"
+                                                                                  AutomationProperties.Name="{Binding DisplayLabel}"
+                                                                                  AutomationProperties.AutomationId="Ecdis.Group.Visible"
                                                                                   Classes="setting"
                                                                                   IsChecked="{Binding IsVisible}" />
                                                                 </Grid>

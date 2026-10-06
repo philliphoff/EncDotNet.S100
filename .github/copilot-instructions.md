@@ -196,8 +196,10 @@ When editing `src/EncDotNet.S100.Viewer/**`, follow the rules in
   - every control gets a short, localized accessible name
     (`AutomationProperties.Name`; a button whose content is an icon or panel
     always needs one), with longer text in `AutomationProperties.HelpText`;
-  - `AccessibilityGuardTests` must pass, and new views must never be added to
-    its `ViewsAwaitingIds` list.
+  - inputs (text boxes, combo boxes, sliders, number boxes, toggle switches)
+    are named after their label;
+  - `AccessibilityGuardTests` must pass: it fails on any button or input
+    without a name and any interactive control without an automation id.
 - All `GridSplitter`s use `Classes="PaneSplitter"` with thickness 4
   and a 500ms hover delay before the accent shows. Adjacent panels
   must not draw their own border on the splitter-facing edge.

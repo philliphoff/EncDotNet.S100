@@ -1087,6 +1087,7 @@ internal static class Strings
     public static string Library_SharedFeedDescription => Get(nameof(Library_SharedFeedDescription));
     public static string Library_SharedFeedCommand => Get(nameof(Library_SharedFeedCommand));
     public static string Library_SharedFeedHint => Get(nameof(Library_SharedFeedHint));
+    public static string Library_SharedFeedUrlLabel => Get(nameof(Library_SharedFeedUrlLabel));
     public static string Library_SharedFeedUrlWatermark => Get(nameof(Library_SharedFeedUrlWatermark));
     public static string Library_SharedFeedChecking => Get(nameof(Library_SharedFeedChecking));
     public static string Library_SharedFeedInvalid => Get(nameof(Library_SharedFeedInvalid));
@@ -1164,6 +1165,7 @@ internal static class Strings
     public static string Toast_LibraryUnpackedManyFormat => Get(nameof(Toast_LibraryUnpackedManyFormat));
     public static string Library_Field_Datasets => Get(nameof(Library_Field_Datasets));
     public static string Menu_LibraryCopyUrl => Get(nameof(Menu_LibraryCopyUrl));
+    public static string Library_RenameBox => Get(nameof(Library_RenameBox));
     public static string Library_ToggleGroup => Get(nameof(Library_ToggleGroup));
     public static string Library_Quick_Folder => Get(nameof(Library_Quick_Folder));
     public static string Library_Quick_FolderSub => Get(nameof(Library_Quick_FolderSub));

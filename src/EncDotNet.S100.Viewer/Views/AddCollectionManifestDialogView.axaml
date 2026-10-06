@@ -61,6 +61,7 @@
                                    ToolTip.Tip="{Binding ManifestPath}" />
                     </StackPanel>
                     <Button Grid.Column="2" Classes="Outline" Height="32" MinHeight="32" VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="Manifest.Change"
                             Content="{x:Static loc:Strings.Manifest_Change}" Command="{Binding ChangeManifestCommand}"
                             IsVisible="{Binding ShowsTarget}" />
                 </Grid>
@@ -95,9 +96,11 @@
                         <TextBlock Text="{x:Static loc:Strings.Manifest_ErrorBody}" FontSize="13" TextWrapping="Wrap" />
                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
                             <Button Classes="Primary" Height="32" MinHeight="32"
+                                    AutomationProperties.AutomationId="Manifest.Reload"
                                     Content="{x:Static loc:Strings.Manifest_ReloadFile}"
                                     Command="{Binding ReloadManifestCommand}" />
                             <Button Classes="Outline" Height="32" MinHeight="32"
+                                    AutomationProperties.AutomationId="Manifest.OpenInEditor"
                                     Content="{x:Static loc:Strings.Manifest_OpenInEditor}"
                                     Command="{Binding OpenManifestCommand}" />
                         </StackPanel>
@@ -120,8 +123,10 @@
                            TextTrimming="CharacterEllipsis"
                            Classes="muted" Classes.warning="{Binding HasManifestProblems}" />
                 <Button Grid.Column="1" Classes="Ghost" Content="{x:Static loc:Strings.Button_Cancel}"
+                        AutomationProperties.AutomationId="Manifest.Cancel"
                         Command="{Binding CancelCommand}" />
                 <Button Grid.Column="2" Classes="Primary" Content="{Binding PrimaryButtonText}"
+                        AutomationProperties.AutomationId="Manifest.Confirm"
                         Command="{Binding ConfirmCommand}" IsDefault="True" />
             </Grid>
         </Border>

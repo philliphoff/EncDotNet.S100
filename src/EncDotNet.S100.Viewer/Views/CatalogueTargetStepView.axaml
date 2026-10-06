@@ -27,6 +27,7 @@
                                  Content="{x:Static loc:Strings.Library_NewCollection}" />
                     <StackPanel Spacing="4" Classes.inactive="{Binding AddToExisting}">
                         <TextBox Text="{Binding NewCollectionName}"
+                                 AutomationProperties.Name="{x:Static loc:Strings.Library_CollectionNameWatermark}"
                                  AutomationProperties.AutomationId="CatalogueTarget.Name"
                                  PlaceholderText="{x:Static loc:Strings.Library_CollectionNameWatermark}" />
                         <TextBlock Text="{Binding NameHint}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
@@ -40,6 +41,7 @@
                                  AutomationProperties.AutomationId="CatalogueTarget.AddToExisting"
                                  Content="{x:Static loc:Strings.Library_ExistingCollection}" />
                     <ComboBox ItemsSource="{Binding ExistingCollections}"
+                              AutomationProperties.Name="{x:Static loc:Strings.Library_ExistingCollection}"
                               AutomationProperties.AutomationId="CatalogueTarget.Existing"
                               SelectedItem="{Binding SelectedCollection}"
                               HorizontalAlignment="Stretch"

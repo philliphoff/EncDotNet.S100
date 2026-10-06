@@ -18,7 +18,7 @@
         </StackPanel>
 
         <StackPanel Grid.Row="1" Spacing="4">
-            <TextBox Text="{Binding Url}" PlaceholderText="{x:Static loc:Strings.Library_SharedFeedUrlWatermark}" />
+            <TextBox Text="{Binding Url}" PlaceholderText="{x:Static loc:Strings.Library_SharedFeedUrlWatermark}"  AutomationProperties.AutomationId="SharedFeed.Url" AutomationProperties.Name="{x:Static loc:Strings.Library_SharedFeedUrlLabel}"/>
             <TextBlock Text="{x:Static loc:Strings.Library_SharedFeedChecking}" IsVisible="{Binding IsChecking}"
                        FontSize="11" Opacity="0.7" />
             <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}"
@@ -26,8 +26,9 @@
         </StackPanel>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
-            <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}" />
+            <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}"  AutomationProperties.AutomationId="SharedFeed.Cancel"/>
             <Button Classes="Primary" Content="{x:Static loc:Strings.Button_Connect}" Command="{Binding ConnectCommand}"
+                    AutomationProperties.AutomationId="SharedFeed.Connect"
                     IsDefault="True" />
         </StackPanel>
     </Grid>

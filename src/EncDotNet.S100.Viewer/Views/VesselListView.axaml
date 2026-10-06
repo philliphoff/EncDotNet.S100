@@ -53,6 +53,7 @@
 
                 <!-- Vessel list (master) -->
                 <ListBox Grid.Row="0"
+                         AutomationProperties.AutomationId="Vessels.List"
                          ItemsSource="{Binding Vessels}"
                          SelectedItem="{Binding SelectedVessel, Mode=TwoWay}"
                          SelectionMode="Single"
@@ -176,12 +177,14 @@
                                      target, or release it from the own-ship
                                      row while helming. -->
                                 <Button Content="{x:Static loc:Strings.Vessels_TakeHelm}"
+                                        AutomationProperties.AutomationId="Vessels.TakeHelm"
                                         IsVisible="{Binding !IsOwnShip}"
                                         HorizontalAlignment="Left"
                                         Margin="0,6,0,0"
                                         Command="{Binding $parent[UserControl].((vm:VesselListViewModel)DataContext).TakeHelmCommand}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_VesselTakeHelm}" />
                                 <Button Content="{x:Static loc:Strings.Vessels_ReleaseHelm}"
+                                        AutomationProperties.AutomationId="Vessels.ReleaseHelm"
                                         IsVisible="{Binding IsOwnShip}"
                                         HorizontalAlignment="Left"
                                         Margin="0,6,0,0"

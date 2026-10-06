@@ -42,6 +42,8 @@
                                FontSize="12"
                                FontWeight="SemiBold" />
                     <TextBox Text="{Binding UserMessage, Mode=TwoWay}"
+                             AutomationProperties.Name="{x:Static loc:Strings.Feedback_YourFeedbackLabel}"
+                             AutomationProperties.AutomationId="Feedback.Message"
                              PlaceholderText="{x:Static loc:Strings.Feedback_FeedbackWatermark}"
                              AcceptsReturn="True"
                              TextWrapping="Wrap"
@@ -53,6 +55,7 @@
                 <!-- Screenshot -->
                 <StackPanel Spacing="8" IsVisible="{Binding HasScreenshot}">
                     <CheckBox IsChecked="{Binding IncludeScreenshot, Mode=TwoWay}"
+                              AutomationProperties.AutomationId="Feedback.IncludeScreenshot"
                               Content="{x:Static loc:Strings.Feedback_IncludeScreenshot}" />
                     <Border BorderBrush="{DynamicResource BorderColor}"
                             BorderThickness="1"
@@ -70,6 +73,7 @@
                 <!-- Raw data disclosure (custom toggle for precise alignment) -->
                 <StackPanel Spacing="0">
                     <ToggleButton Classes="Ghost"
+                                  AutomationProperties.AutomationId="Feedback.ShowRawData"
                                   AutomationProperties.Name="{x:Static loc:Strings.Feedback_RawDataHeader}"
                                   Padding="4,2"
                                   HorizontalAlignment="Left"
@@ -103,11 +107,13 @@
                     Spacing="8"
                     Margin="0,16,0,0">
             <Button Classes="Outline"
+                    AutomationProperties.AutomationId="Feedback.Cancel"
                     Content="{x:Static loc:Strings.Feedback_Cancel}"
                     Command="{Binding CancelCommand}"
                     IsEnabled="{Binding !IsBusy}"
                     ToolTip.Tip="{x:Static loc:Strings.Feedback_CancelTooltip}" />
             <Button Classes="Primary"
+                    AutomationProperties.AutomationId="Feedback.Submit"
                     Content="{x:Static loc:Strings.Feedback_Submit}"
                     Command="{Binding SubmitCommand}"
                     ToolTip.Tip="{x:Static loc:Strings.Feedback_SubmitTooltip}" />

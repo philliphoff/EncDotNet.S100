@@ -71,7 +71,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:WizardStepViewModel">
-                            <Button Classes="wizardStep" Command="{Binding GoToCommand}" Margin="0,0,12,0" AutomationProperties.Name="{Binding Label}">
+                            <Button Classes="wizardStep" Command="{Binding GoToCommand}" Margin="0,0,12,0" AutomationProperties.Name="{Binding Label}" AutomationProperties.AutomationId="Wizard.Step">
                                 <Grid ColumnDefinitions="22,*" ColumnSpacing="8">
                                     <Panel Width="22" Height="22" VerticalAlignment="Top">
                                         <Ellipse Classes="stepMarker"
@@ -139,6 +139,7 @@
                                      Text="{x:Static loc:Strings.Wizard_LoadErrorSuffix}" />
                             </TextBlock>
                             <Button Classes="Primary" Height="32" MinHeight="32" HorizontalAlignment="Left" Margin="0,4,0,0"
+                                    AutomationProperties.AutomationId="Wizard.TryAgain"
                                     Content="{x:Static loc:Strings.Wizard_TryAgain}" Command="{Binding TryAgainCommand}" />
                         </StackPanel>
                     </Border>

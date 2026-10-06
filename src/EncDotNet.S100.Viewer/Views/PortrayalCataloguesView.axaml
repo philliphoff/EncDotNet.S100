@@ -8,6 +8,7 @@
 
     <DockPanel>
         <Button DockPanel.Dock="Bottom"
+                AutomationProperties.AutomationId="PortrayalCatalogues.Add"
                 Classes="Outline"
                 Content="{x:Static loc:Strings.Button_AddPortrayalCatalogue}"
                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddPortrayalCatalogue}"
@@ -42,6 +43,7 @@
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                         <Button Grid.Column="1"
+                                AutomationProperties.AutomationId="PortrayalCatalogues.Row.Remove"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RemoveCatalogue}"
                                 Classes="Icon"
                                 Command="{Binding $parent[ItemsControl].((vm:PortrayalCataloguesViewModel)DataContext).RemoveCommand}"

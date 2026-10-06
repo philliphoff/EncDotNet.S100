@@ -17,12 +17,15 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBox Grid.Column="0"
+                         AutomationProperties.Name="{x:Static loc:Strings.Search_Placeholder}"
+                         AutomationProperties.AutomationId="Search.Query"
                          x:Name="SearchBox"
                          Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                          PlaceholderText="{x:Static loc:Strings.Search_Placeholder}"
                          VerticalContentAlignment="Center"
                          Padding="8,4" />
                 <Button Grid.Column="1"
+                        AutomationProperties.AutomationId="Search.Clear"
                         AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ClearSearch}"
                         Margin="4,0,0,0"
                         Padding="8,4"
@@ -61,6 +64,7 @@
 
             <!-- Results list -->
             <ListBox ItemsSource="{Binding Results}"
+                 AutomationProperties.AutomationId="Search.Results"
                  SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
                  SelectionMode="Single"
                  Classes="accentList"

@@ -128,8 +128,12 @@ chevron) `AutomationProperties.AccessibilityView="Raw"` instead.
 
 - every button has an accessible name (`AutomationProperties.Name`, string
   `Content`, or text content), unless it is marked `Raw`;
+- every input (text box, combo box, slider, number box, toggle switch, check
+  box, radio button) has an accessible name: `AutomationProperties.Name` or
+  `LabeledBy`, or string `Content` for the last three. A label `TextBlock`
+  beside it or a placeholder does not count;
 - every interactive control has an automation id, except template parts and
-  `Raw` elements, in every view not on its `ViewsAwaitingIds` list (#784).
+  `Raw` elements.
 
-When you finish a view's ids, remove it from `ViewsAwaitingIds`; the test fails
-until you do, so the list only shrinks.
+Every view passes all three (#784), so there is no allow-list: new UI must
+pass as written.
