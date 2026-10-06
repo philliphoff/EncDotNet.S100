@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -105,7 +106,7 @@ internal sealed class LibraryTimeSource : ILibraryTimeSource
     private IReadOnlyList<LibraryTimedEntry>? _entries;
     private bool _changePosted;
 
-    public LibraryTimeSource(LibraryPanelViewModel panel, LibraryService library, ILibraryLoader loader, TimeProvider clock, Action<Action>? dispatch = null)
+    public LibraryTimeSource(LibraryPanelViewModel panel, CollectionLibrary library, ILibraryLoader loader, TimeProvider clock, Action<Action>? dispatch = null)
     {
         ArgumentNullException.ThrowIfNull(panel);
         ArgumentNullException.ThrowIfNull(library);
@@ -185,7 +186,7 @@ internal sealed class LibraryTimeSource : ILibraryTimeSource
             foreach (var item in source.Index?.Items ?? [])
             {
                 var forecast = ForecastRuns.IsForecast(item);
-                if (!forecast && LibraryItemViewModel.TimeCoverage(item) is null)
+                if (!forecast && LibraryItemState.TimeCoverage(item) is null)
                     continue;
                 var row = _panel.CreateItem(item, source);
                 var id = $"{source.Id}:{item.Key}";

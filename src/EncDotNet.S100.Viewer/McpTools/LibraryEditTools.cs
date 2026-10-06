@@ -90,7 +90,7 @@ internal sealed class LibraryActionTool(IViewerLibraryEditor editor)
         if (request.MaxBytes is < 0)
             return ToolResult<LibraryActionResult>.Err(new InvalidArgument("maxBytes", "must be 0 or more"));
 
-        LibraryItemQuery? filter = null;
+        LibraryItemPageQuery? filter = null;
         if (QueryLibraryItemsTool.HasFilter(request.Filter))
         {
             var (query, error) = QueryLibraryItemsTool.Parse(request.Filter);

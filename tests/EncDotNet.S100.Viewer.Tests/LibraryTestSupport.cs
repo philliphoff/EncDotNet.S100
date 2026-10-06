@@ -1,5 +1,6 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -20,8 +21,8 @@ internal sealed class LibraryTestContext : IDisposable
 
     public string IndexCacheDirectory => Path.Combine(Root, "index-cache");
 
-    public LibraryService CreateService(CollectionIndexer? indexer = null, bool readOnly = false) =>
-        new(indexer ?? CollectionIndexer.CreateDefault(), StorePath, IndexCacheDirectory, readOnly);
+    public CollectionLibrary CreateService(CollectionIndexer? indexer = null, bool readOnly = false) =>
+        new(indexer ?? CollectionIndexer.CreateDefault(), new CollectionLibraryOptions(StorePath, IndexCacheDirectory) { ReadOnly = readOnly });
 
     /// <summary>Copies the synthetic two-cell S-57 exchange set into the context.</summary>
     public string CreateS57ExchangeSet(string name = "set")
@@ -72,19 +73,6 @@ internal sealed class LibraryTestContext : IDisposable
         {
         }
     }
-}
-
-/// <summary>An indexer that always throws, for failure-path tests.</summary>
-internal sealed class ThrowingIndexer : ICollectionSourceIndexer
-{
-    public bool CanIndex(CollectionSource source) => true;
-
-    public ValueTask<string?> GetFingerprintAsync(CollectionSource source, CancellationToken cancellationToken) =>
-        ValueTask.FromResult<string?>(null);
-
-    public ValueTask<SourceIndex> IndexAsync(
-        CollectionSource source, IProgress<IndexProgress>? progress, CancellationToken cancellationToken) =>
-        throw new InvalidOperationException("Indexing exploded.");
 }
 
 internal sealed class FakeLibraryDownloader : ILibraryDownloader

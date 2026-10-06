@@ -1,4 +1,5 @@
 using Avalonia.Media;
+using EncDotNet.S100.Collections.Library;
 
 namespace EncDotNet.S100.Viewer.Library;
 

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
 using FluentIcons.Common;
@@ -48,7 +49,7 @@ internal sealed record LibraryForecastCounts(int Models, int Local, int NewerRun
 /// A node of the Library panel's tree: a collection, one of its sources, or
 /// (under a collection-manifest source, or a remote S-100 catalogue's areas,
 /// with two or more groups) one group.
-/// Nodes are updated in place from new <see cref="LibraryService"/> snapshots
+/// Nodes are updated in place from new <see cref="CollectionLibrary"/> snapshots
 /// so tree expansion and selection survive background indexing.
 /// </summary>
 internal sealed class LibraryNodeViewModel : ViewModelBase
@@ -397,11 +398,11 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             case { Local: > 0 } some:
                 var line = $"{checkedText} · {string.Format(c, Strings.Library_StatusLine_RunsLocalFormat, some.Local, some.Models)}";
                 if (some.Left is { } left)
-                    line += " · " + ForecastRuns.TimeLeft(left);
+                    line += " · " + ForecastRunText.TimeLeft(left);
                 return (line, LibraryNodeStatusKind.Ok);
             default:
                 var latest = index.PublishedAt is { } run
-                    ? string.Format(c, Strings.Library_StatusLine_LatestRunsFormat, ForecastRuns.FormatRun(run, format, TimeZoneInfo.Local))
+                    ? string.Format(c, Strings.Library_StatusLine_LatestRunsFormat, ForecastRunText.FormatRun(run, format, TimeZoneInfo.Local))
                     : checkedText;
                 return ($"{latest} · {Strings.Library_StatusLine_NothingLocal}", LibraryNodeStatusKind.Info);
         }

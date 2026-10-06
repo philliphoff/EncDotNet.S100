@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.RemoteCatalogues;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Operation.Union;

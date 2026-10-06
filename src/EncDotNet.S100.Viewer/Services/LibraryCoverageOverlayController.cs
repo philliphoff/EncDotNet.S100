@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia.Threading;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Services.LazyLoading;
@@ -183,9 +184,9 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         Candidates(listed, scale)
             .Concat(selected?.Item.Bounds is not null && !selected.IsGroupHeader ? [selected] : [])
             .Distinct()
-            .Where(i => CoverageGeometry.Contains(i.Item, position))
+            .Where(i => CoverageHitTest.Contains(i.Item, position))
             .OrderByDescending(i => i.Item.UsageBand ?? 0)
-            .ThenBy(i => CoverageGeometry.Area(i.Item))
+            .ThenBy(i => CoverageHitTest.Area(i.Item))
             .ToArray();
 
     /// <summary>
@@ -352,7 +353,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
                     && i.Availability != LibraryAvailability.Loaded
                     && (view is null || i.Item.Bounds!.Value.Intersects(view.Value)))
                 // Most detailed last, so they draw on top; keep the most detailed when capping.
-                .OrderByDescending(i => CoverageGeometry.Area(i.Item))
+                .OrderByDescending(i => CoverageHitTest.Area(i.Item))
                 .TakeLast(MaxOutlinedItems);
 
             foreach (var item in candidates)

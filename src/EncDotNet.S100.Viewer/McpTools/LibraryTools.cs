@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.Services;
@@ -94,7 +95,7 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
     /// Validates the filters and page of <paramref name="request"/> (shared
     /// with library_action, which selects items the same way).
     /// </summary>
-    internal static (LibraryItemQuery? Query, ToolError? Error) Parse(QueryLibraryItemsRequest request)
+    internal static (LibraryItemPageQuery? Query, ToolError? Error) Parse(QueryLibraryItemsRequest request)
     {
         Guid? sourceId = null;
         if (!string.IsNullOrWhiteSpace(request.SourceId))
@@ -116,10 +117,10 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
                     "onpan" or "on pan" => "on_pan",
                     var other => other,
                 };
-                if (!ViewerLibraryController.StateNames.Contains(state))
+                if (!LibraryAvailabilityNames.All.Contains(state))
                 {
                     return (null, new InvalidArgument(
-                        "states", $"unknown state '{raw}'; expected {string.Join(", ", ViewerLibraryController.StateNames.Order())}"));
+                        "states", $"unknown state '{raw}'; expected {string.Join(", ", LibraryAvailabilityNames.All.Order())}"));
                 }
                 states.Add(state);
             }
@@ -162,7 +163,7 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
         if (pageSize is < 1 or > MaxPageSize)
             return (null, new InvalidArgument("pageSize", $"must be between 1 and {MaxPageSize}"));
 
-        return (new LibraryItemQuery(
+        return (new LibraryItemPageQuery(
             sourceId,
             states,
             string.IsNullOrWhiteSpace(request.Spec) ? null : request.Spec.Trim(),

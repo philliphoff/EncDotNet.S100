@@ -1,5 +1,6 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.McpTools;
@@ -12,7 +13,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 public sealed class LibraryToolsTests : IDisposable
 {
     private readonly LibraryTestContext _context = new();
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
     private readonly StubLoader _loader = new();
     private readonly StubDownloader _downloader = new();
     private readonly List<KnownCatalogueSource> _userCatalogues = [];
@@ -165,7 +166,7 @@ public sealed class LibraryToolsTests : IDisposable
     [InlineData("US5WA51M", false)]
     [InlineData("not-a-guid:US5WA51M", false)]
     public void Item_ids_parse(string id, bool valid) =>
-        Assert.Equal(valid, ViewerLibraryController.TryParseItemId(id, out _, out _));
+        Assert.Equal(valid, LibraryItemState.TryParseId(id, out _, out _));
 
     [Fact]
     public async Task Every_adapter_builds_its_tool()

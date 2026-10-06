@@ -1,9 +1,7 @@
-using EncDotNet.S100.Collections;
-
-namespace EncDotNet.S100.Viewer.Library;
+namespace EncDotNet.S100.Collections.Library;
 
 /// <summary>Where a collection item's data can be had right now.</summary>
-internal enum LibraryAvailability
+public enum LibraryAvailability
 {
     /// <summary>Catalogue-only: the source describes the product but has no data for it.</summary>
     Listed,
@@ -34,7 +32,7 @@ internal enum LibraryAvailability
 }
 
 /// <summary>Computes a <see cref="LibraryAvailability"/> from an item's location.</summary>
-internal static class LibraryAvailabilityResolver
+public static class LibraryAvailabilityResolver
 {
     /// <summary>
     /// Resolves <paramref name="item"/>'s availability, checking the file
@@ -68,5 +66,41 @@ internal static class LibraryAvailabilityResolver
         {
             return false;
         }
+    }
+}
+
+/// <summary>
+/// The wire names of <see cref="LibraryAvailability"/> states, as the MCP
+/// Library tools report and filter them (<c>online</c>, <c>local</c>,
+/// <c>on_pan</c>, <c>update</c>, …).
+/// </summary>
+public static class LibraryAvailabilityNames
+{
+    /// <summary>Every state's wire name.</summary>
+    public static IReadOnlySet<string> All { get; } =
+        Enum.GetValues<LibraryAvailability>().Select(Of).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>The wire name of <paramref name="availability"/>.</summary>
+    public static string Of(LibraryAvailability availability) => availability switch
+    {
+        LibraryAvailability.Deferred => "on_pan",
+        LibraryAvailability.Outdated => "update",
+        _ => availability.ToString().ToLowerInvariant(),
+    };
+
+    /// <summary>Parses a wire name (<see cref="Of"/>) back to its state.</summary>
+    public static bool TryParse(string? name, out LibraryAvailability availability)
+    {
+        foreach (var value in Enum.GetValues<LibraryAvailability>())
+        {
+            if (string.Equals(Of(value), name, StringComparison.Ordinal))
+            {
+                availability = value;
+                return true;
+            }
+        }
+
+        availability = default;
+        return false;
     }
 }
