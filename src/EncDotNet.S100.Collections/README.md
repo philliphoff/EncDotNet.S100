@@ -56,6 +56,23 @@ Key types:
 
 See `docs/design/dataset-collections.md` for the design.
 
+## Library runtime
+
+The `EncDotNet.S100.Collections.Library` namespace holds a host-neutral library: the collections a user keeps, and how each item stands right now. The SoundCharts viewer's Library panel is built on it, and a headless host (such as the `s100` MCP server, #792) can use it the same way.
+
+- **`CollectionLibrary`** — owns a set of collections:
+  - It persists their definitions to a store file (`collections.json`) and caches each source's index on disk (`CollectionLibraryOptions`).
+  - It re-indexes sources one at a time on a background worker. `WhenIdle` waits for the queue to drain.
+  - It publishes immutable `LibraryCollection` / `LibrarySource` snapshots and a coarse `Changed` event.
+  - Loaded S-128 catalogues can appear in a transient session collection until they are kept.
+- **`LibraryItemState`** — one item as a host sees it:
+  - `Availability` is one of listed, online, local, missing, on-pan, loaded, update or expired. `LibraryAvailabilityNames` gives each state's wire name.
+  - `EffectiveItem` is the copy that would open.
+  - `ValidWindow` is the time the data covers: a forecast run's window, or a dataset's own time coverage.
+  - The host supplies its downloaded copies (`ILibraryLocalCopies`) and what it has open (`LibraryLoadState`).
+- **`LibraryQuery`** — finds items by collection or source, state, product, text, bounding box, covering point (most detailed first, via `CoverageHitTest`) and valid time.
+- **`ForecastRuns`** — forecast-run facts of an item: its model, horizon, shown run window, and its S-102 twin tile.
+
 ## Known catalogue sources
 
 `KnownSources/known-sources.json` is embedded in the library and exposed as `KnownCatalogueSources.All`. It lists the online chart catalogues the viewer offers under **Add Online Catalogue**. The list is maintained here, under this repository's MIT licence.

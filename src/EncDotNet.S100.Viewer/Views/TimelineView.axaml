@@ -262,14 +262,17 @@
                         <!-- C7: previous / next data, flanking the step controls. -->
                         <Button Classes="Icon"
                                 AutomationProperties.AutomationId="Timeline.PreviousData"
-                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelinePreviousData}"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_PreviousData}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelinePreviousData}"
+                                AutomationProperties.AcceleratorKey="Alt+Left"
                                 Command="{Binding PreviousDataCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousData}">
                             <ic:FluentIcon Icon="Previous" IconVariant="Regular" FontSize="14" />
                         </Button>
                         <Button Classes="Icon"
                                 AutomationProperties.AutomationId="Timeline.PreviousStep"
-                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_PreviousStep}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}"
                                 Command="{Binding PreviousStepCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
                             <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
@@ -289,14 +292,17 @@
                         </Button>
                         <Button Classes="Icon"
                                 AutomationProperties.AutomationId="Timeline.NextStep"
-                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelineNextStep}"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_NextStep}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelineNextStep}"
                                 Command="{Binding NextStepCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
                             <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
                         </Button>
                         <Button Classes="Icon"
                                 AutomationProperties.AutomationId="Timeline.NextData"
-                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelineNextData}"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_NextData}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelineNextData}"
+                                AutomationProperties.AcceleratorKey="Alt+Right"
                                 Command="{Binding NextDataCommand}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextData}">
                             <ic:FluentIcon Icon="Next" IconVariant="Regular" FontSize="14" />
@@ -313,7 +319,8 @@
                         <!-- C5: the window presets. -->
                         <Button x:Name="PresetMenuButton"
                                 AutomationProperties.AutomationId="Timeline.Preset"
-                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_TimelinePreset}"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_TimeWindow}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelinePreset}"
                                 Classes="Outline"
                                 Height="28" MinHeight="0" Padding="8,0" Margin="6,0,0,0"
                                 FontSize="12"

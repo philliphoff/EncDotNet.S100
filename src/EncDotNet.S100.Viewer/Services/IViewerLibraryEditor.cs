@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Avalonia.Threading;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -124,7 +125,7 @@ internal sealed record RefreshResult(
 internal sealed record LibraryActionRequest(
     string Action,
     IReadOnlyList<string>? ItemIds,
-    LibraryItemQuery? Filter,
+    LibraryItemPageQuery? Filter,
     bool DryRun,
     long? MaxBytes);
 
@@ -183,7 +184,7 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
     private const int ListedNames = 50;
 
     private readonly LibraryPanelViewModel _panel;
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
     private readonly ViewerLibraryController _reader;
     private readonly Func<AddToLibraryDialogViewModel> _dialogs;
     private readonly Func<Uri, CancellationToken, Task<CatalogueProbe>>? _probe;
@@ -193,7 +194,7 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
 
     public ViewerLibraryEditor(
         LibraryPanelViewModel panel,
-        LibraryService library,
+        CollectionLibrary library,
         ViewerLibraryController reader,
         Func<AddToLibraryDialogViewModel> dialogs,
         Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe = null,
@@ -452,9 +453,9 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
 
     /// <summary>Item id → state for everything in scope (the whole Library when <paramref name="id"/> is null).</summary>
     private Dictionary<string, string> States(Guid? id) =>
-        (_reader.FindRows(new LibraryItemQuery(id, null, null, null, null, null, 0, 1)) ?? [])
+        (_reader.FindRows(new LibraryItemPageQuery(id, null, null, null, null, null, 0, 1)) ?? [])
             .GroupBy(row => $"{row.Source.Id}:{row.Item.Key}", StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => ViewerLibraryController.StateName(g.First().Availability), StringComparer.Ordinal);
+            .ToDictionary(g => g.Key, g => LibraryAvailabilityNames.Of(g.First().Availability), StringComparer.Ordinal);
 
     // ── actions ─────────────────────────────────────────────────────────
 
@@ -519,7 +520,7 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
         };
         var chosen = rows.Where(eligible).ToList();
         var skipped = rows.Where(row => !eligible(row))
-            .GroupBy(row => ViewerLibraryController.StateName(row.Availability), StringComparer.Ordinal)
+            .GroupBy(row => LibraryAvailabilityNames.Of(row.Availability), StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
         var downloads = action is "download" or "download_only" or "update";
         var sizes = chosen.Select(row => (row.Item.Location as RemoteItemLocation)?.SizeBytes).ToArray();
@@ -578,7 +579,7 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
 
     private LibraryItemViewModel? Row(string itemId)
     {
-        if (!ViewerLibraryController.TryParseItemId(itemId.Trim(), out var sourceId, out var key))
+        if (!LibraryItemState.TryParseId(itemId.Trim(), out var sourceId, out var key))
             return null;
         var source = _library.Collections.SelectMany(c => c.Sources).FirstOrDefault(s => s.Id == sourceId);
         var item = source?.Index?.Items.FirstOrDefault(i => string.Equals(i.Key, key, StringComparison.Ordinal));

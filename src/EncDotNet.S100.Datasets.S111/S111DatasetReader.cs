@@ -148,6 +148,7 @@ public static class S111DatasetReader
 
             return new S111DatasetData.StationSeries(new S111StationSeriesDataset
             {
+                DeclaredProductSpecification = productSpecification,
                 HorizontalCRS = horizontalCRS,
                 Epoch = epoch,
                 GeographicIdentifier = geographicIdentifier,
@@ -170,6 +171,7 @@ public static class S111DatasetReader
 
         return new S111DatasetData.GriddedCoverage(new S111Dataset
         {
+            DeclaredProductSpecification = productSpecification,
             HorizontalCRS = horizontalCRS,
             Epoch = epoch,
             GeographicIdentifier = geographicIdentifier,

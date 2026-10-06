@@ -58,10 +58,21 @@ public partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
 #if DEBUG
-        this.AttachDeveloperTools();
+        if (AttachesDeveloperTools)
+        {
+            this.AttachDeveloperTools();
+        }
 #endif
         ConfigureMacApplicationMenu();
     }
+
+    /// <summary>
+    /// Whether <see cref="Initialize"/> attaches Avalonia's developer tools, in
+    /// Debug builds. They can be attached only once per process, so an app
+    /// that is initialized more than once (a headless test session builds one
+    /// per test) must not attach them.
+    /// </summary>
+    protected virtual bool AttachesDeveloperTools => true;
 
     /// <summary>
     /// On macOS, replaces the auto-generated application-menu "About"
@@ -328,7 +339,7 @@ public partial class App : Application
 
             // Load the dataset collections and start background re-indexing
             // (cached indexes appear immediately; nothing is loaded).
-            var library = _services.GetRequiredService<Library.LibraryService>();
+            var library = _services.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>();
             library.Initialize();
 
             desktop.MainWindow = _services.GetRequiredService<MainWindow>();
@@ -423,7 +434,18 @@ public partial class App : Application
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>(),
                 ]);
         });
-        services.AddSingleton<Library.LibraryService>();
+        services.AddSingleton(sp =>
+        {
+            var paths = sp.GetRequiredService<ViewerDataPaths>();
+            return new EncDotNet.S100.Collections.Library.CollectionLibrary(
+                sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.CollectionIndexer>(),
+                new EncDotNet.S100.Collections.Library.CollectionLibraryOptions(paths.CollectionsFilePath, paths.CollectionIndexCacheDirectory)
+                {
+                    ReadOnly = sp.GetRequiredService<ViewerSettings>().IsReadOnly,
+                    SessionCollectionName = EncDotNet.S100.Viewer.Resources.Strings.Library_SessionCollectionName,
+                },
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Collections.Library.CollectionLibrary>>());
+        });
         services.AddSingleton<Library.UserCatalogueStore>();
         services.AddSingleton<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(_ =>
         {
@@ -460,7 +482,7 @@ public partial class App : Application
             var s100Catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
             var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
             return new AddToLibraryDialogViewModel(
-                sp.GetRequiredService<Library.LibraryService>(),
+                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 (uri, ct) => feeds.GetCatalogAsync(uri, cancellationToken: ct),
                 (uri, ct) => usace.GetCatalogAsync(uri, cancellationToken: ct),
                 loadCommunityCatalog: (uri, ct) => community.GetCatalogAsync(uri, cancellationToken: ct),
@@ -487,7 +509,7 @@ public partial class App : Application
             sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>()));
         services.AddSingleton<Func<SharedFeedDialogViewModel>>(sp => sp.GetRequiredService<SharedFeedDialogViewModel>);
         services.AddSingleton<ILibraryImporter>(sp => new LibraryImportCoordinator(
-            sp.GetRequiredService<Library.LibraryService>(),
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
             sp.GetRequiredService<IFileDialogService>(),
             sp.GetRequiredService<ShadUI.DialogManager>(),
             sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
@@ -904,7 +926,7 @@ public partial class App : Application
             sp.GetRequiredService<ViewerLibraryController>(),
             new ViewerLibraryEditor(
                 sp.GetRequiredService<LibraryPanelViewModel>(),
-                sp.GetRequiredService<Library.LibraryService>(),
+                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 sp.GetRequiredService<ViewerLibraryController>(),
                 sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
                 sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
@@ -929,7 +951,7 @@ public partial class App : Application
             var catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
             var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
             return new LibraryPanelViewModel(
-                sp.GetRequiredService<Library.LibraryService>(),
+                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 sp.GetRequiredService<ILibraryImporter>(),
                 sp.GetRequiredService<Library.ILibraryLoader>(),
                 sp.GetRequiredService<Library.ILibraryDownloader>(),
@@ -946,7 +968,7 @@ public partial class App : Application
         });
         services.AddSingleton<LibraryTimeSource>(sp => new LibraryTimeSource(
             sp.GetRequiredService<LibraryPanelViewModel>(),
-            sp.GetRequiredService<Library.LibraryService>(),
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
             sp.GetRequiredService<Library.ILibraryLoader>(),
             sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<ILibraryTimeSource>(sp => sp.GetRequiredService<LibraryTimeSource>());
@@ -970,7 +992,7 @@ public partial class App : Application
             sp.GetService<IMarinerSettingsProvider>(),
             sp.GetService<IUrlOpener>(),
             sp.GetService<IS100ExaminerLinkBuilder>()));
-        services.AddSingleton<IForecastRunRefresher>(sp => new LibraryForecastRunRefresher(sp.GetRequiredService<Library.LibraryService>()));
+        services.AddSingleton<IForecastRunRefresher>(sp => new LibraryForecastRunRefresher(sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>()));
         services.AddSingleton<TimelineMapScope>(sp => new TimelineMapScope(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
             sp.GetRequiredService<DatasetsViewModel>()));
@@ -1001,36 +1023,42 @@ public partial class App : Application
             id: "Datasets",
             order: 10,
             title: Strings.Pane_Datasets,
+            name: Strings.Label_Activity_Datasets,
             tooltip: Strings.Tooltip_Datasets,
             iconFactory: static () => new FluentIcon { Icon = Icon.Layer, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<LibraryPanelViewModel, LibraryPanelView>(
             id: LibraryImportCoordinator.LibraryPanelId,
             order: 20,
             title: Strings.Pane_Library,
+            name: Strings.Label_Activity_Library,
             tooltip: Strings.Tooltip_Library,
             iconFactory: static () => new FluentIcon { Icon = Icon.Library, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<EcdisDisplayPanelViewModel, EcdisDisplayPanelView>(
             id: "EcdisDisplay",
             order: 30,
             title: Strings.Pane_EcdisDisplay,
+            name: Strings.Label_Activity_EcdisDisplay,
             tooltip: Strings.Tooltip_EcdisDisplay,
             iconFactory: static () => new FluentIcon { Icon = Icon.Eye, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<LayerStackViewModel, LayerStackView>(
             id: "LayerStack",
             order: 40,
             title: Strings.Pane_LayerStack,
+            name: Strings.Label_Activity_LayerStack,
             tooltip: Strings.Tooltip_LayerStack,
             iconFactory: static () => new FluentIcon { Icon = Icon.Stack, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<FeatureSearchViewModel, FeatureSearchView>(
             id: "Search",
             order: 50,
             title: Strings.Pane_Search,
+            name: Strings.Label_Activity_Search,
             tooltip: Strings.Tooltip_Search,
             iconFactory: static () => new FluentIcon { Icon = Icon.Search, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<RoutesPanelViewModel, RoutesView>(
             id: "Routes",
             order: 55,
             title: Strings.Pane_Routes,
+            name: Strings.Label_Activity_Routes,
             tooltip: Strings.Tooltip_RoutesPanel,
             iconFactory: static () => new FluentIcon { Icon = Icon.Flow, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false);
@@ -1040,6 +1068,7 @@ public partial class App : Application
             id: "Vessels",
             order: 60,
             title: Strings.Pane_Vessels,
+            name: Strings.Label_Activity_Vessels,
             tooltip: Strings.Tooltip_Vessels,
             iconFactory: static () => new FluentIcon { Icon = Icon.VehicleShip, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,
@@ -1052,6 +1081,7 @@ public partial class App : Application
             id: "Helm",
             order: 70,
             title: Strings.Pane_Helm,
+            name: Strings.Label_Activity_Helm,
             tooltip: Strings.Tooltip_Helm,
             iconFactory: static () => new FluentIcon { Icon = Icon.TopSpeed, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,
@@ -1062,18 +1092,21 @@ public partial class App : Application
             id: "FeatureCatalogues",
             order: 80,
             title: Strings.Pane_FeatureCatalogues,
+            name: Strings.Label_Activity_FeatureCatalogues,
             tooltip: Strings.Tooltip_FeatureCatalogues,
             iconFactory: static () => new FluentIcon { Icon = Icon.BookOpen, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<PortrayalCataloguesViewModel, PortrayalCataloguesView>(
             id: "PortrayalCatalogues",
             order: 90,
             title: Strings.Pane_PortrayalCatalogues,
+            name: Strings.Label_Activity_PortrayalCatalogues,
             tooltip: Strings.Tooltip_PortrayalCatalogues,
             iconFactory: static () => new FluentIcon { Icon = Icon.PaintBrush, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<SettingsViewModel, SettingsView>(
             id: "Settings",
             order: 1000,
             title: Strings.Pane_Settings,
+            name: Strings.Label_Activity_Settings,
             tooltip: Strings.Tooltip_Settings,
             iconFactory: static () => new FluentIcon { Icon = Icon.Settings, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false);
@@ -1085,6 +1118,7 @@ public partial class App : Application
             id: "PickReport",
             order: 10,
             title: Strings.Pick_PanelTitle,
+            name: Strings.Label_Activity_PickReport,
             tooltip: Strings.Pick_PanelTitle,
             iconFactory: static () => new FluentIcon { Icon = Icon.Cursor, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,
@@ -1097,6 +1131,7 @@ public partial class App : Application
             id: "Timeline",
             order: 10,
             title: Strings.TimelinePanel_Title,
+            name: Strings.Label_Activity_Timeline,
             tooltip: Strings.TimelinePanel_Title,
             iconFactory: static () => new FluentIcon { Icon = Icon.Clock, IconVariant = IconVariant.Regular, FontSize = 22 },
             persistAsLastSelected: false,

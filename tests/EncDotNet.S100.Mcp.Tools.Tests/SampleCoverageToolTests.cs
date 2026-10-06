@@ -232,7 +232,7 @@ public class SampleCoverageToolTests
     }
 
     [Fact]
-    public async Task S104_clamps_to_last_time_step_when_requested_time_is_after_dataset()
+    public async Task S104_nearest_policy_samples_last_step_when_requested_time_is_after_dataset()
     {
         var catalog = new FakeDatasetCatalog();
         var times = new[]
@@ -250,16 +250,17 @@ public class SampleCoverageToolTests
 
         var requested = new DateTimeOffset(2024, 12, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested), TestContext.Current.CancellationToken);
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(SampleTimeStatus.AfterEnd, value.TimeStatus);
         var sample = Assert.IsType<WaterLevelSample>(value.Value);
         Assert.Equal(times[^1], sample.SampleTime);
         Assert.Equal(requested, sample.RequestedTime);
     }
 
     [Fact]
-    public async Task S104_clamps_to_first_time_step_when_requested_time_is_before_dataset()
+    public async Task S104_nearest_policy_samples_first_step_when_requested_time_is_before_dataset()
     {
         var catalog = new FakeDatasetCatalog();
         var times = new[]
@@ -276,9 +277,10 @@ public class SampleCoverageToolTests
 
         var requested = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested), TestContext.Current.CancellationToken);
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(SampleTimeStatus.BeforeStart, value.TimeStatus);
         var sample = Assert.IsType<WaterLevelSample>(value.Value);
         Assert.Equal(times[0], sample.SampleTime);
     }
@@ -377,7 +379,7 @@ public class SampleCoverageToolTests
     }
 
     [Fact]
-    public async Task S111_clamps_time_outside_range()
+    public async Task S111_nearest_policy_samples_end_steps_outside_range()
     {
         var catalog = new FakeDatasetCatalog();
         var times = new[]
@@ -394,14 +396,16 @@ public class SampleCoverageToolTests
 
         var before = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var beforeResult = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: before), TestContext.Current.CancellationToken);
+            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: before, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
         Assert.True(beforeResult.TryGetValue(out var bv));
+        Assert.Equal(SampleTimeStatus.BeforeStart, bv.TimeStatus);
         Assert.Equal(times[0], Assert.IsType<SurfaceCurrentSample>(bv.Value).SampleTime);
 
         var after = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var afterResult = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: after), TestContext.Current.CancellationToken);
+            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: after, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
         Assert.True(afterResult.TryGetValue(out var av));
+        Assert.Equal(SampleTimeStatus.AfterEnd, av.TimeStatus);
         Assert.Equal(times[^1], Assert.IsType<SurfaceCurrentSample>(av.Value).SampleTime);
     }
 

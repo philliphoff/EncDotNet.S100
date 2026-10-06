@@ -3064,6 +3064,135 @@
   <data name="Library_ToggleGroup" xml:space="preserve">
     <value>Show or hide the datasets in this package</value>
   </data>
+  <data name="Label_Activity_Datasets" xml:space="preserve">
+    <value>Datasets</value>
+  </data>
+  <data name="Label_Activity_EcdisDisplay" xml:space="preserve">
+    <value>Display controls</value>
+  </data>
+  <data name="Label_Activity_FeatureCatalogues" xml:space="preserve">
+    <value>Feature catalogues</value>
+  </data>
+  <data name="Label_Activity_Helm" xml:space="preserve">
+    <value>Helm</value>
+  </data>
+  <data name="Label_Activity_LayerStack" xml:space="preserve">
+    <value>Layer stack</value>
+  </data>
+  <data name="Label_Activity_Library" xml:space="preserve">
+    <value>Library</value>
+  </data>
+  <data name="Label_Activity_PickReport" xml:space="preserve">
+    <value>Object information</value>
+  </data>
+  <data name="Label_Activity_PortrayalCatalogues" xml:space="preserve">
+    <value>Portrayal catalogues</value>
+  </data>
+  <data name="Label_Activity_Routes" xml:space="preserve">
+    <value>Routes</value>
+  </data>
+  <data name="Label_Activity_Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Label_Activity_Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Label_Activity_Timeline" xml:space="preserve">
+    <value>Timeline</value>
+  </data>
+  <data name="Label_Activity_Vessels" xml:space="preserve">
+    <value>Vessels</value>
+  </data>
+  <data name="Label_Filter" xml:space="preserve">
+    <value>Filter</value>
+  </data>
+  <data name="Label_AddRoute" xml:space="preserve">
+    <value>Add route</value>
+  </data>
+  <data name="Label_CloseExchangeSet" xml:space="preserve">
+    <value>Close exchange set</value>
+  </data>
+  <data name="Label_CopyIdentity" xml:space="preserve">
+    <value>Copy identity</value>
+  </data>
+  <data name="Label_CopyLocation" xml:space="preserve">
+    <value>Copy location</value>
+  </data>
+  <data name="Label_CopyText" xml:space="preserve">
+    <value>Copy text</value>
+  </data>
+  <data name="Label_HoldResume" xml:space="preserve">
+    <value>Hold or resume</value>
+  </data>
+  <data name="Label_InsertWaypoint" xml:space="preserve">
+    <value>Insert waypoint</value>
+  </data>
+  <data name="Label_MeasureMode" xml:space="preserve">
+    <value>Measure</value>
+  </data>
+  <data name="Label_MoveDown" xml:space="preserve">
+    <value>Move down</value>
+  </data>
+  <data name="Label_MoveUp" xml:space="preserve">
+    <value>Move up</value>
+  </data>
+  <data name="Label_NextData" xml:space="preserve">
+    <value>Next data</value>
+  </data>
+  <data name="Label_NextStep" xml:space="preserve">
+    <value>Next step</value>
+  </data>
+  <data name="Label_OpenDataset" xml:space="preserve">
+    <value>Open dataset</value>
+  </data>
+  <data name="Label_OpenInExaminer" xml:space="preserve">
+    <value>Open in eXaminer</value>
+  </data>
+  <data name="Label_OpenTimeline" xml:space="preserve">
+    <value>Open timeline</value>
+  </data>
+  <data name="Label_Overscale" xml:space="preserve">
+    <value>Overscale</value>
+  </data>
+  <data name="Label_PickMode" xml:space="preserve">
+    <value>Pick mode</value>
+  </data>
+  <data name="Label_PreviousData" xml:space="preserve">
+    <value>Previous data</value>
+  </data>
+  <data name="Label_PreviousStep" xml:space="preserve">
+    <value>Previous step</value>
+  </data>
+  <data name="Label_PromoteMeasurement" xml:space="preserve">
+    <value>Route from measurement</value>
+  </data>
+  <data name="Label_ResetOpacity" xml:space="preserve">
+    <value>Reset opacity</value>
+  </data>
+  <data name="Label_RouteEditMode" xml:space="preserve">
+    <value>Edit route</value>
+  </data>
+  <data name="Label_SearchCatalogues" xml:space="preserve">
+    <value>Search catalogues</value>
+  </data>
+  <data name="Label_SearchFeatures" xml:space="preserve">
+    <value>Search features</value>
+  </data>
+  <data name="Label_ShowCoverage" xml:space="preserve">
+    <value>Show coverage</value>
+  </data>
+  <data name="Label_TimeWindow" xml:space="preserve">
+    <value>Time window</value>
+  </data>
+  <data name="Label_ToggleDatasetVisibility" xml:space="preserve">
+    <value>Show or hide dataset</value>
+  </data>
+  <data name="Label_ToggleExchangeSetVisibility" xml:space="preserve">
+    <value>Show or hide exchange set</value>
+  </data>
+  <data name="Label_ToggleGroup" xml:space="preserve">
+    <value>Show or hide datasets</value>
+  </data>
   <data name="Library_Quick_Folder" xml:space="preserve">
     <value>Add a folder…</value>
   </data>

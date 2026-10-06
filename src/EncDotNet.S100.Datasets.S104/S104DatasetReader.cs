@@ -134,6 +134,7 @@ public static class S104DatasetReader
 
             return new S104DatasetData.StationSeries(new S104StationSeriesDataset
             {
+                DeclaredProductSpecification = productSpecification,
                 HorizontalCRS = horizontalCRS,
                 VerticalDatum = verticalDatum,
                 Epoch = epoch,
@@ -157,6 +158,7 @@ public static class S104DatasetReader
 
         return new S104DatasetData.GriddedCoverage(new S104Dataset
         {
+            DeclaredProductSpecification = productSpecification,
             HorizontalCRS = horizontalCRS,
             VerticalDatum = verticalDatum,
             Epoch = epoch,

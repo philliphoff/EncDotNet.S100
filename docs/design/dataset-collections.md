@@ -851,10 +851,18 @@ antimeridian and a large item count.
 - **Copy on import** as an option.
 - **File watching** and automatic re-indexing for local sources.
 - **M_COVR deep index** for S-57 polygons.
-- **CLI and MCP**:
-  - `s100 collections list|index|find --at lat,lon`
-  - MCP tools `list_collections`, `find_collection_items` and
-    `load_collection_items`
+- **CLI and MCP**: tracked by #792, which shares the viewer's Library MCP
+  tools (`list_library_sources`, `query_library_items`, `add_library_source`,
+  `library_action`, …) with the `s100 mcp serve` host rather than adding
+  new tool names. *As built (#792 chunk 1):* the library runtime moved
+  from the viewer into `EncDotNet.S100.Collections.Library`:
+  `CollectionLibrary` (was the viewer's `LibraryService`), the item states
+  (`LibraryItemState`, `LibraryAvailability`), forecast-run facts and the
+  item query (`LibraryQuery`, `CoverageHitTest`). It stays in this project,
+  not a new assembly: the runtime needs only the model, indexers and
+  persistence already here. Opening items into a dataset catalog, which
+  needs `Datasets.Pipelines`, comes later behind a host interface.
+  - Later: `s100 collections list|index|find --at lat,lon`.
 
 ---
 

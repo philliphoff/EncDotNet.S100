@@ -1,6 +1,7 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.RemoteCatalogues;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Library;
@@ -28,7 +29,7 @@ public sealed class ForecastPairingTests : IDisposable
     private readonly FakeTimeProvider _time = new(Run.AddHours(1));
     private readonly Downloader _downloader;
     private readonly RecordingImporter _importer = new();
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
 
     public ForecastPairingTests()
     {

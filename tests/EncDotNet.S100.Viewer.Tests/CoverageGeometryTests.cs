@@ -1,7 +1,6 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.Noaa;
-using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Library;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -26,14 +25,6 @@ public class CoverageGeometryTests
             MaximumDisplayScale = maximumDisplayScale,
             Location = NoItemLocation.Instance,
         };
-
-    [Fact]
-    public void Unwrap_makes_longitudes_continuous_across_the_antimeridian()
-    {
-        var ring = CoverageGeometry.Unwrap([new(50, 179), new(51, -179), new(52, -178)]);
-
-        Assert.Equal([179.0, 181.0, 182.0], ring.Select(p => p.Longitude));
-    }
 
     [Theory]
     [InlineData(-219.7, -216.9, new[] { 360.0 })]          // wholly west of −180 (NOAA Micronesia)
@@ -60,18 +51,6 @@ public class CoverageGeometryTests
 
         Assert.Equal(5, ring.Length);
         Assert.Empty(CoverageGeometry.ToMercatorRings(Item(null)));
-    }
-
-    [Fact]
-    public void Contains_handles_continuous_longitudes_and_holes()
-    {
-        // US3TC300 is published at −219.5 (140.5°E).
-        Assert.True(CoverageGeometry.Contains(NoaaItem("US3TC300"), new GeoPosition(8.1, 140.4)));
-        Assert.False(CoverageGeometry.Contains(NoaaItem("US3TC300"), new GeoPosition(7.5, 140.4)));
-
-        var michigan = NoaaItem("US5MI62M");
-        Assert.True(CoverageGeometry.Contains(michigan, new GeoPosition(46.2, -84.0)));
-        Assert.False(CoverageGeometry.Contains(michigan, new GeoPosition(46.315, -83.99)));  // inside the hole
     }
 
     [Theory]

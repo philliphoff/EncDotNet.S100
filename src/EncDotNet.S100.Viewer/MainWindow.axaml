@@ -269,7 +269,8 @@
                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_MapScale}" />
                     <Button x:Name="OverscaleButton"
                             AutomationProperties.AutomationId="Map.Overscale"
-                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_Overscale}"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_Overscale}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_Overscale}"
                             VerticalAlignment="Center"
                             Margin="10,0,0,0"
                             Padding="8,1"
@@ -379,7 +380,8 @@
                                 </Border>
                                 <ToggleButton Classes="ActivityIcon"
                                               AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}}"
-                                              AutomationProperties.Name="{Binding Title}"
+                                              AutomationProperties.Name="{Binding Name}"
+                                              AutomationProperties.HelpText="{Binding Tooltip}"
                                               Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
                                               CommandParameter="{Binding}"
                                               ToolTip.Tip="{Binding Tooltip}"
@@ -422,7 +424,8 @@
                                 </Border>
                                 <ToggleButton Classes="ActivityIcon"
                                               AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}}"
-                                              AutomationProperties.Name="{Binding Title}"
+                                              AutomationProperties.Name="{Binding Name}"
+                                              AutomationProperties.HelpText="{Binding Tooltip}"
                                               Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
                                               CommandParameter="{Binding}"
                                               ToolTip.Tip="{Binding Tooltip}"
@@ -562,7 +565,9 @@
                             Margin="0,12,12,0">
                     <Button x:Name="PickModeButton"
                             AutomationProperties.AutomationId="Map.PickMode"
-                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_PickMode}"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_PickMode}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PickMode}"
+                            AutomationProperties.AcceleratorKey="I"
                             Classes="Icon MapOverlay"
                             Classes.pickActive="{Binding IsPickModeActive}"
                             Command="{Binding TogglePickModeCommand}"
@@ -624,7 +629,8 @@
                     -->
                     <Button x:Name="MeasureModeButton"
                             AutomationProperties.AutomationId="Map.MeasureMode"
-                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_MeasureMode}"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_MeasureMode}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MeasureMode}"
                             Classes="Icon MapOverlay"
                             Classes.measureActive="{Binding IsMeasureModeActive}"
                             Command="{Binding ToggleMeasureModeCommand}"
@@ -658,7 +664,8 @@
                     -->
                     <Button x:Name="RouteEditModeButton"
                             AutomationProperties.AutomationId="Map.RouteEditMode"
-                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RouteEditMode}"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_RouteEditMode}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_RouteEditMode}"
                             Classes="Icon MapOverlay"
                             Classes.routeActive="{Binding IsRouteEditModeActive}"
                             Command="{Binding ToggleRouteEditModeCommand}"
@@ -695,7 +702,8 @@
                     -->
                     <Button x:Name="DisplaySettingsButton"
                             AutomationProperties.AutomationId="Map.DisplaySettings"
-                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_DisplaySettings}"
+                            AutomationProperties.Name="{x:Static loc:Strings.DisplaySettings_Title}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplaySettings}"
                             Classes="Icon MapOverlay"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplaySettings}">
                         <Button.Styles>

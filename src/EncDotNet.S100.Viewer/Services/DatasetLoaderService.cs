@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia.Input.Platform;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
@@ -28,7 +29,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private readonly FeatureCatalogueOverrides _fcOverrides;
     private readonly DatasetPipelineFactory _pipelineFactory;
     private readonly IRecentFilesService _recentFiles;
-    private readonly Library.LibraryService _library;
+    private readonly CollectionLibrary _library;
     private readonly GlobalTimeService _globalTime;
     private readonly TimeRefreshProgress? _timeProgress;
     private readonly INotificationService _notifications;
@@ -67,7 +68,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         FeatureCatalogueOverrides fcOverrides,
         DatasetPipelineFactory pipelineFactory,
         IRecentFilesService recentFiles,
-        Library.LibraryService library,
+        CollectionLibrary library,
         MapPresentationState presentation,
         GlobalTimeService globalTime,
         INotificationService notifications,

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Downloads;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -60,7 +61,7 @@ internal sealed record LibraryDownloadProgress(int Completed, int Failed, int To
 }
 
 /// <summary>Downloads online library items and resolves their downloaded copies.</summary>
-internal interface ILibraryDownloader
+internal interface ILibraryDownloader : ILibraryLocalCopies
 {
     /// <summary>Raised when a download completes, fails or is cancelled (a copy appeared or changed).</summary>
     event EventHandler? Changed;
@@ -86,24 +87,6 @@ internal interface ILibraryDownloader
     void Cancel(CollectionItem item)
     {
     }
-
-    /// <summary>
-    /// Returns <paramref name="item"/> with a local location when it is an
-    /// online item that has been downloaded; otherwise the item itself.
-    /// </summary>
-    CollectionItem Localize(CollectionItem item);
-
-    /// <summary>True when the downloaded copy of <paramref name="item"/> is an older edition or update.</summary>
-    bool IsOutdated(CollectionItem item);
-
-    /// <summary>The edition of <paramref name="item"/>'s downloaded copy, or <see langword="null"/> when not downloaded (or unknown).</summary>
-    int? LocalEditionOf(CollectionItem item) => null;
-
-    /// <summary>
-    /// When <paramref name="item"/>'s downloaded copy was published (for a
-    /// forecast, its run time), or <see langword="null"/> when not downloaded (or unknown).
-    /// </summary>
-    DateTimeOffset? LocalPublishedAtOf(CollectionItem item) => null;
 
     /// <summary>True when <paramref name="item"/> can be downloaded.</summary>
     bool CanDownload(CollectionItem item);

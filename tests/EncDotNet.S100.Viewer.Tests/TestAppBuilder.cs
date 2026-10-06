@@ -37,10 +37,14 @@ public static class TestAppBuilder
 /// <see cref="App.OnFrameworkInitializationCompleted"/> is skipped on purpose: it
 /// builds the full service container, starts the MCP host and reads and writes
 /// crash markers in the user's data directory. Tests compose the view models
-/// they need themselves.
+/// they need themselves. Developer tools are not attached either: the session
+/// builds an app per test, and a second attach throws, which stops the
+/// session's dispatch loop and hangs every later test in Debug builds.
 /// </remarks>
 public sealed class HeadlessViewerApp : App
 {
+    protected override bool AttachesDeveloperTools => false;
+
     public override void OnFrameworkInitializationCompleted()
     {
     }

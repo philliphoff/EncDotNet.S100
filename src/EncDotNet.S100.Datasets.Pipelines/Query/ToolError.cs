@@ -184,25 +184,52 @@ public sealed record GeometryInvalid(
     $"Geometry in '{Parameter}' is invalid: {Reason}.");
 
 /// <summary>
-/// A supplied <c>TimeQuery</c> Range or Series falls entirely outside
-/// the dataset's available time-step range (no overlap at all), so no
-/// samples can be produced. Single-instant queries clamp instead of
-/// erroring; this variant fires only for windowed/series queries.
+/// The requested time lies outside the time range of every dataset that
+/// covers the point, so no value can be sampled. Raised for a single
+/// instant outside every candidate's range (unless the caller opted into
+/// nearest-step sampling), and for a <c>TimeQuery</c> Range or Series
+/// window that does not overlap any candidate's data at all. The details
+/// name the candidate whose range comes closest and list every candidate's
+/// range, so the caller can re-ask deliberately or tell the user the data
+/// doesn't reach that far.
 /// </summary>
-/// <param name="Parameter">Name of the request parameter that carried the out-of-range query.</param>
-/// <param name="WindowStart">Inclusive start of the requested window (UTC ISO-8601).</param>
-/// <param name="WindowEnd">Inclusive end of the requested window (UTC ISO-8601).</param>
-/// <param name="DatasetFirstTime">First time step available in the matched dataset (UTC ISO-8601), if any.</param>
-/// <param name="DatasetLastTime">Last time step available in the matched dataset (UTC ISO-8601), if any.</param>
-[Description("Raised when a TimeQuery Range or Series window falls entirely outside the matched dataset's available time-step range.")]
+/// <param name="Parameter">Name of the request parameter that carried the out-of-range time (<c>time</c> or <c>times</c>).</param>
+/// <param name="RequestedTime">The requested instant (UTC ISO-8601); null for windowed queries.</param>
+/// <param name="WindowStart">Inclusive start of the requested window (UTC ISO-8601); equals <paramref name="RequestedTime"/> for an instant.</param>
+/// <param name="WindowEnd">Inclusive end of the requested window (UTC ISO-8601); equals <paramref name="RequestedTime"/> for an instant.</param>
+/// <param name="DatasetId">The candidate dataset whose range lies nearest the requested time.</param>
+/// <param name="ValidFrom">First time step of that dataset (UTC ISO-8601).</param>
+/// <param name="ValidTo">Last time step of that dataset (UTC ISO-8601).</param>
+/// <param name="NearestStep">The available step closest to the request (UTC ISO-8601).</param>
+/// <param name="Run">Issue time of that dataset (its model run), when the dataset declares one.</param>
+/// <param name="Candidates">Every dataset covering the point, with its time range.</param>
+[Description("Raised when the requested time (an instant, or a whole Range/Series window) lies outside the time range of every dataset covering the point.")]
 public sealed record TimeOutOfRange(
-    [property: Description("Name of the request parameter that carried the out-of-range time query.")] string Parameter,
-    [property: Description("Inclusive start of the requested window, UTC ISO-8601.")] DateTimeOffset WindowStart,
-    [property: Description("Inclusive end of the requested window, UTC ISO-8601.")] DateTimeOffset WindowEnd,
-    [property: Description("First time step available in the matched dataset, UTC ISO-8601; null when the dataset has no time steps.")] DateTimeOffset? DatasetFirstTime,
-    [property: Description("Last time step available in the matched dataset, UTC ISO-8601; null when the dataset has no time steps.")] DateTimeOffset? DatasetLastTime) : ToolError(
+    [property: Description("Name of the request parameter that carried the out-of-range time (\"time\" or \"times\").")] string Parameter,
+    [property: Description("The requested instant, UTC ISO-8601; null for windowed (range/series) queries.")] DateTimeOffset? RequestedTime,
+    [property: Description("Inclusive start of the requested window, UTC ISO-8601 (the requested instant for single-instant queries).")] DateTimeOffset WindowStart,
+    [property: Description("Inclusive end of the requested window, UTC ISO-8601 (the requested instant for single-instant queries).")] DateTimeOffset WindowEnd,
+    [property: Description("The candidate dataset whose time range lies nearest the request.")] DatasetId DatasetId,
+    [property: Description("First time step of that dataset, UTC ISO-8601.")] DateTimeOffset ValidFrom,
+    [property: Description("Last time step of that dataset, UTC ISO-8601.")] DateTimeOffset ValidTo,
+    [property: Description("The available time step closest to the request, UTC ISO-8601; re-ask at this time (or pass outOfRange=\"nearest\") to sample it.")] DateTimeOffset NearestStep,
+    [property: Description("Issue time (model run) of that dataset, UTC ISO-8601; null when the dataset does not declare one.")] DateTimeOffset? Run,
+    [property: Description("Every dataset covering the point, with its time range.")] IReadOnlyList<DatasetTimeRange> Candidates) : ToolError(
     "time_out_of_range",
-    $"Time query in '{Parameter}' [{WindowStart:o} .. {WindowEnd:o}] is outside the dataset's range.");
+    RequestedTime is { } t
+        ? $"Requested time {t:o} is outside the time range of every dataset covering the point; nearest is '{DatasetId}' ({ValidFrom:o} .. {ValidTo:o}), nearest step {NearestStep:o}."
+        : $"Time query in '{Parameter}' [{WindowStart:o} .. {WindowEnd:o}] does not overlap the time range of any dataset covering the point; nearest is '{DatasetId}' ({ValidFrom:o} .. {ValidTo:o}).");
+
+/// <summary>A candidate dataset's time range, as listed in <see cref="TimeOutOfRange.Candidates"/>.</summary>
+/// <param name="DatasetId">The candidate dataset.</param>
+/// <param name="ValidFrom">Its first time step (UTC).</param>
+/// <param name="ValidTo">Its last time step (UTC).</param>
+/// <param name="Run">Its issue time (model run), when declared.</param>
+public sealed record DatasetTimeRange(
+    [property: Description("The candidate dataset.")] DatasetId DatasetId,
+    [property: Description("First time step of the dataset, UTC ISO-8601.")] DateTimeOffset ValidFrom,
+    [property: Description("Last time step of the dataset, UTC ISO-8601.")] DateTimeOffset ValidTo,
+    [property: Description("Issue time (model run) of the dataset, UTC ISO-8601; null when not declared.")] DateTimeOffset? Run);
 
 /// <summary>
 /// A host capability required by a mutating tool is not yet initialised

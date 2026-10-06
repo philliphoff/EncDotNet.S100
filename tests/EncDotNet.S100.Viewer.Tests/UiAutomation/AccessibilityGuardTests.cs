@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -6,7 +7,7 @@ namespace EncDotNet.S100.Viewer.Tests.UiAutomation;
 /// <summary>
 /// Keeps the viewer reachable by screen readers and by the <c>ui_*</c> MCP
 /// tools (#784): a static check of every view's XAML. Every button and input
-/// needs an accessible name, and every interactive control an automation id
+/// needs a short accessible name, and every interactive control an automation id
 /// (<c>&lt;View&gt;.&lt;Element&gt;</c>, see this project's README).
 /// </summary>
 public sealed class AccessibilityGuardTests
@@ -79,6 +80,82 @@ public sealed class AccessibilityGuardTests
             "These controls have no AutomationProperties.AutomationId (<View>.<Element>, see tests/EncDotNet.S100.Viewer.Tests/README.md):\n"
             + string.Join('\n', missing));
     }
+
+    [Fact]
+    public void Accessible_names_are_short_labels()
+    {
+        // A screen reader announces the name every time focus lands on the
+        // control: a sentence or a shortcut there is noise. Longer text goes in
+        // AutomationProperties.HelpText, a shortcut in AcceleratorKey.
+        var strings = Strings();
+        var tooLong = Elements()
+            .Select(e => (e.Where, Key: StringKey(Attribute(e.Element, "AutomationProperties.Name"))))
+            .Where(e => e.Key is not null && strings.TryGetValue(e.Key, out var value) && !IsShortLabel(value))
+            .Select(e => $"{e.Where} {e.Key} = \"{strings[e.Key!]}\"")
+            .ToList();
+
+        Assert.True(tooLong.Count == 0,
+            "These accessible names are not short labels (at most six words, not in capitals, no full stop, no brackets but a trailing unit); "
+            + "name the control with a short Label_* string and move the text to AutomationProperties.HelpText:\n"
+            + string.Join('\n', tooLong));
+    }
+
+    [Fact]
+    public void Every_activity_tab_has_a_short_accessible_name()
+    {
+        // The activity bar binds each button's name to IActivityTab.Name; some
+        // pane titles are in capitals ("DATASETS"), which a screen reader may
+        // spell out, so every tab registered in App passes its own name.
+        var strings = Strings();
+        var app = File.ReadAllText(LibraryTestContext.RepoFile("src", "EncDotNet.S100.Viewer", "App.axaml.cs"));
+        var registrations = Regex.Matches(app, @"AddActivityTab<(?<tab>[^>]+)>\((?<args>.*?)\);", RegexOptions.Singleline);
+        Assert.NotEmpty(registrations);
+
+        var bad = registrations
+            .Select(m => (Tab: m.Groups["tab"].Value, Key: Regex.Match(m.Groups["args"].Value, @"\bname:\s*Strings\.(\w+)").Groups[1].Value))
+            .Where(r => r.Key.Length == 0 || !strings.TryGetValue(r.Key, out var value) || !IsShortLabel(value))
+            .Select(r => r.Key.Length == 0 ? $"{r.Tab}: no name: argument" : $"{r.Tab}: {r.Key} = \"{strings.GetValueOrDefault(r.Key)}\"")
+            .ToList();
+
+        Assert.True(bad.Count == 0,
+            "These activity tabs need name: Strings.Label_Activity_* set to a short, sentence-case label:\n"
+            + string.Join('\n', bad));
+    }
+
+    private static Dictionary<string, string> Strings()
+        => XDocument.Load(LibraryTestContext.RepoFile("src", "EncDotNet.S100.Viewer", "Resources", "Strings.resx"))
+            .Root!.Elements("data")
+            .ToDictionary(d => (string)d.Attribute("name")!, d => (string?)d.Element("value") ?? "");
+
+    /// <summary>
+    /// At most six words, not in capitals ("DATASETS", which a screen reader
+    /// may spell out; a short acronym such as "AIS" is fine), no full stop,
+    /// and no brackets except a trailing unit such as "Speed (kn)", which a
+    /// field's label needs.
+    /// </summary>
+    private static bool IsShortLabel(string value)
+    {
+        if (value.EndsWith(')') && value.LastIndexOf(" (", StringComparison.Ordinal) is var unit and > 0)
+        {
+            value = value[..unit];
+        }
+
+        var words = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return words.Length <= 6
+            && !(IsCapitals(value) && value.Count(char.IsLetter) > 4)
+            && !words.Any(w => IsCapitals(w) && w.Count(char.IsLetter) >= 6)
+            && value.IndexOfAny(['(', '[']) < 0
+            && !value.EndsWith('.');
+    }
+
+    private static bool IsCapitals(string text)
+        => text.Any(char.IsLetter) && !text.Any(char.IsLower);
+
+    /// <summary>The key of a <c>{x:Static loc:Strings.Key}</c> value.</summary>
+    private static string? StringKey(string? value)
+        => value is not null && value.StartsWith("{x:Static loc:Strings.", StringComparison.Ordinal)
+            ? value["{x:Static loc:Strings.".Length..].TrimEnd('}')
+            : null;
 
     /// <summary>A string <c>Content</c> attribute, or text written as the element's content.</summary>
     private static bool HasStringContent(XElement element)

@@ -1,6 +1,7 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.McpTools;
@@ -15,7 +16,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     private static readonly DateTimeOffset Run = new(2026, 10, 1, 18, 0, 0, TimeSpan.Zero);
 
     private readonly LibraryTestContext _context = new();
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
     private readonly RecordingLoader _loader = new();
     private readonly RecordingDownloader _downloader = new();
     private readonly LibraryPanelViewModel _panel;

@@ -3,8 +3,8 @@ using Avalonia.Threading;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -25,8 +25,8 @@ internal interface IViewerLibraryController
     /// <summary>Finds Library items, paged.</summary>
     /// <param name="query">The filters and page.</param>
     /// <param name="ct">A cancellation token.</param>
-    /// <returns>The page, or null when <see cref="LibraryItemQuery.SourceId"/> matches no collection or source.</returns>
-    Task<LibraryItemPage?> QueryItemsAsync(LibraryItemQuery query, CancellationToken ct = default);
+    /// <returns>The page, or null when <see cref="LibraryItemPageQuery.SourceId"/> matches no collection or source.</returns>
+    Task<LibraryItemPage?> QueryItemsAsync(LibraryItemPageQuery query, CancellationToken ct = default);
 
     /// <summary>Describes one item as the details pane does.</summary>
     /// <param name="itemId">The item id from <see cref="QueryItemsAsync"/>.</param>
@@ -48,7 +48,7 @@ internal interface IViewerLibraryController
 /// <param name="Point">Keep items whose coverage contains this point (as tapping the map does), or null.</param>
 /// <param name="Page">The 0-based page.</param>
 /// <param name="PageSize">Items per page.</param>
-internal sealed record LibraryItemQuery(
+internal sealed record LibraryItemPageQuery(
     Guid? SourceId,
     IReadOnlySet<string>? States,
     string? Spec,
@@ -210,7 +210,7 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
     }
 
     /// <inheritdoc />
-    public async Task<LibraryItemPage?> QueryItemsAsync(LibraryItemQuery query, CancellationToken ct = default)
+    public async Task<LibraryItemPage?> QueryItemsAsync(LibraryItemPageQuery query, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(query);
         ct.ThrowIfCancellationRequested();
@@ -234,46 +234,27 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
     /// page), or <see langword="null"/> when its source id matches nothing.
     /// Call on the UI thread.
     /// </summary>
-    internal List<LibraryItemViewModel>? FindRows(LibraryItemQuery query)
+    internal List<LibraryItemViewModel>? FindRows(LibraryItemPageQuery query)
     {
-        if (Scope(query.SourceId) is not { } scope)
-            return null;
-
-        IEnumerable<LibraryItemViewModel> rows;
-        if (query.Point is { } point)
+        DateTime? validAt = query.ValidAt;
+        if (query.ValidAtViewTime)
         {
-            rows = _panel.HitsAt(point).Where(row => scope.Contains(row.Source.Id));
-            if (query.Spec is { } hitSpec)
-                rows = rows.Where(row => string.Equals(row.Item.ProductSpec, hitSpec, StringComparison.OrdinalIgnoreCase));
-            if (query.Bounds is { } hitBox)
-                rows = rows.Where(row => row.Item.Bounds is { } bounds && bounds.Intersects(hitBox));
-        }
-        else
-        {
-            // Cheap filters on the raw items first: a row view model
-            // resolves its state (file checks, load state), so only the
-            // survivors get one.
-            var pairs = _panel.Collections
-                .SelectMany(c => c.Sources)
-                .Where(source => scope.Contains(source.Id))
-                .SelectMany(source => (source.Index?.Items ?? []).Select(item => (Item: item, Source: source)));
-            if (query.Spec is { } spec)
-                pairs = pairs.Where(p => string.Equals(p.Item.ProductSpec, spec, StringComparison.OrdinalIgnoreCase));
-            if (query.Bounds is { } box)
-                pairs = pairs.Where(p => p.Item.Bounds is { } bounds && bounds.Intersects(box));
-            rows = pairs.Select(p => _panel.CreateItem(p.Item, p.Source));
+            // No view time (no time-aware data loaded): nothing is valid at it.
+            if (_panel.CurrentViewTime is not { } viewTime)
+                return LibraryQuery.ScopeOf(_panel.Collections, query.SourceId) is null ? null : [];
+            validAt = viewTime;
         }
 
-        if (!string.IsNullOrWhiteSpace(query.Text))
-            rows = rows.Where(row => row.Matches(query.Text));
-        if (query.States is { Count: > 0 } states)
-            rows = rows.Where(row => states.Contains(StateName(row.Availability)));
-        if ((query.ValidAtViewTime ? _panel.CurrentViewTime : query.ValidAt) is { } at)
-            rows = rows.Where(row => row.ValidWindow is { } window && at >= window.Start && at <= window.End);
-        else if (query.ValidAtViewTime)
-            rows = [];
-
-        return rows.ToList();
+        IReadOnlySet<LibraryAvailability>? states = query.States?
+            .Select(name => LibraryAvailabilityNames.TryParse(name, out var state)
+                ? state
+                : throw new ArgumentException($"Unknown Library state '{name}'.", nameof(query)))
+            .ToHashSet();
+        var core = new Collections.Library.LibraryItemQuery(query.SourceId, states, query.Spec, query.Text, query.Bounds, query.Point)
+        {
+            ValidAt = validAt,
+        };
+        return LibraryQuery.Find(_panel.Collections, core, _panel.CreateItem, row => row.State);
     }
 
     /// <inheritdoc />
@@ -284,11 +265,7 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
         LibraryItemDetail? detail = null;
         await _dispatch(() =>
         {
-            if (!TryParseItemId(itemId, out var sourceId, out var key))
-                return;
-            var source = _panel.Collections.SelectMany(c => c.Sources).FirstOrDefault(s => s.Id == sourceId);
-            var item = source?.Index?.Items.FirstOrDefault(i => string.Equals(i.Key, key, StringComparison.Ordinal));
-            if (source is null || item is null)
+            if (LibraryQuery.FindById(_panel.Collections, itemId) is not var (item, source))
                 return;
             var row = _panel.CreateItem(item, source);
             detail = new LibraryItemDetail(
@@ -312,37 +289,6 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
         return Task.FromResult(list);
     }
 
-    /// <summary>Parses an item id ('&lt;sourceId&gt;:&lt;key&gt;').</summary>
-    internal static bool TryParseItemId(string itemId, out Guid sourceId, out string key)
-    {
-        var colon = itemId.IndexOf(':', StringComparison.Ordinal);
-        key = colon >= 0 ? itemId[(colon + 1)..] : string.Empty;
-        sourceId = Guid.Empty;
-        return colon > 0 && key.Length > 0 && Guid.TryParse(itemId[..colon], out sourceId);
-    }
-
-    /// <summary>The wire name of an availability state.</summary>
-    internal static string StateName(LibraryAvailability availability) => availability switch
-    {
-        LibraryAvailability.Deferred => "on_pan",
-        LibraryAvailability.Outdated => "update",
-        _ => availability.ToString().ToLowerInvariant(),
-    };
-
-    /// <summary>The state names a query accepts.</summary>
-    internal static IReadOnlySet<string> StateNames { get; } =
-        Enum.GetValues<LibraryAvailability>().Select(StateName).ToHashSet(StringComparer.Ordinal);
-
-    private HashSet<Guid>? Scope(Guid? id)
-    {
-        var collections = _panel.Collections;
-        if (id is not { } wanted)
-            return [.. collections.SelectMany(c => c.Sources).Select(s => s.Id)];
-        if (collections.FirstOrDefault(c => c.Id == wanted) is { } collection)
-            return [.. collection.Sources.Select(s => s.Id)];
-        return collections.SelectMany(c => c.Sources).Any(s => s.Id == wanted) ? [wanted] : null;
-    }
-
     private LibrarySourceInfo Source(LibraryNodeViewModel node, bool counts)
     {
         var source = node.Source!;
@@ -350,7 +296,7 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
         if (counts)
         {
             tally = (source.Index?.Items ?? [])
-                .Select(item => StateName(_panel.CreateItem(item, source).Availability))
+                .Select(item => LibraryAvailabilityNames.Of(_panel.CreateItem(item, source).Availability))
                 .GroupBy(state => state, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         }
@@ -377,12 +323,12 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
         var horizon = ForecastRuns.Horizon(item);
         var effective = row.EffectiveItem;
         return new LibraryItemInfo(
-            $"{row.Source.Id}:{item.Key}",
+            row.State.Id,
             row.Source.Id,
             item.Name,
             item.Title,
             item.ProductSpec,
-            StateName(row.Availability),
+            LibraryAvailabilityNames.Of(row.Availability),
             [.. row.Tags.Select(tag => tag.Text)],
             item.Edition,
             item.Update,

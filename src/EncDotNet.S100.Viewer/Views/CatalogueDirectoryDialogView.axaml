@@ -95,7 +95,8 @@
         <!-- Search, with the count at the right. -->
         <Panel Grid.Row="0" Margin="0,0,0,8">
             <TextBox Text="{Binding SearchText}" Padding="10,0,72,0"
-                     AutomationProperties.Name="{x:Static loc:Strings.Library_DirectorySearchWatermark}"
+                     AutomationProperties.Name="{x:Static loc:Strings.Label_SearchCatalogues}"
+                     AutomationProperties.HelpText="{x:Static loc:Strings.Library_DirectorySearchWatermark}"
                      AutomationProperties.AutomationId="Catalogues.Search"
                      PlaceholderText="{x:Static loc:Strings.Library_DirectorySearchWatermark}" />
             <TextBlock Text="{Binding CountText}" Classes="muted" FontSize="12" IsHitTestVisible="False"

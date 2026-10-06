@@ -1,4 +1,5 @@
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Viewer.Library;
@@ -9,7 +10,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 public sealed class LibraryPanelViewModelTests : IDisposable
 {
     private readonly LibraryTestContext _context = new();
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
     private readonly RecordingLibraryImporter _importer = new();
     private readonly FakeLibraryLoader _loader = new();
     private readonly FakeLibraryDownloader _downloader = new();

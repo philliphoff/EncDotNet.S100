@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Noaa;
 using EncDotNet.S100.Collections.RemoteCatalogues;
 using EncDotNet.S100.Viewer.Tests.Headless;
@@ -233,7 +234,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         Assert.Equal(1, wizard.CurrentStep);
     }
 
-    private static AddOnlineCatalogueWizardViewModel CreateNoaaEncWizard(Library.LibraryService library)
+    private static AddOnlineCatalogueWizardViewModel CreateNoaaEncWizard(CollectionLibrary library)
     {
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>

@@ -374,7 +374,8 @@
                               Margin="8,0,8,6">
                             <Button x:Name="SourcesAddButton"
                                     AutomationProperties.AutomationId="Datasets.Sources.Add"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_AddSource}"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_OpenDataset}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_AddSource}"
                                     Classes="Icon"
                                     HorizontalAlignment="Left"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddSource}">
@@ -415,7 +416,8 @@
                                           ColumnSpacing="6">
                                         <Button Grid.Column="0"
                                                 AutomationProperties.AutomationId="Datasets.Source.ToggleVisibility"
-                                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleExchangeSetVisibility}"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Label_ToggleExchangeSetVisibility}"
+                                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ToggleExchangeSetVisibility}"
                                                 Classes="Icon"
                                                 Command="{Binding ToggleVisibilityCommand}"
                                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleExchangeSetVisibility}"
@@ -459,7 +461,8 @@
                                         </Panel>
                                         <Button Grid.Column="4"
                                                 AutomationProperties.AutomationId="Datasets.Source.Close"
-                                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CloseExchangeSet}"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Label_CloseExchangeSet}"
+                                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CloseExchangeSet}"
                                                 Classes="Icon"
                                                 VerticalAlignment="Center"
                                                 Command="{Binding CloseCommand}"
@@ -474,7 +477,8 @@
                                           ColumnSpacing="6">
                                         <Button Grid.Column="0"
                                                 AutomationProperties.AutomationId="Datasets.Source.Dataset.ToggleVisibility"
-                                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Label_ToggleDatasetVisibility}"
+                                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
                                                 Classes="Icon"
                                                 Command="{Binding ToggleVisibilityCommand}"
                                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
@@ -557,7 +561,8 @@
                             </Button>
                             <Button Classes="Icon"
                                     AutomationProperties.AutomationId="Datasets.Toolbar.ResetOpacity"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ResetDatasetOpacity}"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_ResetOpacity}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ResetDatasetOpacity}"
                                     Command="{Binding ResetOpacityCommand}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetDatasetOpacity}">
                                 <ic:FluentIcon Icon="ArrowReset" IconVariant="Regular" FontSize="14" />
@@ -616,7 +621,8 @@
                             </Border.ContextMenu>
                             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
                                 <Button Grid.Column="0"
-                                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Label_ToggleDatasetVisibility}"
+                                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
                                         Classes="Icon"
                                         Command="{Binding ToggleVisibilityCommand}"
                                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleDatasetVisibility}"
@@ -672,7 +678,8 @@
                                                IsVisible="{Binding HasVersionWarning}"
                                                ToolTip.Tip="{Binding VersionWarningTooltip}" />
                                 <Button Grid.Column="3"
-                                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_MoveDatasetUp}"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Label_MoveUp}"
+                                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MoveDatasetUp}"
                                         Classes="Icon"
                                         Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveUpCommand}"
                                         CommandParameter="{Binding}"
@@ -683,7 +690,8 @@
                                     <ic:FluentIcon Icon="ChevronUp" IconVariant="Regular" FontSize="14" />
                                 </Button>
                                 <Button Grid.Column="4"
-                                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_MoveDatasetDown}"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Label_MoveDown}"
+                                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MoveDatasetDown}"
                                         Classes="Icon"
                                         Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).MoveDownCommand}"
                                         CommandParameter="{Binding}"

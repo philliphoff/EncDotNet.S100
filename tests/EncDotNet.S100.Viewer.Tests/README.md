@@ -133,7 +133,13 @@ chevron) `AutomationProperties.AccessibilityView="Raw"` instead.
   `LabeledBy`, or string `Content` for the last three. A label `TextBlock`
   beside it or a placeholder does not count;
 - every interactive control has an automation id, except template parts and
-  `Raw` elements.
+  `Raw` elements;
+- every `Strings.*` accessible name is a short label: at most six words, not
+  in capitals (a short acronym such as "AIS" is fine), no full stop, and no
+  brackets except a trailing unit such as "Speed (kn)". Longer text belongs
+  in `AutomationProperties.HelpText`;
+- every activity tab registered in `App` passes `name:` with such a label,
+  since the activity bar names its buttons after `IActivityTab.Name`.
 
-Every view passes all three (#784), so there is no allow-list: new UI must
+Every view passes all five (#784), so there is no allow-list: new UI must
 pass as written.

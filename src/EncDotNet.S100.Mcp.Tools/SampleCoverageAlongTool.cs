@@ -26,11 +26,16 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// Takes precedence over <paramref name="Time"/>. Range/Series produce
 /// per-vertex series (see <see cref="SampleCoverageResult.Series"/>).
 /// </param>
+/// <param name="OutOfRange">
+/// Handling of a single requested instant outside the time range of every
+/// dataset covering a vertex; see <see cref="SampleCoverageRequest.OutOfRange"/>.
+/// </param>
 public sealed record SampleCoverageAlongRequest(
     [property: Description("Coverage spec to sample (S-102, S-104, or S-111).")] SpecRef Spec,
     [property: Description("Polyline to sample. Each vertex is sampled at its coordinate; the polyline's CorridorWidthMeters is ignored (corridor width applies to membership queries, not point sampling).")] GeoPolyline Polyline,
     [property: Description("Optional UTC ISO-8601 time selector applied identically to every vertex; for time-varying products (S-104, S-111) only. Ignored for S-102.")] DateTimeOffset? Time = null,
-    [property: Description("Optional TimeQuery (instant / range / series) applied identically to every vertex; takes precedence over 'Time'.")] TimeQuery? Times = null);
+    [property: Description("Optional TimeQuery (instant / range / series) applied identically to every vertex; takes precedence over 'Time'.")] TimeQuery? Times = null,
+    [property: Description("Handling of a single instant outside every covering dataset's time range, applied per vertex: Error (default) or Nearest.")] TimeOutOfRangePolicy OutOfRange = TimeOutOfRangePolicy.Error);
 
 /// <summary>
 /// A single sample along the polyline.
@@ -39,17 +44,26 @@ public sealed record SampleCoverageAlongRequest(
 /// <param name="Latitude">Latitude of the vertex.</param>
 /// <param name="Longitude">Longitude of the vertex.</param>
 /// <param name="Result">
-/// The per-vertex sample result. <c>null</c> when no dataset of the
-/// requested spec covers this vertex (or the spec returned
-/// <c>OutOfBounds</c>/<c>NoDataAtPoint</c>); the agent should treat a
-/// <c>null</c> entry as "no value available at this position" and
-/// continue with the remaining vertices.
+/// The per-vertex sample result. <c>null</c> when no value is available at
+/// this vertex — no dataset of the requested spec covers it, the cell has
+/// no data, or the requested time is outside the covering datasets' range;
+/// <paramref name="Error"/> says which. The agent should continue with the
+/// remaining vertices.
 /// </param>
+/// <param name="Error">Why <paramref name="Result"/> is null; null when a value was sampled.</param>
 public sealed record CoverageSampleAlong(
     int VertexIndex,
     double Latitude,
     double Longitude,
-    SampleCoverageResult? Result);
+    SampleCoverageResult? Result,
+    VertexSampleError? Error = null);
+
+/// <summary>The reason a vertex in <see cref="SampleCoverageAlongResult"/> has no value.</summary>
+/// <param name="Code">The <see cref="ToolError.Code"/> that <c>sample_coverage</c> returned for this vertex (e.g. <c>time_out_of_range</c>, <c>out_of_bounds</c>).</param>
+/// <param name="Message">The matching human-readable message.</param>
+public sealed record VertexSampleError(
+    [property: Description("Error code sample_coverage returned for this vertex, e.g. \"time_out_of_range\", \"out_of_bounds\", \"no_data_at_point\".")] string Code,
+    [property: Description("Human-readable message for the error; not localised.")] string Message);
 
 /// <summary>Result of <see cref="SampleCoverageAlongTool"/>.</summary>
 /// <param name="Spec">The spec that was sampled.</param>
@@ -63,7 +77,10 @@ public sealed record SampleCoverageAlongResult(
 /// every vertex of a polyline, returning per-vertex results in input
 /// order. Per-vertex failures are tolerated — only request-level
 /// failures (invalid geometry, unsupported spec) bubble up as
-/// <see cref="ToolError"/>.
+/// <see cref="ToolError"/>, plus <see cref="TimeOutOfRange"/> when no
+/// vertex produced a value because the requested time is outside the data
+/// (so a route sampled entirely past the forecast's end is not mistaken
+/// for a route outside coverage).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -118,19 +135,21 @@ public sealed class SampleCoverageAlongTool
 
         var vertices = request.Polyline.Vertices;
         var samples = new List<CoverageSampleAlong>(vertices.Count);
+        TimeOutOfRange? firstTimeError = null;
+        var anyValue = false;
 
         for (var i = 0; i < vertices.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var v = vertices[i];
             var inner = await _sampler.InvokeAsync(
-                new SampleCoverageRequest(request.Spec, v.Latitude, v.Longitude, request.Time, request.Times),
+                new SampleCoverageRequest(request.Spec, v.Latitude, v.Longitude, request.Time, request.Times, request.OutOfRange),
                 cancellationToken).ConfigureAwait(false);
 
             // Request-level errors (unsupported spec) propagate; per-
-            // vertex misses (OutOfBounds / NoDataAtPoint / NoDatasetCoversPoint)
-            // surface as null entries so a partial route still returns
-            // usable data.
+            // vertex misses (OutOfBounds / NoDataAtPoint / NoDatasetCoversPoint
+            // / TimeOutOfRange) surface as null entries carrying the error so
+            // a partial route still returns usable data.
             if (inner.TryGetError(out var innerErr))
             {
                 if (innerErr is SpecNotSupportedForTool)
@@ -138,12 +157,20 @@ public sealed class SampleCoverageAlongTool
                     return ToolResult<SampleCoverageAlongResult>.Err(innerErr);
                 }
 
-                samples.Add(new CoverageSampleAlong(i, v.Latitude, v.Longitude, null));
+                firstTimeError ??= innerErr as TimeOutOfRange;
+                samples.Add(new CoverageSampleAlong(i, v.Latitude, v.Longitude, null,
+                    new VertexSampleError(innerErr.Code, innerErr.Message)));
                 continue;
             }
 
             inner.TryGetValue(out var value);
+            anyValue = true;
             samples.Add(new CoverageSampleAlong(i, v.Latitude, v.Longitude, value));
+        }
+
+        if (!anyValue && firstTimeError is not null)
+        {
+            return ToolResult<SampleCoverageAlongResult>.Err(firstTimeError);
         }
 
         return ToolResult<SampleCoverageAlongResult>.Ok(

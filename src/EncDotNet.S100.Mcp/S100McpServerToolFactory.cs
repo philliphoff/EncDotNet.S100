@@ -191,6 +191,18 @@ internal static class S100McpServerToolFactory
         });
     }
 
+    private const string OutOfRangeDescription =
+        "What to do when a single requested time is outside the time range of every dataset covering the point: " +
+        "\"error\" (default) returns time_out_of_range with the nearest step; \"nearest\" samples that step and sets " +
+        "timeStatus to \"before_start\" or \"after_end\". Range/series queries are unaffected.";
+
+    private static TimeOutOfRangePolicy ParseOutOfRange(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        null or "" or "error" => TimeOutOfRangePolicy.Error,
+        "nearest" => TimeOutOfRangePolicy.Nearest,
+        _ => throw new ArgumentException($"outOfRange must be \"error\" or \"nearest\" (got \"{value}\").", "outOfRange"),
+    };
+
     private static McpServerTool CreateSampleCoverageTool(SampleCoverageTool inner)
     {
         var description =
@@ -199,13 +211,20 @@ internal static class S100McpServerToolFactory
             "Supports S-102 (depth and optional uncertainty in metres, positive down), " +
             "S-104 (water-level height in metres and decoded trend at the nearest time step), and " +
             "S-111 (current speed in m/s and knots, direction in degrees from true north 0..360, at the nearest time step). " +
-            "Times outside a dataset's range clamp to its first or last step. Read-only and side-effect free.";
+            "Of the datasets covering the point, one whose time range contains the requested time is used (finest grid first, then newest run); " +
+            "a time within one time step of either end of a range counts as in range. A single time outside every covering dataset's " +
+            "range returns time_out_of_range (details: requestedTime, datasetId, validFrom, validTo, nearestStep, run, candidates) " +
+            "unless outOfRange=\"nearest\", which samples the nearest step and reports timeStatus \"before_start\" or \"after_end\" " +
+            "(in-range results report timeStatus \"in_range\"). Range/series queries return the covered part of the window with " +
+            "truncated=true and coveredFrom/coveredTo when the data does not span it, and time_out_of_range only when there is no overlap. " +
+            "Read-only and side-effect free.";
 
         var del = ([Description("Spec of the coverage to sample (S-102, S-104, or S-111; e.g. \"S-102/2.1.0\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,
                    [Description("Sample latitude in decimal degrees, WGS-84, range -90..+90.")] double latitude,
                    [Description("Sample longitude in decimal degrees, WGS-84, range -180..+180.")] double longitude,
-                   [Description("Optional UTC ISO-8601 time selector for time-varying products (S-104, S-111); ignored for S-102. Nearest time step is selected; times outside the dataset range clamp to the first or last step.")] DateTimeOffset? time = null,
-                   [Description("Optional temporal query JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T14:00:00Z\"}, {\"kind\":\"range\",\"from\":\"…\",\"to\":\"…\"}, {\"kind\":\"series\",\"from\":\"…\",\"to\":\"…\",\"stepSeconds\":1800}. Range/Series populate the result's 'series' field. Takes precedence over 'time'.")] string? times = null,
+                   [Description("Optional UTC ISO-8601 time selector for time-varying products (S-104, S-111); ignored for S-102. The nearest time step of a dataset whose range contains the time is selected; a time outside every covering dataset's range is handled per 'outOfRange'.")] DateTimeOffset? time = null,
+                   [Description("Optional temporal query JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T14:00:00Z\"}, {\"kind\":\"range\",\"from\":\"…\",\"to\":\"…\"}, {\"kind\":\"series\",\"from\":\"…\",\"to\":\"…\",\"stepSeconds\":1800}. Range/Series populate the result's 'series' field (plus 'truncated'/'coveredFrom'/'coveredTo'). Takes precedence over 'time'.")] string? times = null,
+                   [Description(OutOfRangeDescription)] string? outOfRange = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -214,7 +233,8 @@ internal static class S100McpServerToolFactory
                         latitude,
                         longitude,
                         time,
-                        ParseTimeQuery(times)),
+                        ParseTimeQuery(times),
+                        ParseOutOfRange(outOfRange)),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -473,6 +493,9 @@ internal static class S100McpServerToolFactory
             "have no data return null entries so the agent can still use the rest of the route. " +
             "For time-varying products (S-104, S-111), the optional time applies identically to " +
             "every vertex — useful for \"depth/level/current at each waypoint at the same instant\". " +
+            "Time handling matches sample_coverage per vertex: a vertex whose covering datasets don't reach the requested " +
+            "time gets a null result with error code time_out_of_range (or, with outOfRange=\"nearest\", the nearest step and a " +
+            "timeStatus); when no vertex has a value and the time is the reason, the call returns time_out_of_range. " +
             "The polyline's corridor width is ignored (corridors apply to membership queries, not " +
             "point sampling).";
 
@@ -480,6 +503,7 @@ internal static class S100McpServerToolFactory
                    [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]} — corridor width is not used here. Coordinates are WGS-84 decimal degrees.")] string polyline,
                    [Description("Optional time selector (ISO-8601, time-varying products only).")] DateTimeOffset? time = null,
                    [Description("Optional temporal query JSON envelope applied to every vertex; same shape as sample_coverage. Takes precedence over 'time'.")] string? times = null,
+                   [Description(OutOfRangeDescription)] string? outOfRange = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -487,7 +511,8 @@ internal static class S100McpServerToolFactory
                         ParseSpec(spec) ?? throw new ArgumentException("spec is required.", nameof(spec)),
                         ParsePolyline(polyline),
                         time,
-                        ParseTimeQuery(times)),
+                        ParseTimeQuery(times),
+                        ParseOutOfRange(outOfRange)),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions

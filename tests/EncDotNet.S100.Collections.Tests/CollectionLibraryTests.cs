@@ -1,13 +1,12 @@
-using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.S128;
-using EncDotNet.S100.Viewer.Library;
 
-namespace EncDotNet.S100.Viewer.Tests;
+namespace EncDotNet.S100.Collections.Tests;
 
-public sealed class LibraryServiceTests : IDisposable
+public sealed class CollectionLibraryTests : IDisposable
 {
-    private readonly LibraryTestContext _context = new();
+    private readonly LibraryContext _context = new();
 
     public void Dispose() => _context.Dispose();
 
@@ -17,7 +16,7 @@ public sealed class LibraryServiceTests : IDisposable
     public async Task AddCollection_persists_the_definition_and_indexes_the_source()
     {
         var set = _context.CreateS57ExchangeSet();
-        using var library = _context.CreateService();
+        using var library = _context.CreateLibrary();
         library.Initialize();
 
         var collection = library.AddCollection("Puget Sound", [ExchangeSet(set)]);
@@ -39,7 +38,7 @@ public sealed class LibraryServiceTests : IDisposable
     {
         var set = _context.CreateS57ExchangeSet();
         Guid sourceId;
-        using (var first = _context.CreateService())
+        using (var first = _context.CreateLibrary())
         {
             first.Initialize();
             sourceId = first.AddCollection("Charts", [ExchangeSet(set)]).Sources[0].Id;
@@ -49,7 +48,7 @@ public sealed class LibraryServiceTests : IDisposable
         var cachePath = Path.Combine(_context.IndexCacheDirectory, sourceId.ToString("N") + ".index.json.gz");
         var cachedAt = File.GetLastWriteTimeUtc(cachePath);
 
-        using var second = _context.CreateService();
+        using var second = _context.CreateLibrary();
         second.Initialize();
         await second.WhenIdle();
 
@@ -63,7 +62,7 @@ public sealed class LibraryServiceTests : IDisposable
     public async Task RemoveCollection_forgets_it_and_its_cache_but_never_the_data()
     {
         var set = _context.CreateS57ExchangeSet();
-        using var library = _context.CreateService();
+        using var library = _context.CreateLibrary();
         library.Initialize();
         var collection = library.AddCollection("Charts", [ExchangeSet(set)]);
         await library.WhenIdle();
@@ -79,7 +78,7 @@ public sealed class LibraryServiceTests : IDisposable
     [Fact]
     public async Task AddSources_RemoveSource_and_Rename_update_the_store()
     {
-        using var library = _context.CreateService();
+        using var library = _context.CreateLibrary();
         library.Initialize();
         var collection = library.AddCollection("A", [ExchangeSet(_context.CreateS57ExchangeSet("one"))]);
         var second = ExchangeSet(_context.CreateS57ExchangeSet("two"));
@@ -99,7 +98,7 @@ public sealed class LibraryServiceTests : IDisposable
     [Fact]
     public async Task Read_only_mode_never_writes_the_store()
     {
-        using var library = _context.CreateService(readOnly: true);
+        using var library = _context.CreateLibrary(readOnly: true);
         library.Initialize();
         library.AddCollection("Charts", [ExchangeSet(_context.CreateS57ExchangeSet())]);
         await library.WhenIdle();
@@ -111,7 +110,7 @@ public sealed class LibraryServiceTests : IDisposable
     [Fact]
     public async Task Indexing_failure_marks_the_source_failed_with_the_error()
     {
-        using var library = _context.CreateService(new CollectionIndexer([new ThrowingIndexer()]));
+        using var library = _context.CreateLibrary(new CollectionIndexer([new ThrowingIndexer()]));
         library.Initialize();
         library.AddCollection("Broken", [ExchangeSet(_context.Root)]);
         await library.WhenIdle();
@@ -125,7 +124,7 @@ public sealed class LibraryServiceTests : IDisposable
     public void Unreadable_store_starts_an_empty_library()
     {
         File.WriteAllText(_context.StorePath, "{ not json");
-        using var library = _context.CreateService();
+        using var library = _context.CreateLibrary();
 
         library.Initialize();
 
@@ -135,9 +134,9 @@ public sealed class LibraryServiceTests : IDisposable
     [Fact]
     public async Task Session_catalogues_are_transient_until_kept()
     {
-        var path = LibraryTestContext.Datasets("S128", "S128_TDS_sample.gml");
+        var path = TestPaths.Dataset("S128", "S128_TDS_sample.gml");
         var dataset = S128Dataset.Open(path);
-        using var library = _context.CreateService();
+        using var library = _context.CreateLibrary();
         library.Initialize();
         var changes = 0;
         library.Changed += (_, _) => changes++;
@@ -146,7 +145,7 @@ public sealed class LibraryServiceTests : IDisposable
 
         var session = Assert.Single(library.Collections);
         Assert.True(session.IsSession);
-        Assert.Equal(LibraryService.SessionCollectionId, session.Id);
+        Assert.Equal(CollectionLibrary.SessionCollectionId, session.Id);
         Assert.Equal(dataset.Entries.Count, session.ItemCount);
         Assert.True(changes > 0);
         Assert.False(File.Exists(_context.StorePath));
@@ -165,12 +164,46 @@ public sealed class LibraryServiceTests : IDisposable
     [Fact]
     public void RemoveSessionCatalogue_drops_the_session_collection_when_empty()
     {
-        var path = LibraryTestContext.Datasets("S128", "S128_TDS_sample.gml");
-        using var library = _context.CreateService();
+        var path = TestPaths.Dataset("S128", "S128_TDS_sample.gml");
+        using var library = _context.CreateLibrary();
         library.AddSessionCatalogue("sample", path, S128Dataset.Open(path));
 
         Assert.True(library.RemoveSessionCatalogue("sample"));
         Assert.False(library.RemoveSessionCatalogue("sample"));
         Assert.Empty(library.Collections);
     }
+}
+
+/// <summary>A library rooted in a temporary folder, with the synthetic S-57 exchange set to index.</summary>
+internal sealed class LibraryContext : IDisposable
+{
+    private readonly TempDirectory _root = new();
+
+    public string Root => _root.Path;
+
+    public string StorePath => Path.Combine(Root, "collections.json");
+
+    public string IndexCacheDirectory => Path.Combine(Root, "index-cache");
+
+    public CollectionLibrary CreateLibrary(CollectionIndexer? indexer = null, bool readOnly = false) =>
+        new(indexer ?? CollectionIndexer.CreateDefault(), new CollectionLibraryOptions(StorePath, IndexCacheDirectory) { ReadOnly = readOnly });
+
+    /// <summary>Copies the synthetic two-cell S-57 exchange set into the context.</summary>
+    public string CreateS57ExchangeSet(string name = "set") =>
+        _root.CopyTree(TestPaths.Dataset("ExchangeSets", "Synthetic-S57-Framed"), name);
+
+    public void Dispose() => _root.Dispose();
+}
+
+/// <summary>An indexer that always throws, for failure-path tests.</summary>
+internal sealed class ThrowingIndexer : ICollectionSourceIndexer
+{
+    public bool CanIndex(CollectionSource source) => true;
+
+    public ValueTask<string?> GetFingerprintAsync(CollectionSource source, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<string?>(null);
+
+    public ValueTask<SourceIndex> IndexAsync(
+        CollectionSource source, IProgress<IndexProgress>? progress, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException("Indexing exploded.");
 }

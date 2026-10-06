@@ -1,6 +1,7 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.Time.Testing;
@@ -26,7 +27,7 @@ public sealed class ForecastLibraryTests : IDisposable
     private readonly LibraryTestContext _context = new();
     private readonly FakeTimeProvider _time = new(Run.AddHours(1));
     private readonly RunDownloader _downloader;
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
 
     public ForecastLibraryTests()
     {

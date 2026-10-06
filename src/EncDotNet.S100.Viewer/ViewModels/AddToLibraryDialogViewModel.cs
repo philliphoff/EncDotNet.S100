@@ -8,6 +8,7 @@ using EncDotNet.S100.Collections.ChartCatalogs;
 using EncDotNet.S100.Collections.Feeds;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Manifests;
 using EncDotNet.S100.Collections.Noaa;
 using EncDotNet.S100.Collections.RemoteCatalogues;
@@ -107,7 +108,7 @@ internal sealed class FacetGroupViewModel : ViewModelBase
 /// </summary>
 internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
 {
-    private readonly LibraryService _library;
+    private readonly CollectionLibrary _library;
     private readonly Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? _loadCatalog;
     private readonly Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? _loadUsaceCatalog;
     private readonly Func<Uri, CancellationToken, Task<ChartCatalogsProductCatalog>>? _loadCommunityCatalog;
@@ -136,7 +137,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     private string _selectionSummary = string.Empty;
 
     public AddToLibraryDialogViewModel(
-        LibraryService library,
+        CollectionLibrary library,
         Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? loadNoaaCatalog,
         Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? loadUsaceCatalog = null,
         TimeProvider? timeProvider = null,

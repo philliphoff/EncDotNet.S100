@@ -17,7 +17,8 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBox Grid.Column="0"
-                         AutomationProperties.Name="{x:Static loc:Strings.Search_Placeholder}"
+                         AutomationProperties.Name="{x:Static loc:Strings.Label_SearchFeatures}"
+                         AutomationProperties.HelpText="{x:Static loc:Strings.Search_Placeholder}"
                          AutomationProperties.AutomationId="Search.Query"
                          x:Name="SearchBox"
                          Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

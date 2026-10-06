@@ -301,6 +301,7 @@
                        TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,6" />
             <Button Classes="Outline libraryQuickAction" Command="{Binding AddFolderCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Library_Quick_Folder}"
+                    AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_FolderSub}"
                     AutomationProperties.AutomationId="Library.Quick.Folder">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="DIR" /></Border>
@@ -312,6 +313,7 @@
             </Button>
             <Button Classes="Outline libraryQuickAction" Command="{Binding AddOnlineCatalogueCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Library_Quick_Online}"
+                    AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_OnlineSub}"
                     AutomationProperties.AutomationId="Library.Quick.Online">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="WEB" /></Border>
@@ -323,6 +325,7 @@
             </Button>
             <Button Classes="Outline libraryQuickAction" Command="{Binding AddSharedFeedCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Library_Quick_Feed}"
+                    AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_FeedSub}"
                     AutomationProperties.AutomationId="Library.Quick.Feed">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="FEED" /></Border>
@@ -334,6 +337,7 @@
             </Button>
             <Button Classes="Outline libraryQuickAction" Command="{Binding AddCollectionManifestCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Library_Quick_Manifest}"
+                    AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_ManifestSub}"
                     AutomationProperties.AutomationId="Library.Quick.Manifest">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                     <Border Grid.Column="0" Classes="libraryKindTag"><TextBlock Text="JSON" /></Border>
@@ -370,7 +374,8 @@
                     </Button>
                     <ToggleButton Classes="Icon libraryIcon coverageToggle"
                                   AutomationProperties.AutomationId="Library.ShowCoverage"
-                                  AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ShowCoverage}"
+                                  AutomationProperties.Name="{x:Static loc:Strings.Label_ShowCoverage}"
+                                  AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ShowCoverage}"
                                   IsChecked="{Binding ShowCoverage}"
                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowCoverage}">
                         <ic:FluentIcon Icon="Map" FontSize="16" />
@@ -385,7 +390,8 @@
                 </StackPanel>
                 <Button Classes="Secondary" HorizontalAlignment="Left"
                         AutomationProperties.AutomationId="Library.Add"
-                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_AddToLibrary}"
+                        AutomationProperties.Name="{x:Static loc:Strings.Library_AddButton}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_AddToLibrary}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddToLibrary}"
                         Flyout="{StaticResource AddMenu}">
                     <StackPanel Orientation="Horizontal" Spacing="4">
@@ -538,7 +544,8 @@
                     </Panel>
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                         <TextBox Grid.Column="0" Text="{Binding FilterText}"
-                                 AutomationProperties.Name="{x:Static loc:Strings.Library_FilterWatermark}"
+                                 AutomationProperties.Name="{x:Static loc:Strings.Label_Filter}"
+                                 AutomationProperties.HelpText="{x:Static loc:Strings.Library_FilterWatermark}"
                                  AutomationProperties.AutomationId="Library.Filter"
                                  PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}">
                             <TextBox.InnerRightContent>
@@ -666,7 +673,8 @@
                                                          VerticalAlignment="Center" />
                                     <Button Grid.Row="0" Grid.Column="0" Classes="Icon" Padding="0" Width="18" Height="20" MinHeight="0"
                                             AutomationProperties.AutomationId="Library.Row.ToggleGroup"
-                                            AutomationProperties.Name="{x:Static loc:Strings.Library_ToggleGroup}"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Label_ToggleGroup}"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Library_ToggleGroup}"
                                             IsVisible="{Binding IsGroupHeader}" VerticalAlignment="Center"
                                             Command="{Binding ToggleCommand}">
                                         <Panel>

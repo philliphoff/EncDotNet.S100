@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
-             xmlns:lib="using:EncDotNet.S100.Viewer.Library"
+             xmlns:lib="using:EncDotNet.S100.Collections.Library"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:ic="using:FluentIcons.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.AddToLibraryDialogView"

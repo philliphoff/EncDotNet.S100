@@ -19,6 +19,11 @@ internal static class ActivityTabServiceCollectionExtensions
     /// <param name="id">Stable string id (matches the legacy <c>ActivityKind</c> enum name for backwards compatibility with persisted settings).</param>
     /// <param name="order">Render order (ascending top-to-bottom). Tabs with <paramref name="order"/> &gt;= 1000 are pinned to the bottom of the activity bar.</param>
     /// <param name="title">Pane header text (already-resolved <see cref="Resources.Strings"/> value).</param>
+    /// <param name="name">
+    /// The activity-bar button's accessible name: a short, sentence-case
+    /// label (already-resolved <see cref="Resources.Strings"/> value), or
+    /// <c>null</c> to use <paramref name="title"/>.
+    /// </param>
     /// <param name="tooltip">Tooltip text (already-resolved <see cref="Resources.Strings"/> value).</param>
     /// <param name="iconFactory">Factory that returns a fresh icon control for each consumer.</param>
     /// <param name="persistAsLastSelected">When <c>true</c>, selecting the tab updates <see cref="ViewerSettings.LastSelectedActivity"/>.</param>
@@ -35,6 +40,7 @@ internal static class ActivityTabServiceCollectionExtensions
         string id,
         int order,
         string title,
+        string? name,
         string tooltip,
         Func<Control> iconFactory,
         bool persistAsLastSelected = true,
@@ -60,7 +66,8 @@ internal static class ActivityTabServiceCollectionExtensions
             persistAsLastSelected,
             dock,
             autoOpenOnContentSignal,
-            visibilitySourceFactory?.Invoke(sp)));
+            visibilitySourceFactory?.Invoke(sp),
+            name));
 
         return services;
     }
