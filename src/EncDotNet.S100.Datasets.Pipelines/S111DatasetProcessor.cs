@@ -439,7 +439,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                         viewport.MaxLatitude),
                 },
             },
-            Spec = new SpecRef("S-111", default),
+            Spec = Spec,
             SourceDatasetId = _fileName,
             Info = info,
             LayerNames = new[] { "s111.arrows" },
@@ -687,7 +687,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     },
                 },
             },
-            Spec = new SpecRef("S-111", default),
+            Spec = Spec,
             SourceDatasetId = _fileName,
             Info = info,
         };

@@ -25,10 +25,18 @@ public class S104CoverageSource : ICoverageSource
     {
         _dataset = dataset;
         _selectedTimeIndex = 0;
+        Spec = HdfDeclaredSpec.Resolve(dataset.DeclaredProductSpecification, "S-104");
     }
 
     /// <summary>The underlying parsed S-104 dataset.</summary>
     public S104Dataset Dataset => _dataset;
+
+    /// <summary>
+    /// The dataset's declared product specification, resolved from
+    /// <see cref="S104Dataset.DeclaredProductSpecification"/>; the
+    /// edition is default (unknown) when the file declares none.
+    /// </summary>
+    public SpecRef Spec { get; }
 
     /// <inheritdoc/>
     public CoverageMetadata Metadata
@@ -38,7 +46,7 @@ public class S104CoverageSource : ICoverageSource
             var coverage = _dataset.Coverages[_selectedTimeIndex];
             return new CoverageMetadata
             {
-                Spec = new SpecRef("S-104", default),
+                Spec = Spec,
                 NativeExtent = new BoundingBox(
                     coverage.OriginLatitude,
                     coverage.OriginLongitude,

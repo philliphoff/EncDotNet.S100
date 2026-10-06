@@ -25,7 +25,8 @@ internal static class S111FixtureBuilder
         bool useF64GridAttrs,
         bool useUnsignedCounts,
         string timePoint = "20210401T000000Z",
-        ProjectedGrid? projected = null)
+        ProjectedGrid? projected = null,
+        string? productSpecification = null)
         where TRow : struct
     {
         var instance = new H5Group
@@ -49,14 +50,20 @@ internal static class S111FixtureBuilder
             },
         };
 
+        var rootAttributes = new Dictionary<string, object>
+        {
+            ["horizontalDatumValue"] = projected?.Epsg ?? 4326,
+            ["geographicIdentifier"] = "Test",
+            ["issueDate"] = "2021-04-01",
+        };
+        if (productSpecification is not null)
+        {
+            rootAttributes["productSpecification"] = productSpecification;
+        }
+
         var file = new H5File
         {
-            Attributes = new()
-            {
-                ["horizontalDatumValue"] = projected?.Epsg ?? 4326,
-                ["geographicIdentifier"] = "Test",
-                ["issueDate"] = "2021-04-01",
-            },
+            Attributes = rootAttributes,
             ["SurfaceCurrent"] = new H5Group
             {
                 Attributes = new()

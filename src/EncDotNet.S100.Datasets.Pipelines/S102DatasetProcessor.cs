@@ -278,7 +278,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                             Viewport = viewport,
                         },
                     },
-                    Spec = new SpecRef("S-102", default),
+                    Spec = Spec,
                     SourceDatasetId = _fileName,
                     Info = info,
                     CoverageExtent = ResolveCoverageExtent(),

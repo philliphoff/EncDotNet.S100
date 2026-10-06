@@ -50,10 +50,18 @@ public class S102CoverageSource : ICoverageSource
         _dataset = dataset;
         _coverage = dataset.Coverages[coverageIndex];
         _pyramid = new Lazy<CoveragePyramid>(BuildPyramid, isThreadSafe: true);
+        Spec = HdfDeclaredSpec.Resolve(dataset.DeclaredProductSpecification, "S-102");
     }
 
     /// <summary>The underlying S-102 dataset wrapped by this source.</summary>
     public S102Dataset Dataset => _dataset;
+
+    /// <summary>
+    /// The dataset's declared product specification, resolved from
+    /// <see cref="S102Dataset.DeclaredProductSpecification"/>; the
+    /// edition is default (unknown) when the file declares none.
+    /// </summary>
+    public SpecRef Spec { get; }
 
     /// <summary>The single bathymetry coverage instance this source exposes.</summary>
     public BathymetryCoverage Coverage => _coverage;
@@ -102,7 +110,7 @@ public class S102CoverageSource : ICoverageSource
 
             return new CoverageMetadata
             {
-                Spec = new SpecRef("S-102", default),
+                Spec = Spec,
                 NativeExtent = new BoundingBox(
                     _coverage.OriginLatitude,
                     _coverage.OriginLongitude,

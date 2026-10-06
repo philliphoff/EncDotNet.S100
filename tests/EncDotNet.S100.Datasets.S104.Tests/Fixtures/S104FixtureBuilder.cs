@@ -53,7 +53,8 @@ internal static class S104FixtureBuilder
         bool useUnsignedCounts,
         string timePoint = "20210401T000000Z",
         int? verticalDatum = null,
-        ProjectedGrid? projected = null)
+        ProjectedGrid? projected = null,
+        string? productSpecification = null)
         where TRow : struct
     {
         var instance = new H5Group
@@ -86,6 +87,10 @@ internal static class S104FixtureBuilder
         if (verticalDatum is int vd)
         {
             rootAttributes["verticalDatum"] = vd;
+        }
+        if (productSpecification is not null)
+        {
+            rootAttributes["productSpecification"] = productSpecification;
         }
 
         var file = new H5File

@@ -38,6 +38,15 @@ public sealed class S111StationSeriesDataset
     public string? Metadata { get; init; }
 
     /// <summary>
+    /// The raw <c>productSpecification</c> string declared on the dataset
+    /// root (e.g. <c>"INT.IHO.S-111.2.0.0"</c>), or <c>null</c> when the
+    /// attribute is absent. S-100 Part 10c §10.2.1. Carried on the dataset
+    /// itself so consumers holding only the dataset (coverage sources, catalog
+    /// payloads) can report its declared edition.
+    /// </summary>
+    public string? DeclaredProductSpecification { get; init; }
+
+    /// <summary>
     /// The <c>surfaceCurrentDepth</c> root attribute, in metres, interpreted per
     /// <c>depthTypeIndex</c>: a height on an upward axis relative to the reference
     /// level (so a level below the sea surface is negative, e.g. <c>-4.5</c>), or
