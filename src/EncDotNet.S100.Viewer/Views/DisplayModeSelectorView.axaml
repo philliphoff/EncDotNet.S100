@@ -51,6 +51,8 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:DisplayModeOption">
                     <RadioButton GroupName="DisplaySettingsIceMode"
+                                 AutomationProperties.Name="{Binding Label}"
+                                 AutomationProperties.AutomationId="DisplayMode.Option"
                                  IsChecked="{Binding IsSelected, Mode=OneWay}"
                                  Command="{Binding SelectCommand}"
                                  ToolTip.Tip="{Binding Tooltip}"

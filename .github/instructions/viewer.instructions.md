@@ -74,10 +74,9 @@ conventions.
   readers or the `ui_*` tools. Back it with a control that has a command
   (a `Button`, `ToggleButton`, list selection…).
 - **Run the guard.** `UiAutomation/AccessibilityGuardTests` in
-  `tests/EncDotNet.S100.Viewer.Tests` fails on an unnamed button, and on a
-  control without an automation id in any view not on its
-  `ViewsAwaitingIds` list. A new view must pass it: never add a view to
-  that list. When you finish a listed view, remove it.
+  `tests/EncDotNet.S100.Viewer.Tests` fails on any button or input without
+  an accessible name and any interactive control without an automation id,
+  in every view. There is no allow-list: new UI must pass it as written.
 - **Test new UI through its ids.** Add an `[AvaloniaFact]` view test that
   drives the new UI with `ViewHost` and finds controls by automation id,
   not by localized text.

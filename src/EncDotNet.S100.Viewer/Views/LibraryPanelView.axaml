@@ -429,6 +429,7 @@
                                        FontWeight="{Binding IsCollection, Converter={x:Static views:LibraryPanelView.BoolToWeight}}"
                                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                             <TextBox Grid.Column="1" Text="{Binding RenameText}"
+                                     AutomationProperties.Name="{x:Static loc:Strings.Library_RenameBox}"
                                      AutomationProperties.AutomationId="Library.Tree.RenameBox"
                                      IsVisible="{Binding IsRenaming}"
                                      Padding="4,1" MinHeight="0"
@@ -537,6 +538,7 @@
                     </Panel>
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                         <TextBox Grid.Column="0" Text="{Binding FilterText}"
+                                 AutomationProperties.Name="{x:Static loc:Strings.Library_FilterWatermark}"
                                  AutomationProperties.AutomationId="Library.Filter"
                                  PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}">
                             <TextBox.InnerRightContent>
@@ -570,25 +572,25 @@
                     <!-- State segments: what do I have, what can I get, what is new. -->
                     <Border Classes="librarySegments">
                         <UniformGrid Rows="1">
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateAll}" AutomationProperties.AutomationId="Library.State.All">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateAll}" AutomationProperties.AutomationId="Library.State.All" AutomationProperties.Name="{x:Static loc:Strings.Library_State_All}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_All}" />
                                     <TextBlock Text="{Binding AllCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateLocal}" AutomationProperties.AutomationId="Library.State.Local">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateLocal}" AutomationProperties.AutomationId="Library.State.Local" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Local}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Local}" />
                                     <TextBlock Text="{Binding LocalCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateOnline}" AutomationProperties.AutomationId="Library.State.Online">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateOnline}" AutomationProperties.AutomationId="Library.State.Online" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Online}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Online}" />
                                     <TextBlock Text="{Binding OnlineCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateUpdates}" AutomationProperties.AutomationId="Library.State.Updates">
+                            <RadioButton Classes="librarySegment" GroupName="LibraryState" IsChecked="{Binding IsStateUpdates}" AutomationProperties.AutomationId="Library.State.Updates" AutomationProperties.Name="{x:Static loc:Strings.Library_State_Updates}">
                                 <StackPanel Orientation="Horizontal" Spacing="4">
                                     <TextBlock Text="{x:Static loc:Strings.Library_State_Updates}" />
                                     <TextBlock Text="{Binding UpdatesCount, StringFormat={}{0:N0}}" Opacity="0.55" FontSize="12.5" VerticalAlignment="Center" />

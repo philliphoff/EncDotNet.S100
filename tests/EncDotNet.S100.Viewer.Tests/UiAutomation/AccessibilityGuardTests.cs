@@ -5,9 +5,9 @@ namespace EncDotNet.S100.Viewer.Tests.UiAutomation;
 
 /// <summary>
 /// Keeps the viewer reachable by screen readers and by the <c>ui_*</c> MCP
-/// tools (#784): a static check of every view's XAML. Every button needs an
-/// accessible name, and every interactive control in a finished view needs an
-/// automation id (<c>&lt;View&gt;.&lt;Element&gt;</c>, see this project's README).
+/// tools (#784): a static check of every view's XAML. Every button and input
+/// needs an accessible name, and every interactive control an automation id
+/// (<c>&lt;View&gt;.&lt;Element&gt;</c>, see this project's README).
 /// </summary>
 public sealed class AccessibilityGuardTests
 {
@@ -23,30 +23,12 @@ public sealed class AccessibilityGuardTests
     private static readonly HashSet<string> ButtonLike =
         ["Button", "ToggleButton", "RepeatButton", "SplitButton", "DropDownButton", "HyperlinkButton"];
 
-    /// <summary>
-    /// Views whose controls do not all have automation ids yet (#784). When a
-    /// view is finished, remove it here; the ratchet test fails until you do.
-    /// </summary>
-    private static readonly HashSet<string> ViewsAwaitingIds =
-    [
-        "AboutDialogView.axaml",
-        "AddCollectionManifestDialogView.axaml",
-        "AddOnlineCatalogueWizardView.axaml",
-        "AddToLibraryDialogView.axaml",
-        "CatalogueDirectoryDialogView.axaml",
-        "CatalogueScopeStepView.axaml",
-        "DisplayModeSelectorView.axaml",
-        "EcdisDisplayPanelView.axaml",
-        "FeatureCataloguesView.axaml",
-        "FeatureSearchView.axaml",
-        "FeedbackDialogView.axaml",
-        "HelmView.axaml",
-        "LayerStackView.axaml",
-        "PickReportView.axaml",
-        "PortrayalCataloguesView.axaml",
-        "SharedFeedDialogView.axaml",
-        "VesselListView.axaml",
-    ];
+    /// <summary>Controls a user enters or chooses a value with.</summary>
+    private static readonly HashSet<string> Inputs =
+        ["TextBox", "AutoCompleteBox", "ComboBox", "Slider", "NumericUpDown", "ToggleSwitch", "CheckBox", "RadioButton"];
+
+    /// <summary>Inputs that a string <c>Content</c> names, as it names a button.</summary>
+    private static readonly HashSet<string> NamedByContent = ["ToggleSwitch", "CheckBox", "RadioButton"];
 
     [Fact]
     public void Every_button_has_an_accessible_name()
@@ -58,8 +40,7 @@ public sealed class AccessibilityGuardTests
             .Where(e => ButtonLike.Contains(e.Element.Name.LocalName)
                 && !IsHidden(e.Element)
                 && Attribute(e.Element, "AutomationProperties.Name") is null
-                && Attribute(e.Element, "Content") is null
-                && string.IsNullOrWhiteSpace(string.Concat(e.Element.Nodes().OfType<XText>().Select(t => t.Value))))
+                && !HasStringContent(e.Element))
             .Select(e => e.Where)
             .ToList();
 
@@ -69,29 +50,40 @@ public sealed class AccessibilityGuardTests
     }
 
     [Fact]
-    public void Interactive_controls_in_finished_views_have_automation_ids()
+    public void Every_input_has_an_accessible_name()
     {
-        var missing = MissingIds()
-            .Where(e => !ViewsAwaitingIds.Contains(e.File))
+        // An input next to a label TextBlock is not named by it: on its own a
+        // screen reader announces "toggle switch, on". A placeholder is not a
+        // name either.
+        var unnamed = Elements()
+            .Where(e => Inputs.Contains(e.Element.Name.LocalName)
+                && !IsHidden(e.Element)
+                && !IsTemplatePart(e.Element)
+                && Attribute(e.Element, "AutomationProperties.Name") is null
+                && Attribute(e.Element, "AutomationProperties.LabeledBy") is null
+                && !(NamedByContent.Contains(e.Element.Name.LocalName) && HasStringContent(e.Element)))
             .Select(e => e.Where)
             .ToList();
+
+        Assert.True(unnamed.Count == 0,
+            "These inputs have no accessible name; set AutomationProperties.Name to their label's string:\n"
+            + string.Join('\n', unnamed));
+    }
+
+    [Fact]
+    public void Every_interactive_control_has_an_automation_id()
+    {
+        var missing = MissingIds().Select(e => e.Where).ToList();
 
         Assert.True(missing.Count == 0,
             "These controls have no AutomationProperties.AutomationId (<View>.<Element>, see tests/EncDotNet.S100.Viewer.Tests/README.md):\n"
             + string.Join('\n', missing));
     }
 
-    [Fact]
-    public void Views_awaiting_ids_are_still_unfinished()
-    {
-        var unfinished = MissingIds().Select(e => e.File).ToHashSet();
-        var finished = ViewsAwaitingIds.Where(view => !unfinished.Contains(view)).Order().ToList();
-
-        Assert.True(finished.Count == 0,
-            "These views have automation ids on every control now; remove them from ViewsAwaitingIds:\n"
-            + string.Join('\n', finished));
-        Assert.All(ViewsAwaitingIds, view => Assert.Contains(view, Elements().Select(e => e.File)));
-    }
+    /// <summary>A string <c>Content</c> attribute, or text written as the element's content.</summary>
+    private static bool HasStringContent(XElement element)
+        => Attribute(element, "Content") is not null
+            || !string.IsNullOrWhiteSpace(string.Concat(element.Nodes().OfType<XText>().Select(t => t.Value)));
 
     private static IEnumerable<ViewElement> MissingIds()
         => Elements().Where(e => Interactive.Contains(e.Element.Name.LocalName)

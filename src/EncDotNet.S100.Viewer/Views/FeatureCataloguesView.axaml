@@ -8,6 +8,7 @@
 
     <DockPanel>
         <Button DockPanel.Dock="Bottom"
+                AutomationProperties.AutomationId="FeatureCatalogues.Add"
                 Classes="Outline"
                 Content="{x:Static loc:Strings.Button_AddFeatureCatalogue}"
                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddFeatureCatalogue}"
@@ -46,6 +47,7 @@
                                     Spacing="2"
                                     VerticalAlignment="Center">
                             <Button Classes="Icon"
+                                    AutomationProperties.AutomationId="FeatureCatalogues.Row.OpenInExaminer"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_OpenCatalogueInExaminer}"
                                     Command="{Binding $parent[ItemsControl].((vm:FeatureCataloguesViewModel)DataContext).OpenInExaminerCommand}"
                                     CommandParameter="{Binding}"
@@ -54,6 +56,7 @@
                                 <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="16" />
                             </Button>
                             <Button Classes="Icon"
+                                    AutomationProperties.AutomationId="FeatureCatalogues.Row.Remove"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RemoveCatalogue}"
                                     Command="{Binding $parent[ItemsControl].((vm:FeatureCataloguesViewModel)DataContext).RemoveCommand}"
                                     CommandParameter="{Binding}"

@@ -76,6 +76,7 @@
                             </ToolTip.Tip>
                         </TextBlock>
                         <Button Grid.Column="2"
+                                AutomationProperties.AutomationId="PickReport.Attribute.OpenInExaminer"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
                                 Width="22" Height="22"
                                 MinWidth="0" MinHeight="0"
@@ -153,6 +154,7 @@
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                         <Button Grid.Column="2"
+                                AutomationProperties.AutomationId="PickReport.Reference.CopyText"
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CopyReferencedText}"
                                 VerticalAlignment="Top"
                                 Padding="6"
@@ -274,6 +276,7 @@
                                          VerticalAlignment="Center"
                                          TextWrapping="Wrap" />
                     <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                            AutomationProperties.AutomationId="PickReport.CopyLocation"
                             AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CopyLocation}"
                             VerticalAlignment="Center"
                             Padding="6"
@@ -552,6 +555,7 @@
                                Opacity="0.7"
                                Text="{Binding Hits.Count, StringFormat={x:Static loc:Strings.Pick_HitListHeader}}" />
                     <ListBox ItemsSource="{Binding Hits}"
+                             AutomationProperties.AutomationId="PickReport.Hits"
                              SelectedItem="{Binding SelectedHit, Mode=TwoWay}"
                              Classes="accentList"
                              Background="Transparent"
@@ -662,6 +666,7 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                         <Button Content="{x:Static loc:Strings.PickReport_TakeHelm}"
+                                                AutomationProperties.AutomationId="PickReport.TakeHelm"
                                                 HorizontalAlignment="Left"
                                                 Margin="0,4,0,0"
                                                 FontSize="12"
@@ -722,6 +727,7 @@
                             Spacing="2"
                             VerticalAlignment="Top">
                     <Button Padding="6"
+                            AutomationProperties.AutomationId="PickReport.OpenFeatureInExaminer"
                             AutomationProperties.Name="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
                             Background="Transparent"
                             Command="{Binding OpenFeatureInExaminerCommand}"
@@ -730,6 +736,7 @@
                         <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="16" />
                     </Button>
                     <Button Padding="6"
+                            AutomationProperties.AutomationId="PickReport.CopyIdentity"
                             AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CopyIdentity}"
                             Background="Transparent"
                             Command="{Binding CopyIdentityCommand}"
@@ -754,6 +761,7 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="pp:FeatureReference">
                                 <Button Margin="0,1"
+                                        AutomationProperties.AutomationId="PickReport.Reference.Follow"
                                         AutomationProperties.Name="{x:Static loc:Strings.Tooltip_FollowReference}"
                                         Padding="6,2"
                                         HorizontalAlignment="Stretch"

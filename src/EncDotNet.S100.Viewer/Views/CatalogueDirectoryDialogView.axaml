@@ -95,6 +95,7 @@
         <!-- Search, with the count at the right. -->
         <Panel Grid.Row="0" Margin="0,0,0,8">
             <TextBox Text="{Binding SearchText}" Padding="10,0,72,0"
+                     AutomationProperties.Name="{x:Static loc:Strings.Library_DirectorySearchWatermark}"
                      AutomationProperties.AutomationId="Catalogues.Search"
                      PlaceholderText="{x:Static loc:Strings.Library_DirectorySearchWatermark}" />
             <TextBlock Text="{Binding CountText}" Classes="muted" FontSize="12" IsHitTestVisible="False"
@@ -167,8 +168,10 @@
                                                        TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CatalogUrl}" />
                                             <StackPanel Orientation="Horizontal" Spacing="14">
                                                 <Button Classes="link" Content="{x:Static loc:Strings.Library_DirectoryTerms}"
+                                                        AutomationProperties.AutomationId="Catalogues.Row.Terms"
                                                         IsVisible="{Binding HasHomepage}" Command="{Binding OpenHomepageCommand}" />
                                                 <Button Classes="link danger" Content="{x:Static loc:Strings.Library_DirectoryRemove}"
+                                                        AutomationProperties.AutomationId="Catalogues.Row.Remove"
                                                         IsVisible="{Binding IsUser}" Command="{Binding RemoveCommand}" />
                                             </StackPanel>
                                         </StackPanel>
@@ -202,10 +205,12 @@
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBlock Text="{x:Static loc:Strings.Library_DirectoryUrlHeading}" FontSize="13" FontWeight="SemiBold" />
                         <Button Grid.Column="1" Classes="link" Content="{x:Static loc:Strings.Button_Close}"
+                                AutomationProperties.AutomationId="Catalogues.CloseUrlPanel"
                                 Command="{Binding CloseUrlPanelCommand}" />
                     </Grid>
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                         <TextBox Name="UrlBox" Text="{Binding CatalogueUrl}" Classes.error="{Binding HasUrlError}"
+                                 AutomationProperties.Name="{x:Static loc:Strings.Library_DirectoryUrlHeading}"
                                  AutomationProperties.AutomationId="Catalogues.Url"
                                  PlaceholderText="https://…/catalogue.xml" />
                         <Button Grid.Column="1" Classes="Outline" Command="{Binding AddUrlCommand}"

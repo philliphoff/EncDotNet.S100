@@ -85,6 +85,7 @@
         <DataTemplate x:Key="FacetTemplate" x:DataType="vm:FacetOptionViewModel">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="10,0">
                 <CheckBox Classes="facet" IsChecked="{Binding IsSelected}"
+                          AutomationProperties.Name="{Binding Label}"
                           AutomationProperties.AutomationId="CatalogueScope.Option">
                     <StackPanel VerticalAlignment="Center" Margin="0,4">
                         <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" />
@@ -167,7 +168,7 @@
                 <TextBlock Text="{x:Static loc:Strings.Wizard_ForecastShapeTitle}" FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center" />
                 <Border Background="{DynamicResource MutedBackgroundColor}" CornerRadius="8" Padding="3">
-                    <ListBox Classes="facetTabs" ItemsSource="{Binding ForecastShapes}" SelectedItem="{Binding SelectedForecastShape}">
+                    <ListBox Classes="facetTabs" ItemsSource="{Binding ForecastShapes}" SelectedItem="{Binding SelectedForecastShape}" AutomationProperties.AutomationId="CatalogueScope.ForecastShapes">
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <StackPanel Orientation="Horizontal" />
@@ -189,7 +190,7 @@
                 <TextBlock Text="{x:Static loc:Strings.Wizard_ResolutionTitle}" FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center" />
                 <Border Background="{DynamicResource MutedBackgroundColor}" CornerRadius="8" Padding="3">
-                    <ListBox Classes="facetTabs" ItemsSource="{Binding Resolutions}" SelectedItem="{Binding SelectedResolution}">
+                    <ListBox Classes="facetTabs" ItemsSource="{Binding Resolutions}" SelectedItem="{Binding SelectedResolution}" AutomationProperties.AutomationId="CatalogueScope.Resolutions">
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <StackPanel Orientation="Horizontal" />
@@ -211,6 +212,7 @@
                             BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderColor}">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" MinHeight="30">
                             <ListBox Classes="facetTabs" IsVisible="{Binding HasFacetTabs}"
+                                     AutomationProperties.AutomationId="CatalogueScope.FacetGroups"
                                      ItemsSource="{Binding FacetGroups}" SelectedItem="{Binding SelectedFacetGroup}">
                                 <ListBox.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -239,10 +241,13 @@
                                            Text="{Binding SelectedFacetGroup.Title, FallbackValue=''}"
                                            FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 <TextBox IsVisible="{Binding IsSearchable}" Text="{Binding ChartSearchText}"
+                                         AutomationProperties.Name="{Binding SearchPlaceholder}"
+                                         AutomationProperties.AutomationId="CatalogueScope.ChartSearch"
                                          Height="30" MinHeight="30" FontSize="13" Padding="8,0"
                                          PlaceholderText="{Binding SearchPlaceholder}" />
                             </DockPanel>
                             <Button Grid.Column="1" Classes="link" Content="{Binding ToggleShownText}"
+                                    AutomationProperties.AutomationId="CatalogueScope.ToggleShown"
                                     Command="{Binding ToggleShownCommand}" />
                         </Grid>
                     </Border>
@@ -259,6 +264,7 @@
                             <TextBlock DockPanel.Dock="Top" Text="{Binding RegionsHeader}" Classes="muted" FontSize="11.5"
                                        FontWeight="SemiBold" LetterSpacing="0.4" Margin="14,8,10,4" />
                             <ListBox Classes="regionList" ItemsSource="{Binding FacetGroups}"
+                                     AutomationProperties.AutomationId="CatalogueScope.Regions"
                                      SelectedItem="{Binding SelectedFacetGroup}"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.ItemTemplate>
@@ -289,6 +295,7 @@
                                        TextTrimming="CharacterEllipsis"
                                        Classes="muted" Classes.warning="{Binding IsScopeSummaryWarning}" />
                             <Button Grid.Column="1" Classes="link" Content="{x:Static loc:Strings.Library_NoaaClearSelection}"
+                                    AutomationProperties.AutomationId="CatalogueScope.ClearSelection"
                                     Command="{Binding SelectNoneCommand}" IsVisible="{Binding HasSelection}" />
                         </Grid>
                     </Border>
