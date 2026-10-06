@@ -64,7 +64,8 @@ internal static class S111Dcf8FixtureBuilder
         IReadOnlyList<Station<TRow>> stations,
         bool includePositioning = true,
         bool useShortGeometryNames = false,
-        bool positioningUnderInstance = false)
+        bool positioningUnderInstance = false,
+        string? productSpecification = null)
         where TRow : struct
     {
         var instanceGroups = new Dictionary<string, object>();
@@ -106,6 +107,8 @@ internal static class S111Dcf8FixtureBuilder
             ["geographicIdentifier"] = "Test",
             ["issueDate"] = "2024-01-01",
         };
+        if (productSpecification is not null)
+            rootAttrs["productSpecification"] = productSpecification;
 
         var file = new H5File
         {

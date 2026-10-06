@@ -67,7 +67,8 @@ internal static class S104Dcf8FixtureBuilder
         bool includePositioning = true,
         double? waterLevelTrendThreshold = null,
         bool useShortGeometryNames = false,
-        bool positioningUnderInstance = false)
+        bool positioningUnderInstance = false,
+        string? productSpecification = null)
         where TRow : struct
     {
         var instanceGroups = new Dictionary<string, object>();
@@ -111,6 +112,8 @@ internal static class S104Dcf8FixtureBuilder
         };
         if (waterLevelTrendThreshold is not null)
             rootAttrs["waterLevelTrendThreshold"] = waterLevelTrendThreshold.Value;
+        if (productSpecification is not null)
+            rootAttrs["productSpecification"] = productSpecification;
 
         var file = new H5File
         {

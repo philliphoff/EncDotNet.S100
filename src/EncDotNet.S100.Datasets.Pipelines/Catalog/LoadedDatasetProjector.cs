@@ -281,20 +281,20 @@ public static class LoadedDatasetProjector
             S411DatasetData d => Gml(id, "S-411", d.Model.ReadMetadata(), data),
             S421DatasetData d => Gml(id, "S-421", d.Model.ReadMetadata(), data),
             S102CoverageData d => new LoadedDataset(
-                id, new SpecRef("S-102", default), ResolveCoverageBounds(d.Source, ComputeS102Bounds(d.Source.Dataset), transforms), null, data),
+                id, d.Source.Spec, ResolveCoverageBounds(d.Source, ComputeS102Bounds(d.Source.Dataset), transforms), null, data),
             S104CoverageData d => new LoadedDataset(
-                id, new SpecRef("S-104", default), ResolveCoverageBounds(d.Source, ComputeS104Bounds(d.Source.Dataset), transforms), null, data),
+                id, d.Source.Spec, ResolveCoverageBounds(d.Source, ComputeS104Bounds(d.Source.Dataset), transforms), null, data),
             S104StationSeriesData d => new LoadedDataset(
                 id,
-                new SpecRef("S-104", default),
+                HdfDeclaredSpec.Resolve(d.Dataset.DeclaredProductSpecification, "S-104"),
                 ComputeStationBounds(d.Dataset.Stations, x => x.Latitude, x => x.Longitude) ?? WorldBounds,
                 ComputeTimeRange(d.Dataset.MinTime, d.Dataset.MaxTime, d.Dataset.Stations.Count),
                 data),
             S111CoverageData d => new LoadedDataset(
-                id, new SpecRef("S-111", default), ResolveCoverageBounds(d.Source, ComputeS111Bounds(d.Source.Dataset), transforms), null, data),
+                id, d.Source.Spec, ResolveCoverageBounds(d.Source, ComputeS111Bounds(d.Source.Dataset), transforms), null, data),
             S111StationSeriesData d => new LoadedDataset(
                 id,
-                new SpecRef("S-111", default),
+                HdfDeclaredSpec.Resolve(d.Dataset.DeclaredProductSpecification, "S-111"),
                 ComputeStationBounds(d.Dataset.Stations, x => x.Latitude, x => x.Longitude) ?? WorldBounds,
                 ComputeTimeRange(d.Dataset.MinTime, d.Dataset.MaxTime, d.Dataset.Stations.Count),
                 data),

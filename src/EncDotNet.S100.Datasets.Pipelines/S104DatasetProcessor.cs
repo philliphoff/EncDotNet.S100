@@ -337,7 +337,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     Opacity = ColorBandOpacity,
                 },
             },
-            Spec = new SpecRef("S-104", default),
+            Spec = Spec,
             SourceDatasetId = _fileName,
             Info = info,
         };
@@ -514,7 +514,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     Extent = extent,
                 },
             },
-            Spec = new SpecRef("S-104", default),
+            Spec = Spec,
             SourceDatasetId = _fileName,
             Info = info,
         };

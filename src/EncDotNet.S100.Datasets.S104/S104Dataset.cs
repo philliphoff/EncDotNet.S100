@@ -36,6 +36,15 @@ public sealed class S104Dataset
     public string? Metadata { get; init; }
 
     /// <summary>
+    /// The raw <c>productSpecification</c> string declared on the dataset
+    /// root (e.g. <c>"INT.IHO.S-104.2.0.0"</c>), or <c>null</c> when the
+    /// attribute is absent. S-100 Part 10c §10.2.1. Carried on the dataset
+    /// itself so consumers holding only the dataset (coverage sources, catalog
+    /// payloads) can report its declared edition.
+    /// </summary>
+    public string? DeclaredProductSpecification { get; init; }
+
+    /// <summary>
     /// The data coding format used in this dataset.
     /// 2 = regular grid, 3 = ungeorectified grid with explicit positioning.
     /// </summary>
