@@ -1063,8 +1063,9 @@ public sealed class SampleCoverageService
 
     /// <summary>
     /// Picks the candidate for a windowed request: one whose data spans the
-    /// whole window beats one that covers only part of it; within a tier the
-    /// best-ranked wins. Fails with <see cref="TimeOutOfRange"/> when no
+    /// whole window beats one that covers only part of it. Among those that
+    /// span it the best-ranked wins; among partial ones, the one covering the
+    /// most of the window. Fails with <see cref="TimeOutOfRange"/> when no
     /// candidate has a single step in the window.
     /// </summary>
     private static bool TryChooseForWindow<T, TCoverage>(
@@ -1104,11 +1105,26 @@ public sealed class SampleCoverageService
             return false;
         }
 
-        var tier = fits.Where(x => !x.Fit.Truncated).ToList();
-        if (tier.Count == 0) tier = fits;
-        var best = Best(tier.Select(x => x.Candidate));
-        chosen = best;
-        fit = tier.First(x => ReferenceEquals(x.Candidate, best)).Fit;
+        var whole = fits.Where(x => !x.Fit.Truncated).ToList();
+        if (whole.Count > 0)
+        {
+            var best = Best(whole.Select(x => x.Candidate));
+            chosen = best;
+            fit = whole.First(x => ReferenceEquals(x.Candidate, best)).Fit;
+        }
+        else
+        {
+            // No candidate spans the window: take the one covering most of
+            // it (e.g. the older of two runs when the window reaches back
+            // before the newer run), then the best-ranked.
+            var (candidate, partial) = fits
+                .OrderByDescending(x => x.Fit.CoveredTo - x.Fit.CoveredFrom)
+                .ThenBy(x => x.Candidate.Rank)
+                .ThenByDescending(x => x.Candidate.Run ?? DateTime.MinValue)
+                .First();
+            chosen = candidate;
+            fit = partial;
+        }
         error = null;
         return true;
     }

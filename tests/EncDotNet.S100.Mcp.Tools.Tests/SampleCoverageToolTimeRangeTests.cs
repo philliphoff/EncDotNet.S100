@@ -338,6 +338,24 @@ public class SampleCoverageToolTimeRangeTests
         Assert.Equal(7, v.Series!.Count);
     }
 
+    [Fact]
+    public async Task Range_spanning_two_runs_takes_the_run_covering_more_of_it()
+    {
+        // Window 04:00..30:00 — "early" (00..20) covers 16 h, "late" (24..71)
+        // covers 6 h; neither spans it, so the larger overlap wins even
+        // though "late" is the newer run.
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(S111Run("early", Hourly(0, 21), issueDate: "20261005"));
+        catalog.Add(S111Run("late", Hourly(24, 48), issueDate: "20261006"));
+
+        var result = await SampleS111(catalog, times: TimeQuery.Between(At(4), At(30)));
+
+        Assert.True(result.TryGetValue(out var v));
+        Assert.Equal(new DatasetId("early"), v.DatasetId);
+        Assert.True(v.Truncated);
+        Assert.Equal(At(20), v.CoveredTo);
+    }
+
     private static S111StationSeriesDataset StationRun(DateTime start, float speed, string issueDate) => new()
     {
         HorizontalCRS = 4326,
