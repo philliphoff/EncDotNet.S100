@@ -14,7 +14,8 @@ public class DescribeFeatureToolS104Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("WaterLevel", value.FeatureTypeName);
@@ -34,7 +35,8 @@ public class DescribeFeatureToolS104Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01.Group_002"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01.Group_002"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var attrs = value.Attributes;
@@ -55,7 +57,8 @@ public class DescribeFeatureToolS104Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01.Group_099"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01.Group_099"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<FeatureNotFound>(err);
@@ -69,7 +72,8 @@ public class DescribeFeatureToolS104Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var attrs = value.Attributes;
@@ -86,7 +90,8 @@ public class DescribeFeatureToolS104Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01.Group_002"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01.Group_002"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("WaterLevelStation", value.FeatureTypeName);
@@ -104,7 +109,8 @@ public class DescribeFeatureToolS104Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "STN_003"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "STN_003"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("WaterLevelStation", value.FeatureTypeName);
@@ -119,7 +125,8 @@ public class DescribeFeatureToolS104Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "NOT_A_STATION"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "NOT_A_STATION"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<FeatureNotFound>(err);
@@ -139,7 +146,8 @@ public class DescribeFeatureToolS104Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "WaterLevel.01"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         var unsupported = Assert.IsType<SpecNotSupportedForTool>(err);

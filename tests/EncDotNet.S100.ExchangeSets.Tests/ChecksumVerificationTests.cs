@@ -35,7 +35,7 @@ public class ChecksumVerificationTests
         source.AddFile("test.000", content);
 
         var result = await new ExchangeSetVerifier().VerifyAsync(
-            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         var file = Assert.Single(result.FileResults);
         Assert.Equal(VerificationOutcome.NotSigned, file.Outcome);
@@ -68,7 +68,7 @@ public class ChecksumVerificationTests
         source.AddFile("test.000", content);
 
         var result = await new ExchangeSetVerifier().VerifyAsync(
-            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         var file = Assert.Single(result.FileResults);
         Assert.Equal(VerificationOutcome.Ok, file.ChecksumOutcome);
@@ -97,7 +97,7 @@ public class ChecksumVerificationTests
         source.AddFile("test.000", content);
 
         var result = await new ExchangeSetVerifier().VerifyAsync(
-            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         var file = Assert.Single(result.FileResults);
         Assert.Equal(VerificationOutcome.ChecksumMismatch, file.ChecksumOutcome);
@@ -119,7 +119,7 @@ public class ChecksumVerificationTests
         };
 
         var result = await new ExchangeSetVerifier().VerifyAsync(
-            new InMemoryAssetSource(), catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            new InMemoryAssetSource(), catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         var file = Assert.Single(result.FileResults);
         Assert.Equal(VerificationOutcome.FileMissing, file.Outcome);
@@ -170,7 +170,7 @@ public class ChecksumVerificationTests
         source.AddFile("test.000", content);
 
         var result = await new ExchangeSetVerifier().VerifyAsync(
-            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         var file = Assert.Single(result.FileResults);
         Assert.Equal(VerificationOutcome.Ok, file.Outcome);
@@ -202,7 +202,7 @@ public class ChecksumVerificationTests
         source.AddFile("b.000", "bravo"u8.ToArray());
 
         var result = await new ExchangeSetVerifier().VerifyAsync(
-            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true });
+            source, catalogue, new TrustAnchorOptions { AllowUntrustedCertificates = true }, TestContext.Current.CancellationToken);
 
         Assert.All(result.FileResults, f => Assert.Equal(VerificationOutcome.NoChecksum, f.ChecksumOutcome));
         Assert.True(result.IsUnsigned);

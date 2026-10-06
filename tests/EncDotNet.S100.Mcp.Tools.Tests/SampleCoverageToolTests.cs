@@ -22,7 +22,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S102Spec, Latitude: 0.02, Longitude: 0.02));
+            LoadedDatasetFactory.S102Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(new DatasetId("s102-1"), value.DatasetId);
@@ -39,7 +39,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S102Spec, Latitude: 50, Longitude: 50));
+            LoadedDatasetFactory.S102Spec, Latitude: 50, Longitude: 50), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         var miss = Assert.IsType<NoDatasetCoversPoint>(error);
@@ -92,7 +92,7 @@ public class SampleCoverageToolTests
             originEasting + 3.5 * spacing, originNorthing + 2.5 * spacing);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S102Spec, Latitude: lat, Longitude: lon));
+            LoadedDatasetFactory.S102Spec, Latitude: lat, Longitude: lon), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(new DatasetId("s102-utm"), value.DatasetId);
@@ -129,7 +129,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5));
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(new DatasetId("s102-b"), value.DatasetId);
@@ -153,7 +153,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5));
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<NoDatasetCoversPoint>(error);
@@ -181,7 +181,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5));
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(new DatasetId("s102-good"), value.DatasetId);
@@ -197,7 +197,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S102Spec, Latitude: 0, Longitude: 0));
+            LoadedDatasetFactory.S102Spec, Latitude: 0, Longitude: 0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<NoDatasetCoversPoint>(error);
@@ -221,7 +221,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02));
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<WaterLevelSample>(value.Value);
@@ -250,7 +250,7 @@ public class SampleCoverageToolTests
 
         var requested = new DateTimeOffset(2024, 12, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested));
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<WaterLevelSample>(value.Value);
@@ -276,7 +276,7 @@ public class SampleCoverageToolTests
 
         var requested = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested));
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<WaterLevelSample>(value.Value);
@@ -295,7 +295,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 50, Longitude: 50));
+            LoadedDatasetFactory.S104Spec, Latitude: 50, Longitude: 50), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         var oob = Assert.IsType<OutOfBounds>(error);
@@ -310,7 +310,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 0, Longitude: 0));
+            LoadedDatasetFactory.S104Spec, Latitude: 0, Longitude: 0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<NoDatasetCoversPoint>(error);
@@ -328,7 +328,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02));
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         var nsy = Assert.IsType<NotSupportedYet>(error);
@@ -348,7 +348,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02));
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<NoDataAtPoint>(error);
@@ -366,7 +366,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02));
+            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<SurfaceCurrentSample>(value.Value);
@@ -394,13 +394,13 @@ public class SampleCoverageToolTests
 
         var before = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var beforeResult = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: before));
+            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: before), TestContext.Current.CancellationToken);
         Assert.True(beforeResult.TryGetValue(out var bv));
         Assert.Equal(times[0], Assert.IsType<SurfaceCurrentSample>(bv.Value).SampleTime);
 
         var after = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var afterResult = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: after));
+            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: after), TestContext.Current.CancellationToken);
         Assert.True(afterResult.TryGetValue(out var av));
         Assert.Equal(times[^1], Assert.IsType<SurfaceCurrentSample>(av.Value).SampleTime);
     }
@@ -417,7 +417,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02));
+            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         var nsy = Assert.IsType<NotSupportedYet>(error);
@@ -436,7 +436,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S111Spec, Latitude: -50, Longitude: -50));
+            LoadedDatasetFactory.S111Spec, Latitude: -50, Longitude: -50), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<OutOfBounds>(error);
@@ -453,7 +453,7 @@ public class SampleCoverageToolTests
         source.Dispose();
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S102Spec, Latitude: 0.02, Longitude: 0.02));
+            LoadedDatasetFactory.S102Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         var closed = Assert.IsType<DatasetClosedDuringQuery>(error);
@@ -473,7 +473,7 @@ public class SampleCoverageToolTests
         var tool = new SampleCoverageTool(catalog);
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S102Spec, Latitude: 10.0, Longitude: 20.0));
+            LoadedDatasetFactory.S102Spec, Latitude: 10.0, Longitude: 20.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var depth = Assert.IsType<DepthSample>(value.Value);

@@ -28,7 +28,7 @@ public class ViewerMutableDatasetCatalogTests
         };
         var sut = Make(catalog, gateway);
 
-        var outcome = await sut.LoadAsync("/tmp/cell.000");
+        var outcome = await sut.LoadAsync("/tmp/cell.000", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(DatasetSourceKind.File, outcome.Kind);
         Assert.Equal("cell.000", Assert.Single(outcome.Added).Value);
@@ -46,7 +46,7 @@ public class ViewerMutableDatasetCatalogTests
         };
         var sut = Make(catalog, gateway);
 
-        var outcome = await sut.LoadAsync("/tmp/mystery.dat");
+        var outcome = await sut.LoadAsync("/tmp/mystery.dat", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(outcome.Added);
     }
@@ -58,7 +58,7 @@ public class ViewerMutableDatasetCatalogTests
         var sut = Make(new FakeDatasetCatalog(), gateway);
 
         await Assert.ThrowsAsync<DatasetCatalogNotReadyException>(
-            () => sut.LoadAsync("/tmp/cell.000"));
+            () => sut.LoadAsync("/tmp/cell.000", cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class ViewerMutableDatasetCatalogTests
         };
         var sut = new ViewerMutableDatasetCatalog(catalog, gateway, quietMs: 150, maxWaitMs: 5000);
 
-        var outcome = await sut.LoadAsync("/tmp/exchange");
+        var outcome = await sut.LoadAsync("/tmp/exchange", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(DatasetSourceKind.ExchangeSet, outcome.Kind);
         Assert.Equal(2, outcome.Added.Count);
@@ -101,7 +101,7 @@ public class ViewerMutableDatasetCatalogTests
         var sut = new ViewerMutableDatasetCatalog(catalog, gateway, quietMs: 100, maxWaitMs: 5000);
 
         var sw = Stopwatch.StartNew();
-        var outcome = await sut.LoadAsync("/tmp/empty-exchange");
+        var outcome = await sut.LoadAsync("/tmp/empty-exchange", cancellationToken: TestContext.Current.CancellationToken);
         sw.Stop();
 
         Assert.Empty(outcome.Added);

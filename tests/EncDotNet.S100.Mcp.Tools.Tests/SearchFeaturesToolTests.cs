@@ -76,7 +76,7 @@ public class SearchFeaturesToolTests
         catalog.Add(S122With("mpa", null, NamedMpa("a", "North Channel"), NamedMpa("b", "South Bank")));
         var tool = new SearchFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new SearchFeaturesRequest("channel"));
+        var result = await tool.InvokeAsync(new SearchFeaturesRequest("channel"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var match = Assert.Single(value.Features);
@@ -92,7 +92,7 @@ public class SearchFeaturesToolTests
         catalog.Add(S101WithNamedPoint("enc", 100, "Nab Tower", 1.0, 1.0));
         var tool = new SearchFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new SearchFeaturesRequest("nab"));
+        var result = await tool.InvokeAsync(new SearchFeaturesRequest("nab"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var match = Assert.Single(value.Features);
@@ -110,11 +110,11 @@ public class SearchFeaturesToolTests
         catalog.Add(S122With("mpa", null, NamedMpa("a", "North Channel")));
         var tool = new SearchFeaturesTool(catalog);
 
-        var insensitive = await tool.InvokeAsync(new SearchFeaturesRequest("north"));
+        var insensitive = await tool.InvokeAsync(new SearchFeaturesRequest("north"), TestContext.Current.CancellationToken);
         Assert.True(insensitive.TryGetValue(out var iv));
         Assert.Single(iv.Features);
 
-        var sensitive = await tool.InvokeAsync(new SearchFeaturesRequest("north", CaseSensitive: true));
+        var sensitive = await tool.InvokeAsync(new SearchFeaturesRequest("north", CaseSensitive: true), TestContext.Current.CancellationToken);
         Assert.True(sensitive.TryGetValue(out var sv));
         Assert.Empty(sv.Features);
     }
@@ -126,11 +126,11 @@ public class SearchFeaturesToolTests
         catalog.Add(S122With("mpa", null, NamedMpa("a", "North Channel")));
         var tool = new SearchFeaturesTool(catalog);
 
-        var partial = await tool.InvokeAsync(new SearchFeaturesRequest("North", Exact: true));
+        var partial = await tool.InvokeAsync(new SearchFeaturesRequest("North", Exact: true), TestContext.Current.CancellationToken);
         Assert.True(partial.TryGetValue(out var pv));
         Assert.Empty(pv.Features);
 
-        var whole = await tool.InvokeAsync(new SearchFeaturesRequest("North Channel", Exact: true));
+        var whole = await tool.InvokeAsync(new SearchFeaturesRequest("North Channel", Exact: true), TestContext.Current.CancellationToken);
         Assert.True(whole.TryGetValue(out var wv));
         Assert.Single(wv.Features);
     }
@@ -144,7 +144,7 @@ public class SearchFeaturesToolTests
         var tool = new SearchFeaturesTool(catalog);
 
         var result = await tool.InvokeAsync(new SearchFeaturesRequest(
-            "Shared", Spec: new SpecRef("S-101", default)));
+            "Shared", Spec: new SpecRef("S-101", default)), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var match = Assert.Single(value.Features);
@@ -160,7 +160,7 @@ public class SearchFeaturesToolTests
         var tool = new SearchFeaturesTool(catalog);
 
         var result = await tool.InvokeAsync(new SearchFeaturesRequest(
-            "Shared", Dataset: new DatasetId("two")));
+            "Shared", Dataset: new DatasetId("two")), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var match = Assert.Single(value.Features);
@@ -178,7 +178,7 @@ public class SearchFeaturesToolTests
 
         var result = await tool.InvokeAsync(new SearchFeaturesRequest(
             "Channel",
-            Query: new GeoQuery.Box(new GeoBoundingBox(0, 0, 6, 6))));
+            Query: new GeoQuery.Box(new GeoBoundingBox(0, 0, 6, 6))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var match = Assert.Single(value.Features);
@@ -191,7 +191,7 @@ public class SearchFeaturesToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new SearchFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new SearchFeaturesRequest("   "));
+        var result = await tool.InvokeAsync(new SearchFeaturesRequest("   "), TestContext.Current.CancellationToken);
 
         var err = Assert.IsType<ToolResult<SearchFeaturesResult>.ErrResult>(result);
         Assert.Equal("invalid_argument", err.Error.Code);
@@ -207,13 +207,13 @@ public class SearchFeaturesToolTests
             NamedMpa("c", "Channel 3")));
         var tool = new SearchFeaturesTool(catalog);
 
-        var first = await tool.InvokeAsync(new SearchFeaturesRequest("Channel", Page: 0, PageSize: 2));
+        var first = await tool.InvokeAsync(new SearchFeaturesRequest("Channel", Page: 0, PageSize: 2), TestContext.Current.CancellationToken);
         Assert.True(first.TryGetValue(out var fv));
         Assert.Equal(3, fv.TotalCount);
         Assert.Equal(2, fv.Features.Count);
         Assert.True(fv.HasMore);
 
-        var second = await tool.InvokeAsync(new SearchFeaturesRequest("Channel", Page: 1, PageSize: 2));
+        var second = await tool.InvokeAsync(new SearchFeaturesRequest("Channel", Page: 1, PageSize: 2), TestContext.Current.CancellationToken);
         Assert.True(second.TryGetValue(out var sv));
         Assert.Single(sv.Features);
         Assert.False(sv.HasMore);
@@ -239,7 +239,7 @@ public class SearchFeaturesToolTests
         catalog.Add(S122With("mpa", null, feature));
         var tool = new SearchFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new SearchFeaturesRequest("Channel"));
+        var result = await tool.InvokeAsync(new SearchFeaturesRequest("Channel"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Features);

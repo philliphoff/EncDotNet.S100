@@ -42,7 +42,7 @@ public sealed class UpdateNotificationCoordinatorTests
     {
         var (coordinator, notifications, service, _) = Create(AvailableStatus());
 
-        await coordinator.CheckAndNotifyAsync();
+        await coordinator.CheckAndNotifyAsync(TestContext.Current.CancellationToken);
 
         var notification = Assert.Single(notifications.Active);
         Assert.Equal(NotificationSeverity.Info, notification.Severity);
@@ -76,7 +76,7 @@ public sealed class UpdateNotificationCoordinatorTests
         };
         var (coordinator, notifications, _, _) = Create(status);
 
-        await coordinator.CheckAndNotifyAsync();
+        await coordinator.CheckAndNotifyAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(notifications.Active);
     }
@@ -86,8 +86,8 @@ public sealed class UpdateNotificationCoordinatorTests
     {
         var (coordinator, notifications, service, _) = Create(AvailableStatus());
 
-        await coordinator.CheckAndNotifyAsync();
-        await coordinator.CheckAndNotifyAsync();
+        await coordinator.CheckAndNotifyAsync(TestContext.Current.CancellationToken);
+        await coordinator.CheckAndNotifyAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, service.CheckCount);
         Assert.Single(notifications.Active);
@@ -97,7 +97,7 @@ public sealed class UpdateNotificationCoordinatorTests
     public async Task ViewRelease_OpensReleaseUrlAndDismisses()
     {
         var (coordinator, notifications, _, opener) = Create(AvailableStatus());
-        await coordinator.CheckAndNotifyAsync();
+        await coordinator.CheckAndNotifyAsync(TestContext.Current.CancellationToken);
 
         notifications.Active.Single().Actions[0].Command.Execute(null);
 
@@ -122,7 +122,7 @@ public sealed class UpdateNotificationCoordinatorTests
                 null),
         };
         var (coordinator, notifications, _, opener) = Create(status);
-        await coordinator.CheckAndNotifyAsync();
+        await coordinator.CheckAndNotifyAsync(TestContext.Current.CancellationToken);
 
         notifications.Active.Single().Actions[0].Command.Execute(null);
 
@@ -133,7 +133,7 @@ public sealed class UpdateNotificationCoordinatorTests
     public async Task RemindLater_DismissesWithoutPersistingSuppression()
     {
         var (coordinator, notifications, service, _) = Create(AvailableStatus());
-        await coordinator.CheckAndNotifyAsync();
+        await coordinator.CheckAndNotifyAsync(TestContext.Current.CancellationToken);
 
         notifications.Active.Single().Actions[1].Command.Execute(null);
 
@@ -146,7 +146,7 @@ public sealed class UpdateNotificationCoordinatorTests
     public async Task SkipVersion_PersistsVersionAndDismisses()
     {
         var (coordinator, notifications, service, _) = Create(AvailableStatus());
-        await coordinator.CheckAndNotifyAsync();
+        await coordinator.CheckAndNotifyAsync(TestContext.Current.CancellationToken);
 
         notifications.Active.Single().Actions[2].Command.Execute(null);
 
@@ -158,7 +158,7 @@ public sealed class UpdateNotificationCoordinatorTests
     public async Task StopChecking_DisablesChecksAndDismisses()
     {
         var (coordinator, notifications, service, _) = Create(AvailableStatus());
-        await coordinator.CheckAndNotifyAsync();
+        await coordinator.CheckAndNotifyAsync(TestContext.Current.CancellationToken);
 
         notifications.Active.Single().Actions[3].Command.Execute(null);
 

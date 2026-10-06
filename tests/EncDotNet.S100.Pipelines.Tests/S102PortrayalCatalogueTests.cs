@@ -55,7 +55,7 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     public async Task DayPalette_LoadsAllSixDepthTokens()
     {
         var catalogue = CreateCatalogue();
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
 
         foreach (var token in new[] { "DEPDW", "DEPMD", "DEPMS", "DEPVS", "DEPIT", "NODTA" })
         {
@@ -72,14 +72,14 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     public async Task DuskAndNightPalettes_Load_AndDifferFromDay()
     {
         var catalogue = CreateCatalogue();
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
         Assert.True(catalogue.ActivePalette.TryResolve("DEPVS", out var dayHex));
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Dusk);
+        await catalogue.SwitchPaletteAsync(PaletteType.Dusk, TestContext.Current.CancellationToken);
         Assert.True(catalogue.ActivePalette.TryResolve("DEPVS", out var duskHex));
         Assert.NotEqual(dayHex, duskHex);
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Night);
+        await catalogue.SwitchPaletteAsync(PaletteType.Night, TestContext.Current.CancellationToken);
         Assert.True(catalogue.ActivePalette.TryResolve("DEPVS", out var nightHex));
         Assert.Equal(NightDEPVS, nightHex, StringComparer.OrdinalIgnoreCase);
     }
@@ -141,7 +141,7 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     public async Task NightPalette_SwitchAppliesToResolvedScheme()
     {
         var catalogue = CreateCatalogue();
-        await catalogue.SwitchPaletteAsync(PaletteType.Night);
+        await catalogue.SwitchPaletteAsync(PaletteType.Night, TestContext.Current.CancellationToken);
 
         var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = Depth.FromMetres(30.0) });
 
@@ -152,7 +152,7 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     public async Task NoDataColor_IsPopulatedFromActivePaletteNODTA()
     {
         var catalogue = CreateCatalogue();
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
 
         var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = Depth.FromMetres(30.0) });
 
@@ -165,7 +165,7 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     public async Task NoDataColor_IsNull_WhenRenderNoDataFillDisabled()
     {
         var catalogue = new S102PortrayalCatalogue(_engine, _provider) { RenderNoDataFill = false };
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
 
         var scheme = catalogue.ResolveColorScheme(new MarinerSettings { FourShades = false, SafetyContour = Depth.FromMetres(30.0) });
 

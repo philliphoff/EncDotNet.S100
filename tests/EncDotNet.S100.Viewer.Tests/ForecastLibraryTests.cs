@@ -202,7 +202,7 @@ public sealed class ForecastLibraryTests : IDisposable
         Assert.True(vm.HasReviewUse);
         Assert.Contains("Refresh looks for a newer run", vm.ReviewUpdates, StringComparison.Ordinal);
 
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(14, vm.ForecastModels.Count);
         var cbofs = vm.ForecastModels.Single(o => o.Value == "cbofs");

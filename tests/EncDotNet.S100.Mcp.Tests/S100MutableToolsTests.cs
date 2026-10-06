@@ -78,10 +78,10 @@ public class S100MutableToolsTests
             AdditionalTools = S100MutableTools.Create(
                 viewport: new StaticCapabilityAccessor<IViewportController>(host)),
         });
-        await server.StartAsync();
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await server.StartAsync(TestContext.Current.CancellationToken);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var tools = await client.ListToolsAsync();
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(tools, t => t.Name == "set_viewport");
 
         var result = await client.CallToolAsync(
@@ -91,7 +91,8 @@ public class S100MutableToolsTests
                 ["centerLongitude"] = -1.25,
                 ["centerLatitude"] = 50.5,
                 ["scaleDenominator"] = 50000,
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError);
         var json = JsonDocument.Parse(GetText(result)).RootElement;
@@ -114,15 +115,16 @@ public class S100MutableToolsTests
             AdditionalTools = S100MutableTools.Create(
                 renderer: new StaticCapabilityAccessor<IImageRenderer>(new FakeRenderer(png))),
         });
-        await server.StartAsync();
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await server.StartAsync(TestContext.Current.CancellationToken);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var tools = await client.ListToolsAsync();
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(tools, t => t.Name == "render_to_image");
 
         var result = await client.CallToolAsync(
             "render_to_image",
-            new Dictionary<string, object?> { ["width"] = 320, ["height"] = 240 });
+            new Dictionary<string, object?> { ["width"] = 320, ["height"] = 240 },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError);
         var image = Assert.IsType<ModelContextProtocol.Protocol.ImageContentBlock>(result.Content[0]);
@@ -151,15 +153,16 @@ public class S100MutableToolsTests
             Port = 0,
             AdditionalTools = S100MutableTools.Create(PresentationAccessor(host)),
         });
-        await server.StartAsync();
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await server.StartAsync(TestContext.Current.CancellationToken);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var tools = await client.ListToolsAsync();
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(tools, t => t.Name == "set_palette");
 
         var result = await client.CallToolAsync(
             "set_palette",
-            new Dictionary<string, object?> { ["palette"] = "Night" });
+            new Dictionary<string, object?> { ["palette"] = "Night" },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsError);
         var json = JsonDocument.Parse(GetText(result)).RootElement;
@@ -180,12 +183,13 @@ public class S100MutableToolsTests
             Port = 0,
             AdditionalTools = S100MutableTools.Create(PresentationAccessor(host)),
         });
-        await server.StartAsync();
-        await using var client = await McpTestClient.ConnectAsync(server);
+        await server.StartAsync(TestContext.Current.CancellationToken);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
         var result = await client.CallToolAsync(
             "set_palette",
-            new Dictionary<string, object?> { ["palette"] = "Purple" });
+            new Dictionary<string, object?> { ["palette"] = "Purple" },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.IsError);
         var json = JsonDocument.Parse(GetText(result)).RootElement;

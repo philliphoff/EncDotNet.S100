@@ -253,7 +253,7 @@ public class MapPresentationStateTests
     {
         var controller = new RecordingPresentationController();
 
-        await controller.SetPresentationAsync(MapPresentationState.Default);
+        await controller.SetPresentationAsync(MapPresentationState.Default, TestContext.Current.CancellationToken);
 
         Assert.Same(MapPresentationState.Default, controller.Presentation);
     }

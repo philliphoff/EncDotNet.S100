@@ -71,12 +71,12 @@ public sealed class FeedExportTests : IDisposable
         var feedUri = new Uri("https://static.test/charts/feed.json");
         using var http = new HttpClient(new StaticHost(Output, "/charts/"));
         var index = await CollectionIndexer.CreateDefault(feeds: [new S100FeedIndexer(http, Path.Combine(_root, "cache"))])
-            .IndexAsync(new S100FeedSource(Guid.NewGuid(), null, feedUri, S100FeedFilter.All));
+            .IndexAsync(new S100FeedSource(Guid.NewGuid(), null, feedUri, S100FeedFilter.All), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(result.Items, index.Items.Count);
 
         var cell = index.Items.Single(i => i.Name == "US4OH1MK");
         var remote = (RemoteItemLocation)cell.Location;
-        var downloaded = await new EncCellDownloader(http, Path.Combine(_root, "downloads", remote.DownloadFolder!)).DownloadAsync(cell);
+        var downloaded = await new EncCellDownloader(http, Path.Combine(_root, "downloads", remote.DownloadFolder!)).DownloadAsync(cell, cancellationToken: TestContext.Current.CancellationToken);
         var local = downloaded.Datasets["US4OH1MK"];
         Assert.Equal(["US4OH1MK/US4OH1MK.001"], local.UpdateRelativePaths);
     }

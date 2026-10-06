@@ -57,11 +57,11 @@ public sealed class PortrayalAssetNotFoundExceptionTests
     public async Task Catalogue_MissingSymbol_ThrowsPortrayalAssetNotFound()
     {
         using var source = Specification.CreatePortrayalCatalogueSource("S-101");
-        var provider = await PortrayalCatalogueProvider.OpenAsync(source);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new S101PortrayalCatalogue(provider);
 
         var ex = await Assert.ThrowsAsync<PortrayalAssetNotFoundException>(
-            async () => await catalogue.GetSymbolAsync("NOT_A_REAL_SYMBOL_ZZZ"));
+            async () => await catalogue.GetSymbolAsync("NOT_A_REAL_SYMBOL_ZZZ", TestContext.Current.CancellationToken));
 
         Assert.Equal(PortrayalAssetKind.Symbol, ex.AssetKind);
         Assert.Equal("NOT_A_REAL_SYMBOL_ZZZ", ex.AssetName);

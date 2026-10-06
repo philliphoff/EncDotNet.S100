@@ -28,7 +28,7 @@ public sealed class EncCellDownloaderTests : IDisposable
         var downloader = Create();
         long lastProgress = 0;
 
-        var cell = await downloader.DownloadAsync(Cell(), new Progress<long>(b => lastProgress = b));
+        var cell = await downloader.DownloadAsync(Cell(), new Progress<long>(b => lastProgress = b), TestContext.Current.CancellationToken);
 
         Assert.Equal("US4OH1MK", cell.Name);
         Assert.Equal(1, cell.Edition);
@@ -50,10 +50,10 @@ public sealed class EncCellDownloaderTests : IDisposable
     [Fact]
     public async Task Downloaded_cell_indexes_as_a_local_exchange_set()
     {
-        var cell = await Create().DownloadAsync(Cell());
+        var cell = await Create().DownloadAsync(Cell(), cancellationToken: TestContext.Current.CancellationToken);
 
         var index = await Indexing.CollectionIndexer.CreateDefault()
-            .IndexAsync(new ExchangeSetSource(Guid.NewGuid(), null, cell.Location.RootPath));
+            .IndexAsync(new ExchangeSetSource(Guid.NewGuid(), null, cell.Location.RootPath), cancellationToken: TestContext.Current.CancellationToken);
 
         var item = Assert.Single(index.Items);
         Assert.Equal("US4OH1MK", item.Name);
@@ -64,10 +64,10 @@ public sealed class EncCellDownloaderTests : IDisposable
     public async Task A_failed_redownload_keeps_the_previous_copy()
     {
         var downloader = Create();
-        var first = await downloader.DownloadAsync(Cell());
+        var first = await downloader.DownloadAsync(Cell(), cancellationToken: TestContext.Current.CancellationToken);
 
         _server.Fail = true;
-        await Assert.ThrowsAsync<HttpRequestException>(() => downloader.DownloadAsync(Cell(update: 2)));
+        await Assert.ThrowsAsync<HttpRequestException>(() => downloader.DownloadAsync(Cell(update: 2), cancellationToken: TestContext.Current.CancellationToken));
 
         var kept = downloader.TryGetDownloaded("US4OH1MK")!;
         Assert.Equal(first.Update, kept.Update);
@@ -79,9 +79,9 @@ public sealed class EncCellDownloaderTests : IDisposable
     public async Task A_redownload_replaces_the_copy_and_records_the_new_update()
     {
         var downloader = Create();
-        await downloader.DownloadAsync(Cell(update: 1));
+        await downloader.DownloadAsync(Cell(update: 1), cancellationToken: TestContext.Current.CancellationToken);
 
-        var second = await downloader.DownloadAsync(Cell(update: 2));
+        var second = await downloader.DownloadAsync(Cell(update: 2), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, second.Update);
         Assert.Single(Directory.EnumerateFileSystemEntries(_root.Path));
@@ -101,7 +101,7 @@ public sealed class EncCellDownloaderTests : IDisposable
     [Fact]
     public async Task IsOlderThan_compares_edition_then_update()
     {
-        var cell = await Create().DownloadAsync(Cell(edition: 3, update: 2));
+        var cell = await Create().DownloadAsync(Cell(edition: 3, update: 2), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(cell.IsOlderThan(Cell(edition: 3, update: 2)));
         Assert.True(cell.IsOlderThan(Cell(edition: 3, update: 3)));
@@ -129,7 +129,7 @@ public sealed class EncCellDownloaderTests : IDisposable
     [Fact]
     public async Task A_package_records_every_cell_it_holds()
     {
-        var cell = await Create().DownloadAsync(Package("https://example.test/p.zip"));
+        var cell = await Create().DownloadAsync(Package("https://example.test/p.zip"), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(cell.IsPackage);
         Assert.Equal("Base1", cell.Name);
@@ -145,7 +145,7 @@ public sealed class EncCellDownloaderTests : IDisposable
     {
         var downloader = new EncCellDownloader(new HttpClient(new ZipServer(BaseCell())), _root.Path);
 
-        var cell = await downloader.DownloadAsync(Package("https://example.test/cells/US4OH1MK.000"));
+        var cell = await downloader.DownloadAsync(Package("https://example.test/cells/US4OH1MK.000"), cancellationToken: TestContext.Current.CancellationToken);
 
         var location = cell.Datasets["US4OH1MK"];
         Assert.Equal(Path.Combine(_root.Path, "Base1"), location.RootPath);
@@ -159,7 +159,7 @@ public sealed class EncCellDownloaderTests : IDisposable
         var downloader = new EncCellDownloader(new HttpClient(new ZipServer("not a chart"u8.ToArray())), _root.Path);
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
-            downloader.DownloadAsync(Package("https://example.test/download?id=1")));
+            downloader.DownloadAsync(Package("https://example.test/download?id=1"), cancellationToken: TestContext.Current.CancellationToken));
         Assert.Empty(Directory.EnumerateFileSystemEntries(_root.Path));
     }
 
@@ -167,7 +167,7 @@ public sealed class EncCellDownloaderTests : IDisposable
     public async Task A_package_is_older_when_the_list_has_a_later_publication()
     {
         var published = new DateTimeOffset(2024, 6, 12, 0, 0, 0, TimeSpan.Zero);
-        var cell = await Create().DownloadAsync(Package("https://example.test/p.zip", published));
+        var cell = await Create().DownloadAsync(Package("https://example.test/p.zip", published), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(cell.IsOlderThan(Package("https://example.test/p.zip", published)));
         Assert.True(cell.IsOlderThan(Package("https://example.test/p.zip", published.AddDays(1))));

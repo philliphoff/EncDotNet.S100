@@ -112,7 +112,7 @@ public sealed class S100CatalogueFeedIndexerTests : IDisposable
         var server = new BucketServer(GzipCatalogue());
         var indexer = CollectionIndexer.CreateDefault(feeds: [new S100CatalogueFeedIndexer(new HttpClient(server), _temp.Path)]);
 
-        var index = await indexer.IndexAsync(Source());
+        var index = await indexer.IndexAsync(Source(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(index.Diagnostics);
         Assert.Equal(5, index.Items.Count);
@@ -130,7 +130,7 @@ public sealed class S100CatalogueFeedIndexerTests : IDisposable
         Assert.Equal("California/Newport", index.Groups[0].Id);
 
         // Unchanged (a 304): the previous index is reused.
-        var again = await indexer.IndexAsync(Source() with { Id = index.SourceId }, index);
+        var again = await indexer.IndexAsync(Source() with { Id = index.SourceId }, index, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Same(index, again);
     }
 
@@ -169,9 +169,9 @@ public sealed class S100CatalogueFeedIndexerTests : IDisposable
     {
         var server = new BucketServer(GzipCatalogue());
         var indexer = new S100CatalogueFeedIndexer(new HttpClient(server), _temp.Path);
-        var catalogue = await indexer.GetCatalogueAsync(CatalogUri);
+        var catalogue = await indexer.GetCatalogueAsync(CatalogUri, cancellationToken: TestContext.Current.CancellationToken);
 
-        var sizes = await indexer.ListAsync(catalogue, ["Northeast"]);
+        var sizes = await indexer.ListAsync(catalogue, ["Northeast"], TestContext.Current.CancellationToken);
         await indexer.IndexAsync(Source(new S100CatalogueFilter { Folders = ["Northeast/Boston"] }), null, CancellationToken.None);
 
         Assert.Equal(2, sizes!.Count);
@@ -186,7 +186,7 @@ public sealed class S100CatalogueFeedIndexerTests : IDisposable
         var indexer = new S100CatalogueFeedIndexer(new HttpClient(new BucketServer([])), _temp.Path);
 
         Assert.Equal(new Uri("https://charts.example.test/s102/"), catalogue.RootUri);
-        Assert.Null(await indexer.ListAsync(catalogue, [string.Empty]));
+        Assert.Null(await indexer.ListAsync(catalogue, [string.Empty], TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public sealed class S100CatalogueFeedIndexerTests : IDisposable
         var item = ReadFixture().Items.Single(i => i.Name == "102US004SC1EV");
         var downloader = new EncCellDownloader(new HttpClient(new BucketServer([])), _temp.Path);
 
-        var cell = await downloader.DownloadAsync(item);
+        var cell = await downloader.DownloadAsync(item, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(5, cell.Edition);
         Assert.Equal(Path.Combine(_temp.Path, "102US004SC1EV"), cell.Location.RootPath);

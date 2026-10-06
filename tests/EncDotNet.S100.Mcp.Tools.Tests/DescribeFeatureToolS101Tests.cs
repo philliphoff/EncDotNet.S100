@@ -31,7 +31,8 @@ public class DescribeFeatureToolS101Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("enc"), "808"));
+            new DescribeFeatureRequest(new DatasetId("enc"), "808"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("Sounding", value.FeatureTypeName);
@@ -64,7 +65,8 @@ public class DescribeFeatureToolS101Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("enc"), "1"));
+            new DescribeFeatureRequest(new DatasetId("enc"), "1"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var depths = value.Attributes.GetProperty("geometry").GetProperty("depths");
@@ -87,7 +89,8 @@ public class DescribeFeatureToolS101Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("enc"), "700"));
+            new DescribeFeatureRequest(new DatasetId("enc"), "700"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
 
@@ -121,7 +124,8 @@ public class DescribeFeatureToolS101Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("enc"), "1"));
+            new DescribeFeatureRequest(new DatasetId("enc"), "1"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var infoAssociations = value.Attributes.GetProperty("informationAssociations");
@@ -150,7 +154,8 @@ public class DescribeFeatureToolS101Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("enc"), "4242"));
+            new DescribeFeatureRequest(new DatasetId("enc"), "4242"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
 
@@ -183,7 +188,8 @@ public class DescribeFeatureToolS101Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("enc"), "4242"));
+            new DescribeFeatureRequest(new DatasetId("enc"), "4242"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var attr = value.Attributes.GetProperty("attributes")[0];
@@ -205,7 +211,8 @@ public class DescribeFeatureToolS101Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("enc"), "808"));
+            new DescribeFeatureRequest(new DatasetId("enc"), "808"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var geometry = value.Attributes.GetProperty("geometry");

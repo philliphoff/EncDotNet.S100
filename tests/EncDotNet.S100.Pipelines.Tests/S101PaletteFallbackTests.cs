@@ -66,7 +66,7 @@ public class S101PaletteFallbackTests
             var catalogue = await CreateCatalogueAsync(dir);
 
             // Must not throw KeyNotFoundException (the #321 symptom).
-            await catalogue.SwitchPaletteAsync(PaletteType.Day);
+            await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
 
             Assert.NotNull(catalogue.ActivePalette);
             Assert.Same(ColorPalette.Default, catalogue.ActivePalette);
@@ -85,9 +85,9 @@ public class S101PaletteFallbackTests
         {
             var catalogue = await CreateCatalogueAsync(dir);
 
-            await catalogue.SwitchPaletteAsync(PaletteType.Day);
-            await catalogue.SwitchPaletteAsync(PaletteType.Dusk);
-            await catalogue.SwitchPaletteAsync(PaletteType.Night);
+            await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
+            await catalogue.SwitchPaletteAsync(PaletteType.Dusk, TestContext.Current.CancellationToken);
+            await catalogue.SwitchPaletteAsync(PaletteType.Night, TestContext.Current.CancellationToken);
 
             Assert.NotNull(catalogue.ActivePalette);
         }
@@ -110,7 +110,7 @@ public class S101PaletteFallbackTests
     public async Task CancelledLoad_DoesNotPoisonCache_LaterLoadSucceeds()
     {
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
-        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new S101PortrayalCatalogue(provider);
 
         using (var cts = new CancellationTokenSource())
@@ -122,7 +122,7 @@ public class S101PaletteFallbackTests
 
         // The cache must not have been committed by the cancelled attempt, so a
         // fresh load resolves the real, populated Day palette.
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
         Assert.Equal("Day", catalogue.ActivePalette.Name);
         Assert.NotEmpty(catalogue.ActivePalette.Colors);
     }
@@ -138,15 +138,15 @@ public class S101PaletteFallbackTests
     public async Task ConcurrentLoads_SharingCache_BothSucceed()
     {
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
-        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource, cancellationToken: TestContext.Current.CancellationToken);
 
         // Both catalogues read provider.AssetCache, so they share one cache.
         var catalogueA = new S101PortrayalCatalogue(provider);
         var catalogueB = new S101PortrayalCatalogue(provider);
 
         await Task.WhenAll(
-            Task.Run(async () => await catalogueA.SwitchPaletteAsync(PaletteType.Day)),
-            Task.Run(async () => await catalogueB.SwitchPaletteAsync(PaletteType.Day)));
+            Task.Run(async () => await catalogueA.SwitchPaletteAsync(PaletteType.Day), TestContext.Current.CancellationToken),
+            Task.Run(async () => await catalogueB.SwitchPaletteAsync(PaletteType.Day), TestContext.Current.CancellationToken));
 
         Assert.Equal("Day", catalogueA.ActivePalette.Name);
         Assert.NotEmpty(catalogueA.ActivePalette.Colors);

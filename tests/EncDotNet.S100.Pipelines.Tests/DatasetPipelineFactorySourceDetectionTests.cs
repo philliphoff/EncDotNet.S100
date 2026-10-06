@@ -29,7 +29,7 @@ public class DatasetPipelineFactorySourceDetectionTests
     {
         using var source = FileSystemAssetSource.Create(TestData);
 
-        var spec = await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(source, fileName);
+        var spec = await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(source, fileName, TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedSpec, spec);
         Assert.Equal(DatasetPipelineFactory.DetectProductSpec(Path.Combine(TestData, fileName)), spec);
@@ -46,7 +46,7 @@ public class DatasetPipelineFactorySourceDetectionTests
             SyntheticIso8211Cell.Write(dir, fileName, productSpecification);
             using var source = FileSystemAssetSource.Create(dir);
 
-            var spec = await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(source, fileName);
+            var spec = await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(source, fileName, TestContext.Current.CancellationToken);
 
             Assert.Equal(expectedSpec, spec);
         }
@@ -64,7 +64,7 @@ public class DatasetPipelineFactorySourceDetectionTests
     {
         using var source = FileSystemAssetSource.Create(TestData);
 
-        var spec = await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(source, fileName);
+        var spec = await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(source, fileName, TestContext.Current.CancellationToken);
 
         Assert.Null(spec);
     }

@@ -72,7 +72,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     [Fact]
     public async Task A_preview_lists_the_choices_and_adds_nothing()
     {
-        var result = await new AddLibrarySourceTool(_editor).InvokeAsync(Add(known: "noaa-s111", preview: true));
+        var result = await new AddLibrarySourceTool(_editor).InvokeAsync(Add(known: "noaa-s111", preview: true), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var preview));
         Assert.False(preview!.Added);
@@ -85,7 +85,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     [Fact]
     public async Task Choosing_models_adds_a_forecast_source_in_a_new_collection()
     {
-        var result = await new AddLibrarySourceTool(_editor).InvokeAsync(Add(known: "noaa-s111", choices: ["cbofs", "Delaware Bay"]));
+        var result = await new AddLibrarySourceTool(_editor).InvokeAsync(Add(known: "noaa-s111", choices: ["cbofs", "Delaware Bay"]), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var added));
         Assert.True(added!.Added);
@@ -102,7 +102,7 @@ public sealed class LibraryEditToolsTests : IDisposable
         var charts = await ChartsAsync();
         var path = _context.CreateS57ExchangeSet("More");
 
-        var result = await new AddLibrarySourceTool(_editor).InvokeAsync(Add(path: path, collectionId: charts));
+        var result = await new AddLibrarySourceTool(_editor).InvokeAsync(Add(path: path, collectionId: charts), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var added));
         Assert.Equal(charts, added!.CollectionId);
@@ -116,7 +116,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     [InlineData(null, "/no/such/path", "path")]
     public async Task Bad_adds_are_rejected(string? known, string? path, string parameter)
     {
-        var result = await new AddLibrarySourceTool(_editor).InvokeAsync(Add(known: known, path: path, choices: known == "noaa-s111" ? ["atlantis"] : null));
+        var result = await new AddLibrarySourceTool(_editor).InvokeAsync(Add(known: known, path: path, choices: known == "noaa-s111" ? ["atlantis"] : null), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.Equal(parameter, Assert.IsType<InvalidArgument>(error).Parameter);
@@ -131,7 +131,7 @@ public sealed class LibraryEditToolsTests : IDisposable
         await ChartsAsync();
         await OnlineAsync();
 
-        Assert.True((await new LibraryActionTool(_editor).InvokeAsync(Act("download", states: ["online", "local"], dryRun: true))).TryGetValue(out var plan));
+        Assert.True((await new LibraryActionTool(_editor).InvokeAsync(Act("download", states: ["online", "local"], dryRun: true), TestContext.Current.CancellationToken)).TryGetValue(out var plan));
 
         Assert.Equal((2, 1_000L, 1), (plan!.Eligible, plan.Bytes, plan.UnknownSizes));
         Assert.Equal(new Dictionary<string, int> { ["local"] = 2 }, plan.Skipped);
@@ -144,11 +144,11 @@ public sealed class LibraryEditToolsTests : IDisposable
         var online = await OnlineAsync();
         var tool = new LibraryActionTool(_editor);
 
-        Assert.True((await tool.InvokeAsync(Act("download_only", sourceId: online.ToString(), maxBytes: 500))).TryGetError(out var tooBig));
+        Assert.True((await tool.InvokeAsync(Act("download_only", sourceId: online.ToString(), maxBytes: 500), TestContext.Current.CancellationToken)).TryGetError(out var tooBig));
         Assert.Equal("library_change_rejected", tooBig!.Code);
         Assert.Equal(0, _downloader.Downloads);
 
-        Assert.True((await tool.InvokeAsync(Act("download", sourceId: online.ToString(), maxBytes: 5_000))).TryGetValue(out var started));
+        Assert.True((await tool.InvokeAsync(Act("download", sourceId: online.ToString(), maxBytes: 5_000), TestContext.Current.CancellationToken)).TryGetValue(out var started));
         Assert.True(started!.Started);
         Assert.Equal(2, _downloader.Downloads);
         Assert.Equal(2, _loader.Loaded);
@@ -159,10 +159,10 @@ public sealed class LibraryEditToolsTests : IDisposable
     {
         await ChartsAsync();
         Assert.True((await new QueryLibraryItemsTool(new ViewerLibraryController(_panel, null, a => { a(); return Task.CompletedTask; }))
-            .InvokeAsync(new QueryLibraryItemsRequest(null, null, null, "51m", null, null, null, null, null, null, null, null)))
+            .InvokeAsync(new QueryLibraryItemsRequest(null, null, null, "51m", null, null, null, null, null, null, null, null), TestContext.Current.CancellationToken))
             .TryGetValue(out var page));
 
-        Assert.True((await new LibraryActionTool(_editor).InvokeAsync(Act("load", ids: [page!.Items[0].Id]))).TryGetValue(out var loaded));
+        Assert.True((await new LibraryActionTool(_editor).InvokeAsync(Act("load", ids: [page!.Items[0].Id]), TestContext.Current.CancellationToken)).TryGetValue(out var loaded));
 
         Assert.Equal(1, loaded!.Opened);
         Assert.Equal(1, _loader.Loaded);
@@ -174,7 +174,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     public async Task Bad_actions_are_rejected(string action, bool withFilter, string parameter)
     {
         await ChartsAsync();
-        var result = await new LibraryActionTool(_editor).InvokeAsync(Act(action, states: withFilter ? ["local"] : null));
+        var result = await new LibraryActionTool(_editor).InvokeAsync(Act(action, states: withFilter ? ["local"] : null), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.Equal(parameter, Assert.IsType<InvalidArgument>(error).Parameter);
@@ -183,7 +183,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     [Fact]
     public async Task Cancel_all_cancels_every_download()
     {
-        Assert.True((await new LibraryActionTool(_editor).InvokeAsync(Act("cancel", all: true))).TryGetValue(out _));
+        Assert.True((await new LibraryActionTool(_editor).InvokeAsync(Act("cancel", all: true), TestContext.Current.CancellationToken)).TryGetValue(out _));
         Assert.True(_downloader.CancelledAll);
     }
 
@@ -194,7 +194,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     {
         var charts = await ChartsAsync();
 
-        Assert.True((await new RefreshLibrarySourceTool(_editor).InvokeAsync(charts.ToString(), 10_000)).TryGetValue(out var refreshed));
+        Assert.True((await new RefreshLibrarySourceTool(_editor).InvokeAsync(charts.ToString(), 10_000, TestContext.Current.CancellationToken)).TryGetValue(out var refreshed));
 
         Assert.True(refreshed!.Waited);
         Assert.False(refreshed.TimedOut);
@@ -208,11 +208,11 @@ public sealed class LibraryEditToolsTests : IDisposable
         var charts = await ChartsAsync();
         var tool = new RemoveLibrarySourceTool(_editor);
 
-        Assert.True((await tool.InvokeAsync(charts.ToString(), confirm: null)).TryGetError(out var unconfirmed));
+        Assert.True((await tool.InvokeAsync(charts.ToString(), confirm: null, ct: TestContext.Current.CancellationToken)).TryGetError(out var unconfirmed));
         Assert.Equal("confirm", Assert.IsType<InvalidArgument>(unconfirmed).Parameter);
         Assert.Single(_library.Collections);
 
-        Assert.True((await tool.InvokeAsync(charts.ToString(), confirm: true)).TryGetValue(out var removed));
+        Assert.True((await tool.InvokeAsync(charts.ToString(), confirm: true, ct: TestContext.Current.CancellationToken)).TryGetValue(out var removed));
         Assert.Equal(("Charts", true, 2), (removed!.Name, removed.WasCollection, removed.ItemCount));
         Assert.Empty(_library.Collections);
     }
@@ -222,7 +222,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     {
         await ChartsAsync();
 
-        Assert.True((await new AwaitLibraryIdleTool(_editor).InvokeAsync(1_000)).TryGetValue(out var idle));
+        Assert.True((await new AwaitLibraryIdleTool(_editor).InvokeAsync(1_000, TestContext.Current.CancellationToken)).TryGetValue(out var idle));
 
         Assert.True(idle!.Idle);
         Assert.Null(idle.Downloads);

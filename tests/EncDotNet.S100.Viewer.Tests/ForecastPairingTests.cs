@@ -214,7 +214,7 @@ public sealed class ForecastPairingTests : IDisposable
         }).ToArray();
         var vm = new AddToLibraryDialogViewModel(_library, null, loadForecastModels: (_, models, _) => Task.FromResult(Summaries(models)));
         vm.Initialize(known, targetCollectionId: null);
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         vm.PreselectModelsCovering(area);
 
@@ -232,7 +232,7 @@ public sealed class ForecastPairingTests : IDisposable
                 [new ForecastModelSummary(models[0], pilotRun, 4, 5_349_334, null, null)]));
 
         vm.Initialize(known, targetCollectionId: null);
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.True(vm.IsSingleEntry);
         Assert.Equal("Charleston Harbor", vm.SingleEntry!.Label);

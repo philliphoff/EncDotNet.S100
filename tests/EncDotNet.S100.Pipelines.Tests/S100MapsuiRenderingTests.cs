@@ -42,7 +42,7 @@ public class S100MapsuiRenderingTests
             patternClipCache: null,
             options: options);
 
-        var result = await renderer.RenderAsync(new StubVectorProcessor());
+        var result = await renderer.RenderAsync(new StubVectorProcessor(), cancellationToken: TestContext.Current.CancellationToken);
 
         var layer = Assert.Single(result.Layers);
         Assert.Equal(expectedRendererName, layer.CustomLayerRendererName);
@@ -61,8 +61,8 @@ public class S100MapsuiRenderingTests
             options);
         var processor = new StubPatternVectorProcessor();
 
-        await renderer.RenderAsync(processor);
-        await renderer.RenderAsync(processor);
+        await renderer.RenderAsync(processor, cancellationToken: TestContext.Current.CancellationToken);
+        await renderer.RenderAsync(processor, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, renderer.PatternClipCacheMisses);
         Assert.True(renderer.PatternClipCacheHits >= 1);
@@ -89,7 +89,7 @@ public class S100MapsuiRenderingTests
         S100MapsuiRendering.Register();
         var renderer = new MapsuiDatasetRenderer(new IdentityCrsTransformFactory());
 
-        var result = await renderer.RenderAsync(new StubVectorProcessor());
+        var result = await renderer.RenderAsync(new StubVectorProcessor(), cancellationToken: TestContext.Current.CancellationToken);
 
         var layer = Assert.Single(result.Layers);
         Assert.Equal("Test layer", layer.Name);

@@ -47,7 +47,7 @@ public class RenderObservabilityToolTests
         };
         var tool = new AwaitRenderIdleTool(monitor);
 
-        var result = await tool.InvokeAsync(new AwaitRenderIdleRequest());
+        var result = await tool.InvokeAsync(new AwaitRenderIdleRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(AwaitRenderIdleTool.DefaultQuietPeriodMs, value!.QuietPeriodMs);
@@ -63,7 +63,7 @@ public class RenderObservabilityToolTests
         var monitor = new FakeMonitor { NextResult = new RenderIdleResult(false, true, 1, 0, 1) };
         var tool = new AwaitRenderIdleTool(monitor);
 
-        var result = await tool.InvokeAsync(new AwaitRenderIdleRequest(QuietPeriodMs: 999_999, TimeoutMs: 1));
+        var result = await tool.InvokeAsync(new AwaitRenderIdleRequest(QuietPeriodMs: 999_999, TimeoutMs: 1), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(AwaitRenderIdleTool.MaxQuietPeriodMs, value!.QuietPeriodMs);
@@ -90,7 +90,7 @@ public class RenderObservabilityToolTests
     public async Task GetRenderStats_reports_no_data_when_no_paint()
     {
         var tool = new GetRenderStatsTool(new FakeMonitor { LatestStats = null });
-        var result = await tool.InvokeAsync(new GetRenderStatsRequest());
+        var result = await tool.InvokeAsync(new GetRenderStatsRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.False(value!.HasData);
@@ -114,7 +114,7 @@ public class RenderObservabilityToolTests
             CapturedAtUtc: DateTimeOffset.UnixEpoch);
         var tool = new GetRenderStatsTool(new FakeMonitor { LatestStats = snapshot });
 
-        var result = await tool.InvokeAsync(new GetRenderStatsRequest());
+        var result = await tool.InvokeAsync(new GetRenderStatsRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.True(value!.HasData);

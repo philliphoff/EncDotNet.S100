@@ -123,10 +123,10 @@ public class S101PatternFillDiagnosticTests
         {
             try
             {
-                var areaFill = await catalogue.GetAreaFillAsync(fillName);
+                var areaFill = await catalogue.GetAreaFillAsync(fillName, TestContext.Current.CancellationToken);
                 if (areaFill.PatternSymbol is null) continue;
 
-                var svgContent = (await catalogue.GetSymbolAsync(areaFill.PatternSymbol)).SvgContent;
+                var svgContent = (await catalogue.GetSymbolAsync(areaFill.PatternSymbol, TestContext.Current.CancellationToken)).SvgContent;
                 var processed = SvgProcessor.Process(svgContent, palette);
 
                 // Dump SVG and area fill details
@@ -374,10 +374,10 @@ public class S101PatternFillDiagnosticTests
             {
                 try
                 {
-                    var areaFill = await catalogue.GetAreaFillAsync(symbolRef);
+                    var areaFill = await catalogue.GetAreaFillAsync(symbolRef, TestContext.Current.CancellationToken);
                     if (areaFill.PatternSymbol is not null)
                     {
-                        var svgContent = (await catalogue.GetSymbolAsync(areaFill.PatternSymbol)).SvgContent;
+                        var svgContent = (await catalogue.GetSymbolAsync(areaFill.PatternSymbol, TestContext.Current.CancellationToken)).SvgContent;
                         var processed = SvgProcessor.Process(svgContent, palette);
                         var png = SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
                         if (png is not null)

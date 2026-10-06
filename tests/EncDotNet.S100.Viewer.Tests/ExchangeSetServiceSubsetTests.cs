@@ -33,7 +33,7 @@ public sealed class ExchangeSetServiceSubsetTests
         var root = Fixture("Synthetic-S57-Framed");
 
         var entries = await service.OpenSubsetAsync(
-            new ExchangeSetSubsetRequest(root, "CATALOG.031", [Cell("US5WA52M")]), defer: false);
+            new ExchangeSetSubsetRequest(root, "CATALOG.031", [Cell("US5WA52M")]), defer: false, cancellationToken: TestContext.Current.CancellationToken);
 
         var entry = Assert.Single(entries);
         Assert.Equal("US5WA52M", entry.DisplayName);
@@ -54,9 +54,9 @@ public sealed class ExchangeSetServiceSubsetTests
         var root = Fixture("Synthetic-S57-Framed");
 
         var first = await service.OpenSubsetAsync(
-            new ExchangeSetSubsetRequest(root, "CATALOG.031", [Cell("US5WA51M")]), defer: false);
+            new ExchangeSetSubsetRequest(root, "CATALOG.031", [Cell("US5WA51M")]), defer: false, cancellationToken: TestContext.Current.CancellationToken);
         var second = await service.OpenSubsetAsync(
-            new ExchangeSetSubsetRequest(root, "CATALOG.031", [Cell("US5WA51M"), Cell("US5WA52M")]), defer: false);
+            new ExchangeSetSubsetRequest(root, "CATALOG.031", [Cell("US5WA51M"), Cell("US5WA52M")]), defer: false, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Same(first[0], second[0]);
         Assert.Equal(2, datasets.Entries.Count);
@@ -69,10 +69,10 @@ public sealed class ExchangeSetServiceSubsetTests
         var (datasets, service, _) = CreateSystem();
         using var __ = service;
         var root = Fixture("Synthetic-S57-Framed");
-        await service.OpenAsync(root);
+        await service.OpenAsync(root, cancellationToken: TestContext.Current.CancellationToken);
 
         var entries = await service.OpenSubsetAsync(
-            new ExchangeSetSubsetRequest(root + Path.DirectorySeparatorChar, "CATALOG.031", [Cell("US5WA52M")]), defer: false);
+            new ExchangeSetSubsetRequest(root + Path.DirectorySeparatorChar, "CATALOG.031", [Cell("US5WA52M")]), defer: false, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(entries[0], datasets.Entries);
         Assert.Equal(2, datasets.Entries.Count);
@@ -91,7 +91,8 @@ public sealed class ExchangeSetServiceSubsetTests
                 "CATALOG.XML",
                 [new ExchangeSetSubsetItem("S-101/SYNTH101.000", ["S-101/SYNTH101.001", "S-101/SYNTH101.002"], "S-101", "SYNTH101",
                     MinimumDisplayScale: 90_000, MaximumDisplayScale: 12_000)]),
-            defer: false);
+            defer: false,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         var entry = Assert.Single(entries);
         Assert.Equal(2, entry.UpdateRelativePaths.Count);
@@ -106,7 +107,7 @@ public sealed class ExchangeSetServiceSubsetTests
         var (datasets, service, _) = CreateSystem();
         using var __ = service;
         await service.OpenSubsetAsync(
-            new ExchangeSetSubsetRequest(Fixture("Synthetic-S57-Framed"), "CATALOG.031", [Cell("US5WA51M")]), defer: false);
+            new ExchangeSetSubsetRequest(Fixture("Synthetic-S57-Framed"), "CATALOG.031", [Cell("US5WA51M")]), defer: false, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(datasets.ExchangeSetHeaders).CloseCommand.Execute(null);
 
@@ -126,11 +127,12 @@ public sealed class ExchangeSetServiceSubsetTests
             new Services.LazyLoading.LazyLoadOptions { CellThreshold = 1 });
         using var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), coordinator);
 
-        await service.OpenAsync(Fixture("Synthetic-S57-Framed"));
+        await service.OpenAsync(Fixture("Synthetic-S57-Framed"), cancellationToken: TestContext.Current.CancellationToken);
         var subset = await service.OpenSubsetAsync(
             new ExchangeSetSubsetRequest(Fixture("Synthetic-S101Updates"), "CATALOG.XML",
                 [new ExchangeSetSubsetItem("S-101/SYNTH101.000", [], "S-101", "SYNTH101")]),
-            defer: true);
+            defer: true,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(3, datasets.Entries.Count);
         Assert.Equal(2, datasets.ExchangeSetHeaders.Count);

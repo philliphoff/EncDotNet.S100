@@ -47,7 +47,7 @@ public class S57DatasetProcessorScaleBandTests
 
         var processor = CreateProcessor(fixturePath);
 
-        var result = await processor.BuildVectorPortrayalAsync(new S101RenderContext());
+        var result = await processor.BuildVectorPortrayalAsync(new S101RenderContext(), TestContext.Current.CancellationToken);
 
         // The ungated whole-cell window lets the viewer hide the whole cell
         // (extent border included) when zoomed out, matching an
@@ -77,7 +77,7 @@ public class S57DatasetProcessorScaleBandTests
         var result = await processor.BuildVectorPortrayalAsync(new S101RenderContext
         {
             Mariner = new MarinerSettings { IgnoreScaleMinimum = true },
-        });
+        }, TestContext.Current.CancellationToken);
 
         // The whole-cell window is ungated: it still reports the cell's scale
         // even under IgnoreScaleMinimum (the viewer applies its own gate). The

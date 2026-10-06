@@ -34,7 +34,7 @@ public class McpServerHostCommandLineTests
         };
 
         await using var host = new McpServerHost(new EmptyCatalog(), settings);
-        await host.Apply();
+        await host.Apply(TestContext.Current.CancellationToken);
 
         Assert.NotNull(host.Server);
         Assert.True(host.Server!.IsRunning);
@@ -60,7 +60,7 @@ public class McpServerHostCommandLineTests
         };
 
         await using var host = new McpServerHost(new EmptyCatalog(), settings);
-        await host.Apply();
+        await host.Apply(TestContext.Current.CancellationToken);
 
         Assert.True(File.Exists(portFile));
         var contents = File.ReadAllText(portFile).Trim();

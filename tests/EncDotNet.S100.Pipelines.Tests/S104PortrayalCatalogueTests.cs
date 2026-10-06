@@ -31,7 +31,7 @@ public sealed class S104PortrayalCatalogueTests
     public async Task Day_palette_returns_existing_blue_green_diverging_scheme()
     {
         var catalogue = new S104PortrayalCatalogue();
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
 
         var scheme = catalogue.ResolveColorScheme(new MarinerSettings());
 
@@ -52,10 +52,10 @@ public sealed class S104PortrayalCatalogueTests
     {
         var catalogue = new S104PortrayalCatalogue();
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
         var day = catalogue.ResolveColorScheme(new MarinerSettings());
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Dusk);
+        await catalogue.SwitchPaletteAsync(PaletteType.Dusk, TestContext.Current.CancellationToken);
         var dusk = catalogue.ResolveColorScheme(new MarinerSettings());
 
         Assert.Equal(day.Bands.Count, dusk.Bands.Count);
@@ -70,10 +70,10 @@ public sealed class S104PortrayalCatalogueTests
     {
         var catalogue = new S104PortrayalCatalogue();
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
         var day = catalogue.ResolveColorScheme(new MarinerSettings());
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Night);
+        await catalogue.SwitchPaletteAsync(PaletteType.Night, TestContext.Current.CancellationToken);
         var night = catalogue.ResolveColorScheme(new MarinerSettings());
 
         Assert.Equal(day.Bands.Count, night.Bands.Count);
@@ -91,13 +91,13 @@ public sealed class S104PortrayalCatalogueTests
         // the Day band table regardless.
         var catalogue = new S104PortrayalCatalogue();
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
         var dayFirst = catalogue.ResolveColorScheme(new MarinerSettings()).Bands[0].Color;
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Night);
+        await catalogue.SwitchPaletteAsync(PaletteType.Night, TestContext.Current.CancellationToken);
         var nightFirst = catalogue.ResolveColorScheme(new MarinerSettings()).Bands[0].Color;
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Dusk);
+        await catalogue.SwitchPaletteAsync(PaletteType.Dusk, TestContext.Current.CancellationToken);
         var duskFirst = catalogue.ResolveColorScheme(new MarinerSettings()).Bands[0].Color;
 
         Assert.NotEqual(dayFirst, nightFirst);
@@ -110,13 +110,13 @@ public sealed class S104PortrayalCatalogueTests
     {
         var catalogue = new S104PortrayalCatalogue();
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
         var dayNoData = catalogue.ResolveColorScheme(new MarinerSettings()).NoDataColor;
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Dusk);
+        await catalogue.SwitchPaletteAsync(PaletteType.Dusk, TestContext.Current.CancellationToken);
         var duskNoData = catalogue.ResolveColorScheme(new MarinerSettings()).NoDataColor;
 
-        await catalogue.SwitchPaletteAsync(PaletteType.Night);
+        await catalogue.SwitchPaletteAsync(PaletteType.Night, TestContext.Current.CancellationToken);
         var nightNoData = catalogue.ResolveColorScheme(new MarinerSettings()).NoDataColor;
 
         Assert.False(string.IsNullOrEmpty(dayNoData));

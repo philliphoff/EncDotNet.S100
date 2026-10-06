@@ -60,7 +60,7 @@ public sealed class FacadeTests
         using var ds = S100Dataset.Open(S124Surface);
         using var renderer = new PngS100DatasetRenderer();
 
-        byte[] png = await renderer.RenderAsync(ds);
+        byte[] png = await renderer.RenderAsync(ds, cancellationToken: TestContext.Current.CancellationToken);
 
         AssertIsPng(png);
     }
@@ -80,7 +80,7 @@ public sealed class FacadeTests
             PortrayalCatalogue = S100PortrayalCatalogue.Bundled(ds.Spec.Name),
         };
 
-        byte[] png = await renderer.RenderAsync(layer, new S100RendererOptions { Width = 256, Height = 256 });
+        byte[] png = await renderer.RenderAsync(layer, new S100RendererOptions { Width = 256, Height = 256 }, TestContext.Current.CancellationToken);
 
         AssertIsPng(png);
     }
@@ -94,10 +94,10 @@ public sealed class FacadeTests
         using var renderer = new PngS100DatasetRenderer();
 
         using (var a = S100Dataset.Open(S124Surface))
-            AssertIsPng(await renderer.RenderAsync(a, new S100RendererOptions { Width = 256, Height = 256 }));
+            AssertIsPng(await renderer.RenderAsync(a, new S100RendererOptions { Width = 256, Height = 256 }, cancellationToken: TestContext.Current.CancellationToken));
 
         using (var b = S100Dataset.Open(S125Point))
-            AssertIsPng(await renderer.RenderAsync(b, new S100RendererOptions { Width = 256, Height = 256 }));
+            AssertIsPng(await renderer.RenderAsync(b, new S100RendererOptions { Width = 256, Height = 256 }, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -117,8 +117,8 @@ public sealed class FacadeTests
         using (var ds = S100Dataset.Open(S124Surface))
         {
             var layer = new S100Layer { Dataset = ds, PortrayalCatalogue = pc };
-            AssertIsPng(await renderer.RenderAsync(layer, options));
-            AssertIsPng(await renderer.RenderAsync(layer, options));
+            AssertIsPng(await renderer.RenderAsync(layer, options, TestContext.Current.CancellationToken));
+            AssertIsPng(await renderer.RenderAsync(layer, options, TestContext.Current.CancellationToken));
         }
     }
 
@@ -140,7 +140,8 @@ public sealed class FacadeTests
 
         byte[] png = await renderer.RenderAsync(
             layers,
-            new S100CompositeOptions { Width = 256, Height = 256 });
+            new S100CompositeOptions { Width = 256, Height = 256 },
+            TestContext.Current.CancellationToken);
 
         AssertIsPng(png);
     }
@@ -151,7 +152,7 @@ public sealed class FacadeTests
         using var renderer = new PngS100DatasetRenderer();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => renderer.RenderAsync(Array.Empty<S100Layer>(), new S100CompositeOptions()));
+            () => renderer.RenderAsync(Array.Empty<S100Layer>(), new S100CompositeOptions(), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -278,7 +279,7 @@ public sealed class FacadeTests
         };
 
         byte[] shown = await renderer.RenderAsync(
-            layers, new S100CompositeOptions { Width = 256, Height = 256 });
+            layers, new S100CompositeOptions { Width = 256, Height = 256 }, TestContext.Current.CancellationToken);
 
         // Suppressing every drawing-instruction category must reach each layer's
         // pipeline in the composite (the option is applied globally), yielding a
@@ -290,7 +291,8 @@ public sealed class FacadeTests
 
         byte[] hidden = await renderer.RenderAsync(
             layers,
-            new S100CompositeOptions { Width = 256, Height = 256, HiddenCategories = allHidden });
+            new S100CompositeOptions { Width = 256, Height = 256, HiddenCategories = allHidden },
+            TestContext.Current.CancellationToken);
 
         AssertIsPng(shown);
         AssertIsPng(hidden);
@@ -312,10 +314,10 @@ public sealed class FacadeTests
         var processors = new[] { ds.Processor };
         var options = new S100CompositeOptions { Width = 256, Height = 256 };
 
-        AssertIsPng(await renderer.RenderAsync(processors, options));
+        AssertIsPng(await renderer.RenderAsync(processors, options, TestContext.Current.CancellationToken));
         // Same resident processor again — must still render (no disposal on the
         // caller's processor by the renderer).
-        AssertIsPng(await renderer.RenderAsync(processors, options));
+        AssertIsPng(await renderer.RenderAsync(processors, options, TestContext.Current.CancellationToken));
     }
 
     [Fact]

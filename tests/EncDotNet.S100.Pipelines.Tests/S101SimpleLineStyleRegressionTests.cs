@@ -96,7 +96,7 @@ public class S101SimpleLineStyleRegressionTests
         {
             var factory = CreateFactory();
             var processor = (S101DatasetProcessor)factory.CreateProcessor(cell!);
-            await processor.BuildVectorPortrayalAsync();
+            await processor.BuildVectorPortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
         }
         finally
         {

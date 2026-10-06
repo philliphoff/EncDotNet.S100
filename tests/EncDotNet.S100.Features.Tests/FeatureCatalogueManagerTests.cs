@@ -129,7 +129,7 @@ public class FeatureCatalogueManagerTests
     {
         var mgr = new FeatureCatalogueManager((SpecRef _) => Open(MinimalFcXml));
         ICatalogueProvider<FeatureCatalogue> provider = mgr;
-        var fc = await provider.GetCatalogueAsync(new SpecRef("S-101", new SpecVersion(1, 2, 0)));
+        var fc = await provider.GetCatalogueAsync(new SpecRef("S-101", new SpecVersion(1, 2, 0)), TestContext.Current.CancellationToken);
         Assert.NotNull(fc);
         Assert.Equal(new CatalogueRef("S-101", new SpecVersion(2, 0, 0)), fc!.CatalogueRef);
     }
@@ -141,7 +141,7 @@ public class FeatureCatalogueManagerTests
         ICatalogueProvider<FeatureCatalogue> provider = mgr;
         Assert.Empty(provider.AvailableCatalogues);
 
-        await provider.GetCatalogueAsync(new SpecRef("S-101", new SpecVersion(1, 2, 0)));
+        await provider.GetCatalogueAsync(new SpecRef("S-101", new SpecVersion(1, 2, 0)), TestContext.Current.CancellationToken);
         var refs = provider.AvailableCatalogues;
         Assert.Single(refs);
         Assert.Contains(new CatalogueRef("S-101", new SpecVersion(2, 0, 0)), refs);
@@ -257,8 +257,8 @@ public class FeatureCatalogueManagerTests
             return Open(MinimalFcXml);
         });
 
-        var h1 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
-        var h2 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var h1 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
+        var h2 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
 
         Assert.NotNull(h1);
         Assert.Equal(h1, h2);
@@ -274,8 +274,8 @@ public class FeatureCatalogueManagerTests
         var b = new FeatureCatalogueManager(spec =>
             spec == "S-101" ? Open(MinimalFcXml.Replace("Test Catalogue", "Other Catalogue")) : null);
 
-        var ha = await a.GetCatalogueHashAsync(new SpecRef("S-101", default));
-        var hb = await b.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var ha = await a.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
+        var hb = await b.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
 
         Assert.NotNull(ha);
         Assert.NotNull(hb);
@@ -286,7 +286,7 @@ public class FeatureCatalogueManagerTests
     public async Task GetCatalogueHashAsync_AbsentCatalogue_ReturnsNull()
     {
         var mgr = new FeatureCatalogueManager((SpecRef _) => null);
-        Assert.Null(await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default)));
+        Assert.Null(await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -302,11 +302,11 @@ public class FeatureCatalogueManagerTests
 
         // First attempt: no catalogue available yet → null, and the null result
         // must NOT be cached (a transient IO error should not poison the slot).
-        Assert.Null(await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default)));
+        Assert.Null(await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken));
 
         // Once content becomes available the hash is recomputed.
         next = Open(MinimalFcXml);
-        var h = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var h = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
 
         Assert.NotNull(h);
         Assert.Equal(2, callCount);

@@ -53,7 +53,7 @@ public class S125FeatureXmlSourceTests
     {
         var source = new S125FeatureXmlSource(BuildDataset());
 
-        var doc = XDocument.Load(source.GetFeatureXml());
+        var doc = XDocument.Load(source.GetFeatureXml(TestContext.Current.CancellationToken));
         var root = doc.Root!;
 
         Assert.Equal("Dataset", root.Name.LocalName);

@@ -21,7 +21,7 @@ public class MutablePresentationToolsTests
         var host = new FakeController();
         var tool = new SetPaletteTool(Accessor(host));
 
-        var result = await tool.InvokeAsync(new SetPaletteRequest("Night"));
+        var result = await tool.InvokeAsync(new SetPaletteRequest("Night"), TestContext.Current.CancellationToken);
 
         var value = AssertOk(result);
         Assert.Equal("Night", value.Palette);
@@ -40,7 +40,7 @@ public class MutablePresentationToolsTests
         var host = new FakeController();
         var tool = new SetPaletteTool(Accessor(host));
 
-        var result = await tool.InvokeAsync(new SetPaletteRequest(palette));
+        var result = await tool.InvokeAsync(new SetPaletteRequest(palette), TestContext.Current.CancellationToken);
 
         Assert.IsType<InvalidArgument>(AssertErr(result));
         Assert.Equal(0, host.ApplyCount);
@@ -51,7 +51,7 @@ public class MutablePresentationToolsTests
     {
         var tool = new SetPaletteTool(NullAccessor<IPresentationController>());
 
-        var result = await tool.InvokeAsync(new SetPaletteRequest("Night"));
+        var result = await tool.InvokeAsync(new SetPaletteRequest("Night"), TestContext.Current.CancellationToken);
 
         Assert.IsType<HostNotReady>(AssertErr(result));
     }
@@ -64,10 +64,10 @@ public class MutablePresentationToolsTests
         var host = new FakeController();
         // Apply a palette first, then a category: the category change must not
         // clobber the palette — proving the WithX transforms compose.
-        await new SetPaletteTool(Accessor(host)).InvokeAsync(new SetPaletteRequest("Dusk"));
+        await new SetPaletteTool(Accessor(host)).InvokeAsync(new SetPaletteRequest("Dusk"), TestContext.Current.CancellationToken);
 
         var result = await new SetDisplayCategoryTool(Accessor(host))
-            .InvokeAsync(new SetDisplayCategoryRequest("DisplayBase"));
+            .InvokeAsync(new SetDisplayCategoryRequest("DisplayBase"), TestContext.Current.CancellationToken);
 
         var value = AssertOk(result);
         Assert.Equal("DisplayBase", value.DisplayCategory);
@@ -84,7 +84,7 @@ public class MutablePresentationToolsTests
         var host = new FakeController();
 
         var result = await new SetDisplayCategoryTool(Accessor(host))
-            .InvokeAsync(new SetDisplayCategoryRequest(category));
+            .InvokeAsync(new SetDisplayCategoryRequest(category), TestContext.Current.CancellationToken);
 
         Assert.IsType<InvalidArgument>(AssertErr(result));
     }
@@ -97,7 +97,7 @@ public class MutablePresentationToolsTests
         var host = new FakeController();
 
         var result = await new SetDisplayModeTool(Accessor(host))
-            .InvokeAsync(new SetDisplayModeRequest("ice-sod"));
+            .InvokeAsync(new SetDisplayModeRequest("ice-sod"), TestContext.Current.CancellationToken);
 
         var value = AssertOk(result);
         Assert.Equal("S-411", value.Spec);
@@ -113,10 +113,10 @@ public class MutablePresentationToolsTests
     public async Task SetDisplayMode_FlagsProvisionalNavigationalAndReturnsPrevious()
     {
         var host = new FakeController();
-        await new SetDisplayModeTool(Accessor(host)).InvokeAsync(new SetDisplayModeRequest("ice-sod"));
+        await new SetDisplayModeTool(Accessor(host)).InvokeAsync(new SetDisplayModeRequest("ice-sod"), TestContext.Current.CancellationToken);
 
         var result = await new SetDisplayModeTool(Accessor(host))
-            .InvokeAsync(new SetDisplayModeRequest("ice-navigational"));
+            .InvokeAsync(new SetDisplayModeRequest("ice-navigational"), TestContext.Current.CancellationToken);
 
         var value = AssertOk(result);
         Assert.Equal(S411DisplayModes.NavigationalModeId, value.Mode);
@@ -130,7 +130,7 @@ public class MutablePresentationToolsTests
         var host = new FakeController();
 
         var result = await new SetDisplayModeTool(Accessor(host))
-            .InvokeAsync(new SetDisplayModeRequest("ice-sod", "S-101"));
+            .InvokeAsync(new SetDisplayModeRequest("ice-sod", "S-101"), TestContext.Current.CancellationToken);
 
         var error = Assert.IsType<InvalidArgument>(AssertErr(result));
         Assert.Equal("spec", error.Parameter);
@@ -142,7 +142,7 @@ public class MutablePresentationToolsTests
         var host = new FakeController();
 
         var result = await new SetDisplayModeTool(Accessor(host))
-            .InvokeAsync(new SetDisplayModeRequest("teal"));
+            .InvokeAsync(new SetDisplayModeRequest("teal"), TestContext.Current.CancellationToken);
 
         var error = Assert.IsType<InvalidArgument>(AssertErr(result));
         Assert.Equal("mode", error.Parameter);

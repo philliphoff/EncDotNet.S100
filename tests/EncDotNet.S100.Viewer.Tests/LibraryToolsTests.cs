@@ -54,7 +54,7 @@ public sealed class LibraryToolsTests : IDisposable
         var (panel, controller) = await ChartsAsync();
         using var _ = panel;
 
-        Assert.True((await new ListLibrarySourcesTool(controller).InvokeAsync(counts: true)).TryGetValue(out var result));
+        Assert.True((await new ListLibrarySourcesTool(controller).InvokeAsync(counts: true, ct: TestContext.Current.CancellationToken)).TryGetValue(out var result));
 
         var collection = Assert.Single(result!.Collections);
         Assert.Equal("Charts", collection.Name);
@@ -72,20 +72,20 @@ public sealed class LibraryToolsTests : IDisposable
         using var _ = panel;
         var tool = new QueryLibraryItemsTool(controller);
 
-        Assert.True((await tool.InvokeAsync(Query(states: ["local"]))).TryGetValue(out var local));
+        Assert.True((await tool.InvokeAsync(Query(states: ["local"]), TestContext.Current.CancellationToken)).TryGetValue(out var local));
         Assert.Equal(["US5WA51M", "US5WA52M"], local!.Items.Select(i => i.Name));
         Assert.All(local.Items, i => Assert.NotNull(i.LocalPath));
 
-        Assert.True((await tool.InvokeAsync(Query(text: "52m"))).TryGetValue(out var text));
+        Assert.True((await tool.InvokeAsync(Query(text: "52m"), TestContext.Current.CancellationToken)).TryGetValue(out var text));
         Assert.Equal("US5WA52M", Assert.Single(text!.Items).Name);
 
-        Assert.True((await tool.InvokeAsync(Query(pageSize: 1))).TryGetValue(out var first));
+        Assert.True((await tool.InvokeAsync(Query(pageSize: 1), TestContext.Current.CancellationToken)).TryGetValue(out var first));
         Assert.Equal((2, true), (first!.Total, first.HasMore));
-        Assert.True((await tool.InvokeAsync(Query(page: 1, pageSize: 1))).TryGetValue(out var second));
+        Assert.True((await tool.InvokeAsync(Query(page: 1, pageSize: 1), TestContext.Current.CancellationToken)).TryGetValue(out var second));
         Assert.False(second!.HasMore);
 
         _loader.State = LibraryLoadState.Loaded;
-        Assert.True((await tool.InvokeAsync(Query(states: ["loaded"]))).TryGetValue(out var loaded));
+        Assert.True((await tool.InvokeAsync(Query(states: ["loaded"]), TestContext.Current.CancellationToken)).TryGetValue(out var loaded));
         Assert.Equal(2, loaded!.Total);
         Assert.All(loaded.Items, i => Assert.Equal("loaded", i.State));
     }
@@ -96,11 +96,11 @@ public sealed class LibraryToolsTests : IDisposable
         var (panel, controller) = await ChartsAsync();
         using var _ = panel;
         var tool = new QueryLibraryItemsTool(controller);
-        Assert.True((await tool.InvokeAsync(Query(text: "51m"))).TryGetValue(out var target));
+        Assert.True((await tool.InvokeAsync(Query(text: "51m"), TestContext.Current.CancellationToken)).TryGetValue(out var target));
         var bounds = Assert.Single(target!.Items).Bounds!;
 
         Assert.True((await tool.InvokeAsync(Query(
-            lat: (bounds.South + bounds.North) / 2, lon: (bounds.West + bounds.East) / 2))).TryGetValue(out var hits));
+            lat: (bounds.South + bounds.North) / 2, lon: (bounds.West + bounds.East) / 2), TestContext.Current.CancellationToken)).TryGetValue(out var hits));
 
         Assert.Contains(hits!.Items, i => i.Name == "US5WA51M");
     }
@@ -112,13 +112,13 @@ public sealed class LibraryToolsTests : IDisposable
         using var _ = panel;
         var tool = new QueryLibraryItemsTool(controller);
 
-        Assert.True((await tool.InvokeAsync(Query(states: ["stale"]))).TryGetError(out var state));
+        Assert.True((await tool.InvokeAsync(Query(states: ["stale"]), TestContext.Current.CancellationToken)).TryGetError(out var state));
         Assert.Equal("states", Assert.IsType<InvalidArgument>(state).Parameter);
-        Assert.True((await tool.InvokeAsync(Query(sourceId: Guid.NewGuid().ToString()))).TryGetError(out var source));
+        Assert.True((await tool.InvokeAsync(Query(sourceId: Guid.NewGuid().ToString()), TestContext.Current.CancellationToken)).TryGetError(out var source));
         Assert.Equal("library_source_not_found", source!.Code);
-        Assert.True((await tool.InvokeAsync(Query(lat: 47))).TryGetError(out var point));
+        Assert.True((await tool.InvokeAsync(Query(lat: 47), TestContext.Current.CancellationToken)).TryGetError(out var point));
         Assert.Equal("lat", Assert.IsType<InvalidArgument>(point).Parameter);
-        Assert.True((await tool.InvokeAsync(Query(pageSize: 501))).TryGetError(out var size));
+        Assert.True((await tool.InvokeAsync(Query(pageSize: 501), TestContext.Current.CancellationToken)).TryGetError(out var size));
         Assert.Equal("pageSize", Assert.IsType<InvalidArgument>(size).Parameter);
     }
 
@@ -127,16 +127,16 @@ public sealed class LibraryToolsTests : IDisposable
     {
         var (panel, controller) = await ChartsAsync();
         using var _ = panel;
-        Assert.True((await new QueryLibraryItemsTool(controller).InvokeAsync(Query(text: "51m"))).TryGetValue(out var page));
+        Assert.True((await new QueryLibraryItemsTool(controller).InvokeAsync(Query(text: "51m"), TestContext.Current.CancellationToken)).TryGetValue(out var page));
         var id = Assert.Single(page!.Items).Id;
         var describe = new DescribeLibraryItemTool(controller);
 
-        Assert.True((await describe.InvokeAsync(id)).TryGetValue(out var detail));
+        Assert.True((await describe.InvokeAsync(id, TestContext.Current.CancellationToken)).TryGetValue(out var detail));
         Assert.Equal("US5WA51M", detail!.Item.Name);
         Assert.NotEmpty(detail.Details);
         Assert.All(detail.Details, group => Assert.NotEmpty(group.Fields));
 
-        Assert.True((await describe.InvokeAsync($"{Guid.NewGuid()}:US5WA51M")).TryGetError(out var missing));
+        Assert.True((await describe.InvokeAsync($"{Guid.NewGuid()}:US5WA51M", TestContext.Current.CancellationToken)).TryGetError(out var missing));
         Assert.Equal("library_item_not_found", missing!.Code);
     }
 
@@ -148,7 +148,7 @@ public sealed class LibraryToolsTests : IDisposable
         _userCatalogues.Add(KnownCatalogueSources.FromUrl(
             new Uri("http://bridge-pc:8100/secret-token-3f9a/feed.json"), KnownCatalogueFormat.S100Feed, "Bridge"));
 
-        Assert.True((await new ListKnownSourcesTool(controller).InvokeAsync()).TryGetValue(out var result));
+        Assert.True((await new ListKnownSourcesTool(controller).InvokeAsync(TestContext.Current.CancellationToken)).TryGetValue(out var result));
 
         var s111 = Assert.Single(result!.Sources, s => s.Id == "noaa-s111");
         Assert.False(s111.UserAdded);

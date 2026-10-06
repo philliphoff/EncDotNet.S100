@@ -46,7 +46,7 @@ public class NearestFeaturesToolTests
             Point("mid", 0.0, 0.3))));
         var tool = new NearestFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0));
+        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(3, value.TotalMatched);
@@ -66,7 +66,7 @@ public class NearestFeaturesToolTests
             Point("pt", 0.0, 0.2))));
         var tool = new NearestFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0));
+        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var area = value.Features.Single(f => f.FeatureId == "area");
@@ -85,7 +85,7 @@ public class NearestFeaturesToolTests
             Point("far", 0.0, 1.0))));    // ~111 km
         var tool = new NearestFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0, MaxDistanceMeters: 1000.0));
+        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0, MaxDistanceMeters: 1000.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(1, value.TotalMatched);
@@ -101,7 +101,7 @@ public class NearestFeaturesToolTests
             Point("b", 0.0, 0.2, type: "Buoy"))));
         var tool = new NearestFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0, FeatureType: "Buoy"));
+        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0, FeatureType: "Buoy"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("b", Assert.Single(value.Features).FeatureId);
@@ -117,7 +117,7 @@ public class NearestFeaturesToolTests
             Point("c", 0.0, 0.3))));
         var tool = new NearestFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0, Limit: 2));
+        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0, Limit: 2), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(3, value.TotalMatched);
@@ -133,7 +133,7 @@ public class NearestFeaturesToolTests
         catalog.Add(LoadedDatasetFactory.S124("b", S124Synth.Dataset(Point("inb", 0.0, 0.05))));
         var tool = new NearestFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0, Dataset: new DatasetId("a")));
+        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0, Dataset: new DatasetId("a")), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("ina", Assert.Single(value.Features).FeatureId);
@@ -146,7 +146,7 @@ public class NearestFeaturesToolTests
     {
         var tool = new NearestFeaturesTool(new FakeDatasetCatalog());
 
-        var result = await tool.InvokeAsync(new NearestFeaturesRequest(lat, lon));
+        var result = await tool.InvokeAsync(new NearestFeaturesRequest(lat, lon), TestContext.Current.CancellationToken);
 
         var err = Assert.IsType<ToolResult<NearestFeaturesResult>.ErrResult>(result);
         Assert.Equal("invalid_argument", err.Error.Code);
@@ -158,7 +158,7 @@ public class NearestFeaturesToolTests
     {
         var tool = new NearestFeaturesTool(new FakeDatasetCatalog());
 
-        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0, MaxDistanceMeters: -1.0));
+        var result = await tool.InvokeAsync(new NearestFeaturesRequest(0.0, 0.0, MaxDistanceMeters: -1.0), TestContext.Current.CancellationToken);
 
         var err = Assert.IsType<ToolResult<NearestFeaturesResult>.ErrResult>(result);
         Assert.Equal("invalid_argument", err.Error.Code);

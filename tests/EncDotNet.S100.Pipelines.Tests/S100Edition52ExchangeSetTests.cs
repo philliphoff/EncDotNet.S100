@@ -44,13 +44,13 @@ public sealed class S100Edition52ExchangeSetTests : IDisposable
     [Fact]
     public async Task OpenAsync_ReadsSecurityAndResolvesNestedFileUris()
     {
-        using var exchangeSet = await ExchangeSet.OpenAsync(FileSystemAssetSource.Create(_root));
+        using var exchangeSet = await ExchangeSet.OpenAsync(FileSystemAssetSource.Create(_root), cancellationToken: TestContext.Current.CancellationToken);
 
         var datasets = exchangeSet.Catalogue.DatasetDiscoveryMetadata;
         Assert.Equal([S101Relative, S102Relative], datasets.Select(d => d.RelativePath));
         foreach (var dataset in datasets)
         {
-            await using var stream = await exchangeSet.FetchDatasetAsync(dataset);
+            await using var stream = await exchangeSet.FetchDatasetAsync(dataset, TestContext.Current.CancellationToken);
             Assert.True(stream.Length > 0, dataset.RelativePath);
 
             var signature = Assert.Single(dataset.DigitalSignatures);
@@ -62,11 +62,11 @@ public sealed class S100Edition52ExchangeSetTests : IDisposable
     [Fact]
     public async Task LoadAllAsync_PortraysEveryCataloguedDataset()
     {
-        using var exchangeSet = await ExchangeSet.OpenAsync(FileSystemAssetSource.Create(_root));
+        using var exchangeSet = await ExchangeSet.OpenAsync(FileSystemAssetSource.Create(_root), cancellationToken: TestContext.Current.CancellationToken);
         var loader = new ExchangeSetLoader(CreateFactory());
 
         var results = new List<ExchangeSetLoadResult>();
-        await foreach (var result in loader.LoadAllAsync(exchangeSet))
+        await foreach (var result in loader.LoadAllAsync(exchangeSet, cancellationToken: TestContext.Current.CancellationToken))
         {
             results.Add(result);
         }

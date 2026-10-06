@@ -46,7 +46,7 @@ public class XsltRuleExecutorTests
 
         // The mariner argument is ignored by the XSLT engine; pass an explicit
         // non-default value to confirm it has no effect.
-        var instructions = await executor.ExecuteAsync(new MarinerSettings { FourShades = true });
+        var instructions = await executor.ExecuteAsync(new MarinerSettings { FourShades = true }, TestContext.Current.CancellationToken);
 
         var inst = Assert.IsType<PointInstruction>(Assert.Single(instructions));
         Assert.Equal("1", inst.FeatureReference);
@@ -73,7 +73,7 @@ public class XsltRuleExecutorTests
             xsltRules: new() { ["BuoyRule"] = xslt });
 
         var executor = new XsltRuleExecutor(source, catalogue);
-        await executor.ExecuteAsync(MarinerSettings.Default);
+        await executor.ExecuteAsync(MarinerSettings.Default, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, executor.LastFeatureTypeCount);
 
@@ -105,7 +105,7 @@ public class XsltRuleExecutorTests
         var catalogue = new FakeVectorPortrayalCatalogue([]);
         var executor = new XsltRuleExecutor(source, catalogue);
 
-        var instructions = await executor.ExecuteAsync(MarinerSettings.Default);
+        var instructions = await executor.ExecuteAsync(MarinerSettings.Default, TestContext.Current.CancellationToken);
 
         Assert.Empty(instructions);
         Assert.False(source.FeatureXmlRequested);
@@ -123,7 +123,7 @@ public class XsltRuleExecutorTests
             [new PortrayalRule { Name = "BuoyLua", Type = PortrayalRuleType.Lua, ExecutionOrder = 1, AppliesTo = ["Buoy"] }]);
         var executor = new XsltRuleExecutor(source, catalogue);
 
-        var instructions = await executor.ExecuteAsync(MarinerSettings.Default);
+        var instructions = await executor.ExecuteAsync(MarinerSettings.Default, TestContext.Current.CancellationToken);
 
         Assert.Empty(instructions);
         Assert.False(source.FeatureXmlRequested);

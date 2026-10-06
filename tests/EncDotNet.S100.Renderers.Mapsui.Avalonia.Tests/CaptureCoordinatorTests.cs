@@ -50,9 +50,9 @@ public class CaptureCoordinatorTests
             },
             TimeSpan.FromSeconds(5)));
 
-        Assert.False(captureStarted.Wait(TimeSpan.FromMilliseconds(200)));
+        Assert.False(captureStarted.Wait(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken));
         releaseLivePaint.Set();
-        Assert.True(captureStarted.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(captureStarted.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.NotNull(await captureTask);
         paintThread.Join(TimeSpan.FromSeconds(5));
     }
@@ -84,7 +84,7 @@ public class CaptureCoordinatorTests
 
         var waitTask = Task.Run(() =>
             CaptureCoordinator.WaitForFreshDrain(TimeSpan.FromSeconds(5)));
-        await Task.Delay(50);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
         CaptureCoordinator.NotifyDrained();
         Assert.True(await waitTask);
     }
@@ -172,7 +172,7 @@ public class CaptureCoordinatorTests
 
         var finished = await Task.WhenAny(
             capture,
-            Task.Delay(TimeSpan.FromSeconds(5)));
+            Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.Same(capture, finished); // did not deadlock
         Assert.True(reentered);
         Assert.Equal(new byte[] { 42 }, await capture);

@@ -13,7 +13,7 @@ public class FindAtToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new FindAtTool(catalog);
 
-        var result = await tool.InvokeAsync(new FindAtRequest(0, 0));
+        var result = await tool.InvokeAsync(new FindAtRequest(0, 0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Datasets);
@@ -29,7 +29,7 @@ public class FindAtToolTests
         catalog.Add(LoadedDatasetFactory.S124("outside", bounds: LoadedDatasetFactory.Box(20, 20, 30, 30)));
         var tool = new FindAtTool(catalog);
 
-        var result = await tool.InvokeAsync(new FindAtRequest(Latitude: 5, Longitude: 5));
+        var result = await tool.InvokeAsync(new FindAtRequest(Latitude: 5, Longitude: 5), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var single = Assert.Single(value.Datasets);
@@ -47,7 +47,7 @@ public class FindAtToolTests
         catalog.Add(LoadedDatasetFactory.S124("disjoint", bounds: LoadedDatasetFactory.Box(50, 50, 51, 51)));
         var tool = new FindAtTool(catalog);
 
-        var result = await tool.InvokeAsync(new FindAtRequest(Latitude: 5.5, Longitude: 5.5));
+        var result = await tool.InvokeAsync(new FindAtRequest(Latitude: 5.5, Longitude: 5.5), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(3, value.Datasets.Count);
@@ -65,7 +65,7 @@ public class FindAtToolTests
         var result = await tool.InvokeAsync(new FindAtRequest(
             Latitude: 5,
             Longitude: 5,
-            Spec: LoadedDatasetFactory.S124Spec));
+            Spec: LoadedDatasetFactory.S124Spec), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var single = Assert.Single(value.Datasets);
@@ -81,7 +81,7 @@ public class FindAtToolTests
 
         var filter = new SpecRef("S-124", default);
         var result = await tool.InvokeAsync(new FindAtRequest(
-            Latitude: 5, Longitude: 5, Spec: filter));
+            Latitude: 5, Longitude: 5, Spec: filter), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Datasets);
@@ -94,8 +94,8 @@ public class FindAtToolTests
         catalog.Add(LoadedDatasetFactory.S124("edge", bounds: LoadedDatasetFactory.Box(0, 0, 10, 10)));
         var tool = new FindAtTool(catalog);
 
-        var southWest = await tool.InvokeAsync(new FindAtRequest(0, 0));
-        var northEast = await tool.InvokeAsync(new FindAtRequest(10, 10));
+        var southWest = await tool.InvokeAsync(new FindAtRequest(0, 0), TestContext.Current.CancellationToken);
+        var northEast = await tool.InvokeAsync(new FindAtRequest(10, 10), TestContext.Current.CancellationToken);
 
         Assert.True(southWest.TryGetValue(out var sw));
         Assert.Single(sw.Datasets);
@@ -112,7 +112,7 @@ public class FindAtToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new FindAtTool(catalog);
 
-        var result = await tool.InvokeAsync(new FindAtRequest(lat, 0));
+        var result = await tool.InvokeAsync(new FindAtRequest(lat, 0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         var invalid = Assert.IsType<InvalidArgument>(err);
@@ -128,7 +128,7 @@ public class FindAtToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new FindAtTool(catalog);
 
-        var result = await tool.InvokeAsync(new FindAtRequest(0, lon));
+        var result = await tool.InvokeAsync(new FindAtRequest(0, lon), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         var invalid = Assert.IsType<InvalidArgument>(err);
@@ -145,18 +145,18 @@ public class FindAtToolTests
         }
         var tool = new FindAtTool(catalog);
 
-        var page0 = await tool.InvokeAsync(new FindAtRequest(5, 5, Page: 0, PageSize: 3));
+        var page0 = await tool.InvokeAsync(new FindAtRequest(5, 5, Page: 0, PageSize: 3), TestContext.Current.CancellationToken);
         Assert.True(page0.TryGetValue(out var v0));
         Assert.Equal(3, v0.Datasets.Count);
         Assert.True(v0.HasMore);
         Assert.Equal(7, v0.TotalCount);
 
-        var page2 = await tool.InvokeAsync(new FindAtRequest(5, 5, Page: 2, PageSize: 3));
+        var page2 = await tool.InvokeAsync(new FindAtRequest(5, 5, Page: 2, PageSize: 3), TestContext.Current.CancellationToken);
         Assert.True(page2.TryGetValue(out var v2));
         Assert.Single(v2.Datasets);
         Assert.False(v2.HasMore);
 
-        var page5 = await tool.InvokeAsync(new FindAtRequest(5, 5, Page: 5, PageSize: 3));
+        var page5 = await tool.InvokeAsync(new FindAtRequest(5, 5, Page: 5, PageSize: 3), TestContext.Current.CancellationToken);
         Assert.True(page5.TryGetValue(out var v5));
         Assert.Empty(v5.Datasets);
         Assert.False(v5.HasMore);
@@ -170,7 +170,7 @@ public class FindAtToolTests
         catalog.Add(LoadedDatasetFactory.S124("a", bounds: LoadedDatasetFactory.Box(0, 0, 1, 1)));
         var tool = new FindAtTool(catalog);
 
-        var result = await tool.InvokeAsync(new FindAtRequest(50, 50));
+        var result = await tool.InvokeAsync(new FindAtRequest(50, 50), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Datasets);
@@ -191,7 +191,7 @@ public class FindAtToolTests
             bounds: new EncDotNet.S100.Pipelines.BoundingBox(0, 170, 10, -170)));
         var tool = new FindAtTool(catalog);
 
-        var result = await tool.InvokeAsync(new FindAtRequest(5, 175));
+        var result = await tool.InvokeAsync(new FindAtRequest(5, 175), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Datasets);

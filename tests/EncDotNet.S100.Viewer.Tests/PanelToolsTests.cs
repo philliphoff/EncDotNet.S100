@@ -76,7 +76,7 @@ public class ListPanelsToolTests
             Panel("PickReport", "Right", available: true, selected: false, dockOpen: false));
         var tool = new ListPanelsTool(new FakeUiControllerAccessor { Current = controller });
 
-        var result = await tool.InvokeAsync();
+        var result = await tool.InvokeAsync(TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(3, ok!.Panels.Count);
@@ -94,7 +94,7 @@ public class ListPanelsToolTests
     public async Task Ui_not_ready_when_accessor_returns_null()
     {
         var tool = new ListPanelsTool(new FakeUiControllerAccessor { Current = null });
-        var result = await tool.InvokeAsync();
+        var result = await tool.InvokeAsync(TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<UiNotReady>(err);
     }
@@ -128,7 +128,7 @@ public class SetPanelToolTests
             Panel("PickReport", "Right", available: true, selected: false, dockOpen: false));
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = controller });
 
-        var result = await tool.InvokeAsync(new SetPanelRequest("PickReport", null));
+        var result = await tool.InvokeAsync(new SetPanelRequest("PickReport", null), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.True(ok!.Showing);
@@ -144,7 +144,7 @@ public class SetPanelToolTests
             Panel("Timeline", "Bottom", available: true, selected: true, dockOpen: true));
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = controller });
 
-        var result = await tool.InvokeAsync(new SetPanelRequest("Timeline", false));
+        var result = await tool.InvokeAsync(new SetPanelRequest("Timeline", false), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.False(ok!.Showing);
@@ -159,7 +159,7 @@ public class SetPanelToolTests
             Panel("Datasets", "Left", available: true, selected: true, dockOpen: true));
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = controller });
 
-        var result = await tool.InvokeAsync(new SetPanelRequest("Datasets", true));
+        var result = await tool.InvokeAsync(new SetPanelRequest("Datasets", true), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.True(ok!.Showing);
@@ -174,7 +174,7 @@ public class SetPanelToolTests
             Panel("LayerStack", "Left", available: true, selected: false, dockOpen: false));
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = controller });
 
-        var result = await tool.InvokeAsync(new SetPanelRequest("layerstack", true));
+        var result = await tool.InvokeAsync(new SetPanelRequest("layerstack", true), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal("LayerStack", ok!.Panel);
@@ -188,7 +188,7 @@ public class SetPanelToolTests
     {
         var controller = new FakeViewerUiController();
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = controller });
-        var result = await tool.InvokeAsync(new SetPanelRequest(input, true));
+        var result = await tool.InvokeAsync(new SetPanelRequest(input, true), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
         Assert.Equal(0, controller.SetCalls);
@@ -201,7 +201,7 @@ public class SetPanelToolTests
             Panel("Datasets", "Left", available: true, selected: true, dockOpen: true));
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = controller });
 
-        var result = await tool.InvokeAsync(new SetPanelRequest("Nope", true));
+        var result = await tool.InvokeAsync(new SetPanelRequest("Nope", true), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<PanelNotFound>(err);
@@ -214,7 +214,7 @@ public class SetPanelToolTests
             Panel("Helm", "Left", available: false, selected: false, dockOpen: false));
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = controller });
 
-        var result = await tool.InvokeAsync(new SetPanelRequest("Helm", true));
+        var result = await tool.InvokeAsync(new SetPanelRequest("Helm", true), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<PanelUnavailable>(err);
@@ -227,7 +227,7 @@ public class SetPanelToolTests
             Panel("Helm", "Left", available: false, selected: false, dockOpen: false));
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = controller });
 
-        var result = await tool.InvokeAsync(new SetPanelRequest("helm", true));
+        var result = await tool.InvokeAsync(new SetPanelRequest("helm", true), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         var unavailable = Assert.IsType<PanelUnavailable>(err);
@@ -241,7 +241,7 @@ public class SetPanelToolTests
             Panel("Helm", "Left", available: false, selected: false, dockOpen: false));
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = controller });
 
-        var result = await tool.InvokeAsync(new SetPanelRequest("Helm", false));
+        var result = await tool.InvokeAsync(new SetPanelRequest("Helm", false), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.False(ok!.Showing);
@@ -252,7 +252,7 @@ public class SetPanelToolTests
     public async Task Ui_not_ready_when_accessor_returns_null()
     {
         var tool = new SetPanelTool(new FakeUiControllerAccessor { Current = null });
-        var result = await tool.InvokeAsync(new SetPanelRequest("Datasets", true));
+        var result = await tool.InvokeAsync(new SetPanelRequest("Datasets", true), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<UiNotReady>(err);
     }

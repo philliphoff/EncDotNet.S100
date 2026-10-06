@@ -48,7 +48,7 @@ public class RouteMcpToolsTests
         var (routes, invoker) = Make();
         var tool = new CreateRouteTool(routes, invoker);
 
-        var detail = Value(await tool.InvokeAsync(new CreateRouteRequest(Name: "Transit", Id: "r1")));
+        var detail = Value(await tool.InvokeAsync(new CreateRouteRequest(Name: "Transit", Id: "r1"), TestContext.Current.CancellationToken));
 
         Assert.Equal("r1", detail.RouteId);
         Assert.Equal("Transit", detail.Name);
@@ -63,9 +63,9 @@ public class RouteMcpToolsTests
     {
         var (routes, invoker) = Make();
         var tool = new CreateRouteTool(routes, invoker);
-        await tool.InvokeAsync(new CreateRouteRequest(Id: "dup"));
+        await tool.InvokeAsync(new CreateRouteRequest(Id: "dup"), TestContext.Current.CancellationToken);
 
-        var error = Error(await tool.InvokeAsync(new CreateRouteRequest(Id: "dup")));
+        var error = Error(await tool.InvokeAsync(new CreateRouteRequest(Id: "dup"), TestContext.Current.CancellationToken));
 
         Assert.IsType<InvalidArgument>(error);
         Assert.Equal("invalid_argument", error.Code);
@@ -75,10 +75,10 @@ public class RouteMcpToolsTests
     public async Task ListRoutes_reports_all_routes_and_active()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "a"));
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "b"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "a"), TestContext.Current.CancellationToken);
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "b"), TestContext.Current.CancellationToken);
 
-        var result = Value(await new ListRoutesTool(routes, invoker).InvokeAsync(new ListRoutesRequest()));
+        var result = Value(await new ListRoutesTool(routes, invoker).InvokeAsync(new ListRoutesRequest(), TestContext.Current.CancellationToken));
 
         Assert.Equal(2, result.Routes.Count);
         Assert.Equal("b", result.ActiveRouteId);
@@ -89,9 +89,9 @@ public class RouteMcpToolsTests
     public async Task GetRoute_defaults_to_active_route()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "act"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "act"), TestContext.Current.CancellationToken);
 
-        var detail = Value(await new GetRouteTool(routes, invoker).InvokeAsync(new GetRouteRequest()));
+        var detail = Value(await new GetRouteTool(routes, invoker).InvokeAsync(new GetRouteRequest(), TestContext.Current.CancellationToken));
 
         Assert.Equal("act", detail.RouteId);
     }
@@ -101,7 +101,7 @@ public class RouteMcpToolsTests
     {
         var (routes, invoker) = Make();
 
-        var error = Error(await new GetRouteTool(routes, invoker).InvokeAsync(new GetRouteRequest("nope")));
+        var error = Error(await new GetRouteTool(routes, invoker).InvokeAsync(new GetRouteRequest("nope"), TestContext.Current.CancellationToken));
 
         Assert.IsType<RouteNotFound>(error);
         Assert.Equal("route_not_found", error.Code);
@@ -112,7 +112,7 @@ public class RouteMcpToolsTests
     {
         var (routes, invoker) = Make();
 
-        var error = Error(await new GetRouteTool(routes, invoker).InvokeAsync(new GetRouteRequest()));
+        var error = Error(await new GetRouteTool(routes, invoker).InvokeAsync(new GetRouteRequest(), TestContext.Current.CancellationToken));
 
         var notFound = Assert.IsType<RouteNotFound>(error);
         Assert.Equal("(active)", notFound.RouteId);
@@ -122,10 +122,10 @@ public class RouteMcpToolsTests
     public async Task DeleteRoute_removes_and_reports_new_active()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "a"));
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "b"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "a"), TestContext.Current.CancellationToken);
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "b"), TestContext.Current.CancellationToken);
 
-        var result = Value(await new DeleteRouteTool(routes, invoker).InvokeAsync(new DeleteRouteRequest("b")));
+        var result = Value(await new DeleteRouteTool(routes, invoker).InvokeAsync(new DeleteRouteRequest("b"), TestContext.Current.CancellationToken));
 
         Assert.True(result.Deleted);
         Assert.Equal("b", result.RouteId);
@@ -139,10 +139,11 @@ public class RouteMcpToolsTests
     public async Task AppendWaypoint_adds_point_with_metadata()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"), TestContext.Current.CancellationToken);
 
         var detail = Value(await new AppendWaypointTool(routes, invoker).InvokeAsync(
-            new AppendWaypointRequest(47.6, -122.3, Name: "WP1", Number: 1, TurnRadiusNm: 0.5)));
+            new AppendWaypointRequest(47.6, -122.3, Name: "WP1", Number: 1, TurnRadiusNm: 0.5),
+            TestContext.Current.CancellationToken));
 
         var wp = Assert.Single(detail.Waypoints);
         Assert.Equal(47.6, wp.Lat);
@@ -156,10 +157,11 @@ public class RouteMcpToolsTests
     public async Task AppendWaypoint_invalid_latitude_is_rejected()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"), TestContext.Current.CancellationToken);
 
         var error = Error(await new AppendWaypointTool(routes, invoker).InvokeAsync(
-            new AppendWaypointRequest(120.0, 0.0)));
+            new AppendWaypointRequest(120.0, 0.0),
+            TestContext.Current.CancellationToken));
 
         var invalid = Assert.IsType<InvalidArgument>(error);
         Assert.Equal("lat", invalid.Parameter);
@@ -171,7 +173,8 @@ public class RouteMcpToolsTests
         var (routes, invoker) = Make();
 
         var error = Error(await new AppendWaypointTool(routes, invoker).InvokeAsync(
-            new AppendWaypointRequest(10.0, 10.0)));
+            new AppendWaypointRequest(10.0, 10.0),
+            TestContext.Current.CancellationToken));
 
         Assert.IsType<RouteNotFound>(error);
     }
@@ -180,19 +183,19 @@ public class RouteMcpToolsTests
     public async Task InsertWaypoint_builds_legs_and_validates_index()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"), TestContext.Current.CancellationToken);
         var append = new AppendWaypointTool(routes, invoker);
-        await append.InvokeAsync(new AppendWaypointRequest(0.0, 0.0));
-        await append.InvokeAsync(new AppendWaypointRequest(1.0, 0.0));
+        await append.InvokeAsync(new AppendWaypointRequest(0.0, 0.0), TestContext.Current.CancellationToken);
+        await append.InvokeAsync(new AppendWaypointRequest(1.0, 0.0), TestContext.Current.CancellationToken);
 
         var insert = new InsertWaypointTool(routes, invoker);
-        var detail = Value(await insert.InvokeAsync(new InsertWaypointRequest(1, 0.5, 0.0)));
+        var detail = Value(await insert.InvokeAsync(new InsertWaypointRequest(1, 0.5, 0.0), TestContext.Current.CancellationToken));
 
         Assert.Equal(3, detail.Waypoints.Count);
         Assert.Equal(2, detail.Legs.Count);
         Assert.Equal(0.5, detail.Waypoints[1].Lat);
 
-        var error = Error(await insert.InvokeAsync(new InsertWaypointRequest(99, 0.5, 0.0)));
+        var error = Error(await insert.InvokeAsync(new InsertWaypointRequest(99, 0.5, 0.0), TestContext.Current.CancellationToken));
         var invalid = Assert.IsType<InvalidArgument>(error);
         Assert.Equal("index", invalid.Parameter);
     }
@@ -201,16 +204,16 @@ public class RouteMcpToolsTests
     public async Task MoveWaypoint_updates_position_and_validates_index()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"), TestContext.Current.CancellationToken);
         var append = new AppendWaypointTool(routes, invoker);
-        await append.InvokeAsync(new AppendWaypointRequest(0.0, 0.0));
+        await append.InvokeAsync(new AppendWaypointRequest(0.0, 0.0), TestContext.Current.CancellationToken);
 
         var move = new MoveWaypointTool(routes, invoker);
-        var detail = Value(await move.InvokeAsync(new MoveWaypointRequest(0, 5.0, 6.0)));
+        var detail = Value(await move.InvokeAsync(new MoveWaypointRequest(0, 5.0, 6.0), TestContext.Current.CancellationToken));
         Assert.Equal(5.0, detail.Waypoints[0].Lat);
         Assert.Equal(6.0, detail.Waypoints[0].Lon);
 
-        var error = Error(await move.InvokeAsync(new MoveWaypointRequest(7, 1.0, 1.0)));
+        var error = Error(await move.InvokeAsync(new MoveWaypointRequest(7, 1.0, 1.0), TestContext.Current.CancellationToken));
         Assert.Equal("index", Assert.IsType<InvalidArgument>(error).Parameter);
     }
 
@@ -218,17 +221,17 @@ public class RouteMcpToolsTests
     public async Task DeleteWaypoint_removes_point_and_validates_index()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"), TestContext.Current.CancellationToken);
         var append = new AppendWaypointTool(routes, invoker);
-        await append.InvokeAsync(new AppendWaypointRequest(0.0, 0.0));
-        await append.InvokeAsync(new AppendWaypointRequest(1.0, 1.0));
+        await append.InvokeAsync(new AppendWaypointRequest(0.0, 0.0), TestContext.Current.CancellationToken);
+        await append.InvokeAsync(new AppendWaypointRequest(1.0, 1.0), TestContext.Current.CancellationToken);
 
         var del = new DeleteWaypointTool(routes, invoker);
-        var detail = Value(await del.InvokeAsync(new DeleteWaypointRequest(0)));
+        var detail = Value(await del.InvokeAsync(new DeleteWaypointRequest(0), TestContext.Current.CancellationToken));
         Assert.Single(detail.Waypoints);
         Assert.Empty(detail.Legs);
 
-        var error = Error(await del.InvokeAsync(new DeleteWaypointRequest(5)));
+        var error = Error(await del.InvokeAsync(new DeleteWaypointRequest(5), TestContext.Current.CancellationToken));
         Assert.Equal("index", Assert.IsType<InvalidArgument>(error).Parameter);
     }
 
@@ -238,17 +241,17 @@ public class RouteMcpToolsTests
     public async Task SetLegAttributes_updates_geometry_and_envelope()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"), TestContext.Current.CancellationToken);
         var append = new AppendWaypointTool(routes, invoker);
-        await append.InvokeAsync(new AppendWaypointRequest(0.0, 0.0));
-        await append.InvokeAsync(new AppendWaypointRequest(0.0, 10.0));
+        await append.InvokeAsync(new AppendWaypointRequest(0.0, 0.0), TestContext.Current.CancellationToken);
+        await append.InvokeAsync(new AppendWaypointRequest(0.0, 10.0), TestContext.Current.CancellationToken);
 
         var tool = new SetLegAttributesTool(routes, invoker);
         var detail = Value(await tool.InvokeAsync(new SetLegAttributesRequest(
             0, GeometryType: "geodesic",
             StarboardCrossTrackDistanceLimitMeters: 185.2,
             SafetyContourMeters: 10.0,
-            Note: "mid-channel")));
+            Note: "mid-channel"), TestContext.Current.CancellationToken));
 
         var leg = Assert.Single(detail.Legs);
         Assert.Equal("geodesic", leg.GeometryType);
@@ -261,13 +264,14 @@ public class RouteMcpToolsTests
     public async Task SetLegAttributes_rejects_unknown_geometry()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"), TestContext.Current.CancellationToken);
         var append = new AppendWaypointTool(routes, invoker);
-        await append.InvokeAsync(new AppendWaypointRequest(0.0, 0.0));
-        await append.InvokeAsync(new AppendWaypointRequest(0.0, 1.0));
+        await append.InvokeAsync(new AppendWaypointRequest(0.0, 0.0), TestContext.Current.CancellationToken);
+        await append.InvokeAsync(new AppendWaypointRequest(0.0, 1.0), TestContext.Current.CancellationToken);
 
         var error = Error(await new SetLegAttributesTool(routes, invoker).InvokeAsync(
-            new SetLegAttributesRequest(0, GeometryType: "spiral")));
+            new SetLegAttributesRequest(0, GeometryType: "spiral"),
+            TestContext.Current.CancellationToken));
 
         Assert.Equal("geometryType", Assert.IsType<InvalidArgument>(error).Parameter);
     }
@@ -276,10 +280,11 @@ public class RouteMcpToolsTests
     public async Task SetLegAttributes_validates_leg_index()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"), TestContext.Current.CancellationToken);
 
         var error = Error(await new SetLegAttributesTool(routes, invoker).InvokeAsync(
-            new SetLegAttributesRequest(0)));
+            new SetLegAttributesRequest(0),
+            TestContext.Current.CancellationToken));
 
         Assert.Equal("legIndex", Assert.IsType<InvalidArgument>(error).Parameter);
     }
@@ -288,12 +293,13 @@ public class RouteMcpToolsTests
     public async Task SetRouteInfo_updates_metadata_and_creates_vessel()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"), TestContext.Current.CancellationToken);
 
         var detail = Value(await new SetRouteInfoTool(routes, invoker).InvokeAsync(
             new SetRouteInfoRequest(
                 Name: "Pilotage", Author: "Pilot", DeparturePortId: "PORTA",
-                VesselName: "MV Test", VesselMmsi: "366000000", VesselLengthMeters: 180.0)));
+                VesselName: "MV Test", VesselMmsi: "366000000", VesselLengthMeters: 180.0),
+            TestContext.Current.CancellationToken));
 
         Assert.Equal("Pilotage", detail.Name);
         Assert.Equal("Pilot", detail.Info.Author);
@@ -308,12 +314,12 @@ public class RouteMcpToolsTests
     public async Task Mutation_raises_routes_service_changed()
     {
         var (routes, invoker) = Make();
-        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"));
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r"), TestContext.Current.CancellationToken);
 
         var raised = 0;
         routes.Changed += (_, _) => raised++;
 
-        await new AppendWaypointTool(routes, invoker).InvokeAsync(new AppendWaypointRequest(1.0, 1.0));
+        await new AppendWaypointTool(routes, invoker).InvokeAsync(new AppendWaypointRequest(1.0, 1.0), TestContext.Current.CancellationToken);
 
         Assert.True(raised > 0);
     }

@@ -11,8 +11,8 @@ public class CachingAssetSourceTests
         });
         using var cache = new CachingAssetSource(inner);
 
-        AssetBytes first = await cache.ReadAllBytesAsync("a.txt");
-        AssetBytes second = await cache.ReadAllBytesAsync("a.txt");
+        AssetBytes first = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+        AssetBytes second = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
 
         Assert.Equal(new byte[] { 1, 2, 3 }, first.Bytes.ToArray());
         Assert.Equal(new byte[] { 1, 2, 3 }, second.Bytes.ToArray());
@@ -29,9 +29,9 @@ public class CachingAssetSourceTests
         });
         using var cache = new CachingAssetSource(inner);
 
-        AssetBytes a = await cache.ReadAllBytesAsync("a.txt");
-        AssetBytes b = await cache.ReadAllBytesAsync("b.txt");
-        AssetBytes a2 = await cache.ReadAllBytesAsync("a.txt");
+        AssetBytes a = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+        AssetBytes b = await cache.ReadAllBytesAsync("b.txt", TestContext.Current.CancellationToken);
+        AssetBytes a2 = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
 
         Assert.Equal(new byte[] { 1 }, a.Bytes.ToArray());
         Assert.Equal(new byte[] { 2 }, b.Bytes.ToArray());
@@ -52,8 +52,8 @@ public class CachingAssetSourceTests
         });
         using var cache = new CachingAssetSource(inner);
 
-        AssetBytes lower = await cache.ReadAllBytesAsync("a.txt");
-        AssetBytes upper = await cache.ReadAllBytesAsync("A.txt");
+        AssetBytes lower = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+        AssetBytes upper = await cache.ReadAllBytesAsync("A.txt", TestContext.Current.CancellationToken);
 
         Assert.Equal(new byte[] { 1 }, lower.Bytes.ToArray());
         Assert.Equal(new byte[] { 2 }, upper.Bytes.ToArray());
@@ -89,8 +89,8 @@ public class CachingAssetSourceTests
         });
         using var cache = new CachingAssetSource(inner);
 
-        await using Stream first = await cache.OpenAsync("a.txt");
-        await using Stream second = await cache.OpenAsync("a.txt");
+        await using Stream first = await cache.OpenAsync("a.txt", TestContext.Current.CancellationToken);
+        await using Stream second = await cache.OpenAsync("a.txt", TestContext.Current.CancellationToken);
 
         // Consuming `first` should not affect `second`.
         Assert.Equal(1, first.ReadByte());
@@ -111,10 +111,10 @@ public class CachingAssetSourceTests
         });
         using var cache = new CachingAssetSource(inner);
 
-        AssetBytes bytes = await cache.ReadAllBytesAsync("a.txt");
-        await using Stream stream = await cache.OpenAsync("a.txt");
+        AssetBytes bytes = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+        await using Stream stream = await cache.OpenAsync("a.txt", TestContext.Current.CancellationToken);
         using var copy = new MemoryStream();
-        await stream.CopyToAsync(copy);
+        await stream.CopyToAsync(copy, TestContext.Current.CancellationToken);
 
         Assert.Equal(bytes.Bytes.ToArray(), copy.ToArray());
     }
@@ -186,7 +186,7 @@ public class CachingAssetSourceTests
         using var cache = new CachingAssetSource(inner);
 
         await Assert.ThrowsAsync<FileNotFoundException>(
-            () => cache.ReadAllBytesAsync("missing"));
+            () => cache.ReadAllBytesAsync("missing", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -201,6 +201,6 @@ public class CachingAssetSourceTests
         var inner = new InMemoryAssetSource(new());
         using var cache = new CachingAssetSource(inner);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => cache.ReadAllBytesAsync(""));
+        await Assert.ThrowsAsync<ArgumentException>(() => cache.ReadAllBytesAsync("", TestContext.Current.CancellationToken));
     }
 }

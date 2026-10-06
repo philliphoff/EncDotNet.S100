@@ -117,10 +117,10 @@ public class MultipleViewingGroupTests
         var fc = FeatureCatalogueReader.Read(fcStream);
 
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
-        var pcProvider = await PortrayalCatalogueProvider.OpenAsync(pcSource);
+        var pcProvider = await PortrayalCatalogueProvider.OpenAsync(pcSource, cancellationToken: TestContext.Current.CancellationToken);
         var luaEngine = new MoonSharpLuaEngine();
         var catalogue = new S101PortrayalCatalogue(pcProvider, luaEngine);
-        await catalogue.SwitchPaletteAsync(PaletteType.Day);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
 
         async Task<IReadOnlyList<string?>> RenderSymbols()
         {

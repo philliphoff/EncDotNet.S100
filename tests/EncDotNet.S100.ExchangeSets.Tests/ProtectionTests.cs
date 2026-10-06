@@ -354,7 +354,7 @@ public class ProtectionTests
         using var decrypting = new DecryptingAssetSource(inner, keyProvider);
 
         var exception = await Assert.ThrowsAsync<DatasetDecryptionException>(
-            () => decrypting.OpenAsync("S-101/101AA00000000003.000"));
+            () => decrypting.OpenAsync("S-101/101AA00000000003.000", TestContext.Current.CancellationToken));
         Assert.Equal("S-101/101AA00000000003.000", exception.DatasetPath);
         Assert.Contains("101AA00000000003.000", exception.Message);
         Assert.Contains("hardware id", exception.Message);
@@ -386,7 +386,7 @@ public class ProtectionTests
         using var decrypting = new DecryptingAssetSource(inner, keyProvider);
 
         var exception = await Assert.ThrowsAsync<CryptographicException>(
-            () => decrypting.OpenAsync("101AA00000000004.000"));
+            () => decrypting.OpenAsync("101AA00000000004.000", TestContext.Current.CancellationToken));
         Assert.IsNotType<DatasetDecryptionException>(exception);
     }
 

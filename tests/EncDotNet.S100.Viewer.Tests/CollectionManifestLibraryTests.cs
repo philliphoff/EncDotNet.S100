@@ -161,7 +161,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
 
         var vm = new AddToLibraryDialogViewModel(_library, null);
         vm.InitializeEdit(collection.Id, source);
-        await vm.LoadCatalogAsync();
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.True(vm.IsEditing);
         Assert.False(vm.ShowsTarget);

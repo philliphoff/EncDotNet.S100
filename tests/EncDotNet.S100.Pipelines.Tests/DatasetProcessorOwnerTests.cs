@@ -117,12 +117,12 @@ public sealed class DatasetProcessorOwnerTests
         {
             start.Wait();
             owner.Remove(id, processor);
-        });
+        }, TestContext.Current.CancellationToken);
         var release = Task.Run(() =>
         {
             start.Wait();
             lease.Dispose();
-        });
+        }, TestContext.Current.CancellationToken);
 
         start.Set();
         await Task.WhenAll(remove, release);

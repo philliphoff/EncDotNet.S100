@@ -17,7 +17,7 @@ public class RenderToImageToolTests
         var host = new FakeRenderer(FakePng);
         var tool = new RenderToImageTool(Accessor(host));
 
-        var value = AssertOk(await tool.InvokeAsync(new RenderToImageRequest()));
+        var value = AssertOk(await tool.InvokeAsync(new RenderToImageRequest(), TestContext.Current.CancellationToken));
 
         Assert.Equal(1024, value.Width);
         Assert.Equal(768, value.Height);
@@ -34,7 +34,7 @@ public class RenderToImageToolTests
         var host = new FakeRenderer(FakePng);
 
         var value = AssertOk(await new RenderToImageTool(Accessor(host))
-            .InvokeAsync(new RenderToImageRequest(Width: 640, Height: 480, PixelDensity: 2.0)));
+            .InvokeAsync(new RenderToImageRequest(Width: 640, Height: 480, PixelDensity: 2.0), TestContext.Current.CancellationToken));
 
         Assert.Equal(640, value.Width);
         Assert.Equal(480, value.Height);
@@ -49,7 +49,7 @@ public class RenderToImageToolTests
         var host = new FakeRenderer(FakePng) { PreferredSize = (1600, 900) };
 
         var value = AssertOk(await new RenderToImageTool(Accessor(host))
-            .InvokeAsync(new RenderToImageRequest()));
+            .InvokeAsync(new RenderToImageRequest(), TestContext.Current.CancellationToken));
 
         Assert.Equal(1600, value.Width);
         Assert.Equal(900, value.Height);
@@ -65,7 +65,7 @@ public class RenderToImageToolTests
         var host = new FakeRenderer(FakePng) { PreferredSize = (1600, 900) };
 
         var value = AssertOk(await new RenderToImageTool(Accessor(host))
-            .InvokeAsync(new RenderToImageRequest(Width: 640, Height: 480)));
+            .InvokeAsync(new RenderToImageRequest(Width: 640, Height: 480), TestContext.Current.CancellationToken));
 
         // Explicit dims win for the render; the live size is still echoed so an
         // agent can request a matching aspect ratio or feed a pixel pick.
@@ -82,7 +82,7 @@ public class RenderToImageToolTests
         var host = new FakeRenderer(FakePng); // PreferredSize null (headless renderer)
 
         var value = AssertOk(await new RenderToImageTool(Accessor(host))
-            .InvokeAsync(new RenderToImageRequest()));
+            .InvokeAsync(new RenderToImageRequest(), TestContext.Current.CancellationToken));
 
         Assert.Equal(1024, value.Width);
         Assert.Equal(768, value.Height);
@@ -96,7 +96,7 @@ public class RenderToImageToolTests
         var host = new FakeRenderer(FakePng);
 
         var value = AssertOk(await new RenderToImageTool(Accessor(host))
-            .InvokeAsync(new RenderToImageRequest(Width: 10, Height: 99999, PixelDensity: 9.0)));
+            .InvokeAsync(new RenderToImageRequest(Width: 10, Height: 99999, PixelDensity: 9.0), TestContext.Current.CancellationToken));
 
         Assert.Equal(64, value.Width);
         Assert.Equal(4096, value.Height);
@@ -114,7 +114,7 @@ public class RenderToImageToolTests
 
         var error = Assert.IsType<InvalidArgument>(
             AssertErr(await new RenderToImageTool(Accessor(host))
-                .InvokeAsync(new RenderToImageRequest(PixelDensity: density))));
+                .InvokeAsync(new RenderToImageRequest(PixelDensity: density), TestContext.Current.CancellationToken)));
         // The MCP surface uses the camelCase wire field name.
         Assert.Equal("pixelDensity", error.Parameter);
         Assert.Null(host.LastCall);
@@ -127,7 +127,7 @@ public class RenderToImageToolTests
 
         Assert.IsType<HostNotReady>(
             AssertErr(await new RenderToImageTool(Accessor(host))
-                .InvokeAsync(new RenderToImageRequest())));
+                .InvokeAsync(new RenderToImageRequest(), TestContext.Current.CancellationToken)));
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public class RenderToImageToolTests
         var tool = new RenderToImageTool(new NullCapabilityAccessor<IImageRenderer>());
 
         Assert.IsType<HostNotReady>(
-            AssertErr(await tool.InvokeAsync(new RenderToImageRequest())));
+            AssertErr(await tool.InvokeAsync(new RenderToImageRequest(), TestContext.Current.CancellationToken)));
     }
 
     private static ICapabilityAccessor<IImageRenderer> Accessor(IImageRenderer r)

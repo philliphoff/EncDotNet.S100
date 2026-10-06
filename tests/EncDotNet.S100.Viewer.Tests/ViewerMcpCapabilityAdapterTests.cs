@@ -73,7 +73,7 @@ public class ViewerMcpCapabilityAdapterTests
         var ctrl = new RecordingRenderStateController();
         var sut = new ViewerPresentationController(ctrl, () => current);
 
-        await sut.SetPresentationAsync(current.WithPalette(PaletteType.Night));
+        await sut.SetPresentationAsync(current.WithPalette(PaletteType.Night), TestContext.Current.CancellationToken);
 
         Assert.Equal([PaletteType.Night], ctrl.PaletteSets);
         Assert.Empty(ctrl.CategorySets);
@@ -89,7 +89,7 @@ public class ViewerMcpCapabilityAdapterTests
 
         var next = current.WithEcdisDisplay(
             current.EcdisDisplay with { Category = EcdisDisplayCategory.All });
-        await sut.SetPresentationAsync(next);
+        await sut.SetPresentationAsync(next, TestContext.Current.CancellationToken);
 
         Assert.Equal([EcdisDisplayCategory.All], ctrl.CategorySets);
         Assert.Empty(ctrl.PaletteSets);
@@ -103,7 +103,7 @@ public class ViewerMcpCapabilityAdapterTests
         var ctrl = new RecordingRenderStateController();
         var sut = new ViewerPresentationController(ctrl, () => current);
 
-        await sut.SetPresentationAsync(current);
+        await sut.SetPresentationAsync(current, TestContext.Current.CancellationToken);
 
         Assert.Empty(ctrl.PaletteSets);
         Assert.Empty(ctrl.CategorySets);
@@ -117,7 +117,7 @@ public class ViewerMcpCapabilityAdapterTests
         var ctrl = new RecordingRenderStateController();
         var sut = new ViewerPresentationController(ctrl, () => current);
 
-        await sut.SetPresentationAsync(WithDisplayMode(current, "S-411", "sod"));
+        await sut.SetPresentationAsync(WithDisplayMode(current, "S-411", "sod"), TestContext.Current.CancellationToken);
 
         Assert.Equal([("S-411", (string?)"sod")], ctrl.DisplayModeSets);
         Assert.Empty(ctrl.PaletteSets);
@@ -131,7 +131,7 @@ public class ViewerMcpCapabilityAdapterTests
         var ctrl = new RecordingRenderStateController();
         var sut = new ViewerPresentationController(ctrl, () => current);
 
-        await sut.SetPresentationAsync(WithDisplayMode(current, "S-411", null));
+        await sut.SetPresentationAsync(WithDisplayMode(current, "S-411", null), TestContext.Current.CancellationToken);
 
         Assert.Equal([("S-411", (string?)null)], ctrl.DisplayModeSets);
     }
@@ -147,7 +147,7 @@ public class ViewerMcpCapabilityAdapterTests
             return Task.CompletedTask;
         });
 
-        await sut.SetTimeAsync(DateTime.UtcNow);
+        await sut.SetTimeAsync(DateTime.UtcNow, TestContext.Current.CancellationToken);
 
         Assert.True(dispatched);
     }

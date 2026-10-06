@@ -42,7 +42,7 @@ public class SetOwnShipToolTests
         var (tool, helm) = Make();
 
         var result = await tool.InvokeAsync(new SetOwnShipRequest(
-            Lat: 47.6, Lon: -122.3, Cog: 180.0, Sog: 4.0, Heading: 175.0));
+            Lat: 47.6, Lon: -122.3, Cog: 180.0, Sog: 4.0, Heading: 175.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Single(helm.States);
@@ -56,7 +56,7 @@ public class SetOwnShipToolTests
     {
         var (tool, helm) = Make();
 
-        var result = await tool.InvokeAsync(new SetOwnShipRequest(Cog: 90.0));
+        var result = await tool.InvokeAsync(new SetOwnShipRequest(Cog: 90.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out _));
         Assert.Empty(helm.States);
@@ -68,7 +68,7 @@ public class SetOwnShipToolTests
     {
         var (tool, helm) = Make();
 
-        await tool.InvokeAsync(new SetOwnShipRequest(Sog: 2.5));
+        await tool.InvokeAsync(new SetOwnShipRequest(Sog: 2.5), TestContext.Current.CancellationToken);
 
         Assert.Equal(new[] { 2.5 }, helm.Speeds);
     }
@@ -78,7 +78,7 @@ public class SetOwnShipToolTests
     {
         var (tool, helm) = Make();
 
-        var result = await tool.InvokeAsync(new SetOwnShipRequest(Hold: true));
+        var result = await tool.InvokeAsync(new SetOwnShipRequest(Hold: true), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(1, helm.Holds);
@@ -90,7 +90,7 @@ public class SetOwnShipToolTests
     {
         var (tool, helm) = Make();
 
-        var result = await tool.InvokeAsync(new SetOwnShipRequest(Hold: false));
+        var result = await tool.InvokeAsync(new SetOwnShipRequest(Hold: false), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(1, helm.Resumes);
@@ -102,7 +102,7 @@ public class SetOwnShipToolTests
     {
         var (tool, helm) = Make();
 
-        var result = await tool.InvokeAsync(new SetOwnShipRequest(Lat: 10.0));
+        var result = await tool.InvokeAsync(new SetOwnShipRequest(Lat: 10.0), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         Assert.True(result.TryGetError(out var err));
@@ -115,7 +115,7 @@ public class SetOwnShipToolTests
     {
         var (tool, _) = Make();
 
-        var result = await tool.InvokeAsync(new SetOwnShipRequest(Heading: 90.0));
+        var result = await tool.InvokeAsync(new SetOwnShipRequest(Heading: 90.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
@@ -127,7 +127,7 @@ public class SetOwnShipToolTests
     {
         var (tool, _) = Make();
 
-        var result = await tool.InvokeAsync(new SetOwnShipRequest());
+        var result = await tool.InvokeAsync(new SetOwnShipRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
@@ -142,7 +142,7 @@ public class SetOwnShipToolTests
     {
         var (tool, helm) = Make();
 
-        var result = await tool.InvokeAsync(new SetOwnShipRequest(Lat: lat, Lon: lon));
+        var result = await tool.InvokeAsync(new SetOwnShipRequest(Lat: lat, Lon: lon), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out _));
         Assert.Empty(helm.States);
@@ -153,7 +153,7 @@ public class SetOwnShipToolTests
     {
         var (tool, _) = Make();
 
-        var result = await tool.InvokeAsync(new SetOwnShipRequest(Sog: -1.0));
+        var result = await tool.InvokeAsync(new SetOwnShipRequest(Sog: -1.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
@@ -165,7 +165,7 @@ public class SetOwnShipToolTests
     {
         var (tool, _) = Make();
 
-        var result = await tool.InvokeAsync(new SetOwnShipRequest(Cog: double.NaN));
+        var result = await tool.InvokeAsync(new SetOwnShipRequest(Cog: double.NaN), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out _));
     }
@@ -176,7 +176,7 @@ public class SetOwnShipToolTests
         var (tool, helm) = Make();
 
         var result = await tool.InvokeAsync(new SetOwnShipRequest(
-            Lat: 1.0, Lon: 2.0, Cog: 45.0, Hold: false));
+            Lat: 1.0, Lon: 2.0, Cog: 45.0, Hold: false), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(1, helm.Resumes);

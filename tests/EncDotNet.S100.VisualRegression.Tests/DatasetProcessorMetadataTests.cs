@@ -44,7 +44,7 @@ public sealed class DatasetProcessorMetadataTests
         // so the feature scan is not repeated (issue #467 WS1).
         Assert.Same(metadata, processor.Metadata);
 
-        var result = await processor.BuildVectorPortrayalAsync();
+        var result = await processor.BuildVectorPortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(result.GeographicExtent);
 
         var raw = metadata.Extent!;

@@ -59,7 +59,7 @@ public class EcdisDisplayExtensionsTests
     public async Task ApplyTo_ChangesActiveModeAndUserOverridesOnS101Catalogue()
     {
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
-        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new EncDotNet.S100.Datasets.S101.S101PortrayalCatalogue(provider);
 
         var settings = new EcdisDisplaySettings
@@ -83,7 +83,7 @@ public class EcdisDisplayExtensionsTests
     public async Task ApplyTo_AllCategory_ClearsModeFilter()
     {
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
-        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new EncDotNet.S100.Datasets.S101.S101PortrayalCatalogue(provider);
 
         // Pre-set to DisplayBase to prove ApplyTo can return us to "All".

@@ -74,7 +74,7 @@ public class S111Dcf8ProcessorTests
             using var catalogues = S111TestCatalogues.Create();
             var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
+            var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Single(result.Layers);
             var layer = Assert.IsType<ThinnedSymbolLayer>(result.Layers[0]);
@@ -109,7 +109,7 @@ public class S111Dcf8ProcessorTests
             using var catalogues = S111TestCatalogues.Create();
             using var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext { SymbolScale = 1.5 });
+            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext { SymbolScale = 1.5 }, TestContext.Current.CancellationToken);
 
             var sub = Assert.IsType<GlyphCoverageSubLayer>(Assert.Single(result.SubLayers));
             Assert.Equal(2, sub.Glyphs.Count);
@@ -146,7 +146,7 @@ public class S111Dcf8ProcessorTests
             using var catalogues = S111TestCatalogues.Create();
             using var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext());
+            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext(), TestContext.Current.CancellationToken);
 
             AssertGridArrowPlacement(Assert.Single(result.SubLayers));
         }
@@ -175,7 +175,7 @@ public class S111Dcf8ProcessorTests
             using var catalogues = S111TestCatalogues.Create();
             using var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext());
+            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext(), TestContext.Current.CancellationToken);
 
             AssertGridArrowPlacement(Assert.Single(result.SubLayers));
         }
@@ -221,7 +221,7 @@ public class S111Dcf8ProcessorTests
             using var catalogues = S111TestCatalogues.Create();
             var processor = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            using var bitmap = await processor.RenderHeadlessAsync(256, 256);
+            using var bitmap = await processor.RenderHeadlessAsync(256, 256, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains(
                 Enumerable.Range(0, bitmap.Width).SelectMany(x =>
@@ -265,7 +265,7 @@ public class S111Dcf8ProcessorTests
 
             // Render at the second time-step; expected S1 speed = 0.6, dir = 50.
             var secondStep = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
-            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new S111RenderContext { TimeStep = secondStep });
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new S111RenderContext { TimeStep = secondStep }, TestContext.Current.CancellationToken);
 
             var info = p.GetFeatureInfo("station:S1");
 
@@ -299,7 +299,7 @@ public class S111Dcf8ProcessorTests
         {
             using var catalogues = S111TestCatalogues.Create();
             var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
-            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Null(p.GetFeatureInfo("station:Nope"));
             Assert.Null(p.GetFeatureInfo("plain-ref"));

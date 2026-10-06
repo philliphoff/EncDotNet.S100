@@ -36,7 +36,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         Assert.Same(Cell().Location.GetType(), service.Localize(Cell()).Location.GetType());
         Assert.Null(((ILibraryDownloader)service).LocalEditionOf(Cell()));
 
-        var result = await service.DownloadAsync([Cell()]);
+        var result = await service.DownloadAsync([Cell()], TestContext.Current.CancellationToken);
 
         Assert.Equal(new LibraryDownloadResult(1, 0, false), result);
         Assert.True(changes > 0);
@@ -54,7 +54,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         var service = Create();
         _server.Fail = true;
 
-        var result = await service.DownloadAsync([Cell(), Cell(name: "US5GONE1", status: CollectionItemStatus.Cancelled)]);
+        var result = await service.DownloadAsync([Cell(), Cell(name: "US5GONE1", status: CollectionItemStatus.Cancelled)], TestContext.Current.CancellationToken);
 
         Assert.Equal(new LibraryDownloadResult(0, 1, false), result);
         Assert.False(service.CanDownload(Cell(status: CollectionItemStatus.Cancelled)));
@@ -88,7 +88,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         var usaceItem = Cell() with { Location = new RemoteItemLocation(new Uri("https://ienccloud.us/x/US4OH1MK.zip")) };
         var elsewhere = Cell() with { Location = new RemoteItemLocation(new Uri("https://unknown.test/US4OH1MK.zip")) };
 
-        await service.DownloadAsync([usaceItem]);
+        await service.DownloadAsync([usaceItem], TestContext.Current.CancellationToken);
 
         Assert.True(Directory.Exists(Path.Combine(_context.Root, "usace-ienc", "US4OH1MK")));
         Assert.False(Directory.Exists(Path.Combine(_context.Root, "noaa-enc")));
@@ -116,7 +116,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         };
 
         // Two cells of the same package: one download.
-        var result = await service.DownloadAsync([Member("US4OH1MK"), Member("OTHER")]);
+        var result = await service.DownloadAsync([Member("US4OH1MK"), Member("OTHER")], TestContext.Current.CancellationToken);
 
         Assert.Equal(new LibraryDownloadResult(1, 0, false), result);
         Assert.True(File.Exists(Path.Combine(_context.Root, "community", "TEST", "Base1", EncCellDownloader.RecordFileName)));
@@ -141,7 +141,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         items = items.Select((c, i) => c with { Name = $"US4OH1M{i}" }).ToArray();
         Assert.Null(service.Progress);
 
-        var download = service.DownloadAsync(items);
+        var download = service.DownloadAsync(items, TestContext.Current.CancellationToken);
         await server.WaitForRequestsAsync(LibraryDownloadService.MaxConcurrentDownloads);
 
         Assert.Equal(items.Length, service.Progress!.Total);
@@ -169,7 +169,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
         var first = Cell() with { Location = new RemoteItemLocation(new Uri("https://example.test/a/US4OH1MK.zip"), 10_279) };
         var second = Cell() with { Key = "b", Location = new RemoteItemLocation(new Uri("https://example.test/b/US4OH1MK.zip"), 10_279) };
 
-        var download = service.DownloadAsync([first, second]);
+        var download = service.DownloadAsync([first, second], TestContext.Current.CancellationToken);
         await server.WaitForRequestsAsync(2);
         service.Cancel(first);
         server.Release();
@@ -187,7 +187,7 @@ public sealed class LibraryDownloadServiceTests : IDisposable
             LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "US4OH1MK.zip")));
         var service = new LibraryDownloadService(new EncCellDownloader(new HttpClient(server), Path.Combine(_context.Root, "noaa-enc")));
 
-        var download = service.DownloadAsync([Cell()]);
+        var download = service.DownloadAsync([Cell()], TestContext.Current.CancellationToken);
         await server.WaitForRequestsAsync(1);
         service.CancelAll();
         var result = await download;

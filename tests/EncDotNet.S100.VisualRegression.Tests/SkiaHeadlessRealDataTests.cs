@@ -68,7 +68,7 @@ public sealed class SkiaHeadlessRealDataTests
         using var manager = CreateCatalogueManager();
 
         var processor = new S201DatasetProcessor(path, manager, CreateAuthorityProvider());
-        using var bitmap = await processor.RenderHeadlessAsync(800, 600);
+        using var bitmap = await processor.RenderHeadlessAsync(800, 600, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(800, bitmap.Width);
         Assert.Equal(600, bitmap.Height);
@@ -83,7 +83,7 @@ public sealed class SkiaHeadlessRealDataTests
         using var manager = CreateCatalogueManager();
 
         var processor = new S124DatasetProcessor(path, manager, CreateAuthorityProvider());
-        using var bitmap = await processor.RenderHeadlessAsync(800, 600);
+        using var bitmap = await processor.RenderHeadlessAsync(800, 600, cancellationToken: TestContext.Current.CancellationToken);
 
         AssertNonBlank(bitmap);
         MaybeDump(bitmap, "s124_navwarn_surface.png");
@@ -104,7 +104,7 @@ public sealed class SkiaHeadlessRealDataTests
 
         var processor = new S101DatasetProcessor(
             path, manager, new MoonSharpLuaEngine(), featureCatalogues);
-        using var bitmap = await processor.RenderHeadlessAsync(1000, 800);
+        using var bitmap = await processor.RenderHeadlessAsync(1000, 800, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1000, bitmap.Width);
         Assert.Equal(800, bitmap.Height);

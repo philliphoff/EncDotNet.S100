@@ -41,7 +41,7 @@ public class DescribeFeatureGmlBackfillTests
         var tool = new DescribeFeatureTool(catalog);
         var result = await tool.InvokeAsync(new DescribeFeatureRequest(
             new DatasetId("mpa"),
-            "mpa-1"));
+            "mpa-1"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("MarineProtectedArea", value.FeatureTypeName);
@@ -86,7 +86,7 @@ public class DescribeFeatureGmlBackfillTests
         var tool = new DescribeFeatureTool(catalog);
         var result = await tool.InvokeAsync(new DescribeFeatureRequest(
             new DatasetId("harbour"),
-            "auth-1"));
+            "auth-1"), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("Authority", value.FeatureTypeName);
@@ -104,7 +104,7 @@ public class DescribeFeatureGmlBackfillTests
 
         var result = await tool.InvokeAsync(new DescribeFeatureRequest(
             new DatasetId("mpa"),
-            "does-not-exist"));
+            "does-not-exist"), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         Assert.True(result.TryGetError(out var err));

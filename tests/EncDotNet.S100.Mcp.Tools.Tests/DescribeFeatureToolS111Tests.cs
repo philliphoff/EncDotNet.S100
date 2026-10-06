@@ -14,7 +14,8 @@ public class DescribeFeatureToolS111Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("SurfaceCurrent", value.FeatureTypeName);
@@ -34,7 +35,8 @@ public class DescribeFeatureToolS111Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01.Group_001"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01.Group_001"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var attrs = value.Attributes;
@@ -54,7 +56,8 @@ public class DescribeFeatureToolS111Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01.Group_099"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01.Group_099"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<FeatureNotFound>(err);
@@ -68,7 +71,8 @@ public class DescribeFeatureToolS111Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var attrs = value.Attributes;
@@ -86,7 +90,8 @@ public class DescribeFeatureToolS111Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01.Group_001"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01.Group_001"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("SurfaceCurrentStation", value.FeatureTypeName);
@@ -102,7 +107,8 @@ public class DescribeFeatureToolS111Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "CUR_002"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "CUR_002"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("SurfaceCurrentStation", value.FeatureTypeName);
@@ -121,7 +127,8 @@ public class DescribeFeatureToolS111Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "BAD_ID"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "BAD_ID"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<FeatureNotFound>(err);
@@ -141,7 +148,8 @@ public class DescribeFeatureToolS111Tests
         var tool = new DescribeFeatureTool(catalog);
 
         var result = await tool.InvokeAsync(
-            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01"));
+            new DescribeFeatureRequest(new DatasetId("ds"), "SurfaceCurrent.01"),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         var unsupported = Assert.IsType<SpecNotSupportedForTool>(err);

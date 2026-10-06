@@ -21,7 +21,7 @@ public sealed class CacheCounterTests
     public async Task S101_GetLuaSource_emits_one_miss_and_subsequent_hits_with_product_tag()
     {
         using var inner = Specification.CreatePortrayalCatalogueSource("S-101");
-        var provider = await PortrayalCatalogueProvider.OpenAsync(inner);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(inner, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new S101PortrayalCatalogue(provider);
 
         // Subscribe AFTER catalogue construction so any internal warm-up
@@ -34,9 +34,9 @@ public sealed class CacheCounterTests
             "s100.lua.source.cache.miss.count", misses);
 
         const string fileName = "S100Scripting.lua";
-        _ = await catalogue.GetLuaSourceAsync(fileName);
-        _ = await catalogue.GetLuaSourceAsync(fileName);
-        _ = await catalogue.GetLuaSourceAsync(fileName);
+        _ = await catalogue.GetLuaSourceAsync(fileName, TestContext.Current.CancellationToken);
+        _ = await catalogue.GetLuaSourceAsync(fileName, TestContext.Current.CancellationToken);
+        _ = await catalogue.GetLuaSourceAsync(fileName, TestContext.Current.CancellationToken);
 
         listener.Dispose();
         KeyValuePair<string, object?>[][] hitSnap;
@@ -59,7 +59,7 @@ public sealed class CacheCounterTests
         // the SVG slot instead since it's used by every S-101 rule. Same
         // counter, different asset-kind.
         using var inner = Specification.CreatePortrayalCatalogueSource("S-101");
-        var provider = await PortrayalCatalogueProvider.OpenAsync(inner);
+        var provider = await PortrayalCatalogueProvider.OpenAsync(inner, cancellationToken: TestContext.Current.CancellationToken);
         var catalogue = new S101PortrayalCatalogue(provider);
 
         var hits = new List<KeyValuePair<string, object?>[]>();
@@ -70,8 +70,8 @@ public sealed class CacheCounterTests
 
         // Find a real symbol id to ensure we hit the cache miss/hit path.
         var symbolId = provider.Catalogue.Symbols.First().Id;
-        _ = await catalogue.GetSymbolAsync(symbolId);
-        _ = await catalogue.GetSymbolAsync(symbolId);
+        _ = await catalogue.GetSymbolAsync(symbolId, TestContext.Current.CancellationToken);
+        _ = await catalogue.GetSymbolAsync(symbolId, TestContext.Current.CancellationToken);
 
         listener.Dispose();
         KeyValuePair<string, object?>[][] hitSnap;

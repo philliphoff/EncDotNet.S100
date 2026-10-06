@@ -29,7 +29,7 @@ public class CountFeaturesToolTests
         catalog.Add(SolentCell("enc"));
         var tool = new CountFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new CountFeaturesRequest());
+        var result = await tool.InvokeAsync(new CountFeaturesRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(4, value.TotalFeatures);
@@ -51,7 +51,7 @@ public class CountFeaturesToolTests
         catalog.Add(SolentCell("b"));
         var tool = new CountFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new CountFeaturesRequest(Dataset: new DatasetId("b")));
+        var result = await tool.InvokeAsync(new CountFeaturesRequest(Dataset: new DatasetId("b")), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(1, value.DatasetCount);
@@ -66,7 +66,7 @@ public class CountFeaturesToolTests
         catalog.Add(LoadedDatasetFactory.S124("warn", S124Synth.Dataset(S124Synth.Feature("w1"))));
         var tool = new CountFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new CountFeaturesRequest(Spec: new SpecRef("S-101", default)));
+        var result = await tool.InvokeAsync(new CountFeaturesRequest(Spec: new SpecRef("S-101", default)), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(1, value.DatasetCount);
@@ -82,7 +82,7 @@ public class CountFeaturesToolTests
 
         // Box covers the three LIGHTS (lon 0.5..0.6) but not the BOYLAT (lon -0.4).
         var result = await tool.InvokeAsync(new CountFeaturesRequest(
-            Query: new GeoQuery.Box(new GeoBoundingBox(0, 0, 1, 1))));
+            Query: new GeoQuery.Box(new GeoBoundingBox(0, 0, 1, 1))), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var tally = Assert.Single(value.Types);
@@ -99,7 +99,7 @@ public class CountFeaturesToolTests
         catalog.Add(LoadedDatasetFactory.S102("depth"));
         var tool = new CountFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new CountFeaturesRequest());
+        var result = await tool.InvokeAsync(new CountFeaturesRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Types);
@@ -122,7 +122,7 @@ public class CountFeaturesToolTests
         catalog.Add(LoadedDatasetFactory.S124("warn", model));
         var tool = new CountFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new CountFeaturesRequest());
+        var result = await tool.InvokeAsync(new CountFeaturesRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var tally = Assert.Single(value.Types);

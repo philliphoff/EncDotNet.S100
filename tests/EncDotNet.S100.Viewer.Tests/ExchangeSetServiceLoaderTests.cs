@@ -128,7 +128,7 @@ public class ExchangeSetServiceLoaderTests
             using (var service1 = new ExchangeSetService(
                 datasets1, Notifications.TestNotifications.Create(), s57CatalogCache: cache))
             {
-                var first = await service1.OpenAsync(S57FramedFixture());
+                var first = await service1.OpenAsync(S57FramedFixture(), cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(2, datasets1.Entries.Count);
                 Assert.NotNull(first.UnionBoundingBox);
             }
@@ -143,7 +143,7 @@ public class ExchangeSetServiceLoaderTests
             using (var service2 = new ExchangeSetService(
                 datasets2, Notifications.TestNotifications.Create(), s57CatalogCache: cache))
             {
-                var second = await service2.OpenAsync(S57FramedFixture());
+                var second = await service2.OpenAsync(S57FramedFixture(), cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(2, datasets2.Entries.Count);
                 Assert.NotNull(second.UnionBoundingBox);
                 Assert.Equal(-123.0, second.UnionBoundingBox!.WestBoundLongitude);
@@ -164,7 +164,7 @@ public class ExchangeSetServiceLoaderTests
         var (datasets, service) = CreateSystem();
         using var _ = service;
 
-        var result = await service.OpenAsync(MixedFixture());
+        var result = await service.OpenAsync(MixedFixture(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(3, result.Total);
         Assert.Equal(2, result.Loaded);
@@ -189,14 +189,14 @@ public class ExchangeSetServiceLoaderTests
             Notifications.TestNotifications.Create(),
             maxConcurrentLoads: 1);
 
-        var openTask = service.OpenAsync(MixedFixture());
+        var openTask = service.OpenAsync(MixedFixture(), cancellationToken: TestContext.Current.CancellationToken);
         await Task.Run(async () =>
         {
             while (loader.Started == 0)
             {
                 await Task.Delay(10);
             }
-        }).WaitAsync(TimeSpan.FromSeconds(5));
+        }, TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, loader.Started);
         Assert.Equal(1, loader.Active);
@@ -208,7 +208,7 @@ public class ExchangeSetServiceLoaderTests
             {
                 await Task.Delay(10);
             }
-        }).WaitAsync(TimeSpan.FromSeconds(5));
+        }, TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, loader.Active);
         loader.Release();
@@ -221,7 +221,7 @@ public class ExchangeSetServiceLoaderTests
         var (datasets, service) = CreateSystem();
         using var _ = service;
 
-        var result = await service.OpenAsync(MixedFixture());
+        var result = await service.OpenAsync(MixedFixture(), cancellationToken: TestContext.Current.CancellationToken);
 
         var header = Assert.Single(datasets.ExchangeSetHeaders);
         Assert.Equal("Synthetic Hydrographic Office", header.Producer);
@@ -241,7 +241,7 @@ public class ExchangeSetServiceLoaderTests
         var (datasets, service) = CreateSystem();
         using var _ = service;
 
-        await service.OpenAsync(MixedFixture());
+        await service.OpenAsync(MixedFixture(), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(2, datasets.Entries.Count);
         var header = Assert.Single(datasets.ExchangeSetHeaders);
 
@@ -260,7 +260,7 @@ public class ExchangeSetServiceLoaderTests
         var (datasets, service) = CreateSystem();
         using var _ = service;
 
-        await service.OpenAsync(MixedFixture());
+        await service.OpenAsync(MixedFixture(), cancellationToken: TestContext.Current.CancellationToken);
 
         // Simulate the user removing each row individually rather than
         // using the header's Close button.
@@ -279,7 +279,7 @@ public class ExchangeSetServiceLoaderTests
         var (datasets, service) = CreateSystem();
         using var _ = service;
 
-        var result = await service.OpenAsync(AllUnsupportedFixture());
+        var result = await service.OpenAsync(AllUnsupportedFixture(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, result.Total);
         Assert.Equal(0, result.Loaded);
@@ -307,7 +307,7 @@ public class ExchangeSetServiceLoaderTests
         var (datasets, service) = CreateSystem();
         using var _ = service;
 
-        var result = await service.OpenAsync(S411NoProductIdFixture());
+        var result = await service.OpenAsync(S411NoProductIdFixture(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, result.Total);
         Assert.Equal(1, result.Loaded);
@@ -333,7 +333,7 @@ public class ExchangeSetServiceLoaderTests
         using var _ = service;
         var progress = new SynchronousProgress<ExchangeSetProgress>();
 
-        await service.OpenAsync(MixedFixture(), progress);
+        await service.OpenAsync(MixedFixture(), progress, TestContext.Current.CancellationToken);
 
         // Initial total + one per dataset (3) = 4 reports.
         Assert.Equal(4, progress.Reports.Count);
@@ -361,7 +361,8 @@ public class ExchangeSetServiceLoaderTests
                 // Capture how many datasets have been dispatched at the
                 // instant framing is emitted — it must be zero.
                 entryCountWhenFramed = datasets.Entries.Count;
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         // The callback fired with the union of both dataset boxes,
         // computed up front from catalogue metadata (issue #448).
@@ -403,7 +404,8 @@ public class ExchangeSetServiceLoaderTests
             {
                 framed = bbox;
                 entryCountWhenFramed = datasets.Entries.Count;
-            });
+            },
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(framed);
         Assert.Equal(0, entryCountWhenFramed);
@@ -432,7 +434,8 @@ public class ExchangeSetServiceLoaderTests
 
         var result = await service.OpenAsync(
             MixedFixture(),
-            onFramingReady: _ => invoked = true);
+            onFramingReady: _ => invoked = true,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         // No dataset declares a bounding box, so there is nothing to
         // frame early; the caller falls back to its debounce path.
@@ -446,7 +449,7 @@ public class ExchangeSetServiceLoaderTests
         var (datasets, service) = CreateSystem();
         using var _ = service;
 
-        var result = await service.OpenAsync(S101UpdatesFixture());
+        var result = await service.OpenAsync(S101UpdatesFixture(), cancellationToken: TestContext.Current.CancellationToken);
 
         // The base cell plus its two updates form a single load item.
         Assert.Equal(1, result.Total);
@@ -471,7 +474,7 @@ public class ExchangeSetServiceLoaderTests
         var (datasets, service) = CreateSystem();
         using var _ = service;
 
-        await service.OpenAsync(S101UpdatesFixture());
+        await service.OpenAsync(S101UpdatesFixture(), cancellationToken: TestContext.Current.CancellationToken);
 
         var header = Assert.Single(datasets.ExchangeSetHeaders);
         // Three catalogue entries collapse to one renderable cell.
@@ -486,7 +489,7 @@ public class ExchangeSetServiceLoaderTests
         var (datasets, service) = CreateSystem();
         using var _ = service;
 
-        var result = await service.OpenAsync(S101OrphanFixture());
+        var result = await service.OpenAsync(S101OrphanFixture(), cancellationToken: TestContext.Current.CancellationToken);
 
         // An orphan update cannot be applied on its own; it is skipped
         // best-effort with a warning and dispatches no dataset entry.
@@ -519,7 +522,7 @@ public class ExchangeSetServiceLoaderTests
         var (datasets, service) = CreateSystem();
         using var _ = service;
 
-        var result = await service.OpenAsync(root!);
+        var result = await service.OpenAsync(root!, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.Loaded > 0);
         Assert.Equal(result.Total, result.Loaded);
@@ -557,7 +560,7 @@ public class ExchangeSetServiceLoaderTests
             var (datasets, service) = CreateSystem();
             using var _ = service;
 
-            var result = await service.OpenAsync(folder);
+            var result = await service.OpenAsync(folder, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(1, result.Total);
             Assert.Equal(1, result.Loaded);
@@ -590,7 +593,7 @@ public class ExchangeSetServiceLoaderTests
             var (datasets, service) = CreateSystem();
             using var _ = service;
 
-            var result = await service.OpenAsync(folder);
+            var result = await service.OpenAsync(folder, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(2, result.Total);
             Assert.Equal(2, result.Loaded);
@@ -619,7 +622,7 @@ public class ExchangeSetServiceLoaderTests
             var (datasets, service) = CreateSystem();
             using var _ = service;
 
-            await service.OpenAsync(folder);
+            await service.OpenAsync(folder, cancellationToken: TestContext.Current.CancellationToken);
 
             var header = Assert.Single(datasets.ExchangeSetHeaders);
             Assert.Equal(folder, header.SourcePath);

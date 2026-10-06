@@ -15,7 +15,7 @@ public class ZipExchangeSetTests
     public async Task Create_FromFilePath_ReturnsProvider()
     {
         using var source = ZipAssetSource.Create(GetZipPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(provider);
     }
 
@@ -24,7 +24,7 @@ public class ZipExchangeSetTests
     {
         var stream = File.OpenRead(GetZipPath());
         using var source = ZipAssetSource.Create(stream);
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(provider);
     }
 
@@ -32,7 +32,7 @@ public class ZipExchangeSetTests
     public async Task Create_ParsesCatalogue()
     {
         using var source = ZipAssetSource.Create(GetZipPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("IHO_V12", provider.Catalogue.Identifier.Identifier);
         Assert.Equal(19, provider.Catalogue.DatasetDiscoveryMetadata.Count);
@@ -42,10 +42,10 @@ public class ZipExchangeSetTests
     public async Task FetchDatasetAsync_ReturnsReadableStream()
     {
         using var source = ZipAssetSource.Create(GetZipPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         var dataset = provider.Catalogue.DatasetDiscoveryMetadata[0];
 
-        await using var stream = await provider.FetchDatasetAsync(dataset);
+        await using var stream = await provider.FetchDatasetAsync(dataset, TestContext.Current.CancellationToken);
 
         Assert.NotNull(stream);
         Assert.True(stream.CanRead);
@@ -58,11 +58,11 @@ public class ZipExchangeSetTests
     public async Task FetchDatasetAsync_AllDatasets_Readable()
     {
         using var source = ZipAssetSource.Create(GetZipPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
 
         foreach (var dataset in provider.Catalogue.DatasetDiscoveryMetadata)
         {
-            await using var stream = await provider.FetchDatasetAsync(dataset);
+            await using var stream = await provider.FetchDatasetAsync(dataset, TestContext.Current.CancellationToken);
             Assert.NotEqual(-1, stream.ReadByte());
         }
     }
@@ -71,20 +71,20 @@ public class ZipExchangeSetTests
     public async Task FetchDatasetAsync_PathTraversal_Throws()
     {
         using var source = ZipAssetSource.Create(GetZipPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         var malicious = new DatasetDiscoveryMetadata { FileName = "../../etc/passwd" };
 
-        await Assert.ThrowsAsync<ArgumentException>(() => provider.FetchDatasetAsync(malicious));
+        await Assert.ThrowsAsync<ArgumentException>(() => provider.FetchDatasetAsync(malicious, TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task FetchDatasetAsync_MissingEntry_ThrowsFileNotFound()
     {
         using var source = ZipAssetSource.Create(GetZipPath());
-        using var provider = await ExchangeSet.OpenAsync(source);
+        using var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         var missing = new DatasetDiscoveryMetadata { FileName = "nonexistent.000" };
 
-        await Assert.ThrowsAsync<FileNotFoundException>(() => provider.FetchDatasetAsync(missing));
+        await Assert.ThrowsAsync<FileNotFoundException>(() => provider.FetchDatasetAsync(missing, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class ZipExchangeSetTests
             }
 
             using var source = ZipAssetSource.Create(zipPath);
-            await Assert.ThrowsAnyAsync<Exception>(() => ExchangeSet.OpenAsync(source));
+            await Assert.ThrowsAnyAsync<Exception>(() => ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -112,11 +112,11 @@ public class ZipExchangeSetTests
     public async Task Dispose_DisposesArchive()
     {
         using var source = ZipAssetSource.Create(GetZipPath());
-        var provider = await ExchangeSet.OpenAsync(source);
+        var provider = await ExchangeSet.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         provider.Dispose();
 
         // Accessing a dataset after dispose should fail
         var dataset = provider.Catalogue.DatasetDiscoveryMetadata[0];
-        await Assert.ThrowsAnyAsync<ObjectDisposedException>(() => provider.FetchDatasetAsync(dataset));
+        await Assert.ThrowsAnyAsync<ObjectDisposedException>(() => provider.FetchDatasetAsync(dataset, TestContext.Current.CancellationToken));
     }
 }

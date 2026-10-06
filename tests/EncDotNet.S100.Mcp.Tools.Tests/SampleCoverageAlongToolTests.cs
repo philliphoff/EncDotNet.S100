@@ -26,7 +26,7 @@ public class SampleCoverageAlongToolTests
             new GeoPoint(0.03, 0.03)]);
 
         var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
-            LoadedDatasetFactory.S102Spec, polyline));
+            LoadedDatasetFactory.S102Spec, polyline), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(3, value.Samples.Count);
@@ -57,7 +57,7 @@ public class SampleCoverageAlongToolTests
             new GeoPoint(0.03, 0.03)]);     // inside
 
         var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
-            LoadedDatasetFactory.S102Spec, polyline));
+            LoadedDatasetFactory.S102Spec, polyline), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(3, value.Samples.Count);
@@ -78,7 +78,7 @@ public class SampleCoverageAlongToolTests
 
         var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
             new SpecRef("S-101", new SpecVersion(1, 0, 0)),
-            polyline));
+            polyline), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         Assert.True(result.TryGetError(out var err));
@@ -94,7 +94,7 @@ public class SampleCoverageAlongToolTests
         var polyline = new GeoPolyline([]);
 
         var result = await tool.InvokeAsync(new SampleCoverageAlongRequest(
-            LoadedDatasetFactory.S102Spec, polyline));
+            LoadedDatasetFactory.S102Spec, polyline), TestContext.Current.CancellationToken);
 
         Assert.False(result.TryGetValue(out _));
         Assert.True(result.TryGetError(out var err));

@@ -21,7 +21,7 @@ public sealed class GitHubReleaseClientIntegrationTests
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         var client = new GitHubReleaseClient(http);
 
-        var release = await client.GetLatestReleaseAsync();
+        var release = await client.GetLatestReleaseAsync(TestContext.Current.CancellationToken);
 
         Assert.NotNull(release);
         Assert.False(string.IsNullOrWhiteSpace(release!.TagName));
@@ -47,7 +47,7 @@ public sealed class GitHubReleaseClientIntegrationTests
         };
         var service = new UpdateService(client, versions, settings, TimeProvider.System);
 
-        var status = await service.CheckForUpdatesAsync(force: true);
+        var status = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(UpdateAvailability.UpdateAvailable, status.Availability);
         Assert.False(string.IsNullOrWhiteSpace(status.LatestVersion));

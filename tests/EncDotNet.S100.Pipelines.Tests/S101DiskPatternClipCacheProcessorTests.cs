@@ -65,7 +65,7 @@ public class S101DiskPatternClipCacheProcessorTests
             // First cold open: the disk cache is empty, so the clip is computed
             // (a miss) and persisted.
             var first = (S101DatasetProcessor)factory.CreateProcessor(DenseCellPath);
-            await renderer.RenderAsync(first);
+            await renderer.RenderAsync(first, cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(sharedCache.Misses >= 1);
 
             // Second cold open (simulates reopening the cell, even after a
@@ -73,7 +73,7 @@ public class S101DiskPatternClipCacheProcessorTests
             // Its area render must be served from disk — a clip-cache hit — so
             // the multi-second NetTopologySuite overlay is skipped.
             var second = (S101DatasetProcessor)factory.CreateProcessor(DenseCellPath);
-            await renderer.RenderAsync(second);
+            await renderer.RenderAsync(second, cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(
                 sharedCache.Hits >= 1,
                 "Second cold open should hit the warm disk pattern-clip cache.");

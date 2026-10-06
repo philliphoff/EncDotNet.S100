@@ -19,7 +19,7 @@ public sealed class DebouncedSettingsSaverTests
 
         saver.RequestSave();
 
-        Assert.True(fired.Wait(TimeSpan.FromSeconds(5)), "Saver did not fire within 5 s");
+        Assert.True(fired.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken), "Saver did not fire within 5 s");
         Assert.Equal(1, saves);
     }
 
@@ -46,7 +46,7 @@ public sealed class DebouncedSettingsSaverTests
             saver.RequestSave();
         }
 
-        Assert.True(fired.Wait(TimeSpan.FromSeconds(5)), "Saver did not fire within 5 s");
+        Assert.True(fired.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken), "Saver did not fire within 5 s");
         // Give any (incorrectly) scheduled extra fire a chance to land before
         // asserting coalescence. A spurious second timer would fire at roughly
         // the same instant as the first, so a short margin is sufficient.

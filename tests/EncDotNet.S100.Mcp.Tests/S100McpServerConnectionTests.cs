@@ -11,7 +11,7 @@ public class S100McpServerConnectionTests
         await using var server = new S100McpServer(
             new FakeDatasetCatalog(),
             new S100McpServerOptions { BindAddress = IPAddress.Loopback, Port = 0 });
-        await server.StartAsync();
+        await server.StartAsync(TestContext.Current.CancellationToken);
 
         var peak = 0;
         var fired = 0;
@@ -26,11 +26,11 @@ public class S100McpServerConnectionTests
         // streamable-HTTP handshake which exercises the request pipeline
         // at least once. Connections are tracked at the HTTP-request
         // level by ConnectionTrackingMiddleware.
-        var client = await McpTestClient.ConnectAsync(server);
+        var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
         await client.DisposeAsync();
 
         // Allow lingering middleware decrements to settle.
-        await Task.Delay(100);
+        await Task.Delay(100, TestContext.Current.CancellationToken);
 
         Assert.True(fired > 0, "ConnectionsChanged did not fire.");
         Assert.True(peak > 0, $"Peak connection count was {peak}; expected > 0.");

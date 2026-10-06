@@ -138,7 +138,7 @@ public sealed class TileMetatileTests
         {
             var processor = CreateFactory().CreateProcessor(path);
             var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
-            var rendered = await renderer.RenderAsync(processor);
+            var rendered = await renderer.RenderAsync(processor, cancellationToken: TestContext.Current.CancellationToken);
             var layer = rendered.Layers.FirstOrDefault(candidate =>
                 S100VectorTileRenderer.TryGetPartitionedScene(
                     candidate, out _, out _));

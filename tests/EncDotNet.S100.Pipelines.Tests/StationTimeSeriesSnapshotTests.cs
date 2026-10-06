@@ -76,7 +76,7 @@ public class StationTimeSeriesSnapshotTests
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
             var info = p.GetFeatureInfo("station:ST01");
 
             Assert.NotNull(info);
@@ -98,7 +98,7 @@ public class StationTimeSeriesSnapshotTests
         try
         {
             var p = new S111DatasetProcessor(path, S111TestCatalogues.Create(), IdentityFactory.Instance);
-            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
             var info = p.GetFeatureInfo("station:S1");
 
             Assert.NotNull(info);
@@ -122,7 +122,7 @@ public class StationTimeSeriesSnapshotTests
         try
         {
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p);
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
             // unknown ref returns null FeatureInfo entirely
             Assert.Null(p.GetFeatureInfo("station:Missing"));
             Assert.Null(p.GetFeatureInfo("not-a-station"));

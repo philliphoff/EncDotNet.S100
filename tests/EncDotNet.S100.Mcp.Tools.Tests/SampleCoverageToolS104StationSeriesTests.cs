@@ -57,7 +57,7 @@ public class SampleCoverageToolS104StationSeriesTests
 
         // Request very close to station A (51.5, -0.1).
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1));
+            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<WaterLevelStationSample>(value.Value);
@@ -78,7 +78,7 @@ public class SampleCoverageToolS104StationSeriesTests
 
         var requested = new DateTimeOffset(2023, 12, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1, Time: requested));
+            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1, Time: requested), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<WaterLevelStationSample>(value.Value);
@@ -96,7 +96,7 @@ public class SampleCoverageToolS104StationSeriesTests
 
         var requested = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1, Time: requested));
+            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1, Time: requested), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<WaterLevelStationSample>(value.Value);
@@ -115,7 +115,7 @@ public class SampleCoverageToolS104StationSeriesTests
         // 01:40 → rounds to 02:00 (index 2).
         var requested = new DateTimeOffset(2024, 1, 1, 1, 40, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1, Time: requested));
+            LoadedDatasetFactory.S104Spec, Latitude: 51.5, Longitude: -0.1, Time: requested), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<WaterLevelStationSample>(value.Value);
@@ -135,7 +135,7 @@ public class SampleCoverageToolS104StationSeriesTests
         // Far away from every station — should still pick the closest
         // (no max-distance cap).
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
-            LoadedDatasetFactory.S104Spec, Latitude: -80.0, Longitude: 0.0));
+            LoadedDatasetFactory.S104Spec, Latitude: -80.0, Longitude: 0.0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var sample = Assert.IsType<WaterLevelStationSample>(value.Value);

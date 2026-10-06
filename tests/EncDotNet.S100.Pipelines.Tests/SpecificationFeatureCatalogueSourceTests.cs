@@ -17,7 +17,7 @@ public class SpecificationFeatureCatalogueSourceTests
     public async Task CreateFeatureCatalogueSource_OpensFeatureCatalogueXml()
     {
         using var source = Specification.CreateFeatureCatalogueSource("S-101");
-        using var stream = await source.OpenAsync("FeatureCatalogue.xml");
+        using var stream = await source.OpenAsync("FeatureCatalogue.xml", TestContext.Current.CancellationToken);
         Assert.True(stream.Length > 0);
     }
 

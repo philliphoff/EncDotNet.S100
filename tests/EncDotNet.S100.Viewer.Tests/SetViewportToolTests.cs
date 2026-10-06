@@ -58,7 +58,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            South: 50.40, West: -3.66, North: 50.50, East: -3.50));
+            South: 50.40, West: -3.66, North: 50.50, East: -3.50), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal("bbox", ok!.Mode);
@@ -80,7 +80,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 50.45, CenterLon: -3.58, Zoom: 12));
+            CenterLat: 50.45, CenterLon: -3.58, Zoom: 12), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal("center", ok!.Mode);
@@ -99,7 +99,7 @@ public class SetViewportToolTests
     public async Task Empty_request_is_rejected()
     {
         var (tool, _) = Make();
-        var result = await tool.InvokeAsync(new SetViewportRequest());
+        var result = await tool.InvokeAsync(new SetViewportRequest(), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
     }
@@ -110,7 +110,7 @@ public class SetViewportToolTests
         var (tool, _) = Make();
         var result = await tool.InvokeAsync(new SetViewportRequest(
             South: 50, West: -4, North: 51, East: -3,
-            CenterLat: 50.5, CenterLon: -3.5, Zoom: 12));
+            CenterLat: 50.5, CenterLon: -3.5, Zoom: 12), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
     }
@@ -119,7 +119,7 @@ public class SetViewportToolTests
     public async Task Partial_bbox_is_rejected()
     {
         var (tool, _) = Make();
-        var result = await tool.InvokeAsync(new SetViewportRequest(South: 50, West: -4));
+        var result = await tool.InvokeAsync(new SetViewportRequest(South: 50, West: -4), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
     }
@@ -128,7 +128,7 @@ public class SetViewportToolTests
     public async Task Partial_center_zoom_is_rejected()
     {
         var (tool, _) = Make();
-        var result = await tool.InvokeAsync(new SetViewportRequest(CenterLat: 50, CenterLon: -3));
+        var result = await tool.InvokeAsync(new SetViewportRequest(CenterLat: 50, CenterLon: -3), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
     }
@@ -142,7 +142,7 @@ public class SetViewportToolTests
         double south, double west, double north, double east)
     {
         var (tool, _) = Make();
-        var result = await tool.InvokeAsync(new SetViewportRequest(south, west, north, east));
+        var result = await tool.InvokeAsync(new SetViewportRequest(south, west, north, east), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
     }
@@ -156,7 +156,7 @@ public class SetViewportToolTests
         double south, double west, double north, double east)
     {
         var (tool, _) = Make();
-        var result = await tool.InvokeAsync(new SetViewportRequest(south, west, north, east));
+        var result = await tool.InvokeAsync(new SetViewportRequest(south, west, north, east), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<GeometryInvalid>(err);
     }
@@ -170,7 +170,7 @@ public class SetViewportToolTests
         host.LiveCenter = new GeoPosition(72.5, 205);
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            South: 69.5, West: 190, North: 74.5, East: 220));
+            South: 69.5, West: 190, North: 74.5, East: 220), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(190, ok!.West, 6);
@@ -193,7 +193,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            South: 60, West: west, North: 70, East: east));
+            South: 60, West: west, North: 70, East: east), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(framedWest, ok!.West, 6);
@@ -209,7 +209,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 72, CenterLon: 205, ScaleDenominator: 10_000_000));
+            CenterLat: 72, CenterLon: 205, ScaleDenominator: 10_000_000), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         var call = Assert.Single(host.CenterCalls);
@@ -226,7 +226,7 @@ public class SetViewportToolTests
     {
         var (tool, _) = Make();
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 50, CenterLon: lon, Zoom: 5));
+            CenterLat: 50, CenterLon: lon, Zoom: 5), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
     }
@@ -250,7 +250,7 @@ public class SetViewportToolTests
     {
         var (tool, _) = Make();
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 50, CenterLon: -3, Zoom: zoom));
+            CenterLat: 50, CenterLon: -3, Zoom: zoom), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
     }
@@ -262,7 +262,7 @@ public class SetViewportToolTests
         var tool = new SetViewportTool(accessor);
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            South: 50, West: -4, North: 51, East: -3));
+            South: 50, West: -4, North: 51, East: -3), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<MapNotReady>(err);
@@ -295,7 +295,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 50.45, CenterLon: -3.58, Zoom: 12, Rotation: 30));
+            CenterLat: 50.45, CenterLon: -3.58, Zoom: 12, Rotation: 30), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(30, ok!.Rotation, 6);
@@ -309,7 +309,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            South: 50.40, West: -3.66, North: 50.50, East: -3.50, Rotation: 45));
+            South: 50.40, West: -3.66, North: 50.50, East: -3.50, Rotation: 45), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(45, ok!.Rotation, 6);
@@ -326,7 +326,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 50, CenterLon: -3, Zoom: 12, Rotation: input));
+            CenterLat: 50, CenterLon: -3, Zoom: 12, Rotation: input), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(expected, ok!.Rotation, 6);
@@ -339,7 +339,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 50, CenterLon: -3, Zoom: 12));
+            CenterLat: 50, CenterLon: -3, Zoom: 12), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(0, ok!.Rotation, 6);
@@ -354,7 +354,7 @@ public class SetViewportToolTests
         var (tool, _) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 50, CenterLon: -3, Zoom: 12, Rotation: rotation));
+            CenterLat: 50, CenterLon: -3, Zoom: 12, Rotation: rotation), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
@@ -365,7 +365,7 @@ public class SetViewportToolTests
     {
         var (tool, _) = Make();
 
-        var result = await tool.InvokeAsync(new SetViewportRequest(Rotation: 30));
+        var result = await tool.InvokeAsync(new SetViewportRequest(Rotation: 30), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
@@ -388,7 +388,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: -32.383, CenterLon: 61.75, ScaleDenominator: 50000));
+            CenterLat: -32.383, CenterLon: 61.75, ScaleDenominator: 50000), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal("center", ok!.Mode);
@@ -410,7 +410,7 @@ public class SetViewportToolTests
         host.LiveResolution = MapScaleFormatter.ScaleDenominatorToResolution(100000, 50.0);
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 50.0, CenterLon: -3.0, ScaleDenominator: 500));
+            CenterLat: 50.0, CenterLon: -3.0, ScaleDenominator: 500), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(100000, ok!.ScaleDenominator!.Value, 6);
@@ -422,7 +422,7 @@ public class SetViewportToolTests
         var (tool, _) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 0, CenterLon: 0, Zoom: 0));
+            CenterLat: 0, CenterLon: 0, Zoom: 0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var ok));
         Assert.Equal(
@@ -437,13 +437,13 @@ public class SetViewportToolTests
         var (tool, host) = Make();
         var request = new SetViewportRequest(South: 50.40, West: -3.66, North: 50.50, East: -3.50);
 
-        var before = await tool.InvokeAsync(request);
+        var before = await tool.InvokeAsync(request, TestContext.Current.CancellationToken);
         Assert.True(before.TryGetValue(out var unlaid));
         Assert.Null(unlaid!.ScaleDenominator);
 
         host.LiveCenter = new GeoPosition(50.45, -3.58);
         host.LiveResolution = MapScaleFormatter.ScaleDenominatorToResolution(42000, 50.45);
-        var after = await tool.InvokeAsync(request);
+        var after = await tool.InvokeAsync(request, TestContext.Current.CancellationToken);
         Assert.True(after.TryGetValue(out var laid));
         Assert.Equal(42000, laid!.ScaleDenominator!.Value, 6);
     }
@@ -454,7 +454,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 50, CenterLon: -3, Zoom: 12, ScaleDenominator: 50000));
+            CenterLat: 50, CenterLon: -3, Zoom: 12, ScaleDenominator: 50000), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
@@ -467,7 +467,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            South: 50.40, West: -3.66, North: 50.50, East: -3.50, ScaleDenominator: 50000));
+            South: 50.40, West: -3.66, North: 50.50, East: -3.50, ScaleDenominator: 50000), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.IsType<InvalidArgument>(err);
@@ -479,7 +479,7 @@ public class SetViewportToolTests
     {
         var (tool, _) = Make();
 
-        var result = await tool.InvokeAsync(new SetViewportRequest(CenterLat: 50, ScaleDenominator: 50000));
+        var result = await tool.InvokeAsync(new SetViewportRequest(CenterLat: 50, ScaleDenominator: 50000), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         var invalid = Assert.IsType<InvalidArgument>(err);
@@ -496,7 +496,7 @@ public class SetViewportToolTests
         var (tool, host) = Make();
 
         var result = await tool.InvokeAsync(new SetViewportRequest(
-            CenterLat: 50, CenterLon: -3, ScaleDenominator: scale));
+            CenterLat: 50, CenterLon: -3, ScaleDenominator: scale), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var err));
         Assert.Equal("scaleDenominator", Assert.IsType<InvalidArgument>(err).Parameter);

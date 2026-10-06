@@ -88,7 +88,7 @@ public sealed class S100ForecastFeedIndexerTests : IDisposable
     {
         var indexer = new S100ForecastFeedIndexer(new HttpClient(new ForecastServer()), _temp.Path);
 
-        var summaries = await indexer.GetModelsAsync(ModelsUri, [Cbofs, Dbofs]);
+        var summaries = await indexer.GetModelsAsync(ModelsUri, [Cbofs, Dbofs], TestContext.Current.CancellationToken);
 
         var cbofs = summaries.Single(s => s.Model == Cbofs);
         Assert.Equal(Run, cbofs.Run);
@@ -106,7 +106,7 @@ public sealed class S100ForecastFeedIndexerTests : IDisposable
         var tile = (await indexer.IndexAsync(Source(), null, CancellationToken.None)).Items[0];
         var downloader = new EncCellDownloader(new HttpClient(new ForecastServer()), Path.Combine(_temp.Path, "dl"));
 
-        var cell = await downloader.DownloadAsync(tile);
+        var cell = await downloader.DownloadAsync(tile, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(Run, cell.PublishedAt);
         Assert.False(cell.IsOlderThan(tile));

@@ -109,7 +109,7 @@ public class DatasetPipelineFactorySourceSniffingTests
             using var source = FileSystemAssetSource.Create(dir);
 
             var spec = await DatasetPipelineFactory
-                .DetectProductSpecFromSourceAsync(source, "ice.gml");
+                .DetectProductSpecFromSourceAsync(source, "ice.gml", TestContext.Current.CancellationToken);
 
             Assert.Equal("S-411", spec);
         }
@@ -132,7 +132,7 @@ public class DatasetPipelineFactorySourceSniffingTests
             using var source = FileSystemAssetSource.Create(dir);
 
             var spec = await DatasetPipelineFactory
-                .DetectProductSpecFromSourceAsync(source, "ice.gml");
+                .DetectProductSpecFromSourceAsync(source, "ice.gml", TestContext.Current.CancellationToken);
 
             Assert.Equal("S-411", spec);
         }
@@ -152,7 +152,7 @@ public class DatasetPipelineFactorySourceSniffingTests
             using var source = FileSystemAssetSource.Create(dir);
 
             var spec = await DatasetPipelineFactory
-                .DetectProductSpecFromSourceAsync(source, "ice.txt");
+                .DetectProductSpecFromSourceAsync(source, "ice.txt", TestContext.Current.CancellationToken);
 
             Assert.Null(spec);
         }

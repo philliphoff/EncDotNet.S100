@@ -197,7 +197,7 @@ public class S101DocumentWriterTests
     {
         var document = BuildSampleDocument();
 
-        await Assert.ThrowsAsync<ArgumentException>(() => S101DocumentWriter.WriteToFileAsync("", document));
+        await Assert.ThrowsAsync<ArgumentException>(() => S101DocumentWriter.WriteToFileAsync("", document, TestContext.Current.CancellationToken));
     }
 
     [Fact]

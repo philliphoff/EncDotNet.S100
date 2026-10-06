@@ -61,7 +61,7 @@ public class QueryFeaturesToolAttributeTests
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             Box,
             Attributes: [
-                new AttributePredicate("categoryOfMarineProtectedArea", AttributeOperator.Eq, "1")]));
+                new AttributePredicate("categoryOfMarineProtectedArea", AttributeOperator.Eq, "1")]), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var match = Assert.Single(value.Features);
@@ -80,7 +80,7 @@ public class QueryFeaturesToolAttributeTests
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             Box,
             Attributes: [
-                new AttributePredicate("valueOfDepth", AttributeOperator.Ge, "10")]));
+                new AttributePredicate("valueOfDepth", AttributeOperator.Ge, "10")]), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var match = Assert.Single(value.Features);
@@ -99,7 +99,7 @@ public class QueryFeaturesToolAttributeTests
         var result = await tool.InvokeAsync(new QueryFeaturesRequest(
             Box,
             Attributes: [
-                new AttributePredicate("restriction", AttributeOperator.Exists, null)]));
+                new AttributePredicate("restriction", AttributeOperator.Exists, null)]), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(2, value.TotalCount);
@@ -116,7 +116,7 @@ public class QueryFeaturesToolAttributeTests
             Feature("b", "MarineProtectedArea"));
         var tool = new QueryFeaturesTool(catalog);
 
-        var result = await tool.InvokeAsync(new QueryFeaturesRequest(Box));
+        var result = await tool.InvokeAsync(new QueryFeaturesRequest(Box), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(2, value.TotalCount);

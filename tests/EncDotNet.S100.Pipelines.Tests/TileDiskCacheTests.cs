@@ -323,7 +323,7 @@ public class TileDiskCacheTests : IDisposable
                 },
                 () => Volatile.Read(ref relevant) == 1));
 
-        Assert.True(writerEntered.Wait(TimeSpan.FromSeconds(10)));
+        Assert.True(writerEntered.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
         Volatile.Write(ref relevant, 0);
         releaseWriter.Set();
 

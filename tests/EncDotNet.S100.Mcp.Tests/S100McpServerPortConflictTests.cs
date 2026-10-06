@@ -34,7 +34,7 @@ public class S100McpServerPortConflictTests
                 new FakeDatasetCatalog(),
                 new S100McpServerOptions { BindAddress = IPAddress.Loopback, Port = port });
 
-            var ex = await Assert.ThrowsAnyAsync<Exception>(() => server.StartAsync());
+            var ex = await Assert.ThrowsAnyAsync<Exception>(() => server.StartAsync(TestContext.Current.CancellationToken));
 
             // The exception chain must contain a SocketException with
             // AddressAlreadyInUse — this is the signal McpServerHost

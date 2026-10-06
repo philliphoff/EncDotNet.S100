@@ -82,7 +82,7 @@ public class WorkerDrainGateTests
             {
                 gate.Complete();
             }
-        });
+        }, TestContext.Current.CancellationToken);
 
         gate.DrainAndWait(TimeSpan.FromSeconds(5));
         await worker;

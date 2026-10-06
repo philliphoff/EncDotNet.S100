@@ -71,7 +71,7 @@ public class S101PortrayalInstructionCacheProcessorTests
             // no shared-cache hits.
             var firstFactory = CreateFactory(sharedCache);
             var first = (S101DatasetProcessor)firstFactory.CreateProcessor(cell!);
-            var firstResult = await first.BuildVectorPortrayalAsync();
+            var firstResult = await first.BuildVectorPortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(0, first.SharedInstructionCacheHits);
             Assert.Equal(1, sharedCache.Misses);
 
@@ -81,7 +81,7 @@ public class S101PortrayalInstructionCacheProcessorTests
             // the MoonSharp Part 9A Lua run is skipped.
             var secondFactory = CreateFactory(sharedCache);
             var second = (S101DatasetProcessor)secondFactory.CreateProcessor(cell!);
-            var secondResult = await second.BuildVectorPortrayalAsync();
+            var secondResult = await second.BuildVectorPortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.True(
                 second.SharedInstructionCacheHits >= 1,
@@ -113,7 +113,7 @@ public class S101PortrayalInstructionCacheProcessorTests
             CreateCatalogueManager(),
             new MoonSharpLuaEngine(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
-        var result = await processor.BuildVectorPortrayalAsync();
+        var result = await processor.BuildVectorPortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.NotEmpty(result.SubLayers);

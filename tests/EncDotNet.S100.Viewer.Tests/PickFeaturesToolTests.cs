@@ -40,7 +40,7 @@ public class PickFeaturesToolTests
         host.ViewportSizePx = (800, 600);
         host.ScreenToWgs84 = (x, y) => new GeoPosition(47.6, -122.3);
 
-        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 400, Y: 300));
+        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 400, Y: 300), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("pixel", value!.Source);
@@ -55,7 +55,7 @@ public class PickFeaturesToolTests
         var (tool, _, accessor) = Make();
         accessor.Current = null;
 
-        var result = await tool.InvokeAsync(new PickFeaturesRequest(Latitude: 47.6, Longitude: -122.3));
+        var result = await tool.InvokeAsync(new PickFeaturesRequest(Latitude: 47.6, Longitude: -122.3), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("geo", value!.Source);
@@ -70,7 +70,7 @@ public class PickFeaturesToolTests
         host.ViewportSizePx = (800, 600);
         host.ScreenToWgs84 = (_, _) => new GeoPosition(1, 2);
 
-        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 1, Y: 2, Latitude: 3, Longitude: 4));
+        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 1, Y: 2, Latitude: 3, Longitude: 4), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);
@@ -81,7 +81,7 @@ public class PickFeaturesToolTests
     {
         var (tool, _, _) = Make();
 
-        var result = await tool.InvokeAsync(new PickFeaturesRequest());
+        var result = await tool.InvokeAsync(new PickFeaturesRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);
@@ -93,7 +93,7 @@ public class PickFeaturesToolTests
         var (tool, host, _) = Make();
         host.ViewportSizePx = (800, 600);
 
-        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 400));
+        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 400), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);
@@ -105,7 +105,7 @@ public class PickFeaturesToolTests
         var (tool, host, _) = Make();
         host.ViewportSizePx = (800, 600);
 
-        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: double.NaN, Y: 10));
+        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: double.NaN, Y: 10), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);
@@ -118,7 +118,7 @@ public class PickFeaturesToolTests
         host.ViewportSizePx = (800, 600);
         host.ScreenToWgs84 = (_, _) => new GeoPosition(1, 2);
 
-        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 900, Y: 300));
+        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 900, Y: 300), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);
@@ -130,7 +130,7 @@ public class PickFeaturesToolTests
         var (tool, _, accessor) = Make();
         accessor.Current = null;
 
-        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 10, Y: 10));
+        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 10, Y: 10), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<MapNotReady>(error);
@@ -142,7 +142,7 @@ public class PickFeaturesToolTests
         var (tool, host, _) = Make();
         host.ViewportSizePx = null;
 
-        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 10, Y: 10));
+        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 10, Y: 10), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<MapNotReady>(error);
@@ -155,7 +155,7 @@ public class PickFeaturesToolTests
         host.ViewportSizePx = (800, 600);
         host.ScreenToWgs84 = (_, _) => null;
 
-        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 10, Y: 10));
+        var result = await tool.InvokeAsync(new PickFeaturesRequest(X: 10, Y: 10), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);
@@ -179,7 +179,8 @@ public class PickFeaturesToolTests
         };
 
         var result = await tool.InvokeAsync(
-            new PickFeaturesRequest(X: 512, Y: 384, ImageWidth: 1024, ImageHeight: 768));
+            new PickFeaturesRequest(X: 512, Y: 384, ImageWidth: 1024, ImageHeight: 768),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("pixel", value!.Source);
@@ -194,7 +195,8 @@ public class PickFeaturesToolTests
         host.ViewportSizePx = (800, 600);
 
         var result = await tool.InvokeAsync(
-            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 1024));
+            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 1024),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);
@@ -208,7 +210,8 @@ public class PickFeaturesToolTests
         host.ImagePixelToWgs84 = (_, _, _, _) => new GeoPosition(1, 2);
 
         var result = await tool.InvokeAsync(
-            new PickFeaturesRequest(X: 2000, Y: 100, ImageWidth: 1024, ImageHeight: 768));
+            new PickFeaturesRequest(X: 2000, Y: 100, ImageWidth: 1024, ImageHeight: 768),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);
@@ -222,7 +225,8 @@ public class PickFeaturesToolTests
         host.ImagePixelToWgs84 = (_, _, _, _) => new GeoPosition(1, 2);
 
         var result = await tool.InvokeAsync(
-            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 1024, ImageHeight: 768));
+            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 1024, ImageHeight: 768),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<MapNotReady>(error);
@@ -235,7 +239,8 @@ public class PickFeaturesToolTests
         host.ViewportSizePx = (800, 600);
 
         var result = await tool.InvokeAsync(
-            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 0, ImageHeight: 768));
+            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 0, ImageHeight: 768),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);
@@ -249,7 +254,8 @@ public class PickFeaturesToolTests
         host.ImagePixelToWgs84 = (_, _, _, _) => null;
 
         var result = await tool.InvokeAsync(
-            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 1024, ImageHeight: 768));
+            new PickFeaturesRequest(X: 100, Y: 100, ImageWidth: 1024, ImageHeight: 768),
+            TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);

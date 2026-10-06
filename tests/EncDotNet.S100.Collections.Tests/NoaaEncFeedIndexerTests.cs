@@ -29,7 +29,7 @@ public sealed class NoaaEncFeedIndexerTests : IDisposable
     [Fact]
     public async Task Unscoped_feed_indexes_every_active_cell_as_an_online_item()
     {
-        var index = await _indexer.IndexAsync(Feed());
+        var index = await _indexer.IndexAsync(Feed(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(["US1GLBBA", "US1GLBDA", "US1GLBDS", "US2PACTX", "US3TC300", "US5MI62M"], Names(index));
         Assert.Empty(index.Diagnostics);
@@ -76,15 +76,15 @@ public sealed class NoaaEncFeedIndexerTests : IDisposable
     [Fact]
     public async Task Filters_select_by_state_district_or_region_and_exclude_cancelled_cells()
     {
-        var alaska = await _indexer.IndexAsync(Feed(new NoaaEncFilter { States = ["ak"] }));
+        var alaska = await _indexer.IndexAsync(Feed(new NoaaEncFilter { States = ["ak"] }), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(["US1GLBDA", "US1GLBDS"], Names(alaska));
 
-        var withCancelled = await _indexer.IndexAsync(Feed(new NoaaEncFilter { States = ["AK"], IncludeCancelled = true }));
+        var withCancelled = await _indexer.IndexAsync(Feed(new NoaaEncFilter { States = ["AK"], IncludeCancelled = true }), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(["US1EEZ1M", "US1GLBDA", "US1GLBDS"], Names(withCancelled));
         Assert.Equal(CollectionItemStatus.Cancelled, withCancelled.Items[0].Status);
         Assert.Null(withCancelled.Items[0].Bounds);
 
-        var union = await _indexer.IndexAsync(Feed(new NoaaEncFilter { States = ["HI"], Regions = [12], CoastGuardDistricts = [9] }));
+        var union = await _indexer.IndexAsync(Feed(new NoaaEncFilter { States = ["HI"], Regions = [12], CoastGuardDistricts = [9] }), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(["US1GLBBA", "US2PACTX", "US5MI62M"], Names(union));
 
         // One download serves every filter.
@@ -95,23 +95,23 @@ public sealed class NoaaEncFeedIndexerTests : IDisposable
     public async Task Refresh_reuses_the_index_until_the_server_reports_a_change()
     {
         var source = Feed();
-        var first = await _indexer.IndexAsync(source);
+        var first = await _indexer.IndexAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(1, _server.Requests);
 
         // Within the revalidation interval: no request at all.
-        Assert.Same(first, await _indexer.IndexAsync(source, first));
+        Assert.Same(first, await _indexer.IndexAsync(source, first, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(1, _server.Requests);
 
         // After it: a conditional request, answered 304.
         _time.Advance(TimeSpan.FromMinutes(20));
-        Assert.Same(first, await _indexer.IndexAsync(source, first));
+        Assert.Same(first, await _indexer.IndexAsync(source, first, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(2, _server.Requests);
         Assert.Equal(1, _server.NotModifiedResponses);
 
         // The server publishes a new catalogue.
         _time.Advance(TimeSpan.FromMinutes(20));
         _server.Publish(File.ReadAllBytes(TestPaths.Fixture("noaa-enc-prodcat.xml")), "\"v2\"");
-        var rebuilt = await _indexer.IndexAsync(source, first);
+        var rebuilt = await _indexer.IndexAsync(source, first, cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotSame(first, rebuilt);
         Assert.NotEqual(first.Fingerprint, rebuilt.Fingerprint);
     }
@@ -120,10 +120,10 @@ public sealed class NoaaEncFeedIndexerTests : IDisposable
     public async Task Changing_the_filter_rebuilds_without_downloading_again()
     {
         var source = Feed();
-        var first = await _indexer.IndexAsync(source);
+        var first = await _indexer.IndexAsync(source, cancellationToken: TestContext.Current.CancellationToken);
 
         var narrowed = source with { Filter = new NoaaEncFilter { States = ["CA"] } };
-        var second = await _indexer.IndexAsync(narrowed, first);
+        var second = await _indexer.IndexAsync(narrowed, first, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotSame(first, second);
         Assert.Equal(["US2PACTX"], Names(second));
@@ -134,13 +134,13 @@ public sealed class NoaaEncFeedIndexerTests : IDisposable
     public async Task Offline_refresh_serves_the_cached_catalogue_with_a_warning()
     {
         var source = Feed();
-        var first = await _indexer.IndexAsync(source);
+        var first = await _indexer.IndexAsync(source, cancellationToken: TestContext.Current.CancellationToken);
 
         _time.Advance(TimeSpan.FromHours(1));
         _server.Offline = true;
 
         // The fingerprint still matches, so an existing index is kept...
-        Assert.Same(first, await _indexer.IndexAsync(source, first));
+        Assert.Same(first, await _indexer.IndexAsync(source, first, cancellationToken: TestContext.Current.CancellationToken));
 
         // ...and a fresh index is built from the cached copy.
         var offline = await _feeds.IndexAsync(source, null, CancellationToken.None);
@@ -155,7 +155,7 @@ public sealed class NoaaEncFeedIndexerTests : IDisposable
     {
         _server.Offline = true;
 
-        var index = await _indexer.IndexAsync(Feed());
+        var index = await _indexer.IndexAsync(Feed(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(index.Items);
         Assert.Null(index.Fingerprint);
@@ -166,7 +166,7 @@ public sealed class NoaaEncFeedIndexerTests : IDisposable
     public async Task Interrupted_download_keeps_the_previous_copy()
     {
         var source = Feed();
-        var first = await _indexer.IndexAsync(source);
+        var first = await _indexer.IndexAsync(source, cancellationToken: TestContext.Current.CancellationToken);
 
         _time.Advance(TimeSpan.FromHours(1));
         _server.Publish(File.ReadAllBytes(TestPaths.Fixture("noaa-enc-prodcat.xml")), "\"v2\"");
@@ -182,7 +182,7 @@ public sealed class NoaaEncFeedIndexerTests : IDisposable
     [Fact]
     public async Task Facets_count_active_cells_once_per_value()
     {
-        var catalog = await _feeds.GetCatalogAsync(NoaaEncFeedSource.DefaultCatalogUri);
+        var catalog = await _feeds.GetCatalogAsync(NoaaEncFeedSource.DefaultCatalogUri, cancellationToken: TestContext.Current.CancellationToken);
 
         var facets = NoaaEncFacets.Compute(catalog);
 

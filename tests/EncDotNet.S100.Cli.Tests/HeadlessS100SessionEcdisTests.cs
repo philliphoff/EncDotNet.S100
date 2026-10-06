@@ -26,7 +26,7 @@ public sealed class HeadlessS100SessionEcdisTests
         Assert.SkipUnless(File.Exists(FixturePath), $"Fixture not found: {FixturePath}");
 
         using var catalog = new HeadlessMutableCatalog();
-        var outcome = await catalog.LoadAsync(FixturePath);
+        var outcome = await catalog.LoadAsync(FixturePath, cancellationToken: TestContext.Current.CancellationToken);
         Assert.SkipWhen(outcome.Added.Count == 0, "The S-57 cell could not be loaded into the catalog.");
 
         using var session = new HeadlessS100Session(catalog);
@@ -36,15 +36,17 @@ public sealed class HeadlessS100SessionEcdisTests
         // "All" — no viewing-group filter — is the maximal render.
         await session.SetPresentationAsync(
             presentation.Current.WithEcdisDisplay(
-                new EcdisDisplaySettings { Category = EcdisDisplayCategory.All }));
-        var all = await renderer.RenderToPngAsync(256, 256, pixelDensity: 1.0);
+                new EcdisDisplaySettings { Category = EcdisDisplayCategory.All }),
+            TestContext.Current.CancellationToken);
+        var all = await renderer.RenderToPngAsync(256, 256, pixelDensity: 1.0, cancellationToken: TestContext.Current.CancellationToken);
 
         // "Display Base" drops every viewing group above the base minimum. For a
         // cell with non-base content this must change the pixels.
         await session.SetPresentationAsync(
             presentation.Current.WithEcdisDisplay(
-                new EcdisDisplaySettings { Category = EcdisDisplayCategory.DisplayBase }));
-        var displayBase = await renderer.RenderToPngAsync(256, 256, pixelDensity: 1.0);
+                new EcdisDisplaySettings { Category = EcdisDisplayCategory.DisplayBase }),
+            TestContext.Current.CancellationToken);
+        var displayBase = await renderer.RenderToPngAsync(256, 256, pixelDensity: 1.0, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(all);
         Assert.NotNull(displayBase);

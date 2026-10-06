@@ -109,7 +109,7 @@ public class PortrayalCatalogueManagerTests
     {
         using var mgr = new PortrayalCatalogueManager();
         ICatalogueProvider<PortrayalCatalogueProvider> provider = mgr;
-        var result = await provider.GetCatalogueAsync(new SpecRef("S-101", default));
+        var result = await provider.GetCatalogueAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
         Assert.Null(result);
     }
 
@@ -178,7 +178,7 @@ public class PortrayalCatalogueManagerTests
                 {
                     ready.SignalAndWait();
                     results[idx] = mgr.GetProvider("S-101");
-                });
+                }, TestContext.Current.CancellationToken);
             }
             await Task.WhenAll(tasks);
 
@@ -314,9 +314,9 @@ public class PortrayalCatalogueManagerTests
         var src = SourceWithRule("return {}");
         mgr.SetSource("S-101", src);
 
-        var h1 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var h1 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
         var openAfterFirst = src.OpenCounts.GetValueOrDefault("Rules/main.lua");
-        var h2 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var h2 = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
 
         Assert.NotNull(h1);
         Assert.Equal(h1, h2);
@@ -335,9 +335,9 @@ public class PortrayalCatalogueManagerTests
         b.SetSource("S-101", SourceWithRule("return { version = 1 }"));
         c.SetSource("S-101", SourceWithRule("return { version = 2 }"));
 
-        var ha = await a.GetCatalogueHashAsync(new SpecRef("S-101", default));
-        var hb = await b.GetCatalogueHashAsync(new SpecRef("S-101", default));
-        var hc = await c.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var ha = await a.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
+        var hb = await b.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
+        var hc = await c.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
 
         Assert.NotNull(ha);
         // Identical catalogue + asset bytes hash identically.
@@ -350,7 +350,7 @@ public class PortrayalCatalogueManagerTests
     public async Task GetCatalogueHashAsync_UnregisteredSpec_ReturnsNull()
     {
         using var mgr = new PortrayalCatalogueManager();
-        Assert.Null(await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default)));
+        Assert.Null(await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -358,11 +358,11 @@ public class PortrayalCatalogueManagerTests
     {
         using var mgr = new PortrayalCatalogueManager();
         mgr.SetSource("S-101", SourceWithRule("return { version = 1 }"));
-        var first = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var first = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
 
         // Re-registering a different source must invalidate the memoised hash.
         mgr.SetSource("S-101", SourceWithRule("return { version = 2 }"));
-        var second = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default));
+        var second = await mgr.GetCatalogueHashAsync(new SpecRef("S-101", default), TestContext.Current.CancellationToken);
 
         Assert.NotNull(first);
         Assert.NotNull(second);

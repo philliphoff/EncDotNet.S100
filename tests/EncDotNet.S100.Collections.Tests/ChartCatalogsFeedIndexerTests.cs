@@ -82,7 +82,7 @@ public sealed class ChartCatalogsFeedIndexerTests : IDisposable
     [Fact]
     public async Task Entries_index_as_online_packages_without_bounds()
     {
-        var index = await _indexer.IndexAsync(Feed());
+        var index = await _indexer.IndexAsync(Feed(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(index.Diagnostics);
         // The repeated entry appears once.
@@ -100,7 +100,7 @@ public sealed class ChartCatalogsFeedIndexerTests : IDisposable
     [Fact]
     public async Task Filter_selects_entries_by_number()
     {
-        var index = await _indexer.IndexAsync(Feed(new ChartCatalogsFilter { Charts = ["base2"] }));
+        var index = await _indexer.IndexAsync(Feed(new ChartCatalogsFilter { Charts = ["base2"] }), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("Base2", Assert.Single(index.Items).Name);
     }
@@ -109,12 +109,12 @@ public sealed class ChartCatalogsFeedIndexerTests : IDisposable
     public async Task A_downloaded_package_lists_its_cells_with_bounds()
     {
         var source = Feed(new ChartCatalogsFilter { Charts = ["Base1"] });
-        var before = await _indexer.IndexAsync(source);
+        var before = await _indexer.IndexAsync(source, cancellationToken: TestContext.Current.CancellationToken);
         var package = Assert.Single(before.Items);
 
         var downloader = new EncCellDownloader(
             new HttpClient(_server), Path.Combine(_downloads.Path, ((RemoteItemLocation)package.Location).DownloadFolder!));
-        var downloaded = await downloader.DownloadAsync(package);
+        var downloaded = await downloader.DownloadAsync(package, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(downloaded.IsPackage);
         Assert.Equal("Base1", downloaded.Name);
@@ -123,7 +123,7 @@ public sealed class ChartCatalogsFeedIndexerTests : IDisposable
         Assert.Equal("US4OH1MK/US4OH1MK.000", cellLocation.RelativePath);
 
         // The download changes the fingerprint, so the source re-indexes.
-        var after = await _indexer.IndexAsync(source, before);
+        var after = await _indexer.IndexAsync(source, before, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotSame(before, after);
         var cell = Assert.Single(after.Items);
@@ -137,7 +137,7 @@ public sealed class ChartCatalogsFeedIndexerTests : IDisposable
         Assert.Equal("Base1", remote.Package);
 
         // Unchanged afterwards.
-        Assert.Same(after, await _indexer.IndexAsync(source, after));
+        Assert.Same(after, await _indexer.IndexAsync(source, after, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]

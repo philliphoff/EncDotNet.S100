@@ -12,7 +12,7 @@ public class ListDatasetsToolTests
         var catalog = new FakeDatasetCatalog();
         var tool = new ListDatasetsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListDatasetsRequest());
+        var result = await tool.InvokeAsync(new ListDatasetsRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Datasets);
@@ -27,7 +27,7 @@ public class ListDatasetsToolTests
         catalog.Add(LoadedDatasetFactory.S124("alpha"));
         var tool = new ListDatasetsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListDatasetsRequest());
+        var result = await tool.InvokeAsync(new ListDatasetsRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         var summary = Assert.Single(value.Datasets);
@@ -44,7 +44,7 @@ public class ListDatasetsToolTests
         catalog.Add(LoadedDatasetFactory.S102("c"));
         var tool = new ListDatasetsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListDatasetsRequest());
+        var result = await tool.InvokeAsync(new ListDatasetsRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(3, value.Datasets.Count);
@@ -59,7 +59,7 @@ public class ListDatasetsToolTests
         catalog.Add(LoadedDatasetFactory.S124("c"));
         var tool = new ListDatasetsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListDatasetsRequest(Spec: LoadedDatasetFactory.S124Spec));
+        var result = await tool.InvokeAsync(new ListDatasetsRequest(Spec: LoadedDatasetFactory.S124Spec), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal(2, value.Datasets.Count);
@@ -74,7 +74,7 @@ public class ListDatasetsToolTests
         var tool = new ListDatasetsTool(catalog);
 
         var filter = new SpecRef("S-124", default);
-        var result = await tool.InvokeAsync(new ListDatasetsRequest(Spec: filter));
+        var result = await tool.InvokeAsync(new ListDatasetsRequest(Spec: filter), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Datasets);
@@ -88,7 +88,7 @@ public class ListDatasetsToolTests
         var tool = new ListDatasetsTool(catalog);
 
         var result = await tool.InvokeAsync(new ListDatasetsRequest(
-            IntersectsBounds: LoadedDatasetFactory.Box(5, 5, 6, 6)));
+            IntersectsBounds: LoadedDatasetFactory.Box(5, 5, 6, 6)), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Single(value.Datasets);
@@ -102,7 +102,7 @@ public class ListDatasetsToolTests
         var tool = new ListDatasetsTool(catalog);
 
         var result = await tool.InvokeAsync(new ListDatasetsRequest(
-            IntersectsBounds: LoadedDatasetFactory.Box(10, 10, 11, 11)));
+            IntersectsBounds: LoadedDatasetFactory.Box(10, 10, 11, 11)), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Datasets);
@@ -118,13 +118,13 @@ public class ListDatasetsToolTests
         }
         var tool = new ListDatasetsTool(catalog);
 
-        var page0 = await tool.InvokeAsync(new ListDatasetsRequest(Page: 0, PageSize: 3));
+        var page0 = await tool.InvokeAsync(new ListDatasetsRequest(Page: 0, PageSize: 3), TestContext.Current.CancellationToken);
         Assert.True(page0.TryGetValue(out var v0));
         Assert.Equal(3, v0.Datasets.Count);
         Assert.True(v0.HasMore);
         Assert.Equal(7, v0.TotalCount);
 
-        var page2 = await tool.InvokeAsync(new ListDatasetsRequest(Page: 2, PageSize: 3));
+        var page2 = await tool.InvokeAsync(new ListDatasetsRequest(Page: 2, PageSize: 3), TestContext.Current.CancellationToken);
         Assert.True(page2.TryGetValue(out var v2));
         Assert.Single(v2.Datasets);
         Assert.False(v2.HasMore);
@@ -137,7 +137,7 @@ public class ListDatasetsToolTests
         catalog.Add(LoadedDatasetFactory.S124("only"));
         var tool = new ListDatasetsTool(catalog);
 
-        var result = await tool.InvokeAsync(new ListDatasetsRequest(Page: 5, PageSize: 10));
+        var result = await tool.InvokeAsync(new ListDatasetsRequest(Page: 5, PageSize: 10), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
         Assert.Empty(value.Datasets);

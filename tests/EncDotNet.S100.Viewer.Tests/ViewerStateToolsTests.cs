@@ -54,10 +54,10 @@ public sealed class ViewerStateToolsTests
         var (time, controller, _) = Timeline(Run.AddHours(9).AddMinutes(10));
         time.ApplySnapshot(RunSnapshot());
         var tool = new SetViewTimeTool(controller);
-        Assert.True((await tool.InvokeAsync(new SetViewTimeRequest("+2h", null))).TryGetValue(out var pinned));
+        Assert.True((await tool.InvokeAsync(new SetViewTimeRequest("+2h", null), TestContext.Current.CancellationToken)).TryGetValue(out var pinned));
         Assert.Equal("pinned", pinned!.Mode);
 
-        var result = await tool.InvokeAsync(new SetViewTimeRequest("now", null));
+        var result = await tool.InvokeAsync(new SetViewTimeRequest("now", null), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var state));
         Assert.Equal("live", state!.Mode);
@@ -73,11 +73,11 @@ public sealed class ViewerStateToolsTests
         time.ApplySnapshot(RunSnapshot());
         var tool = new SetViewTimeTool(controller);
 
-        Assert.True((await tool.InvokeAsync(new SetViewTimeRequest("2026-09-30T15:20:00Z", null))).TryGetValue(out var exact));
+        Assert.True((await tool.InvokeAsync(new SetViewTimeRequest("2026-09-30T15:20:00Z", null), TestContext.Current.CancellationToken)).TryGetValue(out var exact));
         Assert.Equal(Run.AddHours(3).AddMinutes(20), exact!.ViewTime);
         Assert.Equal("pinned", exact.Mode);
 
-        Assert.True((await tool.InvokeAsync(new SetViewTimeRequest("+25m", "nearest"))).TryGetValue(out var nearest));
+        Assert.True((await tool.InvokeAsync(new SetViewTimeRequest("+25m", "nearest"), TestContext.Current.CancellationToken)).TryGetValue(out var nearest));
         Assert.Equal(Run.AddHours(4), nearest!.ViewTime);
     }
 
@@ -87,7 +87,7 @@ public sealed class ViewerStateToolsTests
         var (time, controller, _) = Timeline(Run.AddDays(5));
         time.ApplySnapshot(RunSnapshot());
 
-        var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest("now", null));
+        var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest("now", null), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var state));
         Assert.Equal("live", state!.Mode);
@@ -101,7 +101,7 @@ public sealed class ViewerStateToolsTests
     {
         var (_, controller, _) = Timeline(Run);
 
-        var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest("now", null));
+        var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest("now", null), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.Equal("view_time_not_applied", error!.Code);
@@ -114,7 +114,7 @@ public sealed class ViewerStateToolsTests
     {
         var (_, controller, _) = Timeline(Run);
 
-        var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest(time, snap));
+        var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest(time, snap), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.Equal(parameter, Assert.IsType<InvalidArgument>(error).Parameter);
@@ -137,7 +137,7 @@ public sealed class ViewerStateToolsTests
         var (time, controller, _) = Timeline(Run.AddHours(9));
         time.ApplySnapshot(RunSnapshot());
         var tool = new GetTimelineStateTool(controller);
-        Assert.True((await tool.InvokeAsync()).TryGetValue(out var state));
+        Assert.True((await tool.InvokeAsync(TestContext.Current.CancellationToken)).TryGetValue(out var state));
         var layer = new TimelineLayerDto("levels.h5", "S-104", true, null, null, null, 0, null, false, false);
 
         var json = System.Text.Json.JsonSerializer.Serialize(state! with { Layers = [layer] }, McpAdapterShared.Options);
@@ -153,16 +153,16 @@ public sealed class ViewerStateToolsTests
         time.ApplySnapshot(RunSnapshot());
         var tool = new StepTimeTool(controller);
 
-        Assert.True((await tool.InvokeAsync(new StepTimeRequest("next", "6h", 2))).TryGetValue(out var stepped));
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("next", "6h", 2), TestContext.Current.CancellationToken)).TryGetValue(out var stepped));
         Assert.Equal(Run.AddHours(12), stepped!.ViewTime);
         Assert.Equal("pinned", stepped.Mode);
         Assert.Equal("hour", stepped.Step);
 
-        Assert.True((await tool.InvokeAsync(new StepTimeRequest("previous", "boundary", null))).TryGetValue(out var boundary));
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("previous", "boundary", null), TestContext.Current.CancellationToken)).TryGetValue(out var boundary));
         Assert.Equal(Run, boundary!.ViewTime);
-        Assert.True((await tool.InvokeAsync(new StepTimeRequest("previous", "boundary", null))).TryGetError(out var none));
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("previous", "boundary", null), TestContext.Current.CancellationToken)).TryGetError(out var none));
         Assert.Equal("view_time_not_applied", none!.Code);
-        Assert.True((await tool.InvokeAsync(new StepTimeRequest("sideways", null, null))).TryGetError(out var bad));
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("sideways", null, null), TestContext.Current.CancellationToken)).TryGetError(out var bad));
         Assert.Equal("direction", Assert.IsType<InvalidArgument>(bad).Parameter);
     }
 
@@ -173,14 +173,14 @@ public sealed class ViewerStateToolsTests
         time.ApplySnapshot(RunSnapshot());
         var tool = new SetTimelineViewTool(controller);
 
-        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest("now_6h", null, null, null))).TryGetValue(out var zoomed));
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest("now_6h", null, null, null), TestContext.Current.CancellationToken)).TryGetValue(out var zoomed));
         Assert.Equal("Now ± 6 h", zoomed!.Preset);
         Assert.Equal(new TimeWindowDto(Run.AddHours(3), Run.AddHours(15)), zoomed.Window);
 
-        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, "2026-09-30T12:00:00Z", "2026-10-01T00:00:00Z"))).TryGetValue(out var custom));
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, "2026-09-30T12:00:00Z", "2026-10-01T00:00:00Z"), TestContext.Current.CancellationToken)).TryGetValue(out var custom));
         Assert.Equal("Custom", custom!.Preset);
 
-        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest("all_loaded", "in", null, null))).TryGetError(out var both));
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest("all_loaded", "in", null, null), TestContext.Current.CancellationToken)).TryGetError(out var both));
         Assert.Equal("preset", Assert.IsType<InvalidArgument>(both).Parameter);
     }
 
@@ -194,7 +194,7 @@ public sealed class ViewerStateToolsTests
         datasets.Entries.Add(entry);
         var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, Immediate));
 
-        var result = await tool.InvokeAsync(new SetDatasetStateRequest(entry.DisplayName, true, 0.5));
+        var result = await tool.InvokeAsync(new SetDatasetStateRequest(entry.DisplayName, true, 0.5), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var state));
         Assert.True(state!.Visible);
@@ -210,9 +210,9 @@ public sealed class ViewerStateToolsTests
         var tool = new SetDatasetStateTool(new ViewerDatasetStateController(
             new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate));
 
-        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest("missing.h5", true, null))).TryGetError(out var missing));
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest("missing.h5", true, null), TestContext.Current.CancellationToken)).TryGetError(out var missing));
         Assert.Equal("dataset_not_found", missing!.Code);
-        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest("missing.h5", null, 1.5))).TryGetError(out var opacity));
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest("missing.h5", null, 1.5), TestContext.Current.CancellationToken)).TryGetError(out var opacity));
         Assert.Equal("opacity", Assert.IsType<InvalidArgument>(opacity).Parameter);
     }
 
@@ -235,7 +235,7 @@ public sealed class ViewerStateToolsTests
         datasets.SelectDataset(other);
         var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
 
-        var result = await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "Validation", null));
+        var result = await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "Validation", null), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var selection));
         Assert.Equal(cell.DisplayName, selection!.Id);
@@ -261,7 +261,7 @@ public sealed class ViewerStateToolsTests
         datasets.InspectorTab = DatasetInspectorTab.Layers;
         var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
 
-        var result = await tool.InvokeAsync(new SelectDatasetRequest(grid.DisplayName, null, null));
+        var result = await tool.InvokeAsync(new SelectDatasetRequest(grid.DisplayName, null, null), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var selection));
         Assert.Equal("layers", selection!.Tab);
@@ -277,7 +277,7 @@ public sealed class ViewerStateToolsTests
         var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
         var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
 
-        var pending = tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "validation", 30_000));
+        var pending = tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "validation", 30_000), TestContext.Current.CancellationToken);
         Assert.False(pending.IsCompleted);
         cell.IsLoaded = true;
         cell.SetValidationReport(ReportOf(new ValidationFinding { RuleId = "R1", Severity = ValidationSeverity.Info, Message = "i" }));
@@ -294,7 +294,7 @@ public sealed class ViewerStateToolsTests
         var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
         var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
 
-        var result = await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, null, 0));
+        var result = await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, null, 0), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var selection));
         Assert.Equal("not_loaded", selection!.Validation.State);
@@ -309,11 +309,11 @@ public sealed class ViewerStateToolsTests
         var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
         var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
 
-        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest("missing.000", null, null))).TryGetError(out var missing));
+        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest("missing.000", null, null), TestContext.Current.CancellationToken)).TryGetError(out var missing));
         Assert.Equal("dataset_not_found", missing!.Code);
-        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "findings", null))).TryGetError(out var tab));
+        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "findings", null), TestContext.Current.CancellationToken)).TryGetError(out var tab));
         Assert.Equal("tab", Assert.IsType<InvalidArgument>(tab).Parameter);
-        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest(" ", null, null))).TryGetError(out var blank));
+        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest(" ", null, null), TestContext.Current.CancellationToken)).TryGetError(out var blank));
         Assert.Equal("datasetId", Assert.IsType<InvalidArgument>(blank).Parameter);
         Assert.Null(datasets.SelectedEntry);
     }
@@ -328,19 +328,19 @@ public sealed class ViewerStateToolsTests
         service.Create("Downloaded 3 tiles").Show();
         var controller = new ViewerNotificationController(service, Immediate);
 
-        Assert.True((await new ListNotificationsTool(controller).InvokeAsync()).TryGetValue(out var listed));
+        Assert.True((await new ListNotificationsTool(controller).InvokeAsync(TestContext.Current.CancellationToken)).TryGetValue(out var listed));
         Assert.Equal(["Viewer recovered", "Downloaded 3 tiles"], listed!.Notifications.Select(n => n.Title));
         Assert.Equal("warning", listed.Notifications[0].Severity);
 
         var dismiss = new DismissNotificationTool(controller);
-        Assert.True((await dismiss.InvokeAsync(new DismissNotificationRequest(listed.Notifications[0].Id.ToString()))).TryGetValue(out var one));
+        Assert.True((await dismiss.InvokeAsync(new DismissNotificationRequest(listed.Notifications[0].Id.ToString()), TestContext.Current.CancellationToken)).TryGetValue(out var one));
         Assert.Single(one!.Dismissed);
         Assert.Single(service.Active);
 
-        Assert.True((await dismiss.InvokeAsync(new DismissNotificationRequest(null))).TryGetValue(out _));
+        Assert.True((await dismiss.InvokeAsync(new DismissNotificationRequest(null), TestContext.Current.CancellationToken)).TryGetValue(out _));
         Assert.Empty(service.Active);
 
-        Assert.True((await dismiss.InvokeAsync(new DismissNotificationRequest(Guid.NewGuid().ToString()))).TryGetError(out var missing));
+        Assert.True((await dismiss.InvokeAsync(new DismissNotificationRequest(Guid.NewGuid().ToString()), TestContext.Current.CancellationToken)).TryGetError(out var missing));
         Assert.Equal("notification_not_found", missing!.Code);
     }
 
