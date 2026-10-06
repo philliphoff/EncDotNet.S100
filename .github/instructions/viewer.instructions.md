@@ -61,7 +61,9 @@ conventions.
   `{Binding Label}`).
 - **Keep names short** ("Move up", "Zoom in"). Put a longer description in
   the tooltip and in `AutomationProperties.HelpText`, and a keyboard
-  shortcut in `AutomationProperties.AcceleratorKey`, not in the name.
+  shortcut in `AutomationProperties.AcceleratorKey`, not in the name. An
+  icon button whose tooltip is a sentence gets its own short `Label_*`
+  string for the name and the tooltip's string as its `HelpText`.
 - **Name inputs after their label.** A text box, combo box, slider, number
   box or toggle switch next to a label `TextBlock` gets
   `AutomationProperties.Name` set to the label's string; on its own a screen
@@ -75,8 +77,8 @@ conventions.
   (a `Button`, `ToggleButton`, list selection…).
 - **Run the guard.** `UiAutomation/AccessibilityGuardTests` in
   `tests/EncDotNet.S100.Viewer.Tests` fails on any button or input without
-  an accessible name and any interactive control without an automation id,
-  in every view. There is no allow-list: new UI must pass it as written.
+  an accessible name, any name longer than a short label, and any
+  interactive control without an automation id, in every view. There is no allow-list: new UI must pass it as written.
 - **Test new UI through its ids.** Add an `[AvaloniaFact]` view test that
   drives the new UI with `ViewHost` and finds controls by automation id,
   not by localized text.

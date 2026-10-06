@@ -77,7 +77,8 @@
                         </TextBlock>
                         <Button Grid.Column="2"
                                 AutomationProperties.AutomationId="PickReport.Attribute.OpenInExaminer"
-                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
                                 Width="22" Height="22"
                                 MinWidth="0" MinHeight="0"
                                 Padding="0"
@@ -155,7 +156,8 @@
                         </StackPanel>
                         <Button Grid.Column="2"
                                 AutomationProperties.AutomationId="PickReport.Reference.CopyText"
-                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CopyReferencedText}"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_CopyText}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyReferencedText}"
                                 VerticalAlignment="Top"
                                 Padding="6"
                                 Margin="4"
@@ -277,7 +279,8 @@
                                          TextWrapping="Wrap" />
                     <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
                             AutomationProperties.AutomationId="PickReport.CopyLocation"
-                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CopyLocation}"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_CopyLocation}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyLocation}"
                             VerticalAlignment="Center"
                             Padding="6"
                             Background="Transparent"
@@ -728,7 +731,8 @@
                             VerticalAlignment="Top">
                     <Button Padding="6"
                             AutomationProperties.AutomationId="PickReport.OpenFeatureInExaminer"
-                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
                             Background="Transparent"
                             Command="{Binding OpenFeatureInExaminerCommand}"
                             IsVisible="{Binding IsExaminerAvailable}"
@@ -737,7 +741,8 @@
                     </Button>
                     <Button Padding="6"
                             AutomationProperties.AutomationId="PickReport.CopyIdentity"
-                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CopyIdentity}"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_CopyIdentity}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyIdentity}"
                             Background="Transparent"
                             Command="{Binding CopyIdentityCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyIdentity}">

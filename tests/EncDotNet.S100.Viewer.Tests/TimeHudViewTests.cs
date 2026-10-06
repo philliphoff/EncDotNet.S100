@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -81,6 +82,22 @@ public sealed class TimeHudViewTests
         host.Click(host.Find<Button>("TimeHud.DockToggle"));
 
         Assert.Equal(1, opened);
+    }
+
+    [AvaloniaFact]
+    public async Task The_panel_button_has_a_short_name_its_tooltip_as_help_text_and_its_shortcut()
+    {
+        var (_, timeline) = CreateTimeline();
+        using var host = Show(new TimeHudView { DataContext = timeline, MapWidth = 1200 });
+        var automation = new ViewerUiAutomation(() => [host.Window]);
+
+        var tree = await automation.GetTreeAsync(
+            new UiTreeQuery(new UiTarget("TimeHud.DockToggle", null), Depth: 0, InteractiveOnly: true, MaxNodes: 10));
+
+        var button = tree.Roots[0].Element;
+        Assert.Equal(Strings.Label_OpenTimeline, button.Name);
+        Assert.Equal(Strings.Tooltip_TimeHudOpenTimeline, button.HelpText);
+        Assert.Equal("T", button.AcceleratorKey);
     }
 
     [AvaloniaFact]

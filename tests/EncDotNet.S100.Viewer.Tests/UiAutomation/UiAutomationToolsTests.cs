@@ -187,7 +187,7 @@ public sealed class UiAutomationToolsTests
         {
             Calls.Add((target, action, value));
             return Throw is null
-                ? Task.FromResult(new UiElementSnapshot("e1", target.Id, "checkBox", "CheckBox", null, "Florida", true, false,
+                ? Task.FromResult(new UiElementSnapshot("e1", target.Id, "checkBox", "CheckBox", null, null, null, "Florida", true, false,
                     ["toggle"], "on", null, null, null, new UiBounds(0, 0, 10, 10), null))
                 : Task.FromException<UiElementSnapshot>(Throw);
         }

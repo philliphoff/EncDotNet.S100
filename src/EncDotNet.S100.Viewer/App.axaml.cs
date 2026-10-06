@@ -58,10 +58,21 @@ public partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
 #if DEBUG
-        this.AttachDeveloperTools();
+        if (AttachesDeveloperTools)
+        {
+            this.AttachDeveloperTools();
+        }
 #endif
         ConfigureMacApplicationMenu();
     }
+
+    /// <summary>
+    /// Whether <see cref="Initialize"/> attaches Avalonia's developer tools, in
+    /// Debug builds. They can be attached only once per process, so an app
+    /// that is initialized more than once (a headless test session builds one
+    /// per test) must not attach them.
+    /// </summary>
+    protected virtual bool AttachesDeveloperTools => true;
 
     /// <summary>
     /// On macOS, replaces the auto-generated application-menu "About"
