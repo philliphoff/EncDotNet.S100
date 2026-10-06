@@ -27,7 +27,8 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab, IDisposable
         bool persistAsLastSelected,
         TabDock dock = TabDock.Left,
         bool autoOpenOnContentSignal = false,
-        ITabVisibilitySource? visibility = null)
+        ITabVisibilitySource? visibility = null,
+        string? name = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
         ArgumentException.ThrowIfNullOrEmpty(title);
@@ -38,6 +39,7 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab, IDisposable
         Id = id;
         Order = order;
         Title = title;
+        Name = string.IsNullOrEmpty(name) ? title : name;
         Tooltip = tooltip;
         _iconFactory = iconFactory;
         ViewModel = viewModel;
@@ -58,6 +60,7 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab, IDisposable
     public string Id { get; }
     public int Order { get; }
     public string Title { get; }
+    public string Name { get; }
     public string Tooltip { get; }
     public object ViewModel { get; }
     public Type ViewType => typeof(TView);

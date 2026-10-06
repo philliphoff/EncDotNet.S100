@@ -544,7 +544,8 @@
                     </Panel>
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                         <TextBox Grid.Column="0" Text="{Binding FilterText}"
-                                 AutomationProperties.Name="{x:Static loc:Strings.Library_FilterWatermark}"
+                                 AutomationProperties.Name="{x:Static loc:Strings.Label_Filter}"
+                                 AutomationProperties.HelpText="{x:Static loc:Strings.Library_FilterWatermark}"
                                  AutomationProperties.AutomationId="Library.Filter"
                                  PlaceholderText="{x:Static loc:Strings.Library_FilterWatermark}">
                             <TextBox.InnerRightContent>
