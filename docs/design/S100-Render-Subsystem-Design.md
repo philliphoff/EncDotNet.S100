@@ -631,8 +631,9 @@ cache keys, disk entries, cold timestamps, prediction state, eviction, and GPU
 residency remain logical-tile granular.
 
 SCAMIN remains exact despite latitude-dependent row denominators. Candidate
-operations are evaluated at each claimed row's denominator; a job splits into
-2×1 rows or singles when any visibility result differs. Oversized temporary
+operations are evaluated at each claimed row's denominator (from the row's
+scale class, below); a job splits into 2×1 rows or singles when any visibility
+result differs. Oversized temporary
 surfaces and batches reduced to one miss by disk hits also fall back to the
 existing single-tile path. Fractional device scales also fall back when integer
 output dimensions cannot preserve the exact independent-tile world-to-pixel
@@ -647,6 +648,24 @@ it, and every capped op (all of a cell's line work) would be culled (#761).
 Tiles are rasterised no coarser than the cap (`TileScaleDenominator`), and the
 cap is applied against the live scale when compositing
 (`IsPastScaleMinimumCap`).
+
+Each op's own scale limits are judged at the live scale too, through a tile's
+SCAMIN *scale class* (`TileScaleClass`, `TileKey.ScaleClass`, #774). The
+thresholds are the scene's distinct `ScaleMinimum`/`ScaleMaximum` values. Those
+strictly inside a tile's band window (the live denominators the band is shown
+at: √2 either side of the band's own, open-ended at `MinBand`/`MaxBand`) split
+it into classes. The class of a frame's tile is the number of in-window
+thresholds below its live denominator (the band denominator times
+`resolution / ResolutionForBand(band)`). The tile is rasterised at the band's
+own denominator when that lies inside the class, and otherwise at the
+geometric mean of the class bounds. A band window with no threshold keeps the
+single class 0 and the band's own denominator, so the class costs nothing
+there. Cross-band warm tiles take the class at the same live-to-band ratio,
+which a zoom step keeps. While a tile's new class rasterises, the composite
+shows a cached sibling class of the same tile in its place. The thresholds are
+cell-wide, so a tile with no op at a crossed threshold re-rasterises to the
+same pixels. Across the NOAA corpus a cell has a median of 4 distinct `SCAMIN`
+values, at most 5 (median 2) inside one band window.
 
 `S100_VECTOR_TILE_METATILE` / `TileMetatileEnabled` is an opt-in A/B knob and
 defaults off pending performance results. Telemetry separates union raster

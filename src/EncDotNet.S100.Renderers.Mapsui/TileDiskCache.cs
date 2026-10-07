@@ -73,8 +73,10 @@ internal sealed class TileDiskCache : IDisposable
     /// differently, and tiles at a world-copy seam fill their gutter from the
     /// adjacent copy (issues #760, #773), without any change to the style
     /// state, so tiles cached before would keep their wedges and seam lines.
+    /// v6: a tile is keyed and rasterised by its SCAMIN scale class (#774), so
+    /// a v5 tile, judged at its band's scale, may hold the wrong ops.
     /// </remarks>
-    public const int FormatVersion = 5;
+    public const int FormatVersion = 6;
 
     private const string FileExtension = ".png";
 
@@ -409,7 +411,7 @@ internal sealed class TileDiskCache : IDisposable
 
         using var persistActivity = S100Diag.ActivitySource.StartActivity(
             "s100.render.tile.cache.persist", ActivityKind.Internal);
-        persistActivity?.SetTag("s100.render.tile.key", $"{key.Band}/{key.X}/{key.Y}");
+        persistActivity?.SetTag("s100.render.tile.key", $"{key.Band}/{key.X}/{key.Y}/{key.ScaleClass}");
 
         byte[] encoded;
         using (S100Diag.ActivitySource.StartActivity(
@@ -569,8 +571,11 @@ internal sealed class TileDiskCache : IDisposable
 
     /// <summary>Maps a tile key to its file name within a namespace directory.</summary>
     private static string FileName(TileKey key) =>
-        string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"{key.Band}_{key.X}_{key.Y}{FileExtension}");
+        key.ScaleClass == 0
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{key.Band}_{key.X}_{key.Y}{FileExtension}")
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{key.Band}_{key.X}_{key.Y}_s{key.ScaleClass}{FileExtension}");
 
     private string EntryPath(string ns, TileKey key) =>
         Path.Combine(_rootDirectory, ns, FileName(key));
