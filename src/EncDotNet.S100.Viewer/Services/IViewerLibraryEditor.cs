@@ -5,7 +5,6 @@ using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines.Query;
-using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -633,19 +632,14 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
         var clock = Stopwatch.StartNew();
         while (true)
         {
-            bool indexing = false;
-            LibraryDownloadProgress? progress = null;
-            int active = 0, loading = 0;
+            LibraryActivitySnapshot activity = null!;
             await _dispatch(() =>
             {
-                indexing = _library.Collections.Any(c => c.IsIndexing);
-                progress = _panel.Downloader.Progress;
-                active = _activity.Active;
-                loading = _activity.PendingDatasets;
+                activity = LibraryActivitySnapshot.Capture(_library, _panel.Downloader.Progress, _activity);
                 return Task.CompletedTask;
             }).ConfigureAwait(false);
 
-            var idle = !indexing && progress is null && active == 0;
+            var idle = activity.IsIdle;
             var timedOut = !idle && clock.Elapsed >= timeout;
             if (idle || timedOut)
             {
@@ -653,11 +647,11 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
                     idle,
                     timedOut,
                     clock.ElapsedMilliseconds,
-                    indexing,
-                    loading,
-                    progress is { } p ? new LibraryDownloadInfo(p.Completed, p.Failed, p.Total, p.BytesDone, p.BytesTotal) : null);
+                    activity.Indexing,
+                    activity.PendingDatasets,
+                    activity.Downloads is { } p ? new LibraryDownloadInfo(p.Completed, p.Failed, p.Total, p.BytesDone, p.BytesTotal) : null);
             }
-            await Task.Delay(TimeSpan.FromMilliseconds(250), ct).ConfigureAwait(false);
+            await Task.Delay(LibraryOperations.IdlePollInterval, ct).ConfigureAwait(false);
         }
     }
 }

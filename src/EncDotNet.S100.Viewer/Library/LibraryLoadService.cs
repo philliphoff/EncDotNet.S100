@@ -10,11 +10,6 @@ using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Library;
 
-/// <summary>The outcome of <see cref="ILibraryLoader.LoadAsync"/>.</summary>
-/// <param name="Opened">Items opened (loaded or registered to load as you pan).</param>
-/// <param name="Skipped">Items that could not be opened (online, missing, catalogue-only, unknown product).</param>
-internal sealed record LibraryLoadResult(int Opened, int Skipped);
-
 /// <summary>Opens library items in the viewer session.</summary>
 internal interface ILibraryLoader
 {
@@ -33,92 +28,109 @@ internal interface ILibraryLoader
 }
 
 /// <summary>
-/// Opens library items (issue #655) through
-/// <see cref="IExchangeSetService.OpenSubsetAsync"/>, grouping them by the
-/// exchange set (or folder) they belong to so each set gets one source and
-/// one Datasets-panel header, and remembers which entry each item became so
-/// the Library can show it as loaded or deferred.
+/// The viewer's <see cref="ILibraryLoader"/> (issue #655): the host-neutral
+/// <see cref="LibraryLoader"/> (#792) opening through
+/// <see cref="ExchangeSetOpener"/>, plus the viewer's warning and
+/// load-as-you-pan notifications.
 /// </summary>
 internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
 {
-    private readonly IExchangeSetService _exchangeSets;
-    private readonly DatasetsViewModel _datasets;
+    private readonly ExchangeSetOpener _opener;
+    private readonly LibraryLoader _loader;
     private readonly INotificationService? _notifications;
-    private readonly Dictionary<string, DatasetEntry> _entries = new(StringComparer.OrdinalIgnoreCase);
 
     public LibraryLoadService(IExchangeSetService exchangeSets, DatasetsViewModel datasets, INotificationService? notifications = null)
     {
-        ArgumentNullException.ThrowIfNull(exchangeSets);
-        ArgumentNullException.ThrowIfNull(datasets);
-        _exchangeSets = exchangeSets;
-        _datasets = datasets;
+        _opener = new ExchangeSetOpener(exchangeSets, datasets);
+        _loader = new LibraryLoader(_opener);
         _notifications = notifications;
-        _datasets.Entries.CollectionChanged += OnEntriesChanged;
     }
 
-    public event EventHandler? Changed;
-
-    public LibraryLoadState StateOf(CollectionItem item)
+    public event EventHandler? Changed
     {
-        ArgumentNullException.ThrowIfNull(item);
-
-        if (item.Location is not LocalItemLocation local || !_entries.TryGetValue(Key(local.RootPath, local.RelativePath), out var entry))
-            return LibraryLoadState.None;
-
-        return entry.IsLoaded ? LibraryLoadState.Loaded
-            : entry.IsDeferred ? LibraryLoadState.Deferred
-            : LibraryLoadState.None;
+        add => _loader.Changed += value;
+        remove => _loader.Changed -= value;
     }
+
+    public LibraryLoadState StateOf(CollectionItem item) => _loader.StateOf(item);
 
     public async Task<LibraryLoadResult> LoadAsync(
         IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(items);
+        var result = await _loader.LoadAsync(items, defer, cancellationToken).ConfigureAwait(true);
 
-        var skipped = 0;
-        var groups = new Dictionary<(string Root, string? Catalogue), List<CollectionItem>>();
-        foreach (var item in items)
+        foreach (var problem in result.Problems ?? [])
         {
-            if (item.Location is not LocalItemLocation local
-                || item.ProductSpec == "Unknown"
-                || LibraryAvailabilityResolver.Resolve(item) != LibraryAvailability.Local)
-            {
-                skipped++;
-                continue;
-            }
-
-            var key = (local.RootPath, local.CatalogueRelativePath);
-            if (!groups.TryGetValue(key, out var group))
-                groups[key] = group = [];
-            group.Add(item);
+            _notifications?.Create(Strings.Toast_Warning)
+                .WithSeverity(NotificationSeverity.Warning)
+                .WithContent(problem)
+                .Show();
         }
 
-        var opened = 0;
-        foreach (var ((root, catalogue), group) in groups)
+        if (defer && _notifications is not null && result.Opened > 0)
+        {
+            _notifications.Create(Strings.Toast_LibraryDeferredTitle)
+                .WithSeverity(NotificationSeverity.Info)
+                .WithContent(string.Format(CultureInfo.CurrentCulture,
+                    result.Skipped > 0 ? Strings.Toast_LibraryDeferredSkippedFormat : Strings.Toast_LibraryDeferredFormat,
+                    result.Opened, result.Skipped))
+                .Show();
+        }
+
+        return result;
+    }
+
+    public void Dispose()
+    {
+        _loader.Dispose();
+        _opener.Dispose();
+    }
+
+    /// <summary>
+    /// Opens a group through <see cref="IExchangeSetService.OpenSubsetAsync"/>,
+    /// so each exchange set (or folder) gets one source and one Datasets-panel
+    /// header, and remembers which entry each item became so the Library can
+    /// show it as loaded or deferred.
+    /// </summary>
+    internal sealed class ExchangeSetOpener : ILibraryDatasetOpener, IDisposable
+    {
+        private readonly IExchangeSetService _exchangeSets;
+        private readonly DatasetsViewModel _datasets;
+        private readonly Dictionary<string, DatasetEntry> _entries = new(StringComparer.OrdinalIgnoreCase);
+
+        public ExchangeSetOpener(IExchangeSetService exchangeSets, DatasetsViewModel datasets)
+        {
+            ArgumentNullException.ThrowIfNull(exchangeSets);
+            ArgumentNullException.ThrowIfNull(datasets);
+            _exchangeSets = exchangeSets;
+            _datasets = datasets;
+            _datasets.Entries.CollectionChanged += OnEntriesChanged;
+        }
+
+        public event EventHandler? Changed;
+
+        public LibraryLoadState StateOf(LocalItemLocation location)
+        {
+            if (!_entries.TryGetValue(Key(location.RootPath, location.RelativePath), out var entry))
+                return LibraryLoadState.None;
+
+            return entry.IsLoaded ? LibraryLoadState.Loaded
+                : entry.IsDeferred ? LibraryLoadState.Deferred
+                : LibraryLoadState.None;
+        }
+
+        public async Task<LibraryOpenOutcome> OpenAsync(LibraryOpenGroup group, bool defer, CancellationToken cancellationToken)
         {
             var request = new ExchangeSetSubsetRequest(
-                root,
-                catalogue,
-                group.Select(ToSubsetItem).ToArray());
+                group.RootPath,
+                group.CatalogueRelativePath,
+                group.Items.Select(ToSubsetItem).ToArray());
 
-            IReadOnlyList<DatasetEntry> entries;
-            try
-            {
-                entries = await _exchangeSets.OpenSubsetAsync(request, defer, cancellationToken).ConfigureAwait(true);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-            {
-                skipped += group.Count;
-                _notifications?.Create(Strings.Toast_Warning)
-                    .WithSeverity(NotificationSeverity.Warning)
-                    .WithContent(ex.Message)
-                    .Show();
-                continue;
-            }
+            var entries = await _exchangeSets.OpenSubsetAsync(request, defer, cancellationToken).ConfigureAwait(true);
 
-            for (var i = 0; i < entries.Count && i < group.Count; i++)
+            for (var i = 0; i < entries.Count && i < group.Items.Count; i++)
             {
-                var local = (LocalItemLocation)group[i].Location;
+                var local = LibraryOpenGroup.LocationOf(group.Items[i]);
                 var key = Key(local.RootPath, local.RelativePath);
                 if (_entries.TryGetValue(key, out var previous) && !ReferenceEquals(previous, entries[i]))
                     previous.PropertyChanged -= OnEntryChanged;
@@ -127,75 +139,61 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
                 _entries[key] = entries[i];
             }
 
-            opened += entries.Count;
+            return new LibraryOpenOutcome(entries.Count, []);
         }
 
-        Changed?.Invoke(this, EventArgs.Empty);
-
-        if (defer && _notifications is not null && opened > 0)
+        private static ExchangeSetSubsetItem ToSubsetItem(CollectionItem item)
         {
-            _notifications.Create(Strings.Toast_LibraryDeferredTitle)
-                .WithSeverity(NotificationSeverity.Info)
-                .WithContent(string.Format(CultureInfo.CurrentCulture,
-                    skipped > 0 ? Strings.Toast_LibraryDeferredSkippedFormat : Strings.Toast_LibraryDeferredFormat,
-                    opened, skipped))
-                .Show();
+            var local = LibraryOpenGroup.LocationOf(item);
+            return new ExchangeSetSubsetItem(
+                local.RelativePath,
+                local.UpdateRelativePaths,
+                item.ProductSpec,
+                item.Name,
+                item.Bounds is { } b
+                    ? new ExchangeSets.BoundingBox
+                    {
+                        WestBoundLongitude = b.West,
+                        EastBoundLongitude = b.East,
+                        SouthBoundLatitude = b.South,
+                        NorthBoundLatitude = b.North,
+                    }
+                    : null,
+                item.MinimumDisplayScale,
+                item.MaximumDisplayScale);
         }
 
-        return new LibraryLoadResult(opened, skipped);
-    }
-
-    private static ExchangeSetSubsetItem ToSubsetItem(CollectionItem item)
-    {
-        var local = (LocalItemLocation)item.Location;
-        return new ExchangeSetSubsetItem(
-            local.RelativePath,
-            local.UpdateRelativePaths,
-            item.ProductSpec,
-            item.Name,
-            item.Bounds is { } b
-                ? new ExchangeSets.BoundingBox
-                {
-                    WestBoundLongitude = b.West,
-                    EastBoundLongitude = b.East,
-                    SouthBoundLatitude = b.South,
-                    NorthBoundLatitude = b.North,
-                }
-                : null,
-            item.MinimumDisplayScale,
-            item.MaximumDisplayScale);
-    }
-
-    private void OnEntryChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(DatasetEntry.IsLoaded) or nameof(DatasetEntry.IsDeferred))
-            Changed?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        if (e.Action is not (NotifyCollectionChangedAction.Remove or NotifyCollectionChangedAction.Replace or NotifyCollectionChangedAction.Reset))
-            return;
-
-        var removed = _entries.Where(p => !_datasets.Entries.Contains(p.Value)).ToArray();
-        foreach (var (key, entry) in removed)
+        private void OnEntryChanged(object? sender, PropertyChangedEventArgs e)
         {
-            entry.PropertyChanged -= OnEntryChanged;
-            _entries.Remove(key);
+            if (e.PropertyName is nameof(DatasetEntry.IsLoaded) or nameof(DatasetEntry.IsDeferred))
+                Changed?.Invoke(this, EventArgs.Empty);
         }
 
-        if (removed.Length > 0)
-            Changed?.Invoke(this, EventArgs.Empty);
-    }
+        private void OnEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action is not (NotifyCollectionChangedAction.Remove or NotifyCollectionChangedAction.Replace or NotifyCollectionChangedAction.Reset))
+                return;
 
-    private static string Key(string root, string relativePath) =>
-        Path.TrimEndingDirectorySeparator(root) + "|" + relativePath.Replace('\\', '/');
+            var removed = _entries.Where(p => !_datasets.Entries.Contains(p.Value)).ToArray();
+            foreach (var (key, entry) in removed)
+            {
+                entry.PropertyChanged -= OnEntryChanged;
+                _entries.Remove(key);
+            }
 
-    public void Dispose()
-    {
-        _datasets.Entries.CollectionChanged -= OnEntriesChanged;
-        foreach (var entry in _entries.Values)
-            entry.PropertyChanged -= OnEntryChanged;
-        _entries.Clear();
+            if (removed.Length > 0)
+                Changed?.Invoke(this, EventArgs.Empty);
+        }
+
+        private static string Key(string root, string relativePath) =>
+            Path.TrimEndingDirectorySeparator(root) + "|" + relativePath.Replace('\\', '/');
+
+        public void Dispose()
+        {
+            _datasets.Entries.CollectionChanged -= OnEntriesChanged;
+            foreach (var entry in _entries.Values)
+                entry.PropertyChanged -= OnEntryChanged;
+            _entries.Clear();
+        }
     }
 }

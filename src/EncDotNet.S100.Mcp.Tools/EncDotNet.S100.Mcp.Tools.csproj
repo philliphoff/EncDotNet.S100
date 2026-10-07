@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Collections\EncDotNet.S100.Collections.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Crs.ProjNet\EncDotNet.S100.Crs.ProjNet.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />

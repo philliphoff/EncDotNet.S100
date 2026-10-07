@@ -2,7 +2,6 @@ using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S128;
-using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
