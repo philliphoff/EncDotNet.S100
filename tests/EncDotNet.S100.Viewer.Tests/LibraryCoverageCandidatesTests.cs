@@ -1,5 +1,6 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -48,5 +49,39 @@ public sealed class LibraryCoverageCandidatesTests
     {
         Assert.Equal(["approach", "harbour"], Outlined(Solent, 25_000));  // coastal stops at 1:45,000
         Assert.Equal(["harbour"], Outlined(Solent, 5_000));
+    }
+
+    private static LibraryItemViewModel Warning(string name, GeoBounds bounds) =>
+        new(new CollectionItem
+        {
+            Key = name,
+            ProductSpec = "S-124",
+            Name = name,
+            Bounds = bounds,
+            Location = new LocalItemLocation("/warnings/" + name, name + ".gml", []),
+        }, Source, _ => LibraryLoadState.None, null, null);
+
+    [Fact]
+    public void Point_sized_coverage_is_drawn_and_hit_as_a_marker()
+    {
+        // A point warning, and a small area (about 2 km across) that is point-sized only when zoomed out.
+        var point = Warning("point", new GeoBounds(49.3, -123.0, 49.3, -123.0));
+        var small = Warning("small", new GeoBounds(49.29, -123.02, 49.31, -122.99));
+        const double ZoomedOut = 1000;  // metres per pixel
+        const double ZoomedIn = 10;
+
+        Assert.True(LibraryCoverageOverlayController.IsPointSized(point.Item, ZoomedOut));
+        Assert.True(LibraryCoverageOverlayController.IsPointSized(point.Item, ZoomedIn));
+        Assert.True(LibraryCoverageOverlayController.IsPointSized(small.Item, ZoomedOut));
+        Assert.False(LibraryCoverageOverlayController.IsPointSized(small.Item, ZoomedIn));
+        Assert.False(LibraryCoverageOverlayController.IsPointSized(point.Item, 0));  // no viewport yet
+
+        // A tap 3 px from the point hits its marker; 30 px away it does not.
+        var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(-123.0, 49.3);
+        GeoPosition At(double dx) =>
+            Mapsui.Projections.SphericalMercator.ToLonLat(x + dx, y) is var (lon, lat) ? new GeoPosition(lat, lon) : default;
+        Assert.Equal(["point"], LibraryCoverageOverlayController.Hits([point], null, At(3 * ZoomedIn), 50_000, ZoomedIn).Select(r => r.Name));
+        Assert.Empty(LibraryCoverageOverlayController.Hits([point], null, At(30 * ZoomedIn), 50_000, ZoomedIn));
+        Assert.Empty(LibraryCoverageOverlayController.Hits([point], null, At(3 * ZoomedIn), 50_000));  // without a resolution
     }
 }
