@@ -354,6 +354,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         Assert.True(vm.SecomInMapView);
         Assert.True(vm.SecomSync);  // now small: synced by default
         Assert.StartsWith("Downloads ", vm.SecomSyncHint);
+        Assert.Equal("secom.test — map area", vm.NewCollectionName);
 
         vm.ConfirmCommand.Execute(null);
 

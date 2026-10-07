@@ -144,7 +144,9 @@ internal sealed partial class AddToLibraryDialogViewModel
         var filter = CurrentSecomFilter;
         var selected = _secom.Products.Where(p => filter.IsUnscoped || filter.ProductSpecs.Contains(p.Value, StringComparer.OrdinalIgnoreCase)).ToArray();
         SelectionSummary = SecomCountSummary(selected.Sum(p => p.CellCount), selected.Sum(p => p.TotalBytes), filter.IsUnscoped);
-        FollowSelectionInName(_includeAll || filter.IsUnscoped, () => DescribeSecomProducts(filter)!);
+        var allProducts = _includeAll || filter.IsUnscoped;
+        FollowSelectionInName(allProducts && _secomArea is null, () => string.Join(", ",
+            new[] { allProducts ? null : DescribeSecomProducts(filter), _secomArea is null ? null : Strings.Library_SecomMapArea }.OfType<string>()));
 
         // Sync by default while the selection is small and complete, until the user decides.
         if (!_secomSyncEdited)

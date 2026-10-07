@@ -3448,6 +3448,9 @@
   <data name="Library_SecomAreaNameFormat" xml:space="preserve">
     <value>{0} (map area)</value>
   </data>
+  <data name="Library_SecomMapArea" xml:space="preserve">
+    <value>map area</value>
+  </data>
   <data name="Library_Format_Secom" xml:space="preserve">
     <value>SECOM service</value>
   </data>
