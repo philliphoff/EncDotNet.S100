@@ -800,7 +800,49 @@ This is the same mechanism as large S-57 sets, generalized:
 
 ### 7.5 SECOM (IEC 63173-2) feasibility (2026-10-06)
 
-> **Status:** researched; the first slice is #804. Nothing is built yet.
+> **As built (#804, first slice):**
+> - **Client.** `SecomClient` in `EncDotNet.S100.Collections.Secom` calls
+>   `Capability`, `GetSummary` (paged; capped, with `SecomSummaryList.Truncated`
+>   set only when the cap is hit) and `Get`. It falls back from `/v2` to `/v1`
+>   and pins whichever answered. The parser (`SecomJson`) is tolerant of the
+>   drift listed under Gotchas below.
+> - **Source.** `SecomSource` (JSON kind `secom`) with a `SecomFilter`
+>   (products matched on this side, plus an optional WKT area sent as
+>   `geometry`). `SecomSourceIndexer`:
+>   - lists each object as an online item whose `RemoteItemLocation` points
+>     at `Get` with `Envelope = Secom` and a single-file `Layout`
+>     (`<identifier>.gml`, `.000` or `.h5`);
+>   - caps a source at 5,000 objects;
+>   - keeps the last list in memory (one minute) and on disk (served stale
+>     when the service is down);
+>   - probes downloaded copies for bounds and records their signature in
+>     the item's properties;
+>   - `DescribeAsync` counts objects per product for the Add to Library
+>     dialog.
+> - **Download.** `EncCellDownloader` unwraps `Get` responses. It refuses
+>   encrypted objects and signatures that do not match. It decompresses
+>   single-file ZIP payloads, and records the `SecomSignatureCheck` in
+>   `.source.json`.
+> - **Signatures.** `SecomSignatureVerifier` checks the hex signature, DER
+>   or raw r‖s, over the decoded data with the first `publicCertificate`
+>   (base64 DER or minified PEM). Signer trust is optional (supplied roots,
+>   root thumbprint matched). It is kept in Collections rather than shared
+>   with `ExchangeSetVerifier`: the overlap is a few BCL calls, and the
+>   verifier's helpers are private and Part 15-specific (P-384 only).
+>   SHA3 algorithms report `Unsupported` where the platform lacks them
+>   (macOS). Baleen and ELMAN sign with SHA3-384; CCG and AIVN with
+>   SHA2-384.
+> - **Discovery.** A URL that answers `Capability` is recognised as
+>   `KnownCatalogueFormat.Secom`, both in the directory's "Add a catalogue by
+>   URL" and in MCP `add_library_source`. The known-sources list carries
+>   the Canadian Coast Guard's S-124 service (`ccg-s124-secom`). The
+>   registry search (MSR) is not wired in yet.
+> - **Live check (2026-10-06).** All four anonymous services listed and
+>   downloaded:
+>   - CCG: 1,735 S-124 objects, signatures valid. The signer certificate
+>     expired on 2026-05-05 and is reported as expired.
+>   - AIVN: 67,640 S-122 objects, so capped. Signatures valid.
+>   - Baleen and ELMAN: signatures SHA3-384, not checked on macOS.
 
 **Spec.** Ed 1.0 (2022) is the only published edition. Ed 2 has been
 out as a draft for comment (BSI, February 2025 and February 2026) but
