@@ -3428,7 +3428,7 @@
     <value>Synced {0:N0} of {1:N0} · {2:N0} failed</value>
   </data>
   <data name="Library_StatusLine_SyncTooLargeFormat" xml:space="preserve">
-    <value>Not synced: needs {0} — narrow it to an area</value>
+    <value>Not synced: needs {0}, over the download limit — choose less</value>
   </data>
   <data name="Library_SecomSyncTitle" xml:space="preserve">
     <value>Keep a copy of every object, synced on each refresh</value>
