@@ -61,15 +61,15 @@ public sealed class LibraryShowOnMapServiceTests : IDisposable
         Assert.Equal(2, header.SetCount);
         Assert.Equal(4, service.Shown[source.Id]);
 
-        // Datasets the source no longer has are closed on its next index.
-        Directory.Delete(Path.Combine(root, "b"), recursive: true);
-        library.Refresh(sourceId: source.Id);
+        // Datasets the source no longer has are closed on its next index: narrow it
+        // to one set (deleting an open set's files is not possible on Windows).
+        library.UpdateSource(collection.Id, source with { Path = Path.Combine(root, "a") });
         await SettleAsync(library, service);
         Assert.Equal(2, datasets.Entries.Count);
         Assert.Equal(1, Assert.Single(datasets.ExchangeSetHeaders).SetCount);
 
         // Turning it off closes the rest.
-        library.UpdateSource(collection.Id, source with { ShowOnMap = false });
+        library.UpdateSource(collection.Id, source with { Path = Path.Combine(root, "a"), ShowOnMap = false });
         await SettleAsync(library, service);
         Assert.Empty(datasets.Entries);
         Assert.Empty(datasets.ExchangeSetHeaders);
