@@ -239,6 +239,14 @@ design in `docs/design/dataset-collections.md`.
       Library.
   - **Point-sized items** (most S-124 warnings) show on the coverage
     overlay as small rings, and can be tapped.
+  - **Keep downloaded** (in an online source's context menu, or "Keep
+    everything downloaded and current" in Add to Library, #809).
+    - After every refresh it downloads what the source lists: missing
+      items, newer editions and updates, a forecast's latest run.
+    - At most 100 MB is downloaded at a time; beyond that the status line
+      says how much is needed.
+    - Downloads made by hand are never deleted. Only SECOM services also
+      remove objects they no longer list.
 
   The list below shows the selected node's datasets.
   - **Filter box:** filter by name, title or product. The count is shown
