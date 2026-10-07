@@ -271,7 +271,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
             properties["signature"] = signature.Status switch
             {
                 SecomSignatureStatus.Valid => signature.SignerExpired ? "valid (signer certificate expired)" : "valid",
-                SecomSignatureStatus.Unsupported => "not checked (algorithm not available)",
+                SecomSignatureStatus.Unsupported => "not checked (unknown algorithm)",
                 SecomSignatureStatus.Unsigned => "unsigned",
                 _ => "invalid",
             };

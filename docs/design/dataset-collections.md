@@ -829,9 +829,13 @@ This is the same mechanism as large S-57 sets, generalized:
 >   root thumbprint matched). It is kept in Collections rather than shared
 >   with `ExchangeSetVerifier`: the overlap is a few BCL calls, and the
 >   verifier's helpers are private and Part 15-specific (P-384 only).
->   SHA3 algorithms report `Unsupported` where the platform lacks them
->   (macOS). Baleen and ELMAN sign with SHA3-384; CCG and AIVN with
->   SHA2-384.
+>   It verifies a digest (`VerifyHash`) rather than the data, so SHA3
+>   works on every platform (#806): where the platform has no SHA3 (macOS
+>   as of .NET 10, dotnet/runtime#116511) the digest comes from `Sha3`, a
+>   FIPS 202 Keccak written from the standard and tested against hashlib
+>   vectors and, where available, the platform. `Unsupported` now means an
+>   unknown `digitalSignatureReference`. Baleen and ELMAN sign with
+>   SHA3-384; CCG and AIVN with SHA2-384.
 > - **Discovery.** A URL that answers `Capability` is recognised as
 >   `KnownCatalogueFormat.Secom`, both in the directory's "Add a catalogue by
 >   URL" and in MCP `add_library_source`. The known-sources list carries
@@ -873,7 +877,9 @@ This is the same mechanism as large S-57 sets, generalized:
 >   - CCG: 1,735 S-124 objects, signatures valid. The signer certificate
 >     expired on 2026-05-05 and is reported as expired.
 >   - AIVN: 67,640 S-122 objects, so capped. Signatures valid.
->   - Baleen and ELMAN: signatures SHA3-384, not checked on macOS.
+>   - Baleen and ELMAN: signatures SHA3-384, not checked on macOS at the
+>     time. Since #806 they verify there too (a captured Baleen object is a
+>     test fixture, cross-checked with OpenSSL 3).
 
 **Spec.** Ed 1.0 (2022) is the only published edition. Ed 2 has been
 out as a draft for comment (BSI, February 2025 and February 2026) but

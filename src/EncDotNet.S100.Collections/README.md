@@ -50,7 +50,7 @@ Key types:
   - The client tries edition 2 (`/v2`) first and falls back to edition 1 (`/v1`). It reads both editions' spellings (`S124` / `S-124`, `summaryObject` / `informationSummaryObject`, compact dates).
   - `SecomFilter` scopes a source by product, matched on this side, and optionally by an area the service filters on. A source is capped at 5,000 objects, with a warning to narrow it to an area.
   - The last list is kept on disk, so an unreachable service still lists what it last offered. `DescribeAsync` counts objects per product, for choosing a filter.
-  - `SecomSignatureVerifier` checks a data object's signature against the signer certificate it carries. Signer trust is checked only when roots are supplied, because MCP roots are not in OS trust stores. SHA3-based signatures need platform support, which macOS lacks.
+  - `SecomSignatureVerifier` checks a data object's signature against the signer certificate it carries. Signer trust is checked only when roots are supplied, because MCP roots are not in OS trust stores. SHA2 and SHA3 signatures (`ecdsa-256-sha2-256`, `ecdsa-256-sha3-256`, `ecdsa-384-sha2`, `ecdsa-384-sha3`, `dsa`) verify on every platform; SHA3 falls back to a built-in FIPS 202 implementation where the platform has none (macOS).
   - Certificates, signed (v2 `POST`) searches and encrypted data are not supported yet. See `docs/design/dataset-collections.md` §7.5.
 - **`EncCellDownloader`** — downloads a cell's zip into a managed folder:
   - The zip is first written to a `.partial` file, then extracted to a staging folder.
