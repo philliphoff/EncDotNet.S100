@@ -118,6 +118,21 @@ public sealed class SecomTests : IDisposable
     }
 
     [Fact]
+    public async Task A_filtered_summary_that_matches_nothing_is_empty_not_an_error()
+    {
+        var server = new FakeSecomServer(Summaries(3)) { NotFoundForGeometry = true };
+        var client = new SecomClient(new HttpClient(server), ServiceUri);
+
+        var list = await client.GetSummariesAsync(new SecomQuery(GeometryWkt: "POLYGON((0 0,1 0,1 1,0 0))"), cancellationToken: Ct);
+
+        Assert.Empty(list.Items);
+        Assert.Equal(SecomApiVersion.V2, client.ApiVersion);
+        var first = server.Requests[0];
+        Assert.DoesNotContain("geometry", first.Query, StringComparison.Ordinal);  // the version was detected unfiltered
+        Assert.Contains(server.Requests, r => r.Query.Contains("geometry=POLYGON", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void A_real_ccg_signature_verifies_and_tampering_is_detected()
     {
         using var stream = File.OpenRead(TestPaths.Fixture("secom-ccg-get.json"));
@@ -439,6 +454,9 @@ public sealed class SecomTests : IDisposable
 
         public int? ReportedTotal { get; init; }
 
+        /// <summary>Answers a summary request with a geometry filter with 404, as ELMAN does for an empty area.</summary>
+        public bool NotFoundForGeometry { get; init; }
+
         public Dictionary<string, (byte[] Data, SecomExchangeMetadata Metadata)> Objects { get; } = new(StringComparer.Ordinal);
 
         /// <summary>When set, objects not in <see cref="Objects"/> are served unsigned with this data.</summary>
@@ -461,6 +479,8 @@ public sealed class SecomTests : IDisposable
 
             var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
             JsonNode body;
+            if (NotFoundForGeometry && path.EndsWith("/object/summary", StringComparison.Ordinal) && query["geometry"] is not null)
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
             if (path.EndsWith("/capability", StringComparison.Ordinal) && Capability)
             {
                 body = new JsonObject

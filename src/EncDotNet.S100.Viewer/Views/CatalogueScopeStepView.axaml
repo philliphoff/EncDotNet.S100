@@ -163,6 +163,19 @@
                 </Border>
             </Grid>
 
+            <!-- A SECOM service (#807): keep it in sync, and narrow it to the map view. -->
+            <StackPanel Grid.Row="1" Spacing="4" IsVisible="{Binding IsSecom}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <CheckBox IsChecked="{Binding SecomSync}" Content="{x:Static loc:Strings.Library_SecomSyncTitle}"
+                              AutomationProperties.AutomationId="CatalogueScope.SecomSync" />
+                    <TextBlock Text="{Binding SecomSyncHint}" Classes="muted" FontSize="12" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <CheckBox IsChecked="{Binding SecomInMapView}" IsEnabled="{Binding CanScopeSecomToMapView}"
+                          Content="{x:Static loc:Strings.Library_SecomInMapView}"
+                          AutomationProperties.AutomationId="CatalogueScope.SecomInMapView" />
+            </StackPanel>
+
             <!-- A forecast feed: how runs download, for every model. -->
             <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding HasForecastShapes}">
                 <TextBlock Text="{x:Static loc:Strings.Wizard_ForecastShapeTitle}" FontSize="13" FontWeight="SemiBold"

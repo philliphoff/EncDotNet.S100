@@ -14,6 +14,13 @@ public sealed record LibrarySyncOptions
     /// <see cref="LibrarySyncStatus.NeededBytes"/>; narrow the source to an area.
     /// </summary>
     public long MaxBytes { get; init; } = 100L * 1024 * 1024;
+
+    /// <summary>
+    /// Says whether a downloaded copy (its folder) is in use, for example open
+    /// in a viewer; a copy in use is not pruned until a later sync. <see langword="null"/>
+    /// when nothing is ever in use.
+    /// </summary>
+    public Func<string, bool>? IsInUse { get; init; }
 }
 
 /// <summary>Where a synced source stands after its last sync.</summary>
@@ -286,9 +293,10 @@ public sealed class LibrarySync : IDisposable
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var pruned = 0;
+        var root = _downloads.FolderOf(probe);
         foreach (var name in _downloads.DownloadedNames(probe))
         {
-            if (keep.Contains(name))
+            if (keep.Contains(name) || (root is not null && _options.IsInUse?.Invoke(Path.Combine(root, name)) == true))
                 continue;
             try
             {

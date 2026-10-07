@@ -70,7 +70,7 @@ internal sealed record LibraryItemPageQuery(
 internal sealed record LibraryCollectionInfo(
     [property: Description("Collection id; pass it as sourceId to query_library_items.")] Guid Id,
     [property: Description("Collection name as shown in the Library.")] string Name,
-    [property: Description("Kind tag as shown: DIR, ZIP, WEB, AWS, LIST, FEED, JSON (collection manifest) or S-128.")] string Kind,
+    [property: Description("Kind tag as shown: DIR, ZIP, WEB, AWS, LIST, FEED, SECOM, JSON (collection manifest) or S-128.")] string Kind,
     [property: Description("Number of items indexed across its sources.")] int ItemCount,
     [property: Description("The status line shown under the node (indexing, downloads, updates, forecast runs, problems), or null when all is normal.")] string? StatusLine,
     [property: Description("True for the session collection (S-128 catalogues opened this session, not kept).")] bool IsSession,
@@ -88,7 +88,8 @@ internal sealed record LibrarySourceInfo(
     [property: Description("When its index was built (UTC); its age shows how stale an online catalogue's cached copy is. Null before the first index.")] DateTimeOffset? IndexedAt,
     [property: Description("The status line shown under the node, or null when all is normal.")] string? StatusLine,
     [property: Description("Online catalogue or feed URL (a shared feed's access token is masked), or null for local sources.")] string? Url,
-    [property: Description("Item counts by state (see query_library_items), when requested.")] IReadOnlyDictionary<string, int>? Counts);
+    [property: Description("Item counts by state (see query_library_items), when requested.")] IReadOnlyDictionary<string, int>? Counts,
+    [property: Description("For a synced SECOM source: its last sync (when, objects local and listed, downloaded, pruned, failed, and the bytes needed when too large to sync), or null.")] EncDotNet.S100.Collections.Library.LibrarySyncStatus? Sync = null);
 
 /// <summary>A page of Library items.</summary>
 [Description("A page of Library items.")]
@@ -313,7 +314,8 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
             source.Index?.IndexedAt,
             node.StatusLine,
             url,
-            tally);
+            tally,
+            node.SyncStatus);
     }
 
     internal static LibraryItemInfo Info(LibraryItemViewModel row)

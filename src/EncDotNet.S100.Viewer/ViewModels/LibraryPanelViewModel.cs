@@ -41,6 +41,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly ILibraryLoader _loader;
     private readonly ILibraryDownloader _downloader;
     private readonly Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? _feedHealth;
+    private readonly LibrarySync? _sync;
     private bool _availabilityRefreshPosted;
     private bool _progressRefreshPosted;
     private readonly Dictionary<Guid, List<CollectionItem>> _downloadingBySource = [];
@@ -82,8 +83,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         Services.Notifications.INotificationService? notifications = null,
         TimeProvider? time = null,
         Services.GlobalTimeService? viewTime = null,
-        Services.ITimeFormatProvider? timeFormat = null)
-        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications, time, viewTime, timeFormat)
+        Services.ITimeFormatProvider? timeFormat = null,
+        LibrarySync? sync = null)
+        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications, time, viewTime, timeFormat, sync)
     {
     }
 
@@ -97,9 +99,13 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         Services.Notifications.INotificationService? notifications = null,
         TimeProvider? time = null,
         Services.GlobalTimeService? viewTime = null,
-        Services.ITimeFormatProvider? timeFormat = null)
+        Services.ITimeFormatProvider? timeFormat = null,
+        LibrarySync? sync = null)
     {
         _time = time ?? TimeProvider.System;
+        _sync = sync;
+        if (sync is not null)
+            sync.Synced += (_, _) => dispatch(UpdateCatalogueCounts);
         _viewTime = viewTime;
         _runFormat = timeFormat is null ? null : () => timeFormat.Current;
         if (timeFormat is not null)
@@ -1071,8 +1077,17 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         {
             LibraryCatalogueCounts? only = null;
             LibraryForecastCounts? onlyForecast = null;
+            LibrarySyncStatus? onlySync = null;
             foreach (var child in collection.Children)
             {
+                if (child.Source is { Definition: SecomSource { Sync: true } } synced)
+                {
+                    child.SyncStatus = _sync?.StatusOf(synced.Id);
+                    if (collection.Children.Count == 1)
+                        onlySync = child.SyncStatus;
+                    continue;
+                }
+
                 if (child.Source is { Definition: S100ForecastFeedSource, Index: { } runs })
                 {
                     child.ForecastCounts = ForecastCountsOf(runs);
@@ -1101,6 +1116,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
             collection.CatalogueCounts = only;
             collection.ForecastCounts = onlyForecast;
+            collection.SyncStatus = onlySync;
         }
     }
 

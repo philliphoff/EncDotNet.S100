@@ -340,6 +340,7 @@ public partial class App : Application
             // Load the dataset collections and start background re-indexing
             // (cached indexes appear immediately; nothing is loaded).
             var library = _services.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>();
+            _ = _services.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>();  // syncs from the first index
             library.Initialize();
 
             desktop.MainWindow = _services.GetRequiredService<MainWindow>();
@@ -361,6 +362,21 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// The map view as geographic bounds for narrowing a source to it (#807),
+    /// shifted into −180…180; <see langword="null"/> when there is no view, or
+    /// it spans the whole world.
+    /// </summary>
+    private static EncDotNet.S100.Collections.GeoBounds? MapViewOf(MapViewportSnapshot? view)
+    {
+        if (view is null || view.LongitudeSpanDegrees >= 360)
+            return null;
+        var centre = (view.MinLongitude + view.MaxLongitude) / 2;
+        var shift = Math.Round(centre / 360) * 360;
+        return new EncDotNet.S100.Collections.GeoBounds(
+            view.MinLatitude, Math.Max(-180, view.MinLongitude - shift), view.MaxLatitude, Math.Min(180, view.MaxLongitude - shift));
     }
 
     private static IServiceProvider ConfigureServices()
@@ -475,6 +491,25 @@ public partial class App : Application
                 EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(http, downloads),
                 sp.GetService<Services.Notifications.INotificationService>());
         });
+        services.AddSingleton(sp =>
+        {
+            // Synced SECOM sources keep every listed object downloaded (#807);
+            // a copy open in the Datasets panel is not pruned.
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            bool IsOpen(string folder)
+            {
+                var prefix = folder.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                return Avalonia.Threading.Dispatcher.UIThread.Invoke(() => datasets.Entries.Any(e =>
+                    e.FilePath.StartsWith(prefix, StringComparison.Ordinal)
+                    || string.Equals(e.FilePath, folder, StringComparison.Ordinal)));
+            }
+
+            return new EncDotNet.S100.Collections.Library.LibrarySync(
+                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+                ((Library.LibraryDownloadService)sp.GetRequiredService<Library.ILibraryDownloader>()).Downloads,
+                new EncDotNet.S100.Collections.Library.LibrarySyncOptions { IsInUse = IsOpen },
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Collections.Library.LibrarySync>>());
+        });
         services.AddSingleton<Library.ILibraryLoader>(sp => new Library.LibraryLoadService(
             sp.GetRequiredService<IExchangeSetService>(),
             sp.GetRequiredService<DatasetsViewModel>(),
@@ -497,7 +532,8 @@ public partial class App : Application
                 loadS100Catalogue: (uri, ct) => s100Catalogues.GetCatalogueAsync(uri, cancellationToken: ct),
                 listS100Folders: (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct),
                 loadForecastModels: (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct),
-                describeSecom: (uri, ct) => secom.DescribeAsync(uri, cancellationToken: ct));
+                describeSecom: (uri, area, ct) => secom.DescribeAsync(uri, area, ct),
+                currentMapView: () => MapViewOf(sp.GetService<IMapViewportNotifier>()?.Current));
         });
         services.AddSingleton<Func<AddToLibraryDialogViewModel>>(sp => sp.GetRequiredService<AddToLibraryDialogViewModel>);
         services.AddTransient(sp =>
@@ -972,7 +1008,8 @@ public partial class App : Application
                 },
                 time: sp.GetRequiredService<TimeProvider>(),
                 viewTime: sp.GetRequiredService<GlobalTimeService>(),
-                timeFormat: sp.GetService<ITimeFormatProvider>());
+                timeFormat: sp.GetService<ITimeFormatProvider>(),
+                sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>());
         });
         services.AddSingleton<LibraryTimeSource>(sp => new LibraryTimeSource(
             sp.GetRequiredService<LibraryPanelViewModel>(),

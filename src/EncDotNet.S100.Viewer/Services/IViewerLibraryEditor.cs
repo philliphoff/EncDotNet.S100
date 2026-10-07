@@ -60,6 +60,8 @@ internal readonly record struct EditOutcome<T>(T? Value, ToolError? Error)
 /// <param name="Shape">For a forecast feed: tiles or regional.</param>
 /// <param name="Resolution">For an S-100 catalogue with several resolutions: its value or label.</param>
 /// <param name="Preview">True to only load the catalogue and report the choices.</param>
+/// <param name="Sync">For a SECOM service: keep a local copy of every object (#807); the dialog's default when null.</param>
+/// <param name="InMapView">For a SECOM service: read only the objects in the current map view.</param>
 internal sealed record AddSourceRequest(
     string? KnownSourceId,
     string? Path,
@@ -71,7 +73,9 @@ internal sealed record AddSourceRequest(
     string? CollectionName,
     string? Shape,
     string? Resolution,
-    bool Preview);
+    bool Preview,
+    bool? Sync = null,
+    bool InMapView = false);
 
 /// <summary>What add_library_source found or added.</summary>
 [Description("What add_library_source found (preview) or added.")]
@@ -88,7 +92,9 @@ internal sealed record AddSourceResult(
     [property: Description("For an S-100 catalogue with several resolutions, the choices (pass one as 'resolution'); otherwise empty.")] IReadOnlyList<AddChoiceOption> Resolutions,
     [property: Description("Existing collections the source can be added to (pass an id as 'collectionId').")] IReadOnlyList<AddChoiceOption> Collections,
     [property: Description("The collection the source was added to, or null for a preview.")] Guid? CollectionId,
-    [property: Description("The new source's id, or null for a preview.")] Guid? SourceId);
+    [property: Description("The new source's id, or null for a preview.")] Guid? SourceId,
+    [property: Description("For a SECOM service: whether every object is kept downloaded (synced on each refresh); null for other sources.")] bool? Sync = null,
+    [property: Description("For a SECOM service: why syncing is or is not advised (its size), or null.")] string? SyncNote = null);
 
 /// <summary>A group of add choices.</summary>
 [Description("A group of choices in the Add-to-Library dialog, e.g. States or Forecast models.")]
@@ -298,6 +304,17 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
         if (request.CollectionId is { } collectionId && !dialog.ExistingCollections.Any(c => c.Id == collectionId))
             return EditOutcome<AddSourceResult>.Fail(new InvalidArgument("collectionId", "no such collection; call list_library_sources"));
 
+        if (request.InMapView)
+        {
+            if (!dialog.IsSecom)
+                return EditOutcome<AddSourceResult>.Fail(new InvalidArgument("inMapView", "only a SECOM service can be narrowed to the map view"));
+            if (!dialog.CanScopeSecomToMapView)
+                return EditOutcome<AddSourceResult>.Fail(new LibraryChangeRejected("there is no map view to narrow to"));
+            await dialog.SetSecomInMapViewAsync(true, ct).ConfigureAwait(true);
+            if (dialog.LoadError is { } areaError)
+                return EditOutcome<AddSourceResult>.Fail(new LibraryChangeRejected($"the service could not be read for the map view: {areaError}"));
+        }
+
         // Choices, shape and resolution are applied for a preview too, so it
         // shows the resulting scope.
         var options = dialog.FacetGroups.SelectMany(g => g.AllOptions).ToArray();
@@ -338,6 +355,13 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
             if (resolution is null)
                 return EditOutcome<AddSourceResult>.Fail(new InvalidArgument("resolution", "not a resolution this catalogue offers; preview to list them"));
             dialog.SelectedResolution = resolution;
+        }
+
+        if (request.Sync is { } sync)
+        {
+            if (!dialog.IsSecom)
+                return EditOutcome<AddSourceResult>.Fail(new InvalidArgument("sync", "only a SECOM service can be kept in sync"));
+            dialog.SecomSync = sync;
         }
 
         if (request.CollectionId is { } target)
@@ -388,7 +412,9 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
             : [],
         [.. dialog.ExistingCollections.Select(c => new AddChoiceOption(c.Id.ToString(), c.Definition.Name, null, !dialog.CreateNew && dialog.SelectedCollection?.Id == c.Id))],
         collectionId,
-        sourceId);
+        sourceId,
+        dialog.IsSecom ? dialog.SecomSync : null,
+        dialog.IsSecom ? dialog.SecomSyncHint : null);
 
     private static bool Matches(string? value, string label, string wanted)
     {

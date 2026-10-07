@@ -61,6 +61,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     private SourceIndexGroup? _group;
     private string? _downloadStatus;
     private LibraryCatalogueCounts? _catalogueCounts;
+    private LibrarySyncStatus? _syncStatus;
     private LibraryForecastCounts? _forecastCounts;
     private bool _isExpanded;
     private bool _isRenaming;
@@ -261,6 +262,23 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// A synced SECOM source's last sync (#807), set by the panel;
+    /// <see langword="null"/> for other nodes, and before the first sync.
+    /// </summary>
+    public LibrarySyncStatus? SyncStatus
+    {
+        get => _syncStatus;
+        set
+        {
+            if (!Equals(_syncStatus, value))
+            {
+                _syncStatus = value;
+                RaiseStatus();
+            }
+        }
+    }
+
     /// <summary>A forecast source's model counts, set by the panel; <see langword="null"/> for other nodes.</summary>
     public LibraryForecastCounts? ForecastCounts
     {
@@ -297,6 +315,8 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             return FeedStatus(feed, health, c);
 
         var problems = sources.Sum(x => x.Index?.Diagnostics.Count(d => d.Severity >= IndexDiagnosticSeverity.Warning) ?? 0);
+        if (sources is [{ Definition: SecomSource { Sync: true } }] && _syncStatus is { } sync && (problems == 0 || sync.NeededBytes is not null))
+            return SyncStatusLine(sync, c);
         if (sources is [{ Definition: S100ForecastFeedSource forecast, Index: { } runs }] && problems == 0)
             return ForecastStatus(runs, _health?.Invoke(forecast), _forecastCounts, c, _timeFormat?.Invoke() ?? TimeFormat.Utc);
         if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)
@@ -306,6 +326,17 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         if (_collection.IsSession)
             return (Strings.Library_StatusLine_Session, LibraryNodeStatusKind.Info);
         return (null, LibraryNodeStatusKind.None);
+    }
+
+    /// <summary>"Synced 1,732 of 1,732 · 14:05", or why a synced source is not fully local.</summary>
+    private static (string, LibraryNodeStatusKind) SyncStatusLine(LibrarySyncStatus sync, CultureInfo c)
+    {
+        if (sync.NeededBytes is { } needed)
+            return (string.Format(c, Strings.Library_StatusLine_SyncTooLargeFormat, LibraryItemViewModel.FormatBytes(needed)), LibraryNodeStatusKind.Warning);
+        if (sync.Failed > 0)
+            return (string.Format(c, Strings.Library_StatusLine_SyncFailedFormat, sync.Local, sync.Listed, sync.Failed), LibraryNodeStatusKind.Warning);
+        return (string.Format(c, Strings.Library_StatusLine_SyncedFormat, sync.Local, sync.Listed, FormatWhen(sync.SyncedAt.ToLocalTime(), c)),
+            sync.Local == sync.Listed ? LibraryNodeStatusKind.Ok : LibraryNodeStatusKind.Info);
     }
 
     private static (string, LibraryNodeStatusKind) FeedStatus(S100FeedSource feed, FeedHealth health, CultureInfo c)

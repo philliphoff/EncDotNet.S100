@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.Json.Nodes;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Core;
@@ -134,6 +133,26 @@ public sealed class LibrarySyncTests : IDisposable
         var status = sync.StatusOf(synced.Id)!;
         Assert.Equal(["NW-0001-26", "NW-0004-26"], Directory.EnumerateDirectories(ServiceFolder).Select(Path.GetFileName).Order());
         Assert.Equal(2, status.Listed);
+    }
+
+    [Fact]
+    public async Task A_copy_in_use_is_not_pruned()
+    {
+        var inUse = new HashSet<string>(StringComparer.Ordinal);
+        var (library, sync, server) = Create(objects: 2, new LibrarySyncOptions { IsInUse = inUse.Contains });
+        var source = Source();
+        library.Initialize();
+        library.AddCollection("Warnings", [source]);
+        await SettleAsync(library, sync);
+
+        inUse.Add(Path.Combine(ServiceFolder, "NW-0002-26"));
+        server.Summaries = SecomTests.Summaries(1);
+        await RefreshAsync(library, sync);
+        Assert.Equal(2, Directory.EnumerateDirectories(ServiceFolder).Count());
+
+        inUse.Clear();
+        await RefreshAsync(library, sync);
+        Assert.Equal(["NW-0001-26"], Directory.EnumerateDirectories(ServiceFolder).Select(Path.GetFileName));
     }
 
     [Fact]

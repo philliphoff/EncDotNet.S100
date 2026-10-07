@@ -192,6 +192,14 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
         return _downloaderFor(location)?.ListDownloaded() ?? [];
     }
 
+    /// <summary>The managed folder that <paramref name="location"/> downloads to, or <see langword="null"/> when it is not downloadable.</summary>
+    /// <param name="location">Any download location of that folder.</param>
+    public string? FolderOf(RemoteItemLocation location)
+    {
+        ArgumentNullException.ThrowIfNull(location);
+        return _downloaderFor(location)?.Root;
+    }
+
     /// <summary>
     /// Deletes the downloaded copy named <paramref name="name"/> from the
     /// managed folder that <paramref name="location"/> downloads to, and
