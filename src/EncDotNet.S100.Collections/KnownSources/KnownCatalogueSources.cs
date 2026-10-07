@@ -30,6 +30,12 @@ public enum KnownCatalogueFormat
     /// see <see cref="S100ForecastFeedSource"/>. The entry lists the models.
     /// </summary>
     S100ForecastModels,
+
+    /// <summary>
+    /// A SECOM (IEC 63173-2) service read anonymously (issue #804); the
+    /// catalogue URL is the service's endpoint. See <see cref="SecomSource"/>.
+    /// </summary>
+    Secom,
 }
 
 /// <summary>What coverage a catalogue publishes for its cells.</summary>
@@ -181,8 +187,11 @@ public static class KnownCatalogueSources
             KnownCatalogueFormat.UsaceIenc => (KnownCatalogueCoverage.BoundingBoxes, true, true),
             KnownCatalogueFormat.S100Feed => (KnownCatalogueCoverage.Polygons, true, true),
             KnownCatalogueFormat.S100ExchangeCatalogue => (KnownCatalogueCoverage.Polygons, true, false),
+            KnownCatalogueFormat.Secom => (KnownCatalogueCoverage.None, false, true),
             _ => (KnownCatalogueCoverage.None, false, false),
         };
+        if (format == KnownCatalogueFormat.Secom)
+            catalogUri = Secom.SecomClient.NormalizeServiceUri(catalogUri);
         return new KnownCatalogueSource(
             "user-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.UTF8.GetBytes(catalogUri.AbsoluteUri)))[..16].ToLowerInvariant(),

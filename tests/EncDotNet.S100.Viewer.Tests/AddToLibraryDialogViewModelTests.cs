@@ -288,6 +288,44 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Secom_service_lists_products_and_builds_a_scoped_source()
+    {
+        var known = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.FromUrl(
+            new Uri("https://secom.test/api/secom/v2/capability"), EncDotNet.S100.Collections.KnownSources.KnownCatalogueFormat.Secom);
+        var description = new EncDotNet.S100.Collections.Indexing.SecomServiceDescription(
+            [new CatalogFacetValue("S-122", 2, 2048), new CatalogFacetValue("S-124", 5, 5120)],
+            7, 7, Truncated: false, EncDotNet.S100.Collections.Secom.SecomApiVersion.V2);
+        Uri? described = null;
+        var vm = new AddToLibraryDialogViewModel(_library, null, describeSecom: (uri, _) =>
+        {
+            described = uri;
+            return Task.FromResult(description);
+        });
+
+        vm.Initialize(known, targetCollectionId: null);
+        Assert.Equal(AddToLibraryKind.Secom, vm.Kind);
+        Assert.True(vm.IsOnlineFeed);
+        Assert.Equal("secom.test", vm.NewCollectionName);
+
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(new Uri("https://secom.test/api/secom/"), described);
+        Assert.Equal(["S-122", "S-124"], vm.Products.Select(p => p.Value));
+        Assert.StartsWith("5 objects", vm.Products[1].Detail);
+        Assert.StartsWith("All 7 objects", vm.SelectionSummary);
+
+        vm.Products.Single(p => p.Value == "S-124").IsSelected = true;
+        Assert.StartsWith("5 objects", vm.SelectionSummary);
+        Assert.Equal("secom.test — S-124", vm.NewCollectionName);
+
+        vm.ConfirmCommand.Execute(null);
+
+        var source = Assert.IsType<SecomSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
+        Assert.Equal(new Uri("https://secom.test/api/secom/"), source.ServiceUri);
+        Assert.Equal(["S-124"], source.Filter.ProductSpecs);
+    }
+
+    [Fact]
     public async Task S102_regions_list_their_areas_sized_when_opened_and_build_a_scoped_source()
     {
         var known = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("noaa-s102")!;

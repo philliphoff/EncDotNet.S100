@@ -1315,6 +1315,11 @@ internal static class Strings
     public static string Library_Format_UsaceIenc => Get(nameof(Library_Format_UsaceIenc));
     public static string Library_Format_ChartCatalogs => Get(nameof(Library_Format_ChartCatalogs));
     public static string Library_Format_S100Feed => Get(nameof(Library_Format_S100Feed));
+    public static string Library_Format_Secom => Get(nameof(Library_Format_Secom));
+    public static string Library_SecomFacetDetailFormat => Get(nameof(Library_SecomFacetDetailFormat));
+    public static string Library_SecomSelectionAllFormat => Get(nameof(Library_SecomSelectionAllFormat));
+    public static string Library_SecomSelectionFormat => Get(nameof(Library_SecomSelectionFormat));
+    public static string Library_SecomSelectionTruncatedFormat => Get(nameof(Library_SecomSelectionTruncatedFormat));
     public static string Button_Back => Get(nameof(Button_Back));
     public static string Button_Close => Get(nameof(Button_Close));
     public static string Button_CheckAndAdd => Get(nameof(Button_CheckAndAdd));

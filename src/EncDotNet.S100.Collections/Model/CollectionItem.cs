@@ -159,14 +159,31 @@ public sealed record LocalItemLocation(
 /// Where the item's files lie within the download, when the publisher states
 /// it (S-100 feeds, issue #680); <see langword="null"/> to discover the layout.
 /// </param>
+/// <param name="Envelope">
+/// How the download wraps the data: <see langword="null"/> when the response
+/// is the file itself, <see cref="RemoteEnvelope.Secom"/> for a SECOM
+/// <c>Get</c> response (issue #804).
+/// </param>
 public sealed record RemoteItemLocation(
     Uri Uri,
     long? SizeBytes = null,
     DateTimeOffset? LastModified = null,
     string? DownloadFolder = null,
     string? Package = null,
-    PackageLayout? Layout = null)
+    PackageLayout? Layout = null,
+    RemoteEnvelope? Envelope = null)
     : ItemLocation;
+
+/// <summary>How a <see cref="RemoteItemLocation"/>'s download wraps its data.</summary>
+public enum RemoteEnvelope
+{
+    /// <summary>
+    /// A SECOM <c>Get</c> response: JSON holding the base64 data and its
+    /// signature; the data is saved as the file the item's
+    /// <see cref="RemoteItemLocation.Layout"/> names.
+    /// </summary>
+    Secom = 1,
+}
 
 /// <summary>
 /// Where a dataset's files lie within a downloaded package, relative to its

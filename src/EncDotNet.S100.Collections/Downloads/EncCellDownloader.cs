@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text.Json;
+using EncDotNet.S100.Collections.Secom;
 
 namespace EncDotNet.S100.Collections.Downloads;
 
@@ -23,6 +24,12 @@ public sealed record DownloadedCell(
 {
     /// <summary>True when this is a package: a download holding any number of cells.</summary>
     public bool IsPackage { get; init; }
+
+    /// <summary>
+    /// The data signature check made when a SECOM object was downloaded
+    /// (issue #804); <see langword="null"/> for other downloads.
+    /// </summary>
+    public SecomSignatureCheck? Signature { get; init; }
 
     /// <summary>
     /// The downloaded base cells by name (case-insensitive); for a single
@@ -79,6 +86,14 @@ public sealed record DownloadedCell(
 /// recorded. A download that is not a zip is kept as a bare cell file, or as
 /// a bare dataset file when its <see cref="RemoteItemLocation.Layout"/> names
 /// that file (remote S-100 catalogues, issue #685).
+/// </para>
+/// <para>
+/// An item whose <see cref="RemoteItemLocation.Envelope"/> is
+/// <see cref="RemoteEnvelope.Secom"/> downloads a SECOM <c>Get</c> response
+/// (issue #804): its base64 data is decoded, its signature checked — a
+/// signature that does not match refuses the download — and the data saved
+/// as the file its <see cref="RemoteItemLocation.Layout"/> names. Encrypted
+/// SECOM data is refused; it needs a certificate.
 /// </para>
 /// </remarks>
 public sealed class EncCellDownloader
@@ -147,6 +162,7 @@ public sealed class EncCellDownloader
             {
                 IsPackage = record.IsPackage,
                 Datasets = datasets,
+                Signature = record.Signature?.ToCheck(),
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -167,7 +183,11 @@ public sealed class EncCellDownloader
     /// <param name="cancellationToken">Cancels the download; nothing is left behind.</param>
     /// <exception cref="ArgumentException">The item has no remote location.</exception>
     /// <exception cref="HttpRequestException">The download failed.</exception>
-    /// <exception cref="InvalidDataException">The download holds no <c>.000</c> base cell for the item (or, for a package, none at all).</exception>
+    /// <exception cref="InvalidDataException">
+    /// The download holds no <c>.000</c> base cell for the item (or, for a
+    /// package, none at all); or a SECOM object is encrypted, malformed, or
+    /// its signature does not match.
+    /// </exception>
     public async Task<DownloadedCell> DownloadAsync(
         CollectionItem item,
         IProgress<long>? bytesProgress = null,
@@ -206,7 +226,12 @@ public sealed class EncCellDownloader
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            if (IsZip(zipPath))
+            SecomSignatureCheck? signature = null;
+            if (remote.Envelope == RemoteEnvelope.Secom)
+            {
+                signature = UnwrapSecom(item, remote, zipPath, staging);
+            }
+            else if (IsZip(zipPath))
             {
                 ZipFile.ExtractToDirectory(zipPath, staging);
             }
@@ -225,7 +250,7 @@ public sealed class EncCellDownloader
                 File.Move(zipPath, Path.Combine(staging, fileName));
             }
 
-            var record = Describe(item, remote, staging);
+            var record = Describe(item, remote, staging) with { Signature = SignatureRecord.From(signature) };
             File.WriteAllText(Path.Combine(staging, RecordFileName), JsonSerializer.Serialize(record, RecordOptions));
 
             Replace(CellFolder(folderName), staging);
@@ -240,6 +265,52 @@ public sealed class EncCellDownloader
     }
 
     private string CellFolder(string cellName) => Path.Combine(Root, cellName);
+
+    /// <summary>
+    /// Decodes a downloaded SECOM <c>Get</c> response into the file named by
+    /// the item's layout, in <paramref name="staging"/>, after checking its signature.
+    /// </summary>
+    private static SecomSignatureCheck UnwrapSecom(CollectionItem item, RemoteItemLocation remote, string responsePath, string staging)
+    {
+        if (remote.Layout is not { UpdateRelativePaths.Count: 0, CatalogueRelativePath: null } layout || !IsSafeName(layout.RelativePath))
+            throw new InvalidDataException($"The SECOM object {item.Name} has no single-file layout to save its data as.");
+
+        SecomDataObject secom;
+        using (var response = File.OpenRead(responsePath))
+            secom = SecomClient.ReadDataObject(response);
+
+        if (secom.Metadata is { DataProtection: true })
+            throw new InvalidDataException($"The SECOM object {item.Name} is encrypted; reading it needs a certificate, which is not supported yet.");
+
+        var signature = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata);
+        if (signature.Status == SecomSignatureStatus.Invalid)
+            throw new InvalidDataException($"The signature of the SECOM object {item.Name} does not match its data.");
+
+        var data = secom.Metadata is { Compressed: true } ? Decompress(secom.Data, item.Name) : secom.Data;
+        Directory.CreateDirectory(staging);
+        File.WriteAllBytes(Path.Combine(staging, layout.RelativePath), data);
+        return signature;
+    }
+
+    /// <summary>SECOM compresses as ZIP; a single-file archive is the object's data.</summary>
+    private static byte[] Decompress(byte[] data, string name)
+    {
+        try
+        {
+            using var archive = new ZipArchive(new MemoryStream(data), ZipArchiveMode.Read);
+            var files = archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).ToArray();
+            if (files.Length != 1)
+                throw new InvalidDataException($"The compressed SECOM object {name} holds {files.Length} files; one was expected.");
+            using var entry = files[0].Open();
+            using var buffer = new MemoryStream();
+            entry.CopyTo(buffer);
+            return buffer.ToArray();
+        }
+        catch (InvalidDataException) when (data.Length < 4 || data[0] != (byte)'P' || data[1] != (byte)'K')
+        {
+            throw new InvalidDataException($"The compressed SECOM object {name} is not a zip archive.");
+        }
+    }
 
     private static readonly EnumerationOptions Recursive = new()
     {
@@ -439,7 +510,20 @@ public sealed class EncCellDownloader
         IReadOnlyList<string> UpdateRelativePaths,
         string? CatalogueRelativePath,
         bool IsPackage = false,
-        IReadOnlyList<DatasetRecord>? Datasets = null);
+        IReadOnlyList<DatasetRecord>? Datasets = null,
+        SignatureRecord? Signature = null);
+
+    /// <summary>The signature check of a SECOM download.</summary>
+    private sealed record SignatureRecord(string Status, string? Signer, bool? SignerTrusted, bool SignerExpired, string? Detail)
+    {
+        public static SignatureRecord? From(SecomSignatureCheck? check) => check is null
+            ? null
+            : new(check.Status.ToString(), check.Signer, check.SignerTrusted, check.SignerExpired, check.Detail);
+
+        public SecomSignatureCheck ToCheck() => new(
+            Enum.TryParse<SecomSignatureStatus>(Status, out var status) ? status : SecomSignatureStatus.Unsigned,
+            Signer, SignerTrusted, SignerExpired, Detail);
+    }
 
     /// <summary>One base cell of a download.</summary>
     private sealed record DatasetRecord(

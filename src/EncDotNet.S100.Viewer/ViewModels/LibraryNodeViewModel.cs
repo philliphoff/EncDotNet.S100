@@ -171,7 +171,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     {
         null => _collection.IsSession ? Icon.History : Icon.Library,
         LocalManifestSource => Icon.DocumentBulletList,
-        NoaaEncFeedSource or UsaceIencFeedSource or S100CatalogueFeedSource or S100ForecastFeedSource => Icon.Globe,
+        NoaaEncFeedSource or UsaceIencFeedSource or S100CatalogueFeedSource or S100ForecastFeedSource or SecomSource => Icon.Globe,
         S128CatalogueSource => Icon.BookOpen,
         ExchangeSetSource { Path: var p } when p.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) => Icon.FolderZip,
         _ => Icon.Folder,
@@ -181,7 +181,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     /// A small mono tag naming the kind of source: <c>DIR</c>, <c>ZIP</c>,
     /// <c>WEB</c> (an online catalogue), <c>AWS</c> (a catalogue on AWS Open
     /// Data, also on its area nodes), <c>LIST</c> (a community list),
-    /// <c>FEED</c> (a shared feed) or <c>S-128</c>. A collection shows its
+    /// <c>FEED</c> (a shared feed), <c>SECOM</c> (a SECOM service) or <c>S-128</c>. A collection shows its
     /// sources' kind.
     /// </summary>
     public string KindTag => IsGroup
@@ -432,6 +432,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         S100ForecastFeedSource => "WEB",
         ChartCatalogsFeedSource => "LIST",
         S100FeedSource => "FEED",
+        SecomSource => "SECOM",
         S128CatalogueSource => "S-128",
         LocalManifestSource => "JSON",
         _ => "DIR",
@@ -650,6 +651,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         ChartCatalogsFeedSource c => c.CatalogUri,
         S100CatalogueFeedSource r => r.CatalogUri,
         S100ForecastFeedSource f => f.ModelsUri,
+        SecomSource s => s.ServiceUri,
         _ => null,
     };
 
@@ -665,6 +667,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         S100FeedSource f => f.FeedUri.Host,
         S100CatalogueFeedSource r => r.CatalogUri.Host,
         S100ForecastFeedSource f => f.ModelsUri.Host,
+        SecomSource s => s.ServiceUri.Host,
         _ => source.GetType().Name,
     };
 
@@ -680,6 +683,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         S100FeedSource f => MaskToken(f.FeedUri),
         S100CatalogueFeedSource r => r.CatalogUri.AbsoluteUri,
         S100ForecastFeedSource f => f.ModelsUri.AbsoluteUri,
+        SecomSource s => s.ServiceUri.AbsoluteUri,
         _ => string.Empty,
     };
 
@@ -692,6 +696,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         S100FeedSource f => f.FeedUri,
         S100CatalogueFeedSource r => r.CatalogUri,
         S100ForecastFeedSource f => f.ModelsUri,
+        SecomSource s => s.ServiceUri,
         _ => null,
     };
 

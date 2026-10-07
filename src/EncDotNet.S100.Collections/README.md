@@ -16,6 +16,7 @@ Key types:
   - `UsaceIencFeedSource`
   - `S100CatalogueFeedSource`
   - `S100ForecastFeedSource`
+  - `SecomSource`
 - **`CollectionIndexer`** — indexes any supported source. It reuses a previous `SourceIndex` when the source's fingerprint is unchanged.
 - **`LocalSourceIndexer`** — handles folders and exchange sets:
   - S-100 exchange sets (`CATALOG.XML`), including their GML coverage polygons.
@@ -44,11 +45,19 @@ Key types:
   - Each item is stamped with its run time and valid window (`run`, `validTo`). Runs have no editions, so a downloaded run is outdated once a later run is listed. Items keep their identity across runs, so a new run replaces the old one on download.
   - `GetModelsAsync` summarises each model's latest run (tiles, sizes, footprint) for choosing models.
   - Catalogues are revalidated after a minute, since each model's catalogue is overwritten with every run.
+- **`SecomSourceIndexer`** — handles SECOM (IEC 63173-2) services, read anonymously through `GetSummary` and `Get` (`Secom/SecomClient`):
+  - Each data object becomes an online item. Summaries carry no coverage, so items get bounds from the downloaded copy, through the host's `DatasetProbe`.
+  - The client tries edition 2 (`/v2`) first and falls back to edition 1 (`/v1`). It reads both editions' spellings (`S124` / `S-124`, `summaryObject` / `informationSummaryObject`, compact dates).
+  - `SecomFilter` scopes a source by product, matched on this side, and optionally by an area the service filters on. A source is capped at 5,000 objects, with a warning to narrow it to an area.
+  - The last list is kept on disk, so an unreachable service still lists what it last offered. `DescribeAsync` counts objects per product, for choosing a filter.
+  - `SecomSignatureVerifier` checks a data object's signature against the signer certificate it carries. Signer trust is checked only when roots are supplied, because MCP roots are not in OS trust stores. SHA3-based signatures need platform support, which macOS lacks.
+  - Certificates, signed (v2 `POST`) searches and encrypted data are not supported yet. See `docs/design/dataset-collections.md` §7.5.
 - **`EncCellDownloader`** — downloads a cell's zip into a managed folder:
   - The zip is first written to a `.partial` file, then extracted to a staging folder.
   - The new copy replaces any old one only once it is complete.
   - It finds the cell's layout itself, so NOAA, USACE and bare-`.000` zips all work.
   - A download that is not a zip is kept as a bare file when the item states its layout (remote S-100 datasets).
+  - A SECOM object (`RemoteEnvelope.Secom`) is decoded from its `Get` response and saved as the file its layout names. Its signature is checked and recorded in `.source.json`, and a signature that does not match refuses the download. Encrypted objects are refused.
 - **`KnownCatalogueSources`** — the curated list of known online chart catalogues. See the next section.
 - **`CollectionJson`** — JSON persistence:
   - collection definitions are written as indented JSON
@@ -91,7 +100,7 @@ To add a catalogue:
 
 - **Point at the provider's own catalogue URL.** Don't copy entries or data from other projects' source lists, and never from GPL-licensed ones such as OpenCPN's.
 - **Check the licence** of any third-party list you reference. For example, the community `chartcatalogs/catalogs` lists are CC0.
-- **Use a supported `format`** (`noaaEnc`, `usaceIenc`, `chartCatalogs`, `s100Feed`, `s100ExchangeCatalogue` or `s100ForecastModels`). Entries in a format this build doesn't know are skipped, not rejected, so newer lists stay loadable.
+- **Use a supported `format`** (`noaaEnc`, `usaceIenc`, `chartCatalogs`, `s100Feed`, `s100ExchangeCatalogue`, `s100ForecastModels` or `secom`). Entries in a format this build doesn't know are skipped, not rejected, so newer lists stay loadable.
 - **Describe what the catalogue provides honestly:**
   - `coverage`: `polygons`, `boundingBoxes` or `none`
   - `editions`: whether it lists editions and updates

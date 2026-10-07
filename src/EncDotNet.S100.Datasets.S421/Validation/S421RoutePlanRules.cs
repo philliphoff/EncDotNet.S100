@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Datasets.S421.Validation;
 /// The default <see cref="ValidationRuleSet{TModel}"/> of normative rules
 /// for an S-421 <see cref="S421RoutePlan"/>. Rule identifiers follow the
 /// convention <c>S421-R-{clause}</c>, where <c>{clause}</c> traces to the
-/// relevant section of the S-421 specification (IEC 63173-2).
+/// relevant section of the S-421 specification (IEC 63173-1).
 /// </summary>
 /// <remarks>
 /// <para>
