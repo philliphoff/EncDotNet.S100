@@ -118,6 +118,21 @@ public sealed class SecomTests : IDisposable
     }
 
     [Fact]
+    public async Task A_filtered_summary_that_matches_nothing_is_empty_not_an_error()
+    {
+        var server = new FakeSecomServer(Summaries(3)) { NotFoundForGeometry = true };
+        var client = new SecomClient(new HttpClient(server), ServiceUri);
+
+        var list = await client.GetSummariesAsync(new SecomQuery(GeometryWkt: "POLYGON((0 0,1 0,1 1,0 0))"), cancellationToken: Ct);
+
+        Assert.Empty(list.Items);
+        Assert.Equal(SecomApiVersion.V2, client.ApiVersion);
+        var first = server.Requests[0];
+        Assert.DoesNotContain("geometry", first.Query, StringComparison.Ordinal);  // the version was detected unfiltered
+        Assert.Contains(server.Requests, r => r.Query.Contains("geometry=POLYGON", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void A_real_ccg_signature_verifies_and_tampering_is_detected()
     {
         using var stream = File.OpenRead(TestPaths.Fixture("secom-ccg-get.json"));
@@ -359,10 +374,10 @@ public sealed class SecomTests : IDisposable
     private static SecomSource Source(SecomFilter? filter = null) =>
         new(Guid.NewGuid(), null, ServiceUri, filter ?? SecomFilter.All);
 
-    private static IEnumerable<JsonObject> Summaries(int count) =>
+    internal static IEnumerable<JsonObject> Summaries(int count) =>
         Enumerable.Range(1, count).Select(i => Summary(i, "S-124"));
 
-    private static JsonObject Summary(int index, string product, int containerType = 0) => new()
+    internal static JsonObject Summary(int index, string product, int containerType = 0) => new()
     {
         ["dataReference"] = $"ref-{index:D4}",
         ["dataProtection"] = false,
@@ -378,7 +393,7 @@ public sealed class SecomTests : IDisposable
     };
 
     /// <summary>A self-signed P-256 signer, standing in for an MCP certificate.</summary>
-    private sealed class Signer : IDisposable
+    internal sealed class Signer : IDisposable
     {
         private readonly ECDsa _key;
 
@@ -416,9 +431,16 @@ public sealed class SecomTests : IDisposable
     }
 
     /// <summary>A SECOM service serving summaries (paged) and objects, on v2 and v1.</summary>
-    private sealed class FakeSecomServer(IEnumerable<JsonObject> summaries) : HttpMessageHandler
+    internal sealed class FakeSecomServer(IEnumerable<JsonObject> summaries) : HttpMessageHandler
     {
-        private readonly JsonObject[] _summaries = summaries.ToArray();
+        private JsonObject[] _summaries = summaries.ToArray();
+
+        /// <summary>The listed objects; replace to change what the service offers.</summary>
+        public IEnumerable<JsonObject> Summaries
+        {
+            get => _summaries;
+            set => _summaries = value.ToArray();
+        }
 
         public bool V2 { get; init; } = true;
 
@@ -432,7 +454,13 @@ public sealed class SecomTests : IDisposable
 
         public int? ReportedTotal { get; init; }
 
+        /// <summary>Answers a summary request with a geometry filter with 404, as ELMAN does for an empty area.</summary>
+        public bool NotFoundForGeometry { get; init; }
+
         public Dictionary<string, (byte[] Data, SecomExchangeMetadata Metadata)> Objects { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>When set, objects not in <see cref="Objects"/> are served unsigned with this data.</summary>
+        public Func<string, byte[]>? DefaultData { get; set; }
 
         public List<Uri> Requests { get; } = [];
 
@@ -451,6 +479,8 @@ public sealed class SecomTests : IDisposable
 
             var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
             JsonNode body;
+            if (NotFoundForGeometry && path.EndsWith("/object/summary", StringComparison.Ordinal) && query["geometry"] is not null)
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
             if (path.EndsWith("/capability", StringComparison.Ordinal) && Capability)
             {
                 body = new JsonObject
@@ -479,6 +509,18 @@ public sealed class SecomTests : IDisposable
                 body = new JsonObject { [isV2 ? "summaryObject" : "informationSummaryObject"] = list };
                 if (Paginate)
                     body["pagination"] = new JsonObject { ["totalItems"] = ReportedTotal ?? _summaries.Length, ["maxItemsPerPage"] = size };
+            }
+            else if (path.EndsWith("/object", StringComparison.Ordinal) && DefaultData is { } fallback
+                && !Objects.ContainsKey(query["dataReference"] ?? string.Empty))
+            {
+                body = new JsonObject
+                {
+                    ["dataResponseObject"] = new JsonArray(new JsonObject
+                    {
+                        ["data"] = Convert.ToBase64String(fallback(query["dataReference"] ?? string.Empty)),
+                        ["exchangeMetadata"] = new JsonObject { ["dataProtection"] = false, ["compressionFlag"] = false },
+                    }),
+                };
             }
             else if (path.EndsWith("/object", StringComparison.Ordinal) && Objects.TryGetValue(query["dataReference"] ?? string.Empty, out var found))
             {

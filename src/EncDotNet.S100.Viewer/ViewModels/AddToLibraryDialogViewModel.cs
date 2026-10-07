@@ -149,7 +149,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         Func<Uri, CancellationToken, Task<RemoteS100Catalogue>>? loadS100Catalogue = null,
         Func<RemoteS100Catalogue, IReadOnlyList<string>, CancellationToken, Task<IReadOnlyDictionary<Uri, S3Object>?>>? listS100Folders = null,
         Func<Uri, IReadOnlyList<ForecastModel>, CancellationToken, Task<IReadOnlyList<ForecastModelSummary>>>? loadForecastModels = null,
-        Func<Uri, CancellationToken, Task<SecomServiceDescription>>? describeSecom = null)
+        Func<Uri, string?, CancellationToken, Task<SecomServiceDescription>>? describeSecom = null,
+        Func<GeoBounds?>? currentMapView = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         _library = library;
@@ -161,6 +162,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         _listS100Folders = listS100Folders;
         _loadForecastModels = loadForecastModels;
         _describeSecom = describeSecom;
+        _currentMapView = currentMapView;
         _time = timeProvider ?? TimeProvider.System;
 
         ConfirmCommand = new RelayCommand(Confirm, () => CanConfirm);
@@ -650,6 +652,9 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         ResetS100Catalogue();
         _forecastModels = null;
         _secom = null;
+        _secomArea = null;
+        _secomSync = false;
+        _secomSyncEdited = false;
         _selectedForecastShape = null;
         ForecastModels.Clear();
         _catalogueDate = null;

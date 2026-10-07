@@ -40,6 +40,22 @@ public sealed record LibrarySource(
     public Guid Id => Definition.Id;
 }
 
+/// <summary>Describes a <see cref="CollectionLibrary.SourceIndexed"/> event.</summary>
+/// <param name="Source">The indexed source's definition.</param>
+/// <param name="Index">The source's index now (the same instance as <paramref name="Previous"/> when it was still current).</param>
+/// <param name="Previous">The index before, or <see langword="null"/> for a first index.</param>
+public sealed class LibrarySourceIndexedEventArgs(CollectionSource Source, SourceIndex Index, SourceIndex? Previous) : EventArgs
+{
+    /// <summary>The indexed source's definition.</summary>
+    public CollectionSource Source { get; } = Source;
+
+    /// <summary>The source's index now.</summary>
+    public SourceIndex Index { get; } = Index;
+
+    /// <summary>The index before, or <see langword="null"/> for a first index.</summary>
+    public SourceIndex? Previous { get; } = Previous;
+}
+
 /// <summary>The indexing state of a <see cref="LibrarySource"/>.</summary>
 public enum LibrarySourceState
 {

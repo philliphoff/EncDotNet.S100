@@ -196,5 +196,10 @@ public sealed record S100ForecastFeedSource(
 /// <param name="DisplayName">An optional user-facing label.</param>
 /// <param name="ServiceUri">The service's endpoint URI (for example <c>https://host/api/secom</c>).</param>
 /// <param name="Filter">Which objects to include.</param>
-public sealed record SecomSource(Guid Id, string? DisplayName, Uri ServiceUri, SecomFilter Filter)
+/// <param name="Sync">
+/// True to keep a local copy of every listed object (issue #807): after each
+/// index, new and changed objects are downloaded and copies the service no
+/// longer lists are deleted; see <see cref="Library.LibrarySync"/>.
+/// </param>
+public sealed record SecomSource(Guid Id, string? DisplayName, Uri ServiceUri, SecomFilter Filter, bool Sync = false)
     : CollectionSource(Id, DisplayName);

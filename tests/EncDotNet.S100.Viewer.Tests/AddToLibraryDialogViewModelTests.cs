@@ -296,7 +296,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
             [new CatalogFacetValue("S-122", 2, 2048), new CatalogFacetValue("S-124", 5, 5120)],
             7, 7, Truncated: false, EncDotNet.S100.Collections.Secom.SecomApiVersion.V2);
         Uri? described = null;
-        var vm = new AddToLibraryDialogViewModel(_library, null, describeSecom: (uri, _) =>
+        var vm = new AddToLibraryDialogViewModel(_library, null, describeSecom: (uri, _, _) =>
         {
             described = uri;
             return Task.FromResult(description);
@@ -323,6 +323,45 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         var source = Assert.IsType<SecomSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
         Assert.Equal(new Uri("https://secom.test/api/secom/"), source.ServiceUri);
         Assert.Equal(["S-124"], source.Filter.ProductSpecs);
+    }
+
+    [Fact]
+    public async Task Secom_service_syncs_by_default_when_small_and_can_be_narrowed_to_the_map_view()
+    {
+        var known = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.FromUrl(
+            new Uri("https://secom.test/api/secom/"), EncDotNet.S100.Collections.KnownSources.KnownCatalogueFormat.Secom);
+        var areas = new List<string?>();
+        var vm = new AddToLibraryDialogViewModel(_library, null,
+            describeSecom: (_, area, _) =>
+            {
+                areas.Add(area);
+                var bytes = area is null ? 500L * 1024 * 1024 : 5120;  // the whole service is too big to sync
+                return Task.FromResult(new EncDotNet.S100.Collections.Indexing.SecomServiceDescription(
+                    [new CatalogFacetValue("S-124", area is null ? 90_000 : 5, bytes)], area is null ? 5_000 : 5, area is null ? 90_000 : 5,
+                    Truncated: area is null, EncDotNet.S100.Collections.Secom.SecomApiVersion.V2));
+            },
+            currentMapView: () => new GeoBounds(49, -124, 49.6, -122.8));
+
+        vm.Initialize(known, targetCollectionId: null);
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
+        Assert.True(vm.IsSecom);
+        Assert.False(vm.SecomSync);  // too big (and capped) to sync by default
+        Assert.True(vm.CanScopeSecomToMapView);
+
+        await vm.SetSecomInMapViewAsync(true, TestContext.Current.CancellationToken);
+
+        Assert.Equal([null, "POLYGON((-124 49,-122.8 49,-122.8 49.6,-124 49.6,-124 49))"], areas);
+        Assert.True(vm.SecomInMapView);
+        Assert.True(vm.SecomSync);  // now small: synced by default
+        Assert.StartsWith("Downloads ", vm.SecomSyncHint);
+        Assert.Equal("secom.test — map area", vm.NewCollectionName);
+
+        vm.ConfirmCommand.Execute(null);
+
+        var source = Assert.IsType<SecomSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
+        Assert.True(source.Sync);
+        Assert.Equal(areas[1], source.Filter.GeometryWkt);
+        Assert.EndsWith("(map area)", source.DisplayName);
     }
 
     [Fact]

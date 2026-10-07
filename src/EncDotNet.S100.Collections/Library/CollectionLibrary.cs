@@ -89,6 +89,12 @@ public sealed class CollectionLibrary : IDisposable
     public event EventHandler? Changed;
 
     /// <summary>
+    /// Raised on the indexing thread after a source has been indexed (or its
+    /// previous index confirmed current), after <see cref="Changed"/>.
+    /// </summary>
+    public event EventHandler<LibrarySourceIndexedEventArgs>? SourceIndexed;
+
+    /// <summary>
     /// The library: persisted collections in order, followed by the session
     /// collection when it has any catalogue.
     /// </summary>
@@ -508,6 +514,8 @@ public sealed class CollectionLibrary : IDisposable
             SaveCachedIndex(index);
 
         RaiseChanged();
+        if (index is not null)
+            SourceIndexed?.Invoke(this, new LibrarySourceIndexedEventArgs(source, index, previous));
     }
 
     private IReadOnlyList<LibraryCollection> BuildSnapshot()
