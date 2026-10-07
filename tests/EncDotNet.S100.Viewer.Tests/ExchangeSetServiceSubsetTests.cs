@@ -102,6 +102,56 @@ public sealed class ExchangeSetServiceSubsetTests
     }
 
     [Fact]
+    public async Task A_library_sources_sets_share_one_header_until_the_last_closes()
+    {
+        var (datasets, service, _) = CreateSystem();
+        using var __ = service;
+        var label = new EncDotNet.S100.Collections.Library.LibrarySourceLabel(Guid.NewGuid(), "Warnings — Canada");
+        var ct = TestContext.Current.CancellationToken;
+
+        // Two folders of one Library source (as downloaded objects or cells are), then one of another source.
+        await service.OpenSubsetAsync(
+            new ExchangeSetSubsetRequest(Fixture("Synthetic-S57-Framed"), "CATALOG.031", [Cell("US5WA51M")], label), defer: false, ct);
+        await service.OpenSubsetAsync(
+            new ExchangeSetSubsetRequest(
+                Fixture("Synthetic-S101Updates"), "CATALOG.XML",
+                [new ExchangeSetSubsetItem("S-101/SYNTH101.000", [], "S-101", "SYNTH101")], label),
+            defer: false, ct);
+
+        var header = Assert.Single(datasets.ExchangeSetHeaders);
+        Assert.Equal("Warnings — Canada", header.DisplayName);
+        Assert.Equal(2, header.SetCount);
+        Assert.Equal(2, header.MemberCount);
+        Assert.Equal(2, header.LoadedCount);
+        Assert.Null(header.Producer);  // several sets: no single producer
+
+        // Closing one dataset keeps the source's header for the other.
+        datasets.Entries.Remove(datasets.Entries.Single(e => e.DisplayName == "US5WA51M"));
+        Assert.Same(header, Assert.Single(datasets.ExchangeSetHeaders));
+        Assert.Equal((1, 1), (header.SetCount, header.LoadedCount));
+
+        header.CloseCommand.Execute(null);
+        Assert.Empty(datasets.Entries);
+        Assert.Empty(datasets.ExchangeSetHeaders);
+    }
+
+    [Fact]
+    public async Task Different_library_sources_keep_their_own_headers()
+    {
+        var (datasets, service, _) = CreateSystem();
+        using var __ = service;
+        var ct = TestContext.Current.CancellationToken;
+
+        await service.OpenSubsetAsync(new ExchangeSetSubsetRequest(Fixture("Synthetic-S57-Framed"), "CATALOG.031", [Cell("US5WA51M")],
+            new EncDotNet.S100.Collections.Library.LibrarySourceLabel(Guid.NewGuid(), "A")), defer: false, ct);
+        await service.OpenSubsetAsync(new ExchangeSetSubsetRequest(Fixture("Synthetic-S101Updates"), "CATALOG.XML",
+            [new ExchangeSetSubsetItem("S-101/SYNTH101.000", [], "S-101", "SYNTH101")],
+            new EncDotNet.S100.Collections.Library.LibrarySourceLabel(Guid.NewGuid(), "B")), defer: false, ct);
+
+        Assert.Equal(["A", "B"], datasets.ExchangeSetHeaders.Select(h => h.DisplayName));
+    }
+
+    [Fact]
     public async Task Closing_the_header_releases_the_subset()
     {
         var (datasets, service, _) = CreateSystem();

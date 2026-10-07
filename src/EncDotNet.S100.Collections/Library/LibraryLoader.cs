@@ -1,6 +1,6 @@
 namespace EncDotNet.S100.Collections.Library;
 
-/// <summary>The outcome of <see cref="LibraryLoader.LoadAsync"/>.</summary>
+/// <summary>The outcome of <see cref="LibraryLoader"/>.<c>LoadAsync</c>.</summary>
 /// <param name="Opened">Items opened (loaded, or registered to load as you pan).</param>
 /// <param name="Skipped">Items that could not be opened (online, missing, catalogue-only, unknown product, or failed).</param>
 /// <param name="Problems">
@@ -9,6 +9,15 @@ namespace EncDotNet.S100.Collections.Library;
 /// opened at all, such as an online one, is not a problem).
 /// </param>
 public sealed record LibraryLoadResult(int Opened, int Skipped, IReadOnlyList<string>? Problems = null);
+
+/// <summary>
+/// The Library source items were loaded from (#809), so a host can show a
+/// source's datasets together (one row per source) however many exchange
+/// sets or folders they come from.
+/// </summary>
+/// <param name="SourceId">The source's id.</param>
+/// <param name="Name">The source's display name.</param>
+public sealed record LibrarySourceLabel(Guid SourceId, string Name);
 
 /// <summary>
 /// Library items that open together: the local items of one exchange set
@@ -25,6 +34,9 @@ public sealed record LibraryOpenGroup(
     bool IsZip,
     IReadOnlyList<CollectionItem> Items)
 {
+    /// <summary>The Library source the items come from, when the caller says; <see langword="null"/> otherwise.</summary>
+    public LibrarySourceLabel? Source { get; init; }
+
     /// <summary>The local location of <paramref name="item"/> (every group item has one).</summary>
     /// <param name="item">One of <see cref="Items"/>.</param>
     public static LocalItemLocation LocationOf(CollectionItem item) => (LocalItemLocation)item.Location;
@@ -100,8 +112,10 @@ public sealed class LibraryLoader : IDisposable
     /// a count of those that cannot (not local, unknown product, or missing).
     /// </summary>
     /// <param name="items">The items to open (downloaded online items localised first).</param>
+    /// <param name="sourceOf">The Library source of an item, labelling its group; <see langword="null"/> for none.</param>
     /// <returns>One group per exchange set or folder, in first-seen order, and the skipped count.</returns>
-    public static (IReadOnlyList<LibraryOpenGroup> Groups, int Skipped) Plan(IEnumerable<CollectionItem> items)
+    public static (IReadOnlyList<LibraryOpenGroup> Groups, int Skipped) Plan(
+        IEnumerable<CollectionItem> items, Func<CollectionItem, LibrarySourceLabel?>? sourceOf = null)
     {
         ArgumentNullException.ThrowIfNull(items);
 
@@ -127,7 +141,10 @@ public sealed class LibraryLoader : IDisposable
             group.Items.Add(item);
         }
 
-        return ([.. order.Select(k => new LibraryOpenGroup(k.Item1, k.Item2, groups[k].IsZip, groups[k].Items))], skipped);
+        return ([.. order.Select(k => new LibraryOpenGroup(k.Item1, k.Item2, groups[k].IsZip, groups[k].Items)
+        {
+            Source = sourceOf?.Invoke(groups[k].Items[0]),
+        })], skipped);
     }
 
     /// <summary>
@@ -139,12 +156,26 @@ public sealed class LibraryLoader : IDisposable
     /// <param name="items">The items to open (downloaded online items localised first).</param>
     /// <param name="defer">True to load as the items come into view (where the host supports it).</param>
     /// <param name="cancellationToken">Cancels the load.</param>
+    public Task<LibraryLoadResult> LoadAsync(
+        IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default) =>
+        LoadAsync(items, defer, sourceOf: null, cancellationToken);
+
+    /// <summary>
+    /// Opens the local items among <paramref name="items"/> as
+    /// <see cref="LoadAsync(IReadOnlyList{CollectionItem}, bool, CancellationToken)"/>
+    /// does, labelling each group with its Library source.
+    /// </summary>
+    /// <param name="items">The items to open (downloaded online items localised first).</param>
+    /// <param name="defer">True to load as the items come into view (where the host supports it).</param>
+    /// <param name="sourceOf">The Library source of an item; <see langword="null"/> for none.</param>
+    /// <param name="cancellationToken">Cancels the load.</param>
     public async Task<LibraryLoadResult> LoadAsync(
-        IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default)
+        IReadOnlyList<CollectionItem> items, bool defer, Func<CollectionItem, LibrarySourceLabel?>? sourceOf,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(items);
 
-        var (groups, skipped) = Plan(items);
+        var (groups, skipped) = Plan(items, sourceOf);
         var opened = 0;
         var problems = new List<string>();
         foreach (var group in groups)

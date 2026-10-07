@@ -1304,16 +1304,40 @@ internal sealed class DatasetsViewModel : ViewModelBase
         string? producer,
         string? issueDate,
         int datasetCount,
-        Action<ExchangeSetHeader> closeAction)
+        Action<ExchangeSetHeader> closeAction,
+        EncDotNet.S100.Collections.Library.LibrarySourceLabel? librarySource = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(sourcePath);
         ArgumentNullException.ThrowIfNull(closeAction);
 
+        // A Library source's sets share one header (#809).
+        var groupKey = librarySource?.SourceId.ToString("N");
+        if (groupKey is not null && ExchangeSetHeaders.FirstOrDefault(h => h.GroupKey == groupKey) is { } shared)
+        {
+            shared.AddSource(source);
+            RebuildExchangeSetGrouping();
+            return shared;
+        }
+
         var header = new ExchangeSetHeader(
-            source, sourcePath, producer, issueDate, datasetCount, closeAction);
+            source, sourcePath, producer, issueDate, datasetCount, closeAction, librarySource?.Name, groupKey);
         ExchangeSetHeaders.Add(header);
         return header;
+    }
+
+    /// <summary>
+    /// Releases one exchange set from <paramref name="header"/>, removing the
+    /// header once it holds none (for a single-set header, at once). Idempotent.
+    /// </summary>
+    internal void ReleaseExchangeSetHeader(ExchangeSetHeader header, IAssetSource source)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+        ArgumentNullException.ThrowIfNull(source);
+        if (header.RemoveSource(source))
+            ExchangeSetHeaders.Remove(header);
+        else
+            RebuildExchangeSetGrouping();
     }
 
     /// <summary>Removes a header registered via
@@ -1337,7 +1361,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
     {
         foreach (var header in ExchangeSetHeaders)
         {
-            var members = Entries.Where(e => ReferenceEquals(e.Source, header.Source)).ToList();
+            var members = Entries.Where(e => header.Contains(e.Source)).ToList();
 
             // Fast path: already in sync (same items, same order).
             if (header.Datasets.Count == members.Count)

@@ -48,6 +48,19 @@ public sealed class LibraryOperationsTests : IDisposable
     }
 
     [Fact]
+    public async Task Plan_labels_each_group_with_its_library_source()
+    {
+        var items = await IndexS57SetAsync();
+        var label = new LibrarySourceLabel(Guid.NewGuid(), "Charts");
+
+        var (groups, _) = LibraryLoader.Plan(items, _ => label);
+        var (unlabelled, _) = LibraryLoader.Plan(items);
+
+        Assert.Same(label, Assert.Single(groups).Source);
+        Assert.Null(Assert.Single(unlabelled).Source);
+    }
+
+    [Fact]
     public async Task Plan_groups_local_items_by_exchange_set_and_skips_the_rest()
     {
         var items = await IndexS57SetAsync();

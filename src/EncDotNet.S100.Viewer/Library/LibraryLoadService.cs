@@ -25,6 +25,19 @@ internal interface ILibraryLoader
     /// into view.
     /// </summary>
     Task<LibraryLoadResult> LoadAsync(IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Opens <paramref name="items"/> as <see cref="LoadAsync(IReadOnlyList{CollectionItem}, bool, CancellationToken)"/>
+    /// does, showing each Library source's datasets under one Datasets row (#809).
+    /// </summary>
+    /// <param name="items">The items to open.</param>
+    /// <param name="defer">True to load as the items come into view.</param>
+    /// <param name="sourceOf">The Library source of an item.</param>
+    /// <param name="cancellationToken">Cancels the load.</param>
+    Task<LibraryLoadResult> LoadAsync(
+        IReadOnlyList<CollectionItem> items, bool defer, Func<CollectionItem, LibrarySourceLabel?> sourceOf,
+        CancellationToken cancellationToken = default) =>
+        LoadAsync(items, defer, cancellationToken);
 }
 
 /// <summary>
@@ -54,10 +67,15 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
 
     public LibraryLoadState StateOf(CollectionItem item) => _loader.StateOf(item);
 
+    public Task<LibraryLoadResult> LoadAsync(
+        IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default) =>
+        LoadAsync(items, defer, _ => null, cancellationToken);
+
     public async Task<LibraryLoadResult> LoadAsync(
-        IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default)
+        IReadOnlyList<CollectionItem> items, bool defer, Func<CollectionItem, LibrarySourceLabel?> sourceOf,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _loader.LoadAsync(items, defer, cancellationToken).ConfigureAwait(true);
+        var result = await _loader.LoadAsync(items, defer, sourceOf, cancellationToken).ConfigureAwait(true);
 
         foreach (var problem in result.Problems ?? [])
         {
@@ -124,7 +142,8 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
             var request = new ExchangeSetSubsetRequest(
                 group.RootPath,
                 group.CatalogueRelativePath,
-                group.Items.Select(ToSubsetItem).ToArray());
+                group.Items.Select(ToSubsetItem).ToArray(),
+                group.Source);
 
             var entries = await _exchangeSets.OpenSubsetAsync(request, defer, cancellationToken).ConfigureAwait(true);
 

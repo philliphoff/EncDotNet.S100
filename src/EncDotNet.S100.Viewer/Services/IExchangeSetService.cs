@@ -194,10 +194,15 @@ internal interface IExchangeSetService
 /// loose datasets.
 /// </param>
 /// <param name="Items">The datasets to open.</param>
+/// <param name="LibrarySource">
+/// The Library source the datasets come from, so its sets share one header
+/// (#809); <see langword="null"/> for a set of its own.
+/// </param>
 internal sealed record ExchangeSetSubsetRequest(
     string RootPath,
     string? CatalogueRelativePath,
-    IReadOnlyList<ExchangeSetSubsetItem> Items);
+    IReadOnlyList<ExchangeSetSubsetItem> Items,
+    EncDotNet.S100.Collections.Library.LibrarySourceLabel? LibrarySource = null);
 
 /// <summary>One dataset in an <see cref="ExchangeSetSubsetRequest"/>.</summary>
 /// <param name="RelativePath">The base dataset file, relative to the root (forward slashes).</param>

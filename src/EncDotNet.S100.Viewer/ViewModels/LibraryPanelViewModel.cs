@@ -1236,10 +1236,37 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     private Task LoadSelectedAsync() =>
-        _selectedItem is { } item ? _loader.LoadAsync([item.EffectiveItem], defer: false) : Task.CompletedTask;
+        _selectedItem is { } item ? LoadLabelledAsync([item], defer: false) : Task.CompletedTask;
 
     private Task LoadListedAsYouPanAsync() =>
-        _loader.LoadAsync(ListedDatasets().Select(i => i.EffectiveItem).ToArray(), defer: true);
+        LoadLabelledAsync(ListedDatasets().ToArray(), defer: true);
+
+    /// <summary>
+    /// Opens <paramref name="rows"/> labelled with their Library sources, so the
+    /// Datasets panel shows each source's datasets under one row (#809).
+    /// </summary>
+    private Task<LibraryLoadResult> LoadLabelledAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer)
+    {
+        var labels = new Dictionary<Guid, LibrarySourceLabel>();
+        var sourceOf = new Dictionary<CollectionItem, LibrarySourceLabel>(ReferenceEqualityComparer.Instance);
+        var items = new CollectionItem[rows.Count];
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var source = rows[i].Source;
+            if (!labels.TryGetValue(source.Id, out var label))
+                labels[source.Id] = label = new LibrarySourceLabel(source.Id, SourceDisplayName(source));
+            items[i] = rows[i].EffectiveItem;
+            sourceOf[items[i]] = label;
+        }
+
+        return _loader.LoadAsync(items, defer, item => sourceOf.GetValueOrDefault(item));
+    }
+
+    /// <summary>A source's name as its tree node shows it.</summary>
+    private string SourceDisplayName(LibrarySource source) =>
+        Nodes.SelectMany(c => c.Children.Prepend(c)).FirstOrDefault(n => !n.IsGroup && n.Source?.Id == source.Id)?.Name
+        ?? source.Definition.DisplayName
+        ?? source.Id.ToString("N")[..8];
 
     private Task DownloadSelectedAsync() => DownloadSelectedAsync(load: true);
 
@@ -1270,12 +1297,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         foreach (var row in rows)
             row.RefreshAvailability();
         if (load)
-            await _loader.LoadAsync(rows.Select(row => row.EffectiveItem).ToArray(), defer: false).ConfigureAwait(true);
+            await LoadLabelledAsync(rows, defer: false).ConfigureAwait(true);
     }
 
     /// <summary>Opens <paramref name="rows"/> now, or as the map pans to them when <paramref name="defer"/> is true.</summary>
     internal Task<LibraryLoadResult> LoadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer) =>
-        _loader.LoadAsync(rows.Select(row => row.EffectiveItem).ToArray(), defer);
+        LoadLabelledAsync(rows, defer);
 
     /// <summary>The downloader behind the panel, for download progress and cancelling.</summary>
     internal ILibraryDownloader Downloader => _downloader;
