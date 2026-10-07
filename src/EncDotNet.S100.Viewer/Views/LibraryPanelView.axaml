@@ -309,6 +309,10 @@
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryAddCurrents}" Command="{Binding AddCurrentsForAreaCommand}"
                       AutomationProperties.AutomationId="Library.NodeMenu.AddCurrents"
                       IsVisible="{Binding CanAddCurrentsForArea}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryShowOnMap}" Command="{Binding ToggleShowOnMapCommand}"
+                      ToggleType="CheckBox" IsChecked="{Binding SelectedShowsOnMap, Mode=OneWay}"
+                      AutomationProperties.AutomationId="Library.NodeMenu.ShowOnMap"
+                      IsVisible="{Binding CanShowOnMap}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}"
                       AutomationProperties.AutomationId="Library.NodeMenu.Rename"
                       IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />

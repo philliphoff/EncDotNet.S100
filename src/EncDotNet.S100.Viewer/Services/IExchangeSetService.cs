@@ -184,6 +184,12 @@ internal interface IExchangeSetService
         ExchangeSetSubsetRequest request,
         bool defer,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Closes <paramref name="entries"/> (#809): they stop loading as you pan
+    /// and leave the Datasets panel; a set left empty is released.
+    /// </summary>
+    void CloseEntries(IReadOnlyList<ViewModels.DatasetEntry> entries) { }
 }
 
 /// <summary>A subset of one exchange set (or loose-dataset folder) to open.</summary>
@@ -194,10 +200,15 @@ internal interface IExchangeSetService
 /// loose datasets.
 /// </param>
 /// <param name="Items">The datasets to open.</param>
+/// <param name="LibrarySource">
+/// The Library source the datasets come from, so its sets share one header
+/// (#809); <see langword="null"/> for a set of its own.
+/// </param>
 internal sealed record ExchangeSetSubsetRequest(
     string RootPath,
     string? CatalogueRelativePath,
-    IReadOnlyList<ExchangeSetSubsetItem> Items);
+    IReadOnlyList<ExchangeSetSubsetItem> Items,
+    EncDotNet.S100.Collections.Library.LibrarySourceLabel? LibrarySource = null);
 
 /// <summary>One dataset in an <see cref="ExchangeSetSubsetRequest"/>.</summary>
 /// <param name="RelativePath">The base dataset file, relative to the root (forward slashes).</param>

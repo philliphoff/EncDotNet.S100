@@ -35,6 +35,23 @@ public class CollectionJsonTests
     }
 
     [Fact]
+    public void Show_on_map_round_trips_and_is_omitted_when_off()
+    {
+        var shown = new LocalFolderSource(Guid.NewGuid(), null, "/charts") { ShowOnMap = true };
+        var hidden = new LocalFolderSource(Guid.NewGuid(), null, "/other");
+        var document = new CollectionStoreDocument(CollectionStoreDocument.CurrentVersion,
+            [new DatasetCollection(Guid.NewGuid(), "Charts", [shown, hidden], DateTimeOffset.UnixEpoch)]);
+
+        var json = CollectionJson.SerializeStore(document);
+        var restored = Assert.Single(CollectionJson.DeserializeStore(json).Collections).Sources;
+
+        Assert.Equal(1, json.Split("showOnMap").Length - 1);
+        Assert.True(restored[0].ShowOnMap);
+        Assert.False(restored[1].ShowOnMap);
+        Assert.Equal(shown, restored[0]);
+    }
+
+    [Fact]
     public void Store_from_a_newer_version_is_rejected()
     {
         Assert.Throws<NotSupportedException>(

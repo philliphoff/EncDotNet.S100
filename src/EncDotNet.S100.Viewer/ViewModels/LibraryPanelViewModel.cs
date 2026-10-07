@@ -134,6 +134,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         RefreshCommand = new RelayCommand(Refresh);
         RefreshAllCommand = new RelayCommand(() => _library.Refresh());
         RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
+        ToggleShowOnMapCommand = new RelayCommand(ToggleShowOnMap, () => CanShowOnMap);
         CommitRenameCommand = new RelayCommand(CommitRename);
         CancelRenameCommand = new RelayCommand(CancelRename);
         RemoveCommand = new RelayCommand(Remove, () => _selectedNode?.CanRemove == true);
@@ -202,6 +203,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
+                ((RelayCommand)ToggleShowOnMapCommand).NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(CanShowOnMap));
+                OnPropertyChanged(nameof(SelectedShowsOnMap));
                 ((AsyncRelayCommand)ChooseGroupsCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)AddCurrentsForAreaCommand).NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(CanAddCurrentsForArea));
@@ -569,6 +573,41 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Starts renaming the selected collection or source in place.</summary>
     public ICommand RenameCommand { get; }
+
+    /// <summary>Turns "Show on map" on or off for the selected source (or every source of the selected collection), #809.</summary>
+    public ICommand ToggleShowOnMapCommand { get; }
+
+    /// <summary>True when the selected node is a kept source or collection, whose datasets can be kept on the map.</summary>
+    public bool CanShowOnMap => SelectedSources().Length > 0;
+
+    /// <summary>True when every source of the selected node shows on the map (the menu item's tick).</summary>
+    public bool SelectedShowsOnMap => SelectedSources() is { Length: > 0 } sources && sources.All(s => s.Definition.ShowOnMap);
+
+    /// <summary>The sources a node-level action applies to: the source node's, or every source of a collection node.</summary>
+    private LibrarySource[] SelectedSources() => _selectedNode switch
+    {
+        null or { IsGroup: true } => [],
+        { Collection.IsSession: true } => [],
+        { Source: { } source } => [source],
+        { } node => [.. node.Collection.Sources],
+    };
+
+    private void ToggleShowOnMap()
+    {
+        var sources = SelectedSources();
+        if (sources.Length == 0 || _selectedNode is not { } node)
+            return;
+        var show = !sources.All(s => s.Definition.ShowOnMap);
+        foreach (var source in sources)
+            _library.UpdateSource(node.Collection.Id, source.Definition with { ShowOnMap = show });
+        OnPropertyChanged(nameof(SelectedShowsOnMap));
+    }
+
+    /// <summary>A source's name as its tree node shows it, for its Datasets row (#809).</summary>
+    internal string SourceDisplayName(Guid sourceId) =>
+        Nodes.SelectMany(c => c.Children.Prepend(c)).FirstOrDefault(n => !n.IsGroup && n.Source?.Id == sourceId)?.Name
+        ?? _library.Collections.SelectMany(c => c.Sources).FirstOrDefault(s => s.Id == sourceId)?.Definition.DisplayName
+        ?? sourceId.ToString("N")[..8];
 
     /// <summary>Applies the name typed while renaming.</summary>
     public ICommand CommitRenameCommand { get; }
@@ -1236,10 +1275,33 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     private Task LoadSelectedAsync() =>
-        _selectedItem is { } item ? _loader.LoadAsync([item.EffectiveItem], defer: false) : Task.CompletedTask;
+        _selectedItem is { } item ? LoadLabelledAsync([item], defer: false) : Task.CompletedTask;
 
     private Task LoadListedAsYouPanAsync() =>
-        _loader.LoadAsync(ListedDatasets().Select(i => i.EffectiveItem).ToArray(), defer: true);
+        LoadLabelledAsync(ListedDatasets().ToArray(), defer: true);
+
+    /// <summary>
+    /// Opens <paramref name="rows"/> labelled with their Library sources, so the
+    /// Datasets panel shows each source's datasets under one row (#809).
+    /// </summary>
+    private Task<LibraryLoadResult> LoadLabelledAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer)
+    {
+        var labels = new Dictionary<Guid, LibrarySourceLabel>();
+        var sourceOf = new Dictionary<CollectionItem, LibrarySourceLabel>(ReferenceEqualityComparer.Instance);
+        var items = new CollectionItem[rows.Count];
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var source = rows[i].Source;
+            if (!labels.TryGetValue(source.Id, out var label))
+                labels[source.Id] = label = new LibrarySourceLabel(source.Id, SourceDisplayName(source.Id));
+            items[i] = rows[i].EffectiveItem;
+            sourceOf[items[i]] = label;
+        }
+
+        return _loader.LoadAsync(items, defer, item => sourceOf.GetValueOrDefault(item));
+    }
+
+
 
     private Task DownloadSelectedAsync() => DownloadSelectedAsync(load: true);
 
@@ -1270,12 +1332,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         foreach (var row in rows)
             row.RefreshAvailability();
         if (load)
-            await _loader.LoadAsync(rows.Select(row => row.EffectiveItem).ToArray(), defer: false).ConfigureAwait(true);
+            await LoadLabelledAsync(rows, defer: false).ConfigureAwait(true);
     }
 
     /// <summary>Opens <paramref name="rows"/> now, or as the map pans to them when <paramref name="defer"/> is true.</summary>
     internal Task<LibraryLoadResult> LoadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer) =>
-        _loader.LoadAsync(rows.Select(row => row.EffectiveItem).ToArray(), defer);
+        LoadLabelledAsync(rows, defer);
 
     /// <summary>The downloader behind the panel, for download progress and cancelling.</summary>
     internal ILibraryDownloader Downloader => _downloader;

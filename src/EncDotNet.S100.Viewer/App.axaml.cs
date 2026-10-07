@@ -341,6 +341,7 @@ public partial class App : Application
             // (cached indexes appear immediately; nothing is loaded).
             var library = _services.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>();
             _ = _services.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>();  // syncs from the first index
+            _ = _services.GetRequiredService<Library.LibraryShowOnMapService>();  // and restores sources shown on the map
             library.Initialize();
 
             desktop.MainWindow = _services.GetRequiredService<MainWindow>();
@@ -510,6 +511,13 @@ public partial class App : Application
                 new EncDotNet.S100.Collections.Library.LibrarySyncOptions { IsInUse = IsOpen },
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Collections.Library.LibrarySync>>());
         });
+        services.AddSingleton(sp => new Library.LibraryShowOnMapService(
+            // Sources shown on the map keep their datasets loading as you pan (#809).
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            (Library.LibraryLoadService)sp.GetRequiredService<Library.ILibraryLoader>(),
+            sp.GetRequiredService<Library.ILibraryDownloader>(),
+            id => sp.GetRequiredService<LibraryPanelViewModel>().SourceDisplayName(id),
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>()));
         services.AddSingleton<Library.ILibraryLoader>(sp => new Library.LibraryLoadService(
             sp.GetRequiredService<IExchangeSetService>(),
             sp.GetRequiredService<DatasetsViewModel>(),

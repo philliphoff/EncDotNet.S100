@@ -62,6 +62,16 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     /// </summary>
     internal const double AreaScaleThreshold = 1_500_000;
 
+    /// <summary>
+    /// An item whose coverage is smaller than this on screen (pixels, either
+    /// side) is drawn as a marker, not an outline: a point-sized warning
+    /// (S-124) would otherwise draw nothing (#809).
+    /// </summary>
+    internal const double MarkerThresholdPixels = 6;
+
+    /// <summary>The marker's diameter, in pixels; taps within it select the item.</summary>
+    internal const double MarkerPixels = 13;
+
     private static readonly ConditionalWeakTable<CollectionItem, IReadOnlyList<(double X, double Y)[]>> RingCache = new();
 
     private readonly IMapLayerCollection _layers;
@@ -158,7 +168,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
             return true;
         }
 
-        var hits = Hits(_panel.Items, _panel.SelectedItem, tap.Position, scale);
+        var hits = Hits(_panel.Items, _panel.SelectedItem, tap.Position, scale, tap.Resolution);
         if (hits.Count == 0)
         {
             _lastTap = null;
@@ -179,12 +189,17 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     /// which is always drawn) whose coverage contains it, most detailed
     /// (highest usage band, then smallest area) first.
     /// </summary>
+    /// <remarks>
+    /// With <paramref name="metresPerPixel"/>, an item drawn as a marker (see
+    /// <see cref="IsPointSized"/>) is hit by a tap within the marker.
+    /// </remarks>
     internal static IReadOnlyList<LibraryItemViewModel> Hits(
-        IEnumerable<LibraryItemViewModel> listed, LibraryItemViewModel? selected, GeoPosition position, double scale) =>
+        IEnumerable<LibraryItemViewModel> listed, LibraryItemViewModel? selected, GeoPosition position, double scale,
+        double metresPerPixel = 0) =>
         Candidates(listed, scale)
             .Concat(selected?.Item.Bounds is not null && !selected.IsGroupHeader ? [selected] : [])
             .Distinct()
-            .Where(i => CoverageHitTest.Contains(i.Item, position))
+            .Where(i => CoverageHitTest.Contains(i.Item, position) || IsMarkerHit(i.Item, position, metresPerPixel))
             .OrderByDescending(i => i.Item.UsageBand ?? 0)
             .ThenBy(i => CoverageHitTest.Area(i.Item))
             .ToArray();
@@ -255,6 +270,42 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         : items.Any(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Expired) ? LibraryPrimaryAvailability.Expired
         : items.All(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Local) ? LibraryPrimaryAvailability.Local
         : LibraryPrimaryAvailability.Online;
+
+    /// <summary>
+    /// True when <paramref name="item"/>'s coverage is smaller than
+    /// <see cref="MarkerThresholdPixels"/> on screen at
+    /// <paramref name="metresPerPixel"/> (Web Mercator), so it is drawn as a marker.
+    /// </summary>
+    internal static bool IsPointSized(CollectionItem item, double metresPerPixel)
+    {
+        if (item.Bounds is not { } b || !(metresPerPixel > 0))
+            return false;
+        var east = b.CrossesAntimeridian ? b.East + 360 : b.East;
+        var (minX, minY) = Mapsui.Projections.SphericalMercator.FromLonLat(b.West, Math.Max(b.South, -85));
+        var (maxX, maxY) = Mapsui.Projections.SphericalMercator.FromLonLat(east, Math.Min(b.North, 85));
+        var limit = MarkerThresholdPixels * metresPerPixel;
+        return maxX - minX < limit && maxY - minY < limit;
+    }
+
+    /// <summary>The marker's centre (Web Mercator metres): the middle of the item's bounds.</summary>
+    internal static (double X, double Y) MarkerCentre(CollectionItem item)
+    {
+        var b = item.Bounds!.Value;
+        var east = b.CrossesAntimeridian ? b.East + 360 : b.East;
+        return Mapsui.Projections.SphericalMercator.FromLonLat(
+            (b.West + east) / 2, (Math.Max(b.South, -85) + Math.Min(b.North, 85)) / 2);
+    }
+
+    /// <summary>True when a tap at <paramref name="position"/> falls within <paramref name="item"/>'s marker.</summary>
+    private static bool IsMarkerHit(CollectionItem item, GeoPosition position, double metresPerPixel)
+    {
+        if (!IsPointSized(item, metresPerPixel))
+            return false;
+        var (x, y) = MarkerCentre(item);
+        var (tx, ty) = Mapsui.Projections.SphericalMercator.FromLonLat(position.Longitude, position.Latitude);
+        var radius = MarkerPixels / 2 * metresPerPixel;
+        return (x - tx) * (x - tx) + (y - ty) * (y - ty) <= radius * radius;
+    }
 
     /// <summary>The overlay layer (for tests).</summary>
     internal MemoryLayer Layer => _layer;
@@ -331,6 +382,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         {
             var view = ViewBounds(_viewport.Current);
             var scale = CurrentScale();
+            var resolution = _viewport.Current?.MercatorResolution ?? 0;
             var selected = _panel.SelectedItem;
             var appearance = _appearance.Current;
             var casing = new MapsuiColor(appearance.ChartBackground.R, appearance.ChartBackground.G, appearance.ChartBackground.B);
@@ -358,23 +410,60 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
             foreach (var item in candidates)
             {
-                AddOutline(features, item, StyleFor(item.PrimaryAvailability), casing, opacity);
+                AddCoverage(features, item, StyleFor(item.PrimaryAvailability), casing, opacity, resolution);
                 OutlinedCount++;
             }
 
             if (selected?.Item.Bounds is not null && !selected.IsGroupHeader)
             {
                 var accent = appearance.Accent;
-                AddOutline(features, selected,
+                AddCoverage(features, selected,
                     new OutlineStyle(new MapsuiColor(accent.R, accent.G, accent.B), LibraryOutlineStyles.SelectedWidth, null,
                         LibraryOutlineStyles.SelectedFillOpacity, RoundCap: false),
-                    casing, 1f);
+                    casing, 1f, resolution);
                 OutlinedCount++;
             }
         }
 
         _layer.Features = features;
         _layer.DataHasChanged();
+    }
+
+    /// <summary>A dataset's outline, or a marker when it is point-sized on screen.</summary>
+    private static void AddCoverage(
+        List<IFeature> features, LibraryItemViewModel item, OutlineStyle style, MapsuiColor casing, float opacity, double metresPerPixel)
+    {
+        if (IsPointSized(item.Item, metresPerPixel))
+            AddMarker(features, item.Item, style, casing, opacity);
+        else
+            AddOutline(features, item, style, casing, opacity);
+    }
+
+    /// <summary>
+    /// Adds a point-sized dataset's marker: a ring in the outline's colour over
+    /// a casing, with the outline's faint fill.
+    /// </summary>
+    private static void AddMarker(List<IFeature> features, CollectionItem item, OutlineStyle style, MapsuiColor casing, float opacity)
+    {
+        var (x, y) = MarkerCentre(item);
+        var marker = new GeometryFeature(new Point(x, y));
+        marker.Styles.Add(new SymbolStyle
+        {
+            SymbolType = SymbolType.Ellipse,
+            SymbolScale = MarkerPixels / 32,
+            Fill = new Brush { Color = new MapsuiColor(style.Color.R, style.Color.G, style.Color.B, (int)(255 * Math.Max(style.FillOpacity, 0.15f))) },
+            Outline = new Pen { Color = casing, Width = style.Width + LibraryOutlineStyles.CasingExtraWidth },
+            Opacity = LibraryOutlineStyles.CasingOpacity,
+        });
+        marker.Styles.Add(new SymbolStyle
+        {
+            SymbolType = SymbolType.Ellipse,
+            SymbolScale = MarkerPixels / 32,
+            Fill = null,
+            Outline = new Pen { Color = style.Color, Width = style.Width },
+            Opacity = opacity,
+        });
+        features.Add(marker);
     }
 
     /// <summary>

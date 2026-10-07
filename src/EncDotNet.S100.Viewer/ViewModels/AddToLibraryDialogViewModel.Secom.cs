@@ -169,7 +169,8 @@ internal sealed partial class AddToLibraryDialogViewModel
         var name = _includeAll ? FeedName : DescribeSecomProducts(CurrentSecomFilter) ?? FeedName;
         if (_secomArea is not null)
             name = string.Format(CultureInfo.CurrentCulture, Strings.Library_SecomAreaNameFormat, name ?? CatalogUri.Host);
-        return new SecomSource(id, name, CatalogUri, filter, _secomSync);
+        // A synced source is shown on the map by default (#809).
+        return new SecomSource(id, name, CatalogUri, filter, _secomSync) { ShowOnMap = _secomSync };
     }
 
     /// <summary>The selected products, or <see langword="null"/> for all (the source is then named after the service).</summary>

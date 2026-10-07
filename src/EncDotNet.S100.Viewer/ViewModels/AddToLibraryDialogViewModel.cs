@@ -939,8 +939,20 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         Closed?.Invoke(this, true);
     }
 
+    /// <summary>
+    /// Whether the new source is shown on the map (#809): <see langword="null"/>
+    /// for the kind's default (on for a synced SECOM service, otherwise off).
+    /// </summary>
+    internal bool? ShowOnMap { get; set; }
+
     /// <summary>Builds the source the dialog describes.</summary>
     internal CollectionSource BuildSource()
+    {
+        var source = BuildSourceCore();
+        return ShowOnMap is { } show ? source with { ShowOnMap = show } : source;
+    }
+
+    private CollectionSource BuildSourceCore()
     {
         var id = Guid.NewGuid();
         return _kind switch

@@ -968,6 +968,53 @@ S-104 or S-111 is openly downloadable over SECOM today.**
    permit/key UX as one shared surface. This is what unlocks the chart
    products (KHRA S-101/S-128, KRISO S-102).
 
+### 7.6 Show on map and one row per source (#809)
+
+> **As built (first slice):**
+> - **One Datasets row per source.** Library loads carry a
+>   `LibrarySourceLabel` (source id and name): `LibraryLoader.Plan` /
+>   `LoadAsync(…, sourceOf)` → `LibraryOpenGroup.Source` →
+>   `ExchangeSetSubsetRequest.LibrarySource`. `DatasetsViewModel` gives
+>   every exchange set of one source the same `ExchangeSetHeader`, named for
+>   the source:
+>   - the header keeps a set of asset sources, and its datasets are those of
+>     any of them;
+>   - counts are summed;
+>   - Close closes every set;
+>   - producer and issue date show only while the header holds a single set;
+>   - the signature badge merges the sets' results, showing "mixed" when they
+>     differ.
+>
+>   Each set still loads and releases on its own. So 84 downloaded SECOM
+>   warnings, or a folder of exchange sets, are one row.
+> - **Show on map.** `CollectionSource.ShowOnMap` is a persisted flag on
+>   every kind, omitted from JSON when off. The viewer's
+>   `LibraryShowOnMapService` handles it:
+>   - **After each index of a shown source:** it opens the source's local,
+>     current items to load as you pan, labelled as above, without a
+>     notification. It closes the ones the source no longer has (gone,
+>     cancelled, or no longer local), through the new
+>     `IExchangeSetService.CloseEntries` / `ILibraryLoader.Close`.
+>   - **Turning it off, or removing the source,** closes everything it
+>     opened.
+>   - **Closing a synced source's datasets** re-syncs it, so copies kept
+>     because they were open are pruned now.
+>   - **Restart:** shown sources come back, because the library indexes
+>     every source at start-up.
+>   - **Defaults and controls:**
+>     - a synced SECOM source defaults to shown;
+>     - the Library tree's source menu has a **Show on map** toggle (a
+>       collection node toggles all its sources);
+>     - MCP `add_library_source` takes `showOnMap`, and
+>       `list_library_sources` reports it.
+> - **Coverage markers.** An item whose coverage is under 6 px on screen is
+>   drawn as a 13 px ring and hit by taps within it, so point-sized S-124
+>   warnings are visible on the coverage overlay.
+> - **Next (#809):** sync policies for the other online kinds (NOAA/USACE
+>   latest editions, community packages, S-100 feeds and catalogues,
+>   forecast latest runs), with sync moved from `SecomSource` to the source
+>   model.
+
 ---
 
 ## 8. Implementation slices

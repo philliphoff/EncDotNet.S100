@@ -41,7 +41,16 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(S100CatalogueFeedSource), "s100CatalogueFeed")]
 [JsonDerivedType(typeof(S100ForecastFeedSource), "s100ForecastFeed")]
 [JsonDerivedType(typeof(SecomSource), "secom")]
-public abstract record CollectionSource(Guid Id, string? DisplayName);
+public abstract record CollectionSource(Guid Id, string? DisplayName)
+{
+    /// <summary>
+    /// True to keep the source's local datasets on the map (issue #809): a host
+    /// opens them to load as the map pans to them, after every index, and
+    /// closes those the source no longer has. Remembered with the source.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ShowOnMap { get; init; }
+}
 
 /// <summary>
 /// A local folder, scanned for exchange sets (S-100 <c>CATALOG.XML</c>, S-57

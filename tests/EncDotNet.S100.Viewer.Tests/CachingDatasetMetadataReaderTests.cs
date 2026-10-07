@@ -105,4 +105,20 @@ public class CachingDatasetMetadataReaderTests : IDisposable
         Assert.Equal(1, cache.Hits);
         Assert.Equal(1, cache.Misses);
     }
+
+    [Fact]
+    public void Reads_the_extent_of_a_loose_s124_warning()
+    {
+        // An S-124 Ed 2.0 warning as downloaded from the Canadian Coast Guard's SECOM service (#809).
+        var warning = System.IO.Path.Combine("TestData", "S124", "navwarn_ccg_ed2.gml");
+        var reader = new CachingDatasetMetadataReader(new DiskDatasetMetadataCache(_cacheDir, 1_000_000));
+
+        var metadata = reader.TryRead(warning);
+
+        Assert.NotNull(metadata);
+        Assert.Equal("S-124", metadata!.Spec.Name);
+        Assert.NotNull(metadata.Extent);
+        Assert.Equal(49.30, metadata.Extent!.SouthLatitude, 2);
+        Assert.Equal(-122.98, metadata.Extent.WestLongitude, 2);
+    }
 }

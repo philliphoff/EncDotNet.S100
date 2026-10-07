@@ -1096,7 +1096,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
         var entries = result.OfType<DatasetEntry>().ToArray();
         if (tracked.Header is { } header)
-            header.LoadedCount = tracked.Entries.Count;
+            header.LoadedCount = LoadedCountOf(header);
 
         if (defer && _lazyCoordinator is not null)
         {
@@ -1117,6 +1117,20 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
         return entries;
     }
+
+    /// <inheritdoc/>
+    public void CloseEntries(IReadOnlyList<DatasetEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        _lazyCoordinator?.Unregister(entries);
+        // One at a time: the loader releases a dataset on its Remove event.
+        foreach (var entry in entries)
+            _datasets.Entries.Remove(entry);
+    }
+
+    /// <summary>The entries of every set under <paramref name="header"/> (a Library source's header holds several, #809).</summary>
+    private int LoadedCountOf(ExchangeSetHeader header) =>
+        _tracked.Where(t => ReferenceEquals(t.Header, header)).Sum(t => t.Entries.Count);
 
     /// <summary>
     /// Finds an already-open tracked set rooted at <paramref name="rootPath"/>
@@ -1179,7 +1193,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             producer,
             issueDate,
             request.Items.Count,
-            closeAction: CloseExchangeSetFromHeader);
+            closeAction: CloseExchangeSetFromHeader,
+            librarySource: request.LibrarySource);
         _ = VerifySignaturesAsync(tracked);
         return tracked;
     }
@@ -1293,13 +1308,19 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
             if (tracked.Entries.Count == 0)
             {
+                _tracked.RemoveAt(i);
                 if (tracked.Header is { } header)
                 {
-                    _datasets.RemoveExchangeSetHeader(header);
+                    // A Library source's header outlives its other sets (#809).
+                    _datasets.ReleaseExchangeSetHeader(header, tracked.Source);
                     tracked.Header = null;
+                    if (_datasets.ExchangeSetHeaders.Contains(header))
+                    {
+                        header.LoadedCount = LoadedCountOf(header);
+                        UpdateHeaderSignature(header);
+                    }
                 }
                 tracked.Owner.Dispose();
-                _tracked.RemoveAt(i);
             }
         }
     }
@@ -1312,12 +1333,11 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     /// </summary>
     private void CloseExchangeSetFromHeader(ExchangeSetHeader header)
     {
-        var tracked = _tracked.Find(t => ReferenceEquals(t.Header, header));
-        if (tracked is null) return;
-
+        // Every set under the header: one, or a Library source's several (#809).
         // Snapshot the entries: removing from `_datasets.Entries`
         // mutates `tracked.Entries` indirectly via OnEntriesChanged.
-        var entriesToRemove = tracked.Entries.ToArray();
+        var entriesToRemove = _tracked.Where(t => ReferenceEquals(t.Header, header)).SelectMany(t => t.Entries).ToArray();
+        if (entriesToRemove.Length == 0) return;
         _lazyCoordinator?.Unregister(entriesToRemove);
         foreach (var entry in entriesToRemove)
         {
@@ -1356,19 +1376,40 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         if (tracked.Header is null) return;
         if (tracked.Verifier is null) return;
 
-        tracked.Header.SignatureStatus = SignatureStatus.Checking;
-        tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureChecking;
+        tracked.Signature = (SignatureStatus.Checking, Strings.Tooltip_SignatureChecking);
+        UpdateHeaderSignature(tracked.Header);
 
         try
         {
             var result = await tracked.Verifier(CancellationToken.None).ConfigureAwait(true);
-            ApplySignatureResult(tracked.Header, result);
+            tracked.Signature = SignatureOf(result);
         }
         catch (Exception)
         {
-            tracked.Header.SignatureStatus = SignatureStatus.Error;
-            tracked.Header.SignatureTooltip = Strings.Tooltip_SignatureError;
+            tracked.Signature = (SignatureStatus.Error, Strings.Tooltip_SignatureError);
         }
+
+        if (tracked.Header is { } header)
+            UpdateHeaderSignature(header);
+    }
+
+    /// <summary>
+    /// Sets a header's badge from its sets' verification: their common result,
+    /// "checking" while any is, else "mixed" (a Library source's header holds several sets, #809).
+    /// </summary>
+    private void UpdateHeaderSignature(ExchangeSetHeader header)
+    {
+        var results = _tracked.Where(t => ReferenceEquals(t.Header, header) && t.Signature is not null)
+            .Select(t => t.Signature!.Value)
+            .ToArray();
+        if (results.Length == 0)
+            return;
+
+        var (status, tooltip) = results.Select(r => r.Status).Distinct().Count() == 1 ? results[0]
+            : results.Any(r => r.Status == SignatureStatus.Checking) ? (SignatureStatus.Checking, Strings.Tooltip_SignatureChecking)
+            : (SignatureStatus.Mixed, Strings.Tooltip_SignatureMixed);
+        header.SignatureStatus = status;
+        header.SignatureTooltip = tooltip;
     }
 
     /// <summary>
@@ -1376,30 +1417,12 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     /// signature badge. Shared by the S-100 and S-57 exchange-set paths so both
     /// surface identical integrity/signature semantics.
     /// </summary>
-    private static void ApplySignatureResult(ExchangeSetHeader header, ExchangeSetVerificationResult result)
-    {
-        if (result.IsUnsigned)
-        {
-            header.SignatureStatus = SignatureStatus.Unsigned;
-            header.SignatureTooltip = Strings.Tooltip_SignatureUnsigned;
-        }
-        else if (result.AllValid)
-        {
-            header.SignatureStatus = SignatureStatus.Verified;
-            header.SignatureTooltip = Strings.Tooltip_SignatureVerified;
-        }
-        else if (result.HasInvalidSignatures)
-        {
-            header.SignatureStatus = SignatureStatus.Invalid;
-            header.SignatureTooltip = Strings.Tooltip_SignatureInvalid;
-        }
-        else
-        {
-            // Some files ok, some not — e.g. certificate issues
-            header.SignatureStatus = SignatureStatus.Mixed;
-            header.SignatureTooltip = Strings.Tooltip_SignatureMixed;
-        }
-    }
+    private static (SignatureStatus Status, string Tooltip) SignatureOf(ExchangeSetVerificationResult result) =>
+        result.IsUnsigned ? (SignatureStatus.Unsigned, Strings.Tooltip_SignatureUnsigned)
+        : result.AllValid ? (SignatureStatus.Verified, Strings.Tooltip_SignatureVerified)
+        : result.HasInvalidSignatures ? (SignatureStatus.Invalid, Strings.Tooltip_SignatureInvalid)
+        // Some files ok, some not — e.g. certificate issues
+        : (SignatureStatus.Mixed, Strings.Tooltip_SignatureMixed);
 
     public void Dispose()
     {
@@ -1438,6 +1461,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
 
         public List<DatasetEntry> Entries { get; } = new();
         public ExchangeSetHeader? Header { get; set; }
+
+        /// <summary>The set's own verification result, merged into its header's badge.</summary>
+        public (SignatureStatus Status, string Tooltip)? Signature { get; set; }
 
         /// <summary>
         /// True while entries are being batch-registered: the batch insert
