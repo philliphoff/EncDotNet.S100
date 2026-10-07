@@ -43,40 +43,40 @@ internal static class S124DatasetReader
         string? productId = null;
         string? datasetId = root.Attribute(GmlNamespaces.Gml + "id")?.Value;
 
-        var dsInfo = root.Element(S100Ns + "DatasetIdentificationInformation");
+        var dsInfo = S100Element(root, "DatasetIdentificationInformation");
         if (dsInfo is not null)
         {
-            productId = dsInfo.Element(S100Ns + "productIdentifier")?.Value;
+            productId = S100Element(dsInfo, "productIdentifier")?.Value;
         }
 
-        // Parse features from <member> elements
+        // Features and information types are wrapped one per <member> / <imember>
+        // element, or (S-124 Ed 2.0, S-100 GML 5.0) gathered in a single
+        // <members> (and <imembers>) container.
+        var containers = root.Elements()
+            .Where(e => e.Name.LocalName is "members" or "imembers")
+            .SelectMany(c => c.Elements())
+            .ToArray();
+
         var features = new List<S124Feature>();
-        foreach (var member in root.Elements(MemberName(root)))
+        foreach (var featureElement in root.Elements(MemberName(root))
+            .Select(m => m.Elements().FirstOrDefault(e => IsFeatureType(e.Name, datasetNs)))
+            .Concat(containers.Where(e => IsFeatureType(e.Name, datasetNs)))
+            .OfType<XElement>())
         {
-            var featureElement = member.Elements()
-                .FirstOrDefault(e => IsFeatureType(e.Name, datasetNs));
-
-            if (featureElement is not null)
-            {
-                var feature = ParseFeature(featureElement);
-                if (feature is not null)
-                    features.Add(feature);
-            }
+            var feature = ParseFeature(featureElement);
+            if (feature is not null)
+                features.Add(feature);
         }
 
-        // Parse information types from <imember> elements
         var informationTypes = new List<S124InformationType>();
-        foreach (var imember in root.Elements(IMemberName(root)))
+        foreach (var infoElement in root.Elements(IMemberName(root))
+            .Select(m => m.Elements().FirstOrDefault(e => IsInformationType(e.Name, datasetNs)))
+            .Concat(containers.Where(e => IsInformationType(e.Name, datasetNs)))
+            .OfType<XElement>())
         {
-            var infoElement = imember.Elements()
-                .FirstOrDefault(e => IsInformationType(e.Name, datasetNs));
-
-            if (infoElement is not null)
-            {
-                var info = ParseInformationType(infoElement);
-                if (info is not null)
-                    informationTypes.Add(info);
-            }
+            var info = ParseInformationType(infoElement);
+            if (info is not null)
+                informationTypes.Add(info);
         }
         return new S124Dataset
         {
@@ -133,25 +133,44 @@ internal static class S124DatasetReader
 
     private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement)
     {
+        // Look for geometry in the "geometry" child elements. A feature may repeat
+        // it (S-124 Ed 2.0 producers write one point per element): points from
+        // every point geometry are gathered; curves and surfaces use the first.
+        var containers = featureElement.Elements(featureElement.Name.Namespace + "geometry")
+            .Concat(featureElement.Elements("geometry"))
+            .ToArray();
+        if (containers.Length == 0)
+            return (S100GeometryType.None, [], [], [], []);
+
+        var first = ParseGeometryContainer(containers[0]);
+        if (first.Item1 != S100GeometryType.Point || containers.Length == 1)
+            return first;
+
+        var points = new List<GeoPosition>(first.Item2);
+        foreach (var container in containers.Skip(1))
+        {
+            var more = ParseGeometryContainer(container);
+            if (more.Item1 == S100GeometryType.Point)
+                points.AddRange(more.Item2);
+        }
+
+        return (S100GeometryType.Point, points, first.Item3, first.Item4, first.Item5);
+    }
+
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometryContainer(XElement geometryContainer)
+    {
         IReadOnlyList<GeoPosition> points = [];
         IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
         IReadOnlyList<GeoPosition> exteriorRing = [];
         IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
         var geometryType = S100GeometryType.None;
 
-        // Look for geometry in the "geometry" child element or directly under the feature
-        var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
-            ?? featureElement.Element("geometry");
-
-        if (geometryContainer is null)
-            return (geometryType, points, curves, exteriorRing, interiorRings);
-
         // S-100 Part 10b point property
-        var pointProp = geometryContainer.Element(S100Ns + "pointProperty")
-            ?? geometryContainer.Element(S100Ns + "Point");
+        var pointProp = S100Element(geometryContainer, "pointProperty")
+            ?? S100Element(geometryContainer, "Point");
         if (pointProp is not null)
         {
-            var pointCoords = GmlCoordinateParser.ParsePointElement(pointProp, S100Ns);
+            var pointCoords = GmlCoordinateParser.ParsePointElement(pointProp, pointProp.Name.Namespace);
             if (pointCoords is not null)
             {
                 geometryType = S100GeometryType.Point;
@@ -175,7 +194,7 @@ internal static class S124DatasetReader
         }
 
         // S-100 Part 10b curve property
-        var curveProp = geometryContainer.Element(S100Ns + "curveProperty");
+        var curveProp = S100Element(geometryContainer, "curveProperty");
         if (curveProp is not null)
         {
             geometryType = S100GeometryType.Curve;
@@ -187,7 +206,7 @@ internal static class S124DatasetReader
         }
 
         // S-100 Part 10b surface property
-        var surfaceProp = geometryContainer.Element(S100Ns + "surfaceProperty");
+        var surfaceProp = S100Element(geometryContainer, "surfaceProperty");
         if (surfaceProp is not null)
         {
             geometryType = S100GeometryType.Surface;
@@ -270,6 +289,10 @@ internal static class S124DatasetReader
         return (name.Namespace == datasetNs || name.Namespace == XNamespace.None) &&
                InformationTypeCodes.Contains(name.LocalName);
     }
+
+    /// <summary>The S-100 GML child <paramref name="localName"/>, in the 1.0 or 5.0 profile namespace.</summary>
+    private static XElement? S100Element(XElement parent, string localName) =>
+        parent.Element(S100Ns + localName) ?? parent.Element(S100Ns50 + localName);
 
     /// <summary>
     /// Finds the "member" element name used in this document.

@@ -252,4 +252,38 @@ public class S124DatasetReaderTests
         Assert.True(f5.Curves.Count == 0);
         Assert.True(f5.ExteriorRing.Count == 0);
     }
+
+    // ── S-124 Ed 2.0 (S-100 GML 5.0), as published by the Canadian Coast Guard over SECOM (#804) ──
+
+    [Fact]
+    public void Edition2Dataset_ReadsMembersContainer()
+    {
+        var ds = LoadTestData("navwarn_ccg_ed2.gml");
+
+        Assert.Equal("S-124", ds.ProductIdentifier);
+        var part = Assert.Single(ds.Features);
+        Assert.Equal("NavwarnPart", part.FeatureType);
+        Assert.Equal(["NavwarnPreamble", "References"], ds.InformationTypes.Select(i => i.TypeCode).Order());
+        Assert.Contains(part.References, r => r.Href.Contains("CCG.S124.CA01.P.0477.20.0", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Edition2Dataset_GathersPointsFromRepeatedGeometry()
+    {
+        var part = Assert.Single(LoadTestData("navwarn_ccg_ed2.gml").Features);
+
+        Assert.Equal(S100GeometryType.Point, part.GeometryType);
+        Assert.Equal(2, part.Points.Count);
+        Assert.Contains(part.Points, p => Math.Abs(p.Latitude - 49.305533) < 1e-6 && Math.Abs(p.Longitude - -122.978567) < 1e-6);
+    }
+
+    [Fact]
+    public void Edition2Dataset_ReportsItsExtent()
+    {
+        var metadata = S124Dataset.ReadMetadata(Path.Combine(TestDataDir, "navwarn_ccg_ed2.gml"));
+
+        Assert.NotNull(metadata.Extent);
+        Assert.Equal(49.301933, metadata.Extent!.SouthLatitude, 5);
+        Assert.Equal(-122.978567, metadata.Extent.WestLongitude, 5);
+    }
 }
