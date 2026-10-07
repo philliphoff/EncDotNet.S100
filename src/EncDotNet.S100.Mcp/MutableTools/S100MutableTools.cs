@@ -33,12 +33,7 @@ namespace EncDotNet.S100.Mcp.MutableTools;
 /// </remarks>
 public static class S100MutableTools
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-    };
+    private static JsonSerializerOptions JsonOptions => McpJson.Options;
 
     /// <summary>
     /// Creates the mutating tools backed by the supplied capabilities. A
@@ -261,7 +256,7 @@ public static class S100MutableTools
                         var datasets = new JsonArray();
                         foreach (var d in v.Datasets)
                         {
-                            datasets.Add(new JsonObject
+                            datasets.Add((JsonNode)new JsonObject
                             {
                                 ["id"] = d.Id,
                                 ["spec"] = d.Spec,
@@ -339,7 +334,7 @@ public static class S100MutableTools
         var array = new JsonArray();
         foreach (var d in removed)
         {
-            array.Add(new JsonObject { ["id"] = d.Id, ["spec"] = d.Spec });
+            array.Add((JsonNode)new JsonObject { ["id"] = d.Id, ["spec"] = d.Spec });
         }
         return array;
     }

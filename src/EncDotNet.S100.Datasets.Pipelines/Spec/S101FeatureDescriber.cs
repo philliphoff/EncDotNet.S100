@@ -326,8 +326,7 @@ internal sealed class S101FeatureDescriber : ISpecFeatureDescriber
             ["informationAssociations"] = infoAssoc,
         };
 
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-        return JsonSerializer.Deserialize<JsonElement>(bytes);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     /// <summary>

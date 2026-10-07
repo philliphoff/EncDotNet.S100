@@ -17,7 +17,7 @@ internal static class ToolErrorPayload
     /// <summary>Serialises a typed <see cref="ToolError"/> as an error result.</summary>
     public static CallToolResult AsCallToolResult(ToolError error, JsonSerializerOptions json)
     {
-        var details = JsonSerializer.SerializeToNode(error, error.GetType(), json) as JsonObject
+        var details = JsonSerializer.SerializeToNode(error, json.GetTypeInfo(error.GetType())) as JsonObject
             ?? new JsonObject();
         details.Remove("code");
         details.Remove("message");

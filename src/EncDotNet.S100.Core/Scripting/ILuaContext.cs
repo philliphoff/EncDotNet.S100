@@ -51,4 +51,10 @@ public interface ILuaContext : IDisposable
     /// Calls a global Lua function and returns all return values.
     /// </summary>
     object?[] CallMultiReturn(string functionName, params object?[] args);
+
+    /// <summary>
+    /// Describes an exception thrown by this context, including the Lua source
+    /// location when the engine records one. Defaults to the exception message.
+    /// </summary>
+    string DescribeError(Exception exception) => exception.Message;
 }
