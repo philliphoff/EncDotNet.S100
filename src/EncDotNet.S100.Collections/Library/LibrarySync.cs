@@ -64,9 +64,11 @@ public sealed class LibrarySyncedEventArgs(Guid SourceId, LibrarySyncStatus Stat
 /// source is indexed, the items its <see cref="ILibrarySyncPolicy"/> wants are
 /// downloaded when missing or outdated, and copies in its managed folder that
 /// no source lists any more (or lists as cancelled) are deleted. The source is
-/// then re-indexed once, so downloaded items get their bounds. Synced SECOM
-/// sources (<see cref="SecomSyncPolicy"/>) are the first kind; others opt in
-/// with a policy of their own.
+/// then re-indexed once, so downloaded items get their bounds (and packages
+/// their cells). A source is synced when <see cref="CollectionSource.Sync"/> is
+/// on and a policy supports its kind: <see cref="SecomSyncPolicy"/> (which
+/// prunes) and <see cref="OnlineSyncPolicy"/> (the other online kinds, which
+/// only download, #809).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -101,7 +103,7 @@ public sealed class LibrarySync : IDisposable
     /// <param name="options">Options; defaults when <see langword="null"/>.</param>
     /// <param name="logger">A logger, or <see langword="null"/>.</param>
     /// <param name="timeProvider">The clock; defaults to <see cref="TimeProvider.System"/>.</param>
-    /// <param name="policies">The sync rules per source kind; defaults to <see cref="SecomSyncPolicy"/>.</param>
+    /// <param name="policies">The sync rules per source kind; defaults to <see cref="SecomSyncPolicy"/> and <see cref="OnlineSyncPolicy"/>.</param>
     public LibrarySync(
         CollectionLibrary library,
         LibraryDownloads downloads,
@@ -110,7 +112,7 @@ public sealed class LibrarySync : IDisposable
         TimeProvider? timeProvider = null,
         IEnumerable<ILibrarySyncPolicy>? policies = null)
     {
-        _policies = policies?.ToArray() ?? [new SecomSyncPolicy()];
+        _policies = policies?.ToArray() ?? [new SecomSyncPolicy(), new OnlineSyncPolicy()];
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(downloads);
         _library = library;
@@ -126,6 +128,9 @@ public sealed class LibrarySync : IDisposable
 
     /// <summary>True when <paramref name="source"/> is kept in sync.</summary>
     public bool IsSynced(CollectionSource source) => PolicyFor(source) is not null;
+
+    /// <summary>True when <paramref name="source"/>'s kind can be kept in sync (online sources).</summary>
+    public bool CanSync(CollectionSource source) => _policies.Any(p => p.Supports(source));
 
     private ILibrarySyncPolicy? PolicyFor(CollectionSource source) => _policies.FirstOrDefault(p => p.IsSynced(source));
 
