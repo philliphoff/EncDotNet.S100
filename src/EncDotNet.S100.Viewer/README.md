@@ -199,6 +199,14 @@ design in `docs/design/dataset-collections.md`.
       property. It then lists the catalogue under **Custom**, saved in
       `catalogues.json` next to `collections.json`, where it can be removed
       again. Online S-100 exchange catalogues are not supported yet.
+    - **SECOM services** (IEC 63173-2): paste a service endpoint (for
+      example `https://s124.ccg-gcc.gc.ca/api/secom`). A URL that answers
+      SECOM `Capability` is recognised. Services are read anonymously; ones
+      that need a certificate are not supported yet. **What to include**
+      lists the service's products with object counts, and a service with
+      more than 5,000 objects is cut off with a warning. Objects have no
+      outline until downloaded. Each downloaded object's signature is
+      checked, and the result shows in its details.
   - an **S-128** Catalogue of Nautical Products
 
   Local sources are referenced **in place**. Files are never copied,
@@ -206,7 +214,7 @@ design in `docs/design/dataset-collections.md`.
 - **Browse**: the tree lists collections and their sources.
   - **Tree nodes:** each shows a small kind tag (`DIR`, `ZIP`, `WEB` for an
     online catalogue, `LIST` for a community list, `FEED` for a shared feed,
-    `S-128`) and its dataset count.
+    `SECOM` for a SECOM service, `S-128`) and its dataset count.
   - **Status lines:** a second line appears only when something needs
     saying: indexing, a download in progress, problems, a shared feed's
     reachability, or the Session's pin hint.
@@ -305,7 +313,7 @@ design in `docs/design/dataset-collections.md`.
   - **Downloads:** go to `downloads/community/<list>/<entry>/`.
   - **Updates:** a cell shows "Update available" when the list publishes a
     newer download than the one you have.
-- **Download** (NOAA, USACE, community lists and shared feeds):
+- **Download** (NOAA, USACE, community lists, shared feeds and SECOM services):
   - **One dataset:** **Download** in the details pane downloads a dataset,
     and **Load after download** also loads it.
   - **Many at once:** the bulk bar says what it acts on ("6 to download ·
@@ -315,8 +323,9 @@ design in `docs/design/dataset-collections.md`.
     **Cancel**), on the tree node and in a notification. The bar's
     **Cancel** stops the batch.
   - **Where cells go:** into one managed folder per provider,
-    `downloads/noaa-enc/` or `downloads/usace-ienc/`, or per community
-    list under `downloads/community/`. These are not
+    `downloads/noaa-enc/` or `downloads/usace-ienc/`, per community
+    list under `downloads/community/`, or per SECOM service under
+    `downloads/secom/`. These are not
     caches, so "clear caches" keeps them.
   - **After downloading:** a downloaded cell is **Local** and loads like
     any other.

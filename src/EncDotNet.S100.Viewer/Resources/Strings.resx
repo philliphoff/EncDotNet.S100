@@ -3400,6 +3400,21 @@
   <data name="Library_Format_S100Feed" xml:space="preserve">
     <value>S-100 feed</value>
   </data>
+  <data name="Library_Format_Secom" xml:space="preserve">
+    <value>SECOM service</value>
+  </data>
+  <data name="Library_SecomFacetDetailFormat" xml:space="preserve">
+    <value>{0:N0} objects · {1}</value>
+  </data>
+  <data name="Library_SecomSelectionAllFormat" xml:space="preserve">
+    <value>All {0:N0} objects · {1}</value>
+  </data>
+  <data name="Library_SecomSelectionFormat" xml:space="preserve">
+    <value>{0:N0} objects · {1}</value>
+  </data>
+  <data name="Library_SecomSelectionTruncatedFormat" xml:space="preserve">
+    <value>First {0:N0} of {1:N0} objects · {2} — narrow to an area to see the rest</value>
+  </data>
   <data name="Button_Back" xml:space="preserve">
     <value>Back</value>
   </data>

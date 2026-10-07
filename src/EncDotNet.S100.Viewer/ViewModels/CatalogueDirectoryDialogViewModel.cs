@@ -404,6 +404,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         KnownCatalogueFormat.S100Feed => Strings.Library_Format_S100Feed,
         KnownCatalogueFormat.S100ExchangeCatalogue => Strings.Library_Format_S100Catalogue,
         KnownCatalogueFormat.S100ForecastModels => Strings.Library_Format_S100Forecast,
+        KnownCatalogueFormat.Secom => Strings.Library_Format_Secom,
         _ => Strings.Library_Format_NoaaEnc,
     };
 

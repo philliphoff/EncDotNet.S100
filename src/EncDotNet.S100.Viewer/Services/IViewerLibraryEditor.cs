@@ -52,7 +52,7 @@ internal readonly record struct EditOutcome<T>(T? Value, ToolError? Error)
 /// <summary>What <see cref="IViewerLibraryEditor.AddSourceAsync"/> adds.</summary>
 /// <param name="KnownSourceId">A <c>list_known_sources</c> id.</param>
 /// <param name="Path">A local folder, exchange set (folder, ZIP or catalogue), collection manifest or S-128 catalogue.</param>
-/// <param name="Url">An online catalogue or feed URL, recognised by its format.</param>
+/// <param name="Url">An online catalogue or feed URL, recognised by its format, or a SECOM service endpoint.</param>
 /// <param name="Kind">For a path: folder, exchange_set, manifest or s128; inferred when null.</param>
 /// <param name="Choices">Choice values or labels to include (states, districts, rivers, models, areas, groups, products, charts).</param>
 /// <param name="IncludeAll">True to include everything the catalogue lists; defaults to true without choices.</param>
@@ -78,7 +78,7 @@ internal sealed record AddSourceRequest(
 [Description("What add_library_source found (preview) or added.")]
 internal sealed record AddSourceResult(
     [property: Description("True when a source was added; false for a preview.")] bool Added,
-    [property: Description("What is being added: Folder, ExchangeSet, S128Catalogue, LocalManifest, NoaaFeed, UsaceFeed, CommunityFeed, S100Feed, S100Catalogue or S100Forecast.")] string Kind,
+    [property: Description("What is being added: Folder, ExchangeSet, S128Catalogue, LocalManifest, NoaaFeed, UsaceFeed, CommunityFeed, S100Feed, S100Catalogue, S100Forecast or Secom.")] string Kind,
     [property: Description("The dialog's title for it, e.g. the known source's name.")] string Title,
     [property: Description("What the catalogue says about itself (date, size), or null.")] string? CatalogueDetail,
     [property: Description("True when the catalogue is over a year old.")] bool CatalogueStale,

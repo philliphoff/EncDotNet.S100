@@ -50,6 +50,9 @@ internal enum AddToLibraryKind
 
     /// <summary>Some models of an S-100 forecast feed, e.g. NOAA's S-111 on AWS (issue #685).</summary>
     S100Forecast,
+
+    /// <summary>Some or all products of a SECOM service, read anonymously (issue #804).</summary>
+    Secom,
 }
 
 /// <summary>A titled group of selectable facet values (one tab in the dialog).</summary>
@@ -145,7 +148,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         Func<Uri, CancellationToken, Task<S100FeedDocument>>? loadS100Feed = null,
         Func<Uri, CancellationToken, Task<RemoteS100Catalogue>>? loadS100Catalogue = null,
         Func<RemoteS100Catalogue, IReadOnlyList<string>, CancellationToken, Task<IReadOnlyDictionary<Uri, S3Object>?>>? listS100Folders = null,
-        Func<Uri, IReadOnlyList<ForecastModel>, CancellationToken, Task<IReadOnlyList<ForecastModelSummary>>>? loadForecastModels = null)
+        Func<Uri, IReadOnlyList<ForecastModel>, CancellationToken, Task<IReadOnlyList<ForecastModelSummary>>>? loadForecastModels = null,
+        Func<Uri, CancellationToken, Task<SecomServiceDescription>>? describeSecom = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         _library = library;
@@ -156,6 +160,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         _loadS100Catalogue = loadS100Catalogue;
         _listS100Folders = listS100Folders;
         _loadForecastModels = loadForecastModels;
+        _describeSecom = describeSecom;
         _time = timeProvider ?? TimeProvider.System;
 
         ConfirmCommand = new RelayCommand(Confirm, () => CanConfirm);
@@ -179,7 +184,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>True when adding a scope of an online feed (NOAA, USACE or a community list).</summary>
     public bool IsOnlineFeed => _kind is AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed
         or AddToLibraryKind.CommunityFeed or AddToLibraryKind.S100Feed or AddToLibraryKind.S100Catalogue
-        or AddToLibraryKind.S100Forecast;
+        or AddToLibraryKind.S100Forecast or AddToLibraryKind.Secom;
 
     /// <summary>True when the feed's values can be filtered by text (community lists).</summary>
     public bool IsSearchable => _kind is AddToLibraryKind.CommunityFeed or AddToLibraryKind.LocalManifest;
@@ -220,7 +225,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         ],
         AddToLibraryKind.UsaceFeed => [new(Strings.Library_UsaceRivers, Rivers)],
         AddToLibraryKind.CommunityFeed => [new(Strings.Library_CommunityCharts, Charts, () => _allCharts)],
-        AddToLibraryKind.S100Feed => [new(Strings.Library_FeedProducts, Products)],
+        AddToLibraryKind.S100Feed or AddToLibraryKind.Secom => [new(Strings.Library_FeedProducts, Products)],
         AddToLibraryKind.LocalManifest => [new(Strings.Manifest_GroupsTitle, Groups, () => _allGroups)],
         AddToLibraryKind.S100Forecast => [new(Strings.Wizard_ForecastModelsTitle, ForecastModels)],
         _ => [],
@@ -239,7 +244,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     public string SourceDescription => _kind switch
     {
         AddToLibraryKind.NoaaFeed or AddToLibraryKind.UsaceFeed or AddToLibraryKind.CommunityFeed or AddToLibraryKind.S100Feed
-            or AddToLibraryKind.S100Catalogue or AddToLibraryKind.S100Forecast
+            or AddToLibraryKind.S100Catalogue or AddToLibraryKind.S100Forecast or AddToLibraryKind.Secom
             => CatalogUri.AbsoluteUri,
         _ => _path ?? string.Empty,
     };
@@ -432,6 +437,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         AddToLibraryKind.LocalManifest => _manifest is not null,
         AddToLibraryKind.S100Catalogue => _s100Catalogue is not null,
         AddToLibraryKind.S100Forecast => _forecastModels is not null,
+        AddToLibraryKind.Secom => _secom is not null,
         _ => false,
     };
 
@@ -506,6 +512,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
                     return S100EverythingSummary;
                 case AddToLibraryKind.S100Forecast when _forecastModels is not null:
                     return ForecastEverythingSummary;
+                case AddToLibraryKind.Secom when _secom is not null:
+                    return SecomEverythingSummary;
                 default:
                     return string.Empty;
             }
@@ -627,6 +635,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
             KnownCatalogueFormat.S100Feed => AddToLibraryKind.S100Feed,
             KnownCatalogueFormat.S100ExchangeCatalogue => AddToLibraryKind.S100Catalogue,
             KnownCatalogueFormat.S100ForecastModels => AddToLibraryKind.S100Forecast,
+            KnownCatalogueFormat.Secom => AddToLibraryKind.Secom,
             _ => AddToLibraryKind.NoaaFeed,
         };
         Initialize(kind, null, targetCollectionId, known);
@@ -640,6 +649,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         ResetManifest();
         ResetS100Catalogue();
         _forecastModels = null;
+        _secom = null;
         _selectedForecastShape = null;
         ForecastModels.Clear();
         _catalogueDate = null;
@@ -694,6 +704,12 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         if (_kind == AddToLibraryKind.S100Forecast)
         {
             await LoadForecastModelsAsync(cancellationToken).ConfigureAwait(true);
+            return;
+        }
+
+        if (_kind == AddToLibraryKind.Secom)
+        {
+            await LoadSecomAsync(cancellationToken).ConfigureAwait(true);
             return;
         }
 
@@ -891,6 +907,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
             AddToLibraryKind.S100Feed => _s100Feed is not null && !_isLoading,
             AddToLibraryKind.S100Catalogue => _s100Catalogue is not null && !_isLoading,
             AddToLibraryKind.S100Forecast => _forecastModels is not null && !_isLoading,
+            AddToLibraryKind.Secom => _secom is not null && !_isLoading,
             _ => !string.IsNullOrEmpty(_path),
         };
 
@@ -937,6 +954,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
                 ? new S100FeedSource(id, FeedName, CatalogUri, new S100FeedFilter())
                 : new S100FeedSource(id, DescribeProducts(CurrentS100FeedFilter) ?? FeedName, CatalogUri, CurrentS100FeedFilter),
             AddToLibraryKind.S100Forecast => BuildForecastSource(id),
+            AddToLibraryKind.Secom => BuildSecomSource(id),
             AddToLibraryKind.S100Catalogue => new S100CatalogueFeedSource(
                 id, DescribeS100Selection(CurrentS100CatalogueFilter) ?? FeedName, CatalogUri, CurrentS100CatalogueFilter),
             _ => _includeAll
@@ -955,6 +973,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         AddToLibraryKind.LocalManifest => DescribeManifestSelection(),
         AddToLibraryKind.S100Catalogue => DescribeS100Selection(CurrentS100CatalogueFilter),
         AddToLibraryKind.S100Forecast => DescribeForecastSelection(),
+        AddToLibraryKind.Secom => DescribeSecomProducts(CurrentSecomFilter),
         _ => null,
     };
 
@@ -1050,6 +1069,12 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         if (_kind == AddToLibraryKind.S100Feed)
         {
             UpdateS100FeedSelection();
+            return;
+        }
+
+        if (_kind == AddToLibraryKind.Secom)
+        {
+            UpdateSecomSelection();
             return;
         }
 

@@ -421,6 +421,17 @@ public partial class App : Application
         });
         services.AddSingleton(sp =>
         {
+            // SECOM services (issue #804): objects get bounds once downloaded.
+            var paths = sp.GetRequiredService<ViewerDataPaths>();
+            var metadata = sp.GetRequiredService<IDatasetMetadataReader>();
+            return new EncDotNet.S100.Collections.Indexing.SecomSourceIndexer(
+                new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+                paths.CollectionFeedCacheDirectory,
+                paths.DownloadsDirectory,
+                (path, _) => metadata.TryRead(path));
+        });
+        services.AddSingleton(sp =>
+        {
             var metadata = sp.GetRequiredService<IDatasetMetadataReader>();
             return EncDotNet.S100.Collections.Indexing.CollectionIndexer.CreateDefault(
                 probe: (path, _) => metadata.TryRead(path),
@@ -432,6 +443,7 @@ public partial class App : Application
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>(),
+                    sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.SecomSourceIndexer>(),
                 ]);
         });
         services.AddSingleton(sp =>
@@ -481,6 +493,7 @@ public partial class App : Application
             var s100Feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>();
             var s100Catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
             var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
+            var secom = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.SecomSourceIndexer>();
             return new AddToLibraryDialogViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 (uri, ct) => feeds.GetCatalogAsync(uri, cancellationToken: ct),
@@ -489,7 +502,8 @@ public partial class App : Application
                 loadS100Feed: (uri, ct) => s100Feeds.GetFeedAsync(uri, cancellationToken: ct),
                 loadS100Catalogue: (uri, ct) => s100Catalogues.GetCatalogueAsync(uri, cancellationToken: ct),
                 listS100Folders: (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct),
-                loadForecastModels: (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct));
+                loadForecastModels: (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct),
+                describeSecom: (uri, ct) => secom.DescribeAsync(uri, cancellationToken: ct));
         });
         services.AddSingleton<Func<AddToLibraryDialogViewModel>>(sp => sp.GetRequiredService<AddToLibraryDialogViewModel>);
         services.AddTransient(sp =>
