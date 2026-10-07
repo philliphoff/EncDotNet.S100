@@ -69,13 +69,7 @@ public sealed class MapsuiMapNavigator
         var paddingX = extent.Width * 0.1;
         var paddingY = extent.Height * 0.1;
         var paddedExtent = extent.Grow(paddingX, paddingY);
-        if (durationMilliseconds < 0)
-        {
-            _navigator.ZoomToBox(paddedExtent);
-            return;
-        }
-
-        _navigator.ZoomToBox(paddedExtent, duration: durationMilliseconds);
+        ZoomToBoxLimited(paddedExtent, durationMilliseconds < 0 ? -1 : durationMilliseconds);
     }
 
     /// <summary>
@@ -88,7 +82,7 @@ public sealed class MapsuiMapNavigator
     public void SetViewportToExtent(MRect extent)
     {
         ArgumentNullException.ThrowIfNull(extent);
-        _navigator.ZoomToBox(extent, duration: 0);
+        ZoomToBoxLimited(extent, duration: 0);
     }
 
     /// <summary>
@@ -102,7 +96,7 @@ public sealed class MapsuiMapNavigator
     public void SetViewportToCenterAndResolution(MPoint center, double resolution)
     {
         ArgumentNullException.ThrowIfNull(center);
-        _navigator.CenterOnAndZoomTo(center, resolution, duration: 0);
+        CenterOnAndZoomToLimited(center, resolution, duration: 0);
     }
 
     /// <summary>
@@ -176,6 +170,43 @@ public sealed class MapsuiMapNavigator
 
         var resolution = viewport.Resolution;
         return double.IsFinite(resolution) && resolution > 0 ? resolution : null;
+    }
+
+    // Fits the box like Navigator.ZoomToBox (MBoxFit.Fit), through
+    // CenterOnAndZoomToLimited.
+    private void ZoomToBoxLimited(MRect box, long duration)
+    {
+        var viewport = _navigator.Viewport;
+        if (!_navigator.HasExecutedPostponedCalls
+            || viewport.Width <= 0 || viewport.Height <= 0
+            || box.Width <= 0 || box.Height <= 0)
+        {
+            _navigator.ZoomToBox(box, MBoxFit.Fit, duration);
+            return;
+        }
+
+        var resolution = Math.Max(box.Width / viewport.Width, box.Height / viewport.Height);
+        CenterOnAndZoomToLimited(box.Centroid, resolution, duration);
+    }
+
+    // Applies the navigator's limits to the goal before handing it over.
+    // When Mapsui has to clamp a requested resolution itself, it also pulls
+    // the centre back toward the previous viewport's centre in proportion
+    // (meant for zooming about the pointer), so a zoom-limited request would
+    // not land on the requested centre (issue #749). An already-limited goal
+    // passes through unchanged.
+    private void CenterOnAndZoomToLimited(MPoint center, double resolution, long duration)
+    {
+        if (!_navigator.HasExecutedPostponedCalls)
+        {
+            _navigator.CenterOnAndZoomTo(center, resolution, duration);
+            return;
+        }
+
+        var goal = _navigator.Viewport with { CenterX = center.X, CenterY = center.Y, Resolution = resolution };
+        var limited = _navigator.Limiter.Limit(goal, _navigator.PanBounds, _navigator.ZoomBounds);
+        _navigator.CenterOnAndZoomTo(
+            new MPoint(limited.CenterX, limited.CenterY), limited.Resolution, duration);
     }
 
     private static bool IsValid(GeoPosition position) =>
