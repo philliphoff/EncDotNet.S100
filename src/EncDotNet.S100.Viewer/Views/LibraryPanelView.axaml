@@ -155,8 +155,10 @@
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Padding" Value="6,4" />
         </Style>
-        <Style Selector="ListBox#ItemList ListBoxItem">
+        <!-- Rows are named after their dataset, not their view model's type (#784). -->
+        <Style Selector="ListBox#ItemList ListBoxItem" x:DataType="vm:LibraryItemViewModel">
             <Setter Property="Padding" Value="12,9" />
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
         </Style>
 
         <!-- Tree rows: taller, with room for the optional status line; the selection
@@ -210,8 +212,29 @@
             <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
-        <Style Selector="Border.libraryTag.clickable">
+        <!-- A clickable tag's button: drawn by the tag underneath it, so it has no
+             look of its own, only the hit area, focus and automation peer (#784). -->
+        <Style Selector="Button.libraryTagAction">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="Transparent" CornerRadius="11" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <!-- A detail value's copy button: small, beside the value. -->
+        <Style Selector="Button.libraryCopyValue">
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
     </UserControl.Styles>
 
@@ -226,17 +249,24 @@
         <SolidColorBrush x:Key="LibraryTagErrorBackground" Color="{DynamicResource ErrorColor}" Opacity="0.08" />
         <SolidColorBrush x:Key="LibraryTagErrorBorder" Color="{DynamicResource ErrorColor}" Opacity="0.35" />
 
-        <!-- A dataset's secondary-state tags. -->
+        <!-- A dataset's secondary-state tags. A clickable one (e.g. "Failed · retry")
+             has a button over it, so the keyboard and automation clients reach its
+             command as well as the pointer (#784). -->
         <DataTemplate x:Key="LibraryTagTemplate" x:DataType="vm:LibraryItemTag">
-            <Border Classes="libraryTag"
-                    Classes.update="{Binding IsUpdate}"
-                    Classes.loaded="{Binding IsLoaded}"
-                    Classes.queued="{Binding IsQueued}"
-                    Classes.failed="{Binding IsFailed}"
-                    Classes.clickable="{Binding IsClickable}"
-                    Tapped="OnTagTapped">
-                <TextBlock Text="{Binding Text}" />
-            </Border>
+            <Panel>
+                <Border Classes="libraryTag"
+                        Classes.update="{Binding IsUpdate}"
+                        Classes.loaded="{Binding IsLoaded}"
+                        Classes.queued="{Binding IsQueued}"
+                        Classes.failed="{Binding IsFailed}">
+                    <TextBlock Text="{Binding Text}" />
+                </Border>
+                <Button Classes="libraryTagAction"
+                        IsVisible="{Binding IsClickable}"
+                        Command="{Binding Command}"
+                        AutomationProperties.AutomationId="Library.Row.Tag"
+                        AutomationProperties.Name="{Binding Text}" />
+            </Panel>
         </DataTemplate>
         <!-- The "Add to Library" menu, shared by the toolbar and the empty state,
              grouped by where the data is. -->
@@ -417,6 +447,7 @@
                 <TreeView.Styles>
                     <Style Selector="TreeViewItem" x:DataType="vm:LibraryNodeViewModel">
                         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
                     </Style>
                 </TreeView.Styles>
                 <TreeView.ItemTemplate>
@@ -853,6 +884,7 @@
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto" SharedSizeGroup="LibraryDetailKey" />
                                                             <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
                                                         <TextBlock Grid.Column="0" Text="{Binding Label}" Opacity="0.6"
                                                                    FontSize="{StaticResource LibrarySecondaryFontSize}" />
@@ -862,6 +894,17 @@
                                                                              Classes.copyable="{Binding IsCopyable}"
                                                                              ToolTip.Tip="{Binding CopyValue}"
                                                                              Tapped="OnDetailValueTapped" />
+                                                        <!-- Clicking the value copies it too; this is the keyboard's and
+                                                             automation clients' way to the same copy (#784). -->
+                                                        <Button Grid.Column="2" Classes="Icon libraryCopyValue"
+                                                                IsVisible="{Binding IsCopyable}"
+                                                                AutomationProperties.AutomationId="Library.Details.Field.Copy"
+                                                                AutomationProperties.Name="{x:Static loc:Strings.Label_CopyValue}"
+                                                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyDetailValue}"
+                                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyDetailValue}"
+                                                                Click="OnCopyDetailValue">
+                                                            <ic:FluentIcon Icon="Copy" FontSize="12" />
+                                                        </Button>
                                                     </Grid>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>

@@ -110,6 +110,12 @@
                      SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
                      Background="Transparent"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.Styles>
+                    <!-- Rows are named after their catalogue or region, not their view model (#784). -->
+                    <Style Selector="ListBoxItem" x:DataType="vm:CatalogueEntryViewModel">
+                        <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}" />
+                    </Style>
+                </ListBox.Styles>
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:CatalogueEntryViewModel">
                         <Panel>

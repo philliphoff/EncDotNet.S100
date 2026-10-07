@@ -130,15 +130,19 @@
                         CornerRadius="6" Padding="7,2" VerticalAlignment="Center">
                     <TextBlock Text="{Binding ModeLabel}" FontSize="10.5" FontWeight="Bold" LetterSpacing="0.6" VerticalAlignment="Center" />
                 </Border>
-                <!-- F6: clicking the time focuses the bar for the keyboard; there is no picker. -->
-                <TextBlock x:Name="TimeText"
-                           AutomationProperties.AutomationId="TimeHud.Time"
-                           Text="{Binding CurrentTimeLabel}"
-                           FontFamily="Menlo, Consolas, monospace"
-                           FontSize="13" FontWeight="SemiBold"
-                           Cursor="Hand"
-                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimeHudTime}"
-                           VerticalAlignment="Center" />
+                <!-- F6: clicking the time focuses the bar for the keyboard; there is no picker.
+                     A button (styled as text) so keyboard users and automation clients reach it
+                     too (#784); its name is the time itself. -->
+                <Button x:Name="TimeText"
+                        Classes="HudText"
+                        AutomationProperties.AutomationId="TimeHud.Time"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimeHudTime}"
+                        Content="{Binding CurrentTimeLabel}"
+                        FontFamily="Menlo, Consolas, monospace"
+                        FontSize="13" FontWeight="SemiBold"
+                        Cursor="Hand"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimeHudTime}"
+                        VerticalAlignment="Center" />
                 <TextBlock x:Name="Offset"
                            Text="{Binding OffsetText}"
                            FontSize="12"

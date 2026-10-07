@@ -1,7 +1,11 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
+using EncDotNet.S100.Viewer.Library;
+using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
@@ -12,8 +16,9 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// The real Library panel over a real <see cref="CollectionLibrary"/>, driven by
 /// pointer and keyboard input. <see cref="LibraryPanelViewModelTests"/> covers
 /// the panel's logic; these cover the view's wiring to it: the empty-state
-/// actions, tree and list selection, the filter box, the details pane, and the
-/// tree's context menu with in-place rename.
+/// actions, tree and list selection, the filter box, the details pane, the
+/// tree's context menu with in-place rename, and the keyboard and automation
+/// paths to what is otherwise pointer-only (#784).
 /// </summary>
 public sealed class LibraryPanelViewTests : IDisposable
 {
@@ -111,6 +116,93 @@ public sealed class LibraryPanelViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Enter_on_a_selected_row_loads_it_as_a_double_click_does()
+    {
+        await AddS57CollectionAsync();
+        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action());
+        using var host = Show(panel);
+
+        // The keyboard path: focus the list, arrow to the second row, Enter.
+        host.Click(Row(host, panel.Items[0]));
+        host.Press(PhysicalKey.ArrowDown);
+        Assert.Same(panel.Items[1], panel.SelectedItem);
+        host.Press(PhysicalKey.Enter);
+        await _library.WhenIdle();
+
+        Assert.Equal([(false, 1)], _loader.Calls);
+    }
+
+    [AvaloniaFact]
+    public async Task Automation_selects_a_row_through_its_selection_item_pattern()
+    {
+        // The pointer-press selection fallback is pointer-only; automation
+        // clients and screen readers select through the ListBoxItem's peer.
+        await AddS57CollectionAsync();
+        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action());
+        using var host = Show(panel);
+        var automation = new ViewerUiAutomation(() => [host.Window]);
+        var row = Row(host, panel.Items[1]);
+
+        var node = await RowNodeAsync(automation, panel.Items[1]);
+        await automation.ActAsync(new UiTarget(null, node.Ref), UiAction.Select, null);
+        host.Settle();
+
+        Assert.True(row.IsSelected);
+        Assert.Same(panel.Items[1], panel.SelectedItem);
+    }
+
+    [AvaloniaFact]
+    public async Task A_failed_download_tag_retries_by_click_and_by_automation()
+    {
+        await AddS57CollectionAsync();
+        _downloader.Status = new LibraryDownloadItemStatus(LibraryDownloadItemState.Failed, 0, null, "404");
+        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action());
+        using var host = Show(panel);
+        var row = Row(host, panel.Items[0]);
+
+        host.Click(host.Find<Button>("Library.Row.Tag", row));
+        await _library.WhenIdle();
+        Assert.Equal(1, _downloader.Downloads);
+
+        var automation = new ViewerUiAutomation(() => [host.Window]);
+        var rowNode = await RowNodeAsync(automation, panel.Items[0]);
+        var tag = Assert.Single(rowNode.Children!, c => c.Id == "Library.Row.Tag");
+        Assert.Equal(Strings.Library_Tag_FailedRetry, tag.Name);
+        Assert.Contains("invoke", tag.Patterns);
+        await automation.ActAsync(new UiTarget("Library.Row.Tag", null, Within: rowNode.Ref), UiAction.Invoke, null);
+        await _library.WhenIdle();
+
+        Assert.Equal(2, _downloader.Downloads);
+    }
+
+    [AvaloniaFact]
+    public async Task Tags_without_an_action_are_not_buttons()
+    {
+        await AddS57CollectionAsync();
+        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action());
+        using var host = Show(panel);
+
+        Assert.Empty(host.FindAll<Button>("Library.Row.Tag"));
+    }
+
+    [AvaloniaFact]
+    public async Task The_copy_button_copies_a_detail_value_in_full()
+    {
+        await AddS57CollectionAsync();
+        using var panel = new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action());
+        using var host = Show(panel);
+        host.Click(Row(host, panel.Items[0]));
+        var field = panel.Items[0].Details.SelectMany(g => g.Fields).Single(f => f.IsCopyable);
+
+        var automation = new ViewerUiAutomation(() => [host.Window]);
+        var copy = await automation.ActAsync(new UiTarget("Library.Details.Field.Copy", null), UiAction.Invoke, null);
+        host.Settle();
+
+        Assert.Equal(Strings.Label_CopyValue, copy.Name);
+        Assert.Equal(field.CopyValue, await host.Window.Clipboard!.TryGetTextAsync());
+    }
+
+    [AvaloniaFact]
     public async Task Rename_from_the_context_menu_edits_in_place_and_enter_commits()
     {
         await AddS57CollectionAsync("Charts");
@@ -169,6 +261,17 @@ public sealed class LibraryPanelViewTests : IDisposable
     /// <summary>A tree node's name label: what a user clicks to pick the node.</summary>
     private static TextBlock NodeLabel(ViewHost host, LibraryNodeViewModel node)
         => host.Find<TextBlock>(t => ReferenceEquals(t.DataContext, node) && t.Text == node.Name);
+
+    /// <summary>
+    /// A list row as <c>ui_tree</c> lists it, found by its accessible name (the
+    /// dataset's name), as an agent would find it.
+    /// </summary>
+    private static async Task<UiElementSnapshot> RowNodeAsync(ViewerUiAutomation automation, LibraryItemViewModel item)
+    {
+        var tree = await automation.GetTreeAsync(
+            new UiTreeQuery(new UiTarget("Library.Items", null), Depth: 2, InteractiveOnly: true, MaxNodes: 200));
+        return tree.Roots[0].Element.Children!.Single(c => c.Name == item.Name);
+    }
 
     private static ListBoxItem Row(ViewHost host, LibraryItemViewModel item)
         => host.Find<ListBoxItem>(row => ReferenceEquals(row.DataContext, item));

@@ -51,9 +51,9 @@ public sealed class ViewerUiAutomationTests
         var tab = await automation.ActAsync(new UiTarget("Datasets.DatasetsTab", null), UiAction.Select, null);
         Assert.True(tab.Selected);
 
-        // Rows have no id; the tree gives each a ref and its visible text.
+        // Rows have no id; the tree gives each a ref and its dataset's name.
         var tree = await automation.GetTreeAsync(Interactive);
-        var row = Assert.Single(Flatten(tree.Roots[0].Element), e => e.Role == "listItem" && e.Text?.Contains("US5SEAFL") == true);
+        var row = Assert.Single(Flatten(tree.Roots[0].Element), e => e.Role == "listItem" && e.Name == cell.DisplayName);
         await automation.ActAsync(new UiTarget(null, row.Ref), UiAction.Select, null);
         Assert.Same(cell, datasets.SelectedDataset);
 
@@ -91,7 +91,7 @@ public sealed class ViewerUiAutomationTests
         var search = await automation.ActAsync(new UiTarget("Catalogues.Search", null), UiAction.SetValue, "NOAA ENC");
         Assert.Equal("NOAA ENC", search.Value);
         var list = (await automation.GetTreeAsync(Interactive with { Root = new UiTarget("Catalogues.List", null) })).Roots[0].Element;
-        var row = Flatten(list).First(e => e.Role == "listItem" && e.Text?.Contains("all U.S. waters") == true);
+        var row = Flatten(list).First(e => e.Role == "listItem" && e.Name?.Contains("all U.S. waters") == true);
         await automation.ActAsync(new UiTarget(null, row.Ref), UiAction.Select, null);
         await automation.ActAsync(new UiTarget("Wizard.Next", null), UiAction.Invoke, null);
         Assert.Equal(2, wizard.CurrentStep);
@@ -122,7 +122,7 @@ public sealed class ViewerUiAutomationTests
         var collection = panel.Nodes.Single();
 
         var tree = await automation.GetTreeAsync(Interactive with { Root = new UiTarget("Library.Tree", null) });
-        var node = Flatten(tree.Roots[0].Element).First(e => e.Role == "treeItem" && e.Text?.Contains("Charts") == true);
+        var node = Flatten(tree.Roots[0].Element).First(e => e.Role == "treeItem" && e.Name == "Charts");
 
         var collapsed = await automation.ActAsync(new UiTarget(null, node.Ref), UiAction.Collapse, null);
         Assert.False(collapsed.Expanded);

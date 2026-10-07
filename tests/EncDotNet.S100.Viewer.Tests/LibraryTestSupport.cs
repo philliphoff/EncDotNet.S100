@@ -104,6 +104,11 @@ internal sealed class FakeLibraryDownloader : ILibraryDownloader
 
     public bool IsOutdated(CollectionItem item) => Outdated;
 
+    /// <summary>Every item's download status, e.g. a failed download (shown as a "Failed · retry" tag).</summary>
+    public LibraryDownloadItemStatus? Status { get; set; }
+
+    public LibraryDownloadItemStatus? StatusOf(CollectionItem item) => Status;
+
     public bool CanDownload(CollectionItem item) => CanDownloadAll || item.Location is RemoteItemLocation;
 
     public Task<LibraryDownloadResult> DownloadAsync(IReadOnlyList<CollectionItem> items, CancellationToken cancellationToken = default)
