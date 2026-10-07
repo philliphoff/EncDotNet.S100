@@ -135,6 +135,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         RefreshAllCommand = new RelayCommand(() => _library.Refresh());
         RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
         ToggleShowOnMapCommand = new RelayCommand(ToggleShowOnMap, () => CanShowOnMap);
+        ToggleSyncCommand = new RelayCommand(ToggleSync, () => CanSyncSelected);
         CommitRenameCommand = new RelayCommand(CommitRename);
         CancelRenameCommand = new RelayCommand(CancelRename);
         RemoveCommand = new RelayCommand(Remove, () => _selectedNode?.CanRemove == true);
@@ -206,6 +207,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((RelayCommand)ToggleShowOnMapCommand).NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(CanShowOnMap));
                 OnPropertyChanged(nameof(SelectedShowsOnMap));
+                ((RelayCommand)ToggleSyncCommand).NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(CanSyncSelected));
+                OnPropertyChanged(nameof(SelectedSyncs));
                 ((AsyncRelayCommand)ChooseGroupsCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)AddCurrentsForAreaCommand).NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(CanAddCurrentsForArea));
@@ -601,6 +605,29 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         foreach (var source in sources)
             _library.UpdateSource(node.Collection.Id, source.Definition with { ShowOnMap = show });
         OnPropertyChanged(nameof(SelectedShowsOnMap));
+    }
+
+    /// <summary>Turns "Keep downloaded" (sync) on or off for the selected online source, or a collection's online sources (#809).</summary>
+    public ICommand ToggleSyncCommand { get; }
+
+    /// <summary>True when the selected node has online sources that can be kept downloaded.</summary>
+    public bool CanSyncSelected => SyncableSelectedSources().Length > 0;
+
+    /// <summary>True when every online source of the selected node is kept downloaded (the menu item's tick).</summary>
+    public bool SelectedSyncs => SyncableSelectedSources() is { Length: > 0 } sources && sources.All(s => s.Definition.Sync);
+
+    private LibrarySource[] SyncableSelectedSources() =>
+        _sync is null ? [] : [.. SelectedSources().Where(s => _sync.CanSync(s.Definition))];
+
+    private void ToggleSync()
+    {
+        var sources = SyncableSelectedSources();
+        if (sources.Length == 0 || _selectedNode is not { } node)
+            return;
+        var sync = !sources.All(s => s.Definition.Sync);
+        foreach (var source in sources)
+            _library.UpdateSource(node.Collection.Id, source.Definition with { Sync = sync });
+        OnPropertyChanged(nameof(SelectedSyncs));
     }
 
     /// <summary>A source's name as its tree node shows it, for its Datasets row (#809).</summary>
@@ -1119,13 +1146,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             LibrarySyncStatus? onlySync = null;
             foreach (var child in collection.Children)
             {
-                if (_sync is not null && child.Source is { } synced && _sync.IsSynced(synced.Definition))
-                {
-                    child.SyncStatus = _sync?.StatusOf(synced.Id);
-                    if (collection.Children.Count == 1)
-                        onlySync = child.SyncStatus;
-                    continue;
-                }
+                // A synced source's last sync (#807, #809); its kind's own counts follow.
+                child.SyncStatus = _sync is not null && child.Source is { } synced && _sync.IsSynced(synced.Definition)
+                    ? _sync.StatusOf(synced.Id)
+                    : null;
+                if (collection.Children.Count == 1)
+                    onlySync = child.SyncStatus;
 
                 if (child.Source is { Definition: S100ForecastFeedSource, Index: { } runs })
                 {

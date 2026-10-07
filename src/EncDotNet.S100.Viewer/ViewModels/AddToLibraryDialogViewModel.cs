@@ -655,6 +655,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         _secomArea = null;
         _secomSync = false;
         _secomSyncEdited = false;
+        _keepDownloaded = false;
         _selectedForecastShape = null;
         ForecastModels.Clear();
         _catalogueDate = null;
@@ -939,6 +940,18 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         Closed?.Invoke(this, true);
     }
 
+    private bool _keepDownloaded;
+
+    /// <summary>True when the source being added is online and not SECOM (which has its own sync option), so it can be kept downloaded (#809).</summary>
+    public bool CanKeepDownloaded => IsOnlineFeed && !IsSecom;
+
+    /// <summary>True to keep the new source's items downloaded and current on each refresh (#809).</summary>
+    public bool KeepDownloaded
+    {
+        get => _keepDownloaded;
+        set => SetProperty(ref _keepDownloaded, value);
+    }
+
     /// <summary>
     /// Whether the new source is shown on the map (#809): <see langword="null"/>
     /// for the kind's default (on for a synced SECOM service, otherwise off).
@@ -949,6 +962,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     internal CollectionSource BuildSource()
     {
         var source = BuildSourceCore();
+        if (CanKeepDownloaded && _keepDownloaded)
+            source = source with { Sync = true };
         return ShowOnMap is { } show ? source with { ShowOnMap = show } : source;
     }
 

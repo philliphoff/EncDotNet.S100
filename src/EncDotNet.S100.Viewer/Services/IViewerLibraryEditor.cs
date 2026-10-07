@@ -60,7 +60,7 @@ internal readonly record struct EditOutcome<T>(T? Value, ToolError? Error)
 /// <param name="Shape">For a forecast feed: tiles or regional.</param>
 /// <param name="Resolution">For an S-100 catalogue with several resolutions: its value or label.</param>
 /// <param name="Preview">True to only load the catalogue and report the choices.</param>
-/// <param name="Sync">For a SECOM service: keep a local copy of every object (#807); the dialog's default when null.</param>
+/// <param name="Sync">For an online source: keep its items downloaded and current (#807, #809); the dialog's default when null (on for a small SECOM service, otherwise off).</param>
 /// <param name="InMapView">For a SECOM service: read only the objects in the current map view.</param>
 /// <param name="ShowOnMap">Keep the source's local datasets on the map, loading as you pan (#809); the kind's default when null.</param>
 internal sealed record AddSourceRequest(
@@ -95,7 +95,7 @@ internal sealed record AddSourceResult(
     [property: Description("Existing collections the source can be added to (pass an id as 'collectionId').")] IReadOnlyList<AddChoiceOption> Collections,
     [property: Description("The collection the source was added to, or null for a preview.")] Guid? CollectionId,
     [property: Description("The new source's id, or null for a preview.")] Guid? SourceId,
-    [property: Description("For a SECOM service: whether every object is kept downloaded (synced on each refresh); null for other sources.")] bool? Sync = null,
+    [property: Description("For an online source: whether its items are kept downloaded and current on each refresh; null for local sources.")] bool? Sync = null,
     [property: Description("For a SECOM service: why syncing is or is not advised (its size), or null.")] string? SyncNote = null);
 
 /// <summary>A group of add choices.</summary>
@@ -361,9 +361,12 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
 
         if (request.Sync is { } sync)
         {
-            if (!dialog.IsSecom)
-                return EditOutcome<AddSourceResult>.Fail(new InvalidArgument("sync", "only a SECOM service can be kept in sync"));
-            dialog.SecomSync = sync;
+            if (dialog.IsSecom)
+                dialog.SecomSync = sync;
+            else if (dialog.CanKeepDownloaded)
+                dialog.KeepDownloaded = sync;
+            else
+                return EditOutcome<AddSourceResult>.Fail(new InvalidArgument("sync", "only an online source can be kept downloaded"));
         }
 
         dialog.ShowOnMap = request.ShowOnMap;
@@ -417,7 +420,7 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
         [.. dialog.ExistingCollections.Select(c => new AddChoiceOption(c.Id.ToString(), c.Definition.Name, null, !dialog.CreateNew && dialog.SelectedCollection?.Id == c.Id))],
         collectionId,
         sourceId,
-        dialog.IsSecom ? dialog.SecomSync : null,
+        dialog.IsSecom ? dialog.SecomSync : dialog.CanKeepDownloaded ? dialog.KeepDownloaded : null,
         dialog.IsSecom ? dialog.SecomSyncHint : null);
 
     private static bool Matches(string? value, string label, string wanted)

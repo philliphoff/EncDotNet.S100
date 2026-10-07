@@ -190,7 +190,7 @@ public sealed class LibraryNodeViewModelTests
     [Fact]
     public void A_synced_secom_source_reports_its_last_sync()
     {
-        var source = new SecomSource(Guid.NewGuid(), null, new Uri("https://secom.test/api/secom/"), SecomFilter.All, Sync: true);
+        var source = new SecomSource(Guid.NewGuid(), null, new Uri("https://secom.test/api/secom/"), SecomFilter.All) { Sync = true };
         var node = Node(source, Index(3));
         Assert.Equal("SECOM", node.KindTag);
         Assert.False(node.HasStatusLine);  // before the first sync
@@ -206,5 +206,21 @@ public sealed class LibraryNodeViewModelTests
         node.SyncStatus = node.SyncStatus with { NeededBytes = 200L * 1024 * 1024 };
         Assert.Equal(LibraryNodeStatusKind.Warning, node.StatusKind);
         Assert.StartsWith("Not synced: needs ", node.StatusLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_synced_catalogue_keeps_its_own_line_unless_the_sync_needs_attention()
+    {
+        var at = DateTimeOffset.Now;
+        var noaa = Node(new NoaaEncFeedSource(Guid.NewGuid(), null, NoaaEncFeedSource.DefaultCatalogUri, NoaaEncFilter.All) { Sync = true }, Index(2));
+        noaa.SyncStatus = new EncDotNet.S100.Collections.Library.LibrarySyncStatus(at, 2, 2, 2, 0, 0);
+        Assert.StartsWith("Synced 2 of 2", noaa.StatusLine, StringComparison.Ordinal);
+
+        var catalogue = Node(new S100CatalogueFeedSource(Guid.NewGuid(), null, new Uri("https://h.test/CATALOG.XML"), new S100CatalogueFilter()) { Sync = true }, Index(2));
+        catalogue.SyncStatus = new EncDotNet.S100.Collections.Library.LibrarySyncStatus(at, 2, 2, 0, 0, 0);
+        Assert.DoesNotContain("Synced", catalogue.StatusLine ?? string.Empty, StringComparison.Ordinal);
+
+        catalogue.SyncStatus = catalogue.SyncStatus with { NeededBytes = 500L * 1024 * 1024 };
+        Assert.StartsWith("Not synced: needs ", catalogue.StatusLine, StringComparison.Ordinal);
     }
 }

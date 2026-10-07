@@ -176,8 +176,15 @@
                           AutomationProperties.AutomationId="CatalogueScope.SecomInMapView" />
             </StackPanel>
 
-            <!-- A forecast feed: how runs download, for every model. -->
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="10" IsVisible="{Binding HasForecastShapes}">
+            <!-- Keep it downloaded (#809), and for a forecast feed how runs download. -->
+            <StackPanel Grid.Row="1" Spacing="6" IsVisible="{Binding !IsSecom}">
+            <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding CanKeepDownloaded}">
+                <CheckBox IsChecked="{Binding KeepDownloaded}" Content="{x:Static loc:Strings.Library_KeepDownloadedTitle}"
+                          AutomationProperties.AutomationId="CatalogueScope.KeepDownloaded" />
+                <TextBlock Text="{x:Static loc:Strings.Library_KeepDownloadedHint}" Classes="muted" FontSize="12"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding HasForecastShapes}">
                 <TextBlock Text="{x:Static loc:Strings.Wizard_ForecastShapeTitle}" FontSize="13" FontWeight="SemiBold"
                            VerticalAlignment="Center" />
                 <Border Background="{DynamicResource MutedBackgroundColor}" CornerRadius="8" Padding="3">
@@ -202,6 +209,7 @@
                 </Border>
                 <TextBlock Text="{Binding ForecastShapeHint}" Classes="muted" FontSize="12" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
+            </StackPanel>
             </StackPanel>
 
             <!-- A remote catalogue's resolution: applies to every area. -->

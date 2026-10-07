@@ -28,7 +28,7 @@ internal static class LibraryEditMcpAdapters
             [Description("For a forecast feed: 'tiles' (default) or 'regional'.")] string? shape = null,
             [Description("For an S-100 catalogue with several resolutions: one from the preview.")] string? resolution = null,
             [Description("True to load the catalogue and report its choices without adding anything.")] bool? preview = null,
-            [Description("For a SECOM service: true to keep every object downloaded and pruned on each refresh, false not to (default: on when small).")] bool? sync = null,
+            [Description("For an online source: true to keep its items downloaded and current on each refresh (a SECOM service also prunes objects it no longer lists), false not to (default: on for a small SECOM service, otherwise off).")] bool? sync = null,
             [Description("For a SECOM service: true to read only the objects in the current map view.")] bool? inMapView = null,
             [Description("True to keep the source's local datasets on the map (loading as you pan, one Datasets row), false not to (default: on for a synced SECOM service).")] bool? showOnMap = null,
             CancellationToken ct = default) =>

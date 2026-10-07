@@ -3451,6 +3451,15 @@
   <data name="Library_SecomMapArea" xml:space="preserve">
     <value>map area</value>
   </data>
+  <data name="Menu_LibraryKeepDownloaded" xml:space="preserve">
+    <value>Keep downloaded</value>
+  </data>
+  <data name="Library_KeepDownloadedTitle" xml:space="preserve">
+    <value>Keep everything downloaded and current, on each refresh</value>
+  </data>
+  <data name="Library_KeepDownloadedHint" xml:space="preserve">
+    <value>New editions and runs download by themselves (up to 100 MB at a time)</value>
+  </data>
   <data name="Menu_LibraryShowOnMap" xml:space="preserve">
     <value>Show on map</value>
   </data>
