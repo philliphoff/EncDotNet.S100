@@ -27,7 +27,7 @@ description: |
   `src/EncDotNet.S100.Specifications/content/S421/**`
 
 ## Spec anchors
-- Canonical: **IEC 63173-2** / **S-421** Route Plan based on S-100
+- Canonical: **IEC 63173-1** / **S-421** Route Plan based on S-100
 - S-100 Part 10b: GML encoding
 - S-100 Part 9: Portrayal (XSLT path)
 - S-421 Annex A: Feature Catalogue (Route, RouteInfo, RouteWaypoints,

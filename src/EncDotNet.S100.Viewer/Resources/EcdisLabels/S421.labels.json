@@ -1,7 +1,7 @@
 {
   "$schema": "./labels.schema.json",
   "specCode": "S-421",
-  "_comment": "Curated viewer labels for S-421 viewing groups. Upstream PC names are the IEC 63173-2 reference numbers (52000-52270); descriptions identify the role within a monitored or planned route.",
+  "_comment": "Curated viewer labels for S-421 viewing groups. Upstream PC names are the IEC 63173-1 reference numbers (52000-52270); descriptions identify the role within a monitored or planned route.",
   "groups": {
     "1": { "label": "Monitored route" },
     "2": { "label": "Monitored route — leglines and waypoints" },

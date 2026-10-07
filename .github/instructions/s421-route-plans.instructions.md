@@ -29,7 +29,7 @@ When modifying S-421 code or assets:
 - Rendered Mapsui features must be tagged with
   `MapsuiDisplayListRenderer.FeatureRefKey` so the viewer's identify
   flow works.
-- Cite the S-421 (or IEC 63173-2) section number in XML doc comments
+- Cite the S-421 (or IEC 63173-1) section number in XML doc comments
   when adding spec-derived constants or element names.
 - Any new public API requires a matching xunit test using the IEC
   sample fixtures under `tests/datasets/S421/`.
