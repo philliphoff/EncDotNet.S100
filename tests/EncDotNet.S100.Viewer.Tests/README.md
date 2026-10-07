@@ -122,6 +122,11 @@ input (toggle switch, combo box, number box) is named after its row's label.
 Mark a control that only repeats its parent's action (a tree item's expand
 chevron) `AutomationProperties.AccessibilityView="Raw"` instead.
 
+A list row, tree item or expander whose content is a view model is named after
+the view model's type, and a tab whose content is a panel after the panel's.
+Set `AutomationProperties.Name` on the item container style from the row's
+display name, and on a tab to a short `Label_Tab_*` string.
+
 ## The accessibility guard
 
 `UiAutomation/AccessibilityGuardTests` checks every view's XAML:
@@ -143,3 +148,12 @@ chevron) `AutomationProperties.AccessibilityView="Raw"` instead.
 
 Every view passes all five (#784), so there is no allow-list: new UI must
 pass as written.
+
+The guard reads XAML, so it cannot see a row's name, which comes from its data
+at run time. `UiAutomation/LiveAccessibleNameTests` covers that: it shows the
+Library, Datasets (both tabs), Layer stack, Routes and Timeline panels with
+populated rows, walks them through `ViewerUiAutomation` as `ui_tree` does, and
+fails on any element whose name is a type name (dotted, ending in `ViewModel`,
+or `FluentIcons.Avalonia.FluentIcon`) and on any row, tree item or button with
+no name at all. Scroll bar and slider parts (the theme's line and track
+buttons) are skipped. Add a case when a view gains a list or tree.

@@ -566,6 +566,12 @@
                              Padding="0"
                              MaxHeight="200"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.Styles>
+                            <!-- Rows are named after their feature, not PickHit (#784). -->
+                            <Style Selector="ListBoxItem" x:DataType="vm:PickHit">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding PrimaryLabel}" />
+                            </Style>
+                        </ListBox.Styles>
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:PickHit">
                                 <Grid ColumnDefinitions="Auto,*,Auto"

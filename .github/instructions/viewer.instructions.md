@@ -59,6 +59,13 @@ conventions.
   `FluentIcons.Avalonia.FluentIcon`), so set `AutomationProperties.Name`.
   Inside a data template, bind it to the row's own text (e.g.
   `{Binding Label}`).
+- **Name list rows, tree items and tabs.** A `ListBoxItem`, `TreeViewItem`
+  or `Expander` whose content is a view model, or a `TabItem` whose content
+  is a panel, is named after that object's type. Set
+  `AutomationProperties.Name` on the item container style from the row's
+  display name (`<Style Selector="ListBoxItem" x:DataType="vm:Row">` with a
+  `{Binding Name}` setter), and on a `TabItem` to a sentence-case
+  `Label_Tab_*` string.
 - **Keep names short** ("Move up", "Zoom in"), in sentence case: a name in
   capitals ("DATASETS") may be spelled out letter by letter, and a
   placeholder ("Filter by name, title, product…") is not a name. A new
@@ -78,12 +85,19 @@ conventions.
 - **Don't rely on raw pointer events for behaviour.** Behaviour behind
   `PointerPressed`/`Tapped` alone cannot be reached by the keyboard, screen
   readers or the `ui_*` tools. Back it with a control that has a command
-  (a `Button`, `ToggleButton`, list selection…).
+  (a `Button`, `ToggleButton`, list selection…); a `Button` with an empty
+  template over the visual keeps the look (the Library's clickable tags).
+  When a pointer shortcut stays (double-click to load, click a value to
+  copy), give it a keyboard and automation path too and say which in a
+  code comment.
 - **Run the guard.** `UiAutomation/AccessibilityGuardTests` in
   `tests/EncDotNet.S100.Viewer.Tests` fails on any button or input without
   an accessible name, any name longer than a short label or in capitals,
   any activity tab without its own `name:`, and any
   interactive control without an automation id, in every view. There is no allow-list: new UI must pass it as written.
+  `UiAutomation/LiveAccessibleNameTests` shows panels with populated rows
+  and fails on any row, item or button whose live name is a type name or
+  missing; add a case when you add a list or tree to a view.
 - **Test new UI through its ids.** Add an `[AvaloniaFact]` view test that
   drives the new UI with `ViewHost` and finds controls by automation id,
   not by localized text.

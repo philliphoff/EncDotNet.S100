@@ -1,7 +1,6 @@
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 
 namespace EncDotNet.S100.Viewer.Views;
@@ -31,12 +30,10 @@ public partial class TimeHudView : UserControl
     public TimeHudView()
     {
         InitializeComponent();
-        if (this.FindControl<TextBlock>("TimeText") is { } time)
-            time.PointerPressed += (_, e) =>
-            {
-                Focus(NavigationMethod.Pointer);
-                e.Handled = true;
-            };
+        // The time is a button so the keyboard (Tab, then Enter or Space) and
+        // automation clients (its invoke pattern) reach it as well as the pointer.
+        if (this.FindControl<Button>("TimeText") is { } time)
+            time.Click += (_, _) => Focus();
         if (this.FindControl<Button>("DockToggle") is { } dock)
             dock.Click += (_, _) => DockCommand?.Execute(null);
     }

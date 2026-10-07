@@ -29,6 +29,8 @@ public partial class LibraryPanelView : UserControl
         {
             list.ContainerPrepared += OnListContainerPrepared;
             list.DoubleTapped += OnItemDoubleTapped;
+            // The list marks Enter handled itself, so listen for handled events too.
+            list.AddHandler(KeyDownEvent, OnItemListKeyDown, RoutingStrategies.Bubble, handledEventsToo: true);
         }
     }
 
@@ -160,23 +162,34 @@ public partial class LibraryPanelView : UserControl
         }
     }
 
-    // A shortened value (a download URL, a path) copies in full.
-    private void OnDetailValueTapped(object? sender, TappedEventArgs e) =>
+    // A shortened value (a download URL, a path) copies in full. Clicking the
+    // value is the pointer's shortcut; the copy button beside it is the same
+    // action for the keyboard and automation clients (#784).
+    private void OnDetailValueTapped(object? sender, TappedEventArgs e) => CopyDetailValue(sender);
+
+    private void OnCopyDetailValue(object? sender, RoutedEventArgs e) => CopyDetailValue(sender);
+
+    private void CopyDetailValue(object? sender) =>
         CopyToClipboard((sender as Control)?.DataContext is LibraryDetailField { CopyValue: { } value } ? value : null);
 
-    private void OnTagTapped(object? sender, TappedEventArgs e)
+    // Double-click a dataset, or press Enter on it, to bring it into view
+    // (keeping the zoom) and load it. Automation clients select the row and
+    // invoke the details pane's Load button (Library.Details.Load) instead (#784).
+    private void OnItemDoubleTapped(object? sender, TappedEventArgs e) => OpenSelected();
+
+    private void OnItemListKeyDown(object? sender, KeyEventArgs e)
     {
-        // A clickable tag (e.g. "Failed · retry") runs its command, not the row's selection.
-        if (sender is Control { DataContext: LibraryItemTag { Command: { } command } } && command.CanExecute(null))
+        // Only Enter on the row itself: a tag's button inside the row has its own.
+        if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.None && e.Source is ListBoxItem
+            && (DataContext as LibraryPanelViewModel)?.SelectedItem is not null)
         {
-            command.Execute(null);
+            OpenSelected();
             e.Handled = true;
         }
     }
 
-    private void OnItemDoubleTapped(object? sender, TappedEventArgs e)
+    private void OpenSelected()
     {
-        // Double-click a dataset to bring it into view (keeping the zoom) and load it.
         if (DataContext is not LibraryPanelViewModel vm)
             return;
         vm.CenterOnSelected();
@@ -189,7 +202,10 @@ public partial class LibraryPanelView : UserControl
         if (e.Container is ListBoxItem item)
         {
             // As in the other list panels: commit selection even when the
-            // first click is swallowed by a focus shift from the map.
+            // first click is swallowed by a focus shift from the map. Only the
+            // pointer needs this: the keyboard (arrow keys) and automation
+            // clients (the row's selection item pattern) select through the
+            // ListBox's own selection, which this only backs up (#784).
             item.AddHandler(PointerPressedEvent, OnItemPointerPressed,
                 RoutingStrategies.Bubble, handledEventsToo: true);
         }

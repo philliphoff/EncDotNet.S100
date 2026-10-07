@@ -6,6 +6,15 @@
              x:Class="EncDotNet.S100.Viewer.Views.LayerStackView"
              x:DataType="vm:LayerStackViewModel">
 
+    <UserControl.Styles>
+        <!-- A plane's header toggle is named after its plane, as the expander is;
+             otherwise its peer falls back to the header's type name (#784). -->
+        <Style Selector="Expander /template/ :is(Button)">
+            <Setter Property="AutomationProperties.Name"
+                    Value="{Binding $parent[Expander].(AutomationProperties.Name)}" />
+        </Style>
+    </UserControl.Styles>
+
     <DockPanel LastChildFill="True">
 
         <!-- Header: "Show empty planes" toggle. The pane title comes
@@ -49,6 +58,7 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:LayerStackPlaneViewModel">
                         <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                  AutomationProperties.Name="{Binding Title}"
                                   Margin="4,2"
                                   Padding="0">
                             <Expander.Header>

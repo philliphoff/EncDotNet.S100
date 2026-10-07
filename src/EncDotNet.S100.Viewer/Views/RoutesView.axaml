@@ -180,6 +180,12 @@
                      Padding="0"
                      Margin="8,2,8,4"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.Styles>
+                    <!-- Rows are named after their route, not RouteRowViewModel (#784). -->
+                    <Style Selector="ListBoxItem" x:DataType="vm:RouteRowViewModel">
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+                    </Style>
+                </ListBox.Styles>
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:RouteRowViewModel">
                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
