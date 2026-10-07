@@ -174,6 +174,12 @@
                                 <StackPanel Orientation="Horizontal" />
                             </ItemsPanelTemplate>
                         </ListBox.ItemsPanel>
+                        <ListBox.Styles>
+                            <!-- Named after the option, not the record's ToString() (#784). -->
+                            <Style Selector="ListBoxItem" x:DataType="vm:ResolutionOptionViewModel">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+                            </Style>
+                        </ListBox.Styles>
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:ResolutionOptionViewModel">
                                 <TextBlock Text="{Binding Label}" FontSize="13" VerticalAlignment="Center" />
@@ -196,6 +202,12 @@
                                 <StackPanel Orientation="Horizontal" />
                             </ItemsPanelTemplate>
                         </ListBox.ItemsPanel>
+                        <ListBox.Styles>
+                            <!-- Named after the option, not the record's ToString() (#784). -->
+                            <Style Selector="ListBoxItem" x:DataType="vm:ResolutionOptionViewModel">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+                            </Style>
+                        </ListBox.Styles>
                         <ListBox.ItemTemplate>
                             <DataTemplate x:DataType="vm:ResolutionOptionViewModel">
                                 <TextBlock Text="{Binding Label}" FontSize="13" VerticalAlignment="Center" />
@@ -219,6 +231,12 @@
                                         <StackPanel Orientation="Horizontal" />
                                     </ItemsPanelTemplate>
                                 </ListBox.ItemsPanel>
+                                <ListBox.Styles>
+                                    <!-- Named after the group, not its view model (#784). -->
+                                    <Style Selector="ListBoxItem" x:DataType="vm:FacetGroupViewModel">
+                                        <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                                    </Style>
+                                </ListBox.Styles>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:FacetGroupViewModel">
                                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -267,6 +285,12 @@
                                      AutomationProperties.AutomationId="CatalogueScope.Regions"
                                      SelectedItem="{Binding SelectedFacetGroup}"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.Styles>
+                                    <!-- Named after the group, not its view model (#784). -->
+                                    <Style Selector="ListBoxItem" x:DataType="vm:FacetGroupViewModel">
+                                        <Setter Property="AutomationProperties.Name" Value="{Binding Title}" />
+                                    </Style>
+                                </ListBox.Styles>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:FacetGroupViewModel">
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">

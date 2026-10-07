@@ -1111,6 +1111,7 @@ internal static class Strings
     public static string Button_ZoomTo => Get(nameof(Button_ZoomTo));
     public static string Button_Load => Get(nameof(Button_Load));
     public static string Button_LoadAfterDownload => Get(nameof(Button_LoadAfterDownload));
+    public static string Tooltip_CopyDetailValue => Get(nameof(Tooltip_CopyDetailValue));
     public static string Tooltip_CopyValue => Get(nameof(Tooltip_CopyValue));
     public static string Library_Property_river => Get(nameof(Library_Property_river));
     public static string Library_Property_riverMiles => Get(nameof(Library_Property_riverMiles));
@@ -1186,6 +1187,7 @@ internal static class Strings
     public static string Label_CopyIdentity => Get(nameof(Label_CopyIdentity));
     public static string Label_CopyLocation => Get(nameof(Label_CopyLocation));
     public static string Label_CopyText => Get(nameof(Label_CopyText));
+    public static string Label_CopyValue => Get(nameof(Label_CopyValue));
     public static string Label_HoldResume => Get(nameof(Label_HoldResume));
     public static string Label_InsertWaypoint => Get(nameof(Label_InsertWaypoint));
     public static string Label_MeasureMode => Get(nameof(Label_MeasureMode));
@@ -1209,6 +1211,11 @@ internal static class Strings
     public static string Label_TimeWindow => Get(nameof(Label_TimeWindow));
     public static string Label_ToggleDatasetVisibility => Get(nameof(Label_ToggleDatasetVisibility));
     public static string Label_ToggleExchangeSetVisibility => Get(nameof(Label_ToggleExchangeSetVisibility));
+    public static string Label_Tab_Dataset => Get(nameof(Label_Tab_Dataset));
+    public static string Label_Tab_Datasets => Get(nameof(Label_Tab_Datasets));
+    public static string Label_Tab_ExchangeSets => Get(nameof(Label_Tab_ExchangeSets));
+    public static string Label_Tab_Layers => Get(nameof(Label_Tab_Layers));
+    public static string Label_Tab_Validation => Get(nameof(Label_Tab_Validation));
     public static string Label_ToggleGroup => Get(nameof(Label_ToggleGroup));
     public static string Library_Quick_Folder => Get(nameof(Library_Quick_Folder));
     public static string Library_Quick_FolderSub => Get(nameof(Library_Quick_FolderSub));

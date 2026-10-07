@@ -12,9 +12,10 @@ namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
 /// The real Time HUD, driven by clicks: stepping pins the view time, Live
-/// returns to now, the panel button opens the dock, and clicking the time
-/// focuses the bar for the Timeline's keys. The keys themselves are handled
-/// by the main window, so they are not covered here.
+/// returns to now, the panel button opens the dock, and clicking the time (or
+/// pressing Enter on it, or invoking it by automation) focuses the bar for the
+/// Timeline's keys. The keys themselves are handled by the main window, so
+/// they are not covered here.
 /// </summary>
 public sealed class TimeHudViewTests
 {
@@ -56,7 +57,7 @@ public sealed class TimeHudViewTests
         Assert.False(timeline.IsLive);
         Assert.True(service.CurrentTime > now);
         Assert.True(host.IsShown("TimeHud.PinnedPill"));
-        Assert.Equal(timeline.CurrentTimeLabel, host.Find<TextBlock>("TimeHud.Time").Text);
+        Assert.Equal(timeline.CurrentTimeLabel, host.Find<Button>("TimeHud.Time").Content);
 
         host.Click(host.Find<Button>("TimeHud.Previous"));
         Assert.Equal(now, service.CurrentTime);
@@ -108,7 +109,39 @@ public sealed class TimeHudViewTests
         using var host = Show(hud);
         Assert.False(hud.IsFocused);
 
-        host.Click(host.Find<TextBlock>("TimeHud.Time"));
+        host.Click(host.Find<Button>("TimeHud.Time"));
+
+        Assert.True(hud.IsFocused);
+    }
+
+    [AvaloniaFact]
+    public async Task Automation_reaches_the_time_by_its_invoke_pattern()
+    {
+        var (_, timeline) = CreateTimeline();
+        var hud = new TimeHudView { DataContext = timeline, MapWidth = 1200 };
+        using var host = Show(hud);
+        var automation = new ViewerUiAutomation(() => [host.Window]);
+
+        var time = await automation.ActAsync(new UiTarget("TimeHud.Time", null), UiAction.Invoke, null);
+        host.Settle();
+
+        // Named by the time itself, with the tooltip as help text.
+        Assert.Equal(timeline.CurrentTimeLabel, time.Name);
+        Assert.Equal(Strings.Tooltip_TimeHudTime, time.HelpText);
+        Assert.True(hud.IsFocused);
+    }
+
+    [AvaloniaFact]
+    public void The_keyboard_reaches_the_time_and_enter_focuses_the_bar()
+    {
+        var (_, timeline) = CreateTimeline();
+        var hud = new TimeHudView { DataContext = timeline, MapWidth = 1200 };
+        using var host = Show(hud);
+        var time = host.Find<Button>("TimeHud.Time");
+        Assert.True(time.IsTabStop && time.Focusable);
+
+        time.Focus(Avalonia.Input.NavigationMethod.Tab);
+        host.Press(Avalonia.Input.PhysicalKey.Enter);
 
         Assert.True(hud.IsFocused);
     }

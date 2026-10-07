@@ -2893,6 +2893,9 @@
   <data name="Button_LoadAfterDownload" xml:space="preserve">
     <value>Load after download</value>
   </data>
+  <data name="Tooltip_CopyDetailValue" xml:space="preserve">
+    <value>Copy the full value to the clipboard</value>
+  </data>
   <data name="Tooltip_CopyValue" xml:space="preserve">
     <value>Click to copy</value>
   </data>
@@ -3115,6 +3118,9 @@
   <data name="Label_CopyIdentity" xml:space="preserve">
     <value>Copy identity</value>
   </data>
+  <data name="Label_CopyValue" xml:space="preserve">
+    <value>Copy value</value>
+  </data>
   <data name="Label_CopyLocation" xml:space="preserve">
     <value>Copy location</value>
   </data>
@@ -3189,6 +3195,21 @@
   </data>
   <data name="Label_ToggleExchangeSetVisibility" xml:space="preserve">
     <value>Show or hide exchange set</value>
+  </data>
+  <data name="Label_Tab_Dataset" xml:space="preserve">
+    <value>Dataset</value>
+  </data>
+  <data name="Label_Tab_Datasets" xml:space="preserve">
+    <value>Datasets</value>
+  </data>
+  <data name="Label_Tab_ExchangeSets" xml:space="preserve">
+    <value>Exchange sets</value>
+  </data>
+  <data name="Label_Tab_Layers" xml:space="preserve">
+    <value>Layers</value>
+  </data>
+  <data name="Label_Tab_Validation" xml:space="preserve">
+    <value>Validation</value>
   </data>
   <data name="Label_ToggleGroup" xml:space="preserve">
     <value>Show or hide datasets</value>

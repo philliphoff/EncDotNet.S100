@@ -81,6 +81,16 @@ The `EncDotNet.S100.Collections.Library` namespace holds a host-neutral library:
   - The host supplies its downloaded copies (`ILibraryLocalCopies`) and what it has open (`LibraryLoadState`).
 - **`LibraryQuery`** — finds items by collection or source, state, product, text, bounding box, covering point (most detailed first, via `CoverageHitTest`) and valid time.
 - **`ForecastRuns`** — forecast-run facts of an item: its model, horizon, shown run window, and its S-102 twin tile.
+- **`LibraryDownloads`** — downloads online items (ENC cells, community packages, S-100 feeds and the NOAA forecast catalogues) through `EncCellDownloader`, at most three at a time:
+  - Progress is a plain `LibraryDownloadProgress` (polled, raised as `ProgressChanged`, or passed to an `IProgress`), with per-item `StatusOf`.
+  - `ManagedFolders` routes each download to the viewer's managed folder layout, so every host keeps downloads in the same place.
+  - It is the `ILibraryLocalCopies` that turns a downloaded item into a local one.
+- **`LibraryLoader`** — opens items into a host's session:
+  - `Plan` skips what can't be opened and groups the rest by exchange set.
+  - Each group opens through the host's `ILibraryDatasetOpener`. The viewer's opener registers the group with its exchange-set service. `CatalogLibraryOpener` in `EncDotNet.S100.Mcp.Tools` loads it into any `IMutableDatasetCatalog`.
+- **`LibraryOperations`** — the actions a headless host runs: load, and download (then re-index packages or open the downloads).
+  - Every operation is tracked by a `LibraryActivityTracker` from the call until its datasets are open.
+  - `AwaitIdleAsync` therefore never reports idle between a download finishing and its datasets opening.
 
 ## Known catalogue sources
 

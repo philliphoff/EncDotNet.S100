@@ -81,6 +81,11 @@ public sealed class TileMetatileTests
         var threshold = (northDenominator + southDenominator) * 0.5;
         var scene = SceneCovering(keys, scaleMinimum: threshold);
 
+        // Shown at the band's own resolution, the rows fall on either side of
+        // the threshold, so they take different scale classes (#774).
+        keys = [.. keys.Select(key => S100VectorTileRenderer.WithScaleClass(scene, key, ratio: 1.0))];
+        Assert.Equal(2, keys.Select(key => key.ScaleClass).Distinct().Count());
+
         var groups = S100VectorTileRenderer.PartitionMetatileForScale(
             scene, new BaseSpatialIndex(scene), keys);
 

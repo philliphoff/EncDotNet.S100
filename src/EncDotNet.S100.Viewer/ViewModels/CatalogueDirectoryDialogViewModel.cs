@@ -424,6 +424,9 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
 
     public string Name => Source.Name;
 
+    /// <summary>The row's accessible name: the region for a header, else the catalogue's name.</summary>
+    public string? AccessibleName => IsGroupHeader ? GroupTitle : Name;
+
     /// <summary>"U.S. Army Corps of Engineers · North America › United States", or "host · added by URL".</summary>
     public string ProviderAndRegion =>
         IsUser ? $"{Source.Provider} · {Strings.Library_DirectoryAddedByUrl}"
