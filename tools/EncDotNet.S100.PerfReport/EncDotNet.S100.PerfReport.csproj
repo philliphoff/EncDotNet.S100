@@ -3,6 +3,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+    <!-- Trim analyzers run on every build (issue #764); the tool is not published trimmed. -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
   </PropertyGroup>
 
   <ItemGroup>

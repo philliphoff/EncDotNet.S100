@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Features;
@@ -28,6 +29,10 @@ internal static class SharedInfrastructure
     public static FeatureCatalogueManager FeatureCatalogueManager =>
         LazyFeatureCatalogueManager.Value;
 
+    [UnconditionalSuppressMessage("Trimming", "IL2026",
+        Justification = "Deliberate version probe: the perf gate builds this runner against the base commit's libraries, whose constructor shapes differ. The runner is never trimmed.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2072",
+        Justification = "Deliberate version probe: the perf gate builds this runner against the base commit's libraries, whose constructor shapes differ. The runner is never trimmed.")]
     public static Datasets.Pipelines.DatasetPipelineFactory CreatePipelineFactory()
     {
         var factoryType = typeof(Datasets.Pipelines.DatasetPipelineFactory);
@@ -156,7 +161,7 @@ internal static class SharedInfrastructure
     /// that gain optional trailing parameters over time (issue #491).
     /// </remarks>
     internal static ConstructorInfo? FindConstructorMatchingPrefix(
-        Type type,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type type,
         IReadOnlyList<Type> requiredLeadingTypes)
     {
         ArgumentNullException.ThrowIfNull(type);
