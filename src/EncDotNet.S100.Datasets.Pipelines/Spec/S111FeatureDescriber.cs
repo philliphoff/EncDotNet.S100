@@ -223,7 +223,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
             ["metadata"] = dataset.Metadata,
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static JsonElement SerializeGriddedGroup(S111Dataset dataset, int groupIndex, SurfaceCurrentCoverage coverage)
@@ -263,7 +263,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
             },
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static JsonElement SerializeStationInstance(S111StationSeriesDataset dataset)
@@ -291,7 +291,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
             ["metadata"] = dataset.Metadata,
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static JsonElement SerializeStation(SurfaceCurrentStation station)
@@ -329,7 +329,7 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
             },
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static (float? MinSpeed, float? MaxSpeed, float? MinDir, float? MaxDir) ComputeSpeedDirectionRange(SurfaceCurrentValue[] values)
@@ -357,11 +357,5 @@ internal sealed class S111FeatureDescriber : ISpecFeatureDescriber
             if (max is null || v > max) max = v;
         }
         return (min, max);
-    }
-
-    private static JsonElement ToJsonElement(object payload)
-    {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-        return JsonSerializer.Deserialize<JsonElement>(bytes);
     }
 }

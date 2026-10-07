@@ -29,7 +29,7 @@ namespace EncDotNet.S100.Collections.Indexing;
 /// downloadable yet.
 /// </para>
 /// </remarks>
-public sealed class SecomSourceIndexer : ICollectionSourceIndexer
+public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
 {
     // v2: hosts now probe downloaded GML objects (S-124, S-122) for bounds (#809);
     // indexes built before then had none, so they are rebuilt once.
@@ -38,7 +38,7 @@ public sealed class SecomSourceIndexer : ICollectionSourceIndexer
     /// <summary>The default cap on objects indexed per source.</summary>
     public const int DefaultMaxItems = 5_000;
 
-    private static readonly JsonSerializerOptions CacheOptions = new(JsonSerializerDefaults.Web);
+    private static readonly CacheJsonContext CacheJson = new(new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
     private readonly HttpClient _httpClient;
     private readonly string? _cacheDirectory;
@@ -358,7 +358,7 @@ public sealed class SecomSourceIndexer : ICollectionSourceIndexer
             Directory.CreateDirectory(_cacheDirectory);
             var path = CachePath(key);
             var partial = path + ".partial";
-            File.WriteAllText(partial, JsonSerializer.Serialize(listing, CacheOptions));
+            File.WriteAllText(partial, JsonSerializer.Serialize(listing, CacheJson.Listing));
             File.Move(partial, path, overwrite: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -374,7 +374,7 @@ public sealed class SecomSourceIndexer : ICollectionSourceIndexer
         try
         {
             var path = CachePath(key);
-            return File.Exists(path) ? JsonSerializer.Deserialize<Listing>(File.ReadAllText(path), CacheOptions) : null;
+            return File.Exists(path) ? JsonSerializer.Deserialize(File.ReadAllText(path), CacheJson.Listing) : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -479,6 +479,9 @@ public sealed class SecomSourceIndexer : ICollectionSourceIndexer
         [System.Text.Json.Serialization.JsonIgnore]
         public string? Stale { get; init; }
     }
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(Listing))]
+    private sealed partial class CacheJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 }
 
 /// <summary>What a SECOM service offers, as read by <see cref="SecomSourceIndexer.DescribeAsync"/>.</summary>

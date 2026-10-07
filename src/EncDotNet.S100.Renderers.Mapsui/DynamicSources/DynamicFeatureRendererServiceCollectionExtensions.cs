@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using EncDotNet.S100.DynamicSources;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -34,7 +35,7 @@ public static class DynamicFeatureRendererServiceCollectionExtensions
     /// <see cref="IDynamicFeatureRenderer"/> under
     /// <paramref name="rendererKey"/>.
     /// </summary>
-    public static IServiceCollection AddDynamicFeatureRenderer<TRenderer>(
+    public static IServiceCollection AddDynamicFeatureRenderer<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TRenderer>(
         this IServiceCollection services,
         string rendererKey,
         ServiceLifetime lifetime = ServiceLifetime.Singleton)
@@ -66,7 +67,9 @@ public static class DynamicFeatureRendererServiceCollectionExtensions
     /// without de-duplication, while keeping the renderer keyed
     /// registration unique to <paramref name="rendererKey"/>.
     /// </remarks>
-    public static IServiceCollection AddDynamicFeatureSource<TSource, TRenderer>(
+    public static IServiceCollection AddDynamicFeatureSource<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TSource,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TRenderer>(
         this IServiceCollection services,
         string rendererKey,
         ServiceLifetime sourceLifetime = ServiceLifetime.Singleton,

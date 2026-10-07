@@ -162,7 +162,7 @@ internal sealed class S129FeatureDescriber : ISpecFeatureDescriber
             ["extraAttributes"] = plan.ExtraAttributes,
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static JsonElement SerializeSurface(
@@ -187,7 +187,7 @@ internal sealed class S129FeatureDescriber : ISpecFeatureDescriber
             ["extraAttributes"] = extraAttributes,
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static JsonElement SerializeControlPoint(S129ControlPoint cp)
@@ -210,7 +210,7 @@ internal sealed class S129FeatureDescriber : ISpecFeatureDescriber
             ["extraAttributes"] = cp.ExtraAttributes,
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static Dictionary<string, object?> SerializePoint(GeoPosition p) =>
@@ -228,11 +228,5 @@ internal sealed class S129FeatureDescriber : ISpecFeatureDescriber
             ["start"] = range.Start,
             ["end"] = range.End,
         };
-    }
-
-    private static JsonElement ToJsonElement(object payload)
-    {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-        return JsonSerializer.Deserialize<JsonElement>(bytes);
     }
 }

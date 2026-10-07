@@ -80,12 +80,9 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
         if (!appendToExisting)
         {
             // Write the schema header as the first line.
-            var header = JsonSerializer.Serialize(new
-            {
-                kind = "header",
-                version = TelemetryJsonFormat.SchemaVersion,
-                startedAtUtc = DateTime.UtcNow,
-            }, TelemetryJsonFormat.SerializerOptions);
+            var header = JsonSerializer.Serialize(
+                new TelemetryHeaderLine("header", TelemetryJsonFormat.SchemaVersion, DateTime.UtcNow),
+                TelemetryJsonFormat.Json.TelemetryHeaderLine);
             _queue.Add(header);
         }
     }
@@ -107,21 +104,19 @@ public sealed class FileTelemetryExporter : BaseExporter<Activity>
                 }
             }
 
-            var line = JsonSerializer.Serialize(new
-            {
-                kind = "span",
-                name = activity.DisplayName,
-                traceId = activity.TraceId.ToString(),
-                spanId = activity.SpanId.ToString(),
-                parentSpanId = activity.ParentSpanId == default
+            var line = JsonSerializer.Serialize(new TelemetrySpanLine(
+                Kind: "span",
+                Name: activity.DisplayName,
+                TraceId: activity.TraceId.ToString(),
+                SpanId: activity.SpanId.ToString(),
+                ParentSpanId: activity.ParentSpanId == default
                     ? null
                     : activity.ParentSpanId.ToString(),
-                startUnixNs = new DateTimeOffset(activity.StartTimeUtc, TimeSpan.Zero).ToUnixTimeNanoseconds(),
-                endUnixNs = new DateTimeOffset(activity.StartTimeUtc + activity.Duration, TimeSpan.Zero).ToUnixTimeNanoseconds(),
-                durationMs = activity.Duration.TotalMilliseconds,
-                status = activity.Status.ToString(),
-                tags,
-            }, TelemetryJsonFormat.SerializerOptions);
+                StartUnixNs: new DateTimeOffset(activity.StartTimeUtc, TimeSpan.Zero).ToUnixTimeNanoseconds(),
+                EndUnixNs: new DateTimeOffset(activity.StartTimeUtc + activity.Duration, TimeSpan.Zero).ToUnixTimeNanoseconds(),
+                DurationMs: activity.Duration.TotalMilliseconds,
+                Status: activity.Status.ToString(),
+                Tags: tags), TelemetryJsonFormat.Json.TelemetrySpanLine);
 
             _queue.TryAdd(line);
         }

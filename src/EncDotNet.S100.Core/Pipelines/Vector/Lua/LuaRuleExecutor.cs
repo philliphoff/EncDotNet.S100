@@ -230,7 +230,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"{_productTag} Lua portrayal failed: {DescribeLuaError(ex)}", ex);
+                $"{_productTag} Lua portrayal failed: {lua.DescribeError(ex)}", ex);
         }
 
         // 8. Collect + dedup. PortrayalModel.lua AddFeature() stores items under
@@ -312,15 +312,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"{_productTag} Lua portrayal failed loading {what}: {DescribeLuaError(ex)}", ex);
+                $"{_productTag} Lua portrayal failed loading {what}: {lua.DescribeError(ex)}", ex);
         }
-    }
-
-    private static string DescribeLuaError(Exception ex)
-    {
-        // MoonSharp exceptions carry a DecoratedMessage with the Lua source
-        // location; surface it when present.
-        var decorated = ex.GetType().GetProperty("DecoratedMessage")?.GetValue(ex) as string;
-        return decorated ?? ex.Message;
     }
 }

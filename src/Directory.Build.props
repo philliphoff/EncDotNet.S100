@@ -21,6 +21,19 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <!-- Libraries are trimmable (issue #764): the trim analyzers run in every
+       build and, with TreatWarningsAsErrors, keep reflection that cannot be
+       statically analysed out of them. Analysed on the net10.0 target only:
+       the same sources build for net8.0, and IsTrimmable there would pull in
+       the net8.0 ILLink pack. The applications (viewer, app host) are not
+       libraries; MoonSharp's Lua interop needs reflection by design. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'
+                            And '$(MSBuildProjectName)' != 'EncDotNet.S100.Viewer'
+                            And '$(MSBuildProjectName)' != 'EncDotNet.S100.AppHost'
+                            And '$(MSBuildProjectName)' != 'EncDotNet.S100.Scripting.MoonSharp'">
+    <IsTrimmable>true</IsTrimmable>
+  </PropertyGroup>
+
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>

@@ -30,6 +30,11 @@ internal sealed class MoonSharpLuaContext : ILuaContext
     }
 
     /// <inheritdoc />
+    // MoonSharp exceptions carry a DecoratedMessage with the Lua source location.
+    public string DescribeError(Exception exception) =>
+        (exception as InterpreterException)?.DecoratedMessage ?? exception.Message;
+
+    /// <inheritdoc />
     public void SetModuleLoader(Func<string, string?> loader)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

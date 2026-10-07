@@ -37,37 +37,7 @@ namespace EncDotNet.S100.Mcp;
 /// </remarks>
 internal static class S100McpServerToolFactory
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver
-        {
-            Modifiers =
-            {
-                static typeInfo =>
-                {
-                    if (typeInfo.Type == typeof(SampledValue))
-                    {
-                        typeInfo.PolymorphismOptions = new System.Text.Json.Serialization.Metadata.JsonPolymorphismOptions
-                        {
-                            TypeDiscriminatorPropertyName = "$kind",
-                            IgnoreUnrecognizedTypeDiscriminators = true,
-                            UnknownDerivedTypeHandling = System.Text.Json.Serialization.JsonUnknownDerivedTypeHandling.FallBackToBaseType,
-                            DerivedTypes =
-                            {
-                                new System.Text.Json.Serialization.Metadata.JsonDerivedType(typeof(DepthSample), "depth"),
-                                new System.Text.Json.Serialization.Metadata.JsonDerivedType(typeof(WaterLevelSample), "water_level"),
-                                new System.Text.Json.Serialization.Metadata.JsonDerivedType(typeof(WaterLevelStationSample), "water_level_station"),
-                                new System.Text.Json.Serialization.Metadata.JsonDerivedType(typeof(SurfaceCurrentSample), "surface_current"),
-                                new System.Text.Json.Serialization.Metadata.JsonDerivedType(typeof(SurfaceCurrentStationSample), "surface_current_station"),
-                            },
-                        };
-                    }
-                },
-            },
-        },
-    };
+    private static JsonSerializerOptions JsonOptions => McpJson.Options;
 
     public static IEnumerable<McpServerTool> CreateTools(
         ListDatasetsTool listDatasets,
@@ -740,8 +710,7 @@ internal static class S100McpServerToolFactory
 
     private static CallToolResult Success<T>(T value)
     {
-        var runtimeType = value?.GetType() ?? typeof(T);
-        var json = JsonSerializer.Serialize(value, runtimeType, JsonOptions);
+        var json = McpJson.SerializeByRuntimeType(value, JsonOptions);
         return new CallToolResult
         {
             Content =
@@ -798,7 +767,7 @@ internal static class S100McpServerToolFactory
     /// </summary>
     private static JsonObject SerializeDetails(ToolError error)
     {
-        var node = JsonSerializer.SerializeToNode(error, error.GetType(), JsonOptions) as JsonObject
+        var node = JsonSerializer.SerializeToNode(error, JsonOptions.GetTypeInfo(error.GetType())) as JsonObject
             ?? new JsonObject();
         node.Remove("code");
         node.Remove("message");

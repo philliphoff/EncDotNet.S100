@@ -72,7 +72,7 @@ public sealed class FileMetricsExporter : BaseExporter<Metric>
 
                 string instrumentType;
                 object? value = null;
-                List<object>? buckets = null;
+                List<TelemetryHistogramBucket>? buckets = null;
 
                 switch (metric.MetricType)
                 {
@@ -99,11 +99,11 @@ public sealed class FileMetricsExporter : BaseExporter<Metric>
                         var countLong = point.GetHistogramCount();
                         if (point.TryGetHistogramMinMaxValues(out var min, out var max))
                         {
-                            buckets.Add(new { sum = sumDouble, count = countLong, min, max });
+                            buckets.Add(new TelemetryHistogramBucket(sumDouble, countLong, min, max));
                         }
                         else
                         {
-                            buckets.Add(new { sum = sumDouble, count = countLong });
+                            buckets.Add(new TelemetryHistogramBucket(sumDouble, countLong));
                         }
                         break;
                     default:
@@ -111,16 +111,9 @@ public sealed class FileMetricsExporter : BaseExporter<Metric>
                         break;
                 }
 
-                var line = JsonSerializer.Serialize(new
-                {
-                    kind = "metric",
-                    name = metric.Name,
-                    instrument = instrumentType,
-                    unit = metric.Unit,
-                    tags,
-                    value,
-                    buckets,
-                }, TelemetryJsonFormat.SerializerOptions);
+                var line = JsonSerializer.Serialize(
+                    new TelemetryMetricLine("metric", metric.Name, instrumentType, metric.Unit, tags, value, buckets),
+                    TelemetryJsonFormat.Json.TelemetryMetricLine);
 
                 _queue.TryAdd(line);
             }

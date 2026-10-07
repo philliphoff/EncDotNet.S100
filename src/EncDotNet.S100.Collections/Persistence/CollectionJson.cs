@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EncDotNet.S100.Collections.Feeds;
 using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Collections.Persistence;
@@ -38,17 +39,23 @@ public sealed record CollectionStoreDocument(int Version, IReadOnlyList<DatasetC
 /// </remarks>
 public static class CollectionJson
 {
+    // Source-generated metadata bound to each set of options, so nothing is
+    // discovered by reflection at run time (issue #764).
+    internal static CollectionJsonContext Store { get; } = new(CreateOptions(indented: true));
+
+    internal static CollectionJsonContext Index { get; } = new(CreateOptions(indented: false));
+
     /// <summary>Options for collection definitions (indented, camelCase).</summary>
-    public static JsonSerializerOptions StoreOptions { get; } = CreateOptions(indented: true);
+    public static JsonSerializerOptions StoreOptions => Store.Options;
 
     /// <summary>Options for source indexes (compact, camelCase).</summary>
-    public static JsonSerializerOptions IndexOptions { get; } = CreateOptions(indented: false);
+    public static JsonSerializerOptions IndexOptions => Index.Options;
 
     /// <summary>Serializes a collection store document.</summary>
     public static string SerializeStore(CollectionStoreDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        return JsonSerializer.Serialize(document, StoreOptions);
+        return JsonSerializer.Serialize(document, Store.CollectionStoreDocument);
     }
 
     /// <summary>
@@ -60,7 +67,7 @@ public static class CollectionJson
     {
         ArgumentNullException.ThrowIfNull(json);
 
-        var document = JsonSerializer.Deserialize<CollectionStoreDocument>(json, StoreOptions)
+        var document = JsonSerializer.Deserialize(json, Store.CollectionStoreDocument)
             ?? CollectionStoreDocument.Empty;
         if (document.Version > CollectionStoreDocument.CurrentVersion)
         {
@@ -78,7 +85,7 @@ public static class CollectionJson
         ArgumentNullException.ThrowIfNull(index);
 
         using var gzip = new GZipStream(stream, CompressionLevel.Optimal, leaveOpen: true);
-        JsonSerializer.Serialize(gzip, index, IndexOptions);
+        JsonSerializer.Serialize(gzip, index, Index.SourceIndex);
     }
 
     /// <summary>Reads a gzip-compressed source index from <paramref name="stream"/>.</summary>
@@ -89,7 +96,7 @@ public static class CollectionJson
         ArgumentNullException.ThrowIfNull(stream);
 
         using var gzip = new GZipStream(stream, CompressionMode.Decompress, leaveOpen: true);
-        return JsonSerializer.Deserialize<SourceIndex>(gzip, IndexOptions)
+        return JsonSerializer.Deserialize(gzip, Index.SourceIndex)
             ?? throw new JsonException("Source index is empty.");
     }
 
@@ -102,7 +109,6 @@ public static class CollectionJson
         };
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
         options.Converters.Add(new GeoPositionConverter());
-        options.MakeReadOnly(populateMissingResolver: true);
         return options;
     }
 
@@ -134,3 +140,11 @@ public static class CollectionJson
         }
     }
 }
+
+/// <summary>Source-generated JSON metadata for the types <see cref="CollectionJson"/> reads and writes.</summary>
+[JsonSerializable(typeof(CollectionStoreDocument))]
+[JsonSerializable(typeof(SourceIndex))]
+[JsonSerializable(typeof(S100FeedDocument))]
+[JsonSerializable(typeof(ItemLocation))]
+[JsonSerializable(typeof(GeoPolygon))]
+internal sealed partial class CollectionJsonContext : JsonSerializerContext;
