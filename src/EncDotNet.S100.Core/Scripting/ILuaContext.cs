@@ -54,7 +54,7 @@ public interface ILuaContext : IDisposable
 
     /// <summary>
     /// Describes an exception thrown by this context, including the Lua source
-    /// location when the engine records one. Defaults to the exception message.
+    /// location when the engine records one.
     /// </summary>
-    string DescribeError(Exception exception) => exception.Message;
+    string DescribeError(Exception exception);
 }
