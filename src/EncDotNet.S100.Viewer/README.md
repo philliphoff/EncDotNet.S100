@@ -228,6 +228,17 @@ design in `docs/design/dataset-collections.md`.
     reachability, or the Session's pin hint.
   - **Actions:** Rename, Refresh, Copy URL and Remove are in the tree's
     context menu and the ··· menu.
+  - **Show on map** (in a source's or collection's context menu, #809)
+    keeps its local datasets loading as you pan.
+    - It follows the source: datasets it gains open after each refresh,
+      and ones it loses close.
+    - It's remembered across restarts. Synced SECOM services have it on by
+      default.
+    - A source's datasets share **one row** in the Datasets panel, however
+      many folders they come from, and so does anything loaded from the
+      Library.
+  - **Point-sized items** (most S-124 warnings) show on the coverage
+    overlay as small rings, and can be tapped.
 
   The list below shows the selected node's datasets.
   - **Filter box:** filter by name, title or product. The count is shown

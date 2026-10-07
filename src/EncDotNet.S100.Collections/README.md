@@ -81,6 +81,7 @@ The `EncDotNet.S100.Collections.Library` namespace holds a host-neutral library:
   - The host supplies its downloaded copies (`ILibraryLocalCopies`) and what it has open (`LibraryLoadState`).
 - **`LibraryQuery`** — finds items by collection or source, state, product, text, bounding box, covering point (most detailed first, via `CoverageHitTest`) and valid time.
 - **`ForecastRuns`** — forecast-run facts of an item: its model, horizon, shown run window, and its S-102 twin tile.
+- **Show on map (#809)** — `CollectionSource.ShowOnMap` asks a host to keep a source's local datasets on the map. `LibraryLoader` labels each open group with its Library source (`LibrarySourceLabel`, `LibraryOpenGroup.Source`), so a host can show a source's datasets as one row.
 - **`LibrarySync`** — keeps synced sources current after each index (#807). Per-kind rules come from an `ILibrarySyncPolicy`; `SecomSyncPolicy` (a `SecomSource` with `Sync`) is the first:
   - It downloads new and changed objects, up to `LibrarySyncOptions.MaxBytes`, and prunes copies no source of the service still lists.
   - It never prunes from a stale or capped listing, nor a copy the host says is in use.
