@@ -862,6 +862,20 @@ antimeridian and a large item count.
   not a new assembly: the runtime needs only the model, indexers and
   persistence already here. Opening items into a dataset catalog, which
   needs `Datasets.Pipelines`, comes later behind a host interface.
+  *As built (#792 chunk 2):* load and download are host-neutral too.
+  - `LibraryDownloads` (was the viewer's `LibraryDownloadService`) reports
+    progress through plain records. `LibraryDownloads.ManagedFolders` holds the
+    download folder layout.
+  - `LibraryLoader` groups items by exchange set and opens each group through
+    an `ILibraryDatasetOpener` host seam:
+    - The viewer's opener wraps `IExchangeSetService.OpenSubsetAsync`.
+    - `CatalogLibraryOpener` (in `Mcp.Tools`) loads each item into any
+      `IMutableDatasetCatalog`, such as `HeadlessMutableCatalog`.
+  - `LibraryOperations` composes these for a headless host and tracks each
+    operation in `LibraryActivityTracker` until its datasets are open. That
+    covers download, re-index, then open (#790), and `AwaitIdleAsync` waits on
+    it.
+  - The viewer keeps thin adapters that add its notifications.
   - Later: `s100 collections list|index|find --at lat,lon`.
 
 ---
