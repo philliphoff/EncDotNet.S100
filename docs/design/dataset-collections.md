@@ -108,7 +108,7 @@ Lessons to carry forward:
 | USACE inland ENC (variant of the NOAA format) | `ienccloud.us/ienc/products/catalog/IENCU37ProductsCatalog.xml` | bbox only | name, river, river miles, edition, S-57/SHP/KML file links |
 | OpenCPN `chart_sources.xml` | A catalogue of ≈97 catalogues | — | A directory of feeds, not datasets. GPL source data: not bundled or fetched (issue #670); the viewer keeps its own curated list |
 | Community `chartcatalogs` lists (`RncProductCatalogChartCatalogs`, a subset of NOAA's RNC catalogue) | `raw.githubusercontent.com/chartcatalogs/catalogs/master/<NAME>_Catalog.xml`, CC0 | none | `number`, `title`, `zipfile_location`, `zipfile_datetime_iso8601`, `target_filename`. An entry is a **download** (one cell, several, or a whole exchange set; sometimes a bare `.000`) |
-| SECOM (IEC 63173-2) | REST: `GetSummary` / `Get`. No verified public unauthenticated server. | WKT query filter | `dataProductType`, `containerType`, `info_*` |
+| SECOM (IEC 63173-2) | REST: `GetSummary` / `Get`. Several anonymous S-124/S-122 servers verified 2026-10-06 (§7.5). Chart products need an MCP certificate. | None in the summary. A WKT query filter, and service geometry in the registry | `dataProductType`, `containerType`, `info_*` |
 
 ---
 
@@ -798,6 +798,103 @@ This is the same mechanism as large S-57 sets, generalized:
 >   Brazilian exchange set. The 1,385-entry EuRIS list indexes in
 >   ≈0.3 s.
 
+### 7.5 SECOM (IEC 63173-2) feasibility (2026-10-06)
+
+> **Status:** researched; the first slice is #804. Nothing is built yet.
+
+**Spec.** Ed 1.0 (2022) is the only published edition. Ed 2 has been
+out as a draft for comment (BSI, February 2025 and February 2026) but
+is not yet a standard. GLA's SECOMLib (Java, Apache-2.0) is the
+reference implementation. Its `master` branch implements v2 only; v1 is
+on the `v1` branch. There is no .NET, Python or published TypeScript
+library. The IEC text is paywalled, so cite section numbers only.
+
+**Interfaces a read-only client needs.** Paths are relative to the
+service's registered endpoint URI. `/api/secom` is a convention, not a
+rule.
+
+| Interface | Method and path |
+|---|---|
+| GetSummary | `GET /v2/object/summary` |
+| Get | `GET /v2/object?dataReference=` |
+| Capability | `GET /v2/capability` |
+| Ping | `GET /v2/ping` |
+
+v1 has the same shapes under `/v1`. The query filters are
+`containerType`, `dataProductType`, `productVersion`, `geometry` (WKT),
+`unlocode`, `validFrom`/`validTo`, `page` and `pageSize`. Summary
+objects carry `dataReference`, `dataProtection`, `dataCompression`,
+`containerType`, `dataProductType` and `info_*` (identifier, name,
+status, description, last-modified date, product version, size). They
+carry **no geometry**.
+
+**Discovery.** The MCP Maritime Service Registry has an anonymous search:
+`POST https://msr.maritimeconnectivity.net/api/secom/v1/searchService`
+with body `{}`. It returned 79 instances. Data quality is poor
+(localhost URIs, bare hostnames, longitudes such as −414°), so results
+need sanity filtering. The v2 search expects a signed envelope.
+
+**Reachable without a client certificate** (probed 2026-10-06):
+
+| Service | Products | Notes |
+|---|---|---|
+| Canadian Coast Guard, `https://s124.ccg-gcc.gc.ca/api/secom` | S-124 | v1 and v2 Get/GetSummary. ECDSA-384 signed. The best test target. |
+| Danish Maritime Authority Baleen (test), `https://baleen-test.e-navigation.net/api/secom` | S-124 | v2 only |
+| ELMAN, `https://pelagus.elmansrl.eu/s100exchanger/secom` | S-122, S-124 | v2 only, about 200 items |
+| AIVN, `https://mpa.aivenautics.co.kr/api/secom` | S-122 | v1 and v2 |
+| AMSA, Fintraffic, KHRA (S-101, S-124, S-128) | — | Capability and Ping answer anonymously. A GET summary returns 404, probably because they need a signed POST search or an access request. |
+
+UKHO, NOAA and PRIMAR do not serve S-100 over SECOM. **No S-101, S-102,
+S-104 or S-111 is openly downloadable over SECOM today.**
+
+**Security.**
+- **Mutual TLS.** It uses Maritime Connectivity Platform (MCP) PKI
+  certificates: secp384r1, SHA384withECDSA, with the MRN and ship
+  attributes in SAN otherName OIDs. None of the anonymous servers
+  above asked for a client certificate. Some servers present
+  MCP-issued server certificates; the MCP root is not in OS trust
+  stores.
+- **Payload signatures.** The signature in
+  `exchangeMetadata.digitalSignatureValue` is computed over the
+  decoded `data` bytes and is hex-encoded. The signer certificate
+  travels as single-line PEM, along with the root thumbprint.
+- **Request envelopes (v2 POST search, subscriptions, uploads).**
+  These are signed over a canonical string: field values joined with
+  `.`, instants as epoch seconds, bytes as base64.
+- **Encryption.** The optional encryption is AES-CBC with a session
+  key exchanged through the EncryptionKey interface. Part 15
+  protection can still apply to the dataset inside.
+- **Developer certificates.** Free from the MCC test environment, but
+  approval is manual.
+
+**Gotchas.**
+- **`data` is base64 inside JSON.** A download is a JSON call, not a
+  file URL, so `EncCellDownloader` cannot be reused as-is.
+- **Servers drift between v1 and v2.**
+  - Product names: `S124` vs `S-124`.
+  - The summary list: `informationSummaryObject` vs `summaryObject`.
+  - `pagination` may be absent.
+  - Ping fields differ, and timestamps come compact or ISO.
+  - The parser must be tolerant.
+- **No bounds before download.** Items have no bounds until they are
+  downloaded. Use the same "bounds after download" pattern as §7.4,
+  optionally with the service's registry geometry as an outline.
+- **`FeedCache` does not fit.** It is GET and URI-keyed only.
+
+**Plan.**
+1. **#804: a read-only source.**
+   - A tolerant v2/v1 client with an injectable handler.
+   - A `SecomSource` and indexer.
+   - A downloader that decodes payloads.
+   - Signature checks that reuse the ECDSA and certificate-chain code
+     pulled out of `ExchangeSetVerifier`.
+   - An Add to Library entry, and `add_library_source` support.
+2. **Later: an identity and a "keys & certificates" store.** An MCP
+   client certificate, mutual TLS, signed v2 POST search, access
+   requests and encryption. Design the store with the Part 15
+   permit/key UX as one shared surface. This is what unlocks the chart
+   products (KHRA S-101/S-128, KRISO S-102).
+
 ---
 
 ## 8. Implementation slices
@@ -846,8 +943,8 @@ antimeridian and a large item count.
       and lists them under "Custom" in the directory.
 - **S-128 as the interchange format**: export a collection as an S-128
   catalogue, and import one as a collection.
-- **SECOM** `GetSummary`/`Get` client as a source kind, once a reachable
-  endpoint exists.
+- **SECOM** source kind: the read-only first slice is #804 (§7.5).
+  Certificates, signing and mutual TLS stay deferred.
 - **Copy on import** as an option.
 - **File watching** and automatic re-indexing for local sources.
 - **M_COVR deep index** for S-57 polygons.
