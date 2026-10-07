@@ -14,13 +14,23 @@ namespace EncDotNet.S100.Mcp;
 /// <see cref="ToolError"/> (issue #764), chained with the MCP SDK's own
 /// resolver for the protocol types.
 /// </summary>
-internal static class McpJson
+/// <remarks>
+/// Hosts that add their own tools chain <see cref="TypeInfoResolver"/> after
+/// metadata for their own types, so the shared results, errors and parameter
+/// types stay resolvable without reflection.
+/// </remarks>
+public static class McpJson
 {
+    /// <summary>Metadata for the shared tool results, errors and parameter types, and the MCP protocol types.</summary>
+    public static IJsonTypeInfoResolver TypeInfoResolver { get; } = JsonTypeInfoResolver.Combine(
+        McpToolsJsonContext.Default.WithAddedModifier(AddSampledValuePolymorphism),
+        McpJsonUtilities.DefaultOptions.TypeInfoResolver);
+
     /// <summary>The shared options.</summary>
     public static JsonSerializerOptions Options { get; } = CreateOptions();
 
-    /// <summary>Serializes <paramref name="value"/> by its run-time type, which must be known to <see cref="Options"/>.</summary>
-    public static string SerializeByRuntimeType<T>(T value, JsonSerializerOptions options) =>
+    /// <summary>Serializes <paramref name="value"/> by its run-time type, which must be known to <paramref name="options"/>.</summary>
+    internal static string SerializeByRuntimeType<T>(T value, JsonSerializerOptions options) =>
         JsonSerializer.Serialize(value, options.GetTypeInfo(value?.GetType() ?? typeof(T)));
 
     private static JsonSerializerOptions CreateOptions()
@@ -29,9 +39,7 @@ internal static class McpJson
         {
             WriteIndented = false,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            TypeInfoResolver = JsonTypeInfoResolver.Combine(
-                McpToolsJsonContext.Default.WithAddedModifier(AddSampledValuePolymorphism),
-                McpJsonUtilities.DefaultOptions.TypeInfoResolver),
+            TypeInfoResolver = TypeInfoResolver,
         };
         options.MakeReadOnly();
         return options;

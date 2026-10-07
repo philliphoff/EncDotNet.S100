@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S57;
@@ -200,53 +201,64 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
         S57TranslationTarget detected,
         S57TranslationDiagnostics diagnostics)
     {
-        var report = new
+        var report = new JsonObject
         {
-            source = sourcePath,
-            output = outputPath,
-            product = target.Spec,
-            productEdition = target.Edition,
-            detectedProduct = detected.Spec,
-            updatesApplied = updates.Select(Path.GetFileName).ToArray(),
-            featureRecordsRead = diagnostics.FeatureRecordsRead,
-            featuresEmitted = diagnostics.FeaturesEmitted,
-            soundingFeaturesRead = diagnostics.SoundingFeaturesRead,
-            soundingFeaturesEmitted = diagnostics.SoundingFeaturesEmitted,
-            soundingPointsEmitted = diagnostics.SoundingPointsEmitted,
-            soundingFeaturesWithoutPoints = diagnostics.SoundingFeaturesWithoutPoints,
-            sectorLightsMerged = diagnostics.SectorLightsMerged,
-            topmarksAbsorbed = diagnostics.TopmarksAbsorbed,
-            nauticalInformationTypesEmitted = diagnostics.NauticalInformationTypesEmitted,
-            rangeSystemsEmitted = diagnostics.RangeSystemsEmitted,
-            timeSchedulesEmitted = diagnostics.TimeSchedulesEmitted,
-            bridgeSpansEmitted = diagnostics.BridgeSpansEmitted,
-            bridgeAggregationsEmitted = diagnostics.BridgeAggregationsEmitted,
-            bridgeEquipmentLinked = diagnostics.BridgeEquipmentLinked,
-            bridgeCollectionsUnjoined = diagnostics.BridgeCollectionsUnjoined,
-            derivedFeatureIdentifiersAssigned = diagnostics.DerivedFeatureIdentifiersAssigned,
-            unmappedObjectClasses = diagnostics.UnmappedObjectClasses
+            ["source"] = sourcePath,
+            ["output"] = outputPath,
+            ["product"] = target.Spec,
+            ["productEdition"] = target.Edition,
+            ["detectedProduct"] = detected.Spec,
+            ["updatesApplied"] = new JsonArray(updates.Select(u => (JsonNode?)Path.GetFileName(u)).ToArray()),
+            ["featureRecordsRead"] = diagnostics.FeatureRecordsRead,
+            ["featuresEmitted"] = diagnostics.FeaturesEmitted,
+            ["soundingFeaturesRead"] = diagnostics.SoundingFeaturesRead,
+            ["soundingFeaturesEmitted"] = diagnostics.SoundingFeaturesEmitted,
+            ["soundingPointsEmitted"] = diagnostics.SoundingPointsEmitted,
+            ["soundingFeaturesWithoutPoints"] = diagnostics.SoundingFeaturesWithoutPoints,
+            ["sectorLightsMerged"] = diagnostics.SectorLightsMerged,
+            ["topmarksAbsorbed"] = diagnostics.TopmarksAbsorbed,
+            ["nauticalInformationTypesEmitted"] = diagnostics.NauticalInformationTypesEmitted,
+            ["rangeSystemsEmitted"] = diagnostics.RangeSystemsEmitted,
+            ["timeSchedulesEmitted"] = diagnostics.TimeSchedulesEmitted,
+            ["bridgeSpansEmitted"] = diagnostics.BridgeSpansEmitted,
+            ["bridgeAggregationsEmitted"] = diagnostics.BridgeAggregationsEmitted,
+            ["bridgeEquipmentLinked"] = diagnostics.BridgeEquipmentLinked,
+            ["bridgeCollectionsUnjoined"] = diagnostics.BridgeCollectionsUnjoined,
+            ["derivedFeatureIdentifiersAssigned"] = diagnostics.DerivedFeatureIdentifiersAssigned,
+            ["unmappedObjectClasses"] = Counts(diagnostics.UnmappedObjectClasses.Select(p => (p.Key.ToString(), p.Value))),
+            ["ruleDroppedObjectClasses"] = Counts(diagnostics.RuleDroppedObjectClasses.Select(p => (p.Key.ToString(), p.Value))),
+            ["unmappedAttributes"] = new JsonArray(diagnostics.UnmappedAttributes
                 .OrderByDescending(p => p.Value)
-                .ToDictionary(p => p.Key.ToString(), p => p.Value),
-            ruleDroppedObjectClasses = diagnostics.RuleDroppedObjectClasses
+                .Select(p => (JsonNode?)new JsonObject
+                {
+                    ["objectClass"] = p.Key.ObjectClass,
+                    ["attribute"] = p.Key.AttributeCode,
+                    ["count"] = p.Value,
+                })
+                .ToArray()),
+            ["ruleDroppedAttributes"] = Counts(diagnostics.RuleDroppedAttributes.Select(p => (p.Key.ToString(), p.Value))),
+            ["droppedEnumValues"] = new JsonArray(diagnostics.DroppedEnumValues
                 .OrderByDescending(p => p.Value)
-                .ToDictionary(p => p.Key.ToString(), p => p.Value),
-            unmappedAttributes = diagnostics.UnmappedAttributes
-                .OrderByDescending(p => p.Value)
-                .Select(p => new { objectClass = p.Key.ObjectClass, attribute = p.Key.AttributeCode, count = p.Value })
-                .ToArray(),
-            ruleDroppedAttributes = diagnostics.RuleDroppedAttributes
-                .OrderByDescending(p => p.Value)
-                .ToDictionary(p => p.Key.ToString(), p => p.Value),
-            droppedEnumValues = diagnostics.DroppedEnumValues
-                .OrderByDescending(p => p.Value)
-                .Select(p => new { attribute = p.Key.S101Attribute, value = p.Key.Value, count = p.Value })
-                .ToArray(),
-            featuresDroppedForNoGeometry = diagnostics.FeaturesDroppedForNoGeometry
-                .OrderByDescending(p => p.Value)
-                .ToDictionary(p => p.Key, p => p.Value),
+                .Select(p => (JsonNode?)new JsonObject
+                {
+                    ["attribute"] = p.Key.S101Attribute,
+                    ["value"] = p.Key.Value,
+                    ["count"] = p.Value,
+                })
+                .ToArray()),
+            ["featuresDroppedForNoGeometry"] = Counts(diagnostics.FeaturesDroppedForNoGeometry.Select(p => (p.Key, p.Value))),
         };
 
-        var json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
+        var json = report.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(reportPath, json);
+    }
+
+    /// <summary>Counts keyed by name, most frequent first.</summary>
+    private static JsonObject Counts(IEnumerable<(string Key, int Count)> counts)
+    {
+        var json = new JsonObject();
+        foreach (var (key, count) in counts.OrderByDescending(c => c.Count))
+            json[key] = count;
+        return json;
     }
 }

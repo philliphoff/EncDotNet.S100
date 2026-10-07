@@ -78,11 +78,11 @@ internal interface IActivityTab : System.ComponentModel.INotifyPropertyChanged
     object ViewModel { get; }
 
     /// <summary>
-    /// The <see cref="UserControl"/> type to instantiate when this tab is
-    /// active. The view must have a parameterless constructor (PR-M1
-    /// limitation — see template TODO for future DI-resolved views).
+    /// Creates the view shown when this tab is active. Called by
+    /// <see cref="ActivityTabViewTemplate"/>, which sets its
+    /// <c>DataContext</c> to <see cref="ViewModel"/>.
     /// </summary>
-    Type ViewType { get; }
+    Control CreateView();
 
     /// <summary>
     /// When <c>true</c>, selecting this tab updates

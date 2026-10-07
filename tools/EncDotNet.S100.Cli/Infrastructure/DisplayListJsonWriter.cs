@@ -25,14 +25,14 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// latitude/longitude) rather than dumped in full, keeping the output compact
 /// and diffable.
 /// </remarks>
-internal static class DisplayListJsonWriter
+internal static partial class DisplayListJsonWriter
 {
-    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web)
+    private static readonly DisplayListJsonContext Json = new(new JsonSerializerOptions(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
+    });
 
     /// <summary>
     /// Serializes the display list carried by <paramref name="result"/> to an
@@ -77,7 +77,7 @@ internal static class DisplayListJsonWriter
             Instructions = instructions,
         };
 
-        return JsonSerializer.Serialize(document, Options) + "\n";
+        return JsonSerializer.Serialize(document, Json.DisplayListDto) + "\n";
     }
 
     private static InstructionDto ToDto(
@@ -235,4 +235,7 @@ internal static class DisplayListJsonWriter
 
         public GeometrySummaryDto? Geometry { get; set; }
     }
+
+    [JsonSerializable(typeof(DisplayListDto))]
+    private sealed partial class DisplayListJsonContext : JsonSerializerContext;
 }

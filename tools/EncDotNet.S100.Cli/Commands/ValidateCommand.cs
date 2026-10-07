@@ -27,7 +27,7 @@ namespace EncDotNet.S100.Cli.Commands;
 /// successfully; this is distinct from a dataset that was evaluated and
 /// found conformant.
 /// </remarks>
-internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
+internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings>
 {
     /// <summary>Exit code returned when validation produced failing findings.</summary>
     private const int FindingsExitCode = 6;
@@ -294,41 +294,35 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
     {
         int failed = result.FileResults.Count(f => FileFailed(f, strict));
 
-        var payload = new
-        {
-            kind = "exchange-set",
-            product,
-            fileCount = result.FileResults.Count,
-            integrityVerified = result.IntegrityVerified,
-            hasChecksumMismatches = result.HasChecksumMismatches,
-            hasMissingFiles = result.HasMissingFiles,
-            isUnsigned = result.FileResults.Count > 0 && result.IsUnsigned,
-            valid = failed == 0,
-            failedCount = failed,
-            files = result.FileResults
-                .Select(f => new
-                {
-                    fileName = f.FileName,
-                    signatureOutcome = f.Outcome.ToString(),
-                    checksumOutcome = f.ChecksumOutcome.ToString(),
-                    computedSha256 = f.ComputedSha256,
-                    detail = f.Detail,
-                    failed = FileFailed(f, strict),
-                    signatures = f.SignatureResults
-                        .Select(signature => new
-                        {
-                            id = signature.Id,
-                            kind = signature.Kind.ToString(),
-                            outcome = signature.Outcome.ToString(),
-                            failureReason = signature.FailureReason.ToString(),
-                            detail = signature.Detail,
-                        })
-                        .ToArray(),
-                })
-                .ToArray(),
-        };
+        var payload = new VerifyPayload(
+            Kind: "exchange-set",
+            Product: product,
+            FileCount: result.FileResults.Count,
+            IntegrityVerified: result.IntegrityVerified,
+            HasChecksumMismatches: result.HasChecksumMismatches,
+            HasMissingFiles: result.HasMissingFiles,
+            IsUnsigned: result.FileResults.Count > 0 && result.IsUnsigned,
+            Valid: failed == 0,
+            FailedCount: failed,
+            Files: result.FileResults
+                .Select(f => new VerifyFilePayload(
+                    FileName: f.FileName,
+                    SignatureOutcome: f.Outcome.ToString(),
+                    ChecksumOutcome: f.ChecksumOutcome.ToString(),
+                    ComputedSha256: f.ComputedSha256,
+                    Detail: f.Detail,
+                    Failed: FileFailed(f, strict),
+                    Signatures: f.SignatureResults
+                        .Select(signature => new VerifySignaturePayload(
+                            Id: signature.Id,
+                            Kind: signature.Kind.ToString(),
+                            Outcome: signature.Outcome.ToString(),
+                            FailureReason: signature.FailureReason.ToString(),
+                            Detail: signature.Detail))
+                        .ToArray()))
+                .ToArray());
 
-        Console.Out.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));
+        Console.Out.WriteLine(JsonSerializer.Serialize(payload, Json.VerifyPayload));
         return failed == 0 ? 0 : FindingsExitCode;
     }
 
@@ -414,39 +408,29 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
             : Partition(report, suppressPatterns).Kept;
         int suppressedCount = report is null ? 0 : report.Findings.Count - kept.Count;
 
-        var payload = new
-        {
-            specification = spec.Name,
-            edition = spec.Edition.ToString(),
-            rulesAvailable = report is not null,
-            rulesEvaluated = report?.RulesEvaluated ?? 0,
-            rulesWithFindings = kept.Select(f => f.RuleId).Distinct().Count(),
-            valid = report is null || kept.Count == 0,
-            suppressedPatterns = suppressPatterns.Count > 0 ? suppressPatterns.ToArray() : null,
-            suppressedCount,
-            findings = kept
-                .Select(f => new
-                {
-                    ruleId = f.RuleId,
-                    severity = f.Severity.ToString(),
-                    message = f.Message,
-                    datasetId = f.DatasetId,
-                    relatedFeatureId = f.RelatedFeatureId,
-                    point = f.Point is { } p ? new { latitude = p.Latitude, longitude = p.Longitude } : null,
-                    boundingBox = f.BoundingBox is { } b
-                        ? new
-                        {
-                            southLatitude = b.SouthLatitude,
-                            westLongitude = b.WestLongitude,
-                            northLatitude = b.NorthLatitude,
-                            eastLongitude = b.EastLongitude,
-                        }
-                        : null,
-                })
-                .ToArray(),
-        };
+        var payload = new ValidatePayload(
+            Specification: spec.Name,
+            Edition: spec.Edition.ToString(),
+            RulesAvailable: report is not null,
+            RulesEvaluated: report?.RulesEvaluated ?? 0,
+            RulesWithFindings: kept.Select(f => f.RuleId).Distinct().Count(),
+            Valid: report is null || kept.Count == 0,
+            SuppressedPatterns: suppressPatterns.Count > 0 ? suppressPatterns.ToArray() : null,
+            SuppressedCount: suppressedCount,
+            Findings: kept
+                .Select(f => new FindingPayload(
+                    RuleId: f.RuleId,
+                    Severity: f.Severity.ToString(),
+                    Message: f.Message,
+                    DatasetId: f.DatasetId,
+                    RelatedFeatureId: f.RelatedFeatureId,
+                    Point: f.Point is { } p ? new PointPayload(p.Latitude, p.Longitude) : null,
+                    BoundingBox: f.BoundingBox is { } b
+                        ? new BoxPayload(b.SouthLatitude, b.WestLongitude, b.NorthLatitude, b.EastLongitude)
+                        : null))
+                .ToArray());
 
-        Console.Out.WriteLine(JsonSerializer.Serialize(payload, JsonOptions));
+        Console.Out.WriteLine(JsonSerializer.Serialize(payload, Json.ValidatePayload));
         return report is not null && Failed(kept, strict) ? FindingsExitCode : 0;
     }
 
@@ -510,13 +494,70 @@ internal sealed class ValidateCommand : Command<ValidateCommand.Settings>
     }
 
     private static void EmitJsonError(string error, string message) =>
-        Console.Out.WriteLine(JsonSerializer.Serialize(new { error, message }, JsonOptions));
+        Console.Out.WriteLine(JsonSerializer.Serialize(new ErrorPayload(error, message), Json.ErrorPayload));
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    // --format json output: indented, camelCase, nulls omitted, written through
+    // source-generated metadata (issue #764).
+    private static readonly PayloadJsonContext Json = new(new JsonSerializerOptions
     {
         WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-    };
+    });
+
+    private sealed record VerifyPayload(
+        string Kind,
+        string Product,
+        int FileCount,
+        bool IntegrityVerified,
+        bool HasChecksumMismatches,
+        bool HasMissingFiles,
+        bool IsUnsigned,
+        bool Valid,
+        int FailedCount,
+        IReadOnlyList<VerifyFilePayload> Files);
+
+    private sealed record VerifyFilePayload(
+        string FileName,
+        string SignatureOutcome,
+        string ChecksumOutcome,
+        string? ComputedSha256,
+        string? Detail,
+        bool Failed,
+        IReadOnlyList<VerifySignaturePayload> Signatures);
+
+    private sealed record VerifySignaturePayload(string Id, string Kind, string Outcome, string FailureReason, string? Detail);
+
+    private sealed record ValidatePayload(
+        string Specification,
+        string Edition,
+        bool RulesAvailable,
+        int RulesEvaluated,
+        int RulesWithFindings,
+        bool Valid,
+        string[]? SuppressedPatterns,
+        int SuppressedCount,
+        IReadOnlyList<FindingPayload> Findings);
+
+    private sealed record FindingPayload(
+        string RuleId,
+        string Severity,
+        string Message,
+        string? DatasetId,
+        string? RelatedFeatureId,
+        PointPayload? Point,
+        BoxPayload? BoundingBox);
+
+    private sealed record PointPayload(double Latitude, double Longitude);
+
+    private sealed record BoxPayload(double SouthLatitude, double WestLongitude, double NorthLatitude, double EastLongitude);
+
+    private sealed record ErrorPayload(string Error, string Message);
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(VerifyPayload))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(ValidatePayload))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(ErrorPayload))]
+    private sealed partial class PayloadJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 
     private enum OutputFormat
     {

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.MutableTools;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -15,12 +16,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// </summary>
 internal static class SetOwnShipMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-    };
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Mutates the live viewer's simulated own-ship position by driving the helm. All fields " +
@@ -110,49 +106,9 @@ internal static class SetOwnShipMcpAdapter
         };
     }
 
-    private static CallToolResult Failure(ToolError error)
-    {
-        var details = JsonSerializer.SerializeToNode(error, error.GetType(), JsonOptions) as JsonObject
-            ?? new JsonObject();
-        details.Remove("code");
-        details.Remove("message");
-        details.Remove("Code");
-        details.Remove("Message");
+    private static CallToolResult Failure(ToolError error) =>
+        ToolErrorPayload.AsCallToolResult(error, JsonOptions);
 
-        var payload = new JsonObject
-        {
-            ["code"] = error.Code,
-            ["message"] = error.Message,
-            ["details"] = details,
-        };
-        return new CallToolResult
-        {
-            Content =
-            [
-                new TextContentBlock { Text = payload.ToJsonString(JsonOptions) },
-            ],
-            IsError = true,
-        };
-    }
-
-    private static CallToolResult InternalError(Exception ex)
-    {
-        var payload = new JsonObject
-        {
-            ["code"] = "internal_error",
-            ["message"] = ex.Message,
-            ["details"] = new JsonObject
-            {
-                ["exceptionType"] = ex.GetType().FullName,
-            },
-        };
-        return new CallToolResult
-        {
-            Content =
-            [
-                new TextContentBlock { Text = payload.ToJsonString(JsonOptions) },
-            ],
-            IsError = true,
-        };
-    }
+    private static CallToolResult InternalError(Exception ex) =>
+        ToolErrorPayload.InternalError(ex, JsonOptions);
 }

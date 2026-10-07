@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.MutableTools;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -9,12 +10,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// <summary>Wraps <see cref="GetRenderStatsTool"/> as an MCP server tool.</summary>
 internal static class GetRenderStatsMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-    };
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Reports the cost of the viewer's most recently completed on-screen map paint: " +
@@ -64,7 +60,7 @@ internal static class GetRenderStatsMcpAdapter
             var styles = new JsonArray();
             foreach (var s in value!.Styles)
             {
-                styles.Add(new JsonObject
+                styles.Add((JsonNode)new JsonObject
                 {
                     ["style"] = s.Style,
                     ["calls"] = s.Calls,

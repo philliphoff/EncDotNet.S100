@@ -397,7 +397,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
                 var texts = new JsonArray();
                 foreach (var text in f.ReferencedTexts)
                 {
-                    texts.Add(new JsonObject
+                    texts.Add((JsonNode)new JsonObject
                     {
                         ["fileName"] = text.FileName,
                         ["text"] = text.Text,
@@ -413,7 +413,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
                     node["attributes"] = JsonNode.Parse(attrs.Value.GetRawText());
             }
 
-            featureArray.Add(node);
+            featureArray.Add((JsonNode)node);
         }
 
         root["features"] = featureArray;
@@ -421,7 +421,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         var sampleArray = new JsonArray();
         foreach (var s in samples)
         {
-            sampleArray.Add(new JsonObject
+            sampleArray.Add((JsonNode)new JsonObject
             {
                 ["spec"] = SpecOfSample(s),
                 ["datasetId"] = s.DatasetId.Value,
@@ -437,7 +437,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         {
             var warningArray = new JsonArray();
             foreach (var warning in warnings)
-                warningArray.Add(warning);
+                warningArray.Add((JsonNode)warning);
             root["warnings"] = warningArray;
         }
 

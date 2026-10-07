@@ -19,13 +19,16 @@ namespace EncDotNet.S100.Viewer.Routing.Persistence;
 /// coordinates) are repaired by reconstructing legs through the
 /// <see cref="Route"/> API and clamping to the available data.
 /// </remarks>
-internal static class RouteStore
+internal static partial class RouteStore
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+    private static readonly StoreJsonContext StoreJson = new(new JsonSerializerOptions
     {
         WriteIndented = true,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-    };
+    });
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(RouteStoreDocument))]
+    private sealed partial class StoreJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 
     /// <summary>
     /// Serializes <paramref name="routes"/> to <paramref name="path"/>,
@@ -49,7 +52,7 @@ internal static class RouteStore
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
 
-        var json = JsonSerializer.Serialize(document, SerializerOptions);
+        var json = JsonSerializer.Serialize(document, StoreJson.RouteStoreDocument);
 
         var tempPath = path + ".tmp";
         File.WriteAllText(tempPath, json);
@@ -84,7 +87,7 @@ internal static class RouteStore
             var json = File.ReadAllText(path);
             if (string.IsNullOrWhiteSpace(json))
                 return false;
-            document = JsonSerializer.Deserialize<RouteStoreDocument>(json, SerializerOptions);
+            document = JsonSerializer.Deserialize(json, StoreJson.RouteStoreDocument);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {

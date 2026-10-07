@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.MutableTools;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -10,12 +11,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// <summary>Wraps <see cref="AwaitRenderIdleTool"/> as an MCP server tool.</summary>
 internal static class AwaitRenderIdleMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-    };
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Blocks until the viewer's live map settles — no completed paint, graphics-refresh " +

@@ -63,10 +63,11 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab, IDisposable
     public string Name { get; }
     public string Tooltip { get; }
     public object ViewModel { get; }
-    public Type ViewType => typeof(TView);
     public bool PersistAsLastSelected { get; }
     public TabDock Dock { get; }
     public bool AutoOpenOnContentSignal { get; }
+
+    public Control CreateView() => new TView();
 
     public bool IsVisible
     {
