@@ -163,13 +163,55 @@ public static class CatalogueFormatDetector
         return copy;
     }
 
-    /// <summary>Fetches the start of the document at <paramref name="uri"/> and probes it.</summary>
-    /// <exception cref="HttpRequestException">The URL could not be fetched.</exception>
+    /// <summary>
+    /// Fetches the start of the document at <paramref name="uri"/> and probes
+    /// it. When the URL is not a recognised document (or cannot be fetched),
+    /// it is tried as a SECOM service endpoint: a service that answers
+    /// <c>Capability</c> is recognised as <see cref="KnownCatalogueFormat.Secom"/>
+    /// (issue #804).
+    /// </summary>
+    /// <exception cref="HttpRequestException">The URL could not be fetched and is not a SECOM service.</exception>
     public static async Task<CatalogueProbe> ProbeAsync(HttpClient httpClient, Uri uri, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(uri);
 
+        CatalogueProbe document;
+        try
+        {
+            document = await ProbeDocumentAsync(httpClient, uri, cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException)
+        {
+            if (await IsSecomServiceAsync(httpClient, uri, cancellationToken).ConfigureAwait(false))
+                return SecomProbe;
+            throw;
+        }
+
+        return document.Format is null && await IsSecomServiceAsync(httpClient, uri, cancellationToken).ConfigureAwait(false)
+            ? SecomProbe
+            : document;
+    }
+
+    private static CatalogueProbe SecomProbe { get; } = new(null, KnownCatalogueFormat.Secom, null, IsJson: true);
+
+    /// <summary>True when <paramref name="uri"/> (or the service it lies under) answers SECOM <c>Capability</c>.</summary>
+    private static async Task<bool> IsSecomServiceAsync(HttpClient httpClient, Uri uri, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var capability = await new Secom.SecomClient(httpClient, uri).GetCapabilityAsync(cancellationToken).ConfigureAwait(false);
+            return capability.Entries.Count > 0;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidDataException
+            || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            return false;
+        }
+    }
+
+    private static async Task<CatalogueProbe> ProbeDocumentAsync(HttpClient httpClient, Uri uri, CancellationToken cancellationToken)
+    {
         using var response = await httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();

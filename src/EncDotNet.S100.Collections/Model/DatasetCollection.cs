@@ -40,6 +40,7 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(LocalManifestSource), "localManifest")]
 [JsonDerivedType(typeof(S100CatalogueFeedSource), "s100CatalogueFeed")]
 [JsonDerivedType(typeof(S100ForecastFeedSource), "s100ForecastFeed")]
+[JsonDerivedType(typeof(SecomSource), "secom")]
 public abstract record CollectionSource(Guid Id, string? DisplayName);
 
 /// <summary>
@@ -181,4 +182,19 @@ public sealed record S100CatalogueFeedSource(Guid Id, string? DisplayName, Uri C
 /// <param name="Shape">Whether runs download as tiles or as one file per model.</param>
 public sealed record S100ForecastFeedSource(
     Guid Id, string? DisplayName, Uri ModelsUri, IReadOnlyList<ForecastModel> Models, ForecastShape Shape = ForecastShape.Tiles)
+    : CollectionSource(Id, DisplayName);
+
+/// <summary>
+/// A SECOM (IEC 63173-2) service — for example the Canadian Coast Guard's
+/// S-124 navigational warnings — read anonymously through <c>GetSummary</c>
+/// and <c>Get</c> (issue #804), optionally scoped to some products or an
+/// area. Its objects are online (<see cref="RemoteItemLocation"/> with a
+/// <see cref="RemoteEnvelope.Secom"/> envelope) until downloaded; summaries
+/// carry no coverage, so objects have bounds only once downloaded.
+/// </summary>
+/// <param name="Id">The source's stable identifier.</param>
+/// <param name="DisplayName">An optional user-facing label.</param>
+/// <param name="ServiceUri">The service's endpoint URI (for example <c>https://host/api/secom</c>).</param>
+/// <param name="Filter">Which objects to include.</param>
+public sealed record SecomSource(Guid Id, string? DisplayName, Uri ServiceUri, SecomFilter Filter)
     : CollectionSource(Id, DisplayName);
