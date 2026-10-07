@@ -67,21 +67,21 @@ public sealed class LibraryCoverageCandidatesTests
         // A point warning, and a small area (about 2 km across) that is point-sized only when zoomed out.
         var point = Warning("point", new GeoBounds(49.3, -123.0, 49.3, -123.0));
         var small = Warning("small", new GeoBounds(49.29, -123.02, 49.31, -122.99));
-        const double ZoomedOut = 1000;  // metres per pixel
-        const double ZoomedIn = 10;
+        const double zoomedOut = 1000;  // metres per pixel
+        const double zoomedIn = 10;
 
-        Assert.True(LibraryCoverageOverlayController.IsPointSized(point.Item, ZoomedOut));
-        Assert.True(LibraryCoverageOverlayController.IsPointSized(point.Item, ZoomedIn));
-        Assert.True(LibraryCoverageOverlayController.IsPointSized(small.Item, ZoomedOut));
-        Assert.False(LibraryCoverageOverlayController.IsPointSized(small.Item, ZoomedIn));
+        Assert.True(LibraryCoverageOverlayController.IsPointSized(point.Item, zoomedOut));
+        Assert.True(LibraryCoverageOverlayController.IsPointSized(point.Item, zoomedIn));
+        Assert.True(LibraryCoverageOverlayController.IsPointSized(small.Item, zoomedOut));
+        Assert.False(LibraryCoverageOverlayController.IsPointSized(small.Item, zoomedIn));
         Assert.False(LibraryCoverageOverlayController.IsPointSized(point.Item, 0));  // no viewport yet
 
         // A tap 3 px from the point hits its marker; 30 px away it does not.
         var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(-123.0, 49.3);
         GeoPosition At(double dx) =>
             Mapsui.Projections.SphericalMercator.ToLonLat(x + dx, y) is var (lon, lat) ? new GeoPosition(lat, lon) : default;
-        Assert.Equal(["point"], LibraryCoverageOverlayController.Hits([point], null, At(3 * ZoomedIn), 50_000, ZoomedIn).Select(r => r.Name));
-        Assert.Empty(LibraryCoverageOverlayController.Hits([point], null, At(30 * ZoomedIn), 50_000, ZoomedIn));
-        Assert.Empty(LibraryCoverageOverlayController.Hits([point], null, At(3 * ZoomedIn), 50_000));  // without a resolution
+        Assert.Equal(["point"], LibraryCoverageOverlayController.Hits([point], null, At(3 * zoomedIn), 50_000, zoomedIn).Select(r => r.Name));
+        Assert.Empty(LibraryCoverageOverlayController.Hits([point], null, At(30 * zoomedIn), 50_000, zoomedIn));
+        Assert.Empty(LibraryCoverageOverlayController.Hits([point], null, At(3 * zoomedIn), 50_000));  // without a resolution
     }
 }
