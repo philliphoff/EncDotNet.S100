@@ -153,8 +153,7 @@ internal sealed class S102FeatureDescriber : ISpecFeatureDescriber
             ["metadata"] = dataset.Metadata,
         };
 
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-        return JsonSerializer.Deserialize<JsonElement>(bytes);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     /// <summary>

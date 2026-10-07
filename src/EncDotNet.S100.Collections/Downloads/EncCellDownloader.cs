@@ -96,12 +96,12 @@ public sealed record DownloadedCell(
 /// SECOM data is refused; it needs a certificate.
 /// </para>
 /// </remarks>
-public sealed class EncCellDownloader
+public sealed partial class EncCellDownloader
 {
     /// <summary>The name of the per-cell record file.</summary>
     public const string RecordFileName = ".source.json";
 
-    private static readonly JsonSerializerOptions RecordOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly RecordJsonContext RecordJson = new(new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
 
     private readonly HttpClient _httpClient;
     private readonly TimeProvider _time;
@@ -135,7 +135,7 @@ public sealed class EncCellDownloader
             if (!File.Exists(recordPath))
                 return null;
 
-            var record = JsonSerializer.Deserialize<CellRecord>(File.ReadAllText(recordPath), RecordOptions);
+            var record = JsonSerializer.Deserialize(File.ReadAllText(recordPath), RecordJson.CellRecord);
             if (record is null)
                 return null;
 
@@ -251,7 +251,7 @@ public sealed class EncCellDownloader
             }
 
             var record = Describe(item, remote, staging) with { Signature = SignatureRecord.From(signature) };
-            File.WriteAllText(Path.Combine(staging, RecordFileName), JsonSerializer.Serialize(record, RecordOptions));
+            File.WriteAllText(Path.Combine(staging, RecordFileName), JsonSerializer.Serialize(record, RecordJson.CellRecord));
 
             Replace(CellFolder(folderName), staging);
             return TryGetDownloaded(folderName)
@@ -576,4 +576,7 @@ public sealed class EncCellDownloader
         string BaseRelativePath,
         IReadOnlyList<string> UpdateRelativePaths,
         string? CatalogueRelativePath);
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(CellRecord))]
+    private sealed partial class RecordJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 }

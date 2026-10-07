@@ -94,7 +94,7 @@ public static class S100Feed
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(feed);
-        JsonSerializer.Serialize(stream, feed, indented ? CollectionJson.StoreOptions : CollectionJson.IndexOptions);
+        JsonSerializer.Serialize(stream, feed, (indented ? CollectionJson.Store : CollectionJson.Index).S100FeedDocument);
     }
 
     /// <summary>
@@ -107,7 +107,7 @@ public static class S100Feed
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        var feed = JsonSerializer.Deserialize<S100FeedDocument>(stream, CollectionJson.IndexOptions)
+        var feed = JsonSerializer.Deserialize(stream, CollectionJson.Index.S100FeedDocument)
             ?? throw new JsonException("The feed is empty.");
         if (feed.Format != FormatName)
             throw new JsonException($"Expected an '{FormatName}' document, found '{feed.Format}'.");

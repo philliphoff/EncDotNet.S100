@@ -110,6 +110,7 @@ public class S101LuaDataProviderTraceTests
         public object? Call(string functionName, params object?[] args) => null;
 
         public object?[] CallMultiReturn(string functionName, params object?[] args) => [];
+        public string DescribeError(Exception exception) => exception.Message;
 
         public void Dispose() { }
     }

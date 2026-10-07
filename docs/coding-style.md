@@ -197,6 +197,13 @@ code is migrated toward it opportunistically.
   findings without a comment justifying the specific, local reason.
 - Keep code cross-platform (CI builds on `ubuntu-latest`). Gate any
   platform-specific API to the appropriate runtime identifier.
+- Library projects are `IsTrimmable` (see `src/Directory.Build.props`), so
+  the trim analyzers run on every build and reflection they cannot follow is a
+  build error. Serialize JSON through a source-generated
+  `JsonSerializerContext` (a nested `private partial` context bound to the
+  options already in use keeps private records private), and annotate
+  `Type`/generic parameters with `[DynamicallyAccessedMembers]` where
+  reflection is genuinely needed.
 
 ---
 

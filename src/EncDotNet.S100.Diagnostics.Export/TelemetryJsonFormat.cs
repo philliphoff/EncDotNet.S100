@@ -22,12 +22,13 @@ internal static class TelemetryJsonFormat
     /// </summary>
     public const int SchemaVersion = 1;
 
-    internal static readonly JsonSerializerOptions SerializerOptions = new()
+    /// <summary>Source-generated metadata for the line records (issue #764).</summary>
+    internal static readonly TelemetryJsonContext Json = new(new JsonSerializerOptions
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false,
-    };
+    });
 
     internal static string FormatTagValue(object value) =>
         value is IFormattable formattable
@@ -140,3 +141,39 @@ internal static class TelemetryJsonFormat
                 leaveOpen: false);
     }
 }
+
+/// <summary>The first line of a telemetry file.</summary>
+internal sealed record TelemetryHeaderLine(string Kind, int Version, DateTime StartedAtUtc);
+
+/// <summary>One finished span.</summary>
+internal sealed record TelemetrySpanLine(
+    string Kind,
+    string Name,
+    string TraceId,
+    string SpanId,
+    string? ParentSpanId,
+    long StartUnixNs,
+    long EndUnixNs,
+    double DurationMs,
+    string Status,
+    Dictionary<string, string> Tags);
+
+/// <summary>One metric point; <see cref="Value"/> is a <see cref="long"/> or a <see cref="double"/>.</summary>
+internal sealed record TelemetryMetricLine(
+    string Kind,
+    string Name,
+    string Instrument,
+    string? Unit,
+    Dictionary<string, string> Tags,
+    object? Value,
+    List<TelemetryHistogramBucket>? Buckets);
+
+/// <summary>A histogram point's summary; min and max are omitted when not recorded.</summary>
+internal sealed record TelemetryHistogramBucket(double Sum, long Count, double? Min = null, double? Max = null);
+
+[JsonSerializable(typeof(TelemetryHeaderLine))]
+[JsonSerializable(typeof(TelemetrySpanLine))]
+[JsonSerializable(typeof(TelemetryMetricLine))]
+[JsonSerializable(typeof(long))]
+[JsonSerializable(typeof(double))]
+internal sealed partial class TelemetryJsonContext : JsonSerializerContext;

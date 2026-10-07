@@ -80,15 +80,14 @@ internal sealed class GmlFeatureDescriber : ISpecFeatureDescriber
             ["geometryType"] = feature.GeometryType.ToString(),
             ["attributes"] = feature.Attributes,
             ["complexAttributes"] = feature.ComplexAttributes
-                .Select(c => new
+                .Select(c => new Dictionary<string, object?>(StringComparer.Ordinal)
                 {
-                    code = c.Code,
-                    subAttributes = c.SubAttributes,
+                    ["code"] = c.Code,
+                    ["subAttributes"] = c.SubAttributes,
                 })
                 .ToArray(),
         };
 
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-        return JsonSerializer.Deserialize<JsonElement>(bytes);
+        return SpecPayloadJson.ToElement(payload);
     }
 }

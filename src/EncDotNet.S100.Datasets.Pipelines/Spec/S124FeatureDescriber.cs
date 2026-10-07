@@ -61,15 +61,14 @@ internal sealed class S124FeatureDescriber : ISpecFeatureDescriber
             ["featureType"] = feature.FeatureType,
             ["geometryType"] = feature.GeometryType.ToString(),
             ["attributes"] = feature.Attributes,
-            ["complexAttributes"] = feature.ComplexAttributes.Select(c => new
+            ["complexAttributes"] = feature.ComplexAttributes.Select(c => new Dictionary<string, object?>(StringComparer.Ordinal)
             {
-                code = c.Code,
-                subAttributes = c.SubAttributes,
+                ["code"] = c.Code,
+                ["subAttributes"] = c.SubAttributes,
             }).ToArray(),
         };
 
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-        return JsonSerializer.Deserialize<JsonElement>(bytes);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static IReadOnlyList<Query.FeatureReference> ProjectReferences(

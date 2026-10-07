@@ -78,13 +78,13 @@ public static partial class CollectionManifest
     /// <summary>The conventional file-name suffix of a manifest.</summary>
     public const string FileSuffix = ".s100collection.json";
 
-    private static readonly JsonSerializerOptions ReadOptions = new()
+    private static readonly ManifestJsonContext ReadJson = new(new JsonSerializerOptions
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
-    };
+    });
 
     /// <summary>Reads a manifest, validating it.</summary>
     /// <exception cref="CollectionManifestException">
@@ -104,7 +104,7 @@ public static partial class CollectionManifest
         RawManifest? raw;
         try
         {
-            raw = JsonSerializer.Deserialize<RawManifest>(bytes, ReadOptions);
+            raw = JsonSerializer.Deserialize(bytes, ReadJson.RawManifest);
         }
         catch (JsonException ex)
         {
@@ -305,6 +305,9 @@ public static partial class CollectionManifest
         string? Description,
         IReadOnlyList<string?>? Paths,
         bool? Recursive);
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(RawManifest))]
+    private sealed partial class ManifestJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 }
 
 /// <summary>One problem that makes a manifest unreadable.</summary>

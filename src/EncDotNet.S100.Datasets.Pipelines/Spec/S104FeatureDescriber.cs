@@ -240,7 +240,7 @@ internal sealed class S104FeatureDescriber : ISpecFeatureDescriber
             ["metadata"] = dataset.Metadata,
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static JsonElement SerializeGriddedGroup(S104Dataset dataset, int groupIndex, WaterLevelCoverage coverage)
@@ -280,7 +280,7 @@ internal sealed class S104FeatureDescriber : ISpecFeatureDescriber
             },
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static JsonElement SerializeStationInstance(S104StationSeriesDataset dataset)
@@ -308,7 +308,7 @@ internal sealed class S104FeatureDescriber : ISpecFeatureDescriber
             ["metadata"] = dataset.Metadata,
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static JsonElement SerializeStation(WaterLevelStation station)
@@ -347,7 +347,7 @@ internal sealed class S104FeatureDescriber : ISpecFeatureDescriber
             },
         };
 
-        return ToJsonElement(payload);
+        return SpecPayloadJson.ToElement(payload);
     }
 
     private static (float? Min, float? Max, int NoDataCount) ComputeHeightRange(WaterLevelValue[] values)
@@ -406,11 +406,5 @@ internal sealed class S104FeatureDescriber : ISpecFeatureDescriber
             }
         }
         return (u, d, inc, st);
-    }
-
-    private static JsonElement ToJsonElement(object payload)
-    {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload);
-        return JsonSerializer.Deserialize<JsonElement>(bytes);
     }
 }

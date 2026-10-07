@@ -56,7 +56,7 @@ public sealed record FeedHealth(DateTimeOffset CheckedAt, string? Failure, DateT
 /// <see cref="FeedSnapshot.StaleReason"/>.
 /// </para>
 /// </remarks>
-internal sealed class FeedCache
+internal sealed partial class FeedCache
 {
     private readonly HttpClient _httpClient;
     private readonly string _directory;
@@ -221,7 +221,7 @@ internal sealed class FeedCache
         try
         {
             return File.Exists(path)
-                ? JsonSerializer.Deserialize<FeedMeta>(File.ReadAllText(path))
+                ? JsonSerializer.Deserialize(File.ReadAllText(path), MetaJsonContext.Default.FeedMeta)
                 : null;
         }
         catch (Exception ex) when (ex is JsonException or IOException)
@@ -233,7 +233,7 @@ internal sealed class FeedCache
     private static void WriteMeta(string path, FeedMeta meta)
     {
         var temp = path + ".partial";
-        File.WriteAllText(temp, JsonSerializer.Serialize(meta));
+        File.WriteAllText(temp, JsonSerializer.Serialize(meta, MetaJsonContext.Default.FeedMeta));
         File.Move(temp, path, overwrite: true);
     }
 
@@ -259,6 +259,9 @@ internal sealed class FeedCache
         public string Version =>
             ETag ?? LastModified?.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? ContentHash;
     }
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(FeedMeta))]
+    private sealed partial class MetaJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 }
 
 /// <summary>Options for caching online catalogues.</summary>

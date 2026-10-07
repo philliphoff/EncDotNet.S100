@@ -97,11 +97,11 @@ public sealed record KnownCatalogueSource(
 /// the library. Entries point at each provider's own catalogue; nothing is
 /// derived from other projects' source lists.
 /// </summary>
-public static class KnownCatalogueSources
+public static partial class KnownCatalogueSources
 {
     private const string ResourceName = "EncDotNet.S100.Collections.KnownSources.known-sources.json";
 
-    private static readonly JsonSerializerOptions Options = CreateOptions();
+    private static readonly DocumentJsonContext ReadJson = new(CreateOptions());
 
     private static readonly Lazy<IReadOnlyList<KnownCatalogueSource>> BuiltIn = new(() =>
     {
@@ -126,7 +126,7 @@ public static class KnownCatalogueSources
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        var document = JsonSerializer.Deserialize<Document>(stream, Options)
+        var document = JsonSerializer.Deserialize(stream, ReadJson.Document)
             ?? throw new JsonException("Known-sources document is empty.");
         return (document.Sources ?? [])
             .Where(s => s.Format is { } && s.Id is { Length: > 0 } && s.Name is { Length: > 0 } && s.CatalogUri is { IsAbsoluteUri: true })
@@ -169,7 +169,7 @@ public static class KnownCatalogueSources
             s.Models.Count == 0 ? null : s.Models.Select(m => new ModelEntry(m.Id, m.Name, m.CadenceHours, m.HorizonHours, m.CataloguePath)).ToArray(),
             s.Pilot))
             .ToArray());
-        JsonSerializer.Serialize(stream, document, WriteOptions);
+        JsonSerializer.Serialize(stream, document, WriteJson.Document);
     }
 
     /// <summary>
@@ -210,18 +210,20 @@ public static class KnownCatalogueSources
     /// <summary>The region user-added catalogues are listed under.</summary>
     public const string CustomRegion = "Custom";
 
-    private static readonly JsonSerializerOptions WriteOptions = new(Options) { WriteIndented = true };
+    private static readonly DocumentJsonContext WriteJson = new(new JsonSerializerOptions(CreateOptions()) { WriteIndented = true });
 
     private static JsonSerializerOptions CreateOptions()
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         options.Converters.Add(new LenientEnumConverter<KnownCatalogueFormat>());
         options.Converters.Add(new LenientEnumConverter<KnownCatalogueCoverage>());
-        options.MakeReadOnly(populateMissingResolver: true);
         return options;
     }
 
     private sealed record Document(int Version, IReadOnlyList<Entry>? Sources);
+
+    [JsonSerializable(typeof(Document))]
+    private sealed partial class DocumentJsonContext : JsonSerializerContext;
 
     private sealed record Entry(
         string? Id,
