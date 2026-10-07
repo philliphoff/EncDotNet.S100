@@ -837,6 +837,37 @@ This is the same mechanism as large S-57 sets, generalized:
 >   URL" and in MCP `add_library_source`. The known-sources list carries
 >   the Canadian Coast Guard's S-124 service (`ccg-s124-secom`). The
 >   registry search (MSR) is not wired in yet.
+> - **Sync (#807).** `SecomSource.Sync` keeps a local copy of every listed
+>   object. `LibrarySync` (`EncDotNet.S100.Collections.Library`) listens to
+>   `CollectionLibrary.SourceIndexed`. Per-kind rules are an
+>   `ILibrarySyncPolicy`: whether a source is synced, which items it wants
+>   locally, its managed folder, and when its listing is complete enough to
+>   prune. `SecomSyncPolicy` is the first; other online kinds will opt in.
+>   The sync works as follows:
+>   - **Downloads** new and changed objects through `LibraryDownloads`
+>     without a notification. It stops with `NeededBytes` when that would
+>     exceed `LibrarySyncOptions.MaxBytes` (100 MB).
+>   - **Prunes** copies in the service's managed folder that no source of
+>     that folder lists as current (so cancelled ones go too). It prunes only
+>     after a complete, fresh listing (a fingerprint and no warnings), and
+>     never a copy the host says is in use (`IsInUse`: open in the viewer).
+>   - **Re-indexes** the source only when it downloaded or pruned something,
+>     so the cycle settles after one extra pass. An index of a non-synced
+>     source of the same service re-syncs the synced ones, since it changes
+>     what they may prune.
+>   - **Area filters:** `SecomClient` detects the interface version
+>     unfiltered first, then treats a 404 on a filtered summary as empty
+>     (ELMAN answers an empty area with 404). WKT is longitude-first,
+>     verified against CCG.
+>   - **Viewer:** Add to Library offers "Keep a copy of every object" (on by
+>     default under the cap) and "Only objects in the current map view".
+>     The node's status line reads "Synced N of M · time" or why not.
+>   - **MCP:** `add_library_source` takes `sync` and `inMapView`, and
+>     `list_library_sources` reports `sync`.
+>   - **Live check:** CCG narrowed to Vancouver synced 75 warnings in
+>     ≈4.5 s, 74 with bounds.
+>   - **Not yet:** auto-loading synced objects. Each object is its own
+>     dataset, so loading a whole source would flood the Datasets panel.
 > - **Live check (2026-10-06).** All four anonymous services listed and
 >   downloaded:
 >   - CCG: 1,735 S-124 objects, signatures valid. The signer certificate

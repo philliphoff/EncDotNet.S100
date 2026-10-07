@@ -207,6 +207,14 @@ design in `docs/design/dataset-collections.md`.
       more than 5,000 objects is cut off with a warning. Objects have no
       outline until downloaded. Each downloaded object's signature is
       checked, and the result shows in its details.
+      - **Keep a copy of every object, synced on each refresh** (on by
+        default when the selection is under 100 MB) downloads every object
+        and deletes copies the service no longer lists or has cancelled. The
+        source's status line says "Synced N of M · time", or why it could not.
+        A copy open in the Datasets panel is kept until it is closed.
+      - **Only objects in the current map view** narrows the source to the
+        view as it is when ticked; the counts update. Use it for large
+        services.
   - an **S-128** Catalogue of Nautical Products
 
   Local sources are referenced **in place**. Files are never copied,

@@ -186,4 +186,25 @@ public sealed class LibraryNodeViewModelTests
         Assert.StartsWith("Access denied", node.StatusLine);
         Assert.Equal(LibraryNodeStatusKind.Error, node.StatusKind);
     }
+
+    [Fact]
+    public void A_synced_secom_source_reports_its_last_sync()
+    {
+        var source = new SecomSource(Guid.NewGuid(), null, new Uri("https://secom.test/api/secom/"), SecomFilter.All, Sync: true);
+        var node = Node(source, Index(3));
+        Assert.Equal("SECOM", node.KindTag);
+        Assert.False(node.HasStatusLine);  // before the first sync
+
+        var at = new DateTimeOffset(DateTime.Today.AddHours(14), TimeZoneInfo.Local.GetUtcOffset(DateTime.Today));
+        node.SyncStatus = new EncDotNet.S100.Collections.Library.LibrarySyncStatus(at, 3, 3, 3, 0, 0);
+        Assert.Equal(LibraryNodeStatusKind.Ok, node.StatusKind);
+        Assert.StartsWith("Synced 3 of 3 · ", node.StatusLine, StringComparison.Ordinal);
+
+        node.SyncStatus = node.SyncStatus with { Local = 2, Failed = 1 };
+        Assert.Equal(("Synced 2 of 3 · 1 failed", LibraryNodeStatusKind.Warning), (node.StatusLine, node.StatusKind));
+
+        node.SyncStatus = node.SyncStatus with { NeededBytes = 200L * 1024 * 1024 };
+        Assert.Equal(LibraryNodeStatusKind.Warning, node.StatusKind);
+        Assert.StartsWith("Not synced: needs ", node.StatusLine, StringComparison.Ordinal);
+    }
 }

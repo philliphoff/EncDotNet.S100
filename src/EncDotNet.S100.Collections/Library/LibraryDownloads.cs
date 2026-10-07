@@ -180,6 +180,56 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
     /// <inheritdoc />
     public DateTimeOffset? LocalPublishedAtOf(CollectionItem item) => Downloaded(item)?.PublishedAt;
 
+    /// <summary>
+    /// The names of the copies downloaded into the managed folder that
+    /// <paramref name="location"/> downloads to (cells or packages); empty
+    /// when the location is not downloadable.
+    /// </summary>
+    /// <param name="location">Any download location of that folder.</param>
+    public IReadOnlyList<string> DownloadedNames(RemoteItemLocation location)
+    {
+        ArgumentNullException.ThrowIfNull(location);
+        return _downloaderFor(location)?.ListDownloaded() ?? [];
+    }
+
+    /// <summary>The managed folder that <paramref name="location"/> downloads to, or <see langword="null"/> when it is not downloadable.</summary>
+    /// <param name="location">Any download location of that folder.</param>
+    public string? FolderOf(RemoteItemLocation location)
+    {
+        ArgumentNullException.ThrowIfNull(location);
+        return _downloaderFor(location)?.Root;
+    }
+
+    /// <summary>
+    /// Deletes the downloaded copy named <paramref name="name"/> from the
+    /// managed folder that <paramref name="location"/> downloads to, and
+    /// forgets it, so its items are online again.
+    /// </summary>
+    /// <param name="location">Any download location of that folder.</param>
+    /// <param name="name">The cell or package name (as <see cref="DownloadedNames"/> lists it).</param>
+    /// <returns>True when a copy was deleted.</returns>
+    public bool Delete(RemoteItemLocation location, string name)
+    {
+        ArgumentNullException.ThrowIfNull(location);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        if (_downloaderFor(location) is not { } downloader)
+            return false;
+
+        bool deleted;
+        try
+        {
+            deleted = downloader.Delete(name);
+        }
+        finally
+        {
+            _known.TryRemove(Key(downloader, name), out _);
+        }
+
+        if (deleted)
+            RaiseChanged();
+        return deleted;
+    }
+
     /// <summary>True when <paramref name="item"/> can be downloaded (online, not cancelled, and a downloader takes it).</summary>
     /// <param name="item">The library item.</param>
     public bool CanDownload(CollectionItem item) =>

@@ -1316,6 +1316,16 @@ internal static class Strings
     public static string Library_Format_ChartCatalogs => Get(nameof(Library_Format_ChartCatalogs));
     public static string Library_Format_S100Feed => Get(nameof(Library_Format_S100Feed));
     public static string Library_Format_Secom => Get(nameof(Library_Format_Secom));
+    public static string Library_SecomMapArea => Get(nameof(Library_SecomMapArea));
+    public static string Library_SecomSyncTitle => Get(nameof(Library_SecomSyncTitle));
+    public static string Library_SecomInMapView => Get(nameof(Library_SecomInMapView));
+    public static string Library_SecomSyncSizeFormat => Get(nameof(Library_SecomSyncSizeFormat));
+    public static string Library_SecomSyncTooLargeFormat => Get(nameof(Library_SecomSyncTooLargeFormat));
+    public static string Library_SecomSyncTruncated => Get(nameof(Library_SecomSyncTruncated));
+    public static string Library_SecomAreaNameFormat => Get(nameof(Library_SecomAreaNameFormat));
+    public static string Library_StatusLine_SyncedFormat => Get(nameof(Library_StatusLine_SyncedFormat));
+    public static string Library_StatusLine_SyncFailedFormat => Get(nameof(Library_StatusLine_SyncFailedFormat));
+    public static string Library_StatusLine_SyncTooLargeFormat => Get(nameof(Library_StatusLine_SyncTooLargeFormat));
     public static string Library_SecomFacetDetailFormat => Get(nameof(Library_SecomFacetDetailFormat));
     public static string Library_SecomSelectionAllFormat => Get(nameof(Library_SecomSelectionAllFormat));
     public static string Library_SecomSelectionFormat => Get(nameof(Library_SecomSelectionFormat));

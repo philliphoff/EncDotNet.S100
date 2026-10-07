@@ -28,6 +28,8 @@ internal static class LibraryEditMcpAdapters
             [Description("For a forecast feed: 'tiles' (default) or 'regional'.")] string? shape = null,
             [Description("For an S-100 catalogue with several resolutions: one from the preview.")] string? resolution = null,
             [Description("True to load the catalogue and report its choices without adding anything.")] bool? preview = null,
+            [Description("For a SECOM service: true to keep every object downloaded and pruned on each refresh, false not to (default: on when small).")] bool? sync = null,
+            [Description("For a SECOM service: true to read only the objects in the current map view.")] bool? inMapView = null,
             CancellationToken ct = default) =>
         {
             Guid? target = null;
@@ -42,7 +44,8 @@ internal static class LibraryEditMcpAdapters
                 target = parsed;
             }
             return McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new AddSourceRequest(
-                knownSourceId, path, url, kind, choices, includeAll, target, collectionName, shape, resolution, preview == true), ct));
+                knownSourceId, path, url, kind, choices, includeAll, target, collectionName, shape, resolution, preview == true,
+                sync, inMapView == true), ct));
         };
         return Tool(del, AddLibrarySourceTool.Name,
             "Adds a source to the live viewer's Library through the Add-to-Library dialog's own logic: a known online "
@@ -51,7 +54,9 @@ internal static class LibraryEditMcpAdapters
             + "rivers, S-111 forecast models, S-102 areas, manifest groups, feed products) with sizes, plus forecast "
             + "shapes, resolutions and existing collections. Then call again with 'choices' (values or labels) or "
             + "includeAll, and optionally collectionId or collectionName. Adding only indexes the catalogue; nothing is "
-            + "downloaded (use library_action). Returns the new collection and source ids. Mutating; viewer-injected tool.");
+            + "downloaded (use library_action), except that a SECOM service added with sync keeps every object "
+            + "downloaded (inMapView narrows it to the current map view). Returns the new collection and source ids. "
+            + "Mutating; viewer-injected tool.");
     }
 
     /// <summary>Creates <c>refresh_library_source</c>.</summary>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 
@@ -97,15 +98,32 @@ public sealed class SecomClient
     /// <summary>Calls <c>GetSummary</c> for one page (pages count from 1).</summary>
     /// <exception cref="HttpRequestException">The service did not answer on any interface version.</exception>
     /// <exception cref="InvalidDataException">The response is not a SECOM summary response.</exception>
-    public Task<SecomSummaryPage> GetSummaryPageAsync(
+    /// <remarks>
+    /// Some services answer a filtered request that matches nothing with
+    /// 404. So for a filtered query the interface version is detected first,
+    /// with an unfiltered request; once it is known, a 404 means an empty page.
+    /// </remarks>
+    public async Task<SecomSummaryPage> GetSummaryPageAsync(
         SecomQuery query, int page = 1, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
-        return SendAsync(
-            v => Resolve(v, "object/summary", SummaryParameters(query, page)),
-            (root, _) => SecomJson.ReadSummaryPage(root),
-            cancellationToken);
+
+        var filtered = query.GeometryWkt is { Length: > 0 } || query.ValidFrom is not null || query.ValidTo is not null;
+        if (filtered && _version is null)
+            await GetSummaryPageAsync(new SecomQuery(PageSize: 1), 1, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return await SendAsync(
+                v => Resolve(v, "object/summary", SummaryParameters(query, page)),
+                (root, _) => SecomJson.ReadSummaryPage(root),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex) when (filtered && _version is not null && ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return new SecomSummaryPage([], 0, null);
+        }
     }
 
     /// <summary>

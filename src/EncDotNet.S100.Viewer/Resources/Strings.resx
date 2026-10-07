@@ -3421,6 +3421,36 @@
   <data name="Library_Format_S100Feed" xml:space="preserve">
     <value>S-100 feed</value>
   </data>
+  <data name="Library_StatusLine_SyncedFormat" xml:space="preserve">
+    <value>Synced {0:N0} of {1:N0} · {2}</value>
+  </data>
+  <data name="Library_StatusLine_SyncFailedFormat" xml:space="preserve">
+    <value>Synced {0:N0} of {1:N0} · {2:N0} failed</value>
+  </data>
+  <data name="Library_StatusLine_SyncTooLargeFormat" xml:space="preserve">
+    <value>Not synced: needs {0} — narrow it to an area</value>
+  </data>
+  <data name="Library_SecomSyncTitle" xml:space="preserve">
+    <value>Keep a copy of every object, synced on each refresh</value>
+  </data>
+  <data name="Library_SecomInMapView" xml:space="preserve">
+    <value>Only objects in the current map view</value>
+  </data>
+  <data name="Library_SecomSyncSizeFormat" xml:space="preserve">
+    <value>Downloads {0} now</value>
+  </data>
+  <data name="Library_SecomSyncTooLargeFormat" xml:space="preserve">
+    <value>{0} — too much to sync; narrow it to the map view</value>
+  </data>
+  <data name="Library_SecomSyncTruncated" xml:space="preserve">
+    <value>The service offers more than can be listed; narrow it to the map view</value>
+  </data>
+  <data name="Library_SecomAreaNameFormat" xml:space="preserve">
+    <value>{0} (map area)</value>
+  </data>
+  <data name="Library_SecomMapArea" xml:space="preserve">
+    <value>map area</value>
+  </data>
   <data name="Library_Format_Secom" xml:space="preserve">
     <value>SECOM service</value>
   </data>

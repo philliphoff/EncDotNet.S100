@@ -264,6 +264,50 @@ public sealed class EncCellDownloader
         }
     }
 
+    /// <summary>The names of the cells and packages downloaded here (folders holding a record).</summary>
+    public IReadOnlyList<string> ListDownloaded()
+    {
+        try
+        {
+            return Directory.Exists(Root)
+                ? Directory.EnumerateDirectories(Root)
+                    .Where(d => File.Exists(Path.Combine(d, RecordFileName)))
+                    .Select(Path.GetFileName)
+                    .OfType<string>()
+                    .Where(n => !n.StartsWith('.'))
+                    .Order(StringComparer.Ordinal)
+                    .ToArray()
+                : [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Deletes the downloaded copy of <paramref name="cellName"/> (a cell or
+    /// package name). The folder is first moved aside, so a reader never sees
+    /// it half deleted.
+    /// </summary>
+    /// <returns>True when a copy was deleted; false when there was none.</returns>
+    /// <exception cref="ArgumentException">The name is not a single, safe folder name.</exception>
+    public bool Delete(string cellName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(cellName);
+        if (!IsSafeName(cellName))
+            throw new ArgumentException($"'{cellName}' is not a safe download name.", nameof(cellName));
+
+        var folder = CellFolder(cellName);
+        if (!Directory.Exists(folder) || !File.Exists(Path.Combine(folder, RecordFileName)))
+            return false;
+
+        var retired = Path.Combine(Root, $".{cellName}.{Guid.NewGuid():N}.deleted");
+        Directory.Move(folder, retired);
+        TryDeleteDirectory(retired);
+        return true;
+    }
+
     private string CellFolder(string cellName) => Path.Combine(Root, cellName);
 
     /// <summary>
