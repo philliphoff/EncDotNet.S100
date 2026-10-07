@@ -140,8 +140,12 @@ public class MapZoomLimitsTests
     [Theory]
     [InlineData(-32.383)]
     [InlineData(60.0)]
-    public void Apply_ClampsZoomOut_ToMaxScaleOnTheStatusBar_AtAnyLatitude(double latitude)
+    [InlineData(85.0)]
+    public void Apply_ClampsZoomOut_ToTheEquatorialResolution_AtAnyLatitude(double latitude)
     {
+        // The zoom-out floor bounds how small the world gets on screen, so it
+        // is one EPSG:3857 resolution everywhere (issue #749); the status bar
+        // reads MaxScaleDenominator * cos(latitude) there.
         var navigator = new Navigator();
         navigator.SetSize(800, 600);
         MapZoomLimits.Apply(navigator);
@@ -150,10 +154,11 @@ public class MapZoomLimitsTests
         var requested = navigator.Viewport with { CenterY = y, Resolution = 100_000_000.0 };
         var limited = navigator.Limiter.Limit(requested, navigator.PanBounds, navigator.ZoomBounds);
 
+        Assert.Equal(MapZoomLimits.ResolutionForScale(MapZoomLimits.MaxScaleDenominator), limited.Resolution, 6);
         Assert.Equal(
-            MapZoomLimits.MaxScaleDenominator,
+            MapZoomLimits.MaxScaleDenominator * Math.Cos(latitude * Math.PI / 180.0),
             MapScaleFormatter.ResolutionToScaleDenominator(limited.Resolution, latitude)!.Value,
-            3);
+            0);
     }
 
     [Fact]
@@ -222,4 +227,55 @@ public class MapZoomLimitsTests
             MapScaleFormatter.ResolutionToScaleDenominator(limited.Resolution, finalLatitude)!.Value,
             6);
     }
+
+    [Fact]
+    public void Navigator_ZoomOutFromAnotherLatitude_SettlesAtTheFloor()
+    {
+        // Issue #749: when the navigator clamps a requested resolution it
+        // pulls the centre back toward the previous viewport's centre
+        // (Mapsui's LimitXYProportionalToResolution). With a latitude-
+        // corrected floor computed at the requested centre, the map settled
+        // short of the floor at the latitude it ended up at.
+        var navigator = new Navigator();
+        navigator.SetSize(727, 635);
+        MapZoomLimits.Apply(navigator);
+        var (px, py) = SphericalMercator.FromLonLat(61.3, -32.3);
+        navigator.CenterOnAndZoomTo(new MPoint(px, py), 10, duration: 0);
+        navigator.CenterOnAndZoomTo(new MPoint(px, py), 100_000, duration: 0);
+
+        navigator.CenterOnAndZoomTo(
+            new MPoint(0, 0), MapZoomLimits.ResolutionForScale(2_000_000_000.0), duration: 0);
+
+        Assert.Equal(MaxResolution, navigator.Viewport.Resolution, 6);
+    }
+
+    [Fact]
+    public void Navigator_WheelZoomOutAboutThePointer_NeverPassesTheFloor()
+    {
+        // Zooming out about a pointer above the centre walks the centre
+        // toward the pole. A latitude-corrected floor let the world shrink to
+        // a few dozen pixels there; the world must stay at least as wide as
+        // it is at the equatorial floor.
+        var navigator = new Navigator();
+        navigator.SetSize(727, 635);
+        var worldMaxY = SphericalMercator.FromLonLat(0, MapZoomLimits.MaxMercatorLatitude).y;
+        navigator.OverridePanBounds = new MRect(-worldMaxY, -worldMaxY, worldMaxY, worldMaxY);
+        MapZoomLimits.Apply(navigator);
+        var (px, py) = SphericalMercator.FromLonLat(20, 40);
+        navigator.CenterOnAndZoomTo(new MPoint(px, py), 10, duration: 0);
+        navigator.CenterOnAndZoomTo(new MPoint(px, py), 50_000, duration: 0);
+
+        for (var tick = 0; tick < 40; tick++)
+        {
+            navigator.MouseWheelZoomContinuous(1.25, new Mapsui.Manipulations.ScreenPosition(500, 200));
+            Assert.True(
+                navigator.Viewport.Resolution <= MaxResolution * (1 + 1e-9),
+                $"tick {tick}: zoomed out past the floor ({navigator.Viewport.Resolution} m/px)");
+        }
+
+        Assert.Equal(MaxResolution, navigator.Viewport.Resolution, 6);
+    }
+
+    private static double MaxResolution =>
+        MapZoomLimits.ResolutionForScale(MapZoomLimits.MaxScaleDenominator);
 }

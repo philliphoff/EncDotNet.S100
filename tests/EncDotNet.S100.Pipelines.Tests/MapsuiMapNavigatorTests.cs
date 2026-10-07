@@ -40,6 +40,38 @@ public sealed class MapsuiMapNavigatorTests
     }
 
     [Fact]
+    public void SetViewportToCenterAndResolution_ZoomLimited_LandsOnTheRequestedCentre()
+    {
+        // Issue #749: when Mapsui clamps the resolution itself it pulls the
+        // centre back toward the previous viewport's centre.
+        using var map = SizedMap();
+        map.Navigator.OverrideZoomBounds = new MMinMax(1, 100);
+        var navigation = new MapsuiMapNavigator(map);
+        navigation.SetViewportToCenterAndResolution(new MPoint(5_000, 5_000), 50);
+
+        navigation.SetViewportToCenterAndResolution(new MPoint(0, 0), 10_000);
+
+        Assert.Equal(0, map.Navigator.Viewport.CenterX, 6);
+        Assert.Equal(0, map.Navigator.Viewport.CenterY, 6);
+        Assert.Equal(100, map.Navigator.Viewport.Resolution, 6);
+    }
+
+    [Fact]
+    public void SetViewportToExtent_ZoomLimited_CentresTheExtent()
+    {
+        using var map = SizedMap();
+        map.Navigator.OverrideZoomBounds = new MMinMax(1, 100);
+        var navigation = new MapsuiMapNavigator(map);
+        navigation.SetViewportToCenterAndResolution(new MPoint(5_000, 5_000), 50);
+
+        navigation.SetViewportToExtent(new MRect(-1_000_000, -1_000_000, 1_000_000, 1_000_000));
+
+        Assert.Equal(0, map.Navigator.Viewport.CenterX, 6);
+        Assert.Equal(0, map.Navigator.Viewport.CenterY, 6);
+        Assert.Equal(100, map.Navigator.Viewport.Resolution, 6);
+    }
+
+    [Fact]
     public void SetRotation_ValidDegrees_AppliesWithoutAnimation()
     {
         using var map = SizedMap();

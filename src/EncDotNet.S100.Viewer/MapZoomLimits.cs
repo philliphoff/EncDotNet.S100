@@ -13,11 +13,19 @@ namespace EncDotNet.S100.Viewer;
 /// <para>
 /// The bounds are 1:N map-scale denominators. Web-mercator stretches ground
 /// distance by <c>1/cos(latitude)</c>, so the EPSG:3857 resolution that shows
-/// a given scale depends on latitude. The limits are therefore converted at
-/// the centre latitude of each requested viewport, with the same conversion as
-/// the status bar (<see cref="MapScaleFormatter.ScaleDenominatorToResolution"/>),
-/// so the status bar reads exactly <see cref="MinScaleDenominator"/> or
-/// <see cref="MaxScaleDenominator"/> at the clamp, whatever the latitude.
+/// a given scale depends on latitude. The zoom-in limit is therefore converted
+/// at the centre latitude of each requested viewport, with the same conversion
+/// as the status bar (<see cref="MapScaleFormatter.ScaleDenominatorToResolution"/>),
+/// so the status bar reads exactly <see cref="MinScaleDenominator"/> at the
+/// clamp, whatever the latitude.
+/// </para>
+/// <para>
+/// The zoom-out limit is a fixed EPSG:3857 resolution: <see cref="MaxScaleDenominator"/>
+/// converted at the equator. It bounds how small the world gets on screen,
+/// which a latitude-corrected limit would not: near the poles it would let
+/// the whole world shrink to a few dozen pixels (issue #749). At the clamp
+/// the status bar reads <see cref="MaxScaleDenominator"/> times
+/// <c>cos(latitude)</c>, e.g. about 1:250&#160;000&#160;000 at 60°.
 /// </para>
 /// <para>
 /// Mapsui's <see cref="Navigator.OverrideZoomBounds"/> is a single global
@@ -30,9 +38,11 @@ namespace EncDotNet.S100.Viewer;
 internal static class MapZoomLimits
 {
     /// <summary>
-    /// Coarsest permitted scale denominator (zoom-out floor). At this scale
-    /// roughly one world is visible, which is as far out as any chart view
-    /// is useful.
+    /// Coarsest permitted scale denominator at the equator (zoom-out floor).
+    /// At this scale roughly one world is visible, which is as far out as any
+    /// chart view is useful. The floor is the matching EPSG:3857 resolution
+    /// at every latitude, so the status bar reads a finer scale at the clamp
+    /// away from the equator.
     /// </summary>
     public const double MaxScaleDenominator = 500_000_000.0;
 
@@ -62,9 +72,9 @@ internal static class MapZoomLimits
             Math.Clamp(latitudeDegrees, -MaxMercatorLatitude, MaxMercatorLatitude));
 
     /// <summary>
-    /// The zoom bounds (finest and coarsest resolution) that keep the map
-    /// between <see cref="MinScaleDenominator"/> and <see cref="MaxScaleDenominator"/>
-    /// at <paramref name="latitudeDegrees"/>.
+    /// The zoom bounds (finest and coarsest resolution) at
+    /// <paramref name="latitudeDegrees"/>: <see cref="MinScaleDenominator"/>
+    /// at that latitude, and <see cref="MaxScaleDenominator"/> at the equator.
     /// </summary>
     /// <param name="latitudeDegrees">The viewport centre latitude in decimal degrees.</param>
     /// <returns>The resolution range, finest first.</returns>
@@ -72,12 +82,12 @@ internal static class MapZoomLimits
         // MMinMax orders its two arguments into Min (finest resolution /
         // deepest zoom-in) and Max (coarsest resolution / farthest zoom-out).
         new(ResolutionForScale(MinScaleDenominator, latitudeDegrees),
-            ResolutionForScale(MaxScaleDenominator, latitudeDegrees));
+            ResolutionForScale(MaxScaleDenominator));
 
     /// <summary>
     /// Applies the zoom-in and zoom-out limits to the given navigator so all
     /// zoom operations (wheel, pinch, buttons, zoom-to-box, scripted
-    /// viewports) are clamped at the viewport's own latitude. Idempotent.
+    /// viewports) are clamped. Idempotent.
     /// </summary>
     /// <param name="navigator">The map navigator to constrain.</param>
     public static void Apply(Navigator navigator)
@@ -95,7 +105,8 @@ internal static class MapZoomLimits
 
     /// <summary>
     /// Wraps the navigator's limiter, replacing the global zoom bounds with
-    /// <see cref="BoundsAt"/> for the requested viewport's centre latitude.
+    /// <see cref="BoundsAt"/> for the requested viewport's centre latitude
+    /// (only the zoom-in bound depends on it).
     /// Pan limiting is left to the wrapped limiter.
     /// </summary>
     internal sealed class LatitudeAwareLimiter : IViewportLimiter
