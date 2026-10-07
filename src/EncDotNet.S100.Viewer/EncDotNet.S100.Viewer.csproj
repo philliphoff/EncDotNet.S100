@@ -20,6 +20,9 @@
     <SelfContained>true</SelfContained>
     <!-- See Directory.Build.targets: ship the NoDependencies Skia native on Linux (issue #23). -->
     <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+    <!-- Trim analyzers run on every build (issue #764): reflection they cannot
+         follow is an error, as in the libraries. The app is not published trimmed. -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
   </PropertyGroup>
 
   <!--

@@ -5,8 +5,8 @@ namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
 /// PR-M1: <see cref="ActivityTabViewTemplate"/> contract — only matches
-/// <see cref="IActivityTab"/> and instantiates the tab's
-/// <see cref="IActivityTab.ViewType"/> with its <see cref="IActivityTab.ViewModel"/>
+/// <see cref="IActivityTab"/> and builds the tab's view
+/// (<see cref="IActivityTab.CreateView"/>) with its <see cref="IActivityTab.ViewModel"/>
 /// wired up as the <c>DataContext</c>.
 /// </summary>
 public sealed class ActivityTabViewTemplateTests
@@ -22,7 +22,7 @@ public sealed class ActivityTabViewTemplateTests
         public string Title => "Stub";
         public string Tooltip => "Stub";
         public required object ViewModel { get; init; }
-        public Type ViewType => typeof(StubView);
+        public Control CreateView() => new StubView();
         public bool PersistAsLastSelected => true;
         public TabDock Dock => TabDock.Left;
         public bool AutoOpenOnContentSignal => false;
@@ -44,7 +44,7 @@ public sealed class ActivityTabViewTemplateTests
     }
 
     [Fact]
-    public void Build_InstantiatesViewTypeAndSetsDataContext()
+    public void Build_CreatesViewAndSetsDataContext()
     {
         var template = new ActivityTabViewTemplate();
         var vm = new object();

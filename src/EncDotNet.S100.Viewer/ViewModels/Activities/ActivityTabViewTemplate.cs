@@ -10,9 +10,6 @@ namespace EncDotNet.S100.Viewer.ViewModels.Activities;
 /// <c>ContentControl Content="{Binding SelectedTab}"</c> can render any
 /// tab's view.
 /// </summary>
-// TODO PR-M-future: resolve views via DI instead of Activator.CreateInstance
-//   once view constructors need access to services. All current views have
-//   parameterless constructors so this stays simple for PR-M1.
 internal sealed class ActivityTabViewTemplate : IDataTemplate
 {
     public bool Match(object? data) => data is IActivityTab;
@@ -24,7 +21,7 @@ internal sealed class ActivityTabViewTemplate : IDataTemplate
             return null;
         }
 
-        var view = (Control)Activator.CreateInstance(tab.ViewType)!;
+        var view = tab.CreateView();
         view.DataContext = tab.ViewModel;
         return view;
     }

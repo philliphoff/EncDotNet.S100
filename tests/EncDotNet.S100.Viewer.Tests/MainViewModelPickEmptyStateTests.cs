@@ -33,7 +33,7 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
         public string Title { get; init; } = "T";
         public string Tooltip { get; init; } = "Tip";
         public object ViewModel { get; init; } = new object();
-        public Type ViewType { get; init; } = typeof(ContentControl);
+        public Control CreateView() => new ContentControl();
         public bool PersistAsLastSelected { get; init; } = true;
         public TabDock Dock { get; init; } = TabDock.Left;
         public bool AutoOpenOnContentSignal { get; init; }

@@ -12,7 +12,7 @@ namespace EncDotNet.S100.Mcp.MutableTools;
 /// consistent across tools. Promoted from the desktop viewer so the CLI host and
 /// the viewer share one implementation.
 /// </summary>
-internal static class ToolErrorPayload
+public static class ToolErrorPayload
 {
     /// <summary>Serialises a typed <see cref="ToolError"/> as an error result.</summary>
     public static CallToolResult AsCallToolResult(ToolError error, JsonSerializerOptions json)

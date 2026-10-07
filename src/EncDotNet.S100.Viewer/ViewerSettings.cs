@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Viewer;
 /// <summary>
 /// Persists user settings to a JSON file in the app's local data directory.
 /// </summary>
-internal sealed class ViewerSettings
+internal sealed partial class ViewerSettings
 {
     private static readonly string DefaultSettingsDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -371,7 +371,7 @@ internal sealed class ViewerSettings
     /// network. Can be overridden per-run with <c>--basemap</c> (issue
     /// #295).
     /// </summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonConverter(typeof(JsonStringEnumConverter<BasemapMode>))]
     public BasemapMode BasemapMode { get; set; } = BasemapMode.Offline;
 
     /// <summary>
@@ -573,7 +573,7 @@ internal sealed class ViewerSettings
             if (File.Exists(path))
             {
                 var json = File.ReadAllText(path);
-                var settings = JsonSerializer.Deserialize<ViewerSettings>(json) ?? new ViewerSettings();
+                var settings = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.ViewerSettings) ?? new ViewerSettings();
                 settings.SettingsFilePath = path;
 
                 // Issue #295: migrate legacy boolean BasemapEnabled to
@@ -635,7 +635,7 @@ internal sealed class ViewerSettings
         // forward/backward compatibility (issue #295).
         BasemapEnabled = BasemapMode != BasemapMode.None;
 
-        var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(this, SettingsJsonContext.Indented.ViewerSettings);
         File.WriteAllText(SettingsFilePath, json);
     }
 
@@ -645,6 +645,14 @@ internal sealed class ViewerSettings
     /// migration / mirror logic.
     /// </summary>
     internal const string OwnShipVisibilityKey = "ownship";
+
+    /// <summary>Source-generated metadata for the settings file (issue #764).</summary>
+    [JsonSerializable(typeof(ViewerSettings))]
+    private sealed partial class SettingsJsonContext : JsonSerializerContext
+    {
+        /// <summary>Metadata bound to indented output, for saving.</summary>
+        public static SettingsJsonContext Indented { get; } = new(new JsonSerializerOptions { WriteIndented = true });
+    }
 }
 
 /// <summary>

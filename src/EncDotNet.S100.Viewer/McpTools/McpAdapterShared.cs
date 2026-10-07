@@ -1,6 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp;
+using EncDotNet.S100.Mcp.MutableTools;
 using ModelContextProtocol.Protocol;
 
 namespace EncDotNet.S100.Viewer.McpTools;
@@ -14,17 +17,24 @@ namespace EncDotNet.S100.Viewer.McpTools;
 internal static class McpAdapterShared
 {
     /// <summary>
-    /// The serializer options every adapter using this helper shares. A configured
-    /// <c>TypeInfoResolver</c> is required so the MCP SDK can call
-    /// <see cref="JsonSerializerOptions.MakeReadOnly()"/> in the published
-    /// (reflection-disabled) viewer without throwing.
+    /// The serializer options every viewer adapter shares: the shared MCP
+    /// options' shape, with source-generated metadata for the viewer's own
+    /// results, errors and parameters chained before the shared tools'
+    /// (issue #764). Nothing is resolved by reflection.
     /// </summary>
-    public static JsonSerializerOptions Options { get; } = new(JsonSerializerDefaults.Web)
+    public static JsonSerializerOptions Options { get; } = CreateOptions();
+
+    private static JsonSerializerOptions CreateOptions()
     {
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-    };
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+        {
+            WriteIndented = false,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            TypeInfoResolver = JsonTypeInfoResolver.Combine(ViewerMcpJsonContext.Default, McpJson.TypeInfoResolver),
+        };
+        options.MakeReadOnly();
+        return options;
+    }
 
     /// <summary>Runs <paramref name="resultFactory"/> and translates its outcome.</summary>
     public static async Task<CallToolResult> DispatchAsync<T>(Func<Task<ToolResult<T>>> resultFactory)
@@ -55,7 +65,7 @@ internal static class McpAdapterShared
 
     private static CallToolResult Success<T>(T value)
     {
-        var node = JsonSerializer.SerializeToNode(value, Options) ?? new JsonObject();
+        var node = JsonSerializer.SerializeToNode(value, (JsonTypeInfo<T>)Options.GetTypeInfo(typeof(T))) ?? new JsonObject();
         return new CallToolResult
         {
             Content = [new TextContentBlock { Text = node.ToJsonString(Options) }],
@@ -63,40 +73,9 @@ internal static class McpAdapterShared
         };
     }
 
-    private static CallToolResult Failure(ToolError error)
-    {
-        var details = JsonSerializer.SerializeToNode(error, error.GetType(), Options) as JsonObject
-            ?? new JsonObject();
-        details.Remove("code");
-        details.Remove("message");
-        details.Remove("Code");
-        details.Remove("Message");
+    private static CallToolResult Failure(ToolError error) =>
+        ToolErrorPayload.AsCallToolResult(error, Options);
 
-        var payload = new JsonObject
-        {
-            ["code"] = error.Code,
-            ["message"] = error.Message,
-            ["details"] = details,
-        };
-        return new CallToolResult
-        {
-            Content = [new TextContentBlock { Text = payload.ToJsonString(Options) }],
-            IsError = true,
-        };
-    }
-
-    private static CallToolResult InternalError(Exception ex)
-    {
-        var payload = new JsonObject
-        {
-            ["code"] = "internal_error",
-            ["message"] = ex.Message,
-            ["details"] = new JsonObject { ["exceptionType"] = ex.GetType().FullName },
-        };
-        return new CallToolResult
-        {
-            Content = [new TextContentBlock { Text = payload.ToJsonString(Options) }],
-            IsError = true,
-        };
-    }
+    private static CallToolResult InternalError(Exception ex) =>
+        ToolErrorPayload.InternalError(ex, Options);
 }

@@ -99,7 +99,7 @@ internal static partial class FeedExporter
                 .ToArray(),
         };
         WriteAtomically(Path.Combine(outputDirectory, S100Feed.FileName), stream => S100Feed.Write(stream, document));
-        WriteAtomically(manifestPath, stream => JsonSerializer.Serialize(stream, stamps));
+        WriteAtomically(manifestPath, stream => JsonSerializer.Serialize(stream, stamps, ManifestJsonContext.Default.DictionaryStringString));
 
         var total = stamps.Keys.Sum(id => new FileInfo(Path.Combine(items, id + ".zip")).Length);
         return new FeedExportResult(document.Items.Count, written, unchanged, removed, failed.Count, total);
@@ -121,7 +121,7 @@ internal static partial class FeedExporter
         try
         {
             return File.Exists(path)
-                ? JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(path)) ?? []
+                ? JsonSerializer.Deserialize(File.ReadAllText(path), ManifestJsonContext.Default.DictionaryStringString) ?? []
                 : [];
         }
         catch (Exception ex) when (ex is IOException or JsonException)
@@ -151,4 +151,8 @@ internal static partial class FeedExporter
 
     [GeneratedRegex("^(?<id>[0-9a-f]{20})\\.zip$")]
     private static partial Regex ItemFileName();
+
+    /// <summary>The export manifest: item id → content stamp.</summary>
+    [System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, string>))]
+    private sealed partial class ManifestJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 }

@@ -5,12 +5,12 @@ namespace EncDotNet.S100.Cli.Infrastructure.Updates;
 /// <summary>
 /// Stores update-check state as JSON in the user's local application data.
 /// </summary>
-internal sealed class JsonCliUpdateCache : ICliUpdateCache
+internal sealed partial class JsonCliUpdateCache : ICliUpdateCache
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+    private static readonly CacheJsonContext CacheJson = new(new JsonSerializerOptions
     {
         WriteIndented = true,
-    };
+    });
 
     private readonly string _path;
 
@@ -34,9 +34,9 @@ internal sealed class JsonCliUpdateCache : ICliUpdateCache
 
             await using var stream = File.OpenRead(_path);
             return await JsonSerializer
-                .DeserializeAsync<CliUpdateCacheEntry>(
+                .DeserializeAsync(
                     stream,
-                    SerializerOptions,
+                    CacheJson.CliUpdateCacheEntry,
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -72,7 +72,7 @@ internal sealed class JsonCliUpdateCache : ICliUpdateCache
             await using (var stream = File.Create(temporaryPath))
             {
                 await JsonSerializer
-                    .SerializeAsync(stream, entry, SerializerOptions, cancellationToken)
+                    .SerializeAsync(stream, entry, CacheJson.CliUpdateCacheEntry, cancellationToken)
                     .ConfigureAwait(false);
             }
 
@@ -101,4 +101,7 @@ internal sealed class JsonCliUpdateCache : ICliUpdateCache
         {
         }
     }
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(CliUpdateCacheEntry))]
+    private sealed partial class CacheJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 }

@@ -28,14 +28,14 @@ namespace EncDotNet.S100.Viewer.Services;
 /// so adding a new spec never breaks the panel.
 /// </para>
 /// </remarks>
-internal sealed class EcdisLabelOverrideProvider
+internal sealed partial class EcdisLabelOverrideProvider
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly OverrideJsonContext OverrideJson = new(new JsonSerializerOptions
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
-    };
+    });
 
     private readonly Assembly _assembly;
     private readonly ConcurrentDictionary<string, SpecLabelData> _cache =
@@ -132,7 +132,7 @@ internal sealed class EcdisLabelOverrideProvider
             using var stream = _assembly.GetManifestResourceStream(resourceName);
             if (stream is null) return SpecLabelData.Empty;
 
-            var doc = JsonSerializer.Deserialize<EcdisLabelOverrideFile>(stream, JsonOptions);
+            var doc = JsonSerializer.Deserialize(stream, OverrideJson.EcdisLabelOverrideFile);
             if (doc is null) return SpecLabelData.Empty;
 
             var groups = new Dictionary<int, EntryInfo>(doc.Groups?.Count ?? 0);
@@ -228,6 +228,9 @@ internal sealed class EcdisLabelOverrideProvider
         [JsonPropertyName("section")]
         public string? Section { get; set; }
     }
+
+    [JsonSerializable(typeof(EcdisLabelOverrideFile))]
+    private sealed partial class OverrideJsonContext : JsonSerializerContext;
 
     private readonly record struct EntryInfo(string Label, string? SectionId);
 

@@ -63,9 +63,15 @@ internal sealed class FeedServer : IAsyncDisposable
         app.UseResponseCompression();
 
         var prefix = token is null ? string.Empty : "/" + Uri.EscapeDataString(token);
-        app.MapGet(prefix + "/", () => Results.Redirect(prefix + "/" + S100Feed.FileName));
-        app.MapGet(prefix + "/" + S100Feed.FileName, (HttpContext context) => ServeFeedAsync(context, publisher));
-        app.MapGet(prefix + "/items/{file}", (HttpContext context, string file) => ServeItemAsync(context, publisher, file, log));
+        // RequestDelegate endpoints: nothing is bound by reflection (issue #764).
+        app.MapGet(prefix + "/", context =>
+        {
+            context.Response.Redirect(prefix + "/" + S100Feed.FileName);
+            return Task.CompletedTask;
+        });
+        app.MapGet(prefix + "/" + S100Feed.FileName, context => ServeFeedAsync(context, publisher));
+        app.MapGet(prefix + "/items/{file}", context =>
+            ServeItemAsync(context, publisher, (string)context.Request.RouteValues["file"]!, log));
 
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
 

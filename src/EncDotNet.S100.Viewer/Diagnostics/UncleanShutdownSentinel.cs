@@ -43,7 +43,7 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 /// detection can never itself take the process down.
 /// </para>
 /// </remarks>
-internal static class UncleanShutdownSentinel
+internal static partial class UncleanShutdownSentinel
 {
     private static readonly object Gate = new();
 
@@ -58,10 +58,10 @@ internal static class UncleanShutdownSentinel
     /// </summary>
     private static readonly TimeSpan StartTimeTolerance = TimeSpan.FromSeconds(2);
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly MarkerJsonContext MarkerJson = new(new JsonSerializerOptions
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    });
 
     /// <summary>
     /// Default marker directory: a <c>crash-markers</c> folder under the
@@ -168,8 +168,8 @@ internal static class UncleanShutdownSentinel
             {
                 try
                 {
-                    var marker = JsonSerializer.Deserialize<SessionMarker>(
-                        File.ReadAllText(file), JsonOptions);
+                    var marker = JsonSerializer.Deserialize(
+                        File.ReadAllText(file), MarkerJson.SessionMarker);
                     if (marker is null)
                     {
                         // Malformed marker — clean it up so it never lingers.
@@ -225,7 +225,7 @@ internal static class UncleanShutdownSentinel
 
             File.WriteAllText(
                 MarkerPathFor(directory, pid),
-                JsonSerializer.Serialize(marker, JsonOptions));
+                JsonSerializer.Serialize(marker, MarkerJson.SessionMarker));
         }
         catch
         {
@@ -330,6 +330,9 @@ internal static class UncleanShutdownSentinel
         public DateTime StartedUtc { get; set; }
         public string? Version { get; set; }
     }
+
+    [JsonSerializable(typeof(SessionMarker))]
+    private sealed partial class MarkerJsonContext : JsonSerializerContext;
 }
 
 /// <summary>

@@ -18,6 +18,9 @@
       stays disabled. The `s100` command name comes from `AssemblyName` above.
     -->
     <PackAsTool>false</PackAsTool>
+    <!-- Trim analyzers run on every build (issue #764): reflection they cannot
+         follow is an error, as in the libraries. The app is not published trimmed. -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
   </PropertyGroup>
 
   <ItemGroup>

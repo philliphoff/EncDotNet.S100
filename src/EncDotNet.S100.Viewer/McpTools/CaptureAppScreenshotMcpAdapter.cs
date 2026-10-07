@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.MutableTools;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -16,12 +17,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// </summary>
 internal static class CaptureAppScreenshotMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-    };
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Captures the whole viewer application window as a PNG image — the chart plus the surrounding "

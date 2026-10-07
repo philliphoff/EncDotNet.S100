@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// separate, optional PNG that the user can preview and exclude. This
 /// record contains only textual diagnostics.
 /// </remarks>
-internal sealed record FeedbackReport
+internal sealed partial record FeedbackReport
 {
     /// <summary>When the report was generated (UTC, ISO-8601).</summary>
     public required DateTimeOffset GeneratedUtc { get; init; }
@@ -53,17 +53,20 @@ internal sealed record FeedbackReport
     /// </summary>
     public string? CrashLogTail { get; init; }
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly ReportJsonContext ReportJson = new(new JsonSerializerOptions
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    });
 
     /// <summary>
     /// Serialises the report to indented JSON — exactly the text shown in
     /// the dialog's raw-data section and written to the bundle.
     /// </summary>
-    public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+    public string ToJson() => JsonSerializer.Serialize(this, ReportJson.FeedbackReport);
+
+    [JsonSerializable(typeof(FeedbackReport))]
+    private sealed partial class ReportJsonContext : JsonSerializerContext;
 }
 
 /// <summary>Application identity / build information.</summary>

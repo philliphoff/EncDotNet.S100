@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.MutableTools;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -9,12 +10,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// <summary>Wraps <see cref="ListPanelsTool"/> as an MCP server tool.</summary>
 internal static class ListPanelsMcpAdapter
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(),
-    };
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
         "Lists the live viewer's activity panels (the tabs in the left / right / bottom docks) and their "
@@ -56,7 +52,7 @@ internal static class ListPanelsMcpAdapter
             var panels = new JsonArray();
             foreach (var p in value!.Panels)
             {
-                panels.Add(new JsonObject
+                panels.Add((JsonNode)new JsonObject
                 {
                     ["id"] = p.Id,
                     ["title"] = p.Title,
