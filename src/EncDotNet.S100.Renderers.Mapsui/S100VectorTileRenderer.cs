@@ -939,13 +939,22 @@ public static class S100VectorTileRenderer
             // clip would erase them (issue #691). Each world copy contributes
             // the data-space tiles under its part of the view; scheduling works
             // on their union.
+            //
+            // Each tile is keyed by its SCAMIN scale class at the live scale
+            // (issue #774), so an op's own scale limits hold at the live scale
+            // rather than the band's. The live-to-band resolution ratio is the
+            // same for every tile, and is kept for speculative tiles.
+            var bandRatio = resolution / TileGrid.ResolutionForBand(band);
             var copyTiles = new CopyTiles[copies.Count];
             for (var i = 0; i < copies.Count; i++)
             {
-                var tiles = WithContent(
-                    state,
-                    TileGrid.VisibleTiles(centerX - copies[i], centerY, coverWidth, coverHeight, resolution, band),
-                    hidden);
+                var tiles = WithScaleClasses(
+                    state.Scene,
+                    WithContent(
+                        state,
+                        TileGrid.VisibleTiles(centerX - copies[i], centerY, coverWidth, coverHeight, resolution, band),
+                        hidden),
+                    bandRatio);
                 copyTiles[i] = new CopyTiles(
                     copies[i],
                     copies.Count > 1 && layerExtent is not null
@@ -1063,14 +1072,16 @@ public static class S100VectorTileRenderer
                 state.CurrentSpeculative.Clear();
                 if (PredictionEnabled)
                 {
-                    foreach (var key in SpeculativeTiles(copies, offset => TileGrid.PredictedTiles(
+                    foreach (var gridKey in SpeculativeTiles(copies, offset => TileGrid.PredictedTiles(
                         centerX - offset, centerY, coverWidth, coverHeight, resolution, band,
                         state.VelocityX, state.VelocityY)))
                     {
-                        if (!TileHasContent(state, key) || IsTileHidden(state, key, hidden))
+                        if (!TileHasContent(state, gridKey) || IsTileHidden(state, gridKey, hidden))
                         {
                             continue;
                         }
+
+                        var key = WithScaleClass(state.Scene, gridKey, bandRatio);
 
                         state.CurrentSpeculative.Add(key);
                         if (!visibleSet.Contains(key)
@@ -1104,18 +1115,22 @@ public static class S100VectorTileRenderer
                     && coldExposure == 0
                     && state.Cache.ResidentBytes < (long)(state.Cache.BudgetBytes * CrossBandPrewarmHeadroomFraction))
                 {
-                    foreach (var key in SpeculativeTiles(copies, offset => TileGrid.CrossBandPrewarmTiles(
+                    foreach (var gridKey in SpeculativeTiles(copies, offset => TileGrid.CrossBandPrewarmTiles(
                         centerX - offset, centerY, coverWidth, coverHeight, resolution, band,
                         CrossBandPrewarmMaxTiles)))
                     {
                         // Zooming in only adds active finer coverages, so a tile of a
                         // finer band hidden now stays hidden there. Zooming out can
                         // drop them, so coarser-band tiles are never skipped.
-                        if (!TileHasContent(state, key)
-                            || (key.Band > band && IsTileHidden(state, key, hidden)))
+                        if (!TileHasContent(state, gridKey)
+                            || (gridKey.Band > band && IsTileHidden(state, gridKey, hidden)))
                         {
                             continue;
                         }
+
+                        // A zoom step keeps the live-to-band ratio, so warm the
+                        // class the neighbouring band would be shown at.
+                        var key = WithScaleClass(state.Scene, gridKey, bandRatio);
 
                         state.CurrentSpeculative.Add(key);
                         // Also exclude keys already queued in a higher tier this frame:
@@ -1671,6 +1686,27 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>
+    /// <paramref name="keys"/> with their SCAMIN scale classes at
+    /// <paramref name="ratio"/> (see <see cref="WithScaleClass"/>), returning
+    /// the input list unchanged when the scene has no scale limits.
+    /// </summary>
+    private static IReadOnlyList<TileKey> WithScaleClasses(VectorScene scene, IReadOnlyList<TileKey> keys, double ratio)
+    {
+        if (TileScaleClass.Thresholds(scene).Length == 0)
+        {
+            return keys;
+        }
+
+        var classed = new TileKey[keys.Count];
+        for (var i = 0; i < keys.Count; i++)
+        {
+            classed[i] = WithScaleClass(scene, keys[i], ratio);
+        }
+
+        return classed;
+    }
+
+    /// <summary>
     /// Filters <paramref name="keys"/> to the tiles that intersect base content
     /// (see <see cref="TileHasContent"/>) and are not wholly hidden by finer
     /// coverage (see <see cref="IsTileHidden"/>), returning the input list
@@ -1891,17 +1927,29 @@ public static class S100VectorTileRenderer
             gpuCache?.Protect(target);
         }
 
+        // A tile whose SCAMIN scale class has just changed (issue #774) shows
+        // its cached sibling class until its own raster lands: same band and
+        // pixels but for the ops whose limit was crossed, so no gap opens.
+        var copyTargets = new IReadOnlyList<TileKey>[copies.Count];
+        for (var i = 0; i < copies.Count; i++)
+        {
+            copyTargets[i] = WithCachedScaleClasses(state, copies[i].Tiles);
+        }
+
         // Whether the band fully covers the viewport (every visible tile
         // already cached). An empty target (no tile in view intersects this
         // cell's content) is trivially complete: there is nothing to draw and
         // no gap to backfill.
         var targetComplete = true;
-        foreach (var key in target)
+        foreach (var keys in copyTargets)
         {
-            if (!state.Cache.Contains(key))
+            foreach (var key in keys)
             {
-                targetComplete = false;
-                break;
+                if (!state.Cache.Contains(key))
+                {
+                    targetComplete = false;
+                    break;
+                }
             }
         }
 
@@ -1915,7 +1963,7 @@ public static class S100VectorTileRenderer
         var blits = new CopyBlits[copies.Count];
         for (var i = 0; i < copies.Count; i++)
         {
-            blits[i] = new CopyBlits(centerX - copies[i].OffsetX, new List<TileKey>(), copies[i].Tiles);
+            blits[i] = new CopyBlits(centerX - copies[i].OffsetX, new List<TileKey>(), copyTargets[i]);
         }
 
         if (!targetComplete)
@@ -1983,6 +2031,48 @@ public static class S100VectorTileRenderer
 
             DiagComposite(state, band, centerX, centerY, coverWidth, coverHeight, resolution, fallback, offscreen: !pinVisible);
         }
+    }
+
+    /// <summary>
+    /// <paramref name="keys"/> with each uncached tile replaced by a cached
+    /// tile of the same band and position in another SCAMIN scale class, the
+    /// nearest class first, when there is one. Returns the input list when
+    /// nothing is replaced. Call under <c>state.Sync</c>.
+    /// </summary>
+    private static IReadOnlyList<TileKey> WithCachedScaleClasses(TileState state, IReadOnlyList<TileKey> keys)
+    {
+        if (state.Scene is not { } scene || TileScaleClass.Thresholds(scene) is not { Length: > 0 } thresholds)
+        {
+            return keys;
+        }
+
+        TileKey[]? replaced = null;
+        for (var i = 0; i < keys.Count; i++)
+        {
+            var key = keys[i];
+            if (state.Cache.Contains(key))
+            {
+                continue;
+            }
+
+            var count = TileScaleClass.Count(thresholds, key.Band, BandDenominator(key));
+            for (var step = 1; step < count; step++)
+            {
+                var finer = key with { ScaleClass = key.ScaleClass - step };
+                var coarser = key with { ScaleClass = key.ScaleClass + step };
+                var sibling = finer.ScaleClass >= 0 && state.Cache.Contains(finer) ? finer
+                    : coarser.ScaleClass < count && state.Cache.Contains(coarser) ? coarser
+                    : (TileKey?)null;
+                if (sibling is { } found)
+                {
+                    replaced ??= [.. keys];
+                    replaced[i] = found;
+                    break;
+                }
+            }
+        }
+
+        return (IReadOnlyList<TileKey>?)replaced ?? keys;
     }
 
     /// <summary>
@@ -2145,8 +2235,10 @@ public static class S100VectorTileRenderer
             bandHist[key.Band] = c + 1;
         }
 
-        foreach (var key in TileGrid.VisibleTiles(centerX, centerY, widthDip, heightDip, resolution, band))
+        var bandRatio = resolution / TileGrid.ResolutionForBand(band);
+        foreach (var gridKey in TileGrid.VisibleTiles(centerX, centerY, widthDip, heightDip, resolution, band))
         {
+            var key = state.Scene is { } scene ? WithScaleClass(scene, gridKey, bandRatio) : gridKey;
             targetTotal++;
             if (present.Contains(key))
             {
@@ -3351,7 +3443,7 @@ public static class S100VectorTileRenderer
         {
             for (var x = xStart; x < xStart + 2; x++)
             {
-                var peer = new TileKey(seed.Band, x, y);
+                var peer = seed with { X = x, Y = y };
                 if (peer != seed && pending.Remove(peer))
                 {
                     result.Add(peer);
@@ -3598,7 +3690,7 @@ public static class S100VectorTileRenderer
         activity?.SetTag("s100.render.tile.width_px", px);
         activity?.SetTag("s100.render.tile.height_px", px);
 
-        var denom = TileScaleDenominator(scene, (minX + maxX) * 0.5, (minY + maxY) * 0.5, key.Band);
+        var denom = TileScaleDenominator(scene, key);
 
         var viewport = new CoreViewport
         {
@@ -3814,20 +3906,15 @@ public static class S100VectorTileRenderer
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(keys);
 
-        if (keys.Count < 2 || keys.Select(key => key.Y).Distinct().Count() == 1)
+        if (keys.Count < 2 || keys.Select(key => (key.Y, key.ScaleClass)).Distinct().Count() == 1)
         {
             return [keys];
         }
 
         var scopedScene = ScopeSceneForTiles(scene, baseIndex, keys);
         var denominators = keys
-            .GroupBy(key => key.Y)
-            .Select(group =>
-            {
-                var key = group.First();
-                var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
-                return TileScaleDenominator(scene, (minX + maxX) * 0.5, (minY + maxY) * 0.5, key.Band);
-            })
+            .GroupBy(key => (key.Y, key.ScaleClass))
+            .Select(group => TileScaleDenominator(scene, group.First()))
             .ToArray();
 
         foreach (var op in scopedScene.Ops)
@@ -3838,8 +3925,8 @@ public static class S100VectorTileRenderer
                 if (ScaleVisibility.IsVisibleAtScale(op, denominators[i]) != visible)
                 {
                     return keys
-                        .GroupBy(key => key.Y)
-                        .OrderBy(group => group.Key)
+                        .GroupBy(key => (key.Y, key.ScaleClass))
+                        .OrderBy(group => group.Key.Y)
                         .Select(group => (IReadOnlyList<TileKey>)group.ToList())
                         .ToList();
                 }
@@ -3923,7 +4010,6 @@ public static class S100VectorTileRenderer
             fullMinX, fullMinY, clampLatitude: false);
         var (maxLon, maxLat) = WebMercator.ToLonLat(
             fullMaxX, fullMaxY, clampLatitude: false);
-        var seedBounds = TileGrid.TileWorldBounds(keys[0]);
         var viewport = new CoreViewport
         {
             MinLatitude = minLat,
@@ -3932,11 +4018,7 @@ public static class S100VectorTileRenderer
             MaxLongitude = maxLon,
             WidthPixels = widthPx,
             HeightPixels = heightPx,
-            ScaleDenominator = TileScaleDenominator(
-                scene,
-                (seedBounds.MinX + seedBounds.MaxX) * 0.5,
-                (seedBounds.MinY + seedBounds.MaxY) * 0.5,
-                band),
+            ScaleDenominator = TileScaleDenominator(scene, keys[0]),
         };
 
         var renderer = new SkiaDisplayListRenderer
@@ -4022,13 +4104,16 @@ public static class S100VectorTileRenderer
     }
 
     /// <summary>
-    /// The scale denominator a band tile centred at (<paramref name="centerX"/>,
-    /// <paramref name="centerY"/>) is rasterised at: the band's own true scale,
-    /// but no coarser than the scene's <see cref="VectorScene.ScaleMinimumCap"/>.
+    /// The scale denominator <paramref name="key"/>'s tile is rasterised at:
+    /// one inside its SCAMIN scale class (<see cref="TileScaleClass"/>, the
+    /// band's own true scale when that lies inside the class), but no coarser
+    /// than the scene's <see cref="VectorScene.ScaleMinimumCap"/>.
     /// </summary>
     /// <remarks>
-    /// The live map snaps to the log-nearest band, so a band's tiles are shown
-    /// at display scales up to √2 finer than the band's own. When the band's
+    /// The scale class makes each op's own scale limits exact at the live scale
+    /// (#774). The cap is kept as well: the live map snaps to the log-nearest
+    /// band, so a band's tiles are shown at display scales up to √2 finer than
+    /// the band's own. When the band's
     /// denominator lies past the cell's out-of-band cap (S-101 PS §4.6: the
     /// cell's <c>minimumDisplayScale</c>) while the live scale is still inside
     /// it, rasterising at the band's denominator culls every capped op and the
@@ -4037,11 +4122,38 @@ public static class S100VectorTileRenderer
     /// to the cap keeps each op's own SCAMIN as before; the cap is applied
     /// against the live scale instead (<see cref="IsPastScaleMinimumCap"/>).
     /// </remarks>
-    internal static double TileScaleDenominator(VectorScene scene, double centerX, double centerY, int band)
+    internal static double TileScaleDenominator(VectorScene scene, TileKey key)
     {
-        var denominator = S100VectorSceneRenderer.ScaleDenominatorFor(
-            centerX, centerY, TileGrid.ResolutionForBand(band));
+        var denominator = TileScaleClass.Denominator(
+            TileScaleClass.Thresholds(scene), key.Band, BandDenominator(key), key.ScaleClass);
         return scene.ScaleMinimumCap is double cap ? Math.Min(denominator, cap) : denominator;
+    }
+
+    /// <summary>The true scale denominator of <paramref name="key"/>'s band at the tile's centre.</summary>
+    internal static double BandDenominator(TileKey key)
+    {
+        var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
+        return S100VectorSceneRenderer.ScaleDenominatorFor(
+            (minX + maxX) * 0.5, (minY + maxY) * 0.5, TileGrid.ResolutionForBand(key.Band));
+    }
+
+    /// <summary>
+    /// <paramref name="key"/> with the SCAMIN scale class it has when its band
+    /// is shown at <paramref name="ratio"/> times the band's resolution (see
+    /// <see cref="TileScaleClass"/>).
+    /// </summary>
+    internal static TileKey WithScaleClass(VectorScene scene, TileKey key, double ratio)
+    {
+        var thresholds = TileScaleClass.Thresholds(scene);
+        if (thresholds.Length == 0)
+        {
+            return key with { ScaleClass = 0 };
+        }
+
+        return key with
+        {
+            ScaleClass = TileScaleClass.For(thresholds, key.Band, BandDenominator(key), ratio),
+        };
     }
 
     /// <summary>

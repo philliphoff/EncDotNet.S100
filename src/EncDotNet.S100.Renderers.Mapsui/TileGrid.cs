@@ -9,8 +9,11 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// EPSG:3857 grid for that band (XYZ convention: <c>X</c> increases east,
 /// <c>Y</c> increases south). See
 /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.2.
+/// <paramref name="ScaleClass"/> is the tile's SCAMIN scale class within its
+/// band (see <see cref="TileScaleClass"/>); the grid itself always yields
+/// class 0, and the tile renderer assigns the class for the live scale.
 /// </summary>
-internal readonly record struct TileKey(int Band, int X, int Y);
+internal readonly record struct TileKey(int Band, int X, int Y, int ScaleClass = 0);
 
 /// <summary>
 /// A screen-space rectangle in device-independent pixels (DIP), corners
