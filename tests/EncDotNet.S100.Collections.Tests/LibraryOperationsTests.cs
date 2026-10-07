@@ -198,9 +198,9 @@ public sealed class LibraryOperationsTests : IDisposable
 
         Assert.Equal(Path.Combine(_context.Root, "noaa-enc"), select(new RemoteItemLocation(new Uri("https://charts.noaa.gov/x.zip")))!.Root);
         Assert.Equal(Path.Combine(_context.Root, "usace-ienc"), select(new RemoteItemLocation(new Uri("https://ienccloud.us/x.zip")))!.Root);
-        var folder = select(new RemoteItemLocation(new Uri("https://example.test/x.h5"), DownloadFolder: "s100/noaa-s111"))!;
-        Assert.Equal(Path.Combine(_context.Root, "s100/noaa-s111"), folder.Root);
-        Assert.Same(folder, select(new RemoteItemLocation(new Uri("https://example.test/y.h5"), DownloadFolder: "s100/noaa-s111")));
+        var folder = select(new RemoteItemLocation(new Uri("https://example.test/x.h5"), DownloadFolder: "noaa-s111"))!;
+        Assert.Equal(Path.Combine(_context.Root, "noaa-s111"), folder.Root);
+        Assert.Same(folder, select(new RemoteItemLocation(new Uri("https://example.test/y.h5"), DownloadFolder: "noaa-s111")));
     }
 
     /// <summary>Opens every group (optionally after a gate) and remembers what it opened.</summary>
