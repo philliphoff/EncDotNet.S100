@@ -32,7 +32,8 @@ public sealed class LibrarySyncTests : IDisposable
 
     private string Downloads => Path.Combine(_context.Root, "downloads");
 
-    private string ServiceFolder => Path.Combine(Downloads, SecomSourceIndexer.DownloadFolderFor(ServiceUri));
+    /// <summary>The service's managed folder, normalised as the downloader keeps it (the folder name uses '/').</summary>
+    private string ServiceFolder => Path.GetFullPath(Path.Combine(Downloads, SecomSourceIndexer.DownloadFolderFor(ServiceUri)));
 
     private (CollectionLibrary Library, LibrarySync Sync, FakeSecomServer Server) Create(
         int objects = 3, LibrarySyncOptions? options = null)
