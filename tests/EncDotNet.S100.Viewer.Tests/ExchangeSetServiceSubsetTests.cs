@@ -124,6 +124,7 @@ public sealed class ExchangeSetServiceSubsetTests
         Assert.Equal(2, header.MemberCount);
         Assert.Equal(2, header.LoadedCount);
         Assert.Null(header.Producer);  // several sets: no single producer
+        Assert.Equal(Path.GetFullPath(LibraryTestContext.Datasets("ExchangeSets")), header.SourcePath);  // the folder they share
 
         // Closing one dataset keeps the source's header for the other.
         datasets.Entries.Remove(datasets.Entries.Single(e => e.DisplayName == "US5WA51M"));

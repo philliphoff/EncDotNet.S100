@@ -1315,7 +1315,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
         var groupKey = librarySource?.SourceId.ToString("N");
         if (groupKey is not null && ExchangeSetHeaders.FirstOrDefault(h => h.GroupKey == groupKey) is { } shared)
         {
-            shared.AddSource(source);
+            shared.AddSource(source, sourcePath);
             RebuildExchangeSetGrouping();
             return shared;
         }

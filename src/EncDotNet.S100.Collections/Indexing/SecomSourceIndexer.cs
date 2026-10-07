@@ -31,7 +31,9 @@ namespace EncDotNet.S100.Collections.Indexing;
 /// </remarks>
 public sealed class SecomSourceIndexer : ICollectionSourceIndexer
 {
-    private const string FingerprintVersion = "secom-v1";
+    // v2: hosts now probe downloaded GML objects (S-124, S-122) for bounds (#809);
+    // indexes built before then had none, so they are rebuilt once.
+    private const string FingerprintVersion = "secom-v2";
 
     /// <summary>The default cap on objects indexed per source.</summary>
     public const int DefaultMaxItems = 5_000;

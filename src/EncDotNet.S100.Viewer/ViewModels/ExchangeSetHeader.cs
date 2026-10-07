@@ -36,8 +36,11 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
     /// match this header against <see cref="DatasetEntry.Source"/>.</summary>
     public IAssetSource Source { get; }
 
-    /// <summary>The folder path or .zip path the user opened.</summary>
-    public string SourcePath { get; }
+    /// <summary>
+    /// The folder path or .zip path the user opened; for a header of several
+    /// sets, the folder they all lie in.
+    /// </summary>
+    public string SourcePath => _paths.Count <= 1 ? _firstPath : CommonFolder(_paths.Values) ?? _firstPath;
 
     /// <summary>Short, user-facing label: the Library source's name for a
     /// source header, else derived from <see cref="SourcePath"/> (the
@@ -73,6 +76,8 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
     }
 
     private readonly HashSet<IAssetSource> _sources = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<IAssetSource, string> _paths = new(ReferenceEqualityComparer.Instance);
+    private readonly string _firstPath;
     private string? _producer;
     private string? _issueDate;
 
@@ -86,21 +91,51 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
     /// Adds another exchange set of the same Library source. A header of
     /// several sets has no single producer or issue date.
     /// </summary>
-    internal void AddSource(IAssetSource source)
+    internal void AddSource(IAssetSource source, string sourcePath)
     {
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrEmpty(sourcePath);
+        _paths[source] = sourcePath;
         if (_sources.Add(source) && _sources.Count > 1)
         {
             Producer = null;
             IssueDate = null;
         }
+
+        OnPropertyChanged(nameof(SourcePath));
     }
 
     /// <summary>Removes an exchange set; returns true when the header holds none any more.</summary>
     internal bool RemoveSource(IAssetSource source)
     {
         _sources.Remove(source);
+        _paths.Remove(source);
+        OnPropertyChanged(nameof(SourcePath));
         return _sources.Count == 0;
+    }
+
+    /// <summary>The deepest folder holding every path, or <see langword="null"/> when they share none.</summary>
+    internal static string? CommonFolder(IEnumerable<string> paths)
+    {
+        string[]? common = null;
+        foreach (var path in paths)
+        {
+            var parts = Path.GetFullPath(path).Split(Path.DirectorySeparatorChar);
+            if (common is null)
+            {
+                common = parts[..^1];  // a set's own folder is not shared
+                continue;
+            }
+
+            var n = 0;
+            while (n < common.Length && n < parts.Length - 1 && string.Equals(common[n], parts[n], StringComparison.Ordinal))
+                n++;
+            common = common[..n];
+        }
+
+        if (common is null || common.Length == 0 || (common.Length == 1 && common[0].Length == 0))
+            return null;
+        return string.Join(Path.DirectorySeparatorChar, common) is { Length: > 0 } joined ? joined : null;
     }
 
     /// <summary>Total number of catalogued datasets.</summary>
@@ -174,7 +209,8 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
 
         Source = source;
         _sources.Add(source);
-        SourcePath = sourcePath;
+        _paths[source] = sourcePath;
+        _firstPath = sourcePath;
         DisplayName = string.IsNullOrWhiteSpace(displayName) ? DeriveDisplayName(sourcePath) : displayName;
         GroupKey = groupKey;
         _producer = producer;
