@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using EncDotNet.S100.Collections.Indexing;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -62,10 +61,12 @@ public sealed class LibrarySyncedEventArgs(Guid SourceId, LibrarySyncStatus Stat
 
 /// <summary>
 /// Keeps synced sources' local copies current (issue #807): after a synced
-/// <see cref="SecomSource"/> is indexed, its new and changed objects are
-/// downloaded and copies that no source of the same service still lists (or
-/// that are listed as cancelled) are deleted. The source is then re-indexed
-/// once, so downloaded objects get their bounds.
+/// source is indexed, the items its <see cref="ILibrarySyncPolicy"/> wants are
+/// downloaded when missing or outdated, and copies in its managed folder that
+/// no source lists any more (or lists as cancelled) are deleted. The source is
+/// then re-indexed once, so downloaded items get their bounds. Synced SECOM
+/// sources (<see cref="SecomSyncPolicy"/>) are the first kind; others opt in
+/// with a policy of their own.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -86,6 +87,7 @@ public sealed class LibrarySync : IDisposable
     private readonly CollectionLibrary _library;
     private readonly LibraryDownloads _downloads;
     private readonly LibrarySyncOptions _options;
+    private readonly IReadOnlyList<ILibrarySyncPolicy> _policies;
     private readonly ILogger _logger;
     private readonly TimeProvider _time;
     private readonly ConcurrentDictionary<Guid, LibrarySyncStatus> _status = new();
@@ -99,13 +101,16 @@ public sealed class LibrarySync : IDisposable
     /// <param name="options">Options; defaults when <see langword="null"/>.</param>
     /// <param name="logger">A logger, or <see langword="null"/>.</param>
     /// <param name="timeProvider">The clock; defaults to <see cref="TimeProvider.System"/>.</param>
+    /// <param name="policies">The sync rules per source kind; defaults to <see cref="SecomSyncPolicy"/>.</param>
     public LibrarySync(
         CollectionLibrary library,
         LibraryDownloads downloads,
         LibrarySyncOptions? options = null,
         ILogger<LibrarySync>? logger = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        IEnumerable<ILibrarySyncPolicy>? policies = null)
     {
+        _policies = policies?.ToArray() ?? [new SecomSyncPolicy()];
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(downloads);
         _library = library;
@@ -120,7 +125,9 @@ public sealed class LibrarySync : IDisposable
     public event EventHandler<LibrarySyncedEventArgs>? Synced;
 
     /// <summary>True when <paramref name="source"/> is kept in sync.</summary>
-    public static bool IsSynced(CollectionSource source) => source is SecomSource { Sync: true };
+    public bool IsSynced(CollectionSource source) => PolicyFor(source) is not null;
+
+    private ILibrarySyncPolicy? PolicyFor(CollectionSource source) => _policies.FirstOrDefault(p => p.IsSynced(source));
 
     /// <summary>Where <paramref name="sourceId"/> stood after its last sync, or <see langword="null"/> before one.</summary>
     public LibrarySyncStatus? StatusOf(Guid sourceId) => _status.TryGetValue(sourceId, out var status) ? status : null;
@@ -158,24 +165,30 @@ public sealed class LibrarySync : IDisposable
 
     private void OnSourceIndexed(object? sender, LibrarySourceIndexedEventArgs e)
     {
-        if (_shutdown.IsCancellationRequested || e.Source is not SecomSource secom)
+        if (_shutdown.IsCancellationRequested)
             return;
 
-        if (IsSynced(secom))
+        if (IsSynced(e.Source))
         {
-            Schedule(secom, e.Index);
+            Schedule(e.Source, e.Index);
             return;
         }
 
-        // Another source of the same service changed what it lists, and so what
-        // the synced sources sharing its folder may prune: sync them again.
-        var folder = SecomSourceIndexer.DownloadFolderFor(secom.ServiceUri);
+        // Another source with items in a synced source's folder changed what it
+        // lists, and so what that source may prune: sync it again.
+        var folders = e.Index.Items
+            .Select(i => i.Location).OfType<RemoteItemLocation>()
+            .Select(_downloads.FolderOf).OfType<string>()
+            .ToHashSet(StringComparer.Ordinal);
+        if (folders.Count == 0)
+            return;
         foreach (var sibling in _library.Collections.SelectMany(c => c.Sources))
         {
-            if (sibling is { Definition: SecomSource { Sync: true } other, Index: { } index }
-                && SecomSourceIndexer.DownloadFolderFor(other.ServiceUri) == folder)
+            if (sibling is { Index: { } index } && PolicyFor(sibling.Definition) is { } policy
+                && policy.PruneFolder(sibling.Definition, index) is { } folder
+                && _downloads.FolderOf(folder) is { } root && folders.Contains(root))
             {
-                Schedule(other, index);
+                Schedule(sibling.Definition, index);
             }
         }
     }
@@ -230,8 +243,9 @@ public sealed class LibrarySync : IDisposable
 
     private async Task<LibrarySyncStatus> SyncCoreAsync(CollectionSource source, SourceIndex index, CancellationToken cancellationToken)
     {
-        var objects = index.Items.Where(i => i.Location is RemoteItemLocation).ToArray();
-        var listed = objects.Where(i => i.Status != CollectionItemStatus.Cancelled).ToArray();
+        var policy = PolicyFor(source)
+            ?? throw new InvalidOperationException($"No sync policy keeps {source.GetType().Name} in sync.");
+        var listed = policy.Wanted(index);
         var needed = listed
             .Where(_downloads.CanDownload)
             .Where(i => _downloads.Localize(i).Location is RemoteItemLocation || _downloads.IsOutdated(i))
@@ -252,10 +266,10 @@ public sealed class LibrarySync : IDisposable
             failed = result.Failed;
         }
 
-        var (pruned, pruneSkipped) = Prune(source, index, objects);
+        var (pruned, pruneSkipped) = Prune(policy, source, index);
 
         var local = listed.Count(i => _downloads.Localize(i).Location is LocalItemLocation && !_downloads.IsOutdated(i));
-        var status = new LibrarySyncStatus(_time.GetUtcNow(), local, listed.Length, downloaded, pruned, failed, neededBytes, pruneSkipped);
+        var status = new LibrarySyncStatus(_time.GetUtcNow(), local, listed.Count, downloaded, pruned, failed, neededBytes, pruneSkipped);
         _status[source.Id] = status;
 
         // Downloaded objects get their bounds, and pruned ones go, on re-index.
@@ -267,36 +281,31 @@ public sealed class LibrarySync : IDisposable
     }
 
     /// <summary>
-    /// Deletes copies in the source's managed folder that no source sharing
-    /// that folder lists as current; only after a complete, fresh listing.
+    /// Deletes copies in the source's managed folder that no source with
+    /// items in that folder lists as current; only after a complete, fresh listing.
     /// </summary>
-    private (int Pruned, bool Skipped) Prune(CollectionSource source, SourceIndex index, IReadOnlyList<CollectionItem> objects)
+    private (int Pruned, bool Skipped) Prune(ILibrarySyncPolicy policy, CollectionSource source, SourceIndex index)
     {
-        if (source is not SecomSource secom)
+        if (policy.PruneFolder(source, index) is not { } probe || _downloads.FolderOf(probe) is not { } root)
             return (0, false);
-        if (index.Fingerprint is null || index.Diagnostics.Any(d => d.Severity >= IndexDiagnosticSeverity.Warning))
+        if (!policy.CanPrune(index))
             return (0, true);
 
-        var folder = SecomSourceIndexer.DownloadFolderFor(secom.ServiceUri);
-        var probe = objects.Select(i => i.Location).OfType<RemoteItemLocation>().FirstOrDefault()
-            ?? new RemoteItemLocation(secom.ServiceUri, DownloadFolder: folder);
-
-        // Anything any source of this folder lists as current is kept, synced or not.
+        // Anything any source lists in this folder as current is kept, synced or not.
         var keep = _library.Collections
             .SelectMany(c => c.Sources)
             .Where(s => s.Id != source.Id)
             .SelectMany(s => s.Index?.Items ?? [])
-            .Concat(objects)
+            .Concat(index.Items)
             .Where(i => i.Status != CollectionItemStatus.Cancelled
-                && i.Location is RemoteItemLocation { DownloadFolder: var f } && f == folder)
+                && i.Location is RemoteItemLocation remote && _downloads.FolderOf(remote) == root)
             .Select(i => (i.Location as RemoteItemLocation)?.Package ?? i.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var pruned = 0;
-        var root = _downloads.FolderOf(probe);
         foreach (var name in _downloads.DownloadedNames(probe))
         {
-            if (keep.Contains(name) || (root is not null && _options.IsInUse?.Invoke(Path.Combine(root, name)) == true))
+            if (keep.Contains(name) || _options.IsInUse?.Invoke(Path.Combine(root, name)) == true)
                 continue;
             try
             {
@@ -305,7 +314,7 @@ public sealed class LibrarySync : IDisposable
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
             {
-                _logger.LogWarning(ex, "Could not delete the synced copy {Name} in {Folder}", name, folder);
+                _logger.LogWarning(ex, "Could not delete the synced copy {Name} in {Folder}", name, root);
             }
         }
 

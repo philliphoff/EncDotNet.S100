@@ -263,7 +263,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// A synced SECOM source's last sync (#807), set by the panel;
+    /// A synced source's last sync (#807), set by the panel;
     /// <see langword="null"/> for other nodes, and before the first sync.
     /// </summary>
     public LibrarySyncStatus? SyncStatus
@@ -315,7 +315,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             return FeedStatus(feed, health, c);
 
         var problems = sources.Sum(x => x.Index?.Diagnostics.Count(d => d.Severity >= IndexDiagnosticSeverity.Warning) ?? 0);
-        if (sources is [{ Definition: SecomSource { Sync: true } }] && _syncStatus is { } sync && (problems == 0 || sync.NeededBytes is not null))
+        if (sources is [_] && _syncStatus is { } sync && (problems == 0 || sync.NeededBytes is not null))
             return SyncStatusLine(sync, c);
         if (sources is [{ Definition: S100ForecastFeedSource forecast, Index: { } runs }] && problems == 0)
             return ForecastStatus(runs, _health?.Invoke(forecast), _forecastCounts, c, _timeFormat?.Invoke() ?? TimeFormat.Utc);

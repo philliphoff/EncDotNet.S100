@@ -1080,7 +1080,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             LibrarySyncStatus? onlySync = null;
             foreach (var child in collection.Children)
             {
-                if (child.Source is { Definition: SecomSource { Sync: true } } synced)
+                if (_sync is not null && child.Source is { } synced && _sync.IsSynced(synced.Definition))
                 {
                     child.SyncStatus = _sync?.StatusOf(synced.Id);
                     if (collection.Children.Count == 1)

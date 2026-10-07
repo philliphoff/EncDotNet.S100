@@ -839,7 +839,11 @@ This is the same mechanism as large S-57 sets, generalized:
 >   registry search (MSR) is not wired in yet.
 > - **Sync (#807).** `SecomSource.Sync` keeps a local copy of every listed
 >   object. `LibrarySync` (`EncDotNet.S100.Collections.Library`) listens to
->   `CollectionLibrary.SourceIndexed` and works as follows:
+>   `CollectionLibrary.SourceIndexed`. Per-kind rules are an
+>   `ILibrarySyncPolicy`: whether a source is synced, which items it wants
+>   locally, its managed folder, and when its listing is complete enough to
+>   prune. `SecomSyncPolicy` is the first; other online kinds will opt in.
+>   The sync works as follows:
 >   - **Downloads** new and changed objects through `LibraryDownloads`
 >     without a notification. It stops with `NeededBytes` when that would
 >     exceed `LibrarySyncOptions.MaxBytes` (100 MB).
