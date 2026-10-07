@@ -81,6 +81,11 @@ The `EncDotNet.S100.Collections.Library` namespace holds a host-neutral library:
   - The host supplies its downloaded copies (`ILibraryLocalCopies`) and what it has open (`LibraryLoadState`).
 - **`LibraryQuery`** — finds items by collection or source, state, product, text, bounding box, covering point (most detailed first, via `CoverageHitTest`) and valid time.
 - **`ForecastRuns`** — forecast-run facts of an item: its model, horizon, shown run window, and its S-102 twin tile.
+- **`LibrarySync`** — keeps synced sources (`SecomSource` with `Sync`) current after each index (#807):
+  - It downloads new and changed objects, up to `LibrarySyncOptions.MaxBytes`, and prunes copies no source of the service still lists.
+  - It never prunes from a stale or capped listing, nor a copy the host says is in use.
+  - It re-indexes once so downloads get their bounds. `StatusOf` and `Synced` report each source's last sync.
+  - `LibraryDownloads.DownloadedNames`/`Delete` and `EncCellDownloader.ListDownloaded`/`Delete` are the deletion side.
 - **`LibraryDownloads`** — downloads online items (ENC cells, community packages, S-100 feeds and the NOAA forecast catalogues) through `EncCellDownloader`, at most three at a time:
   - Progress is a plain `LibraryDownloadProgress` (polled, raised as `ProgressChanged`, or passed to an `IProgress`), with per-item `StatusOf`.
   - `ManagedFolders` routes each download to the viewer's managed folder layout, so every host keeps downloads in the same place.
