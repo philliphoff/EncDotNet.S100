@@ -184,6 +184,12 @@ internal interface IExchangeSetService
         ExchangeSetSubsetRequest request,
         bool defer,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Closes <paramref name="entries"/> (#809): they stop loading as you pan
+    /// and leave the Datasets panel; a set left empty is released.
+    /// </summary>
+    void CloseEntries(IReadOnlyList<ViewModels.DatasetEntry> entries) { }
 }
 
 /// <summary>A subset of one exchange set (or loose-dataset folder) to open.</summary>

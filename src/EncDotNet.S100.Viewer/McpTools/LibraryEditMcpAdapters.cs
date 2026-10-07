@@ -30,6 +30,7 @@ internal static class LibraryEditMcpAdapters
             [Description("True to load the catalogue and report its choices without adding anything.")] bool? preview = null,
             [Description("For a SECOM service: true to keep every object downloaded and pruned on each refresh, false not to (default: on when small).")] bool? sync = null,
             [Description("For a SECOM service: true to read only the objects in the current map view.")] bool? inMapView = null,
+            [Description("True to keep the source's local datasets on the map (loading as you pan, one Datasets row), false not to (default: on for a synced SECOM service).")] bool? showOnMap = null,
             CancellationToken ct = default) =>
         {
             Guid? target = null;
@@ -45,7 +46,7 @@ internal static class LibraryEditMcpAdapters
             }
             return McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new AddSourceRequest(
                 knownSourceId, path, url, kind, choices, includeAll, target, collectionName, shape, resolution, preview == true,
-                sync, inMapView == true), ct));
+                sync, inMapView == true, showOnMap), ct));
         };
         return Tool(del, AddLibrarySourceTool.Name,
             "Adds a source to the live viewer's Library through the Add-to-Library dialog's own logic: a known online "

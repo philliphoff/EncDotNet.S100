@@ -38,6 +38,10 @@ internal interface ILibraryLoader
         IReadOnlyList<CollectionItem> items, bool defer, Func<CollectionItem, LibrarySourceLabel?> sourceOf,
         CancellationToken cancellationToken = default) =>
         LoadAsync(items, defer, cancellationToken);
+
+    /// <summary>Closes the opened (or deferred) datasets of <paramref name="items"/>; others are ignored (#809).</summary>
+    /// <returns>How many were closed.</returns>
+    int Close(IReadOnlyList<CollectionItem> items) => 0;
 }
 
 /// <summary>
@@ -71,8 +75,18 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
         IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default) =>
         LoadAsync(items, defer, _ => null, cancellationToken);
 
-    public async Task<LibraryLoadResult> LoadAsync(
+    public Task<LibraryLoadResult> LoadAsync(
         IReadOnlyList<CollectionItem> items, bool defer, Func<CollectionItem, LibrarySourceLabel?> sourceOf,
+        CancellationToken cancellationToken = default) =>
+        LoadAsync(items, defer, sourceOf, notify: true, cancellationToken);
+
+    /// <summary>
+    /// Opens <paramref name="items"/>; with <paramref name="notify"/> false, the
+    /// "loading as you pan" notice is not shown (problems still are), for opens
+    /// the viewer makes by itself, such as a source shown on the map (#809).
+    /// </summary>
+    internal async Task<LibraryLoadResult> LoadAsync(
+        IReadOnlyList<CollectionItem> items, bool defer, Func<CollectionItem, LibrarySourceLabel?> sourceOf, bool notify,
         CancellationToken cancellationToken = default)
     {
         var result = await _loader.LoadAsync(items, defer, sourceOf, cancellationToken).ConfigureAwait(true);
@@ -85,7 +99,7 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
                 .Show();
         }
 
-        if (defer && _notifications is not null && result.Opened > 0)
+        if (notify && defer && _notifications is not null && result.Opened > 0)
         {
             _notifications.Create(Strings.Toast_LibraryDeferredTitle)
                 .WithSeverity(NotificationSeverity.Info)
@@ -96,6 +110,13 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
         }
 
         return result;
+    }
+
+    public int Close(IReadOnlyList<CollectionItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        var closed = _opener.Close(items.Select(i => i.Location).OfType<LocalItemLocation>().ToArray());
+        return closed;
     }
 
     public void Dispose()
@@ -159,6 +180,20 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
             }
 
             return new LibraryOpenOutcome(entries.Count, []);
+        }
+
+        /// <summary>Closes the entries opened for <paramref name="locations"/>; returns how many.</summary>
+        public int Close(IReadOnlyList<LocalItemLocation> locations)
+        {
+            var entries = locations
+                .Select(l => _entries.TryGetValue(Key(l.RootPath, l.RelativePath), out var entry) ? entry : null)
+                .OfType<DatasetEntry>()
+                .Where(_datasets.Entries.Contains)
+                .Distinct()
+                .ToArray();
+            if (entries.Length > 0)
+                _exchangeSets.CloseEntries(entries);
+            return entries.Length;
         }
 
         private static ExchangeSetSubsetItem ToSubsetItem(CollectionItem item)

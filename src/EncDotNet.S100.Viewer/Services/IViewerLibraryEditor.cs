@@ -62,6 +62,7 @@ internal readonly record struct EditOutcome<T>(T? Value, ToolError? Error)
 /// <param name="Preview">True to only load the catalogue and report the choices.</param>
 /// <param name="Sync">For a SECOM service: keep a local copy of every object (#807); the dialog's default when null.</param>
 /// <param name="InMapView">For a SECOM service: read only the objects in the current map view.</param>
+/// <param name="ShowOnMap">Keep the source's local datasets on the map, loading as you pan (#809); the kind's default when null.</param>
 internal sealed record AddSourceRequest(
     string? KnownSourceId,
     string? Path,
@@ -75,7 +76,8 @@ internal sealed record AddSourceRequest(
     string? Resolution,
     bool Preview,
     bool? Sync = null,
-    bool InMapView = false);
+    bool InMapView = false,
+    bool? ShowOnMap = null);
 
 /// <summary>What add_library_source found or added.</summary>
 [Description("What add_library_source found (preview) or added.")]
@@ -363,6 +365,8 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
                 return EditOutcome<AddSourceResult>.Fail(new InvalidArgument("sync", "only a SECOM service can be kept in sync"));
             dialog.SecomSync = sync;
         }
+
+        dialog.ShowOnMap = request.ShowOnMap;
 
         if (request.CollectionId is { } target)
         {

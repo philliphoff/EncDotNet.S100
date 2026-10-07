@@ -1118,6 +1118,16 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         return entries;
     }
 
+    /// <inheritdoc/>
+    public void CloseEntries(IReadOnlyList<DatasetEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        _lazyCoordinator?.Unregister(entries);
+        // One at a time: the loader releases a dataset on its Remove event.
+        foreach (var entry in entries)
+            _datasets.Entries.Remove(entry);
+    }
+
     /// <summary>The entries of every set under <paramref name="header"/> (a Library source's header holds several, #809).</summary>
     private int LoadedCountOf(ExchangeSetHeader header) =>
         _tracked.Where(t => ReferenceEquals(t.Header, header)).Sum(t => t.Entries.Count);

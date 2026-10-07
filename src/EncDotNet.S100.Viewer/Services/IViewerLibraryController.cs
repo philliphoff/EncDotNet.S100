@@ -89,7 +89,8 @@ internal sealed record LibrarySourceInfo(
     [property: Description("The status line shown under the node, or null when all is normal.")] string? StatusLine,
     [property: Description("Online catalogue or feed URL (a shared feed's access token is masked), or null for local sources.")] string? Url,
     [property: Description("Item counts by state (see query_library_items), when requested.")] IReadOnlyDictionary<string, int>? Counts,
-    [property: Description("For a synced SECOM source: its last sync (when, objects local and listed, downloaded, pruned, failed, and the bytes needed when too large to sync), or null.")] EncDotNet.S100.Collections.Library.LibrarySyncStatus? Sync = null);
+    [property: Description("For a synced SECOM source: its last sync (when, objects local and listed, downloaded, pruned, failed, and the bytes needed when too large to sync), or null.")] EncDotNet.S100.Collections.Library.LibrarySyncStatus? Sync = null,
+    [property: Description("True when the source's local datasets are kept on the map (loading as you pan).")] bool ShowOnMap = false);
 
 /// <summary>A page of Library items.</summary>
 [Description("A page of Library items.")]
@@ -315,7 +316,8 @@ internal sealed class ViewerLibraryController : IViewerLibraryController
             node.StatusLine,
             url,
             tally,
-            node.SyncStatus);
+            node.SyncStatus,
+            source.Definition.ShowOnMap);
     }
 
     internal static LibraryItemInfo Info(LibraryItemViewModel row)

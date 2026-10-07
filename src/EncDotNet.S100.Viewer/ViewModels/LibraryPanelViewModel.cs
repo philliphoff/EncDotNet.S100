@@ -134,6 +134,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         RefreshCommand = new RelayCommand(Refresh);
         RefreshAllCommand = new RelayCommand(() => _library.Refresh());
         RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
+        ToggleShowOnMapCommand = new RelayCommand(ToggleShowOnMap, () => CanShowOnMap);
         CommitRenameCommand = new RelayCommand(CommitRename);
         CancelRenameCommand = new RelayCommand(CancelRename);
         RemoveCommand = new RelayCommand(Remove, () => _selectedNode?.CanRemove == true);
@@ -202,6 +203,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
+                ((RelayCommand)ToggleShowOnMapCommand).NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(CanShowOnMap));
+                OnPropertyChanged(nameof(SelectedShowsOnMap));
                 ((AsyncRelayCommand)ChooseGroupsCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)AddCurrentsForAreaCommand).NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(CanAddCurrentsForArea));
@@ -569,6 +573,41 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Starts renaming the selected collection or source in place.</summary>
     public ICommand RenameCommand { get; }
+
+    /// <summary>Turns "Show on map" on or off for the selected source (or every source of the selected collection), #809.</summary>
+    public ICommand ToggleShowOnMapCommand { get; }
+
+    /// <summary>True when the selected node is a kept source or collection, whose datasets can be kept on the map.</summary>
+    public bool CanShowOnMap => SelectedSources().Length > 0;
+
+    /// <summary>True when every source of the selected node shows on the map (the menu item's tick).</summary>
+    public bool SelectedShowsOnMap => SelectedSources() is { Length: > 0 } sources && sources.All(s => s.Definition.ShowOnMap);
+
+    /// <summary>The sources a node-level action applies to: the source node's, or every source of a collection node.</summary>
+    private LibrarySource[] SelectedSources() => _selectedNode switch
+    {
+        null or { IsGroup: true } => [],
+        { Collection.IsSession: true } => [],
+        { Source: { } source } => [source],
+        { } node => [.. node.Collection.Sources],
+    };
+
+    private void ToggleShowOnMap()
+    {
+        var sources = SelectedSources();
+        if (sources.Length == 0 || _selectedNode is not { } node)
+            return;
+        var show = !sources.All(s => s.Definition.ShowOnMap);
+        foreach (var source in sources)
+            _library.UpdateSource(node.Collection.Id, source.Definition with { ShowOnMap = show });
+        OnPropertyChanged(nameof(SelectedShowsOnMap));
+    }
+
+    /// <summary>A source's name as its tree node shows it, for its Datasets row (#809).</summary>
+    internal string SourceDisplayName(Guid sourceId) =>
+        Nodes.SelectMany(c => c.Children.Prepend(c)).FirstOrDefault(n => !n.IsGroup && n.Source?.Id == sourceId)?.Name
+        ?? _library.Collections.SelectMany(c => c.Sources).FirstOrDefault(s => s.Id == sourceId)?.Definition.DisplayName
+        ?? sourceId.ToString("N")[..8];
 
     /// <summary>Applies the name typed while renaming.</summary>
     public ICommand CommitRenameCommand { get; }
@@ -1254,7 +1293,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         {
             var source = rows[i].Source;
             if (!labels.TryGetValue(source.Id, out var label))
-                labels[source.Id] = label = new LibrarySourceLabel(source.Id, SourceDisplayName(source));
+                labels[source.Id] = label = new LibrarySourceLabel(source.Id, SourceDisplayName(source.Id));
             items[i] = rows[i].EffectiveItem;
             sourceOf[items[i]] = label;
         }
@@ -1262,11 +1301,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         return _loader.LoadAsync(items, defer, item => sourceOf.GetValueOrDefault(item));
     }
 
-    /// <summary>A source's name as its tree node shows it.</summary>
-    private string SourceDisplayName(LibrarySource source) =>
-        Nodes.SelectMany(c => c.Children.Prepend(c)).FirstOrDefault(n => !n.IsGroup && n.Source?.Id == source.Id)?.Name
-        ?? source.Definition.DisplayName
-        ?? source.Id.ToString("N")[..8];
+
 
     private Task DownloadSelectedAsync() => DownloadSelectedAsync(load: true);
 

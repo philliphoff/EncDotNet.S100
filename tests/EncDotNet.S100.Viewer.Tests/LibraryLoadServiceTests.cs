@@ -89,7 +89,7 @@ public sealed class LibraryLoadServiceTests : IDisposable
         Assert.Equal(LibraryLoadState.None, loader.StateOf(items[0]));
     }
 
-    private sealed class NoopDatasetLoader : IDatasetLoaderService
+    internal sealed class NoopDatasetLoader : IDatasetLoaderService
     {
         public IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors { get; } = new Dictionary<DatasetEntry, IDatasetProcessor>();
         public IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; } = new Dictionary<DatasetEntry, IReadOnlyList<ILayer>>();
