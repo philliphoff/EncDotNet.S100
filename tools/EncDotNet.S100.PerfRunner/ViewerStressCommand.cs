@@ -188,7 +188,7 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
                 stopwatch.Stop();
                 EnsureSuccess("set_viewport", result);
 
-                stepResults.Add(new JsonObject
+                stepResults.Add((JsonNode)new JsonObject
                 {
                     ["index"] = step.Index,
                     ["latitude"] = step.Latitude,
@@ -216,7 +216,7 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
                 "get_render_stats",
                 new Dictionary<string, object?>());
 
-            cycles.Add(new JsonObject
+            cycles.Add((JsonNode)new JsonObject
             {
                 ["cycle"] = cycleIndex,
                 ["steps"] = stepResults,
