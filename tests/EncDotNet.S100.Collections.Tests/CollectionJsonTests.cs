@@ -35,6 +35,41 @@ public class CollectionJsonTests
     }
 
     [Fact]
+    public void A_synced_secom_source_saved_before_sync_moved_to_every_source_still_reads_as_synced()
+    {
+        // As #808 wrote it: "sync" on the SECOM source.
+        const string json = """
+            {
+              "version": 1,
+              "collections": [
+                {
+                  "id": "6aa76a11-6986-4979-8cbb-0cc6714d6c7d",
+                  "name": "Warnings",
+                  "sources": [
+                    {
+                      "kind": "secom",
+                      "serviceUri": "https://s124.ccg-gcc.gc.ca/api/secom/",
+                      "filter": { "productSpecs": [] },
+                      "id": "e01b5aed-5ba3-4cce-9f4a-2a73008abb62",
+                      "sync": true,
+                      "showOnMap": true
+                    }
+                  ],
+                  "createdAt": "2026-10-07T00:00:00+00:00"
+                }
+              ]
+            }
+            """;
+
+        var source = Assert.IsType<SecomSource>(Assert.Single(Assert.Single(CollectionJson.DeserializeStore(json).Collections).Sources));
+
+        Assert.True(source.Sync);
+        Assert.True(source.ShowOnMap);
+        Assert.Contains("\"sync\": true", CollectionJson.SerializeStore(new CollectionStoreDocument(CollectionStoreDocument.CurrentVersion,
+            [new DatasetCollection(Guid.NewGuid(), "W", [source], DateTimeOffset.UnixEpoch)])), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Show_on_map_round_trips_and_is_omitted_when_off()
     {
         var shown = new LocalFolderSource(Guid.NewGuid(), null, "/charts") { ShowOnMap = true };

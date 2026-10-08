@@ -11,8 +11,11 @@ namespace EncDotNet.S100.Collections.Library;
 /// </summary>
 public interface ILibrarySyncPolicy
 {
-    /// <summary>True when this policy keeps <paramref name="source"/> in sync.</summary>
-    bool IsSynced(CollectionSource source);
+    /// <summary>True when this policy can keep <paramref name="source"/>'s kind in sync (whether or not it is asked to).</summary>
+    bool Supports(CollectionSource source);
+
+    /// <summary>True when this policy keeps <paramref name="source"/> in sync: it supports it and <see cref="CollectionSource.Sync"/> is on.</summary>
+    bool IsSynced(CollectionSource source) => source.Sync && Supports(source);
 
     /// <summary>The items of <paramref name="index"/> that should have a current local copy.</summary>
     IReadOnlyList<CollectionItem> Wanted(SourceIndex index);
@@ -38,7 +41,7 @@ public interface ILibrarySyncPolicy
 public sealed class SecomSyncPolicy : ILibrarySyncPolicy
 {
     /// <inheritdoc/>
-    public bool IsSynced(CollectionSource source) => source is SecomSource { Sync: true };
+    public bool Supports(CollectionSource source) => source is SecomSource;
 
     /// <inheritdoc/>
     public IReadOnlyList<CollectionItem> Wanted(SourceIndex index)
@@ -69,4 +72,37 @@ public sealed class SecomSyncPolicy : ILibrarySyncPolicy
         ArgumentNullException.ThrowIfNull(index);
         return index.Fingerprint is not null && !index.Diagnostics.Any(d => d.Severity >= IndexDiagnosticSeverity.Warning);
     }
+}
+
+/// <summary>
+/// Sync rules for the other online kinds (issue #809): NOAA and USACE ENC
+/// feeds, community chart lists, S-100 feeds, remote S-100 catalogues and
+/// forecast feeds. Every listed item that is not cancelled is kept downloaded
+/// and current — a newer edition or update, a newer package, a forecast's
+/// latest run (which replaces the last in place).
+/// </summary>
+/// <remarks>
+/// Nothing is pruned: these kinds share managed folders (all NOAA cells, for
+/// one) with downloads made by hand, which are not caches.
+/// </remarks>
+public sealed class OnlineSyncPolicy : ILibrarySyncPolicy
+{
+    /// <inheritdoc/>
+    public bool Supports(CollectionSource source) => source is NoaaEncFeedSource or UsaceIencFeedSource
+        or ChartCatalogsFeedSource or S100FeedSource or S100CatalogueFeedSource or S100ForecastFeedSource;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<CollectionItem> Wanted(SourceIndex index)
+    {
+        ArgumentNullException.ThrowIfNull(index);
+        return index.Items
+            .Where(i => i.Location is RemoteItemLocation && i.Status != CollectionItemStatus.Cancelled)
+            .ToArray();
+    }
+
+    /// <inheritdoc/>
+    public RemoteItemLocation? PruneFolder(CollectionSource source, SourceIndex index) => null;
+
+    /// <inheritdoc/>
+    public bool CanPrune(SourceIndex index) => false;
 }

@@ -82,7 +82,9 @@ The `EncDotNet.S100.Collections.Library` namespace holds a host-neutral library:
 - **`LibraryQuery`** — finds items by collection or source, state, product, text, bounding box, covering point (most detailed first, via `CoverageHitTest`) and valid time.
 - **`ForecastRuns`** — forecast-run facts of an item: its model, horizon, shown run window, and its S-102 twin tile.
 - **Show on map (#809)** — `CollectionSource.ShowOnMap` asks a host to keep a source's local datasets on the map. `LibraryLoader` labels each open group with its Library source (`LibrarySourceLabel`, `LibraryOpenGroup.Source`), so a host can show a source's datasets as one row.
-- **`LibrarySync`** — keeps synced sources current after each index (#807). Per-kind rules come from an `ILibrarySyncPolicy`; `SecomSyncPolicy` (a `SecomSource` with `Sync`) is the first:
+- **`LibrarySync`** — keeps sources with `CollectionSource.Sync` current after each index (#807, #809). Per-kind rules come from an `ILibrarySyncPolicy`:
+  - `SecomSyncPolicy` downloads and prunes;
+  - `OnlineSyncPolicy` covers NOAA/USACE, community lists, S-100 feeds and catalogues, and forecast feeds. It downloads newer editions, packages and runs, and never prunes, because those folders hold hand-made downloads too.
   - It downloads new and changed objects, up to `LibrarySyncOptions.MaxBytes`, and prunes copies no source of the service still lists.
   - It never prunes from a stale or capped listing, nor a copy the host says is in use.
   - It re-indexes once so downloads get their bounds. `StatusOf` and `Synced` report each source's last sync.

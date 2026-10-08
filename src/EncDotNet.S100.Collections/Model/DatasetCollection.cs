@@ -50,6 +50,16 @@ public abstract record CollectionSource(Guid Id, string? DisplayName)
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool ShowOnMap { get; init; }
+
+    /// <summary>
+    /// True to keep the source's items downloaded and current (issues #807,
+    /// #809): after every index, missing and outdated items are downloaded —
+    /// and, for kinds that prune (SECOM), copies the source no longer lists are
+    /// deleted. Online sources only; see <see cref="Library.LibrarySync"/>.
+    /// Remembered with the source.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Sync { get; init; }
 }
 
 /// <summary>
@@ -205,10 +215,10 @@ public sealed record S100ForecastFeedSource(
 /// <param name="DisplayName">An optional user-facing label.</param>
 /// <param name="ServiceUri">The service's endpoint URI (for example <c>https://host/api/secom</c>).</param>
 /// <param name="Filter">Which objects to include.</param>
-/// <param name="Sync">
-/// True to keep a local copy of every listed object (issue #807): after each
-/// index, new and changed objects are downloaded and copies the service no
-/// longer lists are deleted; see <see cref="Library.LibrarySync"/>.
-/// </param>
-public sealed record SecomSource(Guid Id, string? DisplayName, Uri ServiceUri, SecomFilter Filter, bool Sync = false)
+/// <remarks>
+/// With <see cref="CollectionSource.Sync"/>, a local copy of every listed
+/// object is kept (issue #807): new and changed objects are downloaded after
+/// each index, and copies the service no longer lists are deleted.
+/// </remarks>
+public sealed record SecomSource(Guid Id, string? DisplayName, Uri ServiceUri, SecomFilter Filter)
     : CollectionSource(Id, DisplayName);

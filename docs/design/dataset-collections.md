@@ -1010,10 +1010,29 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 > - **Coverage markers.** An item whose coverage is under 6 px on screen is
 >   drawn as a 13 px ring and hit by taps within it, so point-sized S-124
 >   warnings are visible on the coverage overlay.
-> - **Next (#809):** sync policies for the other online kinds (NOAA/USACE
->   latest editions, community packages, S-100 feeds and catalogues,
->   forecast latest runs), with sync moved from `SecomSource` to the source
->   model.
+> - **Sync for every online kind (second slice).**
+>   - **Model.** `Sync` moved from `SecomSource` to `CollectionSource`,
+>     next to `ShowOnMap`; #808's `"sync": true` still reads.
+>   - **Policies.** `ILibrarySyncPolicy.Supports` says which kinds a policy
+>     handles, and `IsSynced` means it supports the kind and `Sync` is on.
+>   - **`OnlineSyncPolicy`** covers NOAA/USACE ENC feeds, community lists,
+>     S-100 feeds, remote S-100 catalogues and forecast feeds. It keeps
+>     every listed, non-cancelled item downloaded and current: newer
+>     editions and updates, newer packages, and a forecast's latest run,
+>     which replaces the last in place. It **never prunes**, because these
+>     kinds share managed folders (`noaa-enc`, …) with downloads made by
+>     hand. Only SECOM prunes.
+>   - **Size cap.** `LibrarySyncOptions.MaxBytes` (100 MB) applies, so a
+>     large scope reports "Not synced: needs …" instead of downloading.
+>   - **Status line.** A synced forecast feed or remote catalogue keeps its
+>     own line unless the sync needs attention (too large, or failures);
+>     other synced sources show "Synced N of M".
+>   - **Viewer controls:**
+>     - **Keep downloaded** in the Library tree's node menu, shown for
+>       online sources; on a collection it applies to its online sources;
+>     - Add to Library has "Keep everything downloaded and current", off by
+>       default (SECOM keeps its own option);
+>     - MCP `add_library_source` `sync` works for every online kind.
 
 ---
 

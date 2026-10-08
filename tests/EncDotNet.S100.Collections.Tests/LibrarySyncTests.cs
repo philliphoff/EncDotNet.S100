@@ -61,7 +61,7 @@ public sealed class LibrarySyncTests : IDisposable
     }
 
     private static SecomSource Source(bool sync = true, SecomFilter? filter = null) =>
-        new(Guid.NewGuid(), null, ServiceUri, filter ?? SecomFilter.All, sync);
+        new(Guid.NewGuid(), null, ServiceUri, filter ?? SecomFilter.All) { Sync = sync };
 
     /// <summary>Waits until indexing and syncing have both stopped (a sync re-indexes, which may sync again).</summary>
     private static async Task SettleAsync(CollectionLibrary library, LibrarySync sync)
@@ -200,5 +200,101 @@ public sealed class LibrarySyncTests : IDisposable
 
         Assert.Null(sync.StatusOf(source.Id));
         Assert.False(Directory.Exists(ServiceFolder));
+    }
+
+    // ── Other online kinds (#809): kept downloaded and current, never pruned ──
+
+    private static string NoaaCatalogue(int update) => $$"""
+        <?xml version="1.0" encoding="UTF-8" ?>
+        <EncProductCatalog>
+          <cell>
+            <name>US4OH1MK</name>
+            <lname>Ohio River</lname>
+            <cscale>40000</cscale>
+            <status>Active</status>
+            <states><state>OH</state></states>
+            <zipfile_location>https://charts.test/ENCs/US4OH1MK.zip</zipfile_location>
+            <zipfile_datetime_iso8601>2026-09-25T04:46:56Z</zipfile_datetime_iso8601>
+            <zipfile_size>10279</zipfile_size>
+            <edtn>1</edtn>
+            <updn>{{update}}</updn>
+          </cell>
+        </EncProductCatalog>
+        """;
+
+    /// <summary>Serves a NOAA catalogue (replaceable) and the US4OH1MK cell zip, counting downloads.</summary>
+    private sealed class NoaaServer : HttpMessageHandler
+    {
+        private readonly byte[] _zip = File.ReadAllBytes(TestPaths.Fixture("US4OH1MK.zip"));
+
+        public string Catalogue { get; set; } = NoaaCatalogue(1);
+
+        public int Downloads { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith(".zip", StringComparison.Ordinal))
+            {
+                Downloads++;
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new ByteArrayContent(_zip) });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(Catalogue) });
+        }
+    }
+
+    [Fact]
+    public async Task A_synced_noaa_source_keeps_its_cells_current_and_prunes_nothing()
+    {
+        var server = new NoaaServer();
+        var http = new HttpClient(server);
+        var feeds = new NoaaEncFeedIndexer(http, Path.Combine(_context.Root, "cache"),
+            new FeedCacheOptions { RevalidationInterval = TimeSpan.Zero });
+        var library = _context.CreateLibrary(CollectionIndexer.CreateDefault(feeds: [feeds]));
+        var downloads = new LibraryDownloads(LibraryDownloads.ManagedFolders(http, Downloads));
+        var sync = new LibrarySync(library, downloads);
+        _disposables.Add(library);
+        _disposables.Add(sync);
+        library.Initialize();
+
+        // A copy downloaded by hand from elsewhere shares the NOAA folder.
+        var manual = Path.Combine(Downloads, "noaa-enc", "US5XX01M");
+        Directory.CreateDirectory(manual);
+        File.WriteAllText(Path.Combine(manual, ".source.json"), "{}");
+
+        var source = new NoaaEncFeedSource(Guid.NewGuid(), null, new Uri("https://charts.test/ENCs/ENCProdCat.xml"), NoaaEncFilter.All)
+        {
+            Sync = true,
+        };
+        library.AddCollection("Ohio", [source]);
+        await SettleAsync(library, sync);
+
+        Assert.Equal(1, server.Downloads);
+        Assert.Equal((1, 1, 0), (sync.StatusOf(source.Id)!.Local, sync.StatusOf(source.Id)!.Listed, sync.StatusOf(source.Id)!.Failed));
+        Assert.True(File.Exists(Path.Combine(Downloads, "noaa-enc", "US4OH1MK", ".source.json")));
+
+        // A new update is downloaded on the next refresh; the hand-made copy is kept.
+        server.Catalogue = NoaaCatalogue(2);
+        library.Refresh();
+        await SettleAsync(library, sync);
+        Assert.Equal(2, server.Downloads);
+        Assert.Equal(1, sync.StatusOf(source.Id)!.Local);
+        Assert.True(Directory.Exists(manual));
+
+        // Up to date: nothing more.
+        library.Refresh();
+        await SettleAsync(library, sync);
+        Assert.Equal(2, server.Downloads);
+    }
+
+    [Fact]
+    public void Online_kinds_can_sync_and_local_ones_cannot()
+    {
+        var (library, sync, _) = Create();
+        Assert.True(sync.CanSync(new NoaaEncFeedSource(Guid.NewGuid(), null, NoaaEncFeedSource.DefaultCatalogUri, NoaaEncFilter.All)));
+        Assert.True(sync.CanSync(Source(sync: false)));
+        Assert.False(sync.CanSync(new LocalFolderSource(Guid.NewGuid(), null, "/charts")));
+        Assert.False(sync.IsSynced(new LocalFolderSource(Guid.NewGuid(), null, "/charts") { Sync = true }));
+        Assert.NotNull(library);
     }
 }

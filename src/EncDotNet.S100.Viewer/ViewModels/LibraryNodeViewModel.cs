@@ -315,12 +315,17 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             return FeedStatus(feed, health, c);
 
         var problems = sources.Sum(x => x.Index?.Diagnostics.Count(d => d.Severity >= IndexDiagnosticSeverity.Warning) ?? 0);
-        if (sources is [_] && _syncStatus is { } sync && (problems == 0 || sync.NeededBytes is not null))
-            return SyncStatusLine(sync, c);
+        // A sync that needs attention says so first; otherwise a forecast feed or
+        // remote catalogue keeps its own line, and other synced sources show the sync.
+        var sync = sources is [_] ? _syncStatus : null;
+        if (sync is { } attention && (attention.NeededBytes is not null || (attention.Failed > 0 && problems == 0)))
+            return SyncStatusLine(attention, c);
         if (sources is [{ Definition: S100ForecastFeedSource forecast, Index: { } runs }] && problems == 0)
             return ForecastStatus(runs, _health?.Invoke(forecast), _forecastCounts, c, _timeFormat?.Invoke() ?? TimeFormat.Utc);
         if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)
             return CatalogueStatus(catalogueIndex, _health?.Invoke(catalogue), _catalogueCounts, c);
+        if (sync is { } synced && problems == 0)
+            return SyncStatusLine(synced, c);
         if (problems > 0)
             return (string.Format(c, Strings.Library_StatusLine_ProblemsFormat, problems), LibraryNodeStatusKind.Warning);
         if (_collection.IsSession)

@@ -1317,6 +1317,9 @@ internal static class Strings
     public static string Library_Format_S100Feed => Get(nameof(Library_Format_S100Feed));
     public static string Library_Format_Secom => Get(nameof(Library_Format_Secom));
     public static string Menu_LibraryShowOnMap => Get(nameof(Menu_LibraryShowOnMap));
+    public static string Menu_LibraryKeepDownloaded => Get(nameof(Menu_LibraryKeepDownloaded));
+    public static string Library_KeepDownloadedTitle => Get(nameof(Library_KeepDownloadedTitle));
+    public static string Library_KeepDownloadedHint => Get(nameof(Library_KeepDownloadedHint));
     public static string Library_SecomMapArea => Get(nameof(Library_SecomMapArea));
     public static string Library_SecomSyncTitle => Get(nameof(Library_SecomSyncTitle));
     public static string Library_SecomInMapView => Get(nameof(Library_SecomInMapView));
