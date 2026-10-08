@@ -542,16 +542,37 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     /// <summary>True when the service cannot be added as things stand (the chip is shown as limited).</summary>
     public bool IsReachabilityLimited => _reachability is { Reachability: not SecomReachability.Open };
 
-    /// <summary>Why the service cannot be added yet, for the row; <see langword="null"/> when it can.</summary>
-    public string? ReachabilityExplanation => _reachability?.Reachability switch
+    /// <summary>
+    /// Why the service cannot be added yet, for the row, and which trust
+    /// anchor its server certificate is from when it is not one the system
+    /// trusts (#829); <see langword="null"/> when there is nothing to say.
+    /// </summary>
+    public string? ReachabilityExplanation
     {
-        SecomReachability.NeedsCertificate => Strings.Library_Reachability_NeedsCertificateExplanation,
-        SecomReachability.UntrustedServer => Strings.Library_Reachability_UntrustedServerExplanation,
-        SecomReachability.Unreachable => _reachability.Detail is { Length: > 0 } detail
-            ? string.Format(CultureInfo.CurrentCulture, Strings.Library_Reachability_UnreachableExplanationFormat, detail)
-            : null,
-        _ => null,
-    };
+        get
+        {
+            var trust = _reachability?.ServerTrust;
+            var why = _reachability?.Reachability switch
+            {
+                SecomReachability.NeedsCertificate => Strings.Library_Reachability_NeedsCertificateExplanation,
+                SecomReachability.UntrustedServer => trust switch
+                {
+                    { Outcome: SecomServerTrustOutcome.WrongHost } => Strings.Library_Reachability_WrongHostExplanation,
+                    { Outcome: SecomServerTrustOutcome.Expired, Anchor: { } expiredAnchor } =>
+                        string.Format(CultureInfo.CurrentCulture, Strings.Library_Reachability_ExpiredServerExplanationFormat, expiredAnchor),
+                    _ => Strings.Library_Reachability_UntrustedServerExplanation,
+                },
+                SecomReachability.Unreachable => _reachability.Detail is { Length: > 0 } detail
+                    ? string.Format(CultureInfo.CurrentCulture, Strings.Library_Reachability_UnreachableExplanationFormat, detail)
+                    : null,
+                _ => null,
+            };
+            var from = trust is { Outcome: SecomServerTrustOutcome.AnchorTrusted, Anchor: { } anchor }
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Library_Reachability_ServerAnchorFormat, anchor)
+                : null;
+            return why is null ? from : from is null ? why : $"{why} {from}";
+        }
+    }
 
     /// <summary>True when <see cref="ReachabilityExplanation"/> is set.</summary>
     public bool HasReachabilityExplanation => ReachabilityExplanation is not null;

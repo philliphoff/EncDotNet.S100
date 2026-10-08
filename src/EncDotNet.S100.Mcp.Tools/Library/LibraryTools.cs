@@ -226,8 +226,10 @@ public sealed record SecomServiceInfo(
     [property: Description("'Released' or 'Provisional' (test).")] string Status,
     [property: Description("The SECOM endpoint; pass it as url to add_library_source.")] string Endpoint,
     [property: Description("The area it covers, as [south, west, north, east], or null.")] double[]? Bounds,
-    [property: Description("With probe: 'Open' (readable without a certificate), 'NeedsCertificate', 'UntrustedServer' (MCP-issued TLS certificate) or 'Unreachable'; otherwise null.")] string? Reachability,
-    [property: Description("With probe: what the service answered, or null.")] string? Detail);
+    [property: Description("With probe: 'Open' (readable without a certificate), 'NeedsCertificate', 'UntrustedServer' (TLS certificate refused) or 'Unreachable'; otherwise null.")] string? Reachability,
+    [property: Description("With probe: what the service answered, or null.")] string? Detail,
+    [property: Description("With probe: the decision on the server's TLS certificate — 'SystemTrusted', 'AnchorTrusted' (issued under a SECOM trust anchor such as MCP MCC), 'NotTrusted', 'Expired' or 'WrongHost'; null when unknown.")] string? ServerCertificate = null,
+    [property: Description("With probe: the trust anchor the server certificate chains to (e.g. 'MCP MCC'), or null.")] string? ServerCertificateAnchor = null);
 
 /// <summary>Lists SECOM services from the MCP service registry (MCP <c>list_secom_services</c>, #822).</summary>
 public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.SecomRegistry registry)
@@ -288,7 +290,9 @@ public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.Secom
                 EncDotNet.S100.Collections.Secom.SecomClient.NormalizeServiceUri(s.EndpointUri).AbsoluteUri,
                 s.Bounds is { } b ? [b.South, b.West, b.North, b.East] : null,
                 probes.TryGetValue(s.InstanceId, out var r) ? r.Reachability.ToString() : null,
-                probes.TryGetValue(s.InstanceId, out var d) ? d.Detail : null))],
+                probes.TryGetValue(s.InstanceId, out var d) ? d.Detail : null,
+                probes.TryGetValue(s.InstanceId, out var t) ? t.ServerTrust?.Outcome.ToString() : null,
+                probes.TryGetValue(s.InstanceId, out var a) ? a.ServerTrust?.Anchor : null))],
             listing.Listed,
             listing.Listed - services.Length,
             listing.FetchedAt,

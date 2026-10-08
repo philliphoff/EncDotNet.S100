@@ -436,13 +436,18 @@ public partial class App : Application
                 paths.DownloadsDirectory,
                 (path, _) => metadata.TryRead(path));
         });
+        // SECOM requests trust MCP-issued server certificates (#829); every
+        // SECOM client below gets a handler from this one validator, and no
+        // other client does.
+        services.AddSingleton(_ => new EncDotNet.S100.Collections.Secom.SecomServerTrust());
         services.AddSingleton(sp =>
         {
             // SECOM services (issue #804): objects get bounds once downloaded.
             var paths = sp.GetRequiredService<ViewerDataPaths>();
             var metadata = sp.GetRequiredService<IDatasetMetadataReader>();
+            var trust = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>();
             return new EncDotNet.S100.Collections.Indexing.SecomSourceIndexer(
-                new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+                new System.Net.Http.HttpClient(trust.CreateHandler()) { Timeout = TimeSpan.FromMinutes(2) },
                 paths.CollectionFeedCacheDirectory,
                 paths.DownloadsDirectory,
                 (path, _) => metadata.TryRead(path));
@@ -476,11 +481,15 @@ public partial class App : Application
                 sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Collections.Library.CollectionLibrary>>());
         });
         services.AddSingleton<Library.UserCatalogueStore>();
-        services.AddSingleton<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(_ =>
+        services.AddSingleton<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(sp =>
         {
-            // Recognises catalogues the user adds by URL (issue #670).
+            // Recognises catalogues the user adds by URL (issue #670); SECOM is asked through the SECOM client.
             var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-            return (uri, ct) => EncDotNet.S100.Collections.KnownSources.CatalogueFormatDetector.ProbeAsync(http, uri, ct);
+            var secom = new System.Net.Http.HttpClient(sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>().CreateHandler())
+            {
+                Timeout = TimeSpan.FromSeconds(30),
+            };
+            return (uri, ct) => EncDotNet.S100.Collections.KnownSources.CatalogueFormatDetector.ProbeAsync(http, uri, secom, ct);
         });
         services.AddSingleton<Library.ILibraryDownloader>(sp =>
         {
@@ -488,8 +497,12 @@ public partial class App : Application
             // the item names its own (community lists: one per list).
             var downloads = sp.GetRequiredService<ViewerDataPaths>().DownloadsDirectory;
             var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+            var secom = new System.Net.Http.HttpClient(sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>().CreateHandler())
+            {
+                Timeout = TimeSpan.FromMinutes(10),
+            };
             return new Library.LibraryDownloadService(
-                EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(http, downloads),
+                EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(http, downloads, secom),
                 sp.GetService<Services.Notifications.INotificationService>());
         });
         services.AddSingleton(sp =>
@@ -557,9 +570,14 @@ public partial class App : Application
                 probeSecom: (uri, ct) => registry.ProbeAsync(uri, ct));
         });
         // SECOM services from the MCP service registry (#822), cached with the feeds.
-        services.AddSingleton(sp => new EncDotNet.S100.Collections.Secom.SecomRegistry(
-            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) },
-            sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
+        services.AddSingleton(sp =>
+        {
+            var trust = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>();
+            return new EncDotNet.S100.Collections.Secom.SecomRegistry(
+                new System.Net.Http.HttpClient(trust.CreateHandler()) { Timeout = TimeSpan.FromSeconds(20) },
+                sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory,
+                serverTrust: trust);
+        });
         services.AddTransient(sp => new AddOnlineCatalogueWizardViewModel(
             sp.GetRequiredService<CatalogueDirectoryDialogViewModel>(),
             sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>()));
