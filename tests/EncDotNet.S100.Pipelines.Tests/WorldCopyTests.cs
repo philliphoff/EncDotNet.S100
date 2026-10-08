@@ -16,10 +16,16 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// (NWS Alaska S-411, ~175°E → ~225°E) shows on both sides of 0° and ±180°,
 /// as the basemap does, and overlays tied to the data follow it.
 /// </summary>
+/// <remarks>
+/// Serial with the other tile-renderer tests: tile workers come from a
+/// process-wide pool, so a sibling class's dense layer could otherwise hold
+/// every worker while these frames wait for their tiles.
+/// </remarks>
+[Collection(RenderingOptimizationsCollection.Name)]
 public sealed class WorldCopyTests
 {
     private const double C = WorldCopies.Circumference;
-    private static readonly TimeSpan LandTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
 
     [Fact]
     public void Visible_ZeroTo360Data_AtPrimeMeridian_DrawsOwnFrameAndWestCopy()
@@ -108,7 +114,7 @@ public sealed class WorldCopyTests
         var layer = BindArea(185, 195);
         var viewport = new Mapsui.Viewport(X(-170), 0, Resolution, 0, 256, 256);
 
-        using var surface = RenderUntil(layer, viewport, s => !IsClear(Pixel(s, 128, 128)));
+        using var surface = RenderSettled(layer, viewport);
 
         Assert.False(IsClear(Pixel(surface, 128, 128)));
     }
@@ -121,8 +127,7 @@ public sealed class WorldCopyTests
         var layer = BindArea(0, 360);
         var viewport = new Mapsui.Viewport(0, 0, Resolution, 0, 256, 256);
 
-        using var surface = RenderUntil(
-            layer, viewport, s => !IsClear(Pixel(s, 32, 128)) && !IsClear(Pixel(s, 224, 128)));
+        using var surface = RenderSettled(layer, viewport);
 
         Assert.False(IsClear(Pixel(surface, 32, 128)), "west of 0° is empty");
         Assert.False(IsClear(Pixel(surface, 224, 128)), "east of 0° is empty");
@@ -144,10 +149,8 @@ public sealed class WorldCopyTests
         var viewport = new Mapsui.Viewport(0.31 * resolution, 0, resolution, 0, 256, 256);
         var row = 128;
 
-        // Settle: every visible tile rasterised, so no backdrop band remains.
-        RenderUntil(layer, viewport, s => Enumerable.Range(0, 256).All(x => !IsClear(Pixel(s, x, row)))).Dispose();
-        Thread.Sleep(500);
-        using var surface = RenderUntil(layer, viewport, _ => true);
+        // Settled: every visible tile rasterised, so no backdrop band remains.
+        using var surface = RenderSettled(layer, viewport);
 
         var alphas = Enumerable.Range(0, 256).Select(x => (int)Pixel(surface, x, row).Alpha).ToList();
         Assert.InRange(alphas[64], 120, 136);
@@ -172,7 +175,7 @@ public sealed class WorldCopyTests
         var layer = BindArea(185, 195);
         var viewport = new Mapsui.Viewport(X(10), 0, Resolution, 0, 256, 256);
 
-        using var surface = RenderUntil(layer, viewport, _ => false, TimeSpan.FromMilliseconds(500));
+        using var surface = RenderFor(layer, viewport, TimeSpan.FromMilliseconds(500));
 
         Assert.True(IsClear(Pixel(surface, 128, 128)));
     }
@@ -383,23 +386,63 @@ public sealed class WorldCopyTests
             },
         });
 
-    private static SKSurface RenderUntil(
-        ILayer layer, Mapsui.Viewport viewport, Func<SKSurface, bool> done, TimeSpan? timeout = null)
+    /// <summary>
+    /// Renders live frames until every visible tile is rasterised and resident
+    /// (the background workers have no visible work left), then returns one
+    /// more frame composited from that settled cache. Waiting on the renderer's
+    /// state rather than on pixels keeps a slow or contended host from passing
+    /// a half-drawn frame on to the assertions; a host that never settles fails
+    /// with the scheduler state rather than with a blank pixel.
+    /// </summary>
+    private static SKSurface RenderSettled(ILayer layer, Mapsui.Viewport viewport)
     {
         var surface = SKSurface.Create(new SKImageInfo((int)viewport.Width, (int)viewport.Height));
         var renderService = new RenderService();
+        var tilePx = S100VectorTileRenderer.TilePixelSize(1f);
         var sw = Stopwatch.StartNew();
         while (true)
         {
             surface.Canvas.Clear(SKColors.Transparent);
             S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, renderService);
-            if (done(surface) || sw.Elapsed > (timeout ?? LandTimeout))
+            if (S100VectorTileRenderer.IsVisibleSettledForTest(layer, tilePx))
             {
-                return surface;
+                break;
+            }
+
+            if (sw.Elapsed > SettleTimeout)
+            {
+                surface.Dispose();
+                Assert.Fail(
+                    $"Tiles did not settle within {SettleTimeout.TotalSeconds:F0} s: "
+                    + S100VectorTileRenderer.DescribeTileWorkForTest(layer));
             }
 
             Thread.Sleep(20);
         }
+
+        surface.Canvas.Clear(SKColors.Transparent);
+        S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, renderService);
+        return surface;
+    }
+
+    /// <summary>
+    /// Renders live frames for <paramref name="duration"/>, for a view that
+    /// must stay empty (no visible tiles, so nothing ever settles).
+    /// </summary>
+    private static SKSurface RenderFor(ILayer layer, Mapsui.Viewport viewport, TimeSpan duration)
+    {
+        var surface = SKSurface.Create(new SKImageInfo((int)viewport.Width, (int)viewport.Height));
+        var renderService = new RenderService();
+        var sw = Stopwatch.StartNew();
+        do
+        {
+            surface.Canvas.Clear(SKColors.Transparent);
+            S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, renderService);
+            Thread.Sleep(20);
+        }
+        while (sw.Elapsed < duration);
+
+        return surface;
     }
 
     private static SKColor Pixel(SKSurface surface, int x, int y)
