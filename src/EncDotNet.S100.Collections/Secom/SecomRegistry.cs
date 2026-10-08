@@ -119,6 +119,12 @@ public sealed class SecomRegistry
     /// <summary>The MCC Maritime Service Registry's SECOM search.</summary>
     public static Uri DefaultSearchUri { get; } = new("https://msr.maritimeconnectivity.net/api/secom/v1/searchService");
 
+    /// <summary>
+    /// The canonical short form of a SECOM product type (<c>S124</c>,
+    /// <c>s-124</c> → <c>S-124</c>), as the listing gives it; <see langword="null"/> for none.
+    /// </summary>
+    public static string? NormalizeProduct(string? value) => SecomJson.NormalizeProduct(value);
+
     /// <summary>How long a fetched listing is reused before the registry is asked again.</summary>
     public static TimeSpan RefreshInterval { get; } = TimeSpan.FromHours(1);
 

@@ -45,6 +45,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly AdjustableTimeProvider? _testClock;
     private readonly IViewerLibraryController? _library;
     private readonly IViewerLibraryEditor? _libraryEditor;
+    private readonly EncDotNet.S100.Collections.Secom.SecomRegistry? _secomRegistry;
     private readonly IViewerUiAutomation? _uiAutomation;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -75,8 +76,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         AdjustableTimeProvider? testClock = null,
         IViewerLibraryController? library = null,
         IViewerLibraryEditor? libraryEditor = null,
-        IViewerUiAutomation? uiAutomation = null)
+        IViewerUiAutomation? uiAutomation = null,
+        EncDotNet.S100.Collections.Secom.SecomRegistry? secomRegistry = null)
     {
+        _secomRegistry = secomRegistry;
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
         _catalog = catalog;
@@ -367,6 +370,8 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(LibraryMcpAdapters.Create(new QueryLibraryItemsTool(_library)));
             tools.Add(LibraryMcpAdapters.Create(new DescribeLibraryItemTool(_library)));
             tools.Add(LibraryMcpAdapters.Create(new ListKnownSourcesTool(_library)));
+            if (_secomRegistry is not null)
+                tools.Add(LibraryMcpAdapters.Create(new ListSecomServicesTool(_secomRegistry)));
         }
         if (_libraryEditor is not null)
         {
