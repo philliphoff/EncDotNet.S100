@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Resources;
+using EncDotNet.S100.Collections.Library;
 
 namespace EncDotNet.S100.Viewer.Resources;
 
@@ -25,8 +26,10 @@ internal static class Strings
     /// <summary>The current UI culture used to look up strings.</summary>
     public static CultureInfo Culture { get; set; } = CultureInfo.CurrentUICulture;
 
+    // The Library's shared text (item tags and details, status lines) lives in
+    // EncDotNet.S100.Collections (#792); keys not found here are looked up there.
     private static string Get(string name) =>
-        ResourceManager.GetString(name, Culture) ?? name;
+        ResourceManager.GetString(name, Culture) ?? LibraryText.Find(name, Culture) ?? name;
 
     /// <summary>
     /// Returns the curated human-readable product title for a spec code
@@ -37,7 +40,7 @@ internal static class Strings
     public static string? SpecDisplayName(string spec) =>
         string.IsNullOrEmpty(spec)
             ? null
-            : ResourceManager.GetString("SpecName_" + spec.Replace("-", string.Empty), Culture);
+            : LibraryText.Find("SpecName_" + spec.Replace("-", string.Empty), Culture);
 
     /// <summary>
     /// Returns a readable label for a library item property key (e.g.
@@ -45,7 +48,7 @@ internal static class Strings
     /// curated label. Lookup keys are <c>Library_Property_&lt;key&gt;</c>.
     /// </summary>
     public static string? LibraryPropertyLabel(string key) =>
-        string.IsNullOrEmpty(key) ? null : ResourceManager.GetString("Library_Property_" + key, Culture);
+        string.IsNullOrEmpty(key) ? null : LibraryText.Find("Library_Property_" + key, Culture);
 
     // Window
     public static string Window_Title => Get(nameof(Window_Title));

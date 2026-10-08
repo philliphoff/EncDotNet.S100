@@ -9,42 +9,6 @@ using FluentIcons.Common;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-/// <summary>How a tree node's status line is marked (the colour of its dot).</summary>
-internal enum LibraryNodeStatusKind
-{
-    /// <summary>No status line.</summary>
-    None,
-
-    /// <summary>Work in progress: indexing, downloading.</summary>
-    Busy,
-
-    /// <summary>Something needs attention but still works (problems, an unreachable feed with a cached index).</summary>
-    Warning,
-
-    /// <summary>Not working (failed, access denied).</summary>
-    Error,
-
-    /// <summary>Healthy, worth saying (a reachable shared feed).</summary>
-    Ok,
-
-    /// <summary>A hint (the session collection).</summary>
-    Info,
-}
-
-/// <summary>How many of a remote catalogue's datasets are on disk, and how many of those have a newer edition online.</summary>
-/// <param name="Total">The datasets the source lists.</param>
-/// <param name="Local">Those with a downloaded copy.</param>
-/// <param name="Outdated">Those whose copy is an older edition than the catalogue's.</param>
-internal sealed record LibraryCatalogueCounts(int Total, int Local, int Outdated);
-
-/// <summary>A forecast source's models (#685): how many have a run on disk, a newer run listed, or an ended run.</summary>
-/// <param name="Models">The models the source lists.</param>
-/// <param name="Local">Models with a downloaded run.</param>
-/// <param name="NewerRun">Models whose downloaded run has a newer one listed.</param>
-/// <param name="Expired">Models whose downloaded run has ended, with nothing newer listed.</param>
-/// <param name="Left">The least time left among the current downloaded runs, if any.</param>
-internal sealed record LibraryForecastCounts(int Models, int Local, int NewerRun, int Expired, TimeSpan? Left);
-
 /// <summary>
 /// A node of the Library panel's tree: a collection, one of its sources, or
 /// (under a collection-manifest source, or a remote S-100 catalogue's areas,
@@ -153,7 +117,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     public bool CanChooseGroups => !IsGroup && _source?.Definition is LocalManifestSource && !_collection.IsSession;
 
     /// <summary>The display name.</summary>
-    public string Name => _group?.Name ?? (_source is { } s ? SourceName(s) : _collection.Definition.Name);
+    public string Name => _group?.Name ?? (_source is { } s ? LibraryNodeText.SourceName(s, _collection) : _collection.Definition.Name);
 
     /// <summary>
     /// A muted second name: a manifest source named like its collection shows
@@ -186,10 +150,10 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     /// sources' kind.
     /// </summary>
     public string KindTag => IsGroup
-        ? _source?.Definition is S100CatalogueFeedSource catalogue ? KindOf(catalogue) : string.Empty
+        ? _source?.Definition is S100CatalogueFeedSource catalogue ? LibraryNodeText.KindOf(catalogue) : string.Empty
         : _source is { } s
-        ? KindOf(s.Definition)
-        : _collection.IsSession ? "S-128" : _collection.Sources.Select(x => KindOf(x.Definition)).FirstOrDefault() ?? "DIR";
+        ? LibraryNodeText.KindOf(s.Definition)
+        : LibraryNodeText.KindOf(_collection);
 
     /// <summary>True when <see cref="KindTag"/> is shown (not for a group node).</summary>
     public bool HasKindTag => KindTag.Length > 0;
@@ -295,184 +259,17 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
 
     private IReadOnlyList<LibrarySource> Sources => _source is { } s ? [s] : _collection.Sources;
 
-    private (string? Line, LibraryNodeStatusKind Kind) ComputeStatus()
-    {
-        var c = CultureInfo.CurrentCulture;
-        var sources = Sources;
-        if (_downloadStatus is { } downloading)
-            return (downloading, LibraryNodeStatusKind.Busy);
-        if (sources.Any(x => x.State == LibrarySourceState.Indexing))
-            return (Strings.Library_Status_Indexing, LibraryNodeStatusKind.Busy);
-        if (_group is { MissingPathCount: > 0 })
-            return (Strings.Library_StatusLine_PathNotFound, LibraryNodeStatusKind.Warning);
-        if (IsGroup)
-            return (null, LibraryNodeStatusKind.None);
-        if (sources.FirstOrDefault(x => x.State == LibrarySourceState.Failed && x.Index is null) is { } failed)
-            return (string.Format(c, Strings.Library_StatusLine_FailedFormat, failed.Error ?? string.Empty), LibraryNodeStatusKind.Error);
-
-        // A shared feed says whether its server is reachable (for a source, or a one-source collection).
-        if (sources is [{ Definition: S100FeedSource feed }] && _health?.Invoke(feed) is { } health)
-            return FeedStatus(feed, health, c);
-
-        var problems = sources.Sum(x => x.Index?.Diagnostics.Count(d => d.Severity >= IndexDiagnosticSeverity.Warning) ?? 0);
-        // A sync that needs attention says so first; otherwise a forecast feed or
-        // remote catalogue keeps its own line, and other synced sources show the sync.
-        var sync = sources is [_] ? _syncStatus : null;
-        if (sync is { } attention && (attention.NeededBytes is not null || (attention.Failed > 0 && problems == 0)))
-            return SyncStatusLine(attention, c);
-        if (sources is [{ Definition: S100ForecastFeedSource forecast, Index: { } runs }] && problems == 0)
-            return ForecastStatus(runs, _health?.Invoke(forecast), _forecastCounts, c, _timeFormat?.Invoke() ?? TimeFormat.Utc);
-        if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)
-            return CatalogueStatus(catalogueIndex, _health?.Invoke(catalogue), _catalogueCounts, c);
-        if (sync is { } synced && problems == 0)
-            return SyncStatusLine(synced, c);
-        if (problems > 0)
-            return (string.Format(c, Strings.Library_StatusLine_ProblemsFormat, problems), LibraryNodeStatusKind.Warning);
-        if (_collection.IsSession)
-            return (Strings.Library_StatusLine_Session, LibraryNodeStatusKind.Info);
-        return (null, LibraryNodeStatusKind.None);
-    }
-
-    /// <summary>"Synced 1,732 of 1,732 · 14:05", or why a synced source is not fully local.</summary>
-    private static (string, LibraryNodeStatusKind) SyncStatusLine(LibrarySyncStatus sync, CultureInfo c)
-    {
-        if (sync.NeededBytes is { } needed)
-            return (string.Format(c, Strings.Library_StatusLine_SyncTooLargeFormat, LibraryItemViewModel.FormatBytes(needed)), LibraryNodeStatusKind.Warning);
-        if (sync.Failed > 0)
-            return (string.Format(c, Strings.Library_StatusLine_SyncFailedFormat, sync.Local, sync.Listed, sync.Failed), LibraryNodeStatusKind.Warning);
-        return (string.Format(c, Strings.Library_StatusLine_SyncedFormat, sync.Local, sync.Listed, FormatWhen(sync.SyncedAt.ToLocalTime(), c)),
-            sync.Local == sync.Listed ? LibraryNodeStatusKind.Ok : LibraryNodeStatusKind.Info);
-    }
-
-    private static (string, LibraryNodeStatusKind) FeedStatus(S100FeedSource feed, FeedHealth health, CultureInfo c)
-    {
-        if (health.IsReachable)
-            return (string.Format(c, Strings.Library_StatusLine_ReachableFormat, feed.FeedUri.Authority), LibraryNodeStatusKind.Ok);
-        if (System.Text.RegularExpressions.Regex.IsMatch(health.Failure!, @"\b(401|403|404)\b"))
-            return (Strings.Library_StatusLine_AccessDenied, LibraryNodeStatusKind.Error);
-        if (health.CopyFetchedAt is { } copied)
+    private (string? Line, LibraryNodeStatusKind Kind) ComputeStatus() =>
+        LibraryNodeText.Status(new LibraryNodeStatusInput(_collection, Sources)
         {
-            var since = (health.FailingSince ?? health.CheckedAt).ToLocalTime();
-            return (string.Format(c, Strings.Library_StatusLine_UnreachableFormat, since, FormatAge(health.CheckedAt - copied)),
-                LibraryNodeStatusKind.Warning);
-        }
-
-        return (string.Format(c, Strings.Library_StatusLine_UnreachableNoCopyFormat, health.Failure), LibraryNodeStatusKind.Error);
-    }
-
-    /// <summary>
-    /// A remote S-100 catalogue's bookkeeping (handoff B1): "Catalogue
-    /// 30.09.2026 · 140 updates · not for navigation" (amber), "… · 152 of 307
-    /// local …" (green) or "… · nothing local …" (grey); or "Offline ·
-    /// catalogue cached 30.09.2026 · 152 local" while its server cannot be reached.
-    /// </summary>
-    private static (string, LibraryNodeStatusKind) CatalogueStatus(
-        SourceIndex index, FeedHealth? health, LibraryCatalogueCounts? counts, CultureInfo c)
-    {
-        var notForNavigation = index.Items.Count > 0
-            && index.Items.All(i => i.Properties.GetValueOrDefault("notForNavigation") == "true");
-        if (health is { IsReachable: false, CopyFetchedAt: { } cached })
-        {
-            var offline = string.Format(c, Strings.Library_StatusLine_CatalogueOfflineFormat, FormatWhen(cached.ToLocalTime(), c));
-            if (counts is { Local: > 0 })
-                offline += " · " + string.Format(c, Strings.Library_StatusLine_LocalFormat, counts.Local);
-            return (offline, LibraryNodeStatusKind.Info);
-        }
-
-        var dated = (index.PublishedAt ?? index.IndexedAt).ToLocalTime();
-        var parts = new List<string>(3) { string.Format(c, Strings.Library_StatusLine_CatalogueFormat, dated.ToString("d", c)) };
-        var kind = LibraryNodeStatusKind.Info;
-        switch (counts)
-        {
-            case { Outdated: > 0 }:
-                parts.Add(string.Format(c, Strings.Library_StatusLine_UpdatesFormat, counts.Outdated));
-                kind = LibraryNodeStatusKind.Warning;
-                break;
-            case { Local: 0 }:
-                parts.Add(Strings.Library_StatusLine_NothingLocal);
-                break;
-            case { } some:
-                parts.Add(some.Local == some.Total
-                    ? string.Format(c, Strings.Library_StatusLine_AllLocalFormat, some.Total)
-                    : string.Format(c, Strings.Library_StatusLine_SomeLocalFormat, some.Local, some.Total));
-                kind = LibraryNodeStatusKind.Ok;
-                break;
-        }
-
-        if (notForNavigation)
-            parts.Add(Strings.Library_StatusLine_NotForNavigation);
-        return (string.Join(" · ", parts), kind);
-    }
-
-    /// <summary>
-    /// A forecast source's bookkeeping (handoff B1, 2c): "Checked 21:04 · newer
-    /// run for 1 model" (amber), "Checked 28.09 · 2 runs expired · Refresh to look
-    /// for new runs" (red), "Checked 21:04 · 1 of 2 runs local · 45 h left"
-    /// (green), "Latest runs 30.09 18:00Z · nothing local" (grey), or offline.
-    /// </summary>
-    private static (string, LibraryNodeStatusKind) ForecastStatus(
-        SourceIndex index, FeedHealth? health, LibraryForecastCounts? counts, CultureInfo c, TimeFormat format)
-    {
-        if (health is { IsReachable: false, CopyFetchedAt: { } cached })
-        {
-            var offline = string.Format(c, Strings.Library_StatusLine_ForecastOfflineFormat, FormatWhen(cached.ToLocalTime(), c));
-            if (counts is { Local: > 0 })
-                offline += " · " + string.Format(c, Strings.Library_StatusLine_RunsOnDiskFormat, counts.Local);
-            return (offline, LibraryNodeStatusKind.Info);
-        }
-
-        var checkedText = string.Format(c, Strings.Library_StatusLine_CheckedFormat,
-            FormatWhen((health?.CheckedAt ?? index.IndexedAt).ToLocalTime(), c));
-        switch (counts)
-        {
-            case { NewerRun: > 0 }:
-                return ($"{checkedText} · {string.Format(c, counts.NewerRun == 1 ? Strings.Library_StatusLine_NewerRunOne : Strings.Library_StatusLine_NewerRunFormat, counts.NewerRun)}",
-                    LibraryNodeStatusKind.Warning);
-            case { Expired: > 0 }:
-                return ($"{checkedText} · {string.Format(c, Strings.Library_StatusLine_RunsExpiredFormat, counts.Expired)} · {Strings.Library_StatusLine_RefreshForRuns}",
-                    LibraryNodeStatusKind.Error);
-            case { Local: > 0 } some:
-                var line = $"{checkedText} · {string.Format(c, Strings.Library_StatusLine_RunsLocalFormat, some.Local, some.Models)}";
-                if (some.Left is { } left)
-                    line += " · " + ForecastRunText.TimeLeft(left);
-                return (line, LibraryNodeStatusKind.Ok);
-            default:
-                var latest = index.PublishedAt is { } run
-                    ? string.Format(c, Strings.Library_StatusLine_LatestRunsFormat, ForecastRunText.FormatRun(run, format, TimeZoneInfo.Local))
-                    : checkedText;
-                return ($"{latest} · {Strings.Library_StatusLine_NothingLocal}", LibraryNodeStatusKind.Info);
-        }
-    }
-
-    /// <summary>The time when <paramref name="when"/> is today, else the date.</summary>
-    private static string FormatWhen(DateTimeOffset when, CultureInfo c) =>
-        when.Date == DateTime.Today ? when.ToString("t", c) : when.ToString("d", c);
-
-    /// <summary>"12 min", "2 h", "3 days".</summary>
-    internal static string FormatAge(TimeSpan age) => age switch
-    {
-        { TotalHours: < 1 } => string.Format(CultureInfo.CurrentCulture, Strings.Library_AgeMinutesFormat, Math.Max(1, (int)age.TotalMinutes)),
-        { TotalHours: < 48 } => string.Format(CultureInfo.CurrentCulture, Strings.Library_AgeHoursFormat, (int)age.TotalHours),
-        _ => string.Format(CultureInfo.CurrentCulture, Strings.Library_AgeDaysFormat, (int)age.TotalDays),
-    };
-
-    private static string KindOf(CollectionSource source) => source switch
-    {
-        ExchangeSetSource { Path: var p } when p.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) => "ZIP",
-        NoaaEncFeedSource or UsaceIencFeedSource => "WEB",
-        S100CatalogueFeedSource { CatalogUri.Host: var host }
-            when host.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
-        S100CatalogueFeedSource => "WEB",
-        S100ForecastFeedSource { ModelsUri.Host: var forecastHost }
-            when forecastHost.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
-        S100ForecastFeedSource => "WEB",
-        ChartCatalogsFeedSource => "LIST",
-        S100FeedSource => "FEED",
-        SecomSource => "SECOM",
-        S128CatalogueSource => "S-128",
-        LocalManifestSource => "JSON",
-        _ => "DIR",
-    };
+            Group = _group,
+            Downloading = _downloadStatus,
+            Health = _health,
+            Sync = _syncStatus,
+            CatalogueCounts = _catalogueCounts,
+            ForecastCounts = _forecastCounts,
+            TimeFormat = ForecastRunText.ToLibrary(_timeFormat?.Invoke() ?? TimeFormat.Utc),
+        });
 
     private void RaiseStatus()
     {
@@ -500,7 +297,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
                 lines.Add(group.Name);
             foreach (var source in sources)
             {
-                lines.Add(SourceLocation(source.Definition));
+                lines.Add(LibraryNodeText.SourceLocation(source.Definition));
                 if (source.Index is { } index)
                 {
                     lines.Add(string.Format(CultureInfo.CurrentCulture, Strings.Library_IndexedAtFormat,
@@ -640,132 +437,11 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     /// Display names older builds gave every unscoped online source. They say
     /// nothing about the source, so the source is named as if it had none.
     /// </summary>
-    private static readonly HashSet<string> LegacyGenericNames =
-        new(["All ENCs", "All rivers", "All downloads", "All products"], StringComparer.Ordinal);
-
-    /// <summary>
-    /// The source's name: the user's (or the dialog's) display name, unless it
-    /// only repeats something generic — a legacy "All …" name, the collection's
-    /// name or the catalogue's — in which case it is derived: a community list
-    /// holding a single package is named by that package's description.
-    /// </summary>
-    private string SourceName(LibrarySource source)
-    {
-        var definition = source.Definition;
-        var catalogue = CatalogueUri(definition) is { } uri
-            ? EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.All.FirstOrDefault(k => k.CatalogUri == uri)?.Name
-            : null;
-        var generic = definition.DisplayName is { } name
-            && CatalogueUri(definition) is not null
-            && (LegacyGenericNames.Contains(name) || name == _collection.Definition.Name || name == catalogue);
-        if (definition.DisplayName is { } display && !generic)
-            return display;
-
-        if (definition is ChartCatalogsFeedSource && SinglePackageTitle(source.Index) is { } package)
-            return package;
-        return catalogue ?? DescribeSource(definition with { DisplayName = null });
-    }
-
-    /// <summary>The one package a community list's index holds, by description, or <see langword="null"/>.</summary>
-    private static string? SinglePackageTitle(SourceIndex? index)
-    {
-        if (index is null)
-            return null;
-        var titles = index.Items
-            .Select(i => i.Properties.GetValueOrDefault("packageTitle") ?? (i.Properties.ContainsKey("package") ? i.Title : null))
-            .OfType<string>()
-            .Distinct(StringComparer.Ordinal)
-            .Take(2)
-            .ToArray();
-        return titles.Length == 1 ? PackageTitles.Clean(titles[0]) : null;
-    }
-
-    private static Uri? CatalogueUri(CollectionSource source) => source switch
-    {
-        NoaaEncFeedSource n => n.CatalogUri,
-        UsaceIencFeedSource u => u.CatalogUri,
-        ChartCatalogsFeedSource c => c.CatalogUri,
-        S100CatalogueFeedSource r => r.CatalogUri,
-        S100ForecastFeedSource f => f.ModelsUri,
-        SecomSource s => s.ServiceUri,
-        _ => null,
-    };
-
-    private static string DescribeSource(CollectionSource source) => source.DisplayName ?? source switch
-    {
-        LocalFolderSource f => LeafName(f.Path),
-        ExchangeSetSource e => LeafName(e.Path),
-        S128CatalogueSource c => LeafName(c.Path),
-        LocalManifestSource m => ManifestName(m.Path),
-        NoaaEncFeedSource => Strings.Library_NoaaFeed,
-        UsaceIencFeedSource => Strings.Library_UsaceFeed,
-        ChartCatalogsFeedSource c => c.CatalogUri.Host,
-        S100FeedSource f => f.FeedUri.Host,
-        S100CatalogueFeedSource r => r.CatalogUri.Host,
-        S100ForecastFeedSource f => f.ModelsUri.Host,
-        SecomSource s => s.ServiceUri.Host,
-        _ => source.GetType().Name,
-    };
-
-    private static string SourceLocation(CollectionSource source) => source switch
-    {
-        LocalFolderSource f => f.Path,
-        ExchangeSetSource e => e.Path,
-        S128CatalogueSource c => c.Path,
-        LocalManifestSource m => m.Path,
-        NoaaEncFeedSource n => n.CatalogUri.AbsoluteUri,
-        UsaceIencFeedSource u => u.CatalogUri.AbsoluteUri,
-        ChartCatalogsFeedSource c => c.CatalogUri.AbsoluteUri,
-        S100FeedSource f => MaskToken(f.FeedUri),
-        S100CatalogueFeedSource r => r.CatalogUri.AbsoluteUri,
-        S100ForecastFeedSource f => f.ModelsUri.AbsoluteUri,
-        SecomSource s => s.ServiceUri.AbsoluteUri,
-        _ => string.Empty,
-    };
-
     /// <summary>The online source's full URL (for "Copy URL"), or <see langword="null"/> for a local source.</summary>
-    public Uri? SourceUrl => _source?.Definition switch
-    {
-        NoaaEncFeedSource n => n.CatalogUri,
-        UsaceIencFeedSource u => u.CatalogUri,
-        ChartCatalogsFeedSource c => c.CatalogUri,
-        S100FeedSource f => f.FeedUri,
-        S100CatalogueFeedSource r => r.CatalogUri,
-        S100ForecastFeedSource f => f.ModelsUri,
-        SecomSource s => s.ServiceUri,
-        _ => null,
-    };
+    public Uri? SourceUrl => _source is { } source ? LibraryNodeText.SourceUrl(source.Definition) : null;
 
     public bool HasSourceUrl => SourceUrl is not null;
 
-    /// <summary>
-    /// A shared feed's URL with its access token (the path before
-    /// <c>feed.json</c>) masked to its last four characters:
-    /// <c>http://bridge-pc:8100/••••3f9a/feed.json</c>. The token is never shown
-    /// in full; "Copy URL" copies it.
-    /// </summary>
-    internal static string MaskToken(Uri feedUri)
-    {
-        var segments = feedUri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length < 2)
-            return feedUri.AbsoluteUri;
-        var masked = segments[..^1].Select(s => "••••" + (s.Length > 4 ? s[^4..] : string.Empty)).Append(segments[^1]);
-        return $"{feedUri.Scheme}://{feedUri.Authority}/{string.Join('/', masked)}";
-    }
-
-    /// <summary>A manifest's file name without <c>.s100collection.json</c> (or <c>.json</c>).</summary>
-    private static string ManifestName(string path)
-    {
-        var name = LeafName(path);
-        return name.EndsWith(EncDotNet.S100.Collections.Manifests.CollectionManifest.FileSuffix, StringComparison.OrdinalIgnoreCase)
-            ? name[..^EncDotNet.S100.Collections.Manifests.CollectionManifest.FileSuffix.Length]
-            : Path.GetFileNameWithoutExtension(name);
-    }
-
-    private static string LeafName(string path)
-    {
-        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var name = Path.GetFileName(trimmed);
-        return string.IsNullOrEmpty(name) ? path : name;
-    }
+    /// <summary>A shared feed's URL with its access token masked (see <see cref="LibraryTextFormat.MaskToken"/>).</summary>
+    internal static string MaskToken(Uri feedUri) => LibraryTextFormat.MaskToken(feedUri);
 }

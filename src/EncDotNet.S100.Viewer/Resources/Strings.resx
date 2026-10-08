@@ -523,51 +523,6 @@
   <!-- Curated product-specification titles (spec code -> human-readable name).
        Shared by the Feature- and Portrayal-catalogue panels. Keys drop the
        hyphen from the spec code (e.g. "S-101" -> SpecName_S101). -->
-  <data name="SpecName_S101" xml:space="preserve">
-    <value>Electronic Navigational Chart</value>
-  </data>
-  <data name="SpecName_S102" xml:space="preserve">
-    <value>Bathymetric Surface</value>
-  </data>
-  <data name="SpecName_S104" xml:space="preserve">
-    <value>Water Level Information for Surface Navigation</value>
-  </data>
-  <data name="SpecName_S111" xml:space="preserve">
-    <value>Surface Currents</value>
-  </data>
-  <data name="SpecName_S122" xml:space="preserve">
-    <value>Marine Protected Areas</value>
-  </data>
-  <data name="SpecName_S124" xml:space="preserve">
-    <value>Navigational Warnings</value>
-  </data>
-  <data name="SpecName_S125" xml:space="preserve">
-    <value>Marine Aids to Navigation</value>
-  </data>
-  <data name="SpecName_S127" xml:space="preserve">
-    <value>Marine Resources and Services</value>
-  </data>
-  <data name="SpecName_S128" xml:space="preserve">
-    <value>Catalogue of Nautical Products</value>
-  </data>
-  <data name="SpecName_S129" xml:space="preserve">
-    <value>Under Keel Clearance Management</value>
-  </data>
-  <data name="SpecName_S131" xml:space="preserve">
-    <value>Marine Harbour Infrastructure</value>
-  </data>
-  <data name="SpecName_S201" xml:space="preserve">
-    <value>Aids to Navigation Information</value>
-  </data>
-  <data name="SpecName_S401" xml:space="preserve">
-    <value>Inland Electronic Navigational Chart</value>
-  </data>
-  <data name="SpecName_S411" xml:space="preserve">
-    <value>Sea Ice Information</value>
-  </data>
-  <data name="SpecName_S421" xml:space="preserve">
-    <value>Route Plan</value>
-  </data>
 
   <!-- Catalog (S-128) panel -->
 
@@ -2512,53 +2467,11 @@
   <data name="Library_FacetDetailFormat" xml:space="preserve">
     <value>{0:N0} datasets · {1}</value>
   </data>
-  <data name="Library_Field_Band" xml:space="preserve">
-    <value>Usage band</value>
-  </data>
-  <data name="Library_Field_CompilationScale" xml:space="preserve">
-    <value>Compilation scale</value>
-  </data>
-  <data name="Library_Field_DisplayScales" xml:space="preserve">
-    <value>Display scales</value>
-  </data>
-  <data name="Library_Field_Download" xml:space="preserve">
-    <value>Download</value>
-  </data>
-  <data name="Library_Field_Edition" xml:space="preserve">
-    <value>Edition</value>
-  </data>
-  <data name="Library_Field_Issued" xml:space="preserve">
-    <value>Issued</value>
-  </data>
-  <data name="Library_Field_Location" xml:space="preserve">
-    <value>Location</value>
-  </data>
-  <data name="Library_Field_NorthEast" xml:space="preserve">
-    <value>North-east</value>
-  </data>
-  <data name="Library_Field_Size" xml:space="preserve">
-    <value>Size</value>
-  </data>
-  <data name="Library_Field_SouthWest" xml:space="preserve">
-    <value>South-west</value>
-  </data>
-  <data name="Library_Field_Spec" xml:space="preserve">
-    <value>Product</value>
-  </data>
-  <data name="Library_Field_Status" xml:space="preserve">
-    <value>Status</value>
-  </data>
   <data name="Library_Field_Title" xml:space="preserve">
     <value>Title</value>
   </data>
   <data name="Library_Field_Update" xml:space="preserve">
     <value>Update</value>
-  </data>
-  <data name="Library_Field_UpdateApplied" xml:space="preserve">
-    <value>Update applied</value>
-  </data>
-  <data name="Library_Field_Updates" xml:space="preserve">
-    <value>Update files</value>
   </data>
   <data name="Library_FilterWatermark" xml:space="preserve">
     <value>Filter by name, title, product…</value>
@@ -2580,9 +2493,6 @@
   </data>
   <data name="Library_NoaaDistricts" xml:space="preserve">
     <value>Coast Guard districts</value>
-  </data>
-  <data name="Library_NoaaFeed" xml:space="preserve">
-    <value>NOAA ENC</value>
   </data>
   <data name="Library_NoaaRegions" xml:space="preserve">
     <value>Regions</value>
@@ -2617,9 +2527,6 @@
   <data name="Library_Status_Failed" xml:space="preserve">
     <value>failed</value>
   </data>
-  <data name="Library_Status_Indexing" xml:space="preserve">
-    <value>Indexing…</value>
-  </data>
   <data name="Library_Status_Pending" xml:space="preserve">
     <value>…</value>
   </data>
@@ -2634,12 +2541,6 @@
   </data>
   <data name="Tooltip_ClearLocation" xml:space="preserve">
     <value>Show the selected collection again</value>
-  </data>
-  <data name="Library_Availability_Deferred" xml:space="preserve">
-    <value>On pan</value>
-  </data>
-  <data name="Library_Availability_Loaded" xml:space="preserve">
-    <value>Loaded</value>
   </data>
   <data name="Library_LoadAsYouPan" xml:space="preserve">
     <value>Load as you pan</value>
@@ -2658,9 +2559,6 @@
   </data>
   <data name="Toast_LibraryDeferredSkippedFormat" xml:space="preserve">
     <value>{0:N0} datasets will load as they come into view; {1:N0} could not be opened (online, missing or catalogue-only).</value>
-  </data>
-  <data name="Library_Availability_Outdated" xml:space="preserve">
-    <value>Update available</value>
   </data>
   <data name="Library_DownloadListedFormat" xml:space="preserve">
     <value>Download {0:N0}</value>
@@ -2691,9 +2589,6 @@
   </data>
   <data name="Library_AddUsaceTitle" xml:space="preserve">
     <value>Add USACE Inland ENC Feed</value>
-  </data>
-  <data name="Library_UsaceFeed" xml:space="preserve">
-    <value>USACE Inland ENC</value>
   </data>
   <data name="Menu_AddLibraryOnlineCatalogue" xml:space="preserve">
     <value>Browse online catalogues…</value>
@@ -2760,21 +2655,6 @@
   </data>
   <data name="Library_DirectoryUrlJson" xml:space="preserve">
     <value>Not a supported catalogue: JSON that is not an S-100 feed.</value>
-  </data>
-  <data name="Library_Tag_EditionAvailableFormat" xml:space="preserve">
-    <value>Ed {0} available</value>
-  </data>
-  <data name="Library_Tag_EditionUpdateAvailableFormat" xml:space="preserve">
-    <value>Ed {0} Upd {1} available</value>
-  </data>
-  <data name="Library_Tag_Queued" xml:space="preserve">
-    <value>Queued</value>
-  </data>
-  <data name="Library_Tag_FailedRetry" xml:space="preserve">
-    <value>Failed · retry</value>
-  </data>
-  <data name="Library_Tag_Package" xml:space="preserve">
-    <value>Package</value>
   </data>
   <data name="Menu_AddLibrarySharedFeed" xml:space="preserve">
     <value>Connect to a shared feed…</value>
@@ -2857,27 +2737,6 @@
   <data name="Tooltip_LibraryFilterOptions" xml:space="preserve">
     <value>Filter options</value>
   </data>
-  <data name="Library_Group_Product" xml:space="preserve">
-    <value>Product</value>
-  </data>
-  <data name="Library_Group_Coverage" xml:space="preserve">
-    <value>Coverage</value>
-  </data>
-  <data name="Library_Group_Source" xml:space="preserve">
-    <value>Source</value>
-  </data>
-  <data name="Library_Field_Collection" xml:space="preserve">
-    <value>Collection</value>
-  </data>
-  <data name="Library_Product_S57" xml:space="preserve">
-    <value>ENC cell</value>
-  </data>
-  <data name="Library_EditionUpdateLongFormat" xml:space="preserve">
-    <value>Ed {0} · Update {1}</value>
-  </data>
-  <data name="Library_EditionLongFormat" xml:space="preserve">
-    <value>Ed {0}</value>
-  </data>
   <data name="Library_StateSizeFormat" xml:space="preserve">
     <value>{0} · {1}</value>
   </data>
@@ -2898,93 +2757,6 @@
   </data>
   <data name="Tooltip_CopyValue" xml:space="preserve">
     <value>Click to copy</value>
-  </data>
-  <data name="Library_Property_river" xml:space="preserve">
-    <value>River</value>
-  </data>
-  <data name="Library_Property_riverMiles" xml:space="preserve">
-    <value>River miles</value>
-  </data>
-  <data name="Library_Property_states" xml:space="preserve">
-    <value>States</value>
-  </data>
-  <data name="Library_Property_coastGuardDistricts" xml:space="preserve">
-    <value>Coast Guard districts</value>
-  </data>
-  <data name="Library_Property_regions" xml:space="preserve">
-    <value>Regions</value>
-  </data>
-  <data name="Library_Property_producingAgency" xml:space="preserve">
-    <value>Producing agency</value>
-  </data>
-  <data name="Library_Property_intendedUsage" xml:space="preserve">
-    <value>Intended usage</value>
-  </data>
-  <data name="Library_Property_package" xml:space="preserve">
-    <value>Package</value>
-  </data>
-  <data name="Library_Property_packageTitle" xml:space="preserve">
-    <value>Package title</value>
-  </data>
-  <data name="Library_Property_gridResolution" xml:space="preserve">
-    <value>Grid resolution (m)</value>
-  </data>
-  <data name="Library_Property_encodingFormat" xml:space="preserve">
-    <value>Encoding format</value>
-  </data>
-  <data name="Library_Property_purpose" xml:space="preserve">
-    <value>Purpose</value>
-  </data>
-  <data name="Library_Property_timeStart" xml:space="preserve">
-    <value>Valid from</value>
-  </data>
-  <data name="Library_Property_timeEnd" xml:space="preserve">
-    <value>Valid to</value>
-  </data>
-  <data name="Library_Property_classification" xml:space="preserve">
-    <value>Classification</value>
-  </data>
-  <data name="Library_Property_dataProtection" xml:space="preserve">
-    <value>Data protection</value>
-  </data>
-  <data name="Library_Property_distributionStatus" xml:space="preserve">
-    <value>Distribution status</value>
-  </data>
-  <data name="Library_Property_serviceStatus" xml:space="preserve">
-    <value>Service status</value>
-  </data>
-  <data name="Library_StatusLine_FailedFormat" xml:space="preserve">
-    <value>Failed · {0}</value>
-  </data>
-  <data name="Library_StatusLine_ProblemsFormat" xml:space="preserve">
-    <value>{0:N0} problems</value>
-  </data>
-  <data name="Library_StatusLine_Session" xml:space="preserve">
-    <value>Temporary · Pin to keep</value>
-  </data>
-  <data name="Library_StatusLine_ReachableFormat" xml:space="preserve">
-    <value>Reachable · {0}</value>
-  </data>
-  <data name="Library_StatusLine_UnreachableFormat" xml:space="preserve">
-    <value>Unreachable since {0:t} · cached index, {1} old</value>
-  </data>
-  <data name="Library_StatusLine_UnreachableNoCopyFormat" xml:space="preserve">
-    <value>Unreachable · {0}</value>
-  </data>
-  <data name="Library_StatusLine_AccessDenied" xml:space="preserve">
-    <value>Access denied · paste the new URL the server printed</value>
-  </data>
-  <data name="Library_StatusLine_DownloadingFormat" xml:space="preserve">
-    <value>Downloading {0:N0} of {1:N0} · {2} left</value>
-  </data>
-  <data name="Library_AgeMinutesFormat" xml:space="preserve">
-    <value>{0} min</value>
-  </data>
-  <data name="Library_AgeHoursFormat" xml:space="preserve">
-    <value>{0} h</value>
-  </data>
-  <data name="Library_AgeDaysFormat" xml:space="preserve">
-    <value>{0} days</value>
   </data>
   <data name="Library_LocationHitsFormat" xml:space="preserve">
     <value>{0:N0} datasets</value>
@@ -3235,12 +3007,6 @@
   <data name="Library_DropHint" xml:space="preserve">
     <value>Or drop a folder, .zip, CATALOG or collection manifest file here</value>
   </data>
-  <data name="Library_Field_LastDownload" xml:space="preserve">
-    <value>Last download</value>
-  </data>
-  <data name="Library_LastDownloadFailedFormat" xml:space="preserve">
-    <value>Failed: {0}</value>
-  </data>
   <data name="Library_PackageGroupNoDateFormat" xml:space="preserve">
     <value>{0:N0} datasets</value>
   </data>
@@ -3420,15 +3186,6 @@
   </data>
   <data name="Library_Format_S100Feed" xml:space="preserve">
     <value>S-100 feed</value>
-  </data>
-  <data name="Library_StatusLine_SyncedFormat" xml:space="preserve">
-    <value>Synced {0:N0} of {1:N0} · {2}</value>
-  </data>
-  <data name="Library_StatusLine_SyncFailedFormat" xml:space="preserve">
-    <value>Synced {0:N0} of {1:N0} · {2:N0} failed</value>
-  </data>
-  <data name="Library_StatusLine_SyncTooLargeFormat" xml:space="preserve">
-    <value>Not synced: needs {0}, over the download limit — choose less</value>
   </data>
   <data name="Library_SecomSyncTitle" xml:space="preserve">
     <value>Keep a copy of every object, synced on each refresh</value>
@@ -3643,9 +3400,6 @@
   <data name="Manifest_DoneEveryGroupFormat" xml:space="preserve">
     <value>every group in {0}</value>
   </data>
-  <data name="Library_StatusLine_PathNotFound" xml:space="preserve">
-    <value>Path not found</value>
-  </data>
   <data name="Menu_LibraryRefreshSource" xml:space="preserve">
     <value>Refresh source</value>
   </data>
@@ -3654,12 +3408,6 @@
   </data>
   <data name="Button_Save" xml:space="preserve">
     <value>Save</value>
-  </data>
-  <data name="Library_Detail_Group" xml:space="preserve">
-    <value>Group</value>
-  </data>
-  <data name="Library_GroupValueFormat" xml:space="preserve">
-    <value>{0} ({1})</value>
   </data>
   <data name="Manifest_TwoFormat" xml:space="preserve">
     <value>{0} and {1}</value>
@@ -3672,17 +3420,6 @@
   </data>
   <data name="Library_Quick_ManifestSub" xml:space="preserve">
     <value>Named groups of local folders, from a .s100collection.json file</value>
-  </data>
-  <data name="Library_StatusLine_CatalogueFormat" xml:space="preserve">
-    <value>Catalogue {0}</value>
-    <comment>{0}: the date the remote catalogue was generated</comment>
-  </data>
-  <data name="Library_StatusLine_CatalogueOfflineFormat" xml:space="preserve">
-    <value>Offline · catalogue cached {0}</value>
-    <comment>{0}: time (today) or date the cached catalogue was fetched</comment>
-  </data>
-  <data name="Library_StatusLine_NotForNavigation" xml:space="preserve">
-    <value>not for navigation</value>
   </data>
   <data name="Library_Host_Aws" xml:space="preserve">
     <value>AWS</value>
@@ -3777,37 +3514,6 @@
   <data name="Tooltip_BulkOffline" xml:space="preserve">
     <value>The catalogue can't be reached; updates are checked when it is back</value>
   </data>
-  <data name="Library_StatusLine_UpdatesFormat" xml:space="preserve">
-    <value>{0:N0} updates</value>
-  </data>
-  <data name="Library_StatusLine_NothingLocal" xml:space="preserve">
-    <value>nothing local</value>
-  </data>
-  <data name="Library_StatusLine_SomeLocalFormat" xml:space="preserve">
-    <value>{0:N0} of {1:N0} local</value>
-  </data>
-  <data name="Library_StatusLine_AllLocalFormat" xml:space="preserve">
-    <value>all {0:N0} local</value>
-  </data>
-  <data name="Library_StatusLine_LocalFormat" xml:space="preserve">
-    <value>{0:N0} local</value>
-  </data>
-  <data name="Library_Forecast_HoursFormat" xml:space="preserve">
-    <value>{0:N0} h</value>
-    <comment>A duration in hours</comment>
-  </data>
-  <data name="Library_Forecast_DaysFormat" xml:space="preserve">
-    <value>{0:N0} d</value>
-    <comment>A duration in days</comment>
-  </data>
-  <data name="Library_Forecast_LeftFormat" xml:space="preserve">
-    <value>{0} left</value>
-    <comment>{0}: a duration, e.g. "39 h"</comment>
-  </data>
-  <data name="Library_Forecast_EndedFormat" xml:space="preserve">
-    <value>Ended {0} ago</value>
-    <comment>{0}: a duration, e.g. "9 h"</comment>
-  </data>
   <data name="Library_Forecast_RunFormat" xml:space="preserve">
     <value>run {0}</value>
     <comment>{0}: a forecast run's time</comment>
@@ -3818,62 +3524,6 @@
   </data>
   <data name="Library_Forecast_TilesFormat" xml:space="preserve">
     <value>{0:N0} tiles</value>
-  </data>
-  <data name="Library_Tag_NewRun" xml:space="preserve">
-    <value>New run</value>
-  </data>
-  <data name="Library_Tag_Expired" xml:space="preserve">
-    <value>Expired</value>
-  </data>
-  <data name="Library_Field_Run" xml:space="preserve">
-    <value>Run</value>
-  </data>
-  <data name="Library_Field_Valid" xml:space="preserve">
-    <value>Valid</value>
-  </data>
-  <data name="Library_Field_NewerRun" xml:space="preserve">
-    <value>Newer run</value>
-  </data>
-  <data name="Library_NewerRunOnlineFormat" xml:space="preserve">
-    <value>{0} online</value>
-    <comment>{0}: the newer run's time</comment>
-  </data>
-  <data name="Library_NewerRunNoneFormat" xml:space="preserve">
-    <value>None as of {0}</value>
-    <comment>{0}: when the catalogue was last read</comment>
-  </data>
-  <data name="Library_Group_Forecast" xml:space="preserve">
-    <value>Forecast</value>
-  </data>
-  <data name="Library_StatusLine_ForecastOfflineFormat" xml:space="preserve">
-    <value>Offline · cached {0}</value>
-    <comment>{0}: time (today) or date the catalogues were cached</comment>
-  </data>
-  <data name="Library_StatusLine_RunsOnDiskFormat" xml:space="preserve">
-    <value>{0:N0} runs on disk</value>
-  </data>
-  <data name="Library_StatusLine_CheckedFormat" xml:space="preserve">
-    <value>Checked {0}</value>
-    <comment>{0}: time (today) or date the catalogues were last checked</comment>
-  </data>
-  <data name="Library_StatusLine_NewerRunOne" xml:space="preserve">
-    <value>newer run for 1 model</value>
-  </data>
-  <data name="Library_StatusLine_NewerRunFormat" xml:space="preserve">
-    <value>newer runs for {0:N0} models</value>
-  </data>
-  <data name="Library_StatusLine_RunsExpiredFormat" xml:space="preserve">
-    <value>{0:N0} runs expired</value>
-  </data>
-  <data name="Library_StatusLine_RefreshForRuns" xml:space="preserve">
-    <value>Refresh to look for new runs</value>
-  </data>
-  <data name="Library_StatusLine_RunsLocalFormat" xml:space="preserve">
-    <value>{0:N0} of {1:N0} runs local</value>
-  </data>
-  <data name="Library_StatusLine_LatestRunsFormat" xml:space="preserve">
-    <value>Latest runs {0}</value>
-    <comment>{0}: the latest run time</comment>
   </data>
   <data name="Library_BulkNewRunFormat" xml:space="preserve">
     <value>{0:N0} new run · {1}</value>

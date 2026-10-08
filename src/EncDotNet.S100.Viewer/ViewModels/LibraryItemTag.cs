@@ -1,31 +1,7 @@
 using System.Windows.Input;
+using EncDotNet.S100.Collections.Library;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
-
-/// <summary>What a <see cref="LibraryItemTag"/> says about a dataset (its style).</summary>
-internal enum LibraryItemTagKind
-{
-    /// <summary>A newer edition or update is available (amber tint).</summary>
-    Update,
-
-    /// <summary>Open in the viewer (the only filled tag).</summary>
-    Loaded,
-
-    /// <summary>Will load when it comes into view (outline).</summary>
-    OnPan,
-
-    /// <summary>Waiting in a bulk download (muted).</summary>
-    Queued,
-
-    /// <summary>The last download failed; clicking retries (red tint).</summary>
-    Failed,
-
-    /// <summary>A neutral fact, e.g. a community-list package (outline).</summary>
-    Neutral,
-
-    /// <summary>A forecast run whose valid window has ended (red tint, like a failure; #685).</summary>
-    Expired,
-}
 
 /// <summary>
 /// A secondary state of a Library dataset — what is happening to it — shown
@@ -34,17 +10,17 @@ internal enum LibraryItemTagKind
 /// <param name="Text">The tag text.</param>
 /// <param name="Kind">How the tag is styled.</param>
 /// <param name="Command">What clicking the tag does (retrying a failed download), if anything.</param>
-internal sealed record LibraryItemTag(string Text, LibraryItemTagKind Kind, ICommand? Command = null)
+internal sealed record LibraryItemTag(string Text, LibraryTagKind Kind, ICommand? Command = null)
 {
-    public bool IsUpdate => Kind == LibraryItemTagKind.Update;
+    public bool IsUpdate => Kind == LibraryTagKind.Update;
 
-    public bool IsLoaded => Kind == LibraryItemTagKind.Loaded;
+    public bool IsLoaded => Kind == LibraryTagKind.Loaded;
 
-    public bool IsOutline => Kind is LibraryItemTagKind.OnPan or LibraryItemTagKind.Neutral;
+    public bool IsOutline => Kind is LibraryTagKind.OnPan or LibraryTagKind.Neutral;
 
-    public bool IsQueued => Kind == LibraryItemTagKind.Queued;
+    public bool IsQueued => Kind == LibraryTagKind.Queued;
 
-    public bool IsFailed => Kind is LibraryItemTagKind.Failed or LibraryItemTagKind.Expired;
+    public bool IsFailed => Kind is LibraryTagKind.Failed or LibraryTagKind.Expired;
 
     public bool IsClickable => Command is not null;
 }

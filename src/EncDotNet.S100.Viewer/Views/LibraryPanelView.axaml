@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ic="using:FluentIcons.Avalonia"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:lib="using:EncDotNet.S100.Collections.Library"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
@@ -882,12 +883,12 @@
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:LibraryDetailGroup">
+                                <DataTemplate x:DataType="lib:LibraryDetailGroup">
                                     <StackPanel Spacing="2">
                                         <TextBlock Text="{Binding Header}" Classes="libraryGroupHeader" />
                                         <ItemsControl ItemsSource="{Binding Fields}">
                                             <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:LibraryDetailField">
+                                                <DataTemplate x:DataType="lib:LibraryDetailField">
                                                     <Grid ColumnSpacing="12" Margin="0,1">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto" SharedSizeGroup="LibraryDetailKey" />
