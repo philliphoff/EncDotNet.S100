@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Mcp.Library;
 /// <summary>
 /// Wraps the Library write tools (<see cref="AddLibrarySourceTool"/>,
 /// <see cref="RefreshLibrarySourceTool"/>, <see cref="LibraryActionTool"/>,
-/// <see cref="RemoveLibrarySourceTool"/>, <see cref="AwaitLibraryIdleTool"/>)
+/// <see cref="RemoveLibrarySourceTool"/>, <see cref="SetLibrarySourceOptionsTool"/>, <see cref="AwaitLibraryIdleTool"/>)
 /// as MCP server tools (#715), for every host (#792).
 /// </summary>
 public static class LibraryEditMcpAdapters
@@ -125,6 +125,23 @@ public static class LibraryEditMcpAdapters
             "REMOVES a collection or one source from the Library, as the viewer's Remove does, and "
             + "deletes its cached index. Downloaded files stay on disk, but the Library no longer lists them. Requires "
             + "confirm: true; confirm with the user first. Mutating.");
+    }
+
+    /// <summary>Creates <c>set_library_source_options</c>.</summary>
+    public static McpServerTool Create(SetLibrarySourceOptionsTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("A source id, or a collection id to set every source of the collection (sync then applies to its online sources only).")] string id,
+            [Description("True to keep the source's items downloaded and current on each refresh (online sources; a SECOM service also prunes), false to stop. Omit to leave as is.")] bool? sync = null,
+            [Description("True to keep the source's local datasets on the map, loading as you pan under one Datasets row, false to close them. Omit to leave as is.")] bool? showOnMap = null,
+            CancellationToken ct = default) =>
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(id, sync, showOnMap, ct));
+        return Tool(del, SetLibrarySourceOptionsTool.Name,
+            "Turns Keep downloaded (sync) and Show on map on or off for an existing Library source, or every source of a "
+            + "collection, as the viewer's Library menu does. Supply sync, showOnMap or both; options not given are left as "
+            + "they are. A changed source re-indexes; syncing downloads in the background (await_library_idle waits for "
+            + "it). Returns each source's options now. Mutating.");
     }
 
     /// <summary>Creates <c>await_library_idle</c>.</summary>

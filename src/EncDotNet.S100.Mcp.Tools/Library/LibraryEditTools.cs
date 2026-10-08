@@ -122,6 +122,23 @@ public sealed class RemoveLibrarySourceTool(ILibraryEditor editor)
     }
 }
 
+/// <summary>Sets a Library source's Keep downloaded and Show on map options (MCP <c>set_library_source_options</c>, #809).</summary>
+public sealed class SetLibrarySourceOptionsTool(ILibraryEditor editor)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "set_library_source_options";
+
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+
+    /// <summary>Sets the options given; options not given are left as they are.</summary>
+    public async Task<ToolResult<SetSourceOptionsResult>> InvokeAsync(string id, bool? sync, bool? showOnMap, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !Guid.TryParse(id.Trim(), out var target))
+            return ToolResult<SetSourceOptionsResult>.Err(new InvalidArgument("id", "expected a collection or source id from list_library_sources"));
+        return AddLibrarySourceTool.Result(await _editor.SetOptionsAsync(target, sync, showOnMap, ct).ConfigureAwait(false));
+    }
+}
+
 /// <summary>Waits for Library indexing, downloads and dataset opens (MCP <c>await_library_idle</c>).</summary>
 public sealed class AwaitLibraryIdleTool(ILibraryEditor editor)
 {

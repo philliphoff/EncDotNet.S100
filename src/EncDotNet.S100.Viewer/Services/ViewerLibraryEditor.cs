@@ -488,6 +488,58 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
         return outcome;
     }
 
+    // ── options ─────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<LibraryEditOutcome<SetSourceOptionsResult>> SetOptionsAsync(
+        Guid id, bool? sync, bool? showOnMap, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (sync is null && showOnMap is null)
+            return LibraryEditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("sync", "supply sync, showOnMap or both"));
+
+        LibraryEditOutcome<SetSourceOptionsResult> outcome = LibraryEditOutcome<SetSourceOptionsResult>.Fail(
+            new InvalidArgument("id", "no such collection or source; call list_library_sources"));
+        await _dispatch(() =>
+        {
+            var collection = _library.Collections.FirstOrDefault(c => c.Id == id)
+                ?? _library.Collections.FirstOrDefault(c => c.Sources.Any(s => s.Id == id));
+            if (collection is null)
+                return Task.CompletedTask;
+            if (collection.IsSession)
+            {
+                outcome = LibraryEditOutcome<SetSourceOptionsResult>.Fail(new LibraryChangeRejected("a session catalogue has no options; keep it in the Library first"));
+                return Task.CompletedTask;
+            }
+
+            var targets = collection.Id == id ? collection.Sources : [.. collection.Sources.Where(s => s.Id == id)];
+            if (sync is not null && targets is [var only] && collection.Id != id && !LibrarySync.CanSyncByDefault(only.Definition))
+            {
+                outcome = LibraryEditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("sync", "only an online source can be kept downloaded"));
+                return Task.CompletedTask;
+            }
+
+            var results = new List<SourceOptionsInfo>();
+            foreach (var source in targets)
+            {
+                var definition = source.Definition;
+                var canSync = LibrarySync.CanSyncByDefault(definition);
+                var updated = definition with
+                {
+                    Sync = canSync && sync is { } s ? s : definition.Sync,
+                    ShowOnMap = showOnMap ?? definition.ShowOnMap,
+                };
+                var changed = updated != definition && _library.UpdateSource(collection.Id, updated);
+                results.Add(new SourceOptionsInfo(
+                    source.Id, _panel.SourceDisplayName(source.Id), updated.Sync, updated.ShowOnMap, canSync, changed));
+            }
+
+            outcome = LibraryEditOutcome<SetSourceOptionsResult>.Ok(new SetSourceOptionsResult(results));
+            return Task.CompletedTask;
+        }).ConfigureAwait(false);
+        return outcome;
+    }
+
     // ── idle ────────────────────────────────────────────────────────────
 
     /// <inheritdoc />

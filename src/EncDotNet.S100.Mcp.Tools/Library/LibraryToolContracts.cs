@@ -198,6 +198,12 @@ public interface ILibraryEditor
     Task<LibraryEditOutcome<RemoveSourceResult>> RemoveAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
+    /// Turns "Keep downloaded" (sync) and "Show on map" on or off for a source,
+    /// or every source of a collection, as the Library tree's menu does (#809).
+    /// </summary>
+    Task<LibraryEditOutcome<SetSourceOptionsResult>> SetOptionsAsync(Guid id, bool? sync, bool? showOnMap, CancellationToken ct = default);
+
+    /// <summary>
     /// Waits until no source is indexing, no download is running, and every
     /// dataset a Library action opens has opened.
     /// </summary>
@@ -323,6 +329,21 @@ public sealed record RemoveSourceResult(
     [property: Description("Its name.")] string Name,
     [property: Description("True for a whole collection, false for one source.")] bool WasCollection,
     [property: Description("How many items it listed.")] int ItemCount);
+
+/// <summary>What set_library_source_options changed.</summary>
+[Description("The sources whose options were set, with their options now.")]
+public sealed record SetSourceOptionsResult(
+    [property: Description("The sources set: the one asked for, or every source of the collection asked for.")] IReadOnlyList<SourceOptionsInfo> Sources);
+
+/// <summary>One source's options after set_library_source_options.</summary>
+[Description("A source's Keep downloaded and Show on map options.")]
+public sealed record SourceOptionsInfo(
+    [property: Description("Source id.")] Guid Id,
+    [property: Description("Source name as shown.")] string Name,
+    [property: Description("True when its items are kept downloaded and current (online sources only).")] bool Sync,
+    [property: Description("True when its local datasets are kept on the map, loading as you pan.")] bool ShowOnMap,
+    [property: Description("True when its kind can be kept downloaded (online sources); a collection's other sources are left as they are.")] bool CanSync,
+    [property: Description("True when this call changed it (it then re-indexes, and syncs or shows accordingly).")] bool Changed);
 
 /// <summary>The Library's background work.</summary>
 [Description("Whether the Library is busy indexing, downloading or opening datasets.")]

@@ -220,6 +220,42 @@ public sealed class LibraryEditToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task Source_options_are_set_on_a_source_or_a_collections_sources()
+    {
+        var online = await OnlineAsync();
+        var charts = await ChartsAsync();
+        var tool = new SetLibrarySourceOptionsTool(_editor);
+        var ct = TestContext.Current.CancellationToken;
+        var onlineSource = _library.Collections.Single(c => c.Id == online).Sources.Single().Id;
+        var chartsSource = _library.Collections.Single(c => c.Id == charts).Sources.Single().Id;
+
+        // Nothing to set, an unknown id, or sync on a local source.
+        Assert.True((await tool.InvokeAsync(online.ToString(), null, null, ct)).TryGetError(out var nothing));
+        Assert.Equal("sync", Assert.IsType<InvalidArgument>(nothing).Parameter);
+        Assert.True((await tool.InvokeAsync(Guid.NewGuid().ToString(), true, null, ct)).TryGetError(out var unknown));
+        Assert.Equal("id", Assert.IsType<InvalidArgument>(unknown).Parameter);
+        Assert.True((await tool.InvokeAsync(chartsSource.ToString(), true, null, ct)).TryGetError(out var local));
+        Assert.Equal("sync", Assert.IsType<InvalidArgument>(local).Parameter);
+
+        // An online source: both options.
+        Assert.True((await tool.InvokeAsync(onlineSource.ToString(), true, true, ct)).TryGetValue(out var set));
+        var info = Assert.Single(set!.Sources);
+        Assert.Equal((true, true, true, true), (info.Sync, info.ShowOnMap, info.CanSync, info.Changed));
+        var stored = _library.Collections.Single(c => c.Id == online).Sources.Single().Definition;
+        Assert.True(stored.Sync && stored.ShowOnMap);
+
+        // Again: nothing changes.
+        Assert.True((await tool.InvokeAsync(onlineSource.ToString(), true, null, ct)).TryGetValue(out var again));
+        Assert.False(Assert.Single(again!.Sources).Changed);
+
+        // A local collection: Show on map applies; sync is left alone (it cannot sync).
+        Assert.True((await tool.InvokeAsync(charts.ToString(), true, true, ct)).TryGetValue(out var collection));
+        var chartsInfo = Assert.Single(collection!.Sources);
+        Assert.Equal((false, true, false), (chartsInfo.Sync, chartsInfo.ShowOnMap, chartsInfo.CanSync));
+        Assert.True(_library.Collections.Single(c => c.Id == charts).Sources.Single().Definition.ShowOnMap);
+    }
+
+    [Fact]
     public async Task Idle_reports_at_once_when_nothing_runs()
     {
         await ChartsAsync();
@@ -285,11 +321,12 @@ public sealed class LibraryEditToolsTests : IDisposable
             LibraryEditMcpAdapters.Create(new RefreshLibrarySourceTool(_editor)),
             LibraryEditMcpAdapters.Create(new LibraryActionTool(_editor)),
             LibraryEditMcpAdapters.Create(new RemoveLibrarySourceTool(_editor)),
+            LibraryEditMcpAdapters.Create(new SetLibrarySourceOptionsTool(_editor)),
             LibraryEditMcpAdapters.Create(new AwaitLibraryIdleTool(_editor)),
         };
 
         Assert.Equal(
-            ["add_library_source", "refresh_library_source", "library_action", "remove_library_source", "await_library_idle"],
+            ["add_library_source", "refresh_library_source", "library_action", "remove_library_source", "set_library_source_options", "await_library_idle"],
             tools.Select(tool => tool.ProtocolTool.Name));
     }
 

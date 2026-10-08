@@ -376,6 +376,7 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(LibraryEditMcpAdapters.Create(new RefreshLibrarySourceTool(_libraryEditor)));
             tools.Add(LibraryEditMcpAdapters.Create(new LibraryActionTool(_libraryEditor)));
             tools.Add(LibraryEditMcpAdapters.Create(new RemoveLibrarySourceTool(_libraryEditor)));
+            tools.Add(LibraryEditMcpAdapters.Create(new SetLibrarySourceOptionsTool(_libraryEditor)));
             tools.Add(LibraryEditMcpAdapters.Create(new AwaitLibraryIdleTool(_libraryEditor)));
         }
         // Test hooks only: set_test_clock exists only when the viewer was

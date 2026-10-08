@@ -1038,7 +1038,9 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 >       online sources; on a collection it applies to its online sources;
 >     - Add to Library has "Keep everything downloaded and current", off by
 >       default (SECOM keeps its own option);
->     - MCP `add_library_source` `sync` works for every online kind.
+>     - MCP `add_library_source` `sync` works for every online kind, and
+>       `set_library_source_options` sets `sync` / `showOnMap` on an existing
+>       source or a collection's sources.
 
 ---
 

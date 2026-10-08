@@ -104,6 +104,7 @@ public static class McpJson
 [JsonSerializable(typeof(RefreshResult))]
 [JsonSerializable(typeof(LibraryActionResult))]
 [JsonSerializable(typeof(RemoveSourceResult))]
+[JsonSerializable(typeof(SetSourceOptionsResult))]
 [JsonSerializable(typeof(LibraryIdleResult))]
 // Sampled values, written polymorphically.
 [JsonSerializable(typeof(DepthSample))]
