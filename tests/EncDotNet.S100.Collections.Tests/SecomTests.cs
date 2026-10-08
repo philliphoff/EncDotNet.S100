@@ -16,7 +16,8 @@ namespace EncDotNet.S100.Collections.Tests;
 /// <summary>
 /// The SECOM client, signature check, source indexer and download path
 /// (issue #804). The <c>secom-ccg-*</c> fixtures were captured from the Canadian
-/// Coast Guard's public S-124 service on 2026-10-06.
+/// Coast Guard's public S-124 service on 2026-10-06, and <c>secom-baleen-get.json</c>
+/// from the Danish Maritime Authority's Baleen test service on 2026-10-07.
 /// </summary>
 public sealed class SecomTests : IDisposable
 {
@@ -147,6 +148,81 @@ public sealed class SecomTests : IDisposable
         var tampered = (byte[])secom.Data.Clone();
         tampered[^2] ^= 0x20;
         Assert.Equal(SecomSignatureStatus.Invalid, SecomSignatureVerifier.Verify(tampered, secom.Metadata).Status);
+    }
+
+    [Fact]
+    public void A_real_sha3_signature_verifies_on_every_platform()
+    {
+        // DMA Baleen signs with ECDSA P-384 over SHA3-384, which macOS has no
+        // platform implementation of (#806). The verdict was cross-checked with
+        // OpenSSL 3 (dgst -sha3-384 -verify) when the fixture was captured.
+        using var stream = File.OpenRead(TestPaths.Fixture("secom-baleen-get.json"));
+        var secom = SecomClient.ReadDataObject(stream);
+        Assert.Equal("ecdsa-384-sha3", secom.Metadata!.SignatureReference);
+
+        var check = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata);
+        Assert.Equal(SecomSignatureStatus.Valid, check.Status);
+        Assert.Equal("S124-test", check.Signer);
+
+        var tampered = (byte[])secom.Data.Clone();
+        tampered[^2] ^= 0x20;
+        Assert.Equal(SecomSignatureStatus.Invalid, SecomSignatureVerifier.Verify(tampered, secom.Metadata).Status);
+    }
+
+    [Fact]
+    public void Sha3_256_signatures_verify()
+    {
+        using var signer = Signer.Create();
+        var data = "<S124:Dataset/>"u8.ToArray();
+        var metadata = signer.Sign(data, "ecdsa-256-sha3-256", Sha3.HashData256(data));
+
+        Assert.Equal(SecomSignatureStatus.Valid, SecomSignatureVerifier.Verify(data, metadata).Status);
+        Assert.Equal(SecomSignatureStatus.Invalid, SecomSignatureVerifier.Verify([.. data, 0x20], metadata).Status);
+    }
+
+    [Fact]
+    public void An_unknown_signature_algorithm_is_reported_as_unsupported()
+    {
+        using var signer = Signer.Create();
+        var data = "<S124:Dataset/>"u8.ToArray();
+        var metadata = signer.Sign(data) with { SignatureReference = "rsa-4096-sha2" };
+
+        Assert.Equal(SecomSignatureStatus.Unsupported, SecomSignatureVerifier.Verify(data, metadata).Status);
+    }
+
+    // Expected digests from Python's hashlib (FIPS 202). The lengths straddle
+    // the SHA3-256 (136-byte) and SHA3-384 (104-byte) block boundaries.
+    [Theory]
+    [InlineData("", 0, "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a", "0c63a75b845e4f7d01107d852e4c2485c51a50aaaa94fc61995e71bbee983a2ac3713831264adb47fb6bd1e058d5f004")]
+    [InlineData("abc", 1, "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532", "ec01498288516fc926459f58e2c6ad8df9b473cb0fc08c2596da7cf0e49be4b298d88cea927ac7f539f1edf228376d25")]
+    [InlineData("x", 135, "c150125edc74b56fb5cbfdd024fabe20ea5a99bd3c97305bbf7cb55885c106fe", "0183ceb1ae9b947885fa71b419e10cb384fe5a8084780c6bf684ede36d83470786a72c5333ae0aa472ab664aa5efeff4")]
+    [InlineData("x", 136, "5bc276bac9c582508b8fa9b3949e7ed9b6e584ee4d2925b29a426b9931ba1486", "3e9a26ef96d6a132f6f7fca32e5a5aa552e3a4861ea2f66d5e83e19f77cde16c6f1bedf72fc183c770fe5ff5bdf1e89b")]
+    [InlineData("y", 103, "b4baf26e1fbe48583bd23df7cd802000e1bcd3562c150fe419ffeb5f1f74b0d5", "07a5ebe0a53660cb49b6f428353b9eee35b9a5add36735ebf92fee8bee64019521c63c31702bc0284413e0dfb7a9c9c2")]
+    [InlineData("y", 104, "61ce1b342437ea008db7a823e35ee289bec7e69e0defc4a6d17c6e009b46b0d5", "4f29fc67df8c71c3cd252a6370354f062ac1685886d6afc68b24ccdc61eb5742a987d8b1c61b33aa3aa6d18434f637bb")]
+    [InlineData("a", 200, "cce34485baf2bf2aca99b94833892a4f52896d3d153f7b840cc4f9fe695f1387", "f97756776c1874724c94a8008f7f155553b4bf00fbf8fbeac246624ad59c258a3c0977d9f2543d7cbd75b9ac8fdc0d40")]
+    [InlineData("a", 1_000_000, "5c8875ae474a3634ba4fd55ec85bffd661f32aca75c6d699d0cdcb6c115891c1", "eee9e24d78c1855337983451df97c8ad9eedf256c6334f8e948d252d5e0e76847aa0774ddb90a842190d2c558b4b8340")]
+    public void Sha3_matches_fips_202(string text, int repeat, string expected256, string expected384)
+    {
+        var data = Encoding.ASCII.GetBytes(repeat == 1 ? text : string.Concat(Enumerable.Repeat(text, repeat)));
+
+        Assert.Equal(expected256, Convert.ToHexStringLower(Sha3.HashData256(data)));
+        Assert.Equal(expected384, Convert.ToHexStringLower(Sha3.HashData384(data)));
+    }
+
+    [Fact]
+    public void Sha3_matches_the_platform_where_it_has_one()
+    {
+        if (!SHA3_256.IsSupported || !SHA3_384.IsSupported)
+            Assert.Skip("This platform has no SHA3 to compare with.");
+
+        var random = new Random(806);
+        for (var length = 0; length <= 600; length += 7)
+        {
+            var data = new byte[length];
+            random.NextBytes(data);
+            Assert.Equal(SHA3_256.HashData(data), Sha3.HashData256(data));
+            Assert.Equal(SHA3_384.HashData(data), Sha3.HashData384(data));
+        }
     }
 
     [Fact]
@@ -414,14 +490,16 @@ public sealed class SecomTests : IDisposable
             return new Signer(key, certificate);
         }
 
-        public SecomExchangeMetadata Sign(byte[] data) => new(
+        public SecomExchangeMetadata Sign(byte[] data) => Sign(data, "ecdsa-256-sha2-256", SHA256.HashData(data));
+
+        public SecomExchangeMetadata Sign(byte[] data, string reference, byte[] digest) => new(
             false,
             "SECOM",
-            "ecdsa-256-sha2-256",
+            reference,
             false,
             [Convert.ToBase64String(Certificate.RawData)],
             Convert.ToHexString(SHA256.HashData(Certificate.RawData)),
-            Convert.ToHexString(_key.SignData(data, HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence)));
+            Convert.ToHexString(_key.SignHash(digest, DSASignatureFormat.Rfc3279DerSequence)));
 
         public void Dispose()
         {

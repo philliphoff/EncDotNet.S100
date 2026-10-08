@@ -15,7 +15,7 @@ public enum SecomSignatureStatus
     /// <summary>The signature does not match the data, or the certificate is unreadable.</summary>
     Invalid,
 
-    /// <summary>The signature algorithm is not available on this platform.</summary>
+    /// <summary>The signature algorithm is not one this library knows.</summary>
     Unsupported,
 }
 
@@ -142,8 +142,7 @@ public static class SecomSignatureVerifier
     private static bool VerifyData(X509Certificate2 signer, string? reference, byte[] data, byte[] signature)
     {
         var (family, hash) = Algorithm(reference, signer);
-        if ((hash == HashAlgorithmName.SHA3_256 && !SHA3_256.IsSupported) || (hash == HashAlgorithmName.SHA3_384 && !SHA3_384.IsSupported))
-            throw new PlatformNotSupportedException($"{hash.Name} is not available on this platform.");
+        var digest = Digest(hash, data, reference);
 
         // Signatures come DER-encoded (Java's default) or as raw r‖s; accept either.
         DSASignatureFormat[] formats = signature.Length > 0 && signature[0] == 0x30
@@ -158,7 +157,7 @@ public static class SecomSignatureVerifier
                         ?? throw new CryptographicException("The signer certificate has no ECDSA key.");
                     foreach (var format in formats)
                     {
-                        if (TryVerify(() => ecdsa.VerifyData(data, signature, hash, format)))
+                        if (TryVerify(() => ecdsa.VerifyHash(digest, signature, format)))
                             return true;
                     }
 
@@ -171,7 +170,7 @@ public static class SecomSignatureVerifier
                         ?? throw new CryptographicException("The signer certificate has no DSA key.");
                     foreach (var format in formats)
                     {
-                        if (TryVerify(() => dsa.VerifyData(data, signature, hash, format)))
+                        if (TryVerify(() => dsa.VerifySignature(digest, signature, format)))
                             return true;
                     }
 
@@ -181,6 +180,24 @@ public static class SecomSignatureVerifier
             default:
                 throw new NotSupportedException($"The signature algorithm '{reference}' is not supported.");
         }
+    }
+
+    /// <summary>
+    /// Hashes <paramref name="data"/> for verification against the digest.
+    /// SHA3 falls back to <see cref="Sha3"/> where the platform has none (macOS
+    /// as of .NET 10), so every algorithm verifies on every platform (#806).
+    /// </summary>
+    private static byte[] Digest(HashAlgorithmName hash, byte[] data, string? reference)
+    {
+        if (hash == HashAlgorithmName.SHA256)
+            return SHA256.HashData(data);
+        if (hash == HashAlgorithmName.SHA384)
+            return SHA384.HashData(data);
+        if (hash == HashAlgorithmName.SHA3_256)
+            return SHA3_256.IsSupported ? SHA3_256.HashData(data) : Sha3.HashData256(data);
+        if (hash == HashAlgorithmName.SHA3_384)
+            return SHA3_384.IsSupported ? SHA3_384.HashData(data) : Sha3.HashData384(data);
+        throw new NotSupportedException($"The signature algorithm '{reference}' is not supported.");
     }
 
     /// <summary>A malformed signature in one encoding throws; treat that as "does not verify".</summary>
