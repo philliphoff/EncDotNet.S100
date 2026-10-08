@@ -132,6 +132,15 @@ public sealed class LibrarySync : IDisposable
     /// <summary>True when <paramref name="source"/>'s kind can be kept in sync (online sources).</summary>
     public bool CanSync(CollectionSource source) => _policies.Any(p => p.Supports(source));
 
+    private static readonly ILibrarySyncPolicy[] DefaultPolicies = [new SecomSyncPolicy(), new OnlineSyncPolicy()];
+
+    /// <summary>True when the default policies can keep <paramref name="source"/>'s kind in sync (online sources).</summary>
+    public static bool CanSyncByDefault(CollectionSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return DefaultPolicies.Any(p => p.Supports(source));
+    }
+
     private ILibrarySyncPolicy? PolicyFor(CollectionSource source) => _policies.FirstOrDefault(p => p.IsSynced(source));
 
     /// <summary>Where <paramref name="sourceId"/> stood after its last sync, or <see langword="null"/> before one.</summary>
