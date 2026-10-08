@@ -2485,6 +2485,52 @@ public static class S100VectorTileRenderer
         }
     }
 
+    /// <summary>
+    /// Test-only seam: whether every tile the last live frame of
+    /// <paramref name="layer"/> found visible is resident at
+    /// <paramref name="pixelSize"/> with no visible work queued or rasterising,
+    /// so the next frame composites a settled picture. False until the layer has
+    /// painted a frame with visible tiles.
+    /// </summary>
+    internal static bool IsVisibleSettledForTest(ILayer layer, int pixelSize)
+    {
+        if (!States.TryGetValue(layer, out var state))
+        {
+            return false;
+        }
+
+        lock (state.Sync)
+        {
+            return state.CurrentVisible.Count > 0
+                && state.PendingVisible.Count == 0
+                && !state.CurrentVisible.Any(state.InFlight.Contains)
+                && state.CurrentVisible.All(key => state.Cache.Contains(key, pixelSize));
+        }
+    }
+
+    /// <summary>
+    /// Test-only seam: a one-line summary of <paramref name="layer"/>'s tile
+    /// scheduling state and the process-wide worker pool, for a settle loop to
+    /// report when it times out.
+    /// </summary>
+    internal static string DescribeTileWorkForTest(ILayer layer)
+    {
+        var pool = $"workers total={Volatile.Read(ref _activeWorkerTotal)}/{MaxTotalWorkers}";
+        if (!States.TryGetValue(layer, out var state))
+        {
+            return $"no tile state; {pool}";
+        }
+
+        lock (state.Sync)
+        {
+            var resident = state.CurrentVisible.Count(state.Cache.Contains);
+            return $"visible={state.CurrentVisible.Count} resident={resident} "
+                + $"pendingVisible={state.PendingVisible.Count} inFlight={state.InFlight.Count} "
+                + $"pendingPredicted={state.PendingPredicted.Count} pendingCrossBand={state.PendingCrossBand.Count} "
+                + $"cached={state.Cache.Count} layerWorkers={state.ActiveWorkers}; {pool}";
+        }
+    }
+
     /// <summary>Test-only seam: the current GPU-registry entry count.</summary>
     internal static int GpuRegistryEntryCountForTest
     {
