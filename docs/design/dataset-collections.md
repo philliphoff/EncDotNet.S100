@@ -1042,6 +1042,50 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 >       `set_library_source_options` sets `sync` / `showOnMap` on an existing
 >       source or a collection's sources.
 
+### 7.7 SECOM service registry (#822)
+
+> **As built:**
+> - **`SecomRegistry`** (`EncDotNet.S100.Collections.Secom`) reads the MCC
+>   Maritime Service Registry's anonymous SECOM search (`POST
+>   …/api/secom/v1/searchService`). It caches the listing on disk for an
+>   hour and serves the cached copy, with a reason, when the registry is
+>   down.
+> - **Cleaning.** On 2026-10-07 the registry listed 79 instances:
+>   - deleted instances are dropped;
+>   - endpoints that aren't absolute http(s) URLs on a real host are
+>     dropped (localhost, bare host names, MRNs typed into the URL field,
+>     the reserved example domains);
+>   - duplicates (same endpoint and product) are collapsed, keeping
+>     released over provisional;
+>   - names and MRNs are trimmed, and products normalised;
+>   - geometry is GeoJSON, often registered with longitudes off by whole
+>     turns (CCG −414…−522°). Each part is shifted back, so CCG covers
+>     −162…−54°. Empty geometry means no area.
+>
+>   The result is 61 usable services, 43 of them S-100 data services.
+> - **Probe.** `ProbeAsync` calls `Capability`, then one `GetSummary` page:
+>   - **Open:** an anonymous summary works.
+>   - **NeedsCertificate:** a 401 or 403, or a service that answers
+>     Capability as SECOM but refuses an anonymous summary (KHRA).
+>   - **UntrustedServer:** a TLS `AuthenticationException`, typically an
+>     MCP-issued server certificate (KRISO gmdrt, AMSA); #823 adds the MCP
+>     roots.
+>   - **Unreachable:** a dead host, a timeout, or no answer as SECOM
+>     (websites, REST endpoints).
+>
+>   Live counts on 2026-10-07: Open 6, NeedsCertificate 6, UntrustedServer
+>   17, Unreachable 14.
+> - **Viewer.** The Add online catalogue directory has **Show SECOM
+>   services**, which reads the registry only when asked.
+>   - S-100 data services are listed under "SECOM service registry"
+>     through `KnownCatalogueSources.FromRegistry`; provisional
+>     registrations show the pilot chip.
+>   - Choosing one probes it and shows a reachability chip and, when it
+>     can't be read, why. Next continues only for an open service, into
+>     the normal SECOM Add to Library step.
+> - **MCP.** `list_secom_services { product?, probe? }` is read-only; add
+>   an open service with `add_library_source url=<endpoint>`.
+
 ---
 
 ## 8. Implementation slices

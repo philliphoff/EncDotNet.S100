@@ -207,6 +207,95 @@ public sealed class DescribeLibraryItemTool(ILibraryReader library)
     }
 }
 
+/// <summary>SECOM services from the MCP service registry, as list_secom_services returns them.</summary>
+[Description("SECOM data services listed in the MCP service registry (#822).")]
+public sealed record SecomServicesDto(
+    [property: Description("The services, released first; add one with add_library_source url=<endpoint>.")] IReadOnlyList<SecomServiceInfo> Services,
+    [property: Description("How many instances the registry listed in all.")] int Listed,
+    [property: Description("How many were left out: not S-100 data, deleted, unusable endpoints, duplicates, or another product.")] int Hidden,
+    [property: Description("When the listing was read from the registry (UTC).")] DateTimeOffset FetchedAt,
+    [property: Description("Why the registry could not be refreshed when a cached copy is returned, or null.")] string? Stale);
+
+/// <summary>One registry service.</summary>
+[Description("A SECOM service instance in the MCP service registry.")]
+public sealed record SecomServiceInfo(
+    [property: Description("The instance's MRN.")] string InstanceId,
+    [property: Description("The registered name.")] string Name,
+    [property: Description("The registering organisation (last part of its MRN), or null.")] string? Organization,
+    [property: Description("The data product, e.g. 'S-124'.")] string Product,
+    [property: Description("'Released' or 'Provisional' (test).")] string Status,
+    [property: Description("The SECOM endpoint; pass it as url to add_library_source.")] string Endpoint,
+    [property: Description("The area it covers, as [south, west, north, east], or null.")] double[]? Bounds,
+    [property: Description("With probe: 'Open' (readable without a certificate), 'NeedsCertificate', 'UntrustedServer' (MCP-issued TLS certificate) or 'Unreachable'; otherwise null.")] string? Reachability,
+    [property: Description("With probe: what the service answered, or null.")] string? Detail);
+
+/// <summary>Lists SECOM services from the MCP service registry (MCP <c>list_secom_services</c>, #822).</summary>
+public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.SecomRegistry registry)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "list_secom_services";
+
+    /// <summary>The most services probed in one call.</summary>
+    public const int MaxProbed = 60;
+
+    private readonly EncDotNet.S100.Collections.Secom.SecomRegistry _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+
+    /// <summary>Lists them, optionally for one product, optionally probing each.</summary>
+    public async Task<ToolResult<SecomServicesDto>> InvokeAsync(string? product, bool? probe, CancellationToken ct = default)
+    {
+        EncDotNet.S100.Collections.Secom.SecomRegistryListing listing;
+        try
+        {
+            listing = await _registry.GetServicesAsync(cancellationToken: ct).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex)
+        {
+            return ToolResult<SecomServicesDto>.Err(new LibraryChangeRejected($"the service registry could not be read ({ex.Message})"));
+        }
+
+        var wanted = EncDotNet.S100.Collections.Secom.SecomRegistry.NormalizeProduct(product);
+        var services = listing.Services
+            .Where(s => s.IsS100Product && (wanted is null || string.Equals(s.ProductSpec, wanted, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+
+        var probes = new Dictionary<string, EncDotNet.S100.Collections.Secom.SecomProbeResult>(StringComparer.Ordinal);
+        if (probe == true)
+        {
+            using var gate = new SemaphoreSlim(6);
+            var results = await Task.WhenAll(services.Take(MaxProbed).Select(async s =>
+            {
+                await gate.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    return (s.InstanceId, Result: await _registry.ProbeAsync(s.EndpointUri, ct).ConfigureAwait(false));
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            })).ConfigureAwait(false);
+            foreach (var (id, result) in results)
+                probes[id] = result;
+        }
+
+        return ToolResult<SecomServicesDto>.Ok(new SecomServicesDto(
+            [.. services.Select(s => new SecomServiceInfo(
+                s.InstanceId,
+                s.Name,
+                s.OrganizationName,
+                s.ProductSpec,
+                s.Status.ToString(),
+                EncDotNet.S100.Collections.Secom.SecomClient.NormalizeServiceUri(s.EndpointUri).AbsoluteUri,
+                s.Bounds is { } b ? [b.South, b.West, b.North, b.East] : null,
+                probes.TryGetValue(s.InstanceId, out var r) ? r.Reachability.ToString() : null,
+                probes.TryGetValue(s.InstanceId, out var d) ? d.Detail : null))],
+            listing.Listed,
+            listing.Listed - services.Length,
+            listing.FetchedAt,
+            listing.Stale));
+    }
+}
+
 /// <summary>Lists the Online Catalogue directory (MCP <c>list_known_sources</c>).</summary>
 public sealed class ListKnownSourcesTool(ILibraryReader library)
 {

@@ -71,6 +71,23 @@ public static class LibraryMcpAdapters
             + "Read-only.");
     }
 
+    /// <summary>Creates <c>list_secom_services</c>.</summary>
+    public static McpServerTool Create(ListSecomServicesTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("Only services of this product, e.g. 'S-124'; omit for every S-100 data service.")] string? product = null,
+            [Description("True to probe each service (at most 60) for whether it can be read without a certificate; slower.")] bool? probe = null,
+            CancellationToken ct = default) =>
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(product, probe, ct));
+        return Tool(del, ListSecomServicesTool.Name,
+            "Lists SECOM (IEC 63173-2) data services registered in the MCP service registry: name, organisation, product, "
+            + "released or provisional, endpoint and area, cleaned of unusable entries. With probe, each is checked: Open "
+            + "(readable without a certificate), NeedsCertificate, UntrustedServer (an MCP-issued TLS certificate this "
+            + "computer does not trust) or Unreachable. Add an Open service with add_library_source url=<endpoint>. "
+            + "Read-only.");
+    }
+
     /// <summary>Creates <c>list_known_sources</c>.</summary>
     public static McpServerTool Create(ListKnownSourcesTool inner)
     {

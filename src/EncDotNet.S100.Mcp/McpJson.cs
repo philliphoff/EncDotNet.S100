@@ -100,6 +100,7 @@ public static class McpJson
 [JsonSerializable(typeof(LibraryItemPage))]
 [JsonSerializable(typeof(LibraryItemDetail))]
 [JsonSerializable(typeof(KnownSourcesDto))]
+[JsonSerializable(typeof(SecomServicesDto))]
 [JsonSerializable(typeof(AddSourceResult))]
 [JsonSerializable(typeof(RefreshResult))]
 [JsonSerializable(typeof(LibraryActionResult))]

@@ -52,6 +52,11 @@ Key types:
   - The last list is kept on disk, so an unreachable service still lists what it last offered. `DescribeAsync` counts objects per product, for choosing a filter.
   - `SecomSignatureVerifier` checks a data object's signature against the signer certificate it carries. Signer trust is checked only when roots are supplied, because MCP roots are not in OS trust stores. SHA2 and SHA3 signatures (`ecdsa-256-sha2-256`, `ecdsa-256-sha3-256`, `ecdsa-384-sha2`, `ecdsa-384-sha3`, `dsa`) verify on every platform; SHA3 falls back to a built-in FIPS 202 implementation where the platform has none (macOS).
   - Certificates, signed (v2 `POST`) searches and encrypted data are not supported yet. See `docs/design/dataset-collections.md` §7.5.
+- **`SecomRegistry`** — lists SECOM services from the MCP Maritime Service Registry's anonymous search (#822).
+  - It cleans the listing: unusable endpoints, deleted and duplicate entries are dropped, and geometry registered off by whole turns is repaired.
+  - It caches the listing on disk.
+  - `ProbeAsync` says whether a service is open, needs a certificate, presents an untrusted (MCP) server certificate, or is unreachable.
+  - `KnownCatalogueSources.FromRegistry` turns a service into a directory entry.
 - **`EncCellDownloader`** — downloads a cell's zip into a managed folder:
   - The zip is first written to a `.partial` file, then extracted to a staging folder.
   - The new copy replaces any old one only once it is complete.

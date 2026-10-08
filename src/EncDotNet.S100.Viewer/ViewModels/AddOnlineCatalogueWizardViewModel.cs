@@ -214,7 +214,7 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
 
     private bool CanNext => _currentStep switch
     {
-        1 => Directory.SelectedEntry is not null,
+        1 => Directory.CanContinueWithSelection,
         2 => _scope is { CanContinueFromScope: true },
         _ => false,
     };
