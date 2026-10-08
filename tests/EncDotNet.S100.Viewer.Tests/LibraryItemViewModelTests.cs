@@ -88,7 +88,7 @@ public sealed class LibraryItemViewModelTests
         Assert.Equal(LibraryAvailability.Outdated, row.Availability);
         Assert.Equal(LibraryPrimaryAvailability.Local, row.PrimaryAvailability);
         var only = Assert.Single(row.Tags);
-        Assert.Equal((tag, LibraryItemTagKind.Update), (only.Text, only.Kind));
+        Assert.Equal((tag, LibraryTagKind.Update), (only.Text, only.Kind));
     }
 
     [Theory]
@@ -98,7 +98,7 @@ public sealed class LibraryItemViewModelTests
     {
         var tag = Assert.Single(Row(Online(), Enum.Parse<LibraryLoadState>(state)).Tags);
 
-        Assert.Equal((text, Enum.Parse<LibraryItemTagKind>(kind)), (tag.Text, tag.Kind));
+        Assert.Equal((text, Enum.Parse<LibraryTagKind>(kind)), (tag.Text, tag.Kind));
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed class LibraryItemViewModelTests
 
         downloader.Status = new LibraryDownloadItemStatus(LibraryDownloadItemState.Queued, 0, 3_040_870);
         row.RefreshDownload();
-        Assert.Equal(LibraryItemTagKind.Queued, Assert.Single(row.Tags).Kind);
+        Assert.Equal(LibraryTagKind.Queued, Assert.Single(row.Tags).Kind);
         Assert.False(row.IsDownloading);
 
         downloader.Status = new LibraryDownloadItemStatus(LibraryDownloadItemState.Running, 1_900_000, 3_040_870);
@@ -180,7 +180,7 @@ public sealed class LibraryItemViewModelTests
         downloader.Status = new LibraryDownloadItemStatus(LibraryDownloadItemState.Failed, 0, null, "404");
         row.RefreshDownload();
         var failed = Assert.Single(row.Tags);
-        Assert.Equal(("Failed · retry", LibraryItemTagKind.Failed), (failed.Text, failed.Kind));
+        Assert.Equal(("Failed · retry", LibraryTagKind.Failed), (failed.Text, failed.Kind));
         failed.Command!.Execute(null);
         Assert.Equal(1, retried);
         Assert.Equal("Failed: 404", row.Details.SelectMany(g => g.Fields).Single(f => f.Label == "Last download").Value);

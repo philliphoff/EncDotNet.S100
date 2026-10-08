@@ -399,22 +399,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     private void AddForecastTags(List<LibraryItemTag> tags)
     {
         var states = IsModelHeader
-            ? _members.Select(m => _loadState?.Invoke(m.EffectiveItem)).ToArray()
+            ? _members.Select(m => _loadState?.Invoke(m.EffectiveItem))
             : [_loadState?.Invoke(EffectiveItem)];
-        if (states.Contains(LibraryLoadState.Loaded))
-            tags.Add(new LibraryItemTag(Strings.Library_Availability_Loaded, LibraryItemTagKind.Loaded));
-        else if (states.Contains(LibraryLoadState.Deferred))
-            tags.Add(new LibraryItemTag(Strings.Library_Availability_Deferred, LibraryItemTagKind.OnPan));
-
-        switch (Availability)
-        {
-            case LibraryAvailability.Outdated:
-                tags.Add(new LibraryItemTag(Strings.Library_Tag_NewRun, LibraryItemTagKind.Update));
-                break;
-            case LibraryAvailability.Expired:
-                tags.Add(new LibraryItemTag(Strings.Library_Tag_Expired, LibraryItemTagKind.Expired));
-                break;
-        }
+        tags.AddRange(LibraryItemText.ForecastRunTags(states, Availability).Select(Tag));
     }
 
     /// <summary>A model row's state: the most pressing of its tiles'.</summary>
@@ -564,56 +551,39 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     {
         get
         {
-            var tags = new List<LibraryItemTag>(2);
-            switch (DownloadStatus?.State)
+            if (IsModelHeader)
             {
-                case LibraryDownloadItemState.Queued:
-                    tags.Add(new LibraryItemTag(Strings.Library_Tag_Queued, LibraryItemTagKind.Queued));
-                    break;
-                case LibraryDownloadItemState.Failed:
-                    tags.Add(new LibraryItemTag(Strings.Library_Tag_FailedRetry, LibraryItemTagKind.Failed, _download is null ? null : RetryCommand));
-                    break;
-            }
-
-            if (IsForecastTile)
-                return tags;  // a run's tiles are updated together; the model's row carries its state
-            if (IsForecastRunRow)
-            {
+                var tags = LibraryItemText.DownloadTags(DownloadStatus).Select(Tag).ToList();
                 AddForecastTags(tags);
                 return tags;
             }
 
-            if (IsPackageEntry)
-                tags.Add(new LibraryItemTag(Strings.Library_Tag_Package, LibraryItemTagKind.Neutral));
             if (IsGroupHeader)
             {
-                tags.Add(new LibraryItemTag(Strings.Library_Tag_Unpacked, LibraryItemTagKind.Neutral));
-                return tags;
+                return
+                [
+                    .. LibraryItemText.DownloadTags(DownloadStatus).Select(Tag),
+                    new LibraryItemTag(Strings.Library_Tag_Unpacked, LibraryTagKind.Neutral),
+                ];
             }
 
-            switch (Availability)
-            {
-                case LibraryAvailability.Outdated when !QuietUpdates:
-                    tags.Add(new LibraryItemTag(UpdateText(), LibraryItemTagKind.Update));
-                    break;
-                case LibraryAvailability.Loaded:
-                    tags.Add(new LibraryItemTag(Strings.Library_Availability_Loaded, LibraryItemTagKind.Loaded));
-                    break;
-                case LibraryAvailability.Deferred:
-                    tags.Add(new LibraryItemTag(Strings.Library_Availability_Deferred, LibraryItemTagKind.OnPan));
-                    break;
-            }
-
-            return tags;
+            return [.. LibraryItemText.Tags(TextInput).Select(Tag)];
         }
     }
 
-    /// <summary>"Ed 46 available" (or with the update), naming what the source now offers.</summary>
-    private string UpdateText() => (Item.Edition, Item.Update) switch
+    /// <summary>A core tag as the row shows it; a failed download's tag retries it when clicked.</summary>
+    private LibraryItemTag Tag(LibraryTag tag) =>
+        new(tag.Text, tag.Kind, tag.Kind == LibraryTagKind.Failed && _download is not null ? RetryCommand : null);
+
+    /// <summary>The row as the Library core describes it (#792): tags and details in shared words.</summary>
+    private LibraryItemTextInput TextInput => new(Item, Source, Availability, EffectiveItem)
     {
-        ({ } edition, { } update and > 0) => string.Format(CultureInfo.CurrentCulture, Strings.Library_Tag_EditionUpdateAvailableFormat, edition, update),
-        ({ } edition, _) => string.Format(CultureInfo.CurrentCulture, Strings.Library_Tag_EditionAvailableFormat, edition),
-        _ => Strings.Library_Availability_Outdated,
+        Download = DownloadStatus,
+        LoadState = _loadState,
+        CollectionName = _collectionName,
+        LocalRun = LocalRun,
+        TimeFormat = ForecastRunText.ToLibrary(_timeFormat?.Invoke() ?? TimeFormat.Utc),
+        TimeZone = _time.LocalTimeZone,
     };
 
     /// <summary>The primary state in words for the details header, e.g. "Online · 1,7 MB".</summary>
@@ -701,167 +671,23 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     {
         get
         {
-            var c = CultureInfo.CurrentCulture;
-            var product = new List<LibraryDetailField>();
-            var coverage = new List<LibraryDetailField>();
-            var source = new List<LibraryDetailField>();
-            static void Add(List<LibraryDetailField> fields, string label, string? value, bool mono = false, string? copy = null)
-            {
-                if (!string.IsNullOrWhiteSpace(value))
-                    fields.Add(new LibraryDetailField(label, value, mono, copy));
-            }
-
             if (IsGroupHeader && !IsModelHeader)
             {
                 // An unpacked package: where it came from and what it held.
-                Add(source, Strings.Library_Field_Collection, _collectionName);
-                Add(source, PropertyLabel("package"), Item.Name);
-                Add(source, Strings.Library_Field_Datasets, GroupCount.ToString("N0", c));
+                var source = new List<LibraryDetailField>();
+                if (!string.IsNullOrWhiteSpace(_collectionName))
+                    source.Add(new LibraryDetailField(Strings.Library_Field_Collection, _collectionName));
+                source.Add(new LibraryDetailField(LibraryTextFormat.PropertyLabel("package"), Item.Name));
+                source.Add(new LibraryDetailField(Strings.Library_Field_Datasets, GroupCount.ToString("N0", CultureInfo.CurrentCulture)));
                 return [new LibraryDetailGroup(Strings.Library_Group_Source, source)];
             }
 
-            var forecast = new List<LibraryDetailField>();
-            if (IsForecast)
-            {
-                if (ShownRun is { } shown)
-                    Add(forecast, Strings.Library_Field_Run, FormatRun(shown), mono: true);
-                if (ShownRun is { } from && ShownValidTo is { } to)
-                    Add(forecast, Strings.Library_Field_Valid, $"{FormatRun(from)} → {FormatRun(to)}", mono: true);
-                Add(forecast, Strings.Library_Field_NewerRun, Availability == LibraryAvailability.Outdated
-                        && S100ForecastFeedIndexer.RunOf(Item) is { } newer
-                    ? string.Format(c, Strings.Library_NewerRunOnlineFormat, FormatRun(newer))
-                    : Source.Index is { } index
-                        ? string.Format(c, Strings.Library_NewerRunNoneFormat, index.IndexedAt.ToLocalTime().ToString("g", c))
-                        : null);
-            }
-
-            Add(product, Strings.Library_Field_Spec, ProductText());
-            Add(product, Strings.Library_Field_Edition, (Item.Edition, Item.Update) switch
-            {
-                ({ } e, { } u) => string.Format(c, Strings.Library_EditionUpdateLongFormat, e, u),
-                ({ } e, null) => string.Format(c, Strings.Library_EditionLongFormat, e),
-                _ => null,
-            }, mono: true);
-            Add(product, Strings.Library_Field_Issued, Item.IssueDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), mono: true);
-            Add(product, Strings.Library_Field_UpdateApplied, Item.UpdateApplicationDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), mono: true);
-            Add(product, Strings.Library_Field_Status, Item.Status == CollectionItemStatus.Unknown ? null : Item.Status.ToString());
-            Add(product, Strings.Library_Field_Band, Item.UsageBand?.ToString(c));
-            Add(product, Strings.Library_Field_CompilationScale, Item.CompilationScale is { } cscl ? "1:" + cscl.ToString("N0", c) : null, mono: true);
-            Add(product, Strings.Library_Field_DisplayScales, FormatScales(Item.MinimumDisplayScale, Item.MaximumDisplayScale, c), mono: true);
-
-            if (Item.Bounds is { } b)
-            {
-                Add(coverage, Strings.Library_Field_NorthEast, LatLonFormatter.Format(b.North, b.East), mono: true);
-                Add(coverage, Strings.Library_Field_SouthWest, LatLonFormatter.Format(b.South, b.West), mono: true);
-            }
-
-            Add(source, Strings.Library_Field_Collection, _collectionName);
-            if (Item.Properties.TryGetValue(LocalManifestIndexer.GroupProperty, out var groupId))
-            {
-                var groupName = Item.Properties.GetValueOrDefault(LocalManifestIndexer.GroupNameProperty) ?? groupId;
-                Add(source, Strings.Library_Detail_Group, string.Equals(groupName, groupId, StringComparison.Ordinal)
-                    ? groupId
-                    : string.Format(c, Strings.Library_GroupValueFormat, groupName, groupId));
-            }
-            if (Item.Location is RemoteItemLocation && EffectiveItem.Location is LocalItemLocation downloaded)
-            {
-                var path = LibraryAvailabilityResolver.ResolvePath(downloaded);
-                Add(source, Strings.Library_Field_Location, path, mono: true, copy: path);
-            }
-
-            switch (Item.Location)
-            {
-                case LocalItemLocation local:
-                    var localPath = LibraryAvailabilityResolver.ResolvePath(local) + (local.IsZip ? " → " + local.RelativePath : string.Empty);
-                    Add(source, Strings.Library_Field_Location, localPath, mono: true, copy: localPath);
-                    if (local.UpdateRelativePaths.Count > 0)
-                        Add(source, Strings.Library_Field_Updates, local.UpdateRelativePaths.Count.ToString(c));
-                    break;
-                case RemoteItemLocation remote:
-                    Add(source, Strings.Library_Field_Download, ShortUrl(remote.Uri), mono: true, copy: remote.Uri.AbsoluteUri);
-                    Add(source, Strings.Library_Field_Size, remote.SizeBytes is { } size ? FormatBytes(size) : null);
-                    if (DownloadStatus is { State: LibraryDownloadItemState.Failed, Error: { } error })
-                        Add(source, Strings.Library_Field_LastDownload, string.Format(c, Strings.Library_LastDownloadFailedFormat, error));
-                    break;
-            }
-
-            foreach (var (key, value) in Item.Properties.OrderBy(p => p.Key, StringComparer.Ordinal))
-            {
-                if (key is not ("notForNavigation" or LocalManifestIndexer.GroupProperty or LocalManifestIndexer.GroupNameProperty))
-                    Add(source, PropertyLabel(key), value);
-            }
-
-            return new[]
-            {
-                new LibraryDetailGroup(Strings.Library_Group_Forecast, forecast),
-                new LibraryDetailGroup(Strings.Library_Group_Product, product),
-                new LibraryDetailGroup(Strings.Library_Group_Coverage, coverage),
-                new LibraryDetailGroup(Strings.Library_Group_Source, source),
-            }.Where(g => g.Fields.Count > 0).ToArray();
+            return LibraryItemText.Details(TextInput);
         }
-    }
-
-    /// <summary>"S-57 · ENC cell", "S-101 · Electronic Navigational Chart (2.0.0)".</summary>
-    private string ProductText()
-    {
-        var name = Item.ProductSpec == "S-57" ? Strings.Library_Product_S57 : Strings.SpecDisplayName(Item.ProductSpec);
-        var text = name is null ? Item.ProductSpec : $"{Item.ProductSpec} · {name}";
-        return Item.ProductSpecVersion is { } version ? $"{text} ({version})" : text;
-    }
-
-    /// <summary>"ienccloud.us · U37IL257.zip": the host and file of a download URL.</summary>
-    internal static string ShortUrl(Uri uri)
-    {
-        var file = Path.GetFileName(uri.AbsolutePath);
-        return string.IsNullOrEmpty(file) ? uri.Host : $"{uri.Host} · {Uri.UnescapeDataString(file)}";
-    }
-
-    /// <summary>A readable label for a property key: curated, else the camelCase key split into words.</summary>
-    internal static string PropertyLabel(string key)
-    {
-        if (Strings.LibraryPropertyLabel(key) is { } label)
-            return label;
-
-        var words = new System.Text.StringBuilder(key.Length + 4);
-        for (var i = 0; i < key.Length; i++)
-        {
-            var ch = key[i];
-            if (i == 0)
-                words.Append(char.ToUpperInvariant(ch));
-            else if (char.IsUpper(ch) && !char.IsUpper(key[i - 1]))
-                words.Append(' ').Append(char.ToLowerInvariant(ch));
-            else
-                words.Append(ch);
-        }
-
-        return words.ToString();
     }
 
     /// <summary>Formats a byte count for display (e.g. <c>1.6 MB</c>).</summary>
-    public static string FormatBytes(long bytes)
-    {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        double value = bytes;
-        var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-
-        return unit == 0
-            ? string.Create(CultureInfo.CurrentCulture, $"{bytes} B")
-            : string.Create(CultureInfo.CurrentCulture, $"{value:0.#} {units[unit]}");
-    }
-
-    private static string? FormatScales(int? minimum, int? maximum, CultureInfo c) =>
-        (minimum, maximum) switch
-        {
-            (null, null) => null,
-            ({ } min, { } max) => $"1:{min.ToString("N0", c)} – 1:{max.ToString("N0", c)}",
-            ({ } min, null) => $"≤ 1:{min.ToString("N0", c)}",
-            (null, { } max) => $"≥ 1:{max.ToString("N0", c)}",
-        };
+    public static string FormatBytes(long bytes) => LibraryTextFormat.Bytes(bytes);
 
     /// <summary>
     /// True when the item matches a free-text filter (name, title, spec, or a

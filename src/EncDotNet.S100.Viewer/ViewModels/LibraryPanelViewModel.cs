@@ -1155,7 +1155,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
                 if (child.Source is { Definition: S100ForecastFeedSource, Index: { } runs })
                 {
-                    child.ForecastCounts = ForecastCountsOf(runs);
+                    child.ForecastCounts = LibraryNodeText.ForecastCounts(runs, _downloader, _time.GetUtcNow());
                     if (collection.Children.Count == 1)
                         onlyForecast = child.ForecastCounts;
                     continue;
@@ -1164,17 +1164,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 if (child.Source is not { Definition: S100CatalogueFeedSource, Index: { } index })
                     continue;
 
-                int local = 0, outdated = 0;
-                foreach (var item in index.Items)
-                {
-                    if (_downloader.Localize(item).Location is not LocalItemLocation)
-                        continue;
-                    local++;
-                    if (_downloader.IsOutdated(item))
-                        outdated++;
-                }
-
-                child.CatalogueCounts = new LibraryCatalogueCounts(index.Items.Count, local, outdated);
+                child.CatalogueCounts = LibraryNodeText.CatalogueCounts(index, _downloader);
                 if (collection.Children.Count == 1)
                     only = child.CatalogueCounts;
             }
@@ -1183,40 +1173,6 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             collection.ForecastCounts = onlyForecast;
             collection.SyncStatus = onlySync;
         }
-    }
-
-    /// <summary>
-    /// Per model of a forecast source: whether a run is on disk, whether a
-    /// newer run is listed, whether the downloaded run has ended, and the least
-    /// time left among the downloaded runs.
-    /// </summary>
-    private LibraryForecastCounts ForecastCountsOf(SourceIndex index)
-    {
-        var now = _time.GetUtcNow();
-        int models = 0, local = 0, newer = 0, expired = 0;
-        TimeSpan? left = null;
-        foreach (var model in index.Items.GroupBy(i => ForecastRuns.ModelOf(i) ?? i.Name, StringComparer.Ordinal))
-        {
-            models++;
-            var downloaded = model.FirstOrDefault(i => _downloader.LocalPublishedAtOf(i) is not null);
-            if (downloaded is null)
-                continue;
-
-            local++;
-            if (model.Any(_downloader.IsOutdated))
-            {
-                newer++;
-                continue;
-            }
-
-            var end = _downloader.LocalPublishedAtOf(downloaded) + ForecastRuns.Horizon(downloaded);
-            if (end is { } e && e <= now)
-                expired++;
-            else if (end is { } e2 && (left is null || e2 - now < left))
-                left = e2 - now;
-        }
-
-        return new LibraryForecastCounts(models, local, newer, expired, left);
     }
 
     /// <summary>Sets "Downloading 2 of 5 · 4,3 MB left" on the nodes whose datasets are downloading.</summary>
@@ -1239,8 +1195,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 var left = items.Zip(statuses)
                     .Where(p => p.Second is { State: not LibraryDownloadItemState.Failed })
                     .Sum(p => Math.Max(0, ((p.First.Location as RemoteItemLocation)?.SizeBytes ?? 0) - p.Second!.BytesReceived));
-                bySource[sourceId] = string.Format(CultureInfo.CurrentCulture, Strings.Library_StatusLine_DownloadingFormat,
-                    items.Count - pending + 1, items.Count, LibraryItemViewModel.FormatBytes(left));
+                bySource[sourceId] = LibraryNodeText.Downloading(items.Count - pending + 1, items.Count, left);
             }
         }
 
