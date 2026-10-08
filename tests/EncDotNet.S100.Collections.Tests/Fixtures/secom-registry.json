@@ -1,0 +1,601 @@
+{
+ "searchServiceResult": [
+  {
+   "certificates": null,
+   "comment": " Only Get and GetSummary requests are implemented.",
+   "dataProductType": "S124",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "https://s124.ccg-gcc.gc.ca/api/secom",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -414.71315,
+       85.111416
+      ],
+      [
+       -522.278396,
+       84.865782
+      ],
+      [
+       -513.841907,
+       38.272689
+      ],
+      [
+       -416.119232,
+       46.073231
+      ],
+      [
+       -414.71315,
+       62.915233
+      ],
+      [
+       -414.71315,
+       85.111416
+      ]
+     ]
+    ],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:4326"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": "urn:mrn:mcp:org:mcc:ccg:s124:prod",
+   "keywords": "s124,service,NW,nw,NAVWARNs,ccg,canadian,coast,guard,prod",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": " s124 CCG service prod service",
+   "organizationId": "urn:mrn:mcp:org:mcc:ccg",
+   "publishedAt": null,
+   "status": "PROVISIONAL",
+   "unlocode": [],
+   "version": "1.0.0"
+  },
+  {
+   "certificates": null,
+   "comment": "",
+   "dataProductType": "S124",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "urn:mrn:iho:country:au:s124",
+   "geometry": {
+    "type": "GeometryCollection",
+    "geometries": [
+     {
+      "type": "Polygon",
+      "coordinates": [
+       [
+        [
+         111.005859,
+         -21.943046
+        ],
+        [
+         117.597656,
+         -12.897489
+        ],
+        [
+         129.462891,
+         -10.314919
+        ],
+        [
+         141.61377,
+         -9.968851
+        ],
+        [
+         144.294434,
+         -9.221405
+        ],
+        [
+         146.513672,
+         -13.079478
+        ],
+        [
+         162.773438,
+         -31.052934
+        ],
+        [
+         153.457031,
+         -50.176898
+        ],
+        [
+         100.722656,
+         -48.341646
+        ],
+        [
+         111.005859,
+         -21.943046
+        ]
+       ]
+      ]
+     }
+    ],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:4326"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": "urn:mrn:mcp:service:mcc:core:s124",
+   "keywords": "s-124,mms",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": "Demo S-124 MMS Service ",
+   "organizationId": "urn:mrn:mcp:org:mcc:core",
+   "publishedAt": null,
+   "status": "PROVISIONAL",
+   "unlocode": [],
+   "version": "0.1"
+  },
+  {
+   "certificates": null,
+   "comment": "KHRA S-124 Navigational Warnings Service",
+   "dataProductType": "S124",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "https://secom124.bluemap.co.kr/",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       124.214575,
+       37.020098
+      ],
+      [
+       124.522276,
+       32.435613
+      ],
+      [
+       126.192652,
+       31.653381
+      ],
+      [
+       127.819071,
+       33.137551
+      ],
+      [
+       128.961959,
+       34.452218
+      ],
+      [
+       130.983994,
+       35.85344
+      ],
+      [
+       132.96207,
+       37.544577
+      ],
+      [
+       131.115865,
+       38.993572
+      ],
+      [
+       129.313618,
+       39.436193
+      ],
+      [
+       124.214575,
+       37.020098
+      ]
+     ]
+    ],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:4326"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": " urn:mrn:mcp:service:mcc:khra:instance:nav-warning",
+   "keywords": "",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": "KHRA S-124 Navigational Warnings Service",
+   "organizationId": "urn:mrn:mcp:org:mcc:kriso",
+   "publishedAt": null,
+   "status": "RELEASED",
+   "unlocode": [],
+   "version": "1.0.0"
+  },
+  {
+   "certificates": null,
+   "comment": "For Test",
+   "dataProductType": "S124",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "https://dmatest:8080/",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:-1"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": "urn:mrn:mcp:service:mcc:dma:baleen-test-local",
+   "keywords": "test",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": "DMA Local Test",
+   "organizationId": "urn:mrn:mcp:org:mcc:dma",
+   "publishedAt": null,
+   "status": "PROVISIONAL",
+   "unlocode": [],
+   "version": "1.0"
+  },
+  {
+   "certificates": null,
+   "comment": "NavWarn S124 service by ELMAN, no certificate required yet",
+   "dataProductType": "S124",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "https://pelagus.elmansrl.eu/s100exchanger/secom",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:-1"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": "urn:mrn:mcp:entity:mcc:elmansrl:s124",
+   "keywords": "S-124, Navigational Warnings",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": "ELMAN S-124 Navigational Warnings Service",
+   "organizationId": "urn:mrn:mcp:org:mcc:elmansrl",
+   "publishedAt": null,
+   "status": "PROVISIONAL",
+   "unlocode": [],
+   "version": "0.1"
+  },
+  {
+   "certificates": null,
+   "comment": "PROTOTYPE SECOM-service for the provision of Marine weather information in Republic of Korea",
+   "dataProductType": "S412",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "https://weather.gmdrt.org:37001/api/weather",
+   "geometry": {
+    "type": "GeometryCollection",
+    "geometries": [
+     {
+      "type": "Polygon",
+      "coordinates": [
+       [
+        [
+         118.995103,
+         42.098222
+        ],
+        [
+         134.208369,
+         42.228517
+        ],
+        [
+         134.120431,
+         30.524413
+        ],
+        [
+         118.467475,
+         30.902225
+        ],
+        [
+         118.995103,
+         42.098222
+        ]
+       ]
+      ]
+     }
+    ],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:4326"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": "urn:mrn:mcp:service:mcc:kriso:instance:weather:0.1",
+   "keywords": "",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": "KRISO Marine weather information",
+   "organizationId": "urn:mrn:mcp:org:mcc:kriso",
+   "publishedAt": null,
+   "status": "PROVISIONAL",
+   "unlocode": [],
+   "version": "0.1"
+  },
+  {
+   "certificates": null,
+   "comment": "Hafen - Hamburg Steinwerder. MADORA-Prototyp",
+   "dataProductType": "OTHER",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "http://localhost:8082",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       8.342463,
+       54.194583
+      ],
+      [
+       7.957794,
+       54.101281
+      ],
+      [
+       7.803926,
+       53.962549
+      ],
+      [
+       8.227063,
+       53.813626
+      ],
+      [
+       8.501826,
+       53.719466
+      ],
+      [
+       9.381101,
+       53.520717
+      ],
+      [
+       9.732799,
+       53.46189
+      ],
+      [
+       10.04603,
+       53.468431
+      ],
+      [
+       10.16143,
+       53.589244
+      ],
+      [
+       9.545959,
+       53.859007
+      ],
+      [
+       9.221738,
+       54.091617
+      ],
+      [
+       9.012917,
+       54.242761
+      ],
+      [
+       8.633743,
+       54.297294
+      ],
+      [
+       8.353484,
+       54.30691
+      ],
+      [
+       8.342463,
+       54.194583
+      ]
+     ]
+    ],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:4326"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": "urn:mrn:mcp:org:mcc:offis:madora:port",
+   "keywords": "elabrius PORT",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": "MADORA Port Data",
+   "organizationId": "urn:mrn:mcp:org:mcc:offis",
+   "publishedAt": null,
+   "status": "RELEASED",
+   "unlocode": [],
+   "version": "1.0.0"
+  },
+  {
+   "certificates": null,
+   "comment": "test",
+   "dataProductType": "S124",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "https://example.com",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -32.695313,
+       36.315125
+      ],
+      [
+       -15.117188,
+       -22.593726
+      ],
+      [
+       43.242188,
+       17.308688
+      ],
+      [
+       6.679688,
+       45.58329
+      ],
+      [
+       -32.695313,
+       36.315125
+      ]
+     ]
+    ],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:4326"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": "urn:mrn:mcp:entity:dmc:instance:navwarntest",
+   "keywords": "s-124",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": "TEST",
+   "organizationId": "urn:mrn:mcp:org:mcc:core",
+   "publishedAt": null,
+   "status": "PROVISIONAL",
+   "unlocode": [],
+   "version": "1.0"
+  },
+  {
+   "certificates": null,
+   "comment": "A simple service implementing a custom service specification",
+   "dataProductType": "OTHER",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "https://testservice.mcp.enav.org/service/endpoint/",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:-1"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": "urn:mrn:mcp:service:test:org:instance:100",
+   "keywords": "test,mcp,navigation",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": "Test Service Instance No1",
+   "organizationId": "urn:mrn:mcp:org:mcc:core",
+   "publishedAt": null,
+   "status": "DELETED",
+   "unlocode": [],
+   "version": "1"
+  },
+  {
+   "certificates": null,
+   "comment": "A demo service used to demonstrate the platform functionality of MANGO",
+   "dataProductType": "OTHER",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "https://pg-mango-kc-3.informatik.uni-oldenburg.de:9001/",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -180,
+       -90
+      ],
+      [
+       -180,
+       90
+      ],
+      [
+       180,
+       90
+      ],
+      [
+       180,
+       -90
+      ],
+      [
+       -180,
+       -90
+      ]
+     ]
+    ],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:4326"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": "urn:mrn:mcp:service:mcc:offis:instance:ship-service-client",
+   "keywords": "",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": "PG-MANGO Demo Ship Service Client 1",
+   "organizationId": null,
+   "publishedAt": null,
+   "status": "PROVISIONAL",
+   "unlocode": [],
+   "version": "1.0.0"
+  },
+  {
+   "certificates": null,
+   "comment": "A demo service used to demonstrate the platform functionality of MANGO",
+   "dataProductType": "OTHER",
+   "description": null,
+   "endpointType": null,
+   "endpointUri": "https://pg-mango-kc-3.informatik.uni-oldenburg.de:9001/",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -180,
+       -90
+      ],
+      [
+       -180,
+       90
+      ],
+      [
+       180,
+       90
+      ],
+      [
+       180,
+       -90
+      ],
+      [
+       -180,
+       -90
+      ]
+     ]
+    ],
+    "crs": {
+     "type": "name",
+     "properties": {
+      "name": "EPSG:4326"
+     }
+    }
+   },
+   "imo": null,
+   "instanceId": "urn:mrn:mcp:service:mcc:offis:instance:ship-service-client2",
+   "keywords": "",
+   "lastUpdatedAt": null,
+   "mmsi": null,
+   "name": "PG-MANGO Demo Ship Service Client 2",
+   "organizationId": null,
+   "publishedAt": null,
+   "status": "PROVISIONAL",
+   "unlocode": [],
+   "version": "1.0.0"
+  }
+ ]
+}
