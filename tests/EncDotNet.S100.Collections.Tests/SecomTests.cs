@@ -145,6 +145,13 @@ public sealed class SecomTests : IDisposable
         Assert.Equal("Canadian Coast Guard", check.Signer);
         Assert.Null(check.SignerTrusted);
 
+        // CCG holds an MCP MCC certificate; it expired on 2026-05-05 but stays attributable (#823).
+        var trusted = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata, SecomTrustAnchors.BuiltIn, new DateTimeOffset(2026, 10, 7, 0, 0, 0, TimeSpan.Zero));
+        Assert.True(trusted.SignerTrusted);
+        Assert.Equal("MCP MCC", trusted.TrustAnchor);
+        Assert.True(trusted.SignerExpired);
+        Assert.False(SecomSignatureVerifier.Verify(secom.Data, secom.Metadata, SecomTrustAnchors.None).SignerTrusted);
+
         var tampered = (byte[])secom.Data.Clone();
         tampered[^2] ^= 0x20;
         Assert.Equal(SecomSignatureStatus.Invalid, SecomSignatureVerifier.Verify(tampered, secom.Metadata).Status);
@@ -163,6 +170,11 @@ public sealed class SecomTests : IDisposable
         var check = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata);
         Assert.Equal(SecomSignatureStatus.Valid, check.Status);
         Assert.Equal("S124-test", check.Signer);
+
+        // DMA states the issuing intermediate's thumbprint rather than the root's (#823).
+        var trusted = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata, SecomTrustAnchors.BuiltIn);
+        Assert.True(trusted.SignerTrusted);
+        Assert.Equal("MCP MCC", trusted.TrustAnchor);
 
         var tampered = (byte[])secom.Data.Clone();
         tampered[^2] ^= 0x20;
@@ -235,13 +247,15 @@ public sealed class SecomTests : IDisposable
         Assert.Equal(SecomSignatureStatus.Unsigned, SecomSignatureVerifier.Verify(data, null).Status);
         Assert.Equal(SecomSignatureStatus.Unsigned, SecomSignatureVerifier.Verify(data, metadata with { Signature = null }).Status);
 
-        var trusted = SecomSignatureVerifier.Verify(data, metadata, [signer.Certificate]);
+        var trusted = SecomSignatureVerifier.Verify(data, metadata, Anchors(signer));
         Assert.Equal(SecomSignatureStatus.Valid, trusted.Status);
         Assert.True(trusted.SignerTrusted);
+        Assert.Equal("test", trusted.TrustAnchor);
         Assert.False(trusted.SignerExpired);
 
         using var other = Signer.Create();
-        Assert.False(SecomSignatureVerifier.Verify(data, metadata, [other.Certificate]).SignerTrusted);
+        Assert.False(SecomSignatureVerifier.Verify(data, metadata, Anchors(other)).SignerTrusted);
+        Assert.False(SecomSignatureVerifier.Verify(data, metadata, SecomTrustAnchors.BuiltIn).SignerTrusted);
 
         // Single-line ("minified") PEM is accepted as well as base64 DER.
         var pem = "-----BEGIN CERTIFICATE-----" + Convert.ToBase64String(signer.Certificate.RawData) + "-----END CERTIFICATE-----";
@@ -367,9 +381,30 @@ public sealed class SecomTests : IDisposable
         Assert.NotSame(index, after);
         var indexed = after.Items.Single(i => i.Key == "ref-0001");
         Assert.Equal(new GeoBounds(49, -127, 51, -125), indexed.Bounds);
-        Assert.Equal("valid", indexed.Properties["signature"]);
+        Assert.Equal("valid · signer not trusted", indexed.Properties["signature"]);
         Assert.Equal(file, Assert.Single(probed));
+
+        // Trust is judged on read against the current anchors: no re-download (#823).
+        var trusting = new EncCellDownloader(new HttpClient(server), downloader.Root) { TrustAnchors = Anchors(signer) };
+        var reread = trusting.TryGetDownloaded(item.Name)!.Signature!;
+        Assert.True(reread.SignerTrusted);
+        Assert.Equal("valid · trusted (test)", SecomSourceIndexer.Describe(reread));
+
+        // A record written before #823 carries no certificates and keeps its recorded trust.
+        var recordPath = Path.Combine(downloader.Root, item.Name, EncCellDownloader.RecordFileName);
+        var record = JsonNode.Parse(File.ReadAllText(recordPath))!.AsObject();
+        var recorded = record["signature"]!.AsObject();
+        recorded.Remove("certificates");
+        recorded.Remove("rootThumbprint");
+        recorded["signerTrusted"] = null;
+        File.WriteAllText(recordPath, record.ToJsonString());
+        var old = trusting.TryGetDownloaded(item.Name)!.Signature!;
+        Assert.Null(old.SignerTrusted);
+        Assert.Equal("valid · signer trust not checked", SecomSourceIndexer.Describe(old));
     }
+
+    private static SecomTrustAnchors Anchors(Signer signer) =>
+        new([new SecomTrustAnchor("test", signer.Certificate)]);
 
     [Fact]
     public async Task Download_refuses_bad_signatures_and_encrypted_objects()
