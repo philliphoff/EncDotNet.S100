@@ -1,6 +1,4 @@
 using Avalonia.Threading;
-using EncDotNet.S100.Collections;
-using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Mcp.Tools.Library;
@@ -105,11 +103,7 @@ internal sealed class ViewerLibraryController : ILibraryReader
             if (LibraryQuery.FindById(_panel.Collections, itemId) is not var (item, source))
                 return;
             var row = _panel.CreateItem(item, source);
-            detail = new LibraryItemDetail(
-                Info(row),
-                [.. row.Details.Select(group => new LibraryDetailGroupInfo(
-                    group.Title,
-                    [.. group.Fields.Select(field => new LibraryDetailFieldInfo(field.Label, field.Value))]))]);
+            detail = LibraryToolResults.Detail(row.State, row.Tags.Select(tag => tag.Text), row.Details);
         }).ConfigureAwait(false);
         return detail;
     }
@@ -120,8 +114,8 @@ internal sealed class ViewerLibraryController : ILibraryReader
         ct.ThrowIfCancellationRequested();
         IReadOnlyList<KnownSourceInfo> list =
         [
-            .. KnownCatalogueSources.All.Select(source => Known(source, userAdded: false)),
-            .. _userCatalogues().Select(source => Known(source, userAdded: true)),
+            .. KnownCatalogueSources.All.Select(source => LibraryToolResults.KnownSource(source, userAdded: false)),
+            .. _userCatalogues().Select(source => LibraryToolResults.KnownSource(source, userAdded: true)),
         ];
         return Task.FromResult(list);
     }
@@ -132,14 +126,9 @@ internal sealed class ViewerLibraryController : ILibraryReader
         IReadOnlyDictionary<string, int>? tally = null;
         if (counts)
         {
-            tally = (source.Index?.Items ?? [])
-                .Select(item => LibraryAvailabilityNames.Of(_panel.CreateItem(item, source).Availability))
-                .GroupBy(state => state, StringComparer.Ordinal)
-                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+            tally = LibraryToolResults.Counts((source.Index?.Items ?? []).Select(item => _panel.CreateItem(item, source).Availability));
         }
-        var url = node.SourceUrl is { } uri
-            ? source.Definition is S100FeedSource ? LibraryNodeViewModel.MaskToken(uri) : uri.AbsoluteUri
-            : null;
+        var url = LibraryToolResults.SourceUrl(source.Definition);
         return new LibrarySourceInfo(
             source.Id,
             node.Name,
@@ -155,47 +144,6 @@ internal sealed class ViewerLibraryController : ILibraryReader
             source.Definition.ShowOnMap);
     }
 
-    internal static LibraryItemInfo Info(LibraryItemViewModel row)
-    {
-        var item = row.Item;
-        var run = S100ForecastFeedIndexer.RunOf(item);
-        var horizon = ForecastRuns.Horizon(item);
-        var effective = row.EffectiveItem;
-        return new LibraryItemInfo(
-            row.State.Id,
-            row.Source.Id,
-            item.Name,
-            item.Title,
-            item.ProductSpec,
-            LibraryAvailabilityNames.Of(row.Availability),
-            [.. row.Tags.Select(tag => tag.Text)],
-            item.Edition,
-            item.Update,
-            item.IssueDate,
-            item.Location is RemoteItemLocation remote ? remote.SizeBytes : null,
-            item.Bounds is { } b ? new LibraryBounds(b.South, b.West, b.North, b.East) : null,
-            effective.Location is LocalItemLocation local ? LibraryAvailabilityResolver.ResolvePath(local) : null,
-            ForecastRuns.ModelOf(item),
-            run,
-            run is { } start && horizon is { } length ? start + length : null,
-            row.NotForNavigation);
-    }
-
-    private static KnownSourceInfo Known(KnownCatalogueSource source, bool userAdded) => new(
-        source.Id,
-        source.Name,
-        source.Provider,
-        source.Region,
-        source.Format.ToString(),
-        source.Format == KnownCatalogueFormat.S100Feed ? LibraryNodeViewModel.MaskToken(source.CatalogUri) : source.CatalogUri.AbsoluteUri,
-        source.Homepage?.AbsoluteUri,
-        source.Coverage.ToString(),
-        source.Editions,
-        source.Sizes,
-        source.Product,
-        source.Note,
-        source.NotForNavigation,
-        source.Pilot,
-        userAdded,
-        [.. source.Models.Select(model => new KnownForecastModelInfo(model.Id, model.Name, model.CadenceHours, model.HorizonHours))]);
+    internal static LibraryItemInfo Info(LibraryItemViewModel row) =>
+        LibraryToolResults.Item(row.State, row.Tags.Select(tag => tag.Text));
 }

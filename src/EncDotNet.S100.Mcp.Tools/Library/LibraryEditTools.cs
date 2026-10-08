@@ -68,6 +68,12 @@ public sealed class LibraryActionTool(ILibraryEditor editor)
     /// <summary>The MCP tool name.</summary>
     public const string Name = "library_action";
 
+    /// <summary>The actions it accepts.</summary>
+    public static readonly IReadOnlyList<string> Actions = ["load", "load_as_you_pan", "download", "download_only", "update", "cancel"];
+
+    /// <summary>How many eligible items' names a result lists.</summary>
+    public const int ListedNames = 50;
+
     private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
     /// <summary>Applies the request.</summary>

@@ -16,11 +16,6 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </summary>
 internal sealed class ViewerLibraryEditor : ILibraryEditor
 {
-    /// <summary>The actions library_action accepts.</summary>
-    internal static readonly IReadOnlyList<string> Actions = ["load", "load_as_you_pan", "download", "download_only", "update", "cancel"];
-
-    private const int ListedNames = 50;
-
     private readonly LibraryPanelViewModel _panel;
     private readonly CollectionLibrary _library;
     private readonly ViewerLibraryController _reader;
@@ -327,8 +322,8 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
     {
         ArgumentNullException.ThrowIfNull(request);
         var action = request.Action?.Trim().ToLowerInvariant() ?? string.Empty;
-        if (!Actions.Contains(action))
-            return LibraryEditOutcome<LibraryActionResult>.Fail(new InvalidArgument("action", $"expected one of {string.Join(", ", Actions)}"));
+        if (!LibraryActionTool.Actions.Contains(action))
+            return LibraryEditOutcome<LibraryActionResult>.Fail(new InvalidArgument("action", $"expected one of {string.Join(", ", LibraryActionTool.Actions)}"));
         var hasIds = request.ItemIds is { Count: > 0 };
         if (hasIds == (request.Filter is not null))
         {
@@ -389,7 +384,7 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
         var sizes = chosen.Select(row => (row.Item.Location as RemoteItemLocation)?.SizeBytes).ToArray();
         var bytes = downloads ? sizes.Sum(size => size ?? 0) : 0;
         var unknownSizes = downloads ? sizes.Count(size => size is null) : 0;
-        var names = chosen.Take(ListedNames).Select(row => row.Item.Name).ToArray();
+        var names = chosen.Take(LibraryActionTool.ListedNames).Select(row => row.Item.Name).ToArray();
 
         LibraryActionResult Result(int? opened, bool started) =>
             new(action, request.DryRun, chosen.Count, skipped, bytes, unknownSizes, names, opened, started);
