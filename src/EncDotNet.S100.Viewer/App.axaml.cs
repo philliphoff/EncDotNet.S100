@@ -547,12 +547,19 @@ public partial class App : Application
         services.AddTransient(sp =>
         {
             var urls = sp.GetService<IUrlOpener>();
+            var registry = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>();
             return new CatalogueDirectoryDialogViewModel(
                 EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.All,
                 urls is null ? null : uri => urls.Open(uri.AbsoluteUri),
                 sp.GetRequiredService<Library.UserCatalogueStore>(),
-                sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>());
+                sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
+                loadSecomRegistry: ct => registry.GetServicesAsync(cancellationToken: ct),
+                probeSecom: (uri, ct) => registry.ProbeAsync(uri, ct));
         });
+        // SECOM services from the MCP service registry (#822), cached with the feeds.
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Secom.SecomRegistry(
+            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) },
+            sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         services.AddTransient(sp => new AddOnlineCatalogueWizardViewModel(
             sp.GetRequiredService<CatalogueDirectoryDialogViewModel>(),
             sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>()));
@@ -984,7 +991,8 @@ public partial class App : Application
                 sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
                 () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources),
             // Only with --mcp-test-hooks: the ui_* tools are for scripted testing.
-            sp.GetRequiredService<ViewerSettings>().McpTestHooks ? ViewerUiAutomation.ForApplication() : null));
+            sp.GetRequiredService<ViewerSettings>().McpTestHooks ? ViewerUiAutomation.ForApplication() : null,
+            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));

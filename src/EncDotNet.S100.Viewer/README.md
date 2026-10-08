@@ -199,6 +199,14 @@ design in `docs/design/dataset-collections.md`.
       property. It then lists the catalogue under **Custom**, saved in
       `catalogues.json` next to `collections.json`, where it can be removed
       again. Online S-100 exchange catalogues are not supported yet.
+    - **SECOM services from the registry** (#822): **Show SECOM services**
+      under the list reads the MCP service registry and lists its S-100
+      data services by product. Choosing one checks it:
+      - "Readable without a certificate" — continue as usual;
+      - "Needs a certificate", "Server certificate not trusted" or "Not
+        reachable" — the reason is shown, and Next stays off.
+
+      Provisional registrations carry the pilot chip.
     - **SECOM services** (IEC 63173-2): paste a service endpoint (for
       example `https://s124.ccg-gcc.gc.ca/api/secom`). A URL that answers
       SECOM `Capability` is recognised. Services are read anonymously; ones

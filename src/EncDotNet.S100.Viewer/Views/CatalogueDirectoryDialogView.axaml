@@ -144,6 +144,12 @@
                                         <!-- Details of the chosen catalogue only. -->
                                         <StackPanel IsVisible="{Binding IsSelected}" Spacing="6" Margin="0,6,0,0">
                                             <WrapPanel Orientation="Horizontal">
+                                                <!-- A registry service: whether it can be read now (#822). -->
+                                                <Border Classes="chip" Classes.limited="{Binding IsReachabilityLimited}" Margin="0,0,4,0"
+                                                        IsVisible="{Binding HasReachability}"
+                                                        AutomationProperties.AutomationId="Catalogues.Row.Reachability">
+                                                    <TextBlock Text="{Binding ReachabilityText}" />
+                                                </Border>
                                                 <Border Classes="chip" Classes.limited="{Binding IsCoverageLimited}" Margin="0,0,4,0">
                                                     <TextBlock Text="{Binding CoverageChip}" />
                                                 </Border>
@@ -168,6 +174,8 @@
                                                     <TextBlock Text="{x:Static loc:Strings.Library_Chip_NotForNavigation}" />
                                                 </Border>
                                             </WrapPanel>
+                                            <TextBlock Text="{Binding ReachabilityExplanation}" IsVisible="{Binding HasReachabilityExplanation}"
+                                                       FontSize="12.5" TextWrapping="Wrap" Classes="muted" />
                                             <TextBlock Text="{Binding Note}" IsVisible="{Binding HasNote}" FontSize="12.5"
                                                        TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding CatalogUrl}" Classes="muted" FontSize="11.5"
@@ -194,7 +202,25 @@
         </Panel>
 
         <!-- Add a catalogue by URL: collapsed to one dashed row until asked for. -->
-        <Panel Grid.Row="2" Margin="0,10,0,0" IsVisible="{Binding CanAddByUrl}">
+        <StackPanel Grid.Row="2" Margin="0,10,0,0" Spacing="6">
+            <!-- SECOM services from the MCP service registry (#822): read only when asked. -->
+            <Button Classes="addByUrl" IsVisible="{Binding CanShowRegistry}" Command="{Binding ShowRegistryCommand}"
+                    AutomationProperties.Name="{x:Static loc:Strings.Label_ShowSecomServices}"
+                    AutomationProperties.HelpText="{x:Static loc:Strings.Library_RegistryShow}"
+                    AutomationProperties.AutomationId="Catalogues.ShowRegistry">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+                    <ic:FluentIcon Icon="Globe" FontSize="14" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{x:Static loc:Strings.Library_RegistryShow}" FontSize="13"
+                               VerticalAlignment="Center" />
+                </Grid>
+            </Button>
+            <TextBlock Text="{x:Static loc:Strings.Library_RegistryLoading}" IsVisible="{Binding IsLoadingRegistry}"
+                       Classes="muted" FontSize="12" />
+            <TextBlock Text="{Binding RegistryText}" IsVisible="{Binding IsRegistryLoaded}" Classes="muted" FontSize="12"
+                       TextWrapping="Wrap" AutomationProperties.AutomationId="Catalogues.RegistrySummary" />
+            <TextBlock Text="{Binding RegistryError}" IsVisible="{Binding HasRegistryError}" FontSize="12"
+                       TextWrapping="Wrap" Classes="destructive" />
+            <Panel IsVisible="{Binding CanAddByUrl}">
             <Button Classes="addByUrl" IsVisible="{Binding !IsUrlPanelOpen}" Command="{Binding OpenUrlPanelCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Library_DirectoryAddByUrl}"
                     AutomationProperties.AutomationId="Catalogues.AddByUrl">
@@ -238,5 +264,6 @@
                 </StackPanel>
             </Border>
         </Panel>
+        </StackPanel>
     </Grid>
 </UserControl>

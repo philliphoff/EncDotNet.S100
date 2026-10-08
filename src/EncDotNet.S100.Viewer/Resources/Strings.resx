@@ -3463,6 +3463,51 @@
   <data name="Menu_LibraryShowOnMap" xml:space="preserve">
     <value>Show on map</value>
   </data>
+  <data name="Label_ShowSecomServices" xml:space="preserve">
+    <value>Show SECOM services</value>
+  </data>
+  <data name="Library_RegistryShow" xml:space="preserve">
+    <value>Show SECOM services from the MCP service registry</value>
+  </data>
+  <data name="Library_RegistryLoading" xml:space="preserve">
+    <value>Reading the service registry…</value>
+  </data>
+  <data name="Library_RegistryRegion" xml:space="preserve">
+    <value>SECOM service registry</value>
+  </data>
+  <data name="Library_RegistrySummaryFormat" xml:space="preserve">
+    <value>{0:N0} SECOM data services from the MCP registry · {1:N0} other or unusable entries hidden · read {2:t}</value>
+  </data>
+  <data name="Library_RegistrySummaryStaleFormat" xml:space="preserve">
+    <value>{0:N0} SECOM data services from the MCP registry (registry unreachable; copy from {2:g}) · {1:N0} other or unusable entries hidden</value>
+  </data>
+  <data name="Library_RegistryErrorFormat" xml:space="preserve">
+    <value>The service registry could not be read: {0}</value>
+  </data>
+  <data name="Library_Reachability_Checking" xml:space="preserve">
+    <value>Checking…</value>
+  </data>
+  <data name="Library_Reachability_Open" xml:space="preserve">
+    <value>Readable without a certificate</value>
+  </data>
+  <data name="Library_Reachability_NeedsCertificate" xml:space="preserve">
+    <value>Needs a certificate</value>
+  </data>
+  <data name="Library_Reachability_UntrustedServer" xml:space="preserve">
+    <value>Server certificate not trusted</value>
+  </data>
+  <data name="Library_Reachability_Unreachable" xml:space="preserve">
+    <value>Not reachable</value>
+  </data>
+  <data name="Library_Reachability_NeedsCertificateExplanation" xml:space="preserve">
+    <value>This service answers, but only shares data with a registered client certificate. Certificates are not supported yet.</value>
+  </data>
+  <data name="Library_Reachability_UntrustedServerExplanation" xml:space="preserve">
+    <value>This service's TLS certificate is issued by the Maritime Connectivity Platform, which this computer does not trust yet.</value>
+  </data>
+  <data name="Library_Reachability_UnreachableExplanationFormat" xml:space="preserve">
+    <value>It could not be read: {0}</value>
+  </data>
   <data name="Library_Format_Secom" xml:space="preserve">
     <value>SECOM service</value>
   </data>

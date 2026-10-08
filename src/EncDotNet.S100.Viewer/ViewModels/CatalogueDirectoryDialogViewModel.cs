@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Secom;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -30,13 +31,25 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     private string? _urlSuccess;
     private bool _isChecking;
     private bool _isUrlPanelOpen;
+    private readonly Func<CancellationToken, Task<SecomRegistryListing>>? _loadRegistry;
+    private readonly Func<Uri, CancellationToken, Task<SecomProbeResult>>? _probeSecom;
+    private List<KnownCatalogueSource> _registry = [];
+    private bool _registryLoaded;
+    private bool _isLoadingRegistry;
+    private string? _registryText;
+    private string? _registryError;
 
     public CatalogueDirectoryDialogViewModel(
         IReadOnlyList<KnownCatalogueSource> sources,
         Action<Uri>? openUrl = null,
         UserCatalogueStore? userCatalogues = null,
-        Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe = null)
+        Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe = null,
+        Func<CancellationToken, Task<SecomRegistryListing>>? loadSecomRegistry = null,
+        Func<Uri, CancellationToken, Task<SecomProbeResult>>? probeSecom = null)
     {
+        _loadRegistry = loadSecomRegistry;
+        _probeSecom = probeSecom;
+        ShowRegistryCommand = new AsyncRelayCommand(ShowRegistryAsync, () => CanShowRegistry);
         ArgumentNullException.ThrowIfNull(sources);
         _known = sources;
         _openUrl = openUrl;
@@ -89,6 +102,118 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
             _selected = value;
             _selected.IsSelected = true;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(CanContinueWithSelection));
+            if (value.IsRegistry && value.Reachability is null && !value.IsProbing)
+                _ = ProbeAsync(value);
+        }
+    }
+
+    /// <summary>
+    /// True when the chosen catalogue can be added: any curated or own
+    /// catalogue, or a registry service that answers without a certificate.
+    /// </summary>
+    public bool CanContinueWithSelection =>
+        _selected is { } entry && (!entry.IsRegistry || entry.Reachability == SecomReachability.Open);
+
+    /// <summary>Lists SECOM services from the MCP service registry (#822); the registry is only asked when this runs.</summary>
+    public ICommand ShowRegistryCommand { get; }
+
+    /// <summary>True when the registry can be listed and is not listed yet.</summary>
+    public bool CanShowRegistry => _loadRegistry is not null && !_registryLoaded && !_isLoadingRegistry;
+
+    /// <summary>True while the registry is being read.</summary>
+    public bool IsLoadingRegistry
+    {
+        get => _isLoadingRegistry;
+        private set
+        {
+            if (SetProperty(ref _isLoadingRegistry, value))
+            {
+                OnPropertyChanged(nameof(CanShowRegistry));
+                ((AsyncRelayCommand)ShowRegistryCommand).NotifyCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>"43 SECOM services from the MCP registry · 18 unusable entries hidden", once listed.</summary>
+    public string? RegistryText
+    {
+        get => _registryText;
+        private set => SetProperty(ref _registryText, value);
+    }
+
+    /// <summary>Why the registry could not be listed, or <see langword="null"/>.</summary>
+    public string? RegistryError
+    {
+        get => _registryError;
+        private set
+        {
+            if (SetProperty(ref _registryError, value))
+                OnPropertyChanged(nameof(HasRegistryError));
+        }
+    }
+
+    /// <summary>True when <see cref="RegistryError"/> is set.</summary>
+    public bool HasRegistryError => _registryError is not null;
+
+    /// <summary>True when the registry has been listed.</summary>
+    public bool IsRegistryLoaded => _registryLoaded;
+
+    private async Task ShowRegistryAsync()
+    {
+        if (_loadRegistry is null)
+            return;
+
+        IsLoadingRegistry = true;
+        RegistryError = null;
+        try
+        {
+            var listing = await _loadRegistry(CancellationToken.None).ConfigureAwait(true);
+            // S-100 data services only: the registry also lists route exchange, ship
+            // reporting and other services the Library has nothing to show for.
+            var services = listing.Services.Where(s => s.IsS100Product).ToArray();
+            _registry = [.. services.Select(KnownCatalogueSources.FromRegistry)];
+            _registryLoaded = true;
+            OnPropertyChanged(nameof(IsRegistryLoaded));
+            RegistryText = string.Format(CultureInfo.CurrentCulture,
+                listing.Stale is null ? Strings.Library_RegistrySummaryFormat : Strings.Library_RegistrySummaryStaleFormat,
+                services.Length, listing.Listed - services.Length, listing.FetchedAt.ToLocalTime());
+            Rebuild(_selected?.Source.Id);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidDataException or IOException)
+        {
+            RegistryError = string.Format(CultureInfo.CurrentCulture, Strings.Library_RegistryErrorFormat, ex.Message);
+        }
+        finally
+        {
+            IsLoadingRegistry = false;
+        }
+    }
+
+    /// <summary>Finds out whether a registry service can be read, and shows it on its row.</summary>
+    private async Task ProbeAsync(CatalogueEntryViewModel entry)
+    {
+        if (_probeSecom is null)
+            return;
+        entry.IsProbing = true;
+        try
+        {
+            var result = await _probeSecom(entry.Source.CatalogUri, CancellationToken.None).ConfigureAwait(true);
+            entry.SetReachability(result);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidDataException or IOException or TaskCanceledException)
+        {
+            entry.SetReachability(new SecomProbeResult(SecomReachability.Unreachable, ex.Message));
+        }
+        finally
+        {
+            entry.IsProbing = false;
+        }
+
+        if (ReferenceEquals(entry, _selected))
+        {
+            OnPropertyChanged(nameof(SelectedEntry));
+            OnPropertyChanged(nameof(CanContinueWithSelection));
         }
     }
 
@@ -277,12 +402,20 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
 
     private void Rebuild(string? selectId)
     {
-        // Regions in the order the curated list first names them; user catalogues last, under Custom.
+        // Regions in the order the curated list first names them; registry services
+        // next (by product), then the user's own, under Custom.
         var regionOrder = _known.Select(s => s.Region.FirstOrDefault() ?? string.Empty).Distinct().ToList();
+        var previous = _entries.Where(e => e.IsRegistry).ToDictionary(e => e.Source.Id, StringComparer.Ordinal);
         Entries = _known
             .OrderBy(s => regionOrder.IndexOf(s.Region.FirstOrDefault() ?? string.Empty))
             .ThenBy(s => s.Name, StringComparer.CurrentCulture)
             .Select(s => new CatalogueEntryViewModel(s, _openUrl))
+            .Concat(_registry
+                .OrderBy(s => s.Pilot)
+                .ThenBy(s => s.Product, StringComparer.Ordinal)
+                .ThenBy(s => s.Name, StringComparer.CurrentCulture)
+                // Keep what was already found out about a service.
+                .Select(s => previous.TryGetValue(s.Id, out var kept) ? kept : new CatalogueEntryViewModel(s, _openUrl, isRegistry: true)))
             .Concat(_user.Select(s => new CatalogueEntryViewModel(s, _openUrl, Remove)))
             .ToArray();
 
@@ -299,7 +432,9 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     {
         var text = _searchText.Trim();
         var rows = new List<CatalogueEntryViewModel>();
-        foreach (var group in _entries.GroupBy(e => e.IsUser ? KnownCatalogueSources.CustomRegion : e.Source.Region.FirstOrDefault() ?? string.Empty))
+        foreach (var group in _entries.GroupBy(e => e.IsUser ? KnownCatalogueSources.CustomRegion
+            : e.IsRegistry ? Strings.Library_RegistryRegion
+            : e.Source.Region.FirstOrDefault() ?? string.Empty))
         {
             var matches = group.Where(e => e.Matches(text)).ToArray();
             if (matches.Length == 0)
@@ -343,11 +478,15 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
 
     private bool _isSelected;
 
+    private SecomProbeResult? _reachability;
+    private bool _isProbing;
+
     public CatalogueEntryViewModel(
-        KnownCatalogueSource source, Action<Uri>? openUrl, Action<KnownCatalogueSource>? remove = null)
+        KnownCatalogueSource source, Action<Uri>? openUrl, Action<KnownCatalogueSource>? remove = null, bool isRegistry = false)
     {
         ArgumentNullException.ThrowIfNull(source);
         Source = source;
+        IsRegistry = isRegistry;
         IsUser = remove is not null;
         RemoveCommand = new RelayCommand(() => remove?.Invoke(source), () => remove is not null);
         OpenHomepageCommand = new RelayCommand(
@@ -364,6 +503,70 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
 
     /// <summary>A region header row.</summary>
     public static CatalogueEntryViewModel Header(string title) => new(title);
+
+    /// <summary>True for a SECOM service listed from the service registry (#822).</summary>
+    public bool IsRegistry { get; }
+
+    /// <summary>Whether a registry service can be read, once probed; <see langword="null"/> before.</summary>
+    public SecomReachability? Reachability => _reachability?.Reachability;
+
+    /// <summary>True while the service is being probed.</summary>
+    public bool IsProbing
+    {
+        get => _isProbing;
+        set
+        {
+            if (SetProperty(ref _isProbing, value))
+            {
+                OnPropertyChanged(nameof(ReachabilityText));
+                OnPropertyChanged(nameof(HasReachability));
+            }
+        }
+    }
+
+    /// <summary>True when the row shows a reachability chip (a registry service).</summary>
+    public bool HasReachability => IsRegistry && (IsProbing || _reachability is not null);
+
+    /// <summary>"Checking…", "Readable without a certificate", "Needs a certificate", …</summary>
+    public string? ReachabilityText => !IsRegistry ? null
+        : IsProbing ? Strings.Library_Reachability_Checking
+        : _reachability?.Reachability switch
+        {
+            SecomReachability.Open => Strings.Library_Reachability_Open,
+            SecomReachability.NeedsCertificate => Strings.Library_Reachability_NeedsCertificate,
+            SecomReachability.UntrustedServer => Strings.Library_Reachability_UntrustedServer,
+            SecomReachability.Unreachable => Strings.Library_Reachability_Unreachable,
+            _ => null,
+        };
+
+    /// <summary>True when the service cannot be added as things stand (the chip is shown as limited).</summary>
+    public bool IsReachabilityLimited => _reachability is { Reachability: not SecomReachability.Open };
+
+    /// <summary>Why the service cannot be added yet, for the row; <see langword="null"/> when it can.</summary>
+    public string? ReachabilityExplanation => _reachability?.Reachability switch
+    {
+        SecomReachability.NeedsCertificate => Strings.Library_Reachability_NeedsCertificateExplanation,
+        SecomReachability.UntrustedServer => Strings.Library_Reachability_UntrustedServerExplanation,
+        SecomReachability.Unreachable => _reachability.Detail is { Length: > 0 } detail
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Library_Reachability_UnreachableExplanationFormat, detail)
+            : null,
+        _ => null,
+    };
+
+    /// <summary>True when <see cref="ReachabilityExplanation"/> is set.</summary>
+    public bool HasReachabilityExplanation => ReachabilityExplanation is not null;
+
+    /// <summary>Records what the probe found.</summary>
+    internal void SetReachability(SecomProbeResult result)
+    {
+        _reachability = result;
+        OnPropertyChanged(nameof(Reachability));
+        OnPropertyChanged(nameof(ReachabilityText));
+        OnPropertyChanged(nameof(HasReachability));
+        OnPropertyChanged(nameof(IsReachabilityLimited));
+        OnPropertyChanged(nameof(ReachabilityExplanation));
+        OnPropertyChanged(nameof(HasReachabilityExplanation));
+    }
 
     /// <summary>True for a region header (not selectable).</summary>
     public bool IsGroupHeader { get; }

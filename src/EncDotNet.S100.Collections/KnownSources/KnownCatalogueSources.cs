@@ -210,6 +210,38 @@ public static partial class KnownCatalogueSources
     /// <summary>The region user-added catalogues are listed under.</summary>
     public const string CustomRegion = "Custom";
 
+    /// <summary>The region SECOM services from a service registry are listed under (#822).</summary>
+    public const string SecomRegistryRegion = "SECOM service registry";
+
+    /// <summary>The prefix of the ids <see cref="FromRegistry"/> gives.</summary>
+    public const string SecomRegistryIdPrefix = "msr-";
+
+    /// <summary>
+    /// Describes a SECOM service listed in a service registry (#822) as a
+    /// catalogue: its registered name and organisation, listed under
+    /// <see cref="SecomRegistryRegion"/> by product, a provisional
+    /// registration marked as a pilot.
+    /// </summary>
+    public static KnownCatalogueSource FromRegistry(Secom.SecomRegistryService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        return new KnownCatalogueSource(
+            SecomRegistryIdPrefix + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(service.InstanceId + "|" + service.EndpointUri.AbsoluteUri)))[..16].ToLowerInvariant(),
+            service.Name,
+            service.OrganizationName ?? service.EndpointUri.Host,
+            [SecomRegistryRegion, service.ProductSpec],
+            KnownCatalogueFormat.Secom,
+            Secom.SecomClient.NormalizeServiceUri(service.EndpointUri),
+            null,
+            KnownCatalogueCoverage.None,
+            Editions: false,
+            Sizes: true,
+            Note: service.Description,
+            Product: service.IsS100Product ? service.ProductSpec : null,
+            Pilot: service.Status != Secom.SecomRegistryStatus.Released);
+    }
+
     private static readonly DocumentJsonContext WriteJson = new(new JsonSerializerOptions(CreateOptions()) { WriteIndented = true });
 
     private static JsonSerializerOptions CreateOptions()
