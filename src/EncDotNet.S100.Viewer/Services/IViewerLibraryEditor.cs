@@ -31,6 +31,12 @@ internal interface IViewerLibraryEditor
     Task<EditOutcome<RemoveSourceResult>> RemoveAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>
+    /// Turns "Keep downloaded" (sync) and "Show on map" on or off for a source,
+    /// or every source of a collection, as the Library tree's menu does (#809).
+    /// </summary>
+    Task<EditOutcome<SetSourceOptionsResult>> SetOptionsAsync(Guid id, bool? sync, bool? showOnMap, CancellationToken ct = default);
+
+    /// <summary>
     /// Waits until no source is indexing, no download is running, and every
     /// dataset a Library action opens has opened.
     /// </summary>
@@ -156,6 +162,21 @@ internal sealed record RemoveSourceResult(
     [property: Description("Its name.")] string Name,
     [property: Description("True for a whole collection, false for one source.")] bool WasCollection,
     [property: Description("How many items it listed.")] int ItemCount);
+
+/// <summary>What set_library_source_options changed.</summary>
+[Description("The sources whose options were set, with their options now.")]
+internal sealed record SetSourceOptionsResult(
+    [property: Description("The sources set: the one asked for, or every source of the collection asked for.")] IReadOnlyList<SourceOptionsInfo> Sources);
+
+/// <summary>One source's options after set_library_source_options.</summary>
+[Description("A source's Keep downloaded and Show on map options.")]
+internal sealed record SourceOptionsInfo(
+    [property: Description("Source id.")] Guid Id,
+    [property: Description("Source name as shown.")] string Name,
+    [property: Description("True when its items are kept downloaded and current (online sources only).")] bool Sync,
+    [property: Description("True when its local datasets are kept on the map, loading as you pan.")] bool ShowOnMap,
+    [property: Description("True when its kind can be kept downloaded (online sources); a collection's other sources are left as they are.")] bool CanSync,
+    [property: Description("True when this call changed it (it then re-indexes, and syncs or shows accordingly).")] bool Changed);
 
 /// <summary>The Library's background work.</summary>
 [Description("Whether the Library is busy indexing, downloading or opening datasets.")]
@@ -652,6 +673,58 @@ internal sealed class ViewerLibraryEditor : IViewerLibraryEditor
                         id, source.Definition.DisplayName ?? owner.Definition.Name, false, source.Index?.Items.Count ?? 0));
                 }
             }
+            return Task.CompletedTask;
+        }).ConfigureAwait(false);
+        return outcome;
+    }
+
+    // ── options ─────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<EditOutcome<SetSourceOptionsResult>> SetOptionsAsync(
+        Guid id, bool? sync, bool? showOnMap, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (sync is null && showOnMap is null)
+            return EditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("sync", "supply sync, showOnMap or both"));
+
+        EditOutcome<SetSourceOptionsResult> outcome = EditOutcome<SetSourceOptionsResult>.Fail(
+            new InvalidArgument("id", "no such collection or source; call list_library_sources"));
+        await _dispatch(() =>
+        {
+            var collection = _library.Collections.FirstOrDefault(c => c.Id == id)
+                ?? _library.Collections.FirstOrDefault(c => c.Sources.Any(s => s.Id == id));
+            if (collection is null)
+                return Task.CompletedTask;
+            if (collection.IsSession)
+            {
+                outcome = EditOutcome<SetSourceOptionsResult>.Fail(new LibraryChangeRejected("a session catalogue has no options; keep it in the Library first"));
+                return Task.CompletedTask;
+            }
+
+            var targets = collection.Id == id ? collection.Sources : [.. collection.Sources.Where(s => s.Id == id)];
+            if (sync is not null && targets is [var only] && collection.Id != id && !LibrarySync.CanSyncByDefault(only.Definition))
+            {
+                outcome = EditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("sync", "only an online source can be kept downloaded"));
+                return Task.CompletedTask;
+            }
+
+            var results = new List<SourceOptionsInfo>();
+            foreach (var source in targets)
+            {
+                var definition = source.Definition;
+                var canSync = LibrarySync.CanSyncByDefault(definition);
+                var updated = definition with
+                {
+                    Sync = canSync && sync is { } s ? s : definition.Sync,
+                    ShowOnMap = showOnMap ?? definition.ShowOnMap,
+                };
+                var changed = updated != definition && _library.UpdateSource(collection.Id, updated);
+                results.Add(new SourceOptionsInfo(
+                    source.Id, _panel.SourceDisplayName(source.Id), updated.Sync, updated.ShowOnMap, canSync, changed));
+            }
+
+            outcome = EditOutcome<SetSourceOptionsResult>.Ok(new SetSourceOptionsResult(results));
             return Task.CompletedTask;
         }).ConfigureAwait(false);
         return outcome;
