@@ -33,6 +33,18 @@ public class DiskCacheBudgetTests : IDisposable
 
     private bool Exists(string name) => File.Exists(Entry(name));
 
+    /// <summary>
+    /// Back-dates an entry's last-access time. The last-write time goes back
+    /// further first: with an access time older than the write time, any read
+    /// (Spotlight, antivirus) bumps the access time to now under relatime-style
+    /// rules, as APFS applies them, reordering the entries.
+    /// </summary>
+    private void SetAccessTime(string name, DateTime accessedUtc)
+    {
+        File.SetLastWriteTimeUtc(Entry(name), accessedUtc.AddHours(-1));
+        File.SetLastAccessTimeUtc(Entry(name), accessedUtc);
+    }
+
     [Fact]
     public void Eviction_FollowsInProcessRecency_WithoutTimestampResolution()
     {
@@ -57,8 +69,8 @@ public class DiskCacheBudgetTests : IDisposable
     {
         File.WriteAllBytes(Entry("old"), Bytes());
         File.WriteAllBytes(Entry("new"), Bytes());
-        File.SetLastAccessTimeUtc(Entry("old"), DateTime.UtcNow.AddHours(-2));
-        File.SetLastAccessTimeUtc(Entry("new"), DateTime.UtcNow.AddHours(-1));
+        SetAccessTime("old", DateTime.UtcNow.AddHours(-2));
+        SetAccessTime("new", DateTime.UtcNow.AddHours(-1));
 
         var budget = new DiskCacheBudget(_dir, Ext, maxBytes: 2 * Unit);
         Assert.Equal(0, budget.Count); // lazy: nothing read until a write
