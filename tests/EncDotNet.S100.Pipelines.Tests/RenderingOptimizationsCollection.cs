@@ -19,6 +19,11 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// cross-class race open, and it would silently reopen whenever a new test starts
 /// touching these statics; disabling parallelization for the collection closes
 /// both without having to enumerate every mutator.
+/// <para>
+/// Tests that wait for live tile rendering to settle join too: tile workers
+/// come from a process-wide pool (and read this config), so running alone keeps
+/// another class's layers from holding every worker while they wait.
+/// </para>
 /// </remarks>
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class RenderingOptimizationsCollection
