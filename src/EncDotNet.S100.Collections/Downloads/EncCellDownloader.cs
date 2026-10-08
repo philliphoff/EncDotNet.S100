@@ -128,6 +128,15 @@ public sealed partial class EncCellDownloader
     public SecomTrustAnchors TrustAnchors { get; init; } = SecomTrustAnchors.BuiltIn;
 
     /// <summary>
+    /// The client SECOM objects (<see cref="RemoteEnvelope.Secom"/>) are
+    /// downloaded with: one whose handler trusts MCP-issued server certificates
+    /// (<see cref="SecomServerTrust.CreateHandler"/>, #829). Other downloads,
+    /// and SECOM ones when this is <see langword="null"/>, use the client given
+    /// to the constructor.
+    /// </summary>
+    public HttpClient? SecomHttpClient { get; init; }
+
+    /// <summary>
     /// Returns the downloaded copy of <paramref name="cellName"/> (a cell or
     /// package name), or <see langword="null"/> when it has not been
     /// downloaded (or its record is unreadable or its files are gone).
@@ -215,7 +224,8 @@ public sealed partial class EncCellDownloader
 
         try
         {
-            using (var response = await _httpClient
+            var http = remote.Envelope == RemoteEnvelope.Secom ? SecomHttpClient ?? _httpClient : _httpClient;
+            using (var response = await http
                 .GetAsync(remote.Uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .ConfigureAwait(false))
             {
