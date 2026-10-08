@@ -825,8 +825,8 @@ This is the same mechanism as large S-57 sets, generalized:
 >   `.source.json`.
 > - **Signatures.** `SecomSignatureVerifier` checks the hex signature, DER
 >   or raw r‖s, over the decoded data with the first `publicCertificate`
->   (base64 DER or minified PEM). Signer trust is optional (supplied roots,
->   root thumbprint matched). It is kept in Collections rather than shared
+>   (base64 DER or minified PEM). Signer trust is judged against
+>   `SecomTrustAnchors` (§7.8). It is kept in Collections rather than shared
 >   with `ExchangeSetVerifier`: the overlap is a few BCL calls, and the
 >   verifier's helpers are private and Part 15-specific (P-384 only).
 >   It verifies a digest (`VerifyHash`) rather than the data, so SHA3
@@ -1068,8 +1068,9 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 >   - **NeedsCertificate:** a 401 or 403, or a service that answers
 >     Capability as SECOM but refuses an anonymous summary (KHRA).
 >   - **UntrustedServer:** a TLS `AuthenticationException`, typically an
->     MCP-issued server certificate (KRISO gmdrt, AMSA); #823 adds the MCP
->     roots.
+>     MCP-issued server certificate (KRISO gmdrt, AMSA). Trusting the MCP
+>     roots for TLS is not done yet; #823 uses them for data signatures
+>     only (§7.8).
 >   - **Unreachable:** a dead host, a timeout, or no answer as SECOM
 >     (websites, REST endpoints).
 >
@@ -1085,6 +1086,55 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 >     the normal SECOM Add to Library step.
 > - **MCP.** `list_secom_services { product?, probe? }` is read-only; add
 >   an open service with `add_library_source url=<endpoint>`.
+
+### 7.8 SECOM signer trust (#823)
+
+> - **Anchors.** `SecomTrustAnchors` holds trusted roots, each with a
+>   name shown for it, plus intermediate CAs. Services send the signer
+>   certificate without its chain, so the anchors supply the intermediate.
+>   - `BuiltIn` is the MCP MCC instance's chain: "MCP Root Certificate"
+>     and "MCP Identity Registry" (`mcp-idreg-new`), named "MCP MCC".
+>   - It is embedded from the MCP documentation repository (MIT). The
+>     source URL, revision, file checksum and certificate fingerprints
+>     are in `Secom/TrustAnchors/README.md`, and a test checks the
+>     fingerprints.
+>   - The MCC test instance is not trusted, because anyone can get a
+>     certificate from it.
+>   - Hosts add roots with `With(...)`. The keys & certificates settings
+>     surface comes later.
+> - **Chain.** `FindAnchor` builds the chain with custom root trust,
+>   ignores time validity and does not check revocation. The stated
+>   `publicRootCertificateThumbprint` must name a CA in the chain, by
+>   SHA-1 or SHA-256:
+>   - CCG states the root.
+>   - DMA (Baleen) states the issuing intermediate.
+> - **Expiry stays separate from trust.** A signer whose certificate has
+>   expired, but which chains to a trusted root, is still attributable:
+>   CCG's certificate expired on 2026-05-05 and reads "valid · trusted (MCP
+>   MCC) · signer certificate expired".
+> - **Recording.** `.source.json` keeps the `SecomSignatureCheck` and the
+>   certificates the object carried, with its stated thumbprint.
+> - **Re-checking existing downloads: on read, not on sync.** Trust needs
+>   only the certificates, not the data: the signature was already checked
+>   when the object was downloaded. So `EncCellDownloader.TryGetDownloaded`
+>   judges the signer again, against its current `TrustAnchors` and the
+>   current time, each time a record is read. Adding an anchor therefore
+>   needs no re-download.
+>   - Records written before #823 carry no certificates. They read "valid ·
+>     signer trust not checked" until the object is downloaded again; a
+>     sync re-downloads it when the service publishes a newer version.
+> - **Item details.** The `signature` property reads one of:
+>   - "valid · trusted (MCP MCC)";
+>   - "valid · signer not trusted";
+>   - "valid · signer trust not checked";
+>   - any of these with " · signer certificate expired" appended;
+>   - or "invalid", "unsigned", "not checked (unknown algorithm)".
+> - **Later.**
+>   - Revocation (OCSP and CRL, at the MCP endpoints the certificates
+>     name).
+>   - Trusting the same roots for TLS, for MCP-issued server
+>     certificates (§7.7 UntrustedServer).
+>   - User-added anchors in the keys & certificates UX.
 
 ---
 
