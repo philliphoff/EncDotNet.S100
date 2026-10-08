@@ -2,6 +2,7 @@ using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
+using EncDotNet.S100.Mcp.Tools.Library;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.Time.Testing;
@@ -354,14 +355,14 @@ public sealed class ForecastLibraryTests : IDisposable
     [InlineData("2026-09-30T20:00:00Z", false, "2026-09-30T20:00:00Z")]
     public void Query_library_items_takes_validAt(string validAt, bool atViewTime, string? at)
     {
-        var (query, error) = McpTools.QueryLibraryItemsTool.Parse(
-            new McpTools.QueryLibraryItemsRequest(null, null, null, null, null, null, null, null, null, null, null, null, validAt));
+        var (query, error) = QueryLibraryItemsTool.Parse(
+            new QueryLibraryItemsRequest(null, null, null, null, null, null, null, null, null, null, null, null, validAt));
 
         Assert.Null(error);
         Assert.Equal(atViewTime, query!.ValidAtViewTime);
         Assert.Equal(at is null ? null : DateTime.Parse(at, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AdjustToUniversal), query.ValidAt);
-        Assert.NotNull(McpTools.QueryLibraryItemsTool.Parse(
-            new McpTools.QueryLibraryItemsRequest(null, null, null, null, null, null, null, null, null, null, null, null, "soon")).Error);
+        Assert.NotNull(QueryLibraryItemsTool.Parse(
+            new QueryLibraryItemsRequest(null, null, null, null, null, null, null, null, null, null, null, null, "soon")).Error);
     }
 
     [Fact]

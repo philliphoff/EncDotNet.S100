@@ -33,8 +33,9 @@ public class ViewerMcpJsonContextTests
     [Fact]
     public void Viewer_tools_are_discovered()
     {
+        // The Library tools' types moved to Mcp.Tools in #792 (covered by McpJsonTests).
         Assert.True(ToolErrorTypes().Count >= 10);
-        Assert.True(ToolResultTypes().Count >= 20);
+        Assert.True(ToolResultTypes().Count >= 15);
     }
 
     [Theory]
