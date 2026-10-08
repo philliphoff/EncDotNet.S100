@@ -3,8 +3,9 @@ using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.Library;
+using EncDotNet.S100.Mcp.Tools.Library;
 using EncDotNet.S100.Viewer.Library;
-using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 

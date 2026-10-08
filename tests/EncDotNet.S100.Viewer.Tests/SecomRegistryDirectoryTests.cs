@@ -2,7 +2,8 @@ using System.Net;
 using System.Text;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Secom;
-using EncDotNet.S100.Viewer.McpTools;
+using EncDotNet.S100.Mcp.Library;
+using EncDotNet.S100.Mcp.Tools.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -109,7 +110,7 @@ public sealed class SecomRegistryDirectoryTests
         Assert.True((await tool.InvokeAsync(null, probe: true, TestContext.Current.CancellationToken)).TryGetValue(out var all));
         Assert.Equal(4, all!.Services.Count);
         Assert.All(all.Services, s => Assert.Equal("Unreachable", s.Reachability));  // the fake answers nothing but the registry
-        Assert.Equal("list_secom_services", McpTools.LibraryMcpAdapters.Create(tool).ProtocolTool.Name);
+        Assert.Equal("list_secom_services", LibraryMcpAdapters.Create(tool).ProtocolTool.Name);
     }
 
     /// <summary>Answers the registry search; every service endpoint is a dead host.</summary>

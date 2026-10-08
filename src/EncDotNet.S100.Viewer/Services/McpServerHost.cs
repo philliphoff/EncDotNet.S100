@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Sockets;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Mcp;
+using EncDotNet.S100.Mcp.Library;
+using EncDotNet.S100.Mcp.Tools.Library;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services.McpCapabilities;
 using Microsoft.Extensions.Logging;
@@ -43,8 +45,8 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IViewerDatasetStateController? _datasetState;
     private readonly IViewerNotificationController? _notifications;
     private readonly AdjustableTimeProvider? _testClock;
-    private readonly IViewerLibraryController? _library;
-    private readonly IViewerLibraryEditor? _libraryEditor;
+    private readonly ILibraryReader? _library;
+    private readonly ILibraryEditor? _libraryEditor;
     private readonly EncDotNet.S100.Collections.Secom.SecomRegistry? _secomRegistry;
     private readonly IViewerUiAutomation? _uiAutomation;
     private readonly ILoggerFactory? _loggers;
@@ -74,8 +76,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         IViewerDatasetStateController? datasetState = null,
         IViewerNotificationController? notifications = null,
         AdjustableTimeProvider? testClock = null,
-        IViewerLibraryController? library = null,
-        IViewerLibraryEditor? libraryEditor = null,
+        ILibraryReader? library = null,
+        ILibraryEditor? libraryEditor = null,
         IViewerUiAutomation? uiAutomation = null,
         EncDotNet.S100.Collections.Secom.SecomRegistry? secomRegistry = null)
     {

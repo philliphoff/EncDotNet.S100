@@ -1,16 +1,16 @@
 using System.ComponentModel;
-using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Mcp.Tools.Library;
 using ModelContextProtocol.Server;
 
-namespace EncDotNet.S100.Viewer.McpTools;
+namespace EncDotNet.S100.Mcp.Library;
 
 /// <summary>
 /// Wraps the Library write tools (<see cref="AddLibrarySourceTool"/>,
 /// <see cref="RefreshLibrarySourceTool"/>, <see cref="LibraryActionTool"/>,
 /// <see cref="RemoveLibrarySourceTool"/>, <see cref="SetLibrarySourceOptionsTool"/>, <see cref="AwaitLibraryIdleTool"/>)
-/// as MCP server tools (#715).
+/// as MCP server tools (#715), for every host (#792).
 /// </summary>
-internal static class LibraryEditMcpAdapters
+public static class LibraryEditMcpAdapters
 {
     /// <summary>Creates <c>add_library_source</c>.</summary>
     public static McpServerTool Create(AddLibrarySourceTool inner)
@@ -24,7 +24,7 @@ internal static class LibraryEditMcpAdapters
             [Description("Choice values or labels to include, from a preview (states, districts, rivers, forecast models, areas, groups, products, charts).")] string[]? choices = null,
             [Description("True to include everything the catalogue lists (the default without choices).")] bool? includeAll = null,
             [Description("An existing collection id to add to; omit to create a new collection.")] string? collectionId = null,
-            [Description("The new collection's name (default: the dialog's).")] string? collectionName = null,
+            [Description("The new collection's name (default: the source's).")] string? collectionName = null,
             [Description("For a forecast feed: 'tiles' (default) or 'regional'.")] string? shape = null,
             [Description("For an S-100 catalogue with several resolutions: one from the preview.")] string? resolution = null,
             [Description("True to load the catalogue and report its choices without adding anything.")] bool? preview = null,
@@ -38,18 +38,18 @@ internal static class LibraryEditMcpAdapters
             {
                 if (!Guid.TryParse(collectionId.Trim(), out var parsed))
                 {
-                    return McpAdapterShared.DispatchAsync(() => Task.FromResult(
-                        Datasets.Pipelines.Query.ToolResult<AddSourceResult>.Err(new Datasets.Pipelines.Query.InvalidArgument(
+                    return McpToolDispatch.DispatchAsync(() => Task.FromResult(
+                        EncDotNet.S100.Datasets.Pipelines.Query.ToolResult<AddSourceResult>.Err(new EncDotNet.S100.Datasets.Pipelines.Query.InvalidArgument(
                             "collectionId", "expected a collection id from list_library_sources"))));
                 }
                 target = parsed;
             }
-            return McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new AddSourceRequest(
+            return McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(new AddSourceRequest(
                 knownSourceId, path, url, kind, choices, includeAll, target, collectionName, shape, resolution, preview == true,
                 sync, inMapView == true, showOnMap), ct));
         };
         return Tool(del, AddLibrarySourceTool.Name,
-            "Adds a source to the live viewer's Library through the Add-to-Library dialog's own logic: a known online "
+            "Adds a source to the Library, as the viewer's Add to Library dialog does: a known online "
             + "source (knownSourceId from list_known_sources), a catalogue or feed URL, or a local path. Call with "
             + "preview: true first to load the catalogue and see its choices (NOAA states / districts / regions, USACE "
             + "rivers, S-111 forecast models, S-102 areas, manifest groups, feed products) with sizes, plus forecast "
@@ -57,7 +57,7 @@ internal static class LibraryEditMcpAdapters
             + "includeAll, and optionally collectionId or collectionName. Adding only indexes the catalogue; nothing is "
             + "downloaded (use library_action), except that a SECOM service added with sync keeps every object "
             + "downloaded (inMapView narrows it to the current map view). Returns the new collection and source ids. "
-            + "Mutating; viewer-injected tool.");
+            + "Mutating.");
     }
 
     /// <summary>Creates <c>refresh_library_source</c>.</summary>
@@ -68,12 +68,12 @@ internal static class LibraryEditMcpAdapters
             [Description("A collection or source id; omit to refresh the whole Library.")] string? id = null,
             [Description("How long to wait for re-indexing, in ms (default 60000, max 600000; 0 returns at once).")] int? waitMs = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(id, waitMs, ct));
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(id, waitMs, ct));
         return Tool(del, RefreshLibrarySourceTool.Name,
-            "Re-indexes a Library collection or source (or everything), as the panel's Refresh does: online "
+            "Re-indexes a Library collection or source (or everything), as the viewer's Refresh does: online "
             + "catalogues are checked again, so new editions, new forecast runs and expired runs appear. Waits for "
             + "indexing, then reports what changed: items added and removed, items whose state changed (by new state, "
-            + "e.g. 'update', 'expired') and counts by state. Mutating; viewer-injected tool.");
+            + "e.g. 'update', 'expired') and counts by state. Mutating.");
     }
 
     /// <summary>Creates <c>library_action</c>.</summary>
@@ -97,7 +97,7 @@ internal static class LibraryEditMcpAdapters
             [Description("True reports what would happen (count, bytes, skipped by state) without doing it.")] bool? dryRun = null,
             [Description("Refuse a download larger than this many bytes.")] long? maxBytes = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new LibraryActionToolRequest(
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(new LibraryActionToolRequest(
                 action,
                 itemIds,
                 new QueryLibraryItemsRequest(sourceId, states, spec, text, south, west, north, east, lat, lon, null, null),
@@ -105,11 +105,11 @@ internal static class LibraryEditMcpAdapters
                 dryRun,
                 maxBytes), ct));
         return Tool(del, LibraryActionTool.Name,
-            "Acts on Library items as the panel's buttons do. Select items by id or with the query_library_items "
+            "Acts on Library items as the viewer's Library buttons do. Select items by id or with the query_library_items "
             + "filters; items the action does not apply to are skipped and counted by state. Downloads can be large: "
             + "call with dryRun: true first to see the count and bytes, confirm with the user, and pass maxBytes. "
             + "Downloads (and the loads after them) continue in the background (await_library_idle waits for them); load returns how many "
-            + "datasets opened. Mutating; viewer-injected tool.");
+            + "datasets opened. Mutating.");
     }
 
     /// <summary>Creates <c>remove_library_source</c>.</summary>
@@ -120,11 +120,11 @@ internal static class LibraryEditMcpAdapters
             [Description("The collection or source id to remove.")] string id,
             [Description("Must be true: removing cannot be undone from here.")] bool? confirm = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(id, confirm, ct));
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(id, confirm, ct));
         return Tool(del, RemoveLibrarySourceTool.Name,
-            "REMOVES a collection or one source from the live viewer's Library, as the panel's Remove does, and "
+            "REMOVES a collection or one source from the Library, as the viewer's Remove does, and "
             + "deletes its cached index. Downloaded files stay on disk, but the Library no longer lists them. Requires "
-            + "confirm: true; confirm with the user first. Mutating; viewer-injected tool.");
+            + "confirm: true; confirm with the user first. Mutating.");
     }
 
     /// <summary>Creates <c>set_library_source_options</c>.</summary>
@@ -136,12 +136,12 @@ internal static class LibraryEditMcpAdapters
             [Description("True to keep the source's items downloaded and current on each refresh (online sources; a SECOM service also prunes), false to stop. Omit to leave as is.")] bool? sync = null,
             [Description("True to keep the source's local datasets on the map, loading as you pan under one Datasets row, false to close them. Omit to leave as is.")] bool? showOnMap = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(id, sync, showOnMap, ct));
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(id, sync, showOnMap, ct));
         return Tool(del, SetLibrarySourceOptionsTool.Name,
             "Turns Keep downloaded (sync) and Show on map on or off for an existing Library source, or every source of a "
-            + "collection, as the Library tree's menu does. Supply sync, showOnMap or both; options not given are left as "
+            + "collection, as the viewer's Library menu does. Supply sync, showOnMap or both; options not given are left as "
             + "they are. A changed source re-indexes; syncing downloads in the background (await_library_idle waits for "
-            + "it). Returns each source's options now. Mutating; viewer-injected tool.");
+            + "it). Returns each source's options now. Mutating.");
     }
 
     /// <summary>Creates <c>await_library_idle</c>.</summary>
@@ -151,14 +151,14 @@ internal static class LibraryEditMcpAdapters
         var del = (
             [Description("How long to wait, in ms (default 60000, max 600000; 0 only reports).")] int? timeoutMs = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(timeoutMs, ct));
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(timeoutMs, ct));
         return Tool(del, AwaitLibraryIdleTool.Name,
             "Waits until the Library is idle: no source indexing, no download running, and every dataset a "
             + "library_action download or load opens is open. Returns whether it is idle, whether the wait timed out, "
             + "loading (datasets still to open, including any still downloading) and the running download batch's "
             + "progress (items and bytes done, failed). Use after add_library_source, refresh_library_source or a "
             + "library_action download. "
-            + "Read-only; viewer-injected tool.");
+            + "Read-only.");
     }
 
     private static McpServerTool Tool(Delegate del, string name, string description) =>
@@ -166,6 +166,6 @@ internal static class LibraryEditMcpAdapters
         {
             Name = name,
             Description = description,
-            SerializerOptions = McpAdapterShared.Options,
+            SerializerOptions = McpJson.Options,
         });
 }

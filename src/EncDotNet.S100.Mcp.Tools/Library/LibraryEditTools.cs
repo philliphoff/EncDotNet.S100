@@ -1,18 +1,17 @@
+using System.ComponentModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
-using EncDotNet.S100.Viewer.Services;
 
-namespace EncDotNet.S100.Viewer.McpTools;
+namespace EncDotNet.S100.Mcp.Tools.Library;
 
-// Viewer-only tools that change the Library through the code paths the UI
-// uses (#715 slice 3).
+// The Library edit tools (#715 slice 3), shared by every host since #792.
 
 /// <summary>Previews or adds a Library source (MCP <c>add_library_source</c>).</summary>
-internal sealed class AddLibrarySourceTool(IViewerLibraryEditor editor)
+public sealed class AddLibrarySourceTool(ILibraryEditor editor)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "add_library_source";
 
-    private readonly IViewerLibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
     /// <summary>Applies the request.</summary>
     public async Task<ToolResult<AddSourceResult>> InvokeAsync(AddSourceRequest request, CancellationToken ct = default)
@@ -21,12 +20,12 @@ internal sealed class AddLibrarySourceTool(IViewerLibraryEditor editor)
         return Result(await _editor.AddSourceAsync(request, ct).ConfigureAwait(false));
     }
 
-    internal static ToolResult<T> Result<T>(EditOutcome<T> outcome) =>
+    public static ToolResult<T> Result<T>(LibraryEditOutcome<T> outcome) =>
         outcome.Error is { } error ? ToolResult<T>.Err(error) : ToolResult<T>.Ok(outcome.Value!);
 }
 
 /// <summary>Re-indexes Library sources and reports what changed (MCP <c>refresh_library_source</c>).</summary>
-internal sealed class RefreshLibrarySourceTool(IViewerLibraryEditor editor)
+public sealed class RefreshLibrarySourceTool(ILibraryEditor editor)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "refresh_library_source";
@@ -37,7 +36,7 @@ internal sealed class RefreshLibrarySourceTool(IViewerLibraryEditor editor)
     /// <summary>The longest wait allowed.</summary>
     public static readonly TimeSpan MaxWait = TimeSpan.FromMinutes(10);
 
-    private readonly IViewerLibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
     /// <summary>Refreshes.</summary>
     public async Task<ToolResult<RefreshResult>> InvokeAsync(string? id, int? waitMs, CancellationToken ct = default)
@@ -55,21 +54,21 @@ internal sealed class RefreshLibrarySourceTool(IViewerLibraryEditor editor)
 }
 
 /// <summary>Request for <see cref="LibraryActionTool"/>.</summary>
-internal sealed record LibraryActionToolRequest(
-    string Action,
-    IReadOnlyList<string>? ItemIds,
-    QueryLibraryItemsRequest Filter,
-    bool? All,
-    bool? DryRun,
-    long? MaxBytes);
+public sealed record LibraryActionToolRequest(
+    [property: Description("load, load_as_you_pan, download, download_only, update or cancel.")] string Action,
+    [property: Description("Item ids from query_library_items, or null to use the filters.")] IReadOnlyList<string>? ItemIds,
+    [property: Description("The items to act on, as query_library_items filters them.")] QueryLibraryItemsRequest Filter,
+    [property: Description("For cancel only: true cancels every running download.")] bool? All,
+    [property: Description("True reports what would happen without doing it.")] bool? DryRun,
+    [property: Description("Refuse a download larger than this many bytes.")] long? MaxBytes);
 
 /// <summary>Loads, downloads, updates or cancels Library items (MCP <c>library_action</c>).</summary>
-internal sealed class LibraryActionTool(IViewerLibraryEditor editor)
+public sealed class LibraryActionTool(ILibraryEditor editor)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "library_action";
 
-    private readonly IViewerLibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
     /// <summary>Applies the request.</summary>
     public async Task<ToolResult<LibraryActionResult>> InvokeAsync(LibraryActionToolRequest request, CancellationToken ct = default)
@@ -105,12 +104,12 @@ internal sealed class LibraryActionTool(IViewerLibraryEditor editor)
 }
 
 /// <summary>Removes a Library collection or source (MCP <c>remove_library_source</c>).</summary>
-internal sealed class RemoveLibrarySourceTool(IViewerLibraryEditor editor)
+public sealed class RemoveLibrarySourceTool(ILibraryEditor editor)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "remove_library_source";
 
-    private readonly IViewerLibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
     /// <summary>Removes it, when <paramref name="confirm"/> is true.</summary>
     public async Task<ToolResult<RemoveSourceResult>> InvokeAsync(string id, bool? confirm, CancellationToken ct = default)
@@ -124,12 +123,12 @@ internal sealed class RemoveLibrarySourceTool(IViewerLibraryEditor editor)
 }
 
 /// <summary>Sets a Library source's Keep downloaded and Show on map options (MCP <c>set_library_source_options</c>, #809).</summary>
-internal sealed class SetLibrarySourceOptionsTool(IViewerLibraryEditor editor)
+public sealed class SetLibrarySourceOptionsTool(ILibraryEditor editor)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "set_library_source_options";
 
-    private readonly IViewerLibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
     /// <summary>Sets the options given; options not given are left as they are.</summary>
     public async Task<ToolResult<SetSourceOptionsResult>> InvokeAsync(string id, bool? sync, bool? showOnMap, CancellationToken ct = default)
@@ -141,12 +140,12 @@ internal sealed class SetLibrarySourceOptionsTool(IViewerLibraryEditor editor)
 }
 
 /// <summary>Waits for Library indexing, downloads and dataset opens (MCP <c>await_library_idle</c>).</summary>
-internal sealed class AwaitLibraryIdleTool(IViewerLibraryEditor editor)
+public sealed class AwaitLibraryIdleTool(ILibraryEditor editor)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "await_library_idle";
 
-    private readonly IViewerLibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
     /// <summary>Waits.</summary>
     public async Task<ToolResult<LibraryIdleResult>> InvokeAsync(int? timeoutMs, CancellationToken ct = default)

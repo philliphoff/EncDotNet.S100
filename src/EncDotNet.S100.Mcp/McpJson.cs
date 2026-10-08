@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools;
+using EncDotNet.S100.Mcp.Tools.Library;
 using EncDotNet.S100.Mcp.Tools.Mutable;
 using ModelContextProtocol;
 
@@ -94,6 +95,18 @@ public static class McpJson
 [JsonSerializable(typeof(SetTimeStepResult))]
 [JsonSerializable(typeof(SetViewportResult))]
 [JsonSerializable(typeof(RenderToImageResult))]
+// Library tool results (#792).
+[JsonSerializable(typeof(LibrarySourcesDto))]
+[JsonSerializable(typeof(LibraryItemPage))]
+[JsonSerializable(typeof(LibraryItemDetail))]
+[JsonSerializable(typeof(KnownSourcesDto))]
+[JsonSerializable(typeof(SecomServicesDto))]
+[JsonSerializable(typeof(AddSourceResult))]
+[JsonSerializable(typeof(RefreshResult))]
+[JsonSerializable(typeof(LibraryActionResult))]
+[JsonSerializable(typeof(RemoveSourceResult))]
+[JsonSerializable(typeof(SetSourceOptionsResult))]
+[JsonSerializable(typeof(LibraryIdleResult))]
 // Sampled values, written polymorphically.
 [JsonSerializable(typeof(DepthSample))]
 [JsonSerializable(typeof(WaterLevelSample))]
@@ -116,6 +129,9 @@ public static class McpJson
 [JsonSerializable(typeof(TimeOutOfRange))]
 [JsonSerializable(typeof(HostNotReady))]
 [JsonSerializable(typeof(DatasetLoadFailed))]
+[JsonSerializable(typeof(LibrarySourceNotFound))]
+[JsonSerializable(typeof(LibraryItemNotFound))]
+[JsonSerializable(typeof(LibraryChangeRejected))]
 // Tool parameter types the SDK binds.
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(JsonElement?))]
@@ -127,4 +143,6 @@ public static class McpJson
 [JsonSerializable(typeof(int))]
 [JsonSerializable(typeof(double))]
 [JsonSerializable(typeof(bool))]
+[JsonSerializable(typeof(long?))]
+[JsonSerializable(typeof(string[]))]
 internal sealed partial class McpToolsJsonContext : JsonSerializerContext;

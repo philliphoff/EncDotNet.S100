@@ -1,14 +1,15 @@
 using System.ComponentModel;
+using EncDotNet.S100.Mcp.Tools.Library;
 using ModelContextProtocol.Server;
 
-namespace EncDotNet.S100.Viewer.McpTools;
+namespace EncDotNet.S100.Mcp.Library;
 
 /// <summary>
 /// Wraps the Library read tools (<see cref="ListLibrarySourcesTool"/>,
 /// <see cref="QueryLibraryItemsTool"/>, <see cref="DescribeLibraryItemTool"/>,
-/// <see cref="ListKnownSourcesTool"/>) as MCP server tools (#715).
+/// <see cref="ListKnownSourcesTool"/>) as MCP server tools (#715), for every host (#792).
 /// </summary>
-internal static class LibraryMcpAdapters
+public static class LibraryMcpAdapters
 {
     /// <summary>Creates <c>list_library_sources</c>.</summary>
     public static McpServerTool Create(ListLibrarySourcesTool inner)
@@ -17,13 +18,13 @@ internal static class LibraryMcpAdapters
         var del = (
             [Description("True (default) counts each source's items by state; false skips reading every item, for very large Libraries.")] bool? counts = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(counts, ct));
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(counts, ct));
         return Tool(del, ListLibrarySourcesTool.Name,
-            "Lists the live viewer's Library: each collection (a top-level node) with its kind tag (DIR, ZIP, WEB, AWS, "
+            "Lists the Library: each collection (a top-level node) with its kind tag (DIR, ZIP, WEB, AWS, "
             + "LIST, FEED, JSON, S-128), item count and status line, and each source with its index state, when its "
             + "index was built (how stale a cached online catalogue is), URL (shared-feed tokens masked) and item counts "
             + "by state (online, local, loaded, on_pan, update, expired, missing, listed). Use the ids with "
-            + "query_library_items. Read-only; viewer-injected tool.");
+            + "query_library_items. Read-only.");
     }
 
     /// <summary>Creates <c>query_library_items</c>.</summary>
@@ -45,15 +46,15 @@ internal static class LibraryMcpAdapters
             [Description("Items per page, 1–500 (default 50).")] int? pageSize = null,
             [Description("Keep only items whose data covers a time: 'view_time' (the Timeline's view time, as the Library's Valid at view time toggle) or an ISO-8601 time. A forecast's window is its run's (the downloaded copy's, else the catalogue's).")] string? validAt = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(
                 new QueryLibraryItemsRequest(sourceId, states, spec, text, south, west, north, east, lat, lon, page, pageSize, validAt), ct));
         return Tool(del, QueryLibraryItemsTool.Name,
-            "Finds datasets in the live viewer's Library, paged. Each item reports its id, spec, state as the Library "
+            "Finds datasets in the Library, paged. Each item reports its id, spec, state as the Library "
             + "row shows it ('online' not downloaded, 'local' on disk, 'loaded', 'on_pan', 'update' newer edition or run "
             + "online, 'expired' forecast run ended, 'missing', 'listed'), tags, edition, issue date, size, bounds, local "
             + "path, and for forecasts the model, run and end of the valid window. Filter by source, states, spec, text, "
             + "a bounding box, or a point (what covers here, most detailed first). Examples: what is out of date "
-            + "(states=[update]); which currents cover a position (spec=S-111, lat, lon). Read-only; viewer-injected tool.");
+            + "(states=[update]); which currents cover a position (spec=S-111, lat, lon). Read-only.");
     }
 
     /// <summary>Creates <c>describe_library_item</c>.</summary>
@@ -63,11 +64,11 @@ internal static class LibraryMcpAdapters
         var del = (
             [Description("Item id from query_library_items ('<sourceId>:<key>').")] string itemId,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(itemId, ct));
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(itemId, ct));
         return Tool(del, DescribeLibraryItemTool.Name,
             "Describes one Library item as its details pane does: the item summary plus groups of labelled fields "
             + "(Forecast, Product, Coverage, Source, …). Fails with library_item_not_found for an unknown id. "
-            + "Read-only; viewer-injected tool.");
+            + "Read-only.");
     }
 
     /// <summary>Creates <c>list_secom_services</c>.</summary>
@@ -78,13 +79,13 @@ internal static class LibraryMcpAdapters
             [Description("Only services of this product, e.g. 'S-124'; omit for every S-100 data service.")] string? product = null,
             [Description("True to probe each service (at most 60) for whether it can be read without a certificate; slower.")] bool? probe = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(product, probe, ct));
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(product, probe, ct));
         return Tool(del, ListSecomServicesTool.Name,
             "Lists SECOM (IEC 63173-2) data services registered in the MCP service registry: name, organisation, product, "
             + "released or provisional, endpoint and area, cleaned of unusable entries. With probe, each is checked: Open "
             + "(readable without a certificate), NeedsCertificate, UntrustedServer (an MCP-issued TLS certificate this "
             + "computer does not trust) or Unreachable. Add an Open service with add_library_source url=<endpoint>. "
-            + "Read-only; viewer-injected tool.");
+            + "Read-only.");
     }
 
     /// <summary>Creates <c>list_known_sources</c>.</summary>
@@ -92,12 +93,12 @@ internal static class LibraryMcpAdapters
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(ct));
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(ct));
         return Tool(del, ListKnownSourcesTool.Name,
             "Lists the Online Catalogue directory: the curated online sources (NOAA ENC, USACE Inland ENC, NOAA S-102 / "
             + "S-104 / S-111 on AWS, community lists, …) and any the user added, with provider, region, format, URL, "
             + "whether it lists editions and sizes, product, pilot and not-for-navigation flags, and for forecast feeds "
-            + "their models (cadence and horizon). Read-only; viewer-injected tool.");
+            + "their models (cadence and horizon). Read-only.");
     }
 
     private static McpServerTool Tool(Delegate del, string name, string description) =>
@@ -105,6 +106,6 @@ internal static class LibraryMcpAdapters
         {
             Name = name,
             Description = description,
-            SerializerOptions = McpAdapterShared.Options,
+            SerializerOptions = McpJson.Options,
         });
 }

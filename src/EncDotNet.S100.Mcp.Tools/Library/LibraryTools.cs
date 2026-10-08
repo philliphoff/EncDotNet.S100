@@ -4,42 +4,40 @@ using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
-using EncDotNet.S100.Viewer.Services;
 
-namespace EncDotNet.S100.Viewer.McpTools;
+namespace EncDotNet.S100.Mcp.Tools.Library;
 
-// Viewer-only tools that read the Library through the panel's own view
-// models (#715 slice 2).
+// The Library read tools (#715 slice 2), shared by every host since #792.
 
 /// <summary>The Library's collections, as list_library_sources returns them.</summary>
 [Description("The Library's collections and their sources.")]
-internal sealed record LibrarySourcesDto(
+public sealed record LibrarySourcesDto(
     [property: Description("The collections, in Library order.")] IReadOnlyList<LibraryCollectionInfo> Collections);
 
 /// <summary>The Online Catalogue directory, as list_known_sources returns it.</summary>
 [Description("The Online Catalogue directory.")]
-internal sealed record KnownSourcesDto(
+public sealed record KnownSourcesDto(
     [property: Description("The curated entries followed by the user's own (Custom).")] IReadOnlyList<KnownSourceInfo> Sources);
 
 /// <summary>No Library collection or source has the given id.</summary>
 [Description("Raised when no Library collection or source has the requested id (call list_library_sources).")]
-internal sealed record LibrarySourceNotFound(
+public sealed record LibrarySourceNotFound(
     [property: Description("The id that could not be resolved.")] string Id)
     : ToolError("library_source_not_found", $"No Library collection or source has id '{Id}'.");
 
 /// <summary>No Library item has the given id.</summary>
 [Description("Raised when no Library item has the requested id (call query_library_items).")]
-internal sealed record LibraryItemNotFound(
+public sealed record LibraryItemNotFound(
     [property: Description("The id that could not be resolved.")] string Id)
     : ToolError("library_item_not_found", $"No Library item has id '{Id}'.");
 
 /// <summary>Lists the Library's collections and sources (MCP <c>list_library_sources</c>).</summary>
-internal sealed class ListLibrarySourcesTool(IViewerLibraryController library)
+public sealed class ListLibrarySourcesTool(ILibraryReader library)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "list_library_sources";
 
-    private readonly IViewerLibraryController _library = library ?? throw new ArgumentNullException(nameof(library));
+    private readonly ILibraryReader _library = library ?? throw new ArgumentNullException(nameof(library));
 
     /// <summary>Lists them.</summary>
     public async Task<ToolResult<LibrarySourcesDto>> InvokeAsync(bool? counts, CancellationToken ct = default) =>
@@ -48,23 +46,23 @@ internal sealed class ListLibrarySourcesTool(IViewerLibraryController library)
 }
 
 /// <summary>Request for <see cref="QueryLibraryItemsTool"/>.</summary>
-internal sealed record QueryLibraryItemsRequest(
-    string? SourceId,
-    IReadOnlyList<string>? States,
-    string? Spec,
-    string? Text,
-    double? South,
-    double? West,
-    double? North,
-    double? East,
-    double? Lat,
-    double? Lon,
-    int? Page,
-    int? PageSize,
-    string? ValidAt = null);
+public sealed record QueryLibraryItemsRequest(
+    [property: Description("A collection or source id from list_library_sources; null for the whole Library.")] string? SourceId,
+    [property: Description("States to keep: online, local, loaded, on_pan, update, expired, missing, listed; null for all.")] IReadOnlyList<string>? States,
+    [property: Description("Product specification to keep, e.g. 'S-101'.")] string? Spec,
+    [property: Description("Text matched against name, title and properties.")] string? Text,
+    [property: Description("Southern latitude of a box items must intersect.")] double? South,
+    [property: Description("Western longitude of the box.")] double? West,
+    [property: Description("Northern latitude of the box.")] double? North,
+    [property: Description("Eastern longitude of the box.")] double? East,
+    [property: Description("Latitude of a point items must cover.")] double? Lat,
+    [property: Description("Longitude of the point.")] double? Lon,
+    [property: Description("The 0-based page.")] int? Page,
+    [property: Description("Items per page.")] int? PageSize,
+    [property: Description("Keep only items whose data covers a time: 'view_time' or an ISO-8601 time.")] string? ValidAt = null);
 
 /// <summary>Finds Library items (MCP <c>query_library_items</c>).</summary>
-internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
+public sealed class QueryLibraryItemsTool(ILibraryReader library)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "query_library_items";
@@ -75,7 +73,7 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
     /// <summary>The largest page allowed.</summary>
     public const int MaxPageSize = 500;
 
-    private readonly IViewerLibraryController _library = library ?? throw new ArgumentNullException(nameof(library));
+    private readonly ILibraryReader _library = library ?? throw new ArgumentNullException(nameof(library));
 
     /// <summary>Runs the query.</summary>
     public async Task<ToolResult<LibraryItemPage>> InvokeAsync(QueryLibraryItemsRequest request, CancellationToken ct = default)
@@ -95,7 +93,7 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
     /// Validates the filters and page of <paramref name="request"/> (shared
     /// with library_action, which selects items the same way).
     /// </summary>
-    internal static (LibraryItemPageQuery? Query, ToolError? Error) Parse(QueryLibraryItemsRequest request)
+    public static (LibraryItemPageQuery? Query, ToolError? Error) Parse(QueryLibraryItemsRequest request)
     {
         Guid? sourceId = null;
         if (!string.IsNullOrWhiteSpace(request.SourceId))
@@ -179,7 +177,7 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
     }
 
     /// <summary>True when <paramref name="request"/> sets any filter (not just a page).</summary>
-    internal static bool HasFilter(QueryLibraryItemsRequest request) =>
+    public static bool HasFilter(QueryLibraryItemsRequest request) =>
         !string.IsNullOrWhiteSpace(request.SourceId)
         || request.States is { Count: > 0 }
         || !string.IsNullOrWhiteSpace(request.Spec)
@@ -190,12 +188,12 @@ internal sealed class QueryLibraryItemsTool(IViewerLibraryController library)
 }
 
 /// <summary>Describes one Library item as its details pane does (MCP <c>describe_library_item</c>).</summary>
-internal sealed class DescribeLibraryItemTool(IViewerLibraryController library)
+public sealed class DescribeLibraryItemTool(ILibraryReader library)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "describe_library_item";
 
-    private readonly IViewerLibraryController _library = library ?? throw new ArgumentNullException(nameof(library));
+    private readonly ILibraryReader _library = library ?? throw new ArgumentNullException(nameof(library));
 
     /// <summary>Describes it.</summary>
     public async Task<ToolResult<LibraryItemDetail>> InvokeAsync(string itemId, CancellationToken ct = default)
@@ -211,7 +209,7 @@ internal sealed class DescribeLibraryItemTool(IViewerLibraryController library)
 
 /// <summary>SECOM services from the MCP service registry, as list_secom_services returns them.</summary>
 [Description("SECOM data services listed in the MCP service registry (#822).")]
-internal sealed record SecomServicesDto(
+public sealed record SecomServicesDto(
     [property: Description("The services, released first; add one with add_library_source url=<endpoint>.")] IReadOnlyList<SecomServiceInfo> Services,
     [property: Description("How many instances the registry listed in all.")] int Listed,
     [property: Description("How many were left out: not S-100 data, deleted, unusable endpoints, duplicates, or another product.")] int Hidden,
@@ -220,7 +218,7 @@ internal sealed record SecomServicesDto(
 
 /// <summary>One registry service.</summary>
 [Description("A SECOM service instance in the MCP service registry.")]
-internal sealed record SecomServiceInfo(
+public sealed record SecomServiceInfo(
     [property: Description("The instance's MRN.")] string InstanceId,
     [property: Description("The registered name.")] string Name,
     [property: Description("The registering organisation (last part of its MRN), or null.")] string? Organization,
@@ -232,7 +230,7 @@ internal sealed record SecomServiceInfo(
     [property: Description("With probe: what the service answered, or null.")] string? Detail);
 
 /// <summary>Lists SECOM services from the MCP service registry (MCP <c>list_secom_services</c>, #822).</summary>
-internal sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.SecomRegistry registry)
+public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.SecomRegistry registry)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "list_secom_services";
@@ -299,12 +297,12 @@ internal sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.Sec
 }
 
 /// <summary>Lists the Online Catalogue directory (MCP <c>list_known_sources</c>).</summary>
-internal sealed class ListKnownSourcesTool(IViewerLibraryController library)
+public sealed class ListKnownSourcesTool(ILibraryReader library)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "list_known_sources";
 
-    private readonly IViewerLibraryController _library = library ?? throw new ArgumentNullException(nameof(library));
+    private readonly ILibraryReader _library = library ?? throw new ArgumentNullException(nameof(library));
 
     /// <summary>Lists them.</summary>
     public async Task<ToolResult<KnownSourcesDto>> InvokeAsync(CancellationToken ct = default) =>
