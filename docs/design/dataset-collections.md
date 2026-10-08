@@ -932,7 +932,7 @@ S-104 or S-111 is openly downloadable over SECOM today.**
   attributes in SAN otherName OIDs. None of the anonymous servers
   above asked for a client certificate. Some servers present
   MCP-issued server certificates; the MCP root is not in OS trust
-  stores.
+  stores, so SECOM requests trust it themselves (§7.9).
 - **Payload signatures.** The signature in
   `exchangeMetadata.digitalSignatureValue` is computed over the
   decoded `data` bytes and is hex-encoded. The signer certificate
@@ -1067,10 +1067,10 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 >   - **Open:** an anonymous summary works.
 >   - **NeedsCertificate:** a 401 or 403, or a service that answers
 >     Capability as SECOM but refuses an anonymous summary (KHRA).
->   - **UntrustedServer:** a TLS `AuthenticationException`, typically an
->     MCP-issued server certificate (KRISO gmdrt, AMSA). Trusting the MCP
->     roots for TLS is not done yet; #823 uses them for data signatures
->     only (§7.8).
+>   - **UntrustedServer:** a TLS `AuthenticationException`. Before #829
+>     this was typically an MCP-issued server certificate (KRISO gmdrt,
+>     AMSA); those are now trusted (§7.9), so it means a certificate
+>     under no trusted root, expired, or naming another host.
 >   - **Unreachable:** a dead host, a timeout, or no answer as SECOM
 >     (websites, REST endpoints).
 >
@@ -1132,9 +1132,63 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 > - **Later.**
 >   - Revocation (OCSP and CRL, at the MCP endpoints the certificates
 >     name).
->   - Trusting the same roots for TLS, for MCP-issued server
->     certificates (§7.7 UntrustedServer).
 >   - User-added anchors in the keys & certificates UX.
+
+TLS trust for the same roots followed in #829 (§7.9).
+
+### 7.9 SECOM server trust (#829)
+
+> - **Why.** 17 of the registry's S-100 services failed the TLS handshake:
+>   their server certificates are MCP-issued. On 2026-10-08 AMSA's
+>   (`navwarn.amsaconnectivity.net`) and KRISO's (`*.gmdrt.org`) chained to
+>   exactly the MCP MCC intermediate and root of §7.8.
+> - **`SecomServerTrust`.** Its `CreateHandler()` handler is given only
+>   to SECOM clients. In the viewer that is:
+>   - the SECOM indexer;
+>   - the registry and its probes;
+>   - the SECOM client of the URL detector;
+>   - `EncCellDownloader.SecomHttpClient`, through
+>     `LibraryDownloads.ManagedFolders(…, secomHttp)`.
+>
+>   NOAA, feeds, basemaps and update checks keep the system's trust.
+> - **Rule.** A connection is allowed when the system trusts it, or when
+>   the system rejects it *because of the chain* and all of these hold:
+>   - the chain reaches a `SecomTrustAnchors` root, with the server's
+>     intermediates or the anchors' own;
+>   - every certificate is within its validity period (unlike signers);
+>   - the certificate names the host.
+>
+>   Revocation is not checked.
+> - **Host names, never skipped.**
+>   - A certificate the system trusts but that names another host is
+>     refused, never widened.
+>   - For an anchor-trusted certificate the host is checked here, the
+>     same way on every platform:
+>     - DNS names in the subject alternative name, where a wildcard
+>       covers exactly one left-most label;
+>     - IP addresses there, for an IP host;
+>     - only when no DNS name is listed, the subject CN, matched
+>       exactly.
+>   - AMSA's device certificate carries the host only in its CN; its SAN
+>     holds just the MRN `otherName`. RFC 6125 discourages a CN fallback
+>     and platforms differ, so the rule is ours: the fallback applies
+>     only under an MCP anchor and only without DNS names. It is the
+>     same as OpenSSL's default.
+> - **Outcomes.** Each host's decision is kept (`ResultFor(host)`):
+>   `SystemTrusted`, `AnchorTrusted` (with the anchor's name),
+>   `NotTrusted`, `Expired` or `WrongHost`.
+> - **Probes and the viewer.**
+>   - `SecomRegistry` (given the validator) attaches the decision to
+>     `SecomProbeResult.ServerTrust`, and replaces the platform's TLS
+>     message with the reason.
+>   - The directory row explains a refusal ("does not name its
+>     address", "has expired") or says "Its server certificate is from
+>     MCP MCC."
+>   - `list_secom_services` reports `serverCertificate` and
+>     `serverCertificateAnchor`.
+> - **Not changed.** A service that also wants a client certificate now
+>   probes as NeedsCertificate rather than UntrustedServer. mTLS with the
+>   user's MCP identity belongs to the keys & certificates UX.
 
 ---
 
