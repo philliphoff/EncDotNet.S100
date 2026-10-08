@@ -120,6 +120,14 @@ public sealed partial class EncCellDownloader
     public string Root { get; }
 
     /// <summary>
+    /// The anchors SECOM signers are trusted against (issue #823); by default
+    /// <see cref="SecomTrustAnchors.BuiltIn"/>. A downloaded object's signer is
+    /// judged against these each time its record is read, so changing them
+    /// needs no re-download.
+    /// </summary>
+    public SecomTrustAnchors TrustAnchors { get; init; } = SecomTrustAnchors.BuiltIn;
+
+    /// <summary>
     /// Returns the downloaded copy of <paramref name="cellName"/> (a cell or
     /// package name), or <see langword="null"/> when it has not been
     /// downloaded (or its record is unreadable or its files are gone).
@@ -162,7 +170,7 @@ public sealed partial class EncCellDownloader
             {
                 IsPackage = record.IsPackage,
                 Datasets = datasets,
-                Signature = record.Signature?.ToCheck(),
+                Signature = record.Signature?.ToCheck(TrustAnchors, _time.GetUtcNow()),
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -226,10 +234,10 @@ public sealed partial class EncCellDownloader
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            SecomSignatureCheck? signature = null;
+            SignatureRecord? signature = null;
             if (remote.Envelope == RemoteEnvelope.Secom)
             {
-                signature = UnwrapSecom(item, remote, zipPath, staging);
+                signature = UnwrapSecom(item, remote, zipPath, staging, TrustAnchors, _time.GetUtcNow());
             }
             else if (IsZip(zipPath))
             {
@@ -250,7 +258,7 @@ public sealed partial class EncCellDownloader
                 File.Move(zipPath, Path.Combine(staging, fileName));
             }
 
-            var record = Describe(item, remote, staging) with { Signature = SignatureRecord.From(signature) };
+            var record = Describe(item, remote, staging) with { Signature = signature };
             File.WriteAllText(Path.Combine(staging, RecordFileName), JsonSerializer.Serialize(record, RecordJson.CellRecord));
 
             Replace(CellFolder(folderName), staging);
@@ -314,7 +322,8 @@ public sealed partial class EncCellDownloader
     /// Decodes a downloaded SECOM <c>Get</c> response into the file named by
     /// the item's layout, in <paramref name="staging"/>, after checking its signature.
     /// </summary>
-    private static SecomSignatureCheck UnwrapSecom(CollectionItem item, RemoteItemLocation remote, string responsePath, string staging)
+    private static SignatureRecord UnwrapSecom(
+        CollectionItem item, RemoteItemLocation remote, string responsePath, string staging, SecomTrustAnchors trust, DateTimeOffset now)
     {
         if (remote.Layout is not { UpdateRelativePaths.Count: 0, CatalogueRelativePath: null } layout || !IsSafeName(layout.RelativePath))
             throw new InvalidDataException($"The SECOM object {item.Name} has no single-file layout to save its data as.");
@@ -326,14 +335,14 @@ public sealed partial class EncCellDownloader
         if (secom.Metadata is { DataProtection: true })
             throw new InvalidDataException($"The SECOM object {item.Name} is encrypted; reading it needs a certificate, which is not supported yet.");
 
-        var signature = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata);
+        var signature = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata, trust, now);
         if (signature.Status == SecomSignatureStatus.Invalid)
             throw new InvalidDataException($"The signature of the SECOM object {item.Name} does not match its data.");
 
         var data = secom.Metadata is { Compressed: true } ? Decompress(secom.Data, item.Name) : secom.Data;
         Directory.CreateDirectory(staging);
         File.WriteAllBytes(Path.Combine(staging, layout.RelativePath), data);
-        return signature;
+        return SignatureRecord.From(signature, secom.Metadata);
     }
 
     /// <summary>SECOM compresses as ZIP; a single-file archive is the object's data.</summary>
@@ -557,16 +566,37 @@ public sealed partial class EncCellDownloader
         IReadOnlyList<DatasetRecord>? Datasets = null,
         SignatureRecord? Signature = null);
 
-    /// <summary>The signature check of a SECOM download.</summary>
-    private sealed record SignatureRecord(string Status, string? Signer, bool? SignerTrusted, bool SignerExpired, string? Detail)
+    /// <summary>
+    /// The signature check of a SECOM download, with the certificates the
+    /// object carried so its signer can be judged again on read (#823).
+    /// Records written before #823 have no certificates and keep their
+    /// recorded trust (none) until the object is downloaded again.
+    /// </summary>
+    private sealed record SignatureRecord(
+        string Status,
+        string? Signer,
+        bool? SignerTrusted,
+        bool SignerExpired,
+        string? Detail,
+        string? TrustAnchor = null,
+        IReadOnlyList<string>? Certificates = null,
+        string? RootThumbprint = null)
     {
-        public static SignatureRecord? From(SecomSignatureCheck? check) => check is null
-            ? null
-            : new(check.Status.ToString(), check.Signer, check.SignerTrusted, check.SignerExpired, check.Detail);
+        public static SignatureRecord From(SecomSignatureCheck check, SecomExchangeMetadata? metadata) => new(
+            check.Status.ToString(), check.Signer, check.SignerTrusted, check.SignerExpired, check.Detail, check.TrustAnchor,
+            metadata is { PublicCertificates.Count: > 0 } ? metadata.PublicCertificates : null,
+            metadata?.RootCertificateThumbprint);
 
-        public SecomSignatureCheck ToCheck() => new(
-            Enum.TryParse<SecomSignatureStatus>(Status, out var status) ? status : SecomSignatureStatus.Unsigned,
-            Signer, SignerTrusted, SignerExpired, Detail);
+        public SecomSignatureCheck ToCheck(SecomTrustAnchors trust, DateTimeOffset now)
+        {
+            var check = new SecomSignatureCheck(
+                Enum.TryParse<SecomSignatureStatus>(Status, out var status) ? status : SecomSignatureStatus.Unsigned,
+                Signer, SignerTrusted, SignerExpired, Detail)
+            { TrustAnchor = TrustAnchor };
+            return Certificates is { Count: > 0 } certificates
+                ? SecomSignatureVerifier.Recheck(check, certificates, RootThumbprint, trust, now)
+                : check;
+        }
     }
 
     /// <summary>One base cell of a download.</summary>

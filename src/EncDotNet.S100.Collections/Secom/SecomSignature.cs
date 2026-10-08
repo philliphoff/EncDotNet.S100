@@ -23,8 +23,9 @@ public enum SecomSignatureStatus
 /// <param name="Status">Whether the signature matches.</param>
 /// <param name="Signer">The signer certificate's subject name, when it could be read.</param>
 /// <param name="SignerTrusted">
-/// True when the signer chains to one of the supplied trusted roots, false when
-/// it does not, <see langword="null"/> when no roots were supplied.
+/// True when the signer chains to one of the trust anchors, false when it does
+/// not, <see langword="null"/> when trust was not checked (no anchors were
+/// supplied, or the signature is not valid).
 /// </param>
 /// <param name="SignerExpired">True when the signer certificate is outside its validity period now.</param>
 /// <param name="Detail">Why the check failed or was not possible, if it did.</param>
@@ -33,7 +34,14 @@ public sealed record SecomSignatureCheck(
     string? Signer = null,
     bool? SignerTrusted = null,
     bool SignerExpired = false,
-    string? Detail = null);
+    string? Detail = null)
+{
+    /// <summary>
+    /// The name of the trust anchor the signer chains to (e.g. "MCP MCC") when
+    /// <see cref="SignerTrusted"/> is true.
+    /// </summary>
+    public string? TrustAnchor { get; init; }
+}
 
 /// <summary>
 /// Checks the data signature of a SECOM data object
@@ -42,23 +50,24 @@ public sealed record SecomSignatureCheck(
 /// <c>publicCertificate</c>.
 /// </summary>
 /// <remarks>
-/// Signer trust is optional: SECOM signers hold Maritime Connectivity Platform
-/// (MCP) certificates, whose roots are not in operating-system trust stores.
-/// Without trusted roots the result says only whether the data matches the
-/// stated certificate (<see cref="SecomSignatureCheck.SignerTrusted"/> is
-/// <see langword="null"/>). Revocation is not checked.
+/// Signer trust is checked against <see cref="SecomTrustAnchors"/>: SECOM
+/// signers hold Maritime Connectivity Platform (MCP) certificates, whose roots
+/// are not in operating-system trust stores. Without anchors the result says
+/// only whether the data matches the stated certificate
+/// (<see cref="SecomSignatureCheck.SignerTrusted"/> is <see langword="null"/>).
+/// Revocation is not checked.
 /// </remarks>
 public static class SecomSignatureVerifier
 {
     /// <summary>Checks the signature of <paramref name="data"/>.</summary>
     /// <param name="data">The decoded data the signature covers.</param>
     /// <param name="metadata">The object's exchange metadata; <see langword="null"/> means unsigned.</param>
-    /// <param name="trustedRoots">Roots the signer must chain to, or <see langword="null"/> to skip the trust check.</param>
+    /// <param name="trust">The anchors the signer must chain to (e.g. <see cref="SecomTrustAnchors.BuiltIn"/>), or <see langword="null"/> to skip the trust check.</param>
     /// <param name="now">The time expiry is judged at; defaults to now.</param>
     public static SecomSignatureCheck Verify(
         byte[] data,
         SecomExchangeMetadata? metadata,
-        IReadOnlyCollection<X509Certificate2>? trustedRoots = null,
+        SecomTrustAnchors? trust = null,
         DateTimeOffset? now = null)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -91,8 +100,6 @@ public static class SecomSignatureVerifier
         {
             var signer = certificates[0];
             var subject = signer.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
-            var at = (now ?? DateTimeOffset.UtcNow).UtcDateTime;
-            var expired = at < signer.NotBefore.ToUniversalTime() || at > signer.NotAfter.ToUniversalTime();
 
             SecomSignatureStatus status;
             string? detail = null;
@@ -108,15 +115,66 @@ public static class SecomSignatureVerifier
                 detail = ex.Message;
             }
 
-            var trusted = trustedRoots is null || status != SecomSignatureStatus.Valid
-                ? (bool?)null
-                : ChainsToTrustedRoot(signer, certificates.Skip(1), trustedRoots, metadata.RootCertificateThumbprint);
-            return new SecomSignatureCheck(status, subject, trusted, expired, detail);
+            return WithSigner(new SecomSignatureCheck(status, subject, Detail: detail), certificates, metadata.RootCertificateThumbprint, trust, now);
         }
         finally
         {
             certificates.ForEach(c => c.Dispose());
         }
+    }
+
+    /// <summary>
+    /// Judges the signer of an earlier check again: its expiry now and, for a
+    /// valid signature, its trust against <paramref name="trust"/>. A recorded
+    /// download is re-judged this way each time it is read, so trust follows
+    /// the current anchors without re-downloading.
+    /// </summary>
+    /// <param name="check">The earlier check.</param>
+    /// <param name="publicCertificates">The certificates the object carried, signer first (base64 DER or PEM).</param>
+    /// <param name="statedThumbprint">The object's <c>publicRootCertificateThumbprint</c>, if any.</param>
+    /// <param name="trust">The anchors to judge trust against, or <see langword="null"/> to skip the trust check.</param>
+    /// <param name="now">The time expiry is judged at; defaults to now.</param>
+    /// <returns>The check with its trust and expiry updated, or unchanged when the certificates cannot be read.</returns>
+    public static SecomSignatureCheck Recheck(
+        SecomSignatureCheck check,
+        IReadOnlyList<string> publicCertificates,
+        string? statedThumbprint,
+        SecomTrustAnchors? trust,
+        DateTimeOffset? now = null)
+    {
+        ArgumentNullException.ThrowIfNull(check);
+        ArgumentNullException.ThrowIfNull(publicCertificates);
+        if (publicCertificates.Count == 0)
+            return check;
+
+        var certificates = new List<X509Certificate2>();
+        try
+        {
+            foreach (var text in publicCertificates)
+                certificates.Add(LoadCertificate(text));
+            return WithSigner(check, certificates, statedThumbprint, trust, now);
+        }
+        catch (Exception ex) when (ex is CryptographicException or FormatException)
+        {
+            return check;
+        }
+        finally
+        {
+            certificates.ForEach(c => c.Dispose());
+        }
+    }
+
+    private static SecomSignatureCheck WithSigner(
+        SecomSignatureCheck check, List<X509Certificate2> certificates, string? statedThumbprint, SecomTrustAnchors? trust, DateTimeOffset? now)
+    {
+        var signer = certificates[0];
+        var at = (now ?? DateTimeOffset.UtcNow).UtcDateTime;
+        var expired = at < signer.NotBefore.ToUniversalTime() || at > signer.NotAfter.ToUniversalTime();
+        if (trust is null || check.Status != SecomSignatureStatus.Valid)
+            return check with { SignerTrusted = null, SignerExpired = expired, TrustAnchor = null };
+
+        var anchor = trust.FindAnchor(signer, certificates.Skip(1), statedThumbprint);
+        return check with { SignerTrusted = anchor is not null, SignerExpired = expired, TrustAnchor = anchor };
     }
 
     /// <summary>
@@ -236,38 +294,5 @@ public static class SecomSignatureVerifier
     {
         using (key)
             return key.KeySize >= 384 ? HashAlgorithmName.SHA384 : HashAlgorithmName.SHA256;
-    }
-
-    private static bool ChainsToTrustedRoot(
-        X509Certificate2 signer,
-        IEnumerable<X509Certificate2> intermediates,
-        IReadOnlyCollection<X509Certificate2> roots,
-        string? statedRootThumbprint)
-    {
-        if (roots.Count == 0)
-            return false;
-
-        using var chain = new X509Chain();
-        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-        // Expiry is reported separately; old objects stay attributable to their signer.
-        chain.ChainPolicy.VerificationFlags = X509VerificationFlags.IgnoreNotTimeValid;
-        chain.ChainPolicy.CustomTrustStore.AddRange(roots.ToArray());
-        chain.ChainPolicy.ExtraStore.AddRange(intermediates.ToArray());
-        try
-        {
-            if (!chain.Build(signer))
-                return false;
-            if (statedRootThumbprint is not { Length: > 0 } stated)
-                return true;
-
-            var root = chain.ChainElements[^1].Certificate;
-            return string.Equals(stated, root.Thumbprint, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(stated, Convert.ToHexString(SHA256.HashData(root.RawData)), StringComparison.OrdinalIgnoreCase);
-        }
-        catch (CryptographicException)
-        {
-            return false;
-        }
     }
 }

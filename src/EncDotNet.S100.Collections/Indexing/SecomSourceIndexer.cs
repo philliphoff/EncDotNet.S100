@@ -258,6 +258,36 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         };
     }
 
+    /// <summary>
+    /// The signature check as item details show it (#823): whether the data
+    /// matches, whether the signer is trusted, and whether its certificate has
+    /// expired, e.g. "valid · trusted (MCP MCC) · signer certificate expired".
+    /// Trust and expiry are independent: an expired signer from a trusted root
+    /// is still attributable to it.
+    /// </summary>
+    internal static string Describe(SecomSignatureCheck signature)
+    {
+        if (signature.Status != SecomSignatureStatus.Valid)
+        {
+            return signature.Status switch
+            {
+                SecomSignatureStatus.Unsupported => "not checked (unknown algorithm)",
+                SecomSignatureStatus.Unsigned => "unsigned",
+                _ => "invalid",
+            };
+        }
+
+        var trust = signature.SignerTrusted switch
+        {
+            true => signature.TrustAnchor is { } anchor ? $"trusted ({anchor})" : "trusted",
+            false => "signer not trusted",
+            null => "signer trust not checked",
+        };
+        return signature.SignerExpired
+            ? $"valid · {trust} · signer certificate expired"
+            : $"valid · {trust}";
+    }
+
     /// <summary>Adds what the downloaded copy (if any) knows: bounds from the probe, and the signature check.</summary>
     private CollectionItem WithDownload(
         CollectionItem item, EncCellDownloader downloader, List<IndexDiagnostic> diagnostics, CancellationToken cancellationToken)
@@ -268,13 +298,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         var properties = new Dictionary<string, string>(item.Properties, StringComparer.Ordinal);
         if (downloaded.Signature is { } signature)
         {
-            properties["signature"] = signature.Status switch
-            {
-                SecomSignatureStatus.Valid => signature.SignerExpired ? "valid (signer certificate expired)" : "valid",
-                SecomSignatureStatus.Unsupported => "not checked (unknown algorithm)",
-                SecomSignatureStatus.Unsigned => "unsigned",
-                _ => "invalid",
-            };
+            properties["signature"] = Describe(signature);
             if (signature.Signer is { } signer)
                 properties["signer"] = signer;
         }
