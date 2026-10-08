@@ -111,8 +111,12 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
     /// </summary>
     /// <param name="http">The client downloads use (with a generous timeout).</param>
     /// <param name="downloadsRoot">The host's downloads root.</param>
+    /// <param name="secomHttp">
+    /// The client SECOM objects are downloaded with (see <see cref="EncCellDownloader.SecomHttpClient"/>);
+    /// <see langword="null"/> uses <paramref name="http"/>.
+    /// </param>
     /// <returns>A downloader selector for <see cref="LibraryDownloads(Func{RemoteItemLocation, EncCellDownloader})"/>.</returns>
-    public static Func<RemoteItemLocation, EncCellDownloader?> ManagedFolders(HttpClient http, string downloadsRoot)
+    public static Func<RemoteItemLocation, EncCellDownloader?> ManagedFolders(HttpClient http, string downloadsRoot, HttpClient? secomHttp = null)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentException.ThrowIfNullOrEmpty(downloadsRoot);
@@ -120,7 +124,7 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
         var usace = new EncCellDownloader(http, Path.Combine(downloadsRoot, "usace-ienc"));
         var byFolder = new ConcurrentDictionary<string, EncCellDownloader>(StringComparer.Ordinal);
         return remote => remote.DownloadFolder is { } folder
-            ? byFolder.GetOrAdd(folder, f => new EncCellDownloader(http, Path.Combine(downloadsRoot, f)))
+            ? byFolder.GetOrAdd(folder, f => new EncCellDownloader(http, Path.Combine(downloadsRoot, f)) { SecomHttpClient = secomHttp })
             : remote.Uri.Host.EndsWith("ienccloud.us", StringComparison.OrdinalIgnoreCase) ? usace : noaa;
     }
 

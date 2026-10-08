@@ -171,10 +171,26 @@ public static class CatalogueFormatDetector
     /// (issue #804).
     /// </summary>
     /// <exception cref="HttpRequestException">The URL could not be fetched and is not a SECOM service.</exception>
-    public static async Task<CatalogueProbe> ProbeAsync(HttpClient httpClient, Uri uri, CancellationToken cancellationToken = default)
+    public static Task<CatalogueProbe> ProbeAsync(HttpClient httpClient, Uri uri, CancellationToken cancellationToken = default) =>
+        ProbeAsync(httpClient, uri, secomHttpClient: null, cancellationToken);
+
+    /// <summary>
+    /// Probes <paramref name="uri"/> as <see cref="ProbeAsync(HttpClient, Uri, CancellationToken)"/>
+    /// does, trying it as a SECOM service with <paramref name="secomHttpClient"/>:
+    /// one whose handler trusts MCP-issued server certificates (#829), which
+    /// the general client deliberately does not.
+    /// </summary>
+    /// <param name="httpClient">The client documents are fetched with.</param>
+    /// <param name="uri">The URL to probe.</param>
+    /// <param name="secomHttpClient">The client SECOM is asked with; <see langword="null"/> uses <paramref name="httpClient"/>.</param>
+    /// <param name="cancellationToken">Cancels the probe.</param>
+    /// <exception cref="HttpRequestException">The URL could not be fetched and is not a SECOM service.</exception>
+    public static async Task<CatalogueProbe> ProbeAsync(
+        HttpClient httpClient, Uri uri, HttpClient? secomHttpClient, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(uri);
+        var secom = secomHttpClient ?? httpClient;
 
         CatalogueProbe document;
         try
@@ -183,12 +199,12 @@ public static class CatalogueFormatDetector
         }
         catch (HttpRequestException)
         {
-            if (await IsSecomServiceAsync(httpClient, uri, cancellationToken).ConfigureAwait(false))
+            if (await IsSecomServiceAsync(secom, uri, cancellationToken).ConfigureAwait(false))
                 return SecomProbe;
             throw;
         }
 
-        return document.Format is null && await IsSecomServiceAsync(httpClient, uri, cancellationToken).ConfigureAwait(false)
+        return document.Format is null && await IsSecomServiceAsync(secom, uri, cancellationToken).ConfigureAwait(false)
             ? SecomProbe
             : document;
     }

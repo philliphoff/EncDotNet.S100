@@ -81,7 +81,11 @@ public enum SecomReachability
     /// <summary>It answers, but not <c>GetSummary</c> without a client certificate (or a signed request).</summary>
     NeedsCertificate,
 
-    /// <summary>Its TLS certificate is not trusted here — usually one issued by the MCP, whose roots operating systems do not carry.</summary>
+    /// <summary>
+    /// Its TLS certificate is not trusted here: issued under no trusted root,
+    /// expired, or naming another host. MCP-issued certificates are trusted
+    /// through <see cref="SecomServerTrust"/> when the probe's client uses it (#829).
+    /// </summary>
     UntrustedServer,
 
     /// <summary>It does not answer at that endpoint, or not as a SECOM service.</summary>
@@ -91,7 +95,16 @@ public enum SecomReachability
 /// <summary>The result of <see cref="SecomRegistry.ProbeAsync"/>.</summary>
 /// <param name="Reachability">Whether the service can be read.</param>
 /// <param name="Detail">What the service answered, for display.</param>
-public sealed record SecomProbeResult(SecomReachability Reachability, string? Detail = null);
+public sealed record SecomProbeResult(SecomReachability Reachability, string? Detail = null)
+{
+    /// <summary>
+    /// What <see cref="SecomServerTrust"/> decided about the server's TLS
+    /// certificate, when the registry was given one and the connection got
+    /// that far (#829): e.g. trusted through "MCP MCC", or refused as naming
+    /// another host.
+    /// </summary>
+    public SecomServerTrustResult? ServerTrust { get; init; }
+}
 
 /// <summary>
 /// Reads SECOM service instances from a Maritime Service Registry (issue
@@ -134,19 +147,33 @@ public sealed class SecomRegistry
     private readonly Uri _searchUri;
     private readonly string? _cacheDirectory;
     private readonly TimeProvider _time;
+    private readonly SecomServerTrust? _serverTrust;
 
     /// <summary>Creates a registry reader.</summary>
-    /// <param name="httpClient">The client used for the registry and for probes.</param>
+    /// <param name="httpClient">
+    /// The client used for the registry and for probes. To trust MCP-issued
+    /// server certificates, give it a handler from <paramref name="serverTrust"/>.
+    /// </param>
     /// <param name="cacheDirectory">Where the last listing is kept; <see langword="null"/> for none.</param>
     /// <param name="searchUri">The registry's SECOM search; defaults to <see cref="DefaultSearchUri"/>.</param>
     /// <param name="timeProvider">The clock; defaults to <see cref="TimeProvider.System"/>.</param>
-    public SecomRegistry(HttpClient httpClient, string? cacheDirectory = null, Uri? searchUri = null, TimeProvider? timeProvider = null)
+    /// <param name="serverTrust">
+    /// The validator behind <paramref name="httpClient"/>'s handler, if any;
+    /// probes then report what it decided (<see cref="SecomProbeResult.ServerTrust"/>).
+    /// </param>
+    public SecomRegistry(
+        HttpClient httpClient,
+        string? cacheDirectory = null,
+        Uri? searchUri = null,
+        TimeProvider? timeProvider = null,
+        SecomServerTrust? serverTrust = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         _httpClient = httpClient;
         _cacheDirectory = cacheDirectory;
         _searchUri = searchUri ?? DefaultSearchUri;
         _time = timeProvider ?? TimeProvider.System;
+        _serverTrust = serverTrust;
     }
 
     /// <summary>
@@ -186,6 +213,26 @@ public sealed class SecomRegistry
     public async Task<SecomProbeResult> ProbeAsync(Uri serviceUri, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(serviceUri);
+        var result = await ProbeServiceAsync(serviceUri, cancellationToken).ConfigureAwait(false);
+        if (result.Reachability == SecomReachability.Unreachable || _serverTrust?.ResultFor(serviceUri.IdnHost) is not { } trust)
+            return result;
+
+        // A refused certificate: say why, rather than the platform's TLS message.
+        return result.Reachability == SecomReachability.UntrustedServer && RefusalReason(trust) is { } reason
+            ? result with { Detail = reason, ServerTrust = trust }
+            : result with { ServerTrust = trust };
+    }
+
+    private static string? RefusalReason(SecomServerTrustResult trust) => trust.Outcome switch
+    {
+        SecomServerTrustOutcome.NotTrusted => "Its certificate is not issued under a trusted root.",
+        SecomServerTrustOutcome.Expired => $"Its certificate from {trust.Anchor} has expired or is not yet valid.",
+        SecomServerTrustOutcome.WrongHost => "Its certificate does not name this host.",
+        _ => null,
+    };
+
+    private async Task<SecomProbeResult> ProbeServiceAsync(Uri serviceUri, CancellationToken cancellationToken)
+    {
         var client = new SecomClient(_httpClient, serviceUri);
         var answered = false;
         try

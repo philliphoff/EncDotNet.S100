@@ -100,6 +100,50 @@ public sealed partial class SecomTrustAnchors
     {
         ArgumentNullException.ThrowIfNull(signer);
         ArgumentNullException.ThrowIfNull(carried);
+        if (BuildChain(signer, carried) is not { } elements)
+            return null;
+
+        // The CAs above the signer; a self-signed signer that is itself a root is its own CA.
+        var authorities = elements.Length > 1 ? elements[1..] : elements;
+        if (statedThumbprint is { Length: > 0 } stated && !authorities.Any(c => Names(c, stated.Trim())))
+            return null;
+
+        return AnchorNamed(authorities[^1]);
+    }
+
+    /// <summary>
+    /// Whether a TLS server certificate chains to one of these roots (#829),
+    /// using the certificates the server presented and <see cref="Intermediates"/>.
+    /// Unlike a signer, a server must be within its validity period, as must
+    /// every CA above it.
+    /// </summary>
+    /// <param name="server">The server's certificate.</param>
+    /// <param name="presented">Further certificates the server presented.</param>
+    /// <param name="at">The time validity is judged at.</param>
+    /// <returns>
+    /// The name of the root reached (<see langword="null"/> when the chain
+    /// reaches none), and whether a certificate in that chain is outside its
+    /// validity period at <paramref name="at"/>.
+    /// </returns>
+    public (string? Anchor, bool Expired) FindServerAnchor(X509Certificate2 server, IEnumerable<X509Certificate2> presented, DateTimeOffset at)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        ArgumentNullException.ThrowIfNull(presented);
+        if (BuildChain(server, presented) is not { } elements)
+            return (null, false);
+
+        var utc = at.UtcDateTime;
+        var expired = elements.Any(c => utc < c.NotBefore.ToUniversalTime() || utc > c.NotAfter.ToUniversalTime());
+        return (AnchorNamed(elements[^1]), expired);
+    }
+
+    /// <summary>
+    /// The chain from <paramref name="leaf"/> to one of these roots, leaf
+    /// first, ignoring validity periods and revocation; <see langword="null"/>
+    /// when there is none.
+    /// </summary>
+    private X509Certificate2[]? BuildChain(X509Certificate2 leaf, IEnumerable<X509Certificate2> extra)
+    {
         if (Roots.Count == 0)
             return null;
 
@@ -108,26 +152,19 @@ public sealed partial class SecomTrustAnchors
         chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
         chain.ChainPolicy.VerificationFlags = X509VerificationFlags.IgnoreNotTimeValid;
         chain.ChainPolicy.CustomTrustStore.AddRange(Roots.Select(r => r.Certificate).ToArray());
-        chain.ChainPolicy.ExtraStore.AddRange(carried.Concat(Intermediates).ToArray());
+        chain.ChainPolicy.ExtraStore.AddRange(extra.Concat(Intermediates).ToArray());
         try
         {
-            if (!chain.Build(signer))
-                return null;
-
-            // The CAs above the signer; a self-signed signer that is itself a root is its own CA.
-            var elements = chain.ChainElements.Select(e => e.Certificate).ToArray();
-            var authorities = elements.Length > 1 ? elements[1..] : elements;
-            if (statedThumbprint is { Length: > 0 } stated && !authorities.Any(c => Names(c, stated.Trim())))
-                return null;
-
-            var root = authorities[^1];
-            return Roots.FirstOrDefault(r => r.Certificate.RawData.AsSpan().SequenceEqual(root.RawData))?.Name;
+            return chain.Build(leaf) ? chain.ChainElements.Select(e => e.Certificate).ToArray() : null;
         }
         catch (CryptographicException)
         {
             return null;
         }
     }
+
+    private string? AnchorNamed(X509Certificate2 root) =>
+        Roots.FirstOrDefault(r => r.Certificate.RawData.AsSpan().SequenceEqual(root.RawData))?.Name;
 
     private static bool Names(X509Certificate2 certificate, string thumbprint) =>
         string.Equals(thumbprint, certificate.Thumbprint, StringComparison.OrdinalIgnoreCase)

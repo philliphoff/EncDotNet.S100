@@ -83,6 +83,37 @@ public sealed class SecomRegistryDirectoryTests
     }
 
     [Fact]
+    public async Task The_explanation_says_why_a_server_certificate_was_refused_or_where_it_is_from()
+    {
+        // #829: the probe reports SecomServerTrust's decision about the TLS certificate.
+        var directory = Directory(uri => uri.Host switch
+        {
+            "s124.ccg-gcc.gc.ca" => new SecomProbeResult(SecomReachability.Open)
+            {
+                ServerTrust = new SecomServerTrustResult(SecomServerTrustOutcome.AnchorTrusted, "MCP MCC"),
+            },
+            _ => new SecomProbeResult(SecomReachability.UntrustedServer, "Its certificate does not name this host.")
+            {
+                ServerTrust = new SecomServerTrustResult(SecomServerTrustOutcome.WrongHost, "MCP MCC"),
+            },
+        });
+        directory.ShowRegistryCommand.Execute(null);
+        await SettleAsync(() => directory.IsRegistryLoaded);
+        var khra = directory.Entries.Single(e => e.IsRegistry && e.Name.StartsWith("KHRA", StringComparison.Ordinal));
+        var ccg = directory.Entries.Single(e => e.IsRegistry && e.Source.CatalogUri.Host == "s124.ccg-gcc.gc.ca");
+
+        directory.SelectedEntry = khra;
+        await SettleAsync(() => khra.Reachability is not null);
+        Assert.Equal("Server certificate not trusted", khra.ReachabilityText);
+        Assert.Equal("This service's TLS certificate does not name its address, so the connection was refused.", khra.ReachabilityExplanation);
+
+        directory.SelectedEntry = ccg;
+        await SettleAsync(() => ccg.Reachability is not null);
+        Assert.Equal("Its server certificate is from MCP MCC.", ccg.ReachabilityExplanation);
+        Assert.True(directory.CanContinueWithSelection);
+    }
+
+    [Fact]
     public async Task A_registry_that_cannot_be_read_says_so()
     {
         var directory = Directory(_ => new SecomProbeResult(SecomReachability.Open),
