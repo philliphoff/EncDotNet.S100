@@ -138,6 +138,13 @@ internal sealed partial class ViewerSettings
     /// </summary>
     public PanelSizes Panels { get; set; } = new();
 
+    /// <summary>
+    /// The main window's size, position and maximized state at last
+    /// shutdown (#825); <c>null</c> until the window has been closed once,
+    /// which makes the next launch use the first-run placement.
+    /// </summary>
+    public WindowPlacement? MainWindowPlacement { get; set; }
+
     /// <summary>Global symbol scale factor (1.0 = default). Scales all point symbols.</summary>
     public double SymbolScale { get; set; } = 1.0;
 
@@ -690,4 +697,29 @@ public sealed class PanelSizes
     /// share of vertical space occupied by the vessel list (top row).
     /// </summary>
     public double? VesselsInnerSplit { get; set; }
+}
+
+/// <summary>
+/// Persisted window placement (#825). Position is in physical pixels of the
+/// virtual desktop (Avalonia's <c>Window.Position</c>); size is the client
+/// size in device-independent units (<c>Window.Width</c>/<c>Height</c>).
+/// The bounds are always the <em>normal</em> (restored) bounds, so a window
+/// saved maximized still has somewhere sensible to un-maximize to.
+/// </summary>
+public sealed class WindowPlacement
+{
+    /// <summary>Left edge of the normal bounds, in physical pixels.</summary>
+    public int X { get; set; }
+
+    /// <summary>Top edge of the normal bounds, in physical pixels.</summary>
+    public int Y { get; set; }
+
+    /// <summary>Client width of the normal bounds, in device-independent units.</summary>
+    public double Width { get; set; }
+
+    /// <summary>Client height of the normal bounds, in device-independent units.</summary>
+    public double Height { get; set; }
+
+    /// <summary>Whether the window was maximized.</summary>
+    public bool IsMaximized { get; set; }
 }

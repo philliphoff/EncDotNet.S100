@@ -1190,6 +1190,14 @@ application-data location. Persisted across sessions:
 - Recent files.
 - Panel layout (which activity-bar panels are docked where, and
   splitter positions).
+- Main window size, position and maximized state. The first launch
+  opens at 80% of the primary screen's working area, centred, or
+  maximized on screens smaller than 1366×768. Later launches restore
+  the last placement. If the window would no longer be visible (for
+  example, its monitor was unplugged), it is placed on the primary
+  screen again. `--ephemeral` runs and runs that enable MCP from the
+  command line keep a fixed 1100×700 window and leave the saved
+  placement alone.
 - Day / Dusk / Night palette and ECDIS display category.
 - Per-spec viewing-group overrides and display-plane toggles.
 - Mariner depth / distance units and contour values.

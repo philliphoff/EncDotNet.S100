@@ -109,6 +109,9 @@ public partial class MainWindow : ShadUI.Window
 
         InitializeComponent();
 
+        // Open large on first run and where the user left it afterwards (#825).
+        InitializeWindowPlacement(options, App.Services.GetRequiredService<ViewerSettings>());
+
         // Bind the notification overlay to the DI-managed notification
         // service so background services can surface notifications.
         NotificationHost.ItemsSource =
