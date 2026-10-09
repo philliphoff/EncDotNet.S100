@@ -81,7 +81,7 @@ public sealed class LibraryKeepDownloadedTests : IDisposable
         vm.KeepDownloaded = true;
         Assert.True(vm.BuildSource().Sync);
 
-        vm.Initialize(AddToLibraryKind.Folder, _context.Root, targetCollectionId: null);
+        vm.Initialize(LibrarySourceKind.Folder, _context.Root, targetCollectionId: null);
         Assert.False(vm.CanKeepDownloaded);
         Assert.False(vm.BuildSource().Sync);
     }

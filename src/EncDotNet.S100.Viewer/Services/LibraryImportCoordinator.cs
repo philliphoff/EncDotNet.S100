@@ -5,7 +5,6 @@ using Avalonia.Platform.Storage;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
-using EncDotNet.S100.Collections.Manifests;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 using ShadUI;
@@ -60,19 +59,19 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     public async Task AddFolderAsync(Guid? targetCollectionId)
     {
         if (await _fileDialogs.OpenLibraryFolderAsync(MainTopLevel()) is { } path)
-            ShowDialog(AddToLibraryKind.Folder, path, targetCollectionId);
+            ShowDialog(LibrarySourceKind.Folder, path, targetCollectionId);
     }
 
     public async Task AddExchangeSetZipAsync(Guid? targetCollectionId)
     {
         if (await _fileDialogs.OpenExchangeSetZipAsync(MainTopLevel()) is { } path)
-            ShowDialog(AddToLibraryKind.ExchangeSet, path, targetCollectionId);
+            ShowDialog(LibrarySourceKind.ExchangeSet, path, targetCollectionId);
     }
 
     public async Task AddS128CatalogueAsync(Guid? targetCollectionId)
     {
         if (await _fileDialogs.OpenS128CatalogueAsync(MainTopLevel()) is { } path)
-            ShowDialog(AddToLibraryKind.S128Catalogue, path, targetCollectionId);
+            ShowDialog(LibrarySourceKind.S128Catalogue, path, targetCollectionId);
     }
 
     public async Task AddCollectionManifestAsync(Guid? targetCollectionId)
@@ -167,7 +166,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         ArgumentException.ThrowIfNullOrEmpty(path);
 
         var kind = Classify(path);
-        if (kind == AddToLibraryKind.LocalManifest)
+        if (kind == LibrarySourceKind.LocalManifest)
             ShowManifestDialog(path, targetCollectionId, editing: null);
         else
             ShowDialog(kind, path, targetCollectionId);
@@ -180,15 +179,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     /// one (by its <c>.s100collection.json</c> name or its <c>format</c>); any
     /// other file is an exchange set (a ZIP or catalogue).
     /// </summary>
-    internal static AddToLibraryKind Classify(string path) =>
-        Directory.Exists(path)
-            ? (ExchangeSetLayout.PickS100Catalogue(SafeFileNames(path)) is not null
-               || SafeFileNames(path).Any(ExchangeSetLayout.IsS57CatalogueName)
-                ? AddToLibraryKind.ExchangeSet
-                : AddToLibraryKind.Folder)
-            : CollectionManifest.IsManifestPath(path)
-                ? AddToLibraryKind.LocalManifest
-                : AddToLibraryKind.ExchangeSet;
+    internal static LibrarySourceKind Classify(string path) => LibrarySourceKinds.Classify(path);
 
     public bool IsInLibrary(string path)
     {
@@ -215,7 +206,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         string.Equals(path, folder, StringComparison.OrdinalIgnoreCase)
         || path.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
-    private void ShowDialog(AddToLibraryKind kind, string? path, Guid? targetCollectionId)
+    private void ShowDialog(LibrarySourceKind kind, string? path, Guid? targetCollectionId)
     {
         var dialog = _dialogFactory();
         dialog.Initialize(kind, path, targetCollectionId);
@@ -244,7 +235,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         if (editing is not null)
             scope.InitializeEdit(editing.CollectionId, editing.Source);
         else
-            scope.Initialize(AddToLibraryKind.LocalManifest, path, targetCollectionId);
+            scope.Initialize(LibrarySourceKind.LocalManifest, path, targetCollectionId);
         scope.PickManifest = () => _fileDialogs.OpenCollectionManifestAsync(MainTopLevel());
         scope.OpenManifest = OpenInEditor;
 
@@ -275,18 +266,6 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
     {
         if (MainTopLevel()?.Launcher is { } launcher)
             _ = launcher.LaunchFileInfoAsync(new FileInfo(path));
-    }
-
-    private static IEnumerable<string?> SafeFileNames(string directory)
-    {
-        try
-        {
-            return Directory.EnumerateFiles(directory).Select(Path.GetFileName).ToArray();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
     }
 
     private static TopLevel? MainTopLevel() =>

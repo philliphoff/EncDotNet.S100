@@ -369,4 +369,64 @@
     <value>Latest runs {0}</value>
     <comment>{0}: the latest run time</comment>
   </data>
+  <data name="Library_FacetDetailFormat" xml:space="preserve">
+    <value>{0:N0} datasets · {1}</value>
+  </data>
+  <data name="Library_AddTitle" xml:space="preserve">
+    <value>Add to Library</value>
+  </data>
+  <data name="Library_AddNoaaTitle" xml:space="preserve">
+    <value>Add NOAA ENC Feed</value>
+  </data>
+  <data name="Library_AndMoreFormat" xml:space="preserve">
+    <value>{0} and {1} more</value>
+  </data>
+  <data name="Library_DistrictFormat" xml:space="preserve">
+    <value>District {0}</value>
+  </data>
+  <data name="Library_NoaaDistricts" xml:space="preserve">
+    <value>Coast Guard districts</value>
+  </data>
+  <data name="Library_NoaaRegions" xml:space="preserve">
+    <value>Regions</value>
+  </data>
+  <data name="Library_NoaaSelectionAllFormat" xml:space="preserve">
+    <value>All {0:N0} datasets · {1}</value>
+  </data>
+  <data name="Library_NoaaSelectionFormat" xml:space="preserve">
+    <value>{0:N0} datasets · {1}</value>
+  </data>
+  <data name="Library_NoaaStates" xml:space="preserve">
+    <value>States</value>
+  </data>
+  <data name="Library_RegionFormat" xml:space="preserve">
+    <value>Region {0}</value>
+  </data>
+  <data name="Library_UsaceRivers" xml:space="preserve">
+    <value>Rivers</value>
+  </data>
+  <data name="Library_AddUsaceTitle" xml:space="preserve">
+    <value>Add USACE Inland ENC Feed</value>
+  </data>
+  <data name="Wizard_TickAtLeastOne" xml:space="preserve">
+    <value>Tick at least one item, or choose Everything.</value>
+  </data>
+  <data name="Wizard_KeptPicksFormat" xml:space="preserve">
+    <value>Everything is included; your {0:N0} picks are kept if you switch back</value>
+  </data>
+  <data name="Wizard_EverythingCellsFormat" xml:space="preserve">
+    <value>{0:N0} cells · {1}</value>
+  </data>
+  <data name="Wizard_DatedFormat" xml:space="preserve">
+    <value>{0} · catalogue dated {1}</value>
+  </data>
+  <data name="Manifest_DialogTitle" xml:space="preserve">
+    <value>Add collection manifest</value>
+  </data>
+  <data name="Manifest_ChooseGroupsTitle" xml:space="preserve">
+    <value>Choose groups</value>
+  </data>
+  <data name="Wizard_NothingDownloadsFormat" xml:space="preserve">
+    <value>{0} · nothing downloads yet</value>
+  </data>
 </root>

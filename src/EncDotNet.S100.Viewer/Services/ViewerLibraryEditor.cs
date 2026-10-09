@@ -88,7 +88,7 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
             known = KnownCatalogueSources.FromUrl(uri, format, probe.Title);
         }
 
-        AddToLibraryKind? pathKind = null;
+        LibrarySourceKind? pathKind = null;
         string? path = null;
         if (!string.IsNullOrWhiteSpace(request.Path))
         {
@@ -98,10 +98,10 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
             pathKind = request.Kind?.Trim().ToLowerInvariant() switch
             {
                 null or "" => LibraryImportCoordinator.Classify(path),
-                "folder" => AddToLibraryKind.Folder,
-                "exchange_set" or "exchangeset" => AddToLibraryKind.ExchangeSet,
-                "manifest" => AddToLibraryKind.LocalManifest,
-                "s128" or "s-128" => AddToLibraryKind.S128Catalogue,
+                "folder" => LibrarySourceKind.Folder,
+                "exchange_set" or "exchangeset" => LibrarySourceKind.ExchangeSet,
+                "manifest" => LibrarySourceKind.LocalManifest,
+                "s128" or "s-128" => LibrarySourceKind.S128Catalogue,
                 _ => null,
             };
             if (pathKind is null)
@@ -114,7 +114,7 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
     }
 
     private async Task<LibraryEditOutcome<AddSourceResult>> AddOnUiThreadAsync(
-        AddSourceRequest request, KnownCatalogueSource? known, AddToLibraryKind? pathKind, string? path, CancellationToken ct)
+        AddSourceRequest request, KnownCatalogueSource? known, LibrarySourceKind? pathKind, string? path, CancellationToken ct)
     {
         var dialog = _dialogs();
         if (known is not null)
@@ -122,7 +122,7 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
         else
             dialog.Initialize(pathKind!.Value, path, request.CollectionId);
 
-        if (dialog.Kind is not (AddToLibraryKind.Folder or AddToLibraryKind.ExchangeSet or AddToLibraryKind.S128Catalogue))
+        if (dialog.Kind is not (LibrarySourceKind.Folder or LibrarySourceKind.ExchangeSet or LibrarySourceKind.S128Catalogue))
         {
             await dialog.LoadCatalogAsync(ct).ConfigureAwait(true);
             if (dialog.LoadError is { } error)
