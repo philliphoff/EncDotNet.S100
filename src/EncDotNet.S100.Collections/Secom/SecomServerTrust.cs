@@ -91,7 +91,9 @@ public sealed class SecomServerTrust
     private readonly ConcurrentDictionary<string, SecomServerTrustResult> _results = new(StringComparer.OrdinalIgnoreCase);
     private readonly TimeProvider _time;
     private SecomClientIdentity? _identity;
+    private SecomTrustAnchors _anchors;
     private int _identityVersion;
+    private int _anchorsVersion;
 
     /// <summary>Creates a validator trusting <paramref name="anchors"/>.</summary>
     /// <param name="anchors">The anchors server certificates may chain to; by default <see cref="SecomTrustAnchors.BuiltIn"/>.</param>
@@ -99,13 +101,32 @@ public sealed class SecomServerTrust
     /// <param name="revocation">Checks anchor-trusted chains for revocation; <see langword="null"/> skips the check.</param>
     public SecomServerTrust(SecomTrustAnchors? anchors = null, TimeProvider? timeProvider = null, SecomRevocation? revocation = null)
     {
-        Anchors = anchors ?? SecomTrustAnchors.BuiltIn;
+        _anchors = anchors ?? SecomTrustAnchors.BuiltIn;
         _time = timeProvider ?? TimeProvider.System;
         Revocation = revocation;
     }
 
-    /// <summary>The anchors server certificates may chain to.</summary>
-    public SecomTrustAnchors Anchors { get; }
+    /// <summary>
+    /// The anchors server certificates may chain to. A host may replace them
+    /// (e.g. when the user turns a built-in root off or adds one, #845):
+    /// decisions recorded under the previous anchors are forgotten, and
+    /// handlers make new connections from their next request.
+    /// </summary>
+    public SecomTrustAnchors Anchors
+    {
+        get => Volatile.Read(ref _anchors);
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            Volatile.Write(ref _anchors, value);
+            _results.Clear();
+            Interlocked.Increment(ref _anchorsVersion);
+            AnchorsChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raised after <see cref="Anchors"/> is replaced.</summary>
+    public event EventHandler? AnchorsChanged;
 
     /// <summary>Checks anchor-trusted chains for revocation, when set.</summary>
     public SecomRevocation? Revocation { get; }
@@ -144,6 +165,44 @@ public sealed class SecomServerTrust
         Volatile.Write(ref _identity, identity);
         Interlocked.Increment(ref _identityVersion);
         IdentityChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Raised when <see cref="CheckIdentityRevocation"/> finds the identity in use revoked and stops using it.</summary>
+    public event EventHandler<SecomIdentityRevokedEventArgs>? IdentityRevoked;
+
+    /// <summary>
+    /// Checks the identity in use against its CAs' CRLs (#845). A revoked
+    /// identity is cleared at once (<see cref="SetIdentity"/> with
+    /// <see langword="null"/>), so SECOM requests connect anonymously, and
+    /// <see cref="IdentityRevoked"/> is raised.
+    /// </summary>
+    /// <param name="fetch">
+    /// True to fetch CRLs that are missing or due; false to judge only from
+    /// CRLs already held (<see cref="SecomRevocation.CacheOnly"/>).
+    /// </param>
+    /// <returns>
+    /// The result for the identity checked; <see cref="SecomRevocationStatus.NotChecked"/>
+    /// when there is no identity, no <see cref="Revocation"/>, or the identity
+    /// chains to none of <see cref="Anchors"/>.
+    /// </returns>
+    public SecomRevocationResult CheckIdentityRevocation(bool fetch = true)
+    {
+        var identity = Identity;
+        if (identity is null || Revocation is null)
+            return new SecomRevocationResult(SecomRevocationStatus.NotChecked);
+        if (Anchors.FindAnchor(identity.Certificate, [], statedThumbprint: null, out var chain) is null || chain is null)
+            return new SecomRevocationResult(SecomRevocationStatus.NotChecked, "The identity chains to no trusted authority.");
+
+        var result = (fetch ? Revocation : Revocation.CacheOnly).Check(chain);
+        if (result.Status == SecomRevocationStatus.Revoked
+            && ReferenceEquals(Interlocked.CompareExchange(ref _identity, null, identity), identity))
+        {
+            Interlocked.Increment(ref _identityVersion);
+            IdentityChanged?.Invoke(this, EventArgs.Empty);
+            IdentityRevoked?.Invoke(this, new SecomIdentityRevokedEventArgs(identity, result));
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -193,6 +252,7 @@ public sealed class SecomServerTrust
         private readonly List<HttpMessageInvoker> _retired = [];
         private HttpMessageInvoker? _current;
         private int _version = -1;
+        private int _anchorsVersion = -1;
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Current().SendAsync(request, cancellationToken);
@@ -200,14 +260,16 @@ public sealed class SecomServerTrust
         private HttpMessageInvoker Current()
         {
             var version = Volatile.Read(ref trust._identityVersion);
+            var anchorsVersion = Volatile.Read(ref trust._anchorsVersion);
             lock (_gate)
             {
-                if (_current is not null && (!presentIdentity || _version == version))
+                if (_current is not null && (!presentIdentity || _version == version) && _anchorsVersion == anchorsVersion)
                     return _current;
 
                 if (_current is not null)
                     _retired.Add(_current);
                 _version = version;
+                _anchorsVersion = anchorsVersion;
                 return _current = new HttpMessageInvoker(Create(presentIdentity ? trust.Identity : null), disposeHandler: true);
             }
         }
@@ -321,4 +383,16 @@ public sealed class SecomServerTrust
                 yield return value;
         }
     }
+}
+
+/// <summary>The identity <see cref="SecomServerTrust.CheckIdentityRevocation"/> found revoked and stopped using.</summary>
+/// <param name="identity">The revoked identity; the caller still owns it.</param>
+/// <param name="result">The revocation result, whose detail names the date.</param>
+public sealed class SecomIdentityRevokedEventArgs(SecomClientIdentity identity, SecomRevocationResult result) : EventArgs
+{
+    /// <summary>The revoked identity.</summary>
+    public SecomClientIdentity Identity { get; } = identity;
+
+    /// <summary>The revocation result.</summary>
+    public SecomRevocationResult Result { get; } = result;
 }

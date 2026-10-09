@@ -103,7 +103,17 @@ public sealed class TestPki : IDisposable
     /// A client identity as an MCP Identity Registry issues one: the MRN as the
     /// subject <c>UID</c>, for client authentication.
     /// </summary>
-    public X509Certificate2 ClientLeaf(string mrn, string commonName = "Test vessel", DateTimeOffset? notAfter = null)
+    /// <param name="mrn">The MRN, as the subject <c>UID</c>.</param>
+    /// <param name="commonName">The subject common name.</param>
+    /// <param name="notAfter">When it expires; by default in 10 days.</param>
+    /// <param name="withCrl">True to name the intermediate's CRL.</param>
+    /// <param name="attributes">MCP attributes (otherName type OID → string) for the subject alternative name.</param>
+    public X509Certificate2 ClientLeaf(
+        string mrn,
+        string commonName = "Test vessel",
+        DateTimeOffset? notAfter = null,
+        bool withCrl = false,
+        IReadOnlyDictionary<string, string>? attributes = null)
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var subject = new X500DistinguishedNameBuilder();
@@ -113,6 +123,28 @@ public sealed class TestPki : IDisposable
         request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
         request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
         request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension([new Oid("1.3.6.1.5.5.7.3.2")], false));
+        if (withCrl)
+            request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([IntermediateCrlUri.AbsoluteUri]));
+        if (attributes is { Count: > 0 })
+        {
+            // GeneralNames of otherName [0] { type-id, value [0] EXPLICIT UTF8String }, as an MCP Identity Registry writes them.
+            var writer = new AsnWriter(AsnEncodingRules.DER);
+            using (writer.PushSequence())
+            {
+                foreach (var (oid, value) in attributes)
+                {
+                    using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true)))
+                    {
+                        writer.WriteObjectIdentifier(oid);
+                        using (writer.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true)))
+                            writer.WriteCharacterString(UniversalTagNumber.UTF8String, value);
+                    }
+                }
+            }
+
+            request.CertificateExtensions.Add(new X509Extension("2.5.29.17", writer.Encode(), critical: false));
+        }
+
         return Issue(request, key, notAfter, withKey: true);
     }
 

@@ -118,13 +118,15 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
     /// </param>
     /// <param name="revocation">Checks SECOM signers for revocation (see <see cref="EncCellDownloader.Revocation"/>); <see langword="null"/> skips it.</param>
     /// <param name="secomSigner">The signer for SECOM 2.0 POST downloads (see <see cref="EncCellDownloader.SecomSigner"/>).</param>
+    /// <param name="trustAnchors">Where SECOM signers' trust anchors come from (see <see cref="EncCellDownloader.TrustAnchorsSource"/>); by default <see cref="SecomTrustAnchors.BuiltIn"/>.</param>
     /// <returns>A downloader selector for <see cref="LibraryDownloads(Func{RemoteItemLocation, EncCellDownloader})"/>.</returns>
     public static Func<RemoteItemLocation, EncCellDownloader?> ManagedFolders(
         HttpClient http,
         string downloadsRoot,
         HttpClient? secomHttp = null,
         SecomRevocation? revocation = null,
-        Func<SecomEnvelopeSigner?>? secomSigner = null)
+        Func<SecomEnvelopeSigner?>? secomSigner = null,
+        Func<SecomTrustAnchors>? trustAnchors = null)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentException.ThrowIfNullOrEmpty(downloadsRoot);
@@ -137,6 +139,7 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
                 SecomHttpClient = secomHttp,
                 Revocation = revocation,
                 SecomSigner = secomSigner,
+                TrustAnchorsSource = trustAnchors ?? (static () => SecomTrustAnchors.BuiltIn),
             })
             : remote.Uri.Host.EndsWith("ienccloud.us", StringComparison.OrdinalIgnoreCase) ? usace : noaa;
     }
