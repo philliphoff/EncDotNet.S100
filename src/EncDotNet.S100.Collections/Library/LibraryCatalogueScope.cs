@@ -48,6 +48,33 @@ public abstract class LibraryCatalogueScope
     /// <summary>True when nothing is ticked (the selection means the whole catalogue).</summary>
     public bool IsUnscoped => !Choices.Any(c => c.IsSelected);
 
+    /// <summary>How many choices are ticked.</summary>
+    public int SelectedCount => Choices.Count(c => c.IsSelected);
+
+    /// <summary>
+    /// True to include the whole catalogue whatever is ticked (the default);
+    /// false to include only the ticked choices.
+    /// </summary>
+    public bool IncludeAll { get; set; } = true;
+
+    /// <summary>True when the source will include everything: the suggested name is then the catalogue's alone.</summary>
+    public virtual bool IsEverything => IncludeAll || IsUnscoped;
+
+    /// <summary>The summary under the choices: what is included, that ticks are kept, or a prompt to tick something.</summary>
+    public virtual string ScopeSummary => LibrarySourceText.ScopeSummary(IncludeAll, SelectedCount, SelectionSummary);
+
+    /// <summary>True when the source can be built (by default, once the catalogue is read).</summary>
+    public virtual bool CanBuild => IsLoaded;
+
+    /// <summary>The catalogue's own name, when it has one (a manifest's title); otherwise null.</summary>
+    public virtual string? Name => null;
+
+    /// <summary>Raised when something the scope shows changed on its own (sizes arriving after a listing).</summary>
+    public event EventHandler? Changed;
+
+    /// <summary>Raises <see cref="Changed"/>.</summary>
+    protected void OnChanged() => Changed?.Invoke(this, EventArgs.Empty);
+
     /// <summary>What the ticked choices (or, with none, the whole catalogue) amount to, e.g. "12 cells · 3 MB".</summary>
     public abstract string SelectionSummary { get; }
 
@@ -67,9 +94,11 @@ public abstract class LibraryCatalogueScope
 
     /// <summary>The source the scope describes.</summary>
     /// <param name="id">The new source's id.</param>
-    /// <param name="includeAll">True to include the whole catalogue whatever is ticked.</param>
-    /// <param name="feedName">The catalogue's name, for the source's display name.</param>
-    public abstract CollectionSource Build(Guid id, bool includeAll, string? feedName);
+    /// <param name="name">
+    /// The source's name when everything is included (the catalogue's name);
+    /// a selection names it after the selection. A manifest source always takes it.
+    /// </param>
+    public abstract CollectionSource Build(Guid id, string? name);
 
     /// <summary>Runs <paramref name="load"/>, turning the expected failures of reading a catalogue into a message.</summary>
     protected static async Task<string?> TryLoadAsync(Func<Task> load)
@@ -195,9 +224,9 @@ public sealed class NoaaEncScope : LibraryCatalogueScope
             ]);
 
     /// <inheritdoc />
-    public override CollectionSource Build(Guid id, bool includeAll, string? feedName) => includeAll
-        ? new NoaaEncFeedSource(id, feedName, CatalogUri, new NoaaEncFilter())
-        : new NoaaEncFeedSource(id, DescribeSelection() ?? feedName, CatalogUri, CurrentFilter);
+    public override CollectionSource Build(Guid id, string? name) => IncludeAll
+        ? new NoaaEncFeedSource(id, name, CatalogUri, new NoaaEncFilter())
+        : new NoaaEncFeedSource(id, DescribeSelection() ?? name, CatalogUri, CurrentFilter);
 }
 
 /// <summary>A scope of the USACE Inland ENC product catalogue: by river.</summary>
@@ -271,7 +300,7 @@ public sealed class UsaceIencScope : LibraryCatalogueScope
     }
 
     /// <inheritdoc />
-    public override CollectionSource Build(Guid id, bool includeAll, string? feedName) => includeAll
-        ? new UsaceIencFeedSource(id, feedName, CatalogUri, new UsaceIencFilter())
-        : new UsaceIencFeedSource(id, DescribeSelection() ?? feedName, CatalogUri, CurrentFilter);
+    public override CollectionSource Build(Guid id, string? name) => IncludeAll
+        ? new UsaceIencFeedSource(id, name, CatalogUri, new UsaceIencFilter())
+        : new UsaceIencFeedSource(id, DescribeSelection() ?? name, CatalogUri, CurrentFilter);
 }

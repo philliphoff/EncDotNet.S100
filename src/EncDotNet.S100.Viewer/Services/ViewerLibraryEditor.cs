@@ -230,7 +230,7 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
         added,
         dialog.Kind.ToString(),
         dialog.Title,
-        dialog.IsLoaded ? dialog.CatalogueDetail : null,
+        dialog.IsLoaded && LibrarySourceKinds.IsOnline(dialog.Kind) ? dialog.CatalogueDetail : null,
         dialog.IsCatalogueStale,
         dialog.ForecastEndedNote,
         dialog.ScopeSummary,

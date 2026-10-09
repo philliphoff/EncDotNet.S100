@@ -197,12 +197,12 @@
                         </ListBox.ItemsPanel>
                         <ListBox.Styles>
                             <!-- Named after the option, not the record's ToString() (#784). -->
-                            <Style Selector="ListBoxItem" x:DataType="vm:ResolutionOptionViewModel">
+                            <Style Selector="ListBoxItem" x:DataType="lib:LibraryResolution">
                                 <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
                             </Style>
                         </ListBox.Styles>
                         <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:ResolutionOptionViewModel">
+                            <DataTemplate x:DataType="lib:LibraryResolution">
                                 <TextBlock Text="{Binding Label}" FontSize="13" VerticalAlignment="Center" />
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -226,12 +226,12 @@
                         </ListBox.ItemsPanel>
                         <ListBox.Styles>
                             <!-- Named after the option, not the record's ToString() (#784). -->
-                            <Style Selector="ListBoxItem" x:DataType="vm:ResolutionOptionViewModel">
+                            <Style Selector="ListBoxItem" x:DataType="lib:LibraryResolution">
                                 <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
                             </Style>
                         </ListBox.Styles>
                         <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:ResolutionOptionViewModel">
+                            <DataTemplate x:DataType="lib:LibraryResolution">
                                 <TextBlock Text="{Binding Label}" FontSize="13" VerticalAlignment="Center" />
                             </DataTemplate>
                         </ListBox.ItemTemplate>

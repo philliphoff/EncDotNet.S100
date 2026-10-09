@@ -1,19 +1,20 @@
 using System.Globalization;
-using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.RemoteCatalogues;
-using EncDotNet.S100.Viewer.Resources;
 
-namespace EncDotNet.S100.Viewer.Library;
+namespace EncDotNet.S100.Collections.Library;
 
 /// <summary>Names a remote S-100 dataset's navigation purpose and grid resolution ("Port 4 m").</summary>
-internal static class NavigationPurposes
+public static class NavigationPurposes
 {
     /// <summary>"Port 4 m": the purpose and a grid resolution in metres, or the purpose alone.</summary>
+    /// <param name="purpose">The purpose code, e.g. <c>port</c>.</param>
+    /// <param name="metres">The grid resolution in metres, if known.</param>
     public static string Label(string purpose, double? metres) => metres is { } m
-        ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_PurposeResolutionFormat, Name(purpose), m)
+        ? string.Format(CultureInfo.CurrentCulture, LibraryText.Get("Wizard_PurposeResolutionFormat"), Name(purpose), m)
         : Name(purpose);
 
     /// <summary>The label for <paramref name="item"/>, or <see langword="null"/> when it declares no purpose.</summary>
+    /// <param name="item">The item.</param>
     public static string? Of(CollectionItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -27,6 +28,7 @@ internal static class NavigationPurposes
     }
 
     /// <summary>The catalogue's purpose code as a name ("port" → "Port").</summary>
+    /// <param name="value">The purpose code.</param>
     public static string Name(string value) =>
-        value.Length == 0 ? value : char.ToUpper(value[0], CultureInfo.CurrentCulture) + value[1..];
+        (value ?? throw new ArgumentNullException(nameof(value))).Length == 0 ? value : char.ToUpper(value[0], CultureInfo.CurrentCulture) + value[1..];
 }
