@@ -95,7 +95,7 @@ internal sealed partial class AddToLibraryDialogViewModel
     }
 
     /// <summary>True when adding a SECOM service.</summary>
-    public bool IsSecom => _kind == AddToLibraryKind.Secom;
+    public bool IsSecom => _kind == LibrarySourceKind.Secom;
 
     /// <summary>The SECOM filter for the current product selection.</summary>
     public SecomFilter CurrentSecomFilter => new()

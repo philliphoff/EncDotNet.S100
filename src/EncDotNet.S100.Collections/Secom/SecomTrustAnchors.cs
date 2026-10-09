@@ -19,7 +19,7 @@ public sealed record SecomTrustAnchor(string Name, X509Certificate2 Certificate)
 /// <remarks>
 /// <see cref="BuiltIn"/> trusts the MCP MCC instance. Hosts add their own
 /// roots with <see cref="With(SecomTrustAnchor, IEnumerable{X509Certificate2}?)"/>.
-/// Revocation is not checked.
+/// Revocation is checked separately, by <see cref="SecomRevocation"/> (#833).
 /// </remarks>
 public sealed partial class SecomTrustAnchors
 {
@@ -96,10 +96,18 @@ public sealed partial class SecomTrustAnchors
     /// the issuing intermediate, by SHA-1 or SHA-256.
     /// </param>
     /// <returns>The name of the root reached, or <see langword="null"/> when the signer is not trusted.</returns>
-    public string? FindAnchor(X509Certificate2 signer, IEnumerable<X509Certificate2> carried, string? statedThumbprint)
+    public string? FindAnchor(X509Certificate2 signer, IEnumerable<X509Certificate2> carried, string? statedThumbprint) =>
+        FindAnchor(signer, carried, statedThumbprint, out _);
+
+    /// <summary>
+    /// <see cref="FindAnchor(X509Certificate2, IEnumerable{X509Certificate2}, string?)"/>,
+    /// also giving the chain reached (leaf first), for the revocation check.
+    /// </summary>
+    internal string? FindAnchor(X509Certificate2 signer, IEnumerable<X509Certificate2> carried, string? statedThumbprint, out X509Certificate2[]? chain)
     {
         ArgumentNullException.ThrowIfNull(signer);
         ArgumentNullException.ThrowIfNull(carried);
+        chain = null;
         if (BuildChain(signer, carried) is not { } elements)
             return null;
 
@@ -108,6 +116,7 @@ public sealed partial class SecomTrustAnchors
         if (statedThumbprint is { Length: > 0 } stated && !authorities.Any(c => Names(c, stated.Trim())))
             return null;
 
+        chain = elements;
         return AnchorNamed(authorities[^1]);
     }
 
@@ -125,16 +134,25 @@ public sealed partial class SecomTrustAnchors
     /// reaches none), and whether a certificate in that chain is outside its
     /// validity period at <paramref name="at"/>.
     /// </returns>
-    public (string? Anchor, bool Expired) FindServerAnchor(X509Certificate2 server, IEnumerable<X509Certificate2> presented, DateTimeOffset at)
+    public (string? Anchor, bool Expired) FindServerAnchor(X509Certificate2 server, IEnumerable<X509Certificate2> presented, DateTimeOffset at) =>
+        FindServerAnchor(server, presented, at, out _);
+
+    /// <summary>
+    /// <see cref="FindServerAnchor(X509Certificate2, IEnumerable{X509Certificate2}, DateTimeOffset)"/>,
+    /// also giving the chain reached (leaf first), for the revocation check.
+    /// </summary>
+    internal (string? Anchor, bool Expired) FindServerAnchor(
+        X509Certificate2 server, IEnumerable<X509Certificate2> presented, DateTimeOffset at, out X509Certificate2[]? chain)
     {
         ArgumentNullException.ThrowIfNull(server);
         ArgumentNullException.ThrowIfNull(presented);
-        if (BuildChain(server, presented) is not { } elements)
+        chain = BuildChain(server, presented);
+        if (chain is null)
             return (null, false);
 
         var utc = at.UtcDateTime;
-        var expired = elements.Any(c => utc < c.NotBefore.ToUniversalTime() || utc > c.NotAfter.ToUniversalTime());
-        return (AnchorNamed(elements[^1]), expired);
+        var expired = chain.Any(c => utc < c.NotBefore.ToUniversalTime() || utc > c.NotAfter.ToUniversalTime());
+        return (AnchorNamed(chain[^1]), expired);
     }
 
     /// <summary>

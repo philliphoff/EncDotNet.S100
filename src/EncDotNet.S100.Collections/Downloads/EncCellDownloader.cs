@@ -128,6 +128,15 @@ public sealed partial class EncCellDownloader
     public SecomTrustAnchors TrustAnchors { get; init; } = SecomTrustAnchors.BuiltIn;
 
     /// <summary>
+    /// Checks a trusted SECOM signer for revocation (issue #833); <see langword="null"/>
+    /// skips the check. A download fetches the CRLs it needs. Reading a record
+    /// judges revocation again from CRLs already held
+    /// (<see cref="SecomRevocation.CacheOnly"/>), unless the caller asks to fetch
+    /// them, and a signer once found revoked stays revoked.
+    /// </summary>
+    public SecomRevocation? Revocation { get; init; }
+
+    /// <summary>
     /// The client SECOM objects (<see cref="RemoteEnvelope.Secom"/>) are
     /// downloaded with: one whose handler trusts MCP-issued server certificates
     /// (<see cref="SecomServerTrust.CreateHandler"/>, #829). Other downloads,
@@ -148,7 +157,14 @@ public sealed partial class EncCellDownloader
     /// package name), or <see langword="null"/> when it has not been
     /// downloaded (or its record is unreadable or its files are gone).
     /// </summary>
-    public DownloadedCell? TryGetDownloaded(string cellName)
+    public DownloadedCell? TryGetDownloaded(string cellName) => TryGetDownloaded(cellName, fetchRevocation: false);
+
+    /// <summary>
+    /// <see cref="TryGetDownloaded(string)"/>, fetching the CRLs a SECOM
+    /// signer's revocation check needs when <paramref name="fetchRevocation"/>
+    /// (index runs, off the UI thread).
+    /// </summary>
+    internal DownloadedCell? TryGetDownloaded(string cellName, bool fetchRevocation)
     {
         ArgumentException.ThrowIfNullOrEmpty(cellName);
 
@@ -186,7 +202,7 @@ public sealed partial class EncCellDownloader
             {
                 IsPackage = record.IsPackage,
                 Datasets = datasets,
-                Signature = record.Signature?.ToCheck(TrustAnchors, _time.GetUtcNow()),
+                Signature = record.Signature?.ToCheck(TrustAnchors, fetchRevocation ? Revocation : Revocation?.CacheOnly, _time.GetUtcNow()),
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -262,7 +278,7 @@ public sealed partial class EncCellDownloader
             SignatureRecord? signature = null;
             if (isSecom)
             {
-                signature = UnwrapSecom(item, remote, zipPath, staging, TrustAnchors, _time.GetUtcNow());
+                signature = UnwrapSecom(item, remote, zipPath, staging, TrustAnchors, Revocation, _time.GetUtcNow());
             }
             else if (IsZip(zipPath))
             {
@@ -348,7 +364,13 @@ public sealed partial class EncCellDownloader
     /// the item's layout, in <paramref name="staging"/>, after checking its signature.
     /// </summary>
     private static SignatureRecord UnwrapSecom(
-        CollectionItem item, RemoteItemLocation remote, string responsePath, string staging, SecomTrustAnchors trust, DateTimeOffset now)
+        CollectionItem item,
+        RemoteItemLocation remote,
+        string responsePath,
+        string staging,
+        SecomTrustAnchors trust,
+        SecomRevocation? revocation,
+        DateTimeOffset now)
     {
         if (remote.Layout is not { UpdateRelativePaths.Count: 0, CatalogueRelativePath: null } layout || !IsSafeName(layout.RelativePath))
             throw new InvalidDataException($"The SECOM object {item.Name} has no single-file layout to save its data as.");
@@ -360,7 +382,7 @@ public sealed partial class EncCellDownloader
         if (secom.Metadata is { DataProtection: true })
             throw new InvalidDataException($"The SECOM object {item.Name} is encrypted; reading it needs a certificate, which is not supported yet.");
 
-        var signature = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata, trust, now);
+        var signature = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata, trust, now, revocation);
         if (signature.Status == SecomSignatureStatus.Invalid)
             throw new InvalidDataException($"The signature of the SECOM object {item.Name} does not match its data.");
 
@@ -595,7 +617,8 @@ public sealed partial class EncCellDownloader
     /// The signature check of a SECOM download, with the certificates the
     /// object carried so its signer can be judged again on read (#823).
     /// Records written before #823 have no certificates and keep their
-    /// recorded trust (none) until the object is downloaded again.
+    /// recorded trust (none) until the object is downloaded again; records
+    /// written before #833 have no <see cref="Revocation"/>.
     /// </summary>
     private sealed record SignatureRecord(
         string Status,
@@ -605,22 +628,30 @@ public sealed partial class EncCellDownloader
         string? Detail,
         string? TrustAnchor = null,
         IReadOnlyList<string>? Certificates = null,
-        string? RootThumbprint = null)
+        string? RootThumbprint = null,
+        string? Revocation = null)
     {
         public static SignatureRecord From(SecomSignatureCheck check, SecomExchangeMetadata? metadata) => new(
             check.Status.ToString(), check.Signer, check.SignerTrusted, check.SignerExpired, check.Detail, check.TrustAnchor,
             metadata is { PublicCertificates.Count: > 0 } ? metadata.PublicCertificates : null,
-            metadata?.RootCertificateThumbprint);
+            metadata?.RootCertificateThumbprint,
+            check.SignerRevocation.ToString());
 
-        public SecomSignatureCheck ToCheck(SecomTrustAnchors trust, DateTimeOffset now)
+        public SecomSignatureCheck ToCheck(SecomTrustAnchors trust, SecomRevocation? revocation, DateTimeOffset now)
         {
+            var recorded = Enum.TryParse<SecomRevocationStatus>(Revocation, out var revoked) ? revoked : SecomRevocationStatus.NotChecked;
             var check = new SecomSignatureCheck(
                 Enum.TryParse<SecomSignatureStatus>(Status, out var status) ? status : SecomSignatureStatus.Unsigned,
                 Signer, SignerTrusted, SignerExpired, Detail)
-            { TrustAnchor = TrustAnchor };
-            return Certificates is { Count: > 0 } certificates
-                ? SecomSignatureVerifier.Recheck(check, certificates, RootThumbprint, trust, now)
-                : check;
+            { TrustAnchor = TrustAnchor, SignerRevocation = recorded };
+            if (Certificates is not { Count: > 0 } certificates)
+                return check;
+
+            // Revocation is permanent: a signer found revoked stays so when its CRL is not at hand now.
+            var rechecked = SecomSignatureVerifier.Recheck(check, certificates, RootThumbprint, trust, now, revocation);
+            return recorded == SecomRevocationStatus.Revoked && rechecked is { SignerTrusted: true, SignerRevocation: SecomRevocationStatus.NotChecked }
+                ? rechecked with { SignerRevocation = SecomRevocationStatus.Revoked }
+                : rechecked;
         }
     }
 

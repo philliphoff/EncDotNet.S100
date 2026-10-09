@@ -290,6 +290,21 @@ public sealed class SecomTests : IDisposable
         Assert.Equal(requests, server.Requests.Count);
     }
 
+    [Theory]
+    [InlineData("S-412", ".gml")]
+    [InlineData("S-124", ".gml")]
+    [InlineData("S-104", ".h5")]
+    [InlineData("S-101", ".000")]
+    public async Task Objects_save_with_their_products_usual_extension(string product, string extension)
+    {
+        var indexer = new SecomSourceIndexer(new HttpClient(new FakeSecomServer([Summary(1, product)])));
+
+        var index = await indexer.IndexAsync(Source(), null, Ct);
+
+        var remote = Assert.IsType<RemoteItemLocation>(Assert.Single(index.Items).Location);
+        Assert.Equal("NW-0001-26" + extension, remote.Layout!.RelativePath);
+    }
+
     [Fact]
     public async Task Products_filter_on_this_side_and_exchange_sets_are_listed_only()
     {
@@ -388,7 +403,7 @@ public sealed class SecomTests : IDisposable
         var trusting = new EncCellDownloader(new HttpClient(server), downloader.Root) { TrustAnchors = Anchors(signer) };
         var reread = trusting.TryGetDownloaded(item.Name)!.Signature!;
         Assert.True(reread.SignerTrusted);
-        Assert.Equal("valid · trusted (test)", SecomSourceIndexer.Describe(reread));
+        Assert.Equal("valid · trusted (test) · revocation not checked", SecomSourceIndexer.Describe(reread));
 
         // A record written before #823 carries no certificates and keeps its recorded trust.
         var recordPath = Path.Combine(downloader.Root, item.Name, EncCellDownloader.RecordFileName);

@@ -2413,20 +2413,11 @@
   <data name="Toast_AddToLibraryAction" xml:space="preserve">
     <value>Add to Library</value>
   </data>
-  <data name="Library_AddTitle" xml:space="preserve">
-    <value>Add to Library</value>
-  </data>
-  <data name="Library_AddNoaaTitle" xml:space="preserve">
-    <value>Add NOAA ENC Feed</value>
-  </data>
   <data name="Library_AddNote" xml:space="preserve">
     <value>Only information about the datasets is indexed; nothing is loaded or downloaded, and the files stay where they are.</value>
   </data>
   <data name="Library_AddTo" xml:space="preserve">
     <value>Add to</value>
-  </data>
-  <data name="Library_AndMoreFormat" xml:space="preserve">
-    <value>{0} and {1} more</value>
   </data>
   <data name="Library_Availability_Listed" xml:space="preserve">
     <value>Listed</value>
@@ -2446,9 +2437,6 @@
   <data name="Library_CollectionNameWatermark" xml:space="preserve">
     <value>Collection name</value>
   </data>
-  <data name="Library_DistrictFormat" xml:space="preserve">
-    <value>District {0}</value>
-  </data>
   <data name="Library_EditionFormat" xml:space="preserve">
     <value>Ed {0}</value>
   </data>
@@ -2463,9 +2451,6 @@
   </data>
   <data name="Library_ExistingCollection" xml:space="preserve">
     <value>Existing collection</value>
-  </data>
-  <data name="Library_FacetDetailFormat" xml:space="preserve">
-    <value>{0:N0} datasets · {1}</value>
   </data>
   <data name="Library_Field_Title" xml:space="preserve">
     <value>Title</value>
@@ -2491,29 +2476,11 @@
   <data name="Library_NoaaClearSelection" xml:space="preserve">
     <value>Clear</value>
   </data>
-  <data name="Library_NoaaDistricts" xml:space="preserve">
-    <value>Coast Guard districts</value>
-  </data>
-  <data name="Library_NoaaRegions" xml:space="preserve">
-    <value>Regions</value>
-  </data>
-  <data name="Library_NoaaSelectionAllFormat" xml:space="preserve">
-    <value>All {0:N0} datasets · {1}</value>
-  </data>
-  <data name="Library_NoaaSelectionFormat" xml:space="preserve">
-    <value>{0:N0} datasets · {1}</value>
-  </data>
-  <data name="Library_NoaaStates" xml:space="preserve">
-    <value>States</value>
-  </data>
   <data name="Library_NotForNavigation" xml:space="preserve">
     <value>Not for navigation</value>
   </data>
   <data name="Library_ProblemsFormat" xml:space="preserve">
     <value>{0:N0} problems while indexing</value>
-  </data>
-  <data name="Library_RegionFormat" xml:space="preserve">
-    <value>Region {0}</value>
   </data>
   <data name="Library_SelectItemPlaceholder" xml:space="preserve">
     <value>Select a dataset to see its details</value>
@@ -2583,12 +2550,6 @@
   </data>
   <data name="Toast_LibraryDownloadedFormat" xml:space="preserve">
     <value>{0:N0} downloaded, {1:N0} failed.</value>
-  </data>
-  <data name="Library_UsaceRivers" xml:space="preserve">
-    <value>Rivers</value>
-  </data>
-  <data name="Library_AddUsaceTitle" xml:space="preserve">
-    <value>Add USACE Inland ENC Feed</value>
   </data>
   <data name="Menu_AddLibraryOnlineCatalogue" xml:space="preserve">
     <value>Browse online catalogues…</value>
@@ -3046,15 +3007,6 @@
   <data name="Wizard_SelectAtLeastOne" xml:space="preserve">
     <value>Select at least one</value>
   </data>
-  <data name="Wizard_TickAtLeastOne" xml:space="preserve">
-    <value>Tick at least one item, or choose Everything.</value>
-  </data>
-  <data name="Wizard_KeptPicksFormat" xml:space="preserve">
-    <value>Everything is included; your {0:N0} picks are kept if you switch back</value>
-  </data>
-  <data name="Wizard_EverythingCellsFormat" xml:space="preserve">
-    <value>{0:N0} cells · {1}</value>
-  </data>
   <data name="Wizard_EverythingDownloadsFormat" xml:space="preserve">
     <value>{0:N0} downloads · sizes unknown</value>
   </data>
@@ -3084,9 +3036,6 @@
   </data>
   <data name="Wizard_StaleSuffix" xml:space="preserve">
     <value> · over a year old; may no longer be maintained</value>
-  </data>
-  <data name="Wizard_DatedFormat" xml:space="preserve">
-    <value>{0} · catalogue dated {1}</value>
   </data>
   <data name="Wizard_FilterDownloads" xml:space="preserve">
     <value>Filter downloads</value>
@@ -3293,6 +3242,13 @@
   <data name="Library_Reachability_WrongHostExplanation" xml:space="preserve">
     <value>This service's TLS certificate does not name its address, so the connection was refused.</value>
   </data>
+  <data name="Library_Reachability_RevokedServerExplanationFormat" xml:space="preserve">
+    <value>This service's TLS certificate from {0} has been revoked, so the connection was refused.</value>
+    <comment>{0}: the trust anchor's name, e.g. "MCP MCC"</comment>
+  </data>
+  <data name="Library_Reachability_RevocationNotCheckedExplanation" xml:space="preserve">
+    <value>Whether it has been revoked could not be checked.</value>
+  </data>
   <data name="Library_Reachability_ServerAnchorFormat" xml:space="preserve">
     <value>Its server certificate is from {0}.</value>
     <comment>{0}: the trust anchor's name, e.g. "MCP MCC" (Maritime Connectivity Platform)</comment>
@@ -3347,12 +3303,6 @@
   </data>
   <data name="FilePicker_ManifestType" xml:space="preserve">
     <value>Collection manifest</value>
-  </data>
-  <data name="Manifest_DialogTitle" xml:space="preserve">
-    <value>Add collection manifest</value>
-  </data>
-  <data name="Manifest_ChooseGroupsTitle" xml:space="preserve">
-    <value>Choose groups</value>
   </data>
   <data name="Manifest_Change" xml:space="preserve">
     <value>Change…</value>
@@ -3509,9 +3459,6 @@
   <data name="Wizard_AreasTilesFormat" xml:space="preserve">
     <value>{0:N0} areas · {1}</value>
     <comment>{1}: Wizard_TilesSizeFormat or similar</comment>
-  </data>
-  <data name="Wizard_NothingDownloadsFormat" xml:space="preserve">
-    <value>{0} · nothing downloads yet</value>
   </data>
   <data name="Wizard_Review_Use" xml:space="preserve">
     <value>Use</value>

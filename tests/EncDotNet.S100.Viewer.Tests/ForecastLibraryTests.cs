@@ -199,7 +199,7 @@ public sealed class ForecastLibraryTests : IDisposable
             loadForecastModels: (uri, models, _) => Task.FromResult(Summaries(models)));
 
         vm.Initialize(known, targetCollectionId: null);
-        Assert.Equal(AddToLibraryKind.S100Forecast, vm.Kind);
+        Assert.Equal(LibrarySourceKind.S100Forecast, vm.Kind);
         Assert.True(vm.IsS100Forecast);
         Assert.True(vm.HasReviewUse);
         Assert.Contains("Refresh looks for a newer run", vm.ReviewUpdates, StringComparison.Ordinal);

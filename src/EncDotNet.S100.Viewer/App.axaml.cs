@@ -442,9 +442,15 @@ public partial class App : Application
         // SECOM requests trust MCP-issued server certificates (#829); every
         // SECOM client below gets a handler from this one validator, and no
         // other client does.
+        // Revocation of MCP-issued certificates (#833): CRLs are fetched over
+        // plain HTTP and kept with the feed cache; signers and servers share them.
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Secom.SecomRevocation(
+            new System.Net.Http.HttpClient(),
+            sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         services.AddSingleton(sp =>
         {
-            var trust = new EncDotNet.S100.Collections.Secom.SecomServerTrust();
+            var trust = new EncDotNet.S100.Collections.Secom.SecomServerTrust(
+                revocation: sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>());
             // An MCP identity for this run only (#832), until the keys & certificates UX holds one.
             if (StartupOptions?.SecomIdentity is { Length: > 0 } identityPath)
             {
@@ -473,6 +479,7 @@ public partial class App : Application
                 paths.DownloadsDirectory,
                 (path, _) => metadata.TryRead(path))
             {
+                Revocation = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(),
                 // SECOM 2.0 services that list only through signed requests (#838).
                 Signer = trust.CreateSigner,
             };
@@ -528,7 +535,8 @@ public partial class App : Application
                 Timeout = TimeSpan.FromMinutes(10),
             };
             return new Library.LibraryDownloadService(
-                EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(http, downloads, secom, trust.CreateSigner),
+                EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(
+                    http, downloads, secom, sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(), trust.CreateSigner),
                 sp.GetService<Services.Notifications.INotificationService>());
         });
         services.AddSingleton(sp =>

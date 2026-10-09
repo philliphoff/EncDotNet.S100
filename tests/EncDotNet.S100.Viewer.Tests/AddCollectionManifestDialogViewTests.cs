@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
 
@@ -33,12 +34,12 @@ public sealed class AddCollectionManifestDialogViewTests
 
         // Read the manifests off the UI thread; the views are built on it below.
         var adding = new AddToLibraryDialogViewModel(library, null);
-        adding.Initialize(AddToLibraryKind.LocalManifest, good, targetCollectionId: null);
+        adding.Initialize(LibrarySourceKind.LocalManifest, good, targetCollectionId: null);
         await adding.LoadCatalogAsync();
         adding.Groups[1].IsSelected = true;
 
         var broken = new AddToLibraryDialogViewModel(library, null);
-        broken.Initialize(AddToLibraryKind.LocalManifest, bad, targetCollectionId: null);
+        broken.Initialize(LibrarySourceKind.LocalManifest, bad, targetCollectionId: null);
         await broken.LoadCatalogAsync();
         Assert.True(broken.HasManifestProblems);
 
@@ -74,7 +75,7 @@ public sealed class AddCollectionManifestDialogViewTests
         File.WriteAllText(path, $$"""{ "format": "encdotnet-s100-collection", "version": 1, "groups": [ {{groups}} ] }""");
 
         var scope = new AddToLibraryDialogViewModel(library, null);
-        scope.Initialize(AddToLibraryKind.LocalManifest, path, targetCollectionId: null);
+        scope.Initialize(LibrarySourceKind.LocalManifest, path, targetCollectionId: null);
         await scope.LoadCatalogAsync();
 
         var view = new AddCollectionManifestDialogView { DataContext = new AddCollectionManifestDialogViewModel(scope) };

@@ -228,8 +228,9 @@ public sealed record SecomServiceInfo(
     [property: Description("The area it covers, as [south, west, north, east], or null.")] double[]? Bounds,
     [property: Description("With probe: 'Open' (readable without a certificate), 'OpenWithCertificate' (readable with the identity from set_secom_identity), 'NeedsCertificate' (no identity set), 'CertificateRefused' (the identity was presented and refused), 'NeedsSecom2Search' (lists only through SECOM 2.0 signed requests: no identity set, or the signed request was not accepted), 'UntrustedServer' (TLS certificate refused) or 'Unreachable'; otherwise null.")] string? Reachability,
     [property: Description("With probe: what the service answered, or null.")] string? Detail,
-    [property: Description("With probe: the decision on the server's TLS certificate — 'SystemTrusted', 'AnchorTrusted' (issued under a SECOM trust anchor such as MCP MCC), 'NotTrusted', 'Expired' or 'WrongHost'; null when unknown.")] string? ServerCertificate = null,
-    [property: Description("With probe: the trust anchor the server certificate chains to (e.g. 'MCP MCC'), or null.")] string? ServerCertificateAnchor = null);
+    [property: Description("With probe: the decision on the server's TLS certificate — 'SystemTrusted', 'AnchorTrusted' (issued under a SECOM trust anchor such as MCP MCC), 'NotTrusted', 'Expired', 'WrongHost' or 'Revoked' (listed on its CA's CRL); null when unknown.")] string? ServerCertificate = null,
+    [property: Description("With probe: the trust anchor the server certificate chains to (e.g. 'MCP MCC'), or null.")] string? ServerCertificateAnchor = null,
+    [property: Description("With probe, for an 'AnchorTrusted' certificate: 'NotRevoked' (checked against its CAs' CRLs) or 'NotChecked' (no current CRL could be read; the connection is still allowed); otherwise null.")] string? ServerCertificateRevocation = null);
 
 /// <summary>The MCP identity SECOM requests present (MCP <c>set_secom_identity</c>, #832).</summary>
 public sealed record SecomIdentityDto(
@@ -387,7 +388,10 @@ public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.Secom
                 probes.TryGetValue(s.InstanceId, out var r) ? r.Reachability.ToString() : null,
                 probes.TryGetValue(s.InstanceId, out var d) ? d.Detail : null,
                 probes.TryGetValue(s.InstanceId, out var t) ? t.ServerTrust?.Outcome.ToString() : null,
-                probes.TryGetValue(s.InstanceId, out var a) ? a.ServerTrust?.Anchor : null))],
+                probes.TryGetValue(s.InstanceId, out var a) ? a.ServerTrust?.Anchor : null,
+                probes.TryGetValue(s.InstanceId, out var v) && v.ServerTrust is { Outcome: EncDotNet.S100.Collections.Secom.SecomServerTrustOutcome.AnchorTrusted } anchored
+                    ? anchored.Revocation.ToString()
+                    : null))],
             listing.Listed,
             listing.Listed - services.Length,
             listing.FetchedAt,
