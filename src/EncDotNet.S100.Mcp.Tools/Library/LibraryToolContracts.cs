@@ -368,4 +368,4 @@ public sealed record LibraryDownloadInfo(
 [Description("Raised when a Library change cannot be done as asked; the reason says why (e.g. the catalogue failed to load, nothing is selected, or a download exceeds maxBytes).")]
 public sealed record LibraryChangeRejected(
     [property: Description("Why the change was not made.")] string Reason)
-    : ToolError("library_change_rejected", $"The Library was not changed: {Reason}.");
+    : ToolError("library_change_rejected", $"The Library was not changed: {Reason?.TrimEnd('.')}.");

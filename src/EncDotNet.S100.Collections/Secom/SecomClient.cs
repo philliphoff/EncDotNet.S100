@@ -345,7 +345,7 @@ public sealed class SecomClient
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException(
-                string.Create(CultureInfo.InvariantCulture, $"SECOM {uri.AbsolutePath} answered {(int)response.StatusCode} {response.ReasonPhrase}."),
+                string.Create(CultureInfo.InvariantCulture, $"SECOM {uri.AbsolutePath} answered {Status(response)}."),
                 null,
                 response.StatusCode);
         }
@@ -378,7 +378,7 @@ public sealed class SecomClient
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException(
-                string.Create(CultureInfo.InvariantCulture, $"SECOM POST {uri.AbsolutePath} answered {(int)response.StatusCode} {response.ReasonPhrase}."),
+                string.Create(CultureInfo.InvariantCulture, $"SECOM POST {uri.AbsolutePath} answered {Status(response)}."),
                 null,
                 response.StatusCode);
         }
@@ -399,6 +399,12 @@ public sealed class SecomClient
             return read(document.RootElement);
         }
     }
+
+    /// <summary>"404 Not Found", or just "404" when the service sends no reason phrase.</summary>
+    private static string Status(HttpResponseMessage response) =>
+        string.IsNullOrWhiteSpace(response.ReasonPhrase)
+            ? ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)
+            : string.Create(CultureInfo.InvariantCulture, $"{(int)response.StatusCode} {response.ReasonPhrase}");
 
     private static HttpRequestMessage PostRequest(Uri uri, System.Text.Json.Nodes.JsonObject body)
     {
