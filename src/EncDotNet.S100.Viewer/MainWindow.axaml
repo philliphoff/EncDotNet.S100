@@ -453,7 +453,7 @@
         <Grid x:Name="ContentGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600"
-                                  bh:CollapsibleColumn.IsVisible="{Binding IsLeftDockOpen}"
+                                  bh:CollapsibleColumn.IsVisible="{Binding IsLeftDockShown}"
                                   bh:CollapsibleColumn.ExpandedWidth="320"
                                   bh:CollapsibleColumn.MinWidthWhenVisible="200"
                                   bh:CollapsibleColumn.MaxWidthWhenVisible="600"
@@ -473,15 +473,15 @@
                  No close button — content swaps via the activity bar. -->
             <views:ApplicationPanel Grid.Column="0"
                                     Title="{Binding LeftDockTitle}"
-                                    Content="{Binding SelectedLeftTab}"
-                                    IsVisible="{Binding IsLeftDockOpen}" />
+                                    Content="{Binding LeftDockContent}"
+                                    IsVisible="{Binding IsLeftDockShown}" />
 
             <!-- Resize grip between pane and map -->
             <GridSplitter Grid.Column="1"
                           Classes="PaneSplitter"
                           Width="4"
                           ResizeDirection="Columns"
-                          IsVisible="{Binding IsLeftDockOpen}"
+                          IsVisible="{Binding IsLeftDockShown}"
                           bh:HoverDelay.DelayMilliseconds="500"
                           Name="PaneSplitter" />
 
@@ -975,6 +975,28 @@
                                     CloseCommandParameter="Right"
                                     CloseButtonToolTip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
                                     IsVisible="{Binding IsRightDockOpen}" />
+
+            <!--
+                Full-content panel (#845): a left-dock tab that fills the
+                content area (Settings) is shown here, over the map and the
+                docks, instead of in the left dock's column. The map stays
+                alive underneath. Closing it returns to the side panel it
+                covered.
+            -->
+            <Border Grid.Column="0"
+                    Grid.ColumnSpan="5"
+                    ZIndex="10"
+                    IsVisible="{Binding IsContentPanelOpen}">
+                <Border.Background>
+                    <SolidColorBrush Color="{DynamicResource WindowBackgroundColor}" />
+                </Border.Background>
+                <views:ApplicationPanel Title="{Binding LeftDockTitle}"
+                                        Content="{Binding ContentPanelTab}"
+                                        ShowCloseButton="True"
+                                        CloseCommand="{Binding CloseDockCommand}"
+                                        CloseCommandParameter="Left"
+                                        CloseButtonToolTip="{x:Static loc:Strings.Tooltip_CloseSettings}" />
+            </Border>
         </Grid>
     </DockPanel>
     <notify:NotificationHost x:Name="NotificationHost"

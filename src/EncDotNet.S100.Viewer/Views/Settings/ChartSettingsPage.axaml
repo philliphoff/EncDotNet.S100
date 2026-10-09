@@ -1,0 +1,188 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:viewer="using:EncDotNet.S100.Viewer"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.Settings.ChartSettingsPage"
+             x:DataType="vm:SettingsViewModel">
+
+    <!-- Settings → Chart display: basemap, scale indicators and mariner settings (#845). -->
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+        <StackPanel Classes="settingsPage">
+            <StackPanel Spacing="3">
+                <TextBlock Classes="settingsPageTitle" Text="{x:Static loc:Strings.Settings_Category_Chart}" />
+                <TextBlock Classes="settingsPageHelp" Text="{x:Static loc:Strings.Settings_Category_Chart_Help}" />
+            </StackPanel>
+
+            <TextBlock Classes="settingsSection" Text="{x:Static loc:Strings.Settings_MapSection}" />
+            <TextBlock Classes="settingsHelp" Text="{x:Static loc:Strings.Settings_MapSection_Help}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_BasemapEnabled}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_BasemapEnabled}" />
+                <ComboBox Grid.Column="1" Classes="setting"
+                          AutomationProperties.AutomationId="Settings.BasemapMode"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_BasemapEnabled}"
+                          ItemsSource="{Binding AvailableBasemapModes}"
+                          SelectedItem="{Binding SelectedBasemapMode}"
+                          MinWidth="160">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static viewer:BasemapModeNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowOutOfScaleExtentIndicators}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_ShowOutOfScaleExtentIndicators}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShowOutOfScaleExtentIndicators}"  AutomationProperties.AutomationId="Settings.ShowOutOfScaleExtentIndicators" AutomationProperties.Name="{x:Static loc:Strings.Settings_ShowOutOfScaleExtentIndicators}"/>
+            </Grid>
+
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowOverscaleIndication}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_ShowOverscaleIndication}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShowOverscaleIndication}"  AutomationProperties.AutomationId="Settings.ShowOverscaleIndication" AutomationProperties.Name="{x:Static loc:Strings.Settings_ShowOverscaleIndication}"/>
+            </Grid>
+
+            <Separator Margin="0,8,0,0" />
+            <TextBlock Classes="settingsSection" Text="{x:Static loc:Strings.Settings_MarinerSection}" />
+            <TextBlock Classes="settingsHelp" Text="{x:Static loc:Strings.Settings_MarinerSection_Help}" />
+            <!-- Depth Unit -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_DepthUnit}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_DepthUnit_Help}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+                <ComboBox ItemsSource="{Binding AvailableDepthUnits}"
+                          AutomationProperties.AutomationId="Settings.DepthUnit"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_DepthUnit}"
+                          SelectedItem="{Binding SelectedDepthUnit}"
+                          ToolTip.Tip="{x:Static loc:Strings.Settings_DepthUnit_Help}"
+                          MinWidth="180"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={x:Static viewer:DepthUnitNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- Safety Contour -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_SafetyContour}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBox Text="{Binding SafetyContourDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         AutomationProperties.AutomationId="Settings.SafetyContour"
+                         AutomationProperties.Name="{x:Static loc:Strings.Settings_SafetyContour}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_SafetyContour}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <!-- Safety Depth -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_SafetyDepth}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBox Text="{Binding SafetyDepthDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         AutomationProperties.AutomationId="Settings.SafetyDepth"
+                         AutomationProperties.Name="{x:Static loc:Strings.Settings_SafetyDepth}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_SafetyDepth}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <!-- Shallow Contour -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_ShallowContour}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBox Text="{Binding ShallowContourDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         AutomationProperties.AutomationId="Settings.ShallowContour"
+                         AutomationProperties.Name="{x:Static loc:Strings.Settings_ShallowContour}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShallowContour}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <!-- Deep Contour -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_DeepContour}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBox Text="{Binding DeepContourDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         AutomationProperties.AutomationId="Settings.DeepContour"
+                         AutomationProperties.Name="{x:Static loc:Strings.Settings_DeepContour}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DeepContour}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <!-- S-101 toggles -->
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_FourShades}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_FourShades}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding FourShades}"  AutomationProperties.AutomationId="Settings.FourShades" AutomationProperties.Name="{x:Static loc:Strings.Settings_FourShades}"/>
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShallowWaterDangers}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_ShallowWaterDangers}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ShallowWaterDangers}"  AutomationProperties.AutomationId="Settings.ShallowWaterDangers" AutomationProperties.Name="{x:Static loc:Strings.Settings_ShallowWaterDangers}"/>
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_PlainBoundaries}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_PlainBoundaries}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding PlainBoundaries}"  AutomationProperties.AutomationId="Settings.PlainBoundaries" AutomationProperties.Name="{x:Static loc:Strings.Settings_PlainBoundaries}"/>
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_SimplifiedSymbols}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_SimplifiedSymbols}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding SimplifiedSymbols}"  AutomationProperties.AutomationId="Settings.SimplifiedSymbols" AutomationProperties.Name="{x:Static loc:Strings.Settings_SimplifiedSymbols}"/>
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_FullLightLines}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_FullLightLines}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding FullLightLines}"  AutomationProperties.AutomationId="Settings.FullLightLines" AutomationProperties.Name="{x:Static loc:Strings.Settings_FullLightLines}"/>
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_RadarOverlay}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_RadarOverlay}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding RadarOverlay}"  AutomationProperties.AutomationId="Settings.RadarOverlay" AutomationProperties.Name="{x:Static loc:Strings.Settings_RadarOverlay}"/>
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_IgnoreScaleMinimum}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IgnoreScaleMinimum}"  AutomationProperties.AutomationId="Settings.IgnoreScaleMinimum" AutomationProperties.Name="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}"/>
+            </Grid>
+
+            <!-- National Language -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_NationalLanguage}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <ComboBox ItemsSource="{Binding AvailableLanguages}"
+                          AutomationProperties.AutomationId="Settings.NationalLanguage"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_NationalLanguage}"
+                          SelectedValue="{Binding NationalLanguage}"
+                          SelectedValueBinding="{Binding Code}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_NationalLanguage}"
+                          MinWidth="180"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

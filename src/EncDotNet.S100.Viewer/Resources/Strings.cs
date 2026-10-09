@@ -352,7 +352,6 @@ internal static class Strings
     public static string Pick_EggCode_Role_SnowDepth => Get(nameof(Pick_EggCode_Role_SnowDepth));
 
     // Settings
-    public static string Settings_Heading => Get(nameof(Settings_Heading));
     public static string Settings_AccentColor => Get(nameof(Settings_AccentColor));
     public static string Settings_ColorProfile => Get(nameof(Settings_ColorProfile));
     public static string Settings_ColorProfile_Help => Get(nameof(Settings_ColorProfile_Help));
@@ -1475,4 +1474,18 @@ internal static class Strings
     public static string Library_Pairing_Bathymetry => Get(nameof(Library_Pairing_Bathymetry));
     public static string Library_Pairing_SameCell => Get(nameof(Library_Pairing_SameCell));
     public static string Library_Pairing_Get => Get(nameof(Library_Pairing_Get));
+    public static string Tooltip_CloseSettings => Get(nameof(Tooltip_CloseSettings));
+    public static string Label_SettingsCategories => Get(nameof(Label_SettingsCategories));
+    public static string Settings_Category_General => Get(nameof(Settings_Category_General));
+    public static string Settings_Category_General_Help => Get(nameof(Settings_Category_General_Help));
+    public static string Settings_Category_Appearance => Get(nameof(Settings_Category_Appearance));
+    public static string Settings_Category_Appearance_Help => Get(nameof(Settings_Category_Appearance_Help));
+    public static string Settings_Category_Chart => Get(nameof(Settings_Category_Chart));
+    public static string Settings_Category_Chart_Help => Get(nameof(Settings_Category_Chart_Help));
+    public static string Settings_Category_Vessels => Get(nameof(Settings_Category_Vessels));
+    public static string Settings_Category_Vessels_Help => Get(nameof(Settings_Category_Vessels_Help));
+    public static string Settings_Category_Integrations => Get(nameof(Settings_Category_Integrations));
+    public static string Settings_Category_Integrations_Help => Get(nameof(Settings_Category_Integrations_Help));
+    public static string Settings_Category_Advanced => Get(nameof(Settings_Category_Advanced));
+    public static string Settings_Category_Advanced_Help => Get(nameof(Settings_Category_Advanced_Help));
 }

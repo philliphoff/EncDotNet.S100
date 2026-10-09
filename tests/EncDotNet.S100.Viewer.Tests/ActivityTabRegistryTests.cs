@@ -36,6 +36,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
         public bool PersistAsLastSelected { get; init; } = true;
         public TabDock Dock { get; init; } = TabDock.Left;
         public bool AutoOpenOnContentSignal { get; init; }
+        public bool FillsContent { get; init; }
 
         public Control CreateIcon() => new ContentControl();
         public bool IsVisible { get; init; } = true;
@@ -258,5 +259,78 @@ public sealed class ActivityTabRegistryTests : IDisposable
         vm.SelectDefaultTab();
 
         Assert.Same(alpha, vm.SelectedLeftTab);
+    }
+
+    [Fact]
+    public void A_full_content_tab_is_shown_across_the_content_area_not_in_the_dock()
+    {
+        var datasets = new FakeTab { Id = "Datasets", Order = 30 };
+        var settingsTab = new FakeTab { Id = "Settings", Order = 1000, PersistAsLastSelected = false, FillsContent = true };
+        var vm = CreateViewModel(new IActivityTab[] { datasets, settingsTab });
+        Assert.Same(datasets, vm.LeftDockContent);
+
+        vm.SelectTabCommand.Execute(settingsTab);
+
+        Assert.True(vm.IsContentPanelOpen);
+        Assert.False(vm.IsLeftDockShown);
+        Assert.Same(settingsTab, vm.ContentPanelTab);
+        Assert.Null(vm.LeftDockContent);
+        Assert.Equal("Settings", vm.SelectedLeftTabId);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Closing_a_full_content_tab_returns_to_the_panel_it_covered(bool dockWasOpen)
+    {
+        var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
+        var datasets = new FakeTab { Id = "Datasets", Order = 30 };
+        var search = new FakeTab { Id = "Search", Order = 60 };
+        var settingsTab = new FakeTab { Id = "Settings", Order = 1000, PersistAsLastSelected = false, FillsContent = true };
+        var vm = CreateViewModel(new IActivityTab[] { datasets, search, settingsTab }, settings);
+        vm.SelectTabCommand.Execute(search);
+        vm.IsLeftDockOpen = dockWasOpen;
+
+        vm.SelectTabCommand.Execute(settingsTab);
+        // A restart while Settings is open restores the covered panel's state.
+        Assert.Equal(dockWasOpen, settings.IsLeftDockOpen);
+        vm.SelectTabCommand.Execute(settingsTab); // the activity bar toggles it closed
+
+        Assert.False(vm.IsContentPanelOpen);
+        Assert.Same(search, vm.SelectedLeftTab);
+        Assert.Equal(dockWasOpen, vm.IsLeftDockOpen);
+        Assert.Equal(dockWasOpen, vm.IsLeftDockShown);
+        Assert.Equal(dockWasOpen, settings.IsLeftDockOpen);
+    }
+
+    [Fact]
+    public void The_close_button_of_a_full_content_tab_returns_to_the_covered_panel()
+    {
+        var datasets = new FakeTab { Id = "Datasets", Order = 30 };
+        var settingsTab = new FakeTab { Id = "Settings", Order = 1000, PersistAsLastSelected = false, FillsContent = true };
+        var vm = CreateViewModel(new IActivityTab[] { datasets, settingsTab });
+        vm.SelectTabCommand.Execute(settingsTab);
+
+        vm.CloseDockCommand.Execute("Left");
+
+        Assert.Same(datasets, vm.SelectedLeftTab);
+        Assert.True(vm.IsLeftDockShown);
+        Assert.Same(datasets, vm.LeftDockContent);
+    }
+
+    [Fact]
+    public void Choosing_another_tab_from_a_full_content_tab_shows_it_in_the_dock()
+    {
+        var datasets = new FakeTab { Id = "Datasets", Order = 30 };
+        var search = new FakeTab { Id = "Search", Order = 60 };
+        var settingsTab = new FakeTab { Id = "Settings", Order = 1000, PersistAsLastSelected = false, FillsContent = true };
+        var vm = CreateViewModel(new IActivityTab[] { datasets, search, settingsTab });
+        vm.SelectTabCommand.Execute(settingsTab);
+
+        vm.SelectTabCommand.Execute(search);
+
+        Assert.False(vm.IsContentPanelOpen);
+        Assert.Same(search, vm.LeftDockContent);
+        Assert.True(vm.IsLeftDockShown);
     }
 }

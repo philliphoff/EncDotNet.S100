@@ -96,10 +96,23 @@ internal sealed class MainViewModel : ViewModelBase
             var newValue = value ?? _selectedLeftTab;
             if (!ReferenceEquals(_selectedLeftTab, newValue))
             {
+                // Remember the side panel a full-content tab (Settings) covers,
+                // so closing it returns there rather than to a closed dock.
+                if (newValue is { FillsContent: true } && !IsContentPanelOpen)
+                {
+                    _coveredLeftTab = _selectedLeftTab;
+                    _coveredLeftDockOpen = _isLeftDockOpen;
+                }
+                else if (newValue is not { FillsContent: true })
+                {
+                    _coveredLeftTab = null;
+                }
+
                 _selectedLeftTab = newValue;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectedLeftTabId));
                 OnPropertyChanged(nameof(LeftDockTitle));
+                OnContentPanelChanged();
 
                 if (newValue is not null && newValue.PersistAsLastSelected)
                 {
@@ -190,12 +203,52 @@ internal sealed class MainViewModel : ViewModelBase
         get => _isLeftDockOpen;
         set
         {
+            // Closing a full-content tab (Settings) returns to the side panel
+            // it covered, open or closed as it was.
+            if (!value && IsContentPanelOpen && _coveredLeftTab is { } covered)
+            {
+                _coveredLeftTab = null;
+                SetLeftSelectionSystem(covered);
+                value = _coveredLeftDockOpen;
+            }
+
             if (SetProperty(ref _isLeftDockOpen, value) && _settingsInitialized)
             {
-                _settings.IsLeftDockOpen = value;
+                // A full-content tab is not a side panel: persist the state of
+                // the panel it covers, so a restart doesn't open the dock.
+                _settings.IsLeftDockOpen = IsContentPanelOpen ? _coveredLeftTab is not null && _coveredLeftDockOpen : value;
                 _settings.Save();
             }
+
+            OnContentPanelChanged();
         }
+    }
+
+    private IActivityTab? _coveredLeftTab;
+    private bool _coveredLeftDockOpen;
+
+    /// <summary>
+    /// True while a <see cref="IActivityTab.FillsContent"/> tab (Settings) is
+    /// selected and open: it is shown across the content area, not in the
+    /// left dock's column.
+    /// </summary>
+    public bool IsContentPanelOpen => _isLeftDockOpen && _selectedLeftTab is { FillsContent: true };
+
+    /// <summary>True when the left dock's column is shown (open, and not replaced by a full-content tab).</summary>
+    public bool IsLeftDockShown => _isLeftDockOpen && !IsContentPanelOpen;
+
+    /// <summary>The tab shown in the left dock's column, or <c>null</c> while a full-content tab is open.</summary>
+    public IActivityTab? LeftDockContent => IsContentPanelOpen ? null : _selectedLeftTab;
+
+    /// <summary>The full-content tab shown across the content area, or <c>null</c>.</summary>
+    public IActivityTab? ContentPanelTab => IsContentPanelOpen ? _selectedLeftTab : null;
+
+    private void OnContentPanelChanged()
+    {
+        OnPropertyChanged(nameof(IsContentPanelOpen));
+        OnPropertyChanged(nameof(IsLeftDockShown));
+        OnPropertyChanged(nameof(LeftDockContent));
+        OnPropertyChanged(nameof(ContentPanelTab));
     }
 
     private bool _isRightDockOpen;
@@ -553,6 +606,7 @@ internal sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedLeftTab));
         OnPropertyChanged(nameof(SelectedLeftTabId));
         OnPropertyChanged(nameof(LeftDockTitle));
+        OnContentPanelChanged();
     }
 
 

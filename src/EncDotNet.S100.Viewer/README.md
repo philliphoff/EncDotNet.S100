@@ -428,7 +428,7 @@ indicators* below).
 
 A Mapsui-backed map fills the centre of the window with a basemap
 underlay (bundled offline Natural Earth land by default; see
-**Settings → Map**). Standard pan / zoom gestures work
+**Settings → Chart display**). Standard pan / zoom gestures work
 out of the box (mouse wheel, trackpad, touch). A **scale bar** at the
 bottom of the map updates with the viewport and respects the
 mariner's distance-unit choice (metres / kilometres, feet, nautical
@@ -452,7 +452,7 @@ dataset is so you have a target to zoom in on (or double-click its row in
 the Datasets panel to fly straight to it). Zooming back in past the
 dataset's display-scale limit hides the border and restores its content.
 
-The indicators can be turned off via **Settings → Map → Out-of-scale
+The indicators can be turned off via **Settings → Chart display → Out-of-scale
 dataset outlines** (on by default). They have no effect when "ignore
 scale minima" is enabled, since datasets then never drop out on
 zoom-out.
@@ -544,8 +544,8 @@ shows:
   [S-100 Feature Catalogue eXaminer](https://s100examiner.com/) in
   your browser, so you can read the full FC definition. The links
   appear only for product specs the eXaminer hosts; they can be turned
-  off (or pointed at a mirror) under **Settings → S-100 Feature
-  Catalogue eXaminer**. The **Feature Catalogues** panel offers the
+  off (or pointed at a mirror) under **Settings → Integrations → S-100
+  Feature Catalogue eXaminer**. The **Feature Catalogues** panel offers the
   same catalogue-level link per built-in/loaded catalogue.
 - A **References** section listing every `xlink:href` the feature
   carries. Clicking a row resolves the reference through the same
@@ -592,7 +592,7 @@ across distinct features.
 A **Vessels** activity-bar panel lists the live AIS targets,
 nearest to the own ship first, in a master/detail layout. The
 panel's activity-bar icon is shown only while the AIS overlay is
-enabled (Settings → AIS); disabling the overlay hides the icon.
+enabled (Settings → Vessels → AIS overlay); disabling the overlay hides the icon.
 Each compact list row shows the vessel name, a ship-type pictogram
 tinted by class, its navigation state, and the range and bearing
 from the own ship. Selecting a row recentres the map on that
@@ -620,7 +620,7 @@ snap-back). Engaging the helm hides the followed target and
 auto-selects the own-ship row so the release control stays reachable.
 
 Range and bearing are shown only when the own-ship overlay is
-enabled (**Settings → simulated own-ship**); with it off, the list
+enabled (**Settings → Vessels → simulated own-ship**); with it off, the list
 still shows vessels but omits the per-row range/bearing line and
 the detail pane's *Relative to own ship* section, and orders the
 list nearest-first relative to the current map viewport centre
@@ -949,7 +949,7 @@ subsequent pans / zooms keep the bbox in sync via debounced
 `UpdateArea` calls. Activation is one-shot: the subscription
 stays alive for the rest of the session even if the user zooms
 back out. Set the threshold (or clear it for the legacy
-"subscribe immediately" behaviour) under **Settings → AIS
+"subscribe immediately" behaviour) under **Settings → Vessels → AIS
 overlay**. See
 [`docs/design/ais-zoom-gated-subscription.md`](../../docs/design/ais-zoom-gated-subscription.md).
 
@@ -958,7 +958,7 @@ overlay**. See
 The viewer can optionally host a Model Context Protocol server
 exposing the loaded datasets to AI agents. The server is **off by
 default**, bound to `127.0.0.1`, and has no authentication; the
-toggle lives in the Settings panel. While on, the standard MCP
+toggle lives in **Settings → Integrations**. While on, the standard MCP
 tools surface (`list_datasets`, `describe_feature`,
 `sample_coverage`) is joined by a viewer-injected `render_to_image`
 tool that snapshots the current map view.
@@ -1072,7 +1072,7 @@ location (caches stay under the data directory), and `--ephemeral`
 still combines (the redirected settings are loaded read-only). An
 explicit `S100_VECTOR_TILE_DISK_DIR` continues to win for the tile
 cache. The same locations can be wiped at runtime from
-**Settings → Maintenance** ("Clear caches" / "Reset all settings").
+**Settings → Advanced → Maintenance** ("Clear caches" / "Reset all settings").
 
 **Deterministic viewport.** `--center <LAT,LON> --zoom <LEVEL>` or
 `--bbox <SOUTH,WEST,NORTH,EAST>` frame the map after datasets load.
@@ -1088,7 +1088,7 @@ only. To change any of them **mid-session**, use the `set_palette` /
 
 **Basemap.** `--basemap None|Offline|Online` selects the basemap for
 the run, overriding the persisted setting (also exposed as a selector
-in **Settings → Map**; default **Offline**). **Offline** draws bundled
+in **Settings → Chart display**; default **Offline**). **Offline** draws bundled
 Natural Earth 1:10m land (public domain) with zero network access, at a
 level of detail matched to the zoom and only for the tiles in view;
 **Online** uses OpenStreetMap tiles with a persistent on-disk cache;
@@ -1110,7 +1110,7 @@ report their own extent, so "zoom to extent" frames the dataset's own
 frame. The repeat covers one world either side of the dataset's frame,
 so a view zoomed out past about two worlds can show the basemap beyond
 the data's last copy. The **Single surface** scene mode (Settings →
-Scene mode) draws the dataset's own frame only.
+Advanced → Scene mode) draws the dataset's own frame only.
 The **Online** OpenStreetMap tiles are *not* world-copied (the XYZ tile
 schema spans one world and Mapsui's tiling does not wrap), so such a
 dataset shows no online tiles beneath the portion east of +180°; use the
@@ -1213,7 +1213,7 @@ application-data location. Persisted across sessions:
 - Simulated own-ship overlay enable, visibility, and vessel geometry.
 - Map rendering optimizations (raster snapshot, off-thread snapshot
   prebuild, vector path cache, line simplification) — all default on
-  (**Settings → Map → Rendering optimizations**).
+  (**Settings → Advanced → Base-plane rendering**).
 - MCP server enable / disable.
 
 Older settings shapes are migrated forward silently; missing values

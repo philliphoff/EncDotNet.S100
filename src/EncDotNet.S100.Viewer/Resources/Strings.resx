@@ -761,9 +761,6 @@
   </data>
 
   <!-- Settings -->
-  <data name="Settings_Heading" xml:space="preserve">
-    <value>Application Settings</value>
-  </data>
   <data name="Settings_AccentColor" xml:space="preserve">
     <value>Accent Color</value>
   </data>
@@ -922,7 +919,7 @@
     <value>Map</value>
   </data>
   <data name="Settings_MapSection_Help" xml:space="preserve">
-    <value>Background map and rendering performance options.</value>
+    <value>The background map and the indicators for chart scale.</value>
   </data>
   <data name="Settings_RenderSubsystemSubsection" xml:space="preserve">
     <value>Base-plane rendering</value>
@@ -3921,5 +3918,47 @@
   </data>
   <data name="Tooltip_TimelineShowLayers" xml:space="preserve">
     <value>Show the layers without data</value>
+  </data>
+  <data name="Tooltip_CloseSettings" xml:space="preserve">
+    <value>Close settings</value>
+  </data>
+  <data name="Label_SettingsCategories" xml:space="preserve">
+    <value>Settings categories</value>
+  </data>
+  <data name="Settings_Category_General" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Settings_Category_General_Help" xml:space="preserve">
+    <value>Units and how times are shown.</value>
+  </data>
+  <data name="Settings_Category_Appearance" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="Settings_Category_Appearance_Help" xml:space="preserve">
+    <value>Colours, theme, and the size of chart symbols and text.</value>
+  </data>
+  <data name="Settings_Category_Chart" xml:space="preserve">
+    <value>Chart display</value>
+  </data>
+  <data name="Settings_Category_Chart_Help" xml:space="preserve">
+    <value>The background map, scale indicators, and the mariner settings that shape how charts are drawn.</value>
+  </data>
+  <data name="Settings_Category_Vessels" xml:space="preserve">
+    <value>Vessels</value>
+  </data>
+  <data name="Settings_Category_Vessels_Help" xml:space="preserve">
+    <value>Your own vessel and live AIS targets.</value>
+  </data>
+  <data name="Settings_Category_Integrations" xml:space="preserve">
+    <value>Integrations</value>
+  </data>
+  <data name="Settings_Category_Integrations_Help" xml:space="preserve">
+    <value>The MCP server for assistants and tools, and links to the S-100 Feature Catalogue eXaminer.</value>
+  </data>
+  <data name="Settings_Category_Advanced" xml:space="preserve">
+    <value>Advanced</value>
+  </data>
+  <data name="Settings_Category_Advanced_Help" xml:space="preserve">
+    <value>Renderer tuning and maintenance. Most people never need to change these.</value>
   </data>
 </root>

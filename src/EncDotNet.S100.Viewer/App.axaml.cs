@@ -1223,7 +1223,8 @@ public partial class App : Application
             name: Strings.Label_Activity_Settings,
             tooltip: Strings.Tooltip_Settings,
             iconFactory: static () => new FluentIcon { Icon = Icon.Settings, IconVariant = IconVariant.Regular, FontSize = 22 },
-            persistAsLastSelected: false);
+            persistAsLastSelected: false,
+            fillsContent: true);
 
         // PR-M4: Pick Report lives in the right dock; auto-opens when a
         // feature is picked. No switcher UI; chrome bar in MainWindow

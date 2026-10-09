@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:viewer="using:EncDotNet.S100.Viewer"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.Settings.IntegrationsSettingsPage"
+             x:DataType="vm:SettingsViewModel">
+
+    <!-- Settings → Integrations: the MCP server and Feature Catalogue eXaminer links (#845). -->
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+        <StackPanel Classes="settingsPage">
+            <StackPanel Spacing="3">
+                <TextBlock Classes="settingsPageTitle" Text="{x:Static loc:Strings.Settings_Category_Integrations}" />
+                <TextBlock Classes="settingsPageHelp" Text="{x:Static loc:Strings.Settings_Category_Integrations_Help}" />
+            </StackPanel>
+
+            <TextBlock Classes="settingsSection" Text="{x:Static loc:Strings.Settings_McpSection}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Settings_McpEnabledTooltip}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_McpEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding McpEnabled}"  AutomationProperties.AutomationId="Settings.McpEnabled" AutomationProperties.Name="{x:Static loc:Strings.Settings_McpEnabled}"/>
+            </Grid>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_McpPort}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <NumericUpDown Value="{Binding McpPort}"
+                                   AutomationProperties.AutomationId="Settings.McpPort"
+                                   AutomationProperties.Name="{x:Static loc:Strings.Settings_McpPort}"
+                                   Minimum="0"
+                                   Maximum="65535"
+                                   Increment="1"
+                                   FormatString="0"
+                                   ToolTip.Tip="{x:Static loc:Strings.Settings_McpPortTooltip}"
+                                   MinWidth="120" />
+                    <Button Content="{x:Static loc:Strings.Settings_McpPort_ResetToAuto}"
+                            AutomationProperties.AutomationId="Settings.ResetMcpPort"
+                            Command="{Binding ResetMcpPortCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Settings_McpPort_ResetToAutoTooltip}"
+                            VerticalAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+
+            <Separator Margin="0,8,0,0" />
+            <TextBlock Classes="settingsSection" Text="{x:Static loc:Strings.Settings_ExaminerSection}" />
+            <TextBlock Classes="settingsHelp" Text="{x:Static loc:Strings.Settings_ExaminerSection_Help}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Settings_ExaminerEnabledTooltip}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_ExaminerEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding ExaminerLinksEnabled}"  AutomationProperties.AutomationId="Settings.ExaminerLinksEnabled" AutomationProperties.Name="{x:Static loc:Strings.Settings_ExaminerEnabled}"/>
+            </Grid>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_ExaminerBaseUrl}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0"
+                             AutomationProperties.AutomationId="Settings.ExaminerBaseUrl"
+                             AutomationProperties.Name="{x:Static loc:Strings.Settings_ExaminerBaseUrl}"
+                             Text="{Binding ExaminerBaseUrl}"
+                             ToolTip.Tip="{x:Static loc:Strings.Settings_ExaminerBaseUrlTooltip}"
+                             MinWidth="120"
+                             Margin="0,0,8,0"
+                             VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            AutomationProperties.AutomationId="Settings.ResetExaminerBaseUrl"
+                            Content="{x:Static loc:Strings.Settings_ExaminerBaseUrl_Reset}"
+                            Command="{Binding ResetExaminerBaseUrlCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Settings_ExaminerBaseUrl_ResetTooltip}"
+                            VerticalAlignment="Center" />
+                </Grid>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
