@@ -684,7 +684,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         return null;
     }
 
-    private static int HandleException(Exception ex, bool debug)
+    internal static int HandleException(Exception ex, bool debug)
     {
         switch (ex)
         {

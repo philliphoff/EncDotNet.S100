@@ -82,24 +82,49 @@ public sealed class VectorCompositeLayer : CompositeLayer
         _honorScaleVisibility = honorScaleVisibility;
     }
 
+    /// <summary>
+    /// The coarsest scale denominator the whole layer is drawn at, such as a
+    /// cell's <c>DataCoverage.minimumDisplayScale</c>, or <see langword="null"/>
+    /// for no limit. Applied only with scale-visibility culling on: past it,
+    /// <see cref="Draw"/> paints nothing, area fills included.
+    /// </summary>
+    public double? MinimumDisplayScale { get; init; }
+
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, Viewport viewport)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(viewport);
 
+        if (IsPastMinimumDisplayScale(viewport))
+            return;
+
         CreateRenderer().RenderOnto(canvas, _scene, viewport);
     }
 
+    private bool IsPastMinimumDisplayScale(Viewport viewport) =>
+        _honorScaleVisibility
+        && MinimumDisplayScale is double limit
+        && viewport.ScaleDenominator > limit;
+
     internal override void DrawRotating(SKCanvas canvas, Viewport viewport)
-        => CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
+    {
+        if (IsPastMinimumDisplayScale(viewport))
+            return;
+
+        CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
         {
             DrawPoints = false,
             DrawText = false,
         });
+    }
 
     internal override void DrawScreenPlaced(SKCanvas canvas, Viewport viewport, double rotationDegrees, SKRect cullBounds)
-        => CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
+    {
+        if (IsPastMinimumDisplayScale(viewport))
+            return;
+
+        CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
         {
             PointCullBounds = cullBounds,
             DrawAreasAndLines = false,
@@ -107,11 +132,22 @@ public sealed class VectorCompositeLayer : CompositeLayer
             ScreenCenterX = viewport.WidthPixels / 2f,
             ScreenCenterY = viewport.HeightPixels / 2f,
         });
+    }
+
+    /// <summary>
+    /// Whether geometry is wrapped into a viewport that crosses the ±180°
+    /// antimeridian (see <see cref="SkiaDisplayListRenderer.EnableSeamWrap"/>).
+    /// Defaults to <see langword="true"/>. A tiled render turns it off and draws
+    /// the world copies itself, because wrapping under a narrow tile viewport
+    /// smears polygons that extend beyond the tile.
+    /// </summary>
+    public bool EnableSeamWrap { get; init; } = true;
 
     private SkiaDisplayListRenderer CreateRenderer() => new()
     {
         Background = _background,
         HonorScaleVisibility = _honorScaleVisibility,
+        EnableSeamWrap = EnableSeamWrap,
     };
 }
 
@@ -129,6 +165,10 @@ public sealed class CoverageCompositeLayer : CompositeLayer
     private readonly double _south;
     private readonly double _north;
     private readonly CoverageHeadlessRenderer _renderer;
+
+    // The arrow renderer caches parsed symbols without synchronisation, so draws
+    // are serialised to let concurrent tile renders share one layer.
+    private readonly object _drawLock = new();
 
     /// <summary>
     /// Creates a coverage composite layer.
@@ -184,6 +224,14 @@ public sealed class CoverageCompositeLayer : CompositeLayer
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(viewport);
 
+        lock (_drawLock)
+        {
+            DrawCore(canvas, viewport);
+        }
+    }
+
+    private void DrawCore(SKCanvas canvas, Viewport viewport)
+    {
         if (Opacity >= 1.0)
         {
             _renderer.DrawOnto(canvas, viewport, _layer, _west, _east, _south, _north);

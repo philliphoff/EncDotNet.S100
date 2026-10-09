@@ -26,7 +26,7 @@ provides:
   any combination of supported products from an exchange set or as
   loose files and renders them, time-aligned, on an interactive map.
 - A **standalone command-line tool** (`s100`) that renders any
-  supported dataset to a PNG from the shell — self-contained, with no
+  supported dataset to a PNG, or to a web-map tile set, from the shell — self-contained, with no
   .NET install required — for batch and headless scripting.
 - An **optional MCP server** that exposes loaded datasets to AI
   agents — feature discovery and query (`identify_features`,

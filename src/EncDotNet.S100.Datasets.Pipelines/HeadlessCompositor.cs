@@ -89,6 +89,150 @@ public sealed class HeadlessCompositeOptions
     /// <see cref="BasemapKind.None"/> (no basemap; output unchanged).
     /// </summary>
     public BasemapKind Basemap { get; init; } = BasemapKind.None;
+
+    /// <summary>
+    /// Whether vector layers apply S-100 Part 9 §11.1 scale-visibility culling
+    /// (each op's SCAMIN, and each cell's minimum display scale for the whole
+    /// cell) at the viewport's <see cref="Viewport.ScaleDenominator"/>. Defaults to
+    /// <see langword="false"/>, which draws every op whatever the scale.
+    /// </summary>
+    public bool HonorScaleVisibility { get; init; }
+
+    /// <summary>
+    /// Whether vector layers wrap geometry into a viewport that crosses the ±180°
+    /// antimeridian. Defaults to <see langword="true"/>, which suits a single
+    /// auto-fitted viewport. Tiled rendering turns it off and draws the world
+    /// copies itself (see <see cref="HeadlessCompositeScene.Draw"/>).
+    /// </summary>
+    public bool EnableSeamWrap { get; init; } = true;
+}
+
+/// <summary>
+/// A headless composite whose S-98 ordering, suppression and scene lowering are
+/// already done, ready to paint against any number of viewports. Build one with
+/// <see cref="HeadlessCompositor.Prepare"/> when rendering the same datasets
+/// many times, as a tile pyramid does.
+/// </summary>
+/// <remarks>
+/// A scene is immutable, and <see cref="Render"/> and <see cref="Draw"/> may be
+/// called concurrently from several threads.
+/// </remarks>
+public sealed class HeadlessCompositeScene
+{
+    private readonly bool _hasBounds;
+    private readonly double _minX;
+    private readonly double _minY;
+    private readonly double _maxX;
+    private readonly double _maxY;
+
+    internal HeadlessCompositeScene(
+        IReadOnlyList<CompositeLayer> layers,
+        SeamAwareBoundsAccumulator bounds,
+        HeadlessCompositeOptions options)
+    {
+        Layers = layers;
+        Background = options.Background;
+        Basemap = options.Basemap;
+        HonorScaleVisibility = options.HonorScaleVisibility;
+        _hasBounds = bounds.TryResolve(out _minX, out _minY, out _maxX, out _maxY);
+    }
+
+    /// <summary>The lowered layers, bottom-most first.</summary>
+    public IReadOnlyList<CompositeLayer> Layers { get; }
+
+    /// <summary>The background <see cref="Render"/> clears to.</summary>
+    public RgbaColor Background { get; }
+
+    /// <summary>The basemap drawn beneath the chart layers.</summary>
+    public BasemapKind Basemap { get; }
+
+    /// <summary>Whether the vector layers apply scale-visibility culling.</summary>
+    public bool HonorScaleVisibility { get; }
+
+    /// <summary>
+    /// Gets the EPSG:3857 union extent of the active layers. The extent is
+    /// seam-aware: for data crossing the antimeridian, <paramref name="maxX"/>
+    /// may lie east of +180° (see <see cref="SeamAwareBoundsAccumulator"/>).
+    /// </summary>
+    /// <param name="minX">The western edge, in metres.</param>
+    /// <param name="minY">The southern edge, in metres.</param>
+    /// <param name="maxX">The eastern edge, in metres.</param>
+    /// <param name="maxY">The northern edge, in metres.</param>
+    /// <returns><see langword="true"/> when any layer has geometry; otherwise <see langword="false"/>.</returns>
+    public bool TryGetWorldBounds(out double minX, out double minY, out double maxX, out double maxY)
+    {
+        minX = _minX;
+        minY = _minY;
+        maxX = _maxX;
+        maxY = _maxY;
+        return _hasBounds;
+    }
+
+    /// <summary>
+    /// Renders the scene into a new bitmap of the viewport's pixel size, cleared
+    /// to <see cref="Background"/>.
+    /// </summary>
+    /// <param name="viewport">The viewport to render.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    public SKBitmap Render(Viewport viewport)
+    {
+        ArgumentNullException.ThrowIfNull(viewport);
+
+        var renderer = new HeadlessCompositeRenderer { Background = Background };
+        return renderer.Render(viewport, WithBasemap(viewport));
+    }
+
+    /// <summary>
+    /// Paints the basemap and the layers onto <paramref name="canvas"/> against
+    /// <paramref name="viewport"/>, without clearing it. Each layer is also drawn
+    /// shifted by each of <paramref name="longitudeOffsets"/> (in degrees, for
+    /// example −360 and +360), so data stored one world east or west of the
+    /// viewport shows up in it; layer order is kept across the copies.
+    /// </summary>
+    /// <param name="canvas">The canvas to paint onto.</param>
+    /// <param name="viewport">A north-up viewport.</param>
+    /// <param name="longitudeOffsets">Extra world copies to draw, in degrees; may be empty.</param>
+    public void Draw(SKCanvas canvas, Viewport viewport, IReadOnlyList<double> longitudeOffsets)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(viewport);
+        ArgumentNullException.ThrowIfNull(longitudeOffsets);
+
+        if (Basemap == BasemapKind.Offline)
+        {
+            new VectorCompositeLayer(NaturalEarthBasemap.GetLandScene(viewport), honorScaleVisibility: false)
+                .Draw(canvas, viewport);
+        }
+
+        foreach (var layer in Layers)
+        {
+            layer.Draw(canvas, viewport);
+            foreach (var offset in longitudeOffsets)
+            {
+                // Data stored at longitude L + offset lands where L would.
+                layer.Draw(canvas, viewport with
+                {
+                    MinLongitude = viewport.MinLongitude + offset,
+                    MaxLongitude = viewport.MaxLongitude + offset,
+                });
+            }
+        }
+    }
+
+    private IReadOnlyList<CompositeLayer> WithBasemap(Viewport viewport)
+    {
+        if (Basemap != BasemapKind.Offline)
+            return Layers;
+
+        // The land basemap draws under every chart layer, registered with the
+        // viewport, at a level of detail matching its pixel size (#411, #731).
+        var layers = new List<CompositeLayer>(Layers.Count + 1)
+        {
+            new VectorCompositeLayer(NaturalEarthBasemap.GetLandScene(viewport), honorScaleVisibility: false),
+        };
+        layers.AddRange(Layers);
+        return layers;
+    }
 }
 
 /// <summary>
@@ -146,6 +290,32 @@ public sealed class HeadlessCompositor
         IReadOnlyList<HeadlessCompositeInput> datasets,
         HeadlessCompositeOptions? options = null)
     {
+        options ??= new HeadlessCompositeOptions();
+        var scene = Prepare(datasets, options);
+
+        // Explicit viewport wins; otherwise seam-aware auto-fit of the union extent.
+        var viewport = options.Viewport ?? BuildUnionViewport(scene, options.Width, options.Height);
+        return scene.Render(viewport);
+    }
+
+    /// <summary>
+    /// Orders, rules and lowers the supplied datasets once, returning a scene
+    /// that can be painted against many viewports.
+    /// </summary>
+    /// <param name="datasets">
+    /// The datasets to composite, in draw order (bottom-most first). Each carries
+    /// a vector or coverage portrayal result.
+    /// </param>
+    /// <param name="options">
+    /// Composite options. <see cref="HeadlessCompositeOptions.Width"/>,
+    /// <see cref="HeadlessCompositeOptions.Height"/> and
+    /// <see cref="HeadlessCompositeOptions.Viewport"/> are not used.
+    /// </param>
+    /// <returns>The prepared scene.</returns>
+    public HeadlessCompositeScene Prepare(
+        IReadOnlyList<HeadlessCompositeInput> datasets,
+        HeadlessCompositeOptions? options = null)
+    {
         ArgumentNullException.ThrowIfNull(datasets);
         options ??= new HeadlessCompositeOptions();
 
@@ -190,7 +360,15 @@ public sealed class HeadlessCompositor
                 case VectorStackPayload vector:
                     {
                         var scene = LowerVector(vector, options.HiddenCategories);
-                        lowered.Add(new VectorCompositeLayer(scene, honorScaleVisibility: false));
+                        lowered.Add(new VectorCompositeLayer(scene, options.HonorScaleVisibility)
+                        {
+                            EnableSeamWrap = options.EnableSeamWrap,
+                            // The whole cell stops at its minimum display scale
+                            // unless the mariner asks to ignore it (S-101 FC §3.1.1).
+                            MinimumDisplayScale = (options.Mariner?.IgnoreScaleMinimum ?? false)
+                                ? null
+                                : vector.Result.CellMinimumDisplayScale,
+                        });
                         bounds.AddScene(scene);
                         break;
                     }
@@ -207,23 +385,7 @@ public sealed class HeadlessCompositor
             }
         }
 
-        // 4. Resolve the shared viewport: explicit wins; otherwise seam-aware
-        //    auto-fit of the union extent.
-        var viewport = options.Viewport
-            ?? BuildUnionViewport(bounds, options.Width, options.Height);
-
-        // 4a. Prepend the land basemap (issue #411) as the bottom-most layer so
-        //     it draws under every chart layer, registered with the shared
-        //     viewport, at a level of detail matching its pixel size (#731).
-        if (options.Basemap == BasemapKind.Offline)
-        {
-            lowered.Insert(0, new VectorCompositeLayer(
-                NaturalEarthBasemap.GetLandScene(viewport), honorScaleVisibility: false));
-        }
-
-        // 5. Paint.
-        var renderer = new HeadlessCompositeRenderer { Background = options.Background };
-        return renderer.Render(viewport, lowered);
+        return new HeadlessCompositeScene(lowered, bounds, options);
     }
 
     private static (IReadOnlyList<SubLayerStackItem> Items, string Spec, string DatasetId) BuildItems(
@@ -389,12 +551,12 @@ public sealed class HeadlessCompositor
     }
 
     private static Viewport BuildUnionViewport(
-        SeamAwareBoundsAccumulator bounds, int widthPixels, int heightPixels)
+        HeadlessCompositeScene scene, int widthPixels, int heightPixels)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
 
-        if (!bounds.TryResolve(out double minX, out double minY, out double maxX, out double maxY))
+        if (!scene.TryGetWorldBounds(out double minX, out double minY, out double maxX, out double maxY))
         {
             minX = -1000; minY = -1000; maxX = 1000; maxY = 1000;
         }
