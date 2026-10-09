@@ -290,6 +290,21 @@ public sealed class SecomTests : IDisposable
         Assert.Equal(requests, server.Requests.Count);
     }
 
+    [Theory]
+    [InlineData("S-412", ".gml")]
+    [InlineData("S-124", ".gml")]
+    [InlineData("S-104", ".h5")]
+    [InlineData("S-101", ".000")]
+    public async Task Objects_save_with_their_products_usual_extension(string product, string extension)
+    {
+        var indexer = new SecomSourceIndexer(new HttpClient(new FakeSecomServer([Summary(1, product)])));
+
+        var index = await indexer.IndexAsync(Source(), null, Ct);
+
+        var remote = Assert.IsType<RemoteItemLocation>(Assert.Single(index.Items).Location);
+        Assert.Equal("NW-0001-26" + extension, remote.Layout!.RelativePath);
+    }
+
     [Fact]
     public async Task Products_filter_on_this_side_and_exchange_sets_are_listed_only()
     {
