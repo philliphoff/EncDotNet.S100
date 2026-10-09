@@ -142,6 +142,22 @@ public sealed class SecomRegistryDirectoryTests
     }
 
     [Fact]
+    public async Task A_secom_2_service_says_its_search_is_not_supported_rather_than_a_certificate()
+    {
+        var directory = Directory(_ => new SecomProbeResult(SecomReachability.NeedsSecom2Search, "search"));
+        directory.ShowRegistryCommand.Execute(null);
+        await SettleAsync(() => directory.IsRegistryLoaded);
+        var khra = directory.Entries.Single(e => e.IsRegistry && e.Name.StartsWith("KHRA", StringComparison.Ordinal));
+
+        directory.SelectedEntry = khra;
+        await SettleAsync(() => khra.Reachability is not null);
+        Assert.Equal("Uses SECOM 2.0 search", khra.ReachabilityText);
+        Assert.Contains("SECOM 2.0's signed search", khra.ReachabilityExplanation, StringComparison.Ordinal);
+        Assert.True(khra.IsReachabilityLimited);
+        Assert.False(directory.CanContinueWithSelection);
+    }
+
+    [Fact]
     public async Task Set_secom_identity_loads_reports_refuses_and_clears_for_the_session()
     {
         var folder = System.IO.Directory.CreateTempSubdirectory("secom-identity-").FullName;
