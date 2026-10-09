@@ -1,7 +1,5 @@
 - name: Documentation
   href: index.md
-- name: Start here
-  href: start-here.md
 - name: Getting started
   href: getting-started.md
 - name: Developer guides

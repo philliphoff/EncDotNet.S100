@@ -237,7 +237,7 @@ as a desktop app.
 
 | ID | Asset | Notes |
 |---|---|---|
-| B1 | SoundCharts mark + wordmark (SVG, light/dark) | The site uses the viewer's app icon (`src/EncDotNet.S100.Viewer/Branding/icon.svg`). DocFX still uses the older `docs/images/logo.svg`; it should probably switch too. |
+| B1 | SoundCharts mark + wordmark (SVG, light/dark) | The site uses the viewer's app icon (`src/EncDotNet.S100.Viewer/Branding/icon.svg`). The DocFX docs use it too (`_appLogoPath` in `docfx.json`). |
 | B2 | App icon (macOS .icns, Windows .ico, Linux PNGs) | Already exists in `Branding/`. |
 | B3 | Favicon set + `apple-touch-icon` | Done: taken from `Branding/` at build time. |
 | B4 | Open Graph card, 1200×630 | Night-palette crop of H2 + wordmark + "S-100 marine charts on your desktop". |

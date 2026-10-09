@@ -1,29 +1,21 @@
-# Documentation
+# EncDotNet.S100 documentation
 
-## Why it matters
+EncDotNet.S100 reads, validates and portrays IHO S-100 nautical data in .NET.
+It includes:
 
-EncDotNet.S100 combines multiple S-100 products, portrayals, and renderers in one
-stack. This documentation is organized to get you to a visible success quickly,
-then guide you into deeper API and architecture detail.
+- **.NET libraries** that read each supported product, run its portrayal
+  catalogue and render the result to an image or an interactive map.
+- **SoundCharts**, a desktop viewer for macOS, Windows and Linux.
+- **`s100`**, a command-line tool that inspects, validates and renders datasets.
+- **An MCP server** that gives AI agents access to loaded datasets.
 
-## Quick win
+## Get started
 
-<div class="badge-row">
-  <img alt="Docs" src="https://img.shields.io/badge/docs-DocFX-blue" />
-  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512bd4" />
-  <img alt="S-100" src="https://img.shields.io/badge/IHO-S--100-0a4a7a" />
-</div>
+[Getting started](getting-started.md) has a quickstart for each of these:
 
-<div class="hero-brand">
-  <strong>Start here:</strong> choose your path and get a result in minutes.
-  <div class="quick-links">
-    <a href="start-here.md">🧭 Audience paths: Viewer / Library / Contributor</a>
-    <a href="getting-started.md">⚡ First success in minutes</a>
-    <a href="top-apis.md">📚 Curated top APIs by package</a>
-  </div>
-</div>
-
-## Deep dive
+- [Open a dataset in the desktop app](getting-started.md#desktop-app)
+- [Read and render a dataset from .NET](getting-started.md#net-library)
+- [Render a dataset from the command line](getting-started.md#command-line-tool)
 
 ## Supported products
 
@@ -46,60 +38,66 @@ then guide you into deeper API and architecture detail.
 | **S-401** *(IEHG)* | Inland ENC | ISO 8211 | Lua (Part 9A) | — | [Specifications/content/S401](../src/EncDotNet.S100.Specifications/content/S401/README.md) |
 | **S-57** *(legacy)* | Electronic Navigational Charts (Ed 3.1) | ISO 8211 | via S-101 pipeline | ✅ (delegated) | [Datasets.S57](../src/EncDotNet.S100.Datasets.S57/README.md) |
 
-## Guides
+## How the pieces fit
 
-- [Start here](start-here.md) — audience-based entry page.
-- [Getting started](getting-started.md) — first rendered output via Viewer, library, or CLI.
-- [Loading datasets](loading-datasets.md) — files, folders, ZIPs, exchange sets and S-101 updates.
-- [Reading protected exchange sets](protected-exchange-sets.md) — S-100 Part 15 permits, decryption and signatures.
-- [Reading product data](reading-product-data.md) — each product's features, typed models, grids and time series.
-- [Custom catalogues and validation](catalogues-and-validation.md) — your own catalogues, and validation rules.
-- [Scenario guides](scenarios/render-s102-to-png.md) — task-focused workflows.
-- [Top APIs](top-apis.md) — curated API entry points per package.
-- [Command-line rendering](cli.md) — full `s100` command and option guide.
-- [Embedding the renderer](embedding-the-renderer.md) — scene/rendering integration seam.
-- [Typed data models](typed-data-models.md) — strongly-typed projections on feature bags.
-- [Observability](observability.md) — logs, traces, and metrics.
-- [C# coding style guide](coding-style.md) — normative style for contributors.
-- [MCP server](mcp-server.md) — AI-agent tool surface.
-- [What's new](whats-new.md) — docs and experience highlights.
-
-## Visual gallery
-
-| S-57 ENC (via S-101) | S-102 Bathymetry |
-|---|---|
-| <img class="docs-shot" alt="NOAA ENC of Elliott Bay rendered through the S-101 pipeline" src="../site/src/assets/shots/P02.png" /> | <img class="docs-shot" alt="NOAA S-102 bathymetry over the NOAA ENC, Elliott Bay" src="../site/src/assets/shots/P03.png" /> |
-
-### Portrayal comparison (before/after workflow)
-
-| Before (base chart context) | After (with temporal/overlay analysis) |
-|---|---|
-| <img class="docs-shot" alt="NOAA chart of the Chesapeake Bay entrance" src="../site/src/assets/shots/F1a.png" /> | <img class="docs-shot" alt="The same chart with NOAA S-102 bathymetry and S-111 surface currents" src="../site/src/assets/shots/F1c.png" /> |
+Each dataset goes through the same stages. A product-specific reader decodes
+the file, the product's portrayal catalogue turns its features into drawing
+instructions, and a renderer draws them. The viewer, the CLI and the library
+all use this pipeline.
 
 ```mermaid
 flowchart LR
-  A[Reader] --> B[Portrayal]
-  B --> C[Drawing instructions / coverage]
-  C --> D[Renderer]
-  D --> E[Viewer / CLI / PNG]
+  A[Dataset file<br/>ISO 8211 / HDF5 / GML] --> B[Reader]
+  B --> C[Portrayal<br/>Lua or XSLT]
+  C --> D[Drawing instructions]
+  D --> E[Renderer<br/>Skia / Mapsui]
 ```
 
-## Design notes
+## Guides
 
-The `design/` folder collects shipped implementation contracts and rationale.
+**Working with data**
 
-- [Dynamic feature sources](design/dynamic-feature-source.md)
-- [Own-ship vessel symbology](design/own-ship-symbology.md)
-- [AIS dynamic feature source](design/ais-source.md)
-- [S-98 interoperability](design/s98-interoperability.md)
+- [Loading datasets](loading-datasets.md): files, folders, ZIPs, exchange sets
+  and S-101 updates.
+- [Reading product data](reading-product-data.md): each product's features,
+  typed models, grids and time series.
+- [Reading protected exchange sets](protected-exchange-sets.md): S-100 Part 15
+  permits, decryption and signatures.
+- [Custom catalogues and validation](catalogues-and-validation.md): use your own
+  catalogues, and validate datasets.
+- [Bringing S-57 into the pipeline](s57-to-s101.md): read S-57 cells through the
+  S-101 portrayal.
 
-## Troubleshooting
+**Tasks**
 
-> [!IMPORTANT]
-> If the site looks unstyled, check that `docs/template` (which provides `public/main.css`) is still listed under `template` in `docfx.json`.
+- [Render S-102 to PNG](scenarios/render-s102-to-png.md)
+- [Inspect S-124 warnings](scenarios/inspect-s124-warnings.md)
+- [Compose S-101 and S-102](scenarios/compose-s101-s102.md)
 
-## Next step
+**Rendering and integration**
 
-- [Start here](start-here.md)
-- [Getting started](getting-started.md)
-- [Top APIs](top-apis.md)
+- [Embedding the renderer](embedding-the-renderer.md): the scene and rendering
+  API for interactive maps.
+- [Observability](observability.md): logs, traces and metrics.
+- [MCP server](mcp-server.md): the tools exposed to AI agents.
+
+## Reference
+
+- [API reference](../api/index.md)
+- [Top APIs](top-apis.md): the main entry points in each package.
+- [Typed data models](typed-data-models.md): typed views over feature
+  attributes.
+- [Command-line rendering](cli.md): every `s100` command and option.
+- [S-100 feed format](s100-feed-format.md) and
+  [local collection manifests](local-collection-manifest.md): the JSON formats
+  the viewer's Library reads.
+- [What's new](whats-new.md)
+
+## Contributing
+
+- [Contribution guide](../CONTRIBUTING.md)
+- [C# coding style](coding-style.md)
+- Design notes, in [`docs/design/`](design/s98-interoperability.md), record the
+  rationale behind shipped subsystems. Start with
+  [S-98 interoperability](design/s98-interoperability.md) and
+  [dynamic feature sources](design/dynamic-feature-source.md).

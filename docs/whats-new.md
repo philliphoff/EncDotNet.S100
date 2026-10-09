@@ -87,6 +87,6 @@ Current highlights:
 
 ## Next step
 
-- [Start here](start-here.md)
+- [Getting started](getting-started.md)
 - [Documentation index](index.md)
 - [Releases](https://github.com/philliphoff/EncDotNet.S100/releases)

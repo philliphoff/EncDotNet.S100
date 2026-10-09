@@ -1,48 +1,141 @@
-:root {
-  --brand-primary: #0a4a7a;
-  --brand-accent: #1aa3ff;
+/*
+ * Docs theme. Colours, fonts and the dark header follow the soundcharts.app
+ * landing page (site/src/styles/global.css) so the two read as one site.
+ * The modern DocFX template is Bootstrap 5.3: theme by overriding --bs-* vars.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root,
+[data-bs-theme="light"] {
+  --sc-accent: #0f8f86;          /* sounding teal */
+  --sc-accent-rgb: 15, 143, 134;
+  --sc-accent-hover-rgb: 10, 110, 103;
+  --sc-surface-2: #eef2f6;
+  --sc-line: #d9e1e8;
+  --sc-sea-deep: #0a1826;
+  --sc-sea-mid: #12304a;
+  --sc-hero-ink: #e8f1f8;
+  --sc-hero-ink-2: #9fb6c9;
+  --sc-hero-accent: #7fe0d4;
+
+  --bs-body-font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bs-font-monospace: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --bs-body-color: #0e1b28;
+  --bs-secondary-color: #4a5a6a;
+  --bs-border-color: var(--sc-line);
+  --bs-tertiary-bg: var(--sc-surface-2);
+  --bs-link-color: var(--sc-accent);
+  --bs-link-color-rgb: var(--sc-accent-rgb);
+  --bs-link-hover-color-rgb: var(--sc-accent-hover-rgb);
+  --bs-primary: var(--sc-accent);
+  --bs-primary-rgb: var(--sc-accent-rgb);
 }
 
-/* The logo SVG has a 200px intrinsic size; keep it navbar-sized. */
+[data-bs-theme="dark"] {
+  --sc-accent: #3cc3b5;
+  --sc-accent-rgb: 60, 195, 181;
+  --sc-accent-hover-rgb: 127, 224, 212;
+  --sc-surface-2: #162636;
+  --sc-line: #22374a;
+
+  --bs-body-bg: #0b141d;
+  --bs-body-bg-rgb: 11, 20, 29;
+  --bs-body-color: #e6eef5;
+  --bs-secondary-color: #9db0c1;
+  --bs-secondary-bg: #111e2a;
+  --bs-tertiary-bg: var(--sc-surface-2);
+  --bs-border-color: var(--sc-line);
+}
+
+/* ---------- header: the landing page's dark sea band ---------- */
+body > header {
+  background: radial-gradient(120% 220% at 70% 0%, var(--sc-sea-mid), var(--sc-sea-deep) 70%) !important;
+  border-bottom: 0 !important;
+}
+
+body > header .navbar {
+  --bs-navbar-color: rgba(232, 241, 248, .82);
+  --bs-navbar-hover-color: #fff;
+  --bs-navbar-active-color: var(--sc-hero-accent);
+  --bs-navbar-brand-color: var(--sc-hero-ink);
+  --bs-navbar-brand-hover-color: #fff;
+}
+
+body > header .navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 600 19px/1 "Fraunces", Georgia, serif;
+}
+
+/* The icon SVG has a large intrinsic size; keep it navbar-sized. */
 #logo {
-  height: 40px;
+  height: 30px;
   width: auto;
 }
 
-.hero-brand {
-  border: 1px solid color-mix(in srgb, var(--brand-accent) 35%, white);
-  border-radius: 14px;
-  padding: 16px;
-  background: linear-gradient(135deg, #f4fbff 0%, #eef6ff 100%);
-  margin: 12px 0 20px;
+body > header .btn,
+body > header .bi {
+  color: var(--sc-hero-ink);
 }
 
-.quick-links {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-  margin: 8px 0 16px;
+body > header .search .form-control {
+  background-color: rgba(255, 255, 255, .06);
+  border-color: rgba(255, 255, 255, .18);
+  color: var(--sc-hero-ink);
 }
 
-.quick-links a {
-  display: block;
-  border: 1px solid #d7e8f8;
-  border-radius: 10px;
-  padding: 10px 12px;
-  text-decoration: none;
-  background: #fff;
+body > header .search .form-control::placeholder {
+  color: var(--sc-hero-ink-2);
 }
 
-.quick-links a:hover {
-  border-color: var(--brand-accent);
-  box-shadow: 0 1px 10px rgba(26, 163, 255, 0.15);
+/* ---------- article typography ---------- */
+article h1,
+article h2,
+article h3 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -.01em;
 }
 
-.badge-row img {
-  margin-right: 6px;
+article h1 {
+  margin-bottom: 1rem;
 }
 
-img.docs-shot {
-  border: 1px solid #dbe9f5;
-  border-radius: 8px;
+article h2 {
+  font-size: 1.85rem;
+  margin-top: 2.5rem;
+  padding-bottom: .35rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+article :not(pre) > code {
+  color: var(--bs-body-color);
+  background-color: var(--bs-tertiary-bg);
+  border-radius: 4px;
+  padding: .1em .35em;
+}
+
+article h3 {
+  font-size: 1.3rem;
+  margin-top: 1.75rem;
+}
+
+article h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+article table {
+  border: 1px solid var(--bs-border-color);
+}
+
+article table thead th {
+  background-color: var(--bs-tertiary-bg);
+}
+
+/* ---------- table of contents ---------- */
+.toc a.active {
+  color: var(--sc-accent);
+  font-weight: 600;
 }

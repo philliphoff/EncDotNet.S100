@@ -59,7 +59,8 @@
           "docs/images/**",
           "readme/**",
           "site/src/assets/shots/*.png",
-          "src/*/images/**"
+          "src/*/images/**",
+          "src/EncDotNet.S100.Viewer/Branding/icon.svg"
         ],
         "exclude": [
           "site/src/assets/shots/*.light.png"
@@ -73,8 +74,9 @@
       "docs/template"
     ],
     "globalMetadata": {
-      "_appLogoPath": "docs/images/logo.svg",
-      "_appFaviconPath": "docs/images/logo.svg",
+      "_appLogoPath": "src/EncDotNet.S100.Viewer/Branding/icon.svg",
+      "_appFaviconPath": "src/EncDotNet.S100.Viewer/Branding/icon.svg",
+      "_appName": "EncDotNet.S100",
       "_appTitle": "EncDotNet.S100 Docs"
     }
   }
