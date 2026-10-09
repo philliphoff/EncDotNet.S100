@@ -78,8 +78,14 @@ public enum SecomReachability
     /// <summary>It answers <c>GetSummary</c> without a certificate.</summary>
     Open,
 
-    /// <summary>It answers, but not <c>GetSummary</c> without a client certificate (or a signed request).</summary>
+    /// <summary>It answers, but not <c>GetSummary</c> without a client certificate (or a signed request), and no identity is set.</summary>
     NeedsCertificate,
+
+    /// <summary>It answers <c>GetSummary</c> when this client presents its MCP identity (#832), and not without.</summary>
+    OpenWithCertificate,
+
+    /// <summary>It needs a client certificate, and refused the identity this client presented (#832).</summary>
+    CertificateRefused,
 
     /// <summary>
     /// Its TLS certificate is not trusted here: issued under no trusted root,
@@ -104,6 +110,12 @@ public sealed record SecomProbeResult(SecomReachability Reachability, string? De
     /// another host.
     /// </summary>
     public SecomServerTrustResult? ServerTrust { get; init; }
+
+    /// <summary>
+    /// The identity presented, for <see cref="SecomReachability.OpenWithCertificate"/>
+    /// and <see cref="SecomReachability.CertificateRefused"/> (#832): its MRN, or its subject.
+    /// </summary>
+    public string? Identity { get; init; }
 }
 
 /// <summary>
@@ -148,6 +160,7 @@ public sealed class SecomRegistry
     private readonly string? _cacheDirectory;
     private readonly TimeProvider _time;
     private readonly SecomServerTrust? _serverTrust;
+    private HttpClient? _anonymousClient;
 
     /// <summary>Creates a registry reader.</summary>
     /// <param name="httpClient">
@@ -213,8 +226,29 @@ public sealed class SecomRegistry
     public async Task<SecomProbeResult> ProbeAsync(Uri serviceUri, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(serviceUri);
-        var result = await ProbeServiceAsync(serviceUri, cancellationToken).ConfigureAwait(false);
-        if (result.Reachability == SecomReachability.Unreachable || _serverTrust?.ResultFor(serviceUri.IdnHost) is not { } trust)
+        var host = serviceUri.IdnHost;
+        _serverTrust?.Forget(host);
+
+        // Anonymously first: a service that answers without the identity is Open.
+        var result = await ProbeServiceAsync(AnonymousClient, serviceUri, cancellationToken).ConfigureAwait(false);
+        if (result.Reachability == SecomReachability.NeedsCertificate && _serverTrust?.Identity is { } identity)
+        {
+            var identified = await ProbeServiceAsync(_httpClient, serviceUri, cancellationToken).ConfigureAwait(false);
+            result = identified.Reachability switch
+            {
+                SecomReachability.Open => new SecomProbeResult(SecomReachability.OpenWithCertificate, identity.DisplayName)
+                {
+                    Identity = identity.DisplayName,
+                },
+                SecomReachability.NeedsCertificate => new SecomProbeResult(SecomReachability.CertificateRefused, identified.Detail)
+                {
+                    Identity = identity.DisplayName,
+                },
+                _ => identified,
+            };
+        }
+
+        if (result.Reachability == SecomReachability.Unreachable || _serverTrust?.ResultFor(host) is not { } trust)
             return result;
 
         // A refused certificate: say why, rather than the platform's TLS message.
@@ -231,9 +265,20 @@ public sealed class SecomRegistry
         _ => null,
     };
 
-    private async Task<SecomProbeResult> ProbeServiceAsync(Uri serviceUri, CancellationToken cancellationToken)
+    /// <summary>
+    /// The client anonymous probes use: one from <see cref="SecomServerTrust"/>
+    /// that never presents the identity, when the registry was given the
+    /// validator; otherwise the registry's client.
+    /// </summary>
+    private HttpClient AnonymousClient => _serverTrust is null
+        ? _httpClient
+        : LazyInitializer.EnsureInitialized(ref _anonymousClient, () =>
+            new HttpClient(_serverTrust.CreateHandler(presentIdentity: false)) { Timeout = _httpClient.Timeout });
+
+    private async Task<SecomProbeResult> ProbeServiceAsync(HttpClient httpClient, Uri serviceUri, CancellationToken cancellationToken)
     {
-        var client = new SecomClient(_httpClient, serviceUri);
+        var host = serviceUri.IdnHost;
+        var client = new SecomClient(httpClient, serviceUri);
         var answered = false;
         try
         {
@@ -244,7 +289,7 @@ public sealed class SecomRegistry
         {
             // A refusal (401/403) or a dead endpoint is an answer in itself; a 404
             // or a non-SECOM body is not yet: GetSummary may still answer.
-            if (Classify(ex) is { } early)
+            if (Classify(ex, host) is { } early)
                 return early;
         }
 
@@ -255,7 +300,7 @@ public sealed class SecomRegistry
         }
         catch (Exception ex) when (IsProbeFailure(ex, cancellationToken))
         {
-            if (Classify(ex) is { } failed)
+            if (Classify(ex, host) is { } failed)
                 return failed;
 
             // It answers Capability as SECOM but not an anonymous GetSummary (some
@@ -267,8 +312,14 @@ public sealed class SecomRegistry
     }
 
     /// <summary>A TLS trust failure or a dead endpoint, recognised from the exception; otherwise <see langword="null"/>.</summary>
-    private static SecomProbeResult? Classify(Exception ex)
+    private SecomProbeResult? Classify(Exception ex, string host)
     {
+        // The server's certificate was accepted on this probe's connection, yet
+        // the connection failed: the service refused the TLS handshake for want
+        // of an (acceptable) client certificate.
+        if (ex is HttpRequestException { StatusCode: null } && _serverTrust?.ResultFor(host) is { Allowed: true })
+            return new SecomProbeResult(SecomReachability.NeedsCertificate, "It asks for a client certificate when connecting.");
+
         for (var inner = ex; inner is not null; inner = inner.InnerException)
         {
             if (inner is AuthenticationException)
