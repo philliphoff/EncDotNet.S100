@@ -20,6 +20,12 @@ Current highlights:
 
 ### October 2026
 
+- **Sign data and issue permits.** The Part 15 support now covers the data
+  server's side too: `Part15Signer` produces ECDSA P-384 signatures, and
+  `PermitFileWriter` writes a `PERMIT.XML` with its `PERMIT.SIGN`, using cell
+  keys wrapped by `DataPermit.Create`. Everything it writes verifies through the
+  existing readers. See
+  [Reading protected exchange sets](protected-exchange-sets.md#create-a-test-exchange-set).
 - **S-57 validation reports the data, not the translation.** Validating a NOAA
   cell no longer reports thousands of `S101-as-S57/*` errors caused by the S-57
   → S-101 translation: complex sub-attributes now carry their parent index,

@@ -47,6 +47,50 @@ public sealed class DataPermit
     }
 
     /// <summary>
+    /// Issues a permit for one dataset by wrapping its cell key with the
+    /// recipient system's hardware id (§15-7.4.4).
+    /// </summary>
+    /// <param name="fileName">
+    /// The dataset file name the permit applies to; omit the extension to cover
+    /// every dataset with that base name.
+    /// </param>
+    /// <param name="cellKey">The 16-byte cell key the dataset was encrypted with.</param>
+    /// <param name="hardwareId">The hardware id of the system the permit is for.</param>
+    /// <param name="expiry">The licence expiry date.</param>
+    /// <param name="editionNumber">The edition number the permit applies to, if any.</param>
+    /// <param name="issueDate">The dataset issue date, for products without edition numbers.</param>
+    /// <returns>The permit, carrying the wrapped key.</returns>
+    /// <remarks>This method is synchronous and CPU-bound.</remarks>
+    public static DataPermit Create(
+        string fileName,
+        ReadOnlySpan<byte> cellKey,
+        HardwareId hardwareId,
+        DateOnly expiry,
+        int? editionNumber = null,
+        DateOnly? issueDate = null)
+    {
+        ArgumentNullException.ThrowIfNull(hardwareId);
+        if (cellKey.Length != S100Cipher.KeyLength)
+        {
+            throw new ArgumentException(
+                $"A cell key must be {S100Cipher.KeyLength} bytes.", nameof(cellKey));
+        }
+
+        if (editionNumber is <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(editionNumber), editionNumber, "An edition number must be positive.");
+        }
+
+        return new DataPermit(
+            fileName,
+            S100Cipher.EncryptBlock(cellKey, hardwareId.Value),
+            expiry,
+            editionNumber,
+            issueDate);
+    }
+
+    /// <summary>
     /// The dataset file name the permit applies to. When no file extension is
     /// present the permit applies to all datasets with this name regardless of
     /// extension (§15-7.4.4 NOTE).

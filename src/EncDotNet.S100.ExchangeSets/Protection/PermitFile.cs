@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Xml;
 using System.Xml.Linq;
@@ -76,6 +77,17 @@ public sealed class PermitFile
         ArgumentException.ThrowIfNullOrEmpty(path);
         var doc = XDocument.Load(path);
         return Parse(doc, isAuthenticated: false);
+    }
+
+    /// <summary>
+    /// Creates a permit file to issue, from its header/products groups.
+    /// </summary>
+    /// <param name="groups">The groups, each addressed to one end-user system.</param>
+    /// <returns>An unauthenticated permit file; write it with <see cref="PermitFileWriter"/>.</returns>
+    public static PermitFile Create(IEnumerable<PermitGroup> groups)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+        return new PermitFile([.. groups], isAuthenticated: false);
     }
 
     internal static PermitFile ReadAuthenticated(Stream stream)
@@ -327,10 +339,21 @@ public sealed class PermitFile
 /// </summary>
 public sealed class PermitGroup
 {
-    internal PermitGroup(PermitHeader header, IReadOnlyDictionary<string, IReadOnlyList<DataPermit>> products)
+    /// <summary>
+    /// Creates a header/products group.
+    /// </summary>
+    /// <param name="header">The header that applies to the group's permits.</param>
+    /// <param name="products">The permits, keyed by product specification id (for example <c>S-101</c>).</param>
+    public PermitGroup(PermitHeader header, IReadOnlyDictionary<string, IReadOnlyList<DataPermit>> products)
     {
+        ArgumentNullException.ThrowIfNull(header);
+        ArgumentNullException.ThrowIfNull(products);
         Header = header;
-        Products = products;
+        Products = new ReadOnlyDictionary<string, IReadOnlyList<DataPermit>>(
+            products.ToDictionary(
+                product => product.Key,
+                product => (IReadOnlyList<DataPermit>)[.. product.Value],
+                StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>The header that applies to this group's permits.</summary>

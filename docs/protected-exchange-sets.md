@@ -191,20 +191,19 @@ The IHO also publishes test SA certificates for interoperability testing.
 ### Create a test exchange set
 
 > [!CAUTION]
-> This code stands in for a **data server**, to produce test data. It isn't part
-> of the library API, and a real client never has the data server's private
-> keys or the cell keys.
+> This code stands in for a **data server**, to produce test data. A real
+> client never has the data server's private keys or the cell keys.
 
 The method below creates a protected exchange set from any S-101 cell, such as
 `tests/datasets/S101/S-101/DATASET_FILES/101AA00DS0019.000` in this repository.
 It generates a Scheme Administrator certificate and a data-server certificate,
-encrypts the cell, signs it in `CATALOG.XML`, and writes a permit for the given
-hardware ID:
+encrypts the cell, signs it in `CATALOG.XML`, and issues a signed permit for the
+given hardware ID. `Part15Signer` and `PermitFileWriter` produce the signatures
+and the permit; the catalogue is still written by hand:
 
 ```csharp
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using EncDotNet.S100.ExchangeSets.Protection;
 
 static X509Certificate2 CreateProtectedExchangeSet(string folder, string cellPath, HardwareId hardwareId)
@@ -225,8 +224,10 @@ static X509Certificate2 CreateProtectedExchangeSet(string folder, string cellPat
     var serverRequest = new CertificateRequest("CN=Test Data Server", serverKey, HashAlgorithmName.SHA384);
     serverRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
     serverRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
-    using var serverCert = serverRequest.Create(
+    using var issued = serverRequest.Create(
         saRoot, saRoot.NotBefore.AddMinutes(1), saRoot.NotAfter.AddMinutes(-1), RandomNumberGenerator.GetBytes(16));
+    using var serverCert = issued.CopyWithPrivateKey(serverKey);
+    using var signer = new Part15Signer(serverCert, certificateId: "data-server", schemeAdministratorId: "SA");
     string serverCertBase64 = Convert.ToBase64String(serverCert.RawData);
 
     // Encrypt the cell with a random cell key, and sign its unencrypted bytes.
@@ -234,8 +235,7 @@ static X509Certificate2 CreateProtectedExchangeSet(string folder, string cellPat
     byte[] cellKey = RandomNumberGenerator.GetBytes(16);
     Directory.CreateDirectory(Path.Combine(folder, "S-101"));
     File.WriteAllBytes(Path.Combine(folder, "S-101", cellName + ".000"), S100Cipher.EncryptDataset(plaintext, cellKey));
-    string cellSignature = Convert.ToBase64String(
-        serverKey.SignHash(SHA384.HashData(plaintext), DSASignatureFormat.Rfc3279DerSequence));
+    string cellSignature = Convert.ToBase64String(signer.SignData(plaintext, "cell-signature").Value);
 
     // CATALOG.XML: the protected cell, its signature, and the data-server certificate.
     File.WriteAllText(Path.Combine(folder, "CATALOG.XML"), $"""
@@ -270,44 +270,28 @@ static X509Certificate2 CreateProtectedExchangeSet(string folder, string cellPat
         </S100XC:S100_ExchangeCatalogue>
         """);
 
-    // PERMIT.XML: the cell key wrapped with the client's hardware ID.
-    string encryptedKey = Convert.ToHexString(S100Cipher.EncryptBlock(cellKey, hardwareId.Value));
-    byte[] permitXml = Encoding.UTF8.GetBytes($"""
-        <?xml version="1.0" encoding="UTF-8"?>
-        <Permit xmlns="http://www.iho.int/s100/se/5.1">
-          <header>
-            <issueDate>{issueDate}</issueDate>
-            <dataServerName>Test Data Server</dataServerName>
-            <dataServerIdentifier>TS</dataServerIdentifier>
-            <version>1.0.0</version>
-          </header>
-          <products>
-            <product id="S-101">
-              <datasetPermit>
-                <filename>{cellName}</filename>
-                <editionNumber>1</editionNumber>
-                <expiry>2099-12-31</expiry>
-                <encryptedKey>{encryptedKey}</encryptedKey>
-              </datasetPermit>
-            </product>
-          </products>
-        </Permit>
-        """);
-    File.WriteAllBytes(Path.Combine(folder, "PERMIT.XML"), permitXml);
-
-    // PERMIT.SIGN: the data server's signature over the exact PERMIT.XML bytes.
-    string permitSignature = Convert.ToBase64String(
-        serverKey.SignHash(SHA384.HashData(permitXml), DSASignatureFormat.Rfc3279DerSequence));
-    File.WriteAllText(Path.Combine(folder, "PERMIT.SIGN"), $"""
-        <StandaloneDigitalSignature xmlns="http://www.iho.int/s100/se/5.1">
-          <filename>PERMIT.XML</filename>
-          <certificates>
-            <schemeAdministrator id="SA" />
-            <certificate id="data-server" issuer="SA">{serverCertBase64}</certificate>
-          </certificates>
-          <digitalSignature id="permit-signature" certificateRef="data-server">{permitSignature}</digitalSignature>
-        </StandaloneDigitalSignature>
-        """);
+    // PERMIT.XML and PERMIT.SIGN: the cell key wrapped with the client's hardware
+    // ID, signed by the data server over the exact bytes written.
+    var permit = PermitFile.Create(
+    [
+        new PermitGroup(
+            new PermitHeader
+            {
+                IssueDate = new DateOnly(2026, 3, 1),
+                DataServerName = "Test Data Server",
+                DataServerIdentifier = "TS",
+                Version = "1.0.0",
+            },
+            new Dictionary<string, IReadOnlyList<DataPermit>>
+            {
+                ["S-101"] = [DataPermit.Create(cellName, cellKey, hardwareId, new DateOnly(2099, 12, 31), editionNumber: 1)],
+            }),
+    ]);
+    using (var permitXml = File.Create(Path.Combine(folder, PermitFileWriter.PermitFileName)))
+    using (var permitSign = File.Create(Path.Combine(folder, PermitFileWriter.SignatureFileName)))
+    {
+        PermitFileWriter.WriteSigned(permit, signer, permitXml, permitSign);
+    }
 
     return saRoot;
 }
