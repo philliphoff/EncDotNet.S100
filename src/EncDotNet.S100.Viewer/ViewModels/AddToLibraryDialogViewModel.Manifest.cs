@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Manifests;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -21,7 +22,7 @@ internal sealed record EditedManifestSource(Guid CollectionId, LocalManifestSour
 /// </summary>
 internal sealed partial class AddToLibraryDialogViewModel
 {
-    private readonly List<FacetOptionViewModel> _allGroups = [];
+    private readonly List<LibraryChoice> _allGroups = [];
     private CollectionManifestDocument? _manifest;
     private IReadOnlyList<string> _manifestProblems = [];
     private EditedManifestSource? _editing;
@@ -31,10 +32,10 @@ internal sealed partial class AddToLibraryDialogViewModel
     private ICommand? _openManifestCommand;
 
     /// <summary>A collection manifest's groups matching the filter text.</summary>
-    public ObservableCollection<FacetOptionViewModel> Groups { get; } = [];
+    public ObservableCollection<LibraryChoice> Groups { get; } = [];
 
     /// <summary>True when adding (or editing) a collection manifest.</summary>
-    public bool IsManifest => _kind == AddToLibraryKind.LocalManifest;
+    public bool IsManifest => _kind == LibrarySourceKind.LocalManifest;
 
     /// <summary>True in "Choose groups…" mode: the source exists, and Save changes its selection.</summary>
     public bool IsEditing => _editing is not null;
@@ -100,7 +101,7 @@ internal sealed partial class AddToLibraryDialogViewModel
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        Initialize(AddToLibraryKind.LocalManifest, source.Path, collectionId);
+        Initialize(LibrarySourceKind.LocalManifest, source.Path, collectionId);
         _editing = new EditedManifestSource(collectionId, source);
         _includeAll = source.Filter.IsUnscoped;
         _pendingPicks = source.Filter.Groups.ToArray();
@@ -207,7 +208,7 @@ internal sealed partial class AddToLibraryDialogViewModel
                 var selected = new HashSet<string>(picks, StringComparer.OrdinalIgnoreCase);
                 foreach (var (group, info) in manifest.Groups.Zip(summary))
                 {
-                    var option = new FacetOptionViewModel(group.Id, group.DisplayName, string.Empty)
+                    var option = new LibraryChoice(group.Id, group.DisplayName, string.Empty)
                     {
                         PathText = group.Paths[0],
                         MorePathsText = group.Paths.Count > 1

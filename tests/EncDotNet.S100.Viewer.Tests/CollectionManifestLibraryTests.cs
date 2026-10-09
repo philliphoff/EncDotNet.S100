@@ -57,7 +57,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
     private async Task<AddToLibraryDialogViewModel> OpenDialogAsync(string path)
     {
         var vm = new AddToLibraryDialogViewModel(_library, null);
-        vm.Initialize(AddToLibraryKind.LocalManifest, path, targetCollectionId: null);
+        vm.Initialize(LibrarySourceKind.LocalManifest, path, targetCollectionId: null);
         await vm.LoadCatalogAsync();
         return vm;
     }
@@ -243,10 +243,10 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         var otherJson = Path.Combine(_context.Root, "other.json");
         File.WriteAllText(otherJson, """{ "format": "encdotnet-s100-feed" }""");
 
-        Assert.Equal(AddToLibraryKind.LocalManifest, LibraryImportCoordinator.Classify(manifest));
-        Assert.Equal(AddToLibraryKind.ExchangeSet, LibraryImportCoordinator.Classify(otherJson));
-        Assert.Equal(AddToLibraryKind.ExchangeSet, LibraryImportCoordinator.Classify(Path.Combine(_context.Root, "AU", "set")));
-        Assert.Equal(AddToLibraryKind.Folder, LibraryImportCoordinator.Classify(_context.Root));
+        Assert.Equal(LibrarySourceKind.LocalManifest, LibraryImportCoordinator.Classify(manifest));
+        Assert.Equal(LibrarySourceKind.ExchangeSet, LibraryImportCoordinator.Classify(otherJson));
+        Assert.Equal(LibrarySourceKind.ExchangeSet, LibraryImportCoordinator.Classify(Path.Combine(_context.Root, "AU", "set")));
+        Assert.Equal(LibrarySourceKind.Folder, LibraryImportCoordinator.Classify(_context.Root));
     }
 
     private sealed class NullLoader : ILibraryLoader

@@ -569,6 +569,8 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
                     { Outcome: SecomServerTrustOutcome.WrongHost } => Strings.Library_Reachability_WrongHostExplanation,
                     { Outcome: SecomServerTrustOutcome.Expired, Anchor: { } expiredAnchor } =>
                         string.Format(CultureInfo.CurrentCulture, Strings.Library_Reachability_ExpiredServerExplanationFormat, expiredAnchor),
+                    { Outcome: SecomServerTrustOutcome.Revoked, Anchor: { } revokedAnchor } =>
+                        string.Format(CultureInfo.CurrentCulture, Strings.Library_Reachability_RevokedServerExplanationFormat, revokedAnchor),
                     _ => Strings.Library_Reachability_UntrustedServerExplanation,
                 },
                 SecomReachability.Unreachable => _reachability.Detail is { Length: > 0 } detail
@@ -578,6 +580,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
             };
             var from = trust is { Outcome: SecomServerTrustOutcome.AnchorTrusted, Anchor: { } anchor }
                 ? string.Format(CultureInfo.CurrentCulture, Strings.Library_Reachability_ServerAnchorFormat, anchor)
+                    + (trust.Revocation == SecomRevocationStatus.NotChecked ? " " + Strings.Library_Reachability_RevocationNotCheckedExplanation : null)
                 : null;
             return why is null ? from : from is null ? why : $"{why} {from}";
         }

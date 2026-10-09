@@ -157,7 +157,7 @@ S-100 has **no per-resource CRC element** like S-57's CATALOG.031; the digital s
 
 ### Part 15 confidentiality (decryption)
 
-The **confidentiality** dimension of Part 15 — reading **encrypted** datasets — is implemented at the library level under the `EncDotNet.S100.ExchangeSets.Protection` namespace. Signing/authoring and viewer/CLI wiring remain out of scope.
+The **confidentiality** dimension of Part 15 — reading **encrypted** datasets — is implemented at the library level under the `EncDotNet.S100.ExchangeSets.Protection` namespace. Issuing permits and producing signatures is covered under [Part 15 production](#part-15-production-signing-and-permits); writing a signed `CATALOG.XML` and viewer/CLI wiring remain out of scope.
 
 | Type | Role | S-100 Part 15 ref |
 |---|---|---|
@@ -234,6 +234,37 @@ signatures coexist on one resource.
 
 `PermitFile.Read(...)` remains available for metadata inspection, but returns an unauthenticated permit that `PermitKeyProvider` rejects. Production key use must flow through `PermitSignatureVerifier.AuthenticateAsync(...)`.
 
+### Part 15 production (signing and permits)
+
+The data-server side of Part 15 mirrors the readers above, and its output verifies through them ([#843](https://github.com/philliphoff/EncDotNet.S100/issues/843)):
+
+| Type | Role | S-100 Part 15 ref |
+|---|---|---|
+| `Part15Signer` | Signs with an ECDSA P-384 certificate key (SHA-384, DER): `SignData`/`SignDataAsync` (`S100_SE_SignatureOnData` with a `dataStatus`), `SignSignature` (`S100_SE_SignatureOnSignature`), `SignStandalone`, and the matching `CertificateBlock` | §15-8.4, §15-8.11 |
+| `StandaloneDigitalSignatureWriter` | Writes `PERMIT.SIGN` / `CATALOG.SIGN` documents | §15-8.11.2 |
+| `DataPermit.Create` | Issues a `datasetPermit` by wrapping a cell key with the recipient's `HardwareId` | §15-7.4.4 |
+| `PermitFile.Create` / `PermitGroup` | Builds a permit file from header/products groups | §15-7.4 |
+| `PermitFileWriter` | Writes `PERMIT.XML`; `WriteSigned` also writes `PERMIT.SIGN` over the exact bytes written | §15-7.4, §15-7.4.5 |
+
+```csharp
+using var signer = new Part15Signer(dataServerCertificate, "urn:mrn:iho:s62:xx:key1", schemeAdministratorId: "IHO");
+var permit = PermitFile.Create(
+[
+    new PermitGroup(
+        new PermitHeader { IssueDate = DateOnly.FromDateTime(DateTime.UtcNow), DataServerName = "Example", DataServerIdentifier = "EX", Version = "1.0.0" },
+        new Dictionary<string, IReadOnlyList<DataPermit>>
+        {
+            ["S-101"] = [DataPermit.Create("101AA00DS0019", cellKey, hardwareId, expiry: new DateOnly(2027, 12, 31), editionNumber: 1)],
+        }),
+]);
+
+using var permitXml = File.Create("PERMIT.XML");
+using var permitSign = File.Create("PERMIT.SIGN");
+PermitFileWriter.WriteSigned(permit, signer, permitXml, permitSign);
+```
+
+Permit and standalone-signature documents are written in the `http://www.iho.int/s100/se/5.1` namespace used by the §15-7.4.6 example.
+
 Viewer/CLI workflows for supplying permits and keys remain separate from the
 library-level signature and decryption support.
 
@@ -273,7 +304,7 @@ The IHO publishes test SA certificates for interoperability testing. For product
 
 ### Scope and limitations
 
-- **Verification only** — signing/authoring of exchange sets is not yet implemented.
+- **Partial authoring** — signatures, standalone signature files, and signed permits can be produced; writing a signed `CATALOG.XML` and protecting a whole exchange set are not yet implemented ([#843](https://github.com/philliphoff/EncDotNet.S100/issues/843)).
 - **Decryption, permit authentication, and signature metadata are implemented** — Part 15 confidentiality and all catalogue-level signature forms are supported at the library level. Viewer/CLI permit-entry UX remains out of scope here.
 - **Checksum reference is opportunistic** — S-100 mandates no per-resource hash, so `NoChecksum` is the common (and non-failing) result for unsigned sets; hash-MRN placement is discovered best-effort.
 - File hashing uses streaming SHA-256 to avoid loading large HDF5 files into memory.

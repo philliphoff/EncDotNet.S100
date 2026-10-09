@@ -1,5 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.RemoteCatalogues;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -30,7 +31,7 @@ internal sealed partial class AddToLibraryDialogViewModel
     private ResolutionOptionViewModel? _selectedResolution;
 
     /// <summary>True when adding a remote S-100 catalogue.</summary>
-    public bool IsS100Catalogue => _kind == AddToLibraryKind.S100Catalogue;
+    public bool IsS100Catalogue => _kind == LibrarySourceKind.S100Catalogue;
 
     /// <summary>True when the facets are regions (left) and their areas (right) rather than tabs.</summary>
     public bool IsRegionPicker => IsS100Catalogue && _facetGroups.Count > 1;
@@ -111,7 +112,7 @@ internal sealed partial class AddToLibraryDialogViewModel
                 option.PropertyChanged -= OnFacetChanged;
             _facetGroups = regions.Select(r =>
             {
-                var group = new FacetGroupViewModel(r.Name, [.. r.Areas.Select(a => new FacetOptionViewModel(
+                var group = new FacetGroupViewModel(r.Name, [.. r.Areas.Select(a => new LibraryChoice(
                     a.Value, RemoteS100Catalogue.FolderName(a.Value), string.Empty))])
                 { Key = r.Folder };
                 foreach (var option in group.Options)

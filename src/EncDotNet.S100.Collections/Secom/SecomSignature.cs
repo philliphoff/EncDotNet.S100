@@ -41,6 +41,15 @@ public sealed record SecomSignatureCheck(
     /// <see cref="SignerTrusted"/> is true.
     /// </summary>
     public string? TrustAnchor { get; init; }
+
+    /// <summary>
+    /// Whether the signer's certificate, or a CA above it, has been revoked
+    /// (#833). It is checked only for a trusted signer and only when a
+    /// <see cref="SecomRevocation"/> is given; otherwise, and when no current
+    /// CRL could be had, it is <see cref="SecomRevocationStatus.NotChecked"/>.
+    /// It is independent of <see cref="SignerTrusted"/> and <see cref="SignerExpired"/>.
+    /// </summary>
+    public SecomRevocationStatus SignerRevocation { get; init; }
 }
 
 /// <summary>
@@ -55,7 +64,8 @@ public sealed record SecomSignatureCheck(
 /// are not in operating-system trust stores. Without anchors the result says
 /// only whether the data matches the stated certificate
 /// (<see cref="SecomSignatureCheck.SignerTrusted"/> is <see langword="null"/>).
-/// Revocation is not checked.
+/// Revocation is checked for a trusted signer when a <see cref="SecomRevocation"/>
+/// is given (<see cref="SecomSignatureCheck.SignerRevocation"/>).
 /// </remarks>
 public static class SecomSignatureVerifier
 {
@@ -64,11 +74,13 @@ public static class SecomSignatureVerifier
     /// <param name="metadata">The object's exchange metadata; <see langword="null"/> means unsigned.</param>
     /// <param name="trust">The anchors the signer must chain to (e.g. <see cref="SecomTrustAnchors.BuiltIn"/>), or <see langword="null"/> to skip the trust check.</param>
     /// <param name="now">The time expiry is judged at; defaults to now.</param>
+    /// <param name="revocation">Checks a trusted signer's chain for revocation, or <see langword="null"/> to skip the check.</param>
     public static SecomSignatureCheck Verify(
         byte[] data,
         SecomExchangeMetadata? metadata,
         SecomTrustAnchors? trust = null,
-        DateTimeOffset? now = null)
+        DateTimeOffset? now = null,
+        SecomRevocation? revocation = null)
     {
         ArgumentNullException.ThrowIfNull(data);
         if (metadata is not { Signature: { Length: > 0 } signatureHex } || metadata.PublicCertificates.Count == 0)
@@ -115,7 +127,7 @@ public static class SecomSignatureVerifier
                 detail = ex.Message;
             }
 
-            return WithSigner(new SecomSignatureCheck(status, subject, Detail: detail), certificates, metadata.RootCertificateThumbprint, trust, now);
+            return WithSigner(new SecomSignatureCheck(status, subject, Detail: detail), certificates, metadata.RootCertificateThumbprint, trust, now, revocation);
         }
         finally
         {
@@ -125,7 +137,8 @@ public static class SecomSignatureVerifier
 
     /// <summary>
     /// Judges the signer of an earlier check again: its expiry now and, for a
-    /// valid signature, its trust against <paramref name="trust"/>. A recorded
+    /// valid signature, its trust against <paramref name="trust"/> and its
+    /// revocation with <paramref name="revocation"/>. A recorded
     /// download is re-judged this way each time it is read, so trust follows
     /// the current anchors without re-downloading.
     /// </summary>
@@ -134,13 +147,18 @@ public static class SecomSignatureVerifier
     /// <param name="statedThumbprint">The object's <c>publicRootCertificateThumbprint</c>, if any.</param>
     /// <param name="trust">The anchors to judge trust against, or <see langword="null"/> to skip the trust check.</param>
     /// <param name="now">The time expiry is judged at; defaults to now.</param>
-    /// <returns>The check with its trust and expiry updated, or unchanged when the certificates cannot be read.</returns>
+    /// <param name="revocation">
+    /// Checks a trusted signer's chain for revocation, or <see langword="null"/>
+    /// to skip the check. On read paths pass <see cref="SecomRevocation.CacheOnly"/>.
+    /// </param>
+    /// <returns>The check with its trust, revocation and expiry updated, or unchanged when the certificates cannot be read.</returns>
     public static SecomSignatureCheck Recheck(
         SecomSignatureCheck check,
         IReadOnlyList<string> publicCertificates,
         string? statedThumbprint,
         SecomTrustAnchors? trust,
-        DateTimeOffset? now = null)
+        DateTimeOffset? now = null,
+        SecomRevocation? revocation = null)
     {
         ArgumentNullException.ThrowIfNull(check);
         ArgumentNullException.ThrowIfNull(publicCertificates);
@@ -152,7 +170,7 @@ public static class SecomSignatureVerifier
         {
             foreach (var text in publicCertificates)
                 certificates.Add(LoadCertificate(text));
-            return WithSigner(check, certificates, statedThumbprint, trust, now);
+            return WithSigner(check, certificates, statedThumbprint, trust, now, revocation);
         }
         catch (Exception ex) when (ex is CryptographicException or FormatException)
         {
@@ -165,16 +183,24 @@ public static class SecomSignatureVerifier
     }
 
     private static SecomSignatureCheck WithSigner(
-        SecomSignatureCheck check, List<X509Certificate2> certificates, string? statedThumbprint, SecomTrustAnchors? trust, DateTimeOffset? now)
+        SecomSignatureCheck check,
+        List<X509Certificate2> certificates,
+        string? statedThumbprint,
+        SecomTrustAnchors? trust,
+        DateTimeOffset? now,
+        SecomRevocation? revocation)
     {
         var signer = certificates[0];
         var at = (now ?? DateTimeOffset.UtcNow).UtcDateTime;
         var expired = at < signer.NotBefore.ToUniversalTime() || at > signer.NotAfter.ToUniversalTime();
         if (trust is null || check.Status != SecomSignatureStatus.Valid)
-            return check with { SignerTrusted = null, SignerExpired = expired, TrustAnchor = null };
+            return check with { SignerTrusted = null, SignerExpired = expired, TrustAnchor = null, SignerRevocation = SecomRevocationStatus.NotChecked };
 
-        var anchor = trust.FindAnchor(signer, certificates.Skip(1), statedThumbprint);
-        return check with { SignerTrusted = anchor is not null, SignerExpired = expired, TrustAnchor = anchor };
+        var anchor = trust.FindAnchor(signer, certificates.Skip(1), statedThumbprint, out var chain);
+        var revoked = anchor is not null && chain is not null && revocation is not null
+            ? revocation.Check(chain).Status
+            : SecomRevocationStatus.NotChecked;
+        return check with { SignerTrusted = anchor is not null, SignerExpired = expired, TrustAnchor = anchor, SignerRevocation = revoked };
     }
 
     /// <summary>

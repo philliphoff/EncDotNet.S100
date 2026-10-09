@@ -1,10 +1,10 @@
-namespace EncDotNet.S100.Viewer.Library;
+namespace EncDotNet.S100.Collections.Library;
 
 /// <summary>
 /// Display names for the two-letter state and territory codes used by the
 /// NOAA ENC product catalogue.
 /// </summary>
-internal static class UsStateNames
+public static class UsStateNames
 {
     private static readonly Dictionary<string, string> Names = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -71,9 +71,11 @@ internal static class UsStateNames
     };
 
     /// <summary>Returns "Name (CODE)", or the code alone when it is unknown.</summary>
+    /// <param name="code">The two-letter code.</param>
     public static string Describe(string code) =>
         Names.TryGetValue(code, out var name) ? $"{name} ({code.ToUpperInvariant()})" : code;
 
     /// <summary>Returns the name for sorting, or the code when unknown.</summary>
+    /// <param name="code">The two-letter code.</param>
     public static string SortKey(string code) => Names.TryGetValue(code, out var name) ? name : code;
 }

@@ -78,6 +78,13 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         _time = timeProvider ?? TimeProvider.System;
     }
 
+    /// <summary>
+    /// Checks the signers of downloaded objects for revocation (issue #833) when
+    /// their <c>signature</c> property is made; <see langword="null"/> skips it
+    /// and reads "revocation not checked".
+    /// </summary>
+    public SecomRevocation? Revocation { get; init; }
+
     /// <summary>How long a list read from a service is reused before it is read again.</summary>
     public static TimeSpan ReuseInterval { get; } = TimeSpan.FromMinutes(1);
 
@@ -137,7 +144,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         // fingerprint, so the re-index after it is not skipped as unchanged.
         var fingerprint = listing.Stale is null ? Fingerprint(secom, listing) : null;
         var folder = DownloadFolderFor(serviceUri);
-        var downloader = _downloadsRoot is null ? null : new EncCellDownloader(_httpClient, Path.Combine(_downloadsRoot, folder));
+        var downloader = _downloadsRoot is null ? null : new EncCellDownloader(_httpClient, Path.Combine(_downloadsRoot, folder)) { Revocation = Revocation };
         var client = new SecomClient(_httpClient, serviceUri, listing.Version);
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var items = new List<CollectionItem>();
@@ -269,6 +276,12 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     /// Trust and expiry are independent: an expired signer from a trusted root
     /// is still attributable to it.
     /// </summary>
+    /// <remarks>
+    /// For a trusted signer, revocation (#833) is shown between trust and
+    /// expiry: " · signer certificate revoked", or " · revocation not checked"
+    /// when no current CRL could be had. A signer found not revoked adds
+    /// nothing, so the shortest string means every check passed.
+    /// </remarks>
     internal static string Describe(SecomSignatureCheck signature)
     {
         if (signature.Status != SecomSignatureStatus.Valid)
@@ -287,16 +300,22 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
             false => "signer not trusted",
             null => "signer trust not checked",
         };
-        return signature.SignerExpired
-            ? $"valid · {trust} · signer certificate expired"
-            : $"valid · {trust}";
+        var revocation = signature.SignerTrusted is not true ? null : signature.SignerRevocation switch
+        {
+            SecomRevocationStatus.Revoked => " · signer certificate revoked",
+            SecomRevocationStatus.NotChecked => " · revocation not checked",
+            _ => null,
+        };
+        var expiry = signature.SignerExpired ? " · signer certificate expired" : null;
+        return $"valid · {trust}{revocation}{expiry}";
     }
 
     /// <summary>Adds what the downloaded copy (if any) knows: bounds from the probe, and the signature check.</summary>
     private CollectionItem WithDownload(
         CollectionItem item, EncCellDownloader downloader, List<IndexDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
-        if (item.Location is not RemoteItemLocation || downloader.TryGetDownloaded(item.Name) is not { } downloaded)
+        // Index runs are off the UI thread, so they may fetch the CRLs revocation needs.
+        if (item.Location is not RemoteItemLocation || downloader.TryGetDownloaded(item.Name, fetchRevocation: true) is not { } downloaded)
             return item;
 
         var properties = new Dictionary<string, string>(item.Properties, StringComparer.Ordinal);
@@ -465,7 +484,8 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         return product switch
         {
             "S-101" or "S-57" or "S-401" => ".000",
-            "S-102" or "S-104" or "S-111" or "S-412" or "S-413" or "S-414" => ".h5",
+            // S-412 (weather warnings) is GML; S-413/S-414 are unpublished but expected to carry HDF5 grids.
+            "S-102" or "S-104" or "S-111" or "S-413" or "S-414" => ".h5",
             "RTZ" => ".rtz",
             "Unknown" or "OTHER" => ".dat",
             _ => ".gml",

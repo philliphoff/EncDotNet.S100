@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using EncDotNet.S100.Collections.Secom;
 
 namespace EncDotNet.S100.Collections.Tests;
@@ -148,5 +149,67 @@ public sealed class SecomServerTrustTests(SecomServerTrustTests.Pkis pkis) : ICl
         Assert.Equal(SecomReachability.UntrustedServer, refused.Reachability);
         Assert.Equal(SecomServerTrustOutcome.WrongHost, refused.ServerTrust?.Outcome);
         Assert.Equal("Its certificate does not name this host.", refused.Detail);
+    }
+
+    [Theory]
+    [InlineData("not-revoked", SecomRevocationStatus.NotRevoked)]
+    [InlineData("crl-unreachable", SecomRevocationStatus.NotChecked)]
+    public async Task An_anchor_trusted_server_reports_whether_revocation_was_checked(string kind, SecomRevocationStatus expected)
+    {
+        // #833: an unreachable CRL soft-fails; the connection is allowed and says so.
+        var pki = _pki;
+        using var leaf = pki.Leaf(dnsNames: ["localhost"], withCrl: true);
+        await using var server = await TlsServer.StartAsync(leaf, pki.Intermediate);
+        var crls = Crls(pki);
+        crls.Down = kind == "crl-unreachable";
+        var trust = new SecomServerTrust(pki.Anchors, revocation: new SecomRevocation(new HttpClient(crls)));
+
+        using var secom = new HttpClient(trust.CreateHandler());
+        Assert.Equal("ok", await secom.GetStringAsync(server.Uri("/"), Ct));
+        var result = trust.ResultFor("localhost")!;
+        Assert.Equal(SecomServerTrustOutcome.AnchorTrusted, result.Outcome);
+        Assert.Equal(expected, result.Revocation);
+    }
+
+    [Fact]
+    public async Task A_revoked_server_certificate_is_refused_and_probes_say_so()
+    {
+        var pki = _pki;
+        using var leaf = pki.Leaf(dnsNames: ["localhost"], withCrl: true);
+        await using var server = await TlsServer.StartAsync(leaf, pki.Intermediate);
+        var crls = Crls(pki, leaf);
+        var trust = new SecomServerTrust(pki.Anchors, revocation: new SecomRevocation(new HttpClient(crls)));
+
+        using var secom = new HttpClient(trust.CreateHandler());
+        await Assert.ThrowsAsync<HttpRequestException>(() => secom.GetStringAsync(server.Uri("/"), Ct));
+        Assert.Equal(new SecomServerTrustResult(SecomServerTrustOutcome.Revoked, "Test MCP") { Revocation = SecomRevocationStatus.Revoked }, trust.ResultFor("localhost"));
+
+        var registry = new SecomRegistry(new HttpClient(trust.CreateHandler()), serverTrust: trust);
+        var probe = await registry.ProbeAsync(server.Uri("/api/secom"), Ct);
+        Assert.Equal(SecomReachability.UntrustedServer, probe.Reachability);
+        Assert.Equal("Its certificate from Test MCP has been revoked.", probe.Detail);
+    }
+
+    [Fact]
+    public async Task A_refused_certificate_costs_no_crl_fetch()
+    {
+        var pki = _pki;
+        using var leaf = pki.Leaf(dnsNames: ["service.example.test"], withCrl: true);
+        await using var server = await TlsServer.StartAsync(leaf, pki.Intermediate);
+        var crls = Crls(pki);
+        var trust = new SecomServerTrust(pki.Anchors, revocation: new SecomRevocation(new HttpClient(crls)));
+
+        using var secom = new HttpClient(trust.CreateHandler());
+        await Assert.ThrowsAsync<HttpRequestException>(() => secom.GetStringAsync(server.Uri("/"), Ct));
+        Assert.Equal(SecomServerTrustOutcome.WrongHost, trust.ResultFor("localhost")!.Outcome);
+        Assert.Equal(0, crls.Requests);
+    }
+
+    private static SecomRevocationTests.CrlServer Crls(TestPki pki, params X509Certificate2[] revoked)
+    {
+        var crls = new SecomRevocationTests.CrlServer();
+        crls.Crls[TestPki.IntermediateCrlUri.AbsoluteUri] = pki.IntermediateCrl(null, revoked);
+        crls.Crls[TestPki.RootCrlUri.AbsoluteUri] = pki.RootCrl();
+        return crls;
     }
 }

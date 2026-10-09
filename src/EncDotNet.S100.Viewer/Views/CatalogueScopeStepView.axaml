@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:lib="using:EncDotNet.S100.Collections.Library"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              x:Class="EncDotNet.S100.Viewer.Views.CatalogueScopeStepView"
              x:DataType="vm:AddToLibraryDialogViewModel">
@@ -82,7 +83,7 @@
         <!-- The check box stretches over the label; the detail sits right-aligned beside it.
              A collection-manifest group shows its first path (and "+N") instead, and "Not found"
              when a path is missing. -->
-        <DataTemplate x:Key="FacetTemplate" x:DataType="vm:FacetOptionViewModel">
+        <DataTemplate x:Key="FacetTemplate" x:DataType="lib:LibraryChoice">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="10,0">
                 <CheckBox Classes="facet" IsChecked="{Binding IsSelected}"
                           AutomationProperties.Name="{Binding Label}"
