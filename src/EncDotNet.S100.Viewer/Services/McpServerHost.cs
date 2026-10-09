@@ -372,26 +372,7 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(ViewerStateMcpAdapters.Create(new ListNotificationsTool(_notifications)));
             tools.Add(ViewerStateMcpAdapters.Create(new DismissNotificationTool(_notifications)));
         }
-        if (_library is not null)
-        {
-            tools.Add(LibraryMcpAdapters.Create(new ListLibrarySourcesTool(_library)));
-            tools.Add(LibraryMcpAdapters.Create(new QueryLibraryItemsTool(_library)));
-            tools.Add(LibraryMcpAdapters.Create(new DescribeLibraryItemTool(_library)));
-            tools.Add(LibraryMcpAdapters.Create(new ListKnownSourcesTool(_library)));
-            if (_secomRegistry is not null)
-                tools.Add(LibraryMcpAdapters.Create(new ListSecomServicesTool(_secomRegistry)));
-        }
-        if (_libraryEditor is not null)
-        {
-            tools.Add(LibraryEditMcpAdapters.Create(new AddLibrarySourceTool(_libraryEditor)));
-            tools.Add(LibraryEditMcpAdapters.Create(new RefreshLibrarySourceTool(_libraryEditor)));
-            tools.Add(LibraryEditMcpAdapters.Create(new LibraryActionTool(_libraryEditor)));
-            tools.Add(LibraryEditMcpAdapters.Create(new RemoveLibrarySourceTool(_libraryEditor)));
-            tools.Add(LibraryEditMcpAdapters.Create(new SetLibrarySourceOptionsTool(_libraryEditor)));
-            tools.Add(LibraryEditMcpAdapters.Create(new AwaitLibraryIdleTool(_libraryEditor)));
-            if (_secomServerTrust is not null)
-                tools.Add(LibraryMcpAdapters.Create(new SetSecomIdentityTool(_secomServerTrust, references: _secomIdentities)));
-        }
+        tools.AddRange(LibraryMcpTools.Create(_library, _libraryEditor, _secomRegistry, _secomServerTrust, _secomIdentities));
         // Test hooks only: set_test_clock exists only when the viewer was
         // started with --mcp-test-hooks, which makes its clock adjustable.
         if (_testClock is not null && _settings.McpTestHooks)

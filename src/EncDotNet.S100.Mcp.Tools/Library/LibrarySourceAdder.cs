@@ -47,6 +47,51 @@ public sealed class LibrarySourceAdder
         ArgumentNullException.ThrowIfNull(library);
         onLibraryThread ??= work => work();
 
+        IReadOnlyList<LibraryCollection> collections = [];
+        await onLibraryThread(() =>
+        {
+            collections = [.. library.Collections.Where(c => !c.IsSession)];
+            return Task.CompletedTask;
+        }).ConfigureAwait(false);
+        if (request.CollectionId is { } collectionId && !collections.Any(c => c.Id == collectionId))
+            return Fail(new InvalidArgument("collectionId", "no such collection; call list_library_sources"));
+
+        var (draft, error) = await DraftAsync(request, ct).ConfigureAwait(false);
+        if (error is not null)
+            return Fail(error);
+
+        if (request.Preview)
+            return LibraryEditOutcome<AddSourceResult>.Ok(Describe(draft!, collections, request.CollectionId, added: false, null, null));
+        if (!draft!.CanBuild)
+        {
+            return Fail(new LibraryChangeRejected(draft.IncludeAll
+                ? "this source cannot be added as it stands"
+                : "nothing is selected; pass choices or includeAll"));
+        }
+
+        (Guid Collection, Guid Source) added = default;
+        await onLibraryThread(() =>
+        {
+            added = draft.AddTo(library, request.CollectionId, request.CollectionName);
+            return Task.CompletedTask;
+        }).ConfigureAwait(false);
+        return LibraryEditOutcome<AddSourceResult>.Ok(Describe(draft, collections, request.CollectionId, added: true, added.Collection, added.Source));
+
+        static LibraryEditOutcome<AddSourceResult> Fail(ToolError error) => LibraryEditOutcome<AddSourceResult>.Fail(error);
+    }
+
+    /// <summary>
+    /// Resolves what <paramref name="request"/> adds, reads its catalogue and
+    /// applies its choices, shape, resolution, sync and map options, without
+    /// adding it (its collection options are not looked at).
+    /// </summary>
+    /// <param name="request">The request.</param>
+    /// <param name="ct">Cancels reading the catalogue.</param>
+    /// <returns>The draft, or why there is none.</returns>
+    public async Task<LibraryEditOutcome<LibrarySourceDraft>> DraftAsync(AddSourceRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
         var given = new[] { request.KnownSourceId, request.Path, request.Url }.Count(v => !string.IsNullOrWhiteSpace(v));
         if (given != 1)
             return Fail(new InvalidArgument("knownSourceId", "supply exactly one of knownSourceId, path and url"));
@@ -114,15 +159,6 @@ public sealed class LibrarySourceAdder
         if (draft.Scope is not null && await draft.LoadAsync(ct).ConfigureAwait(false) is { } error)
             return Fail(new LibraryChangeRejected($"the catalogue could not be loaded: {error}"));
 
-        IReadOnlyList<LibraryCollection> collections = [];
-        await onLibraryThread(() =>
-        {
-            collections = [.. library.Collections.Where(c => !c.IsSession)];
-            return Task.CompletedTask;
-        }).ConfigureAwait(false);
-        if (request.CollectionId is { } collectionId && !collections.Any(c => c.Id == collectionId))
-            return Fail(new InvalidArgument("collectionId", "no such collection; call list_library_sources"));
-
         if (request.InMapView)
         {
             if (draft.Scope is not SecomScope secom)
@@ -177,25 +213,9 @@ public sealed class LibrarySourceAdder
             draft.KeepDownloaded = sync;
         }
         draft.ShowOnMap = request.ShowOnMap;
+        return LibraryEditOutcome<LibrarySourceDraft>.Ok(draft);
 
-        if (request.Preview)
-            return LibraryEditOutcome<AddSourceResult>.Ok(Describe(draft, collections, request.CollectionId, added: false, null, null));
-        if (!draft.CanBuild)
-        {
-            return Fail(new LibraryChangeRejected(draft.IncludeAll
-                ? "this source cannot be added as it stands"
-                : "nothing is selected; pass choices or includeAll"));
-        }
-
-        (Guid Collection, Guid Source) added = default;
-        await onLibraryThread(() =>
-        {
-            added = draft.AddTo(library, request.CollectionId, request.CollectionName);
-            return Task.CompletedTask;
-        }).ConfigureAwait(false);
-        return LibraryEditOutcome<AddSourceResult>.Ok(Describe(draft, collections, request.CollectionId, added: true, added.Collection, added.Source));
-
-        static LibraryEditOutcome<AddSourceResult> Fail(ToolError error) => LibraryEditOutcome<AddSourceResult>.Fail(error);
+        static LibraryEditOutcome<LibrarySourceDraft> Fail(ToolError error) => LibraryEditOutcome<LibrarySourceDraft>.Fail(error);
     }
 
     private static AddSourceResult Describe(

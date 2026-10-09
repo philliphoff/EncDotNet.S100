@@ -103,10 +103,13 @@ internal static class CliApp
                 mcp.SetDescription("Model Context Protocol (MCP) server operations.");
 
                 mcp.AddCommand<McpServeCommand>("serve")
-                    .WithDescription("Serve the read-only S-100 MCP tools over stdio for a fixed set of datasets, so an agent that spawns this process can query features and coverages without a GUI.")
+                    .WithDescription("Serve the S-100 MCP tools over stdio, with a headless session and a dataset-collection Library, so an agent that spawns this process can query, sample, render and fetch data without a GUI.")
                     .WithExample("mcp", "serve", "dataset.h5")
                     .WithExample("mcp", "serve", "--layer", "enc.000", "--layer", "bathy.h5")
-                    .WithExample("mcp", "serve", "--from", "exchange-set.zip", "--only", "S101,S102");
+                    .WithExample("mcp", "serve", "--from", "exchange-set.zip", "--only", "S101,S102")
+                    .WithExample("mcp", "serve", "charts/")
+                    .WithExample("mcp", "serve", "--collection", "noaa-s111#sfbofs", "--data-dir", "s100-data")
+                    .WithExample("mcp", "serve", "--collection", "charts.s100collection.json");
             });
         });
         return app;
