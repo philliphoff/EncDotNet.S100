@@ -140,6 +140,10 @@ dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn 
   when adding types, removing APIs, or changing behaviour.
 - Conceptual guides live under `docs/` in DocFX Markdown. Add or update pages
   there for user-facing features.
+- Write pages and READMEs to the
+  [documentation style guide](docs/docs-style.md): pick a page type, use its
+  structure, and describe rather than promote. Agents load the `docs-writing`
+  skill.
 - Every public type and member in a packable library needs an XML doc comment;
   the build fails on a missing one (CS1591).
 - The docs site (`docfx.json`) publishes `docs/`, the per-project READMEs

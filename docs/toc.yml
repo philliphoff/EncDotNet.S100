@@ -1,7 +1,5 @@
 - name: Documentation
   href: index.md
-- name: Start here
-  href: start-here.md
 - name: Getting started
   href: getting-started.md
 - name: Developer guides
@@ -34,6 +32,8 @@
   href: observability.md
 - name: C# coding style
   href: coding-style.md
+- name: Documentation style
+  href: docs-style.md
 - name: MCP server
   href: mcp-server.md
 - name: What's new

@@ -1,63 +1,38 @@
 # Getting started
 
-This guide gets supported S-100 data in front of you in a few minutes, with
-**no prior S-100 knowledge required**. Pick the path that fits you:
+There are three ways to use EncDotNet.S100. Each section below is a
+self-contained quickstart.
 
-- **[Desktop app](#desktop-app)** — download the viewer and open a chart on an
-  interactive map. No coding and no .NET installation required. *Start here if
-  you just want to look at data.*
-- **[Library path](#library-path)** — render (or read features from) a dataset
-  in ~20 lines of C# using the batteries-included `EncDotNet.S100` facade.
-- **[CLI path](#cli-path)** — download the standalone `s100` tool and render
-  from the command line, no .NET installation required.
+| If you want to… | Use | .NET required |
+|---|---|---|
+| Look at S-100 data on an interactive map | [Desktop app](#desktop-app) | No |
+| Read or render S-100 data from your own .NET code | [.NET library](#net-library) | Yes |
+| Render datasets to PNG from a script or terminal | [Command-line tool](#command-line-tool) | No |
 
-If you just want to see it run, the
-[`EncDotNet.S100.Samples.Quickstart`](../samples/EncDotNet.S100.Samples.Quickstart/README.md)
-console sample does the library path end-to-end against a bundled synthetic
-fixture — clone the repo and `dotnet run` it.
-
-## Why it matters
-
-This page is optimized for a first successful run, then gives paths for deeper
-integration and automation.
-
-## Quick win
-
-Copy/paste this for a first output image:
-
-```bash
-s100 render dataset.h5 out.png
-```
-
-Expected result: `out.png` appears in your working directory.
-
-> [!TIP]
-> If you prefer no install/setup, use the standalone release binaries for the viewer or `s100` CLI.
+All three need a dataset to open. If you don't have one, see
+[Get sample data](#get-sample-data).
 
 ## Desktop app
 
-**SoundCharts: S-100 Viewer** is a cross-platform desktop application that loads any
-combination of supported products and renders them, time-aligned, on an
-interactive map over a bundled offline basemap (Natural Earth land;
-OpenStreetMap optional). It needs no .NET installation
-and no commercial chart assets.
+SoundCharts is a desktop viewer for S-100 data. It loads any mix of supported
+products onto one map, aligned in time, over an offline basemap.
 
-### 1. Download
+### Install
 
-Each [GitHub Release](https://github.com/philliphoff/EncDotNet.S100/releases)
-attaches a pre-built, self-contained app per platform:
+Download the archive for your platform from the latest
+[GitHub release](https://github.com/philliphoff/EncDotNet.S100/releases).
+The app is self-contained; you don't need to install .NET.
 
-| Platform | Asset | First launch |
+| Platform | Asset | To install |
 |---|---|---|
-| macOS (Apple silicon) | `.dmg` | Signed and Apple-notarized — open the DMG and drag the app to Applications. |
-| Windows | `.zip` | Extract and run the `.exe`. The executable is Authenticode-signed via Azure Trusted Signing. |
-| Linux | `.tar.gz` | Extract and run the executable. See [Linux prerequisites](#linux-prerequisites) below. |
+| macOS (Apple silicon) | `.dmg` | Open the DMG and drag the app to **Applications**. |
+| Windows | `.zip` | Extract the archive and run the `.exe`. |
+| Linux | `.tar.gz` | Install the [Linux prerequisites](#linux-prerequisites), then extract the archive and run the executable. |
 
 #### Linux prerequisites
 
-The Linux archive is self-contained but relies on a few system libraries
-for globalization, fonts, and the X11/OpenGL windowing stack. On a
-minimal or container image install them first (Debian/Ubuntu):
+The app needs a display server (X11, or Wayland through XWayland) and a few
+system libraries. On Debian or Ubuntu:
 
 ```bash
 sudo apt-get update
@@ -66,217 +41,157 @@ sudo apt-get install -y libicu74 fontconfig fonts-dejavu-core \
   libgl1 libegl1
 ```
 
-A running display server (X11, or Wayland via XWayland) is required. See
-the [viewer README](../src/EncDotNet.S100.Viewer/README.md#linux-runtime-prerequisites)
-for the full breakdown and the headless `s100` CLI's
-[lighter requirements](cli.md).
+For details, see
+[Linux runtime prerequisites](../src/EncDotNet.S100.Viewer/README.md#linux-runtime-prerequisites)
+in the viewer guide.
 
-### 2. Open some data
+### Open a dataset
 
-Launch the app, then either **drag a file onto the window** or use the **File**
-menu. The viewer accepts:
+1. Start the app.
+2. Drag a dataset onto the window, or use one of the **File** menu commands:
+   - **Open Dataset...** opens a single dataset file: `.000` (S-101 or S-57),
+     `.h5` (S-102, S-104 or S-111) or `.gml` (any GML-encoded product).
+   - **Open Exchange Set...** opens a folder that contains `CATALOG.XML`.
+     **Open Exchange Set (ZIP)...** opens a `.zip` of one. The app loads every
+     dataset the catalogue lists.
+3. Pan and zoom with the mouse, trackpad or touch.
 
-- **Exchange sets** — a folder containing a `CATALOG.XML`, or a `.zip` of one.
-  Every dataset the catalogue lists is loaded at once.
-- **Loose datasets** — an individual `.h5` (S-102 / S-104 / S-111), `.gml`
-  (any GML-encoded product), or `.000` (S-101 / S-57) file.
+### Next steps
 
-No data yet? See [Where to get sample data](#where-to-get-sample-data) below.
+The [viewer guide](../src/EncDotNet.S100.Viewer/README.md) covers the layer
+stack, feature picking, display palettes and settings, and the timeline for
+time-varying products.
 
-### 3. Explore
+## .NET library
 
-Pan and zoom with the mouse, trackpad, or touch. From the activity bar you can:
+The [`EncDotNet.S100`](../src/EncDotNet.S100/README.md) package opens a
+dataset, detects its product, and reads or renders it using the official feature
+and portrayal catalogues, which ship inside the package.
 
-- toggle layers and see how products stack in the **Layer Stack**;
-- click features in **Pick Mode** to read their decoded attributes;
-- switch **Day / Dusk / Night** palettes and ECDIS display settings;
-- scrub the **timeline** for time-varying data (water levels, currents, ice).
+### Prerequisites
 
-See the [viewer guide](../src/EncDotNet.S100.Viewer/README.md) for the full
-feature tour.
+- [.NET SDK](https://dotnet.microsoft.com/download) 8.0 or later.
+- A dataset file. See [Get sample data](#get-sample-data).
 
-## Library path
+### Create a project
 
-The [`EncDotNet.S100`](../src/EncDotNet.S100/README.md) package is the
-on-ramp: open a dataset, read its features, and render it to an image
-**without hand-wiring feature or portrayal catalogues** — the official
-catalogues bundled in
-[`EncDotNet.S100.Specifications`](../src/EncDotNet.S100.Specifications/README.md)
-are discovered and wired for you.
-
-### 1. Install
-
-```sh
+```bash
+dotnet new console -n S100Quickstart
+cd S100Quickstart
 dotnet add package EncDotNet.S100
 ```
 
-That single package transitively brings in the readers, the pipeline factory,
-the Lua/MoonSharp portrayal engine, the bundled specifications, and the
-headless Skia renderer.
+### Read and render a dataset
 
-### 2. Render a dataset to PNG
+Replace the contents of `Program.cs` with:
 
 ```csharp
 using EncDotNet.S100;
 
-// Detects the product specification from the file (ISO 8211, HDF5, or GML).
-using var dataset = S100Dataset.Open("chart.000");
+string datasetPath = args[0];
+
+// Open the dataset. The product specification is detected from the file.
+using var dataset = S100Dataset.Open(datasetPath);
 Console.WriteLine($"Opened {dataset.Spec}");
 
-// Read features through the bundled feature catalogue
-// (empty for coverage products such as S-102/104/111).
+// List features using the bundled feature catalogue.
+// Coverage products (S-102, S-104, S-111) have no features to list.
 using var featureCatalogue = S100FeatureCatalogue.Bundled(dataset.Spec.Name);
 foreach (var feature in featureCatalogue.EnumerateFeatures(dataset))
     Console.WriteLine($"  {feature.FeatureRef}: {feature.FeatureTypeName ?? feature.FeatureType}");
 
-// Render to PNG through the bundled portrayal catalogue.
-using var renderer = new PngS100DatasetRenderer();
-byte[] png = await renderer.RenderAsync(dataset);
-File.WriteAllBytes("out.png", png);
-```
-
-`RenderAsync(dataset)` is the one-call path: it uses the bundled feature and
-portrayal catalogues for the dataset's product specification.
-
-### 3. Render options
-
-```csharp
-using EncDotNet.S100.Pipelines; // PaletteType
-
-byte[] png = await renderer.RenderAsync(dataset, new S100RendererOptions
+// Render to PNG using the bundled portrayal catalogue.
+if (dataset.CanRenderHeadless)
 {
-    Width = 2048,
-    Height = 1536,
-    Palette = PaletteType.Night,
-    SymbolScale = 1.25,
-    TimeStep = 0,            // time-aware products (S-104, S-111)
-});
+    using var renderer = new PngS100DatasetRenderer();
+    byte[] png = await renderer.RenderAsync(dataset);
+    File.WriteAllBytes("out.png", png);
+    Console.WriteLine("Wrote out.png");
+}
 ```
 
-Not every dataset shape can be rasterised headlessly (for example, fixed-station
-time series). Guard with `dataset.CanRenderHeadless` before rendering, and use
-`dataset.AvailableTimes` to discover the time steps of S-104 / S-111 products.
-
-### 4. Composite multiple datasets
-
-Pass an ordered list of layers (bottom-most first) to render several datasets
-into a single image. The facade drives the renderer-neutral **S-98
-interoperability engine** — the same cross-dataset ordering and depth
-suppression the interactive viewer applies (S-98 Annex A §A-6.9.1) — so an
-S-101 ENC and an S-102 bathymetric surface interleave correctly and the S-101
-depth shading is suppressed where S-102 supersedes it (R-101-102-B).
-
-```csharp
-using var enc = S100Dataset.Open("enc-cell.000");   // S-101
-using var bathy = S100Dataset.Open("bathy.h5");      // S-102
-
-byte[] png = await renderer.RenderAsync(
-    new[]
-    {
-        new S100Layer { Dataset = enc },
-        new S100Layer { Dataset = bathy },
-    },
-    new S100CompositeOptions { Width = 2048, Height = 1536 });
-```
-
-When no `Viewport` is supplied the compositor fits a shared viewport to the
-**union** extent of all active layers; pass an explicit `S100CompositeOptions.Viewport`
-to pin the framing. This path is entirely Mapsui-free — see the
-[headless compositing design note](design/s98-interoperability.md).
-
-To go further with the library:
-
-- [Loading datasets](loading-datasets.md) — open data from folders, ZIPs and
-  exchange sets, with S-101 updates applied.
-- [Reading product data](reading-product-data.md) — read each product's own
-  data: warnings, routes, depths, currents.
-- [Reading protected exchange sets](protected-exchange-sets.md) — S-100 Part 15
-  permits and decryption.
-- [Custom catalogues and validation](catalogues-and-validation.md) — your own
-  catalogues, and validating datasets.
-
-The [`EncDotNet.S100` README](../src/EncDotNet.S100/README.md) summarises the
-whole facade API.
-
-## CLI path
-
-[`s100`](cli.md) is a cross-platform console tool that renders any supported
-dataset to PNG using the same portrayal pipelines as the library, through the
-Mapsui-free Skia headless renderer.
-
-### 1. Install (standalone download)
-
-Each [GitHub Release](https://github.com/philliphoff/EncDotNet.S100/releases)
-attaches a **self-contained, per-platform archive** that bundles the .NET
-runtime and native libraries — **no .NET installation required**.
+Run it with the path to your dataset:
 
 ```bash
-# macOS / Linux
+dotnet run -- path/to/dataset.000
+```
+
+The program prints the detected product and its features, then writes
+`out.png` to the project folder.
+
+`CanRenderHeadless` is `false` for dataset shapes that have no image
+rendering, such as fixed-station time series.
+
+The runnable
+[Quickstart sample](../samples/EncDotNet.S100.Samples.Quickstart/README.md)
+contains the same code and a bundled test dataset.
+
+### Next steps
+
+- [Render options](../src/EncDotNet.S100/README.md#render-options): image size,
+  palette, symbol scale and time step.
+- [Loading datasets](loading-datasets.md): open folders, ZIPs and exchange sets,
+  and apply S-101 updates.
+- [Reading product data](reading-product-data.md): typed access to each
+  product's features, grids and time series.
+- [Compose S-101 and S-102](scenarios/compose-s101-s102.md): render several
+  datasets into one image.
+- [Top APIs](top-apis.md): the main entry points in each package.
+
+## Command-line tool
+
+`s100` inspects datasets and renders them to PNG. It uses the same portrayal
+code as the library.
+
+### Install
+
+Download the `s100` archive for your platform from the latest
+[GitHub release](https://github.com/philliphoff/EncDotNet.S100/releases).
+The tool is self-contained; you don't need to install .NET.
+
+On macOS or Linux:
+
+```bash
 tar -xzf s100-<version>-<rid>.tar.gz
 ./s100 list-specs
 ```
 
-On Windows, extract `s100-<version>-win-x64.zip` and run `s100.exe`. See
-[docs/cli.md](cli.md) for the per-platform asset names and the macOS Gatekeeper
-note.
+On Windows, extract `s100-<version>-win-x64.zip` and run `s100.exe list-specs`.
 
-### 2. Inspect and render
+`list-specs` prints the product specifications the tool supports. For the asset
+names per platform and the macOS Gatekeeper prompt, see
+[Command-line rendering](cli.md).
+
+### Inspect and render a dataset
+
+Show the detected product, the bounds and, for time series, the available time
+steps:
 
 ```bash
-# Show the detected spec, bounds, and (for time-series) the available time steps
-s100 info dataset.h5
-
-# Render to a 1024x768 PNG (auto-detects the spec)
-s100 render dataset.h5 out.png
-
-# Render the 7th time step at night palette on a larger canvas
-s100 render currents.h5 currents.png --time-step 6 --palette night -w 2048 -h 1536
+./s100 info path/to/dataset.h5
 ```
 
-See [docs/cli.md](cli.md) for the full option and exit-code reference.
+Render it to a PNG:
 
-## Where to get sample data
+```bash
+./s100 render path/to/dataset.h5 out.png
+```
 
-This repository **does not** ship real ENC data, and you should never commit
-real ENC data to it either. To try the tools with real-world data, use one of
-the freely available official sample sets:
+### Next steps
 
-- **IHO / product-specification test data** — the IHO and the test-bed working
-  groups publish sample datasets and exchange sets alongside several S-100
-  product specifications (S-101, S-102, S-104, S-111, S-12x, …). Start from the
-  [IHO S-100 page](https://iho.int/en/s-100-edition-5-2-0) and the per-product
-  specification repositories.
-- **Synthetic fixtures in this repo** — the small hand-authored GML/HDF5
-  fixtures under [`tests/datasets/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tests/datasets) are safe to experiment
-  with and are exactly what the test suite and the quickstart sample use. They
-  are deliberately minimal and are **not** navigationally meaningful.
+[Command-line rendering](cli.md) lists every command and option, including
+palettes, image size, time steps and rendering several layers into one image.
 
-The quickstart sample reuses one of these synthetic S-124 fixtures so it runs
-with no downloads at all.
+## Get sample data
 
-## Troubleshooting
+This repository doesn't include real ENC data. Don't commit real ENC data to it.
 
-> [!IMPORTANT]
-> Format mismatch is the most common issue: `.000` (ISO 8211), `.h5` (HDF5), and
-> `.gml` (GML) use different readers and portrayal paths.
-
-> [!WARNING]
-> For GML in EPSG:4326, S-100 Part 10b coordinate ordering is `lat lon`, not
-> `lon lat`.
-
-## Next steps
-
-- [Start here](start-here.md) — audience-based pathways.
-- [Scenario: Render S-102 to PNG](scenarios/render-s102-to-png.md)
-- [Scenario: Inspect S-124 warnings](scenarios/inspect-s124-warnings.md)
-- [Scenario: Compose S-101 + S-102](scenarios/compose-s101-s102.md)
-- [Viewer guide](../src/EncDotNet.S100.Viewer/README.md) — the desktop app's
-  full feature tour.
-- [Command-line rendering](cli.md) — the full `s100` reference.
-- [Loading datasets](loading-datasets.md), [Reading product data](reading-product-data.md),
-  [Reading protected exchange sets](protected-exchange-sets.md) and
-  [Custom catalogues and validation](catalogues-and-validation.md) — the
-  developer guides.
-- [Documentation index](index.md) — per-product libraries and conceptual guides.
-- [Typed data models](typed-data-models.md) — strongly-typed projections over
-  the schema-agnostic feature bags.
+- **Official sample data**: the IHO and its test-bed working groups publish
+  sample datasets and exchange sets with several product specifications
+  (S-101, S-102, S-104, S-111, S-12x and others). Start at the
+  [IHO S-100 page](https://iho.int/en/s-100-edition-5-2-0) and follow the links
+  to each product specification.
+- **Test fixtures in this repository**: the small datasets under
+  [`tests/datasets/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tests/datasets)
+  are synthetic. They're useful for trying the tools, but they aren't
+  navigationally meaningful.

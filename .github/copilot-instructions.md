@@ -167,6 +167,7 @@ them by task signal regardless of which spec you are touching:
 | Choosing or invoking an `s100` CLI command; changes to `tools/EncDotNet.S100.Cli/**`; maintaining `s100 --skill` | `s100-cli` |
 | Verifying a rendering/portrayal change in the viewer, designing or reproducing integration/regression scenarios, capturing reference images, measuring load/render performance, deriving fixtures from real datasets — driving the viewer headlessly via its CLI + MCP server | `viewer-evaluation` |
 | Chart composition independent of a single spec: layer/draw-order & display priority, scale-dependent generalization & declutter, label placement, day/dusk/night palette & contrast, CRS/projection pitfalls, rendering-performance strategy (geometry simplification, caching, vertex-bound cost reasoning) | `chart-cartography` |
+| Adding, rewriting or reviewing developer docs: `docs/**`, `src/*/README.md`, sample READMEs (page types, section structure, tone, runnable steps, DocFX build) | `docs-writing` |
 
 - Before choosing `s100` commands or arguments, run `s100 --skill` and treat
   its comprehensive Markdown as authoritative for the installed build.
