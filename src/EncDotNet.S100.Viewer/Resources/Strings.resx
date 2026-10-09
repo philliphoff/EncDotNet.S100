@@ -3211,6 +3211,12 @@
   <data name="Library_Reachability_UntrustedServerExplanation" xml:space="preserve">
     <value>This service's TLS certificate is not issued under a root this computer or SoundCharts trusts.</value>
   </data>
+  <data name="Library_Reachability_NeedsSecom2Search" xml:space="preserve">
+    <value>Uses SECOM 2.0 search</value>
+  </data>
+  <data name="Library_Reachability_NeedsSecom2SearchExplanation" xml:space="preserve">
+    <value>This service lists its data through SECOM 2.0's signed search, which SoundCharts does not support yet.</value>
+  </data>
   <data name="Library_Reachability_OpenWithCertificate" xml:space="preserve">
     <value>Readable with your certificate</value>
   </data>

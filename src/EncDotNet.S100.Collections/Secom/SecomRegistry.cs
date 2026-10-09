@@ -78,7 +78,7 @@ public enum SecomReachability
     /// <summary>It answers <c>GetSummary</c> without a certificate.</summary>
     Open,
 
-    /// <summary>It answers, but not <c>GetSummary</c> without a client certificate (or a signed request), and no identity is set.</summary>
+    /// <summary>It answers, but refuses <c>GetSummary</c> without a client certificate, and no identity is set.</summary>
     NeedsCertificate,
 
     /// <summary>It answers <c>GetSummary</c> when this client presents its MCP identity (#832), and not without.</summary>
@@ -86,6 +86,14 @@ public enum SecomReachability
 
     /// <summary>It needs a client certificate, and refused the identity this client presented (#832).</summary>
     CertificateRefused,
+
+    /// <summary>
+    /// It has no <c>GetSummary</c> GET (404) but has SECOM 2.0's POST
+    /// GetSummary (<c>POST …/v2/object/search/summary</c>, an enveloped and
+    /// signed filter), which this client does not support yet. Not a
+    /// certificate matter in itself.
+    /// </summary>
+    NeedsSecom2Search,
 
     /// <summary>
     /// Its TLS certificate is not trusted here: issued under no trusted root,
@@ -116,6 +124,9 @@ public sealed record SecomProbeResult(SecomReachability Reachability, string? De
     /// and <see cref="SecomReachability.CertificateRefused"/> (#832): its MRN, or its subject.
     /// </summary>
     public string? Identity { get; init; }
+
+    /// <summary>True when the service actively refused (401, 403, or a TLS-level refusal), not merely failed.</summary>
+    internal bool Refusal { get; init; }
 }
 
 /// <summary>
@@ -234,16 +245,15 @@ public sealed class SecomRegistry
         if (result.Reachability == SecomReachability.NeedsCertificate && _serverTrust?.Identity is { } identity)
         {
             var identified = await ProbeServiceAsync(_httpClient, serviceUri, cancellationToken).ConfigureAwait(false);
-            result = identified.Reachability switch
+            result = identified switch
             {
-                SecomReachability.Open => new SecomProbeResult(SecomReachability.OpenWithCertificate, identity.DisplayName)
+                { Reachability: SecomReachability.Open } => new SecomProbeResult(SecomReachability.OpenWithCertificate, identity.DisplayName)
                 {
                     Identity = identity.DisplayName,
                 },
-                SecomReachability.NeedsCertificate => new SecomProbeResult(SecomReachability.CertificateRefused, identified.Detail)
-                {
-                    Identity = identity.DisplayName,
-                },
+                // Only an active refusal is the identity's: other failures say nothing about it.
+                { Reachability: SecomReachability.NeedsCertificate, Refusal: true } =>
+                    new SecomProbeResult(SecomReachability.CertificateRefused, identified.Detail) { Identity = identity.DisplayName },
                 _ => identified,
             };
         }
@@ -280,11 +290,10 @@ public sealed class SecomRegistry
     {
         var host = serviceUri.IdnHost;
         var client = new SecomClient(httpClient, serviceUri);
-        var answered = false;
+        SecomCapability? capability = null;
         try
         {
-            await client.GetCapabilityAsync(cancellationToken).ConfigureAwait(false);
-            answered = true;
+            capability = await client.GetCapabilityAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsProbeFailure(ex, cancellationToken))
         {
@@ -304,9 +313,17 @@ public sealed class SecomRegistry
             if (Classify(ex, host) is { } failed)
                 return failed;
 
-            // It answers Capability as SECOM but not an anonymous GetSummary (some
-            // services only take signed searches); otherwise it is not a SECOM service.
-            return answered
+            // SECOM 2.0 services (KHRA, KRISO) list only through the enveloped POST
+            // GetSummary and have no GET summary (404): not a certificate matter.
+            // Their serviceVersion is no guide (KRISO states its own 0.1.0, 1.0.0).
+            if (capability is not null
+                && ex is HttpRequestException { StatusCode: HttpStatusCode.NotFound }
+                && await client.HasPostSummaryAsync(cancellationToken).ConfigureAwait(false))
+                return new SecomProbeResult(SecomReachability.NeedsSecom2Search, "It lists its objects only through SECOM 2.0's signed POST summary, which is not supported yet.");
+
+            // It answers Capability as SECOM but not an anonymous GetSummary;
+            // otherwise it is not a SECOM service.
+            return capability is not null
                 ? new SecomProbeResult(SecomReachability.NeedsCertificate, ex.Message)
                 : new SecomProbeResult(SecomReachability.Unreachable, "It does not answer as a SECOM service.");
         }
@@ -319,7 +336,7 @@ public sealed class SecomRegistry
         // the connection failed: the service refused the TLS handshake for want
         // of an (acceptable) client certificate.
         if (ex is HttpRequestException { StatusCode: null } && _serverTrust?.ResultFor(host) is { Allowed: true })
-            return new SecomProbeResult(SecomReachability.NeedsCertificate, "It asks for a client certificate when connecting.");
+            return new SecomProbeResult(SecomReachability.NeedsCertificate, "It asks for a client certificate when connecting.") { Refusal = true };
 
         for (var inner = ex; inner is not null; inner = inner.InnerException)
         {
@@ -332,7 +349,7 @@ public sealed class SecomRegistry
             HttpRequestException { StatusCode: null } => new SecomProbeResult(SecomReachability.Unreachable, ex.Message),
             TaskCanceledException => new SecomProbeResult(SecomReachability.Unreachable, "The service did not answer in time."),
             HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden } =>
-                new SecomProbeResult(SecomReachability.NeedsCertificate, ex.Message),
+                new SecomProbeResult(SecomReachability.NeedsCertificate, ex.Message) { Refusal = true },
             _ => null,
         };
     }

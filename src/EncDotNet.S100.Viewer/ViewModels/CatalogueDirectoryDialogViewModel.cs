@@ -537,6 +537,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
             SecomReachability.OpenWithCertificate => Strings.Library_Reachability_OpenWithCertificate,
             SecomReachability.NeedsCertificate => Strings.Library_Reachability_NeedsCertificate,
             SecomReachability.CertificateRefused => Strings.Library_Reachability_CertificateRefused,
+            SecomReachability.NeedsSecom2Search => Strings.Library_Reachability_NeedsSecom2Search,
             SecomReachability.UntrustedServer => Strings.Library_Reachability_UntrustedServer,
             SecomReachability.Unreachable => Strings.Library_Reachability_Unreachable,
             _ => null,
@@ -558,6 +559,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
             var why = _reachability?.Reachability switch
             {
                 SecomReachability.NeedsCertificate => Strings.Library_Reachability_NeedsCertificateExplanation,
+                SecomReachability.NeedsSecom2Search => Strings.Library_Reachability_NeedsSecom2SearchExplanation,
                 SecomReachability.OpenWithCertificate => string.Format(
                     CultureInfo.CurrentCulture, Strings.Library_Reachability_OpenWithCertificateExplanationFormat, _reachability.Identity),
                 SecomReachability.CertificateRefused => string.Format(

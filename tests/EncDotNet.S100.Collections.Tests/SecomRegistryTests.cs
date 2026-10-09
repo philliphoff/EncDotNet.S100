@@ -114,6 +114,7 @@ public sealed class SecomRegistryTests : IDisposable
     [InlineData("website", SecomReachability.Unreachable)]
     [InlineData("down", SecomReachability.Unreachable)]
     [InlineData("untrusted-tls", SecomReachability.UntrustedServer)]
+    [InlineData("secom2", SecomReachability.NeedsSecom2Search)]
     public async Task Probes_classify_what_a_service_answers(string behaviour, SecomReachability expected)
     {
         var registry = new SecomRegistry(new HttpClient(new ServiceServer(behaviour)));
@@ -146,6 +147,7 @@ public sealed class SecomRegistryTests : IDisposable
     private sealed class ServiceServer(string behaviour) : HttpMessageHandler
     {
         private const string Capability = """{"capability":[{"containerType":0,"dataProductType":"S124","implementedInterfaces":{"get":true,"getSummary":true}}]}""";
+        private const string Capability2 = """{"capability":[{"containerType":0,"dataProductType":"S-124","implementedInterfaces":{"get":true,"getSummary":true},"serviceVersion":"2.0.0"}]}""";
         private const string Summary = """{"summaryObject":[],"pagination":{"totalItems":0,"maxItemsPerPage":1}}""";
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -161,6 +163,10 @@ public sealed class SecomRegistryTests : IDisposable
                 "signed-search-only" => capability ? Json(Capability) : Status(HttpStatusCode.NotFound),
                 "refuses" => Status(HttpStatusCode.Unauthorized),
                 "website" => Status(HttpStatusCode.NotFound),
+                // SECOM 2.0 (KHRA, KRISO): Capability answers, no GET summary (404), a POST summary (400 for {}).
+                "secom2" => capability ? Json(Capability2)
+                    : path.EndsWith("/object/search/summary", StringComparison.Ordinal) ? Status(HttpStatusCode.BadRequest)
+                    : Status(HttpStatusCode.NotFound),
                 _ => throw new InvalidOperationException(behaviour),
             };
         }

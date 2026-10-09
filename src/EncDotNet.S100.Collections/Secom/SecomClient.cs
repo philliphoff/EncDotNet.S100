@@ -270,6 +270,28 @@ public sealed class SecomClient
         }
     }
 
+    /// <summary>
+    /// True when the service has SECOM 2.0's POST GetSummary
+    /// (<c>POST …/v2/object/search/summary</c>, an enveloped and signed
+    /// filter): an empty request is answered with anything but 404. KHRA and
+    /// KRISO list objects only through it; they have no GET summary.
+    /// </summary>
+    internal async Task<bool> HasPostSummaryAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+            using var response = await _httpClient
+                .PostAsync(Resolve(SecomApiVersion.V2, "object/search/summary", []), content, cancellationToken)
+                .ConfigureAwait(false);
+            return response.StatusCode != System.Net.HttpStatusCode.NotFound;
+        }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            return false;
+        }
+    }
+
     private Uri Resolve(SecomApiVersion version, string path, IEnumerable<(string Name, string Value)> parameters)
     {
         var query = new StringBuilder();

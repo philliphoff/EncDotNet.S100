@@ -1244,6 +1244,25 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   - Persisted identities.
 >   - Live validation, which waits on an approved MCC organisation and
 >     providers accepting its certificate.
+> - **Correction (2026-10-09): SECOM 2.0 POST summary.** Most "Needs a
+>   certificate" services were not refusing a certificate.
+>   - SECOM 2.0 (as GLA's SECOMLib implements it) keeps the GET
+>     `…/v2/object/summary` and adds enveloped, signed POST forms:
+>     `POST …/v2/object/search/summary` (GetSummary) and
+>     `POST …/v2/object/search` (Get).
+>   - KHRA and KRISO implement **only** the POST forms. KRISO answers the
+>     GET with "No endpoint GET …/object/summary"; KHRA with Spring's
+>     route-not-found.
+>   - AMSA answers the GET with a bare 404. SECOMLib uses 404 for "nothing
+>     found", so it may just be an empty result.
+>   - The probe now tells them apart:
+>     - **NeedsSecom2Search:** after a 404 summary, an empty POST to
+>       `…/v2/object/search/summary` is answered with anything but 404.
+>     - **CertificateRefused** is kept for active refusals (401, 403, or a
+>       TLS-level refusal) of the identity.
+>   - `serviceVersion` is no guide: KRISO states its own versions (0.1.0,
+>     1.0.0).
+>   - Supporting the signed POST GetSummary and Get is the next slice.
 
 ### 7.11 SECOM certificate revocation (#833)
 
