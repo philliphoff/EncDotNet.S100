@@ -22,7 +22,7 @@ public sealed class CatalogLibraryOpener : ILibraryDatasetOpener, IDisposable
 {
     private readonly IMutableDatasetCatalog _catalog;
     private readonly object _gate = new();
-    private readonly Dictionary<string, IReadOnlyList<DatasetId>> _opened = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (string Path, IReadOnlyList<DatasetId> Ids)> _opened = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Creates an opener that loads into <paramref name="catalog"/>.</summary>
     /// <param name="catalog">The host's dataset catalog.</param>
@@ -89,7 +89,7 @@ public sealed class CatalogLibraryOpener : ILibraryDatasetOpener, IDisposable
             }
 
             lock (_gate)
-                _opened[key] = outcome.Added;
+                _opened[key] = (Path.GetFullPath(path), outcome.Added);
             opened++;
         }
 
@@ -98,15 +98,42 @@ public sealed class CatalogLibraryOpener : ILibraryDatasetOpener, IDisposable
         return new LibraryOpenOutcome(opened, problems);
     }
 
-    private bool IsOpen(string key)
+    /// <summary>
+    /// True when an item this opener opened is <paramref name="path"/> or is
+    /// inside it (a folder) and is still in the catalog: a synced copy the
+    /// Library's sync must not prune.
+    /// </summary>
+    /// <param name="path">A file or folder.</param>
+    public bool IsInUse(string path)
     {
-        IReadOnlyList<DatasetId>? ids;
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var folder = full + Path.DirectorySeparatorChar;
+        IReadOnlyList<DatasetId>[] inside;
         lock (_gate)
         {
-            if (!_opened.TryGetValue(key, out ids))
+            inside = [.. _opened.Values
+                .Where(o => string.Equals(o.Path, full, StringComparison.Ordinal) || o.Path.StartsWith(folder, StringComparison.Ordinal))
+                .Select(o => o.Ids)];
+        }
+
+        return inside.Any(Loaded);
+    }
+
+    private bool IsOpen(string key)
+    {
+        (string Path, IReadOnlyList<DatasetId> Ids) opened;
+        lock (_gate)
+        {
+            if (!_opened.TryGetValue(key, out opened))
                 return false;
         }
 
+        return Loaded(opened.Ids);
+    }
+
+    private bool Loaded(IReadOnlyList<DatasetId> ids)
+    {
         var loaded = _catalog.Datasets;
         return ids.Any(id => loaded.Any(d => d.Id.Equals(id)));
     }

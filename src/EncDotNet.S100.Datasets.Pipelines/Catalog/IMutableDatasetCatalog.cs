@@ -72,7 +72,7 @@ public interface IMutableDatasetCatalog : IDatasetCatalog
 /// </param>
 public sealed record DatasetLoadOutcome(
     [property: Description("The filesystem path that was loaded.")] string Path,
-    [property: Description("How the path was classified: file or exchangeSet.")] DatasetSourceKind Kind,
+    [property: Description("How the path was classified: file, exchangeSet or folder.")] DatasetSourceKind Kind,
     [property: Description("Catalog ids of datasets newly added, in add order; empty when the path produced nothing portrayable.")] IReadOnlyList<DatasetId> Added,
     [property: Description("True when an exchange-set load did not settle before the host's ceiling; some datasets may still be arriving.")] bool TimedOut,
     [property: Description("Why the load failed or skipped datasets, in the order they arose; empty when nothing was skipped.")] IReadOnlyList<string>? Problems = null);
@@ -87,4 +87,8 @@ public enum DatasetSourceKind
     /// <summary>An exchange set — a folder containing a catalogue, or an archive of one.</summary>
     [Description("An exchange set: a folder containing a catalogue, or an archive of one.")]
     ExchangeSet,
+
+    /// <summary>A plain folder of dataset files and exchange sets, searched recursively.</summary>
+    [Description("A plain folder of dataset files and exchange sets, searched recursively.")]
+    Folder,
 }

@@ -240,13 +240,14 @@ public static class S100MutableTools
     private const string OpenDatasetDescription =
         "Loads a dataset file or exchange set into the session's catalog so it becomes queryable and "
         + "renderable. 'path' is a local file (S-101 .000, HDF5 .h5, GML, etc.) OR an exchange set (a "
-        + "folder containing a catalogue, or a .zip of one); the kind is auto-detected. 'spec' "
+        + "folder containing a catalogue, or a .zip of one); hosts that support it also take a plain folder of "
+        + "datasets, searched recursively. The kind is auto-detected. 'spec' "
         + "optionally forces a product-spec hint for single-file loads. Returns the resulting catalog "
         + "id(s), spec, and bounding box, plus why any catalogued dataset was skipped. MUTATING.";
 
     private static McpServerTool CreateOpenDataset(OpenDatasetTool inner) =>
         McpServerTool.Create(
-            ([Description("Local filesystem path to a dataset file or an exchange set (folder containing a catalogue, or a .zip of one).")] string path,
+            ([Description("Local filesystem path to a dataset file or an exchange set (folder containing a catalogue, or a .zip of one); hosts that support it also take a plain folder of datasets, searched recursively.")] string path,
              [Description("Optional explicit product-spec hint (e.g. \"S-102\") for single-file loads; ignored for exchange sets. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
              CancellationToken ct = default) =>
                 DispatchAsync(

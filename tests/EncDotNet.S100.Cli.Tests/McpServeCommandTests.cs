@@ -18,26 +18,38 @@ public sealed class McpServeCommandTests
 {
     private static readonly string[] ExpectedTools =
     [
+        "add_library_source",
+        "await_library_idle",
         "close_all_datasets",
         "close_dataset",
         "count_features",
         "describe_feature",
         "describe_feature_type",
+        "describe_library_item",
         "find_at",
         "identify_features",
+        "library_action",
         "list_datasets",
+        "list_known_sources",
+        "list_library_sources",
+        "list_secom_services",
         "list_specs",
         "list_time_steps",
         "nearest_features",
         "open_dataset",
         "query_features",
+        "query_library_items",
+        "refresh_library_source",
+        "remove_library_source",
         "render_to_image",
         "sample_coverage",
         "sample_coverage_along",
         "search_features",
         "set_display_category",
         "set_display_mode",
+        "set_library_source_options",
         "set_palette",
+        "set_secom_identity",
         "set_time_step",
         "set_viewport",
     ];
@@ -194,11 +206,77 @@ public sealed class McpServeCommandTests
     }
 
     [Fact]
-    public void Serve_rejects_layer_and_from_together()
+    public void Serve_rejects_only_without_an_exchange_set_or_folder()
     {
         // Purely a settings-validation path — the server is never started.
-        var exit = CliApp.Build().Run(["mcp", "serve", "--layer", "a.gml", "--from", "b.zip"]);
+        var exit = CliApp.Build().Run(["mcp", "serve", "--layer", "a.gml", "--only", "S101"]);
 
         Assert.NotEqual(0, exit);
+    }
+
+    [Fact]
+    public async Task Serve_adds_startup_collections_once_to_a_kept_library()
+    {
+        var host = HostPath();
+        var dataset = FixturePath(Path.Combine("S124", "navwarn_surface.gml"));
+        Assert.SkipUnless(File.Exists(host), $"CLI host not found: {host}");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var root = Path.Combine(Path.GetTempPath(), $"s100-serve-library-{Guid.NewGuid():N}");
+        var charts = Path.Combine(root, "warnings");
+        Directory.CreateDirectory(charts);
+        File.Copy(dataset, Path.Combine(charts, "navwarn_surface.gml"));
+        try
+        {
+            // The same command line twice over one data directory: the folder is added once.
+            for (var run = 0; run < 2; run++)
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                var transport = new StdioClientTransport(new StdioClientTransportOptions
+                {
+                    Name = "s100-mcp-serve",
+                    Command = host,
+                    Arguments = ["mcp", "serve", "--collection", charts, "--data-dir", Path.Combine(root, "data")],
+                });
+                await using var client = await McpClient.CreateAsync(transport, cancellationToken: cts.Token);
+
+                var result = await client.CallToolAsync(
+                    "list_library_sources", new Dictionary<string, object?>(), cancellationToken: cts.Token);
+
+                Assert.False(result.IsError ?? false, "list_library_sources returned an error.");
+                var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text;
+                using var doc = System.Text.Json.JsonDocument.Parse(text);
+                var collection = Assert.Single(doc.RootElement.GetProperty("collections").EnumerateArray());
+                Assert.Equal("warnings", collection.GetProperty("name").GetString());
+            }
+
+            Assert.True(File.Exists(Path.Combine(root, "data", "collections.json")));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("https://example.test/catalog.xml", null, null, "https://example.test/catalog.xml", null)]
+    [InlineData("noaa-s111#sfbofs, cbofs", "noaa-s111", null, null, "sfbofs|cbofs")]
+    [InlineData("noaa-enc", "noaa-enc", null, null, null)]
+    [InlineData("./charts#Belgium", null, "./charts", null, "Belgium")]
+    public void A_collection_value_is_a_url_a_path_or_a_known_source(
+        string value, string? known, string? path, string? url, string? choices)
+    {
+        var request = Commands.McpServeCommand.CollectionRequest(value);
+
+        Assert.Equal(known, request.KnownSourceId);
+        Assert.Equal(path, request.Path);
+        Assert.Equal(url, request.Url);
+        Assert.Equal(choices, request.Choices is null ? null : string.Join("|", request.Choices));
     }
 }
