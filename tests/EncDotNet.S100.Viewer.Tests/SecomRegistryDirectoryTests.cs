@@ -142,7 +142,7 @@ public sealed class SecomRegistryDirectoryTests
     }
 
     [Fact]
-    public async Task A_secom_2_service_says_its_search_is_not_supported_rather_than_a_certificate()
+    public async Task A_secom_2_service_says_it_needs_a_signed_request_rather_than_a_certificate()
     {
         var directory = Directory(_ => new SecomProbeResult(SecomReachability.NeedsSecom2Search, "search"));
         directory.ShowRegistryCommand.Execute(null);
@@ -151,10 +151,24 @@ public sealed class SecomRegistryDirectoryTests
 
         directory.SelectedEntry = khra;
         await SettleAsync(() => khra.Reachability is not null);
-        Assert.Equal("Uses SECOM 2.0 search", khra.ReachabilityText);
-        Assert.Contains("SECOM 2.0's signed search", khra.ReachabilityExplanation, StringComparison.Ordinal);
+        Assert.Equal("Needs a signed request", khra.ReachabilityText);
+        Assert.Contains("need your MCP identity, and none is set", khra.ReachabilityExplanation, StringComparison.Ordinal);
         Assert.True(khra.IsReachabilityLimited);
         Assert.False(directory.CanContinueWithSelection);
+    }
+
+    [Fact]
+    public async Task A_signed_request_that_was_not_accepted_says_whose_and_what_the_service_answered()
+    {
+        const string mrn = "urn:mrn:mcp:device:mcc:soundcharts:test";
+        var directory = Directory(_ => new SecomProbeResult(SecomReachability.NeedsSecom2Search, "SECOM POST answered 500.") { Identity = mrn });
+        directory.ShowRegistryCommand.Execute(null);
+        await SettleAsync(() => directory.IsRegistryLoaded);
+        var khra = directory.Entries.Single(e => e.IsRegistry && e.Name.StartsWith("KHRA", StringComparison.Ordinal));
+
+        directory.SelectedEntry = khra;
+        await SettleAsync(() => khra.Reachability is not null);
+        Assert.Equal($"A request signed with your MCP identity ({mrn}) was not accepted: SECOM POST answered 500.", khra.ReachabilityExplanation);
     }
 
     [Fact]
@@ -165,11 +179,11 @@ public sealed class SecomRegistryDirectoryTests
         var tool = new SetSecomIdentityTool(trust);
         var ct = TestContext.Current.CancellationToken;
 
-        Assert.False(Ok(await tool.InvokeAsync(null, null, null, ct)).Set);
+        Assert.False(Ok(await tool.InvokeAsync(null, null, null, ct: ct)).Set);
 
         var path = Path.Combine(folder, "identity.p12");
         File.WriteAllBytes(path, SelfSigned("urn:mrn:mcp:device:mcc:soundcharts:test", DateTimeOffset.UtcNow.AddDays(30)));
-        var set = Ok(await tool.InvokeAsync(path, "pw", null, ct));
+        var set = Ok(await tool.InvokeAsync(path, "pw", null, ct: ct));
         Assert.True(set.Set);
         Assert.Equal("urn:mrn:mcp:device:mcc:soundcharts:test", set.Mrn);
         Assert.Null(set.Anchor);  // self-signed: not under MCP MCC
@@ -178,12 +192,12 @@ public sealed class SecomRegistryDirectoryTests
         // An expired identity, a wrong password and a missing file are refused; the identity stays.
         var expired = Path.Combine(folder, "expired.p12");
         File.WriteAllBytes(expired, SelfSigned("urn:mrn:mcp:device:mcc:soundcharts:old", DateTimeOffset.UtcNow.AddDays(-1)));
-        Assert.False((await tool.InvokeAsync(expired, "pw", null, ct)).TryGetValue(out _));
-        Assert.False((await tool.InvokeAsync(path, "wrong", null, ct)).TryGetValue(out _));
-        Assert.False((await tool.InvokeAsync(Path.Combine(folder, "missing.p12"), null, null, ct)).TryGetValue(out _));
+        Assert.False((await tool.InvokeAsync(expired, "pw", null, ct: ct)).TryGetValue(out _));
+        Assert.False((await tool.InvokeAsync(path, "wrong", null, ct: ct)).TryGetValue(out _));
+        Assert.False((await tool.InvokeAsync(Path.Combine(folder, "missing.p12"), null, null, ct: ct)).TryGetValue(out _));
         Assert.NotNull(trust.Identity);
 
-        Assert.False(Ok(await tool.InvokeAsync(null, null, clear: true, ct)).Set);
+        Assert.False(Ok(await tool.InvokeAsync(null, null, clear: true, ct: ct)).Set);
         Assert.Null(trust.Identity);
         System.IO.Directory.Delete(folder, recursive: true);
     }

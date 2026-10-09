@@ -84,8 +84,9 @@ public static class LibraryMcpAdapters
             "Lists SECOM (IEC 63173-2) data services registered in the MCP service registry: name, organisation, product, "
             + "released or provisional, endpoint and area, cleaned of unusable entries. With probe, each is checked: Open "
             + "(readable without a certificate), OpenWithCertificate (readable with the set_secom_identity identity), "
-            + "NeedsCertificate (no identity set), CertificateRefused, NeedsSecom2Search (SECOM 2.0 signed search, not "
-            + "supported yet), UntrustedServer (its TLS certificate is refused) or "
+            + "NeedsCertificate (no identity set), CertificateRefused, NeedsSecom2Search (lists only through SECOM 2.0 "
+            + "signed requests: no identity set, or the signed request was not accepted), UntrustedServer (its TLS "
+            + "certificate is refused) or "
             + "Unreachable. Add an Open or OpenWithCertificate service with add_library_source url=<endpoint>. Read-only.");
     }
 
@@ -97,8 +98,9 @@ public static class LibraryMcpAdapters
             [Description("A PKCS#12 (.p12/.pfx) or PEM file holding an MCP client certificate and its private key; omit to report the current identity.")] string? path = null,
             [Description("The PKCS#12 or encrypted-key password, if any.")] string? password = null,
             [Description("True to clear the identity.")] bool? clear = null,
+            [Description("The algorithm SECOM 2.0 request envelopes are signed with: 'ecdsa-384-sha3', 'ecdsa-384-sha2', 'ecdsa-256-sha2-256' or 'ecdsa-256-sha3-256'; '' to follow the key (the default). Services check search envelopes with the algorithm they are configured for.")] string? signatureAlgorithm = null,
             CancellationToken ct = default) =>
-            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(path, password, clear, ct));
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(path, password, clear, signatureAlgorithm, ct));
         return Tool(del, SetSecomIdentityTool.Name,
             "Sets the MCP identity (client certificate) presented to SECOM services that ask for one (mutual TLS), clears "
             + "it, or reports it: subject, MRN, trust anchor and expiry. For this session only; nothing is persisted. An "
