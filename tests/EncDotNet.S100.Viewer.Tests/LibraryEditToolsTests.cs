@@ -29,7 +29,7 @@ public sealed class LibraryEditToolsTests : IDisposable
         _library.Initialize();
         _panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action());
         var reader = new ViewerLibraryController(_panel, null, action => { action(); return Task.CompletedTask; });
-        _editor = new ViewerLibraryEditor(_panel, _library, reader, Dialog, dispatch: work => work());
+        _editor = new ViewerLibraryEditor(_panel, _library, reader, new LibrarySourceAdder(Readers), dispatch: work => work());
     }
 
     public void Dispose()
@@ -39,11 +39,11 @@ public sealed class LibraryEditToolsTests : IDisposable
         _context.Dispose();
     }
 
-    private AddToLibraryDialogViewModel Dialog() => new(
-        _library,
-        null,
-        loadForecastModels: (_, models, _) => Task.FromResult<IReadOnlyList<ForecastModelSummary>>(
-            [.. models.Select(m => new ForecastModelSummary(m, Run, 4, 2_000_000, 1_000_000, new GeoBounds(36.5, -77.5, 39.7, -75.5)))]));
+    private static readonly LibraryCatalogueReaders Readers = new()
+    {
+        ForecastModels = (_, models, _) => Task.FromResult<IReadOnlyList<ForecastModelSummary>>(
+            [.. models.Select(m => new ForecastModelSummary(m, Run, 4, 2_000_000, 1_000_000, new GeoBounds(36.5, -77.5, 39.7, -75.5)))]),
+    };
 
     private static AddSourceRequest Add(
         string? known = null, string? path = null, string[]? choices = null, Guid? collectionId = null, bool preview = false) =>

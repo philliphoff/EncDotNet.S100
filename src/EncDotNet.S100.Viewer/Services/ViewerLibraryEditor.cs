@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using Avalonia.Threading;
 using EncDotNet.S100.Collections;
-using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools.Library;
@@ -11,17 +10,15 @@ namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// The viewer's <see cref="ILibraryEditor"/>: each change goes through the code
-/// path the UI uses (the Add-to-Library dialog's view model, the panel's download
-/// and load entry points, and the Library service).
+/// path the UI uses (the core's source drafts the Add-to-Library dialog is built
+/// on, the panel's download and load entry points, and the Library service).
 /// </summary>
 internal sealed class ViewerLibraryEditor : ILibraryEditor
 {
     private readonly LibraryPanelViewModel _panel;
     private readonly CollectionLibrary _library;
     private readonly ViewerLibraryController _reader;
-    private readonly Func<AddToLibraryDialogViewModel> _dialogs;
-    private readonly Func<Uri, CancellationToken, Task<CatalogueProbe>>? _probe;
-    private readonly Func<IReadOnlyList<KnownCatalogueSource>> _userCatalogues;
+    private readonly LibrarySourceAdder _adder;
     private readonly Func<Func<Task>, Task> _dispatch;
     private readonly LibraryActivityTracker _activity;
 
@@ -29,22 +26,18 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
         LibraryPanelViewModel panel,
         CollectionLibrary library,
         ViewerLibraryController reader,
-        Func<AddToLibraryDialogViewModel> dialogs,
-        Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe = null,
-        Func<IReadOnlyList<KnownCatalogueSource>>? userCatalogues = null,
+        LibrarySourceAdder adder,
         Func<Func<Task>, Task>? dispatch = null,
         LibraryActivityTracker? activity = null)
     {
         ArgumentNullException.ThrowIfNull(panel);
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(reader);
-        ArgumentNullException.ThrowIfNull(dialogs);
+        ArgumentNullException.ThrowIfNull(adder);
         _panel = panel;
         _library = library;
         _reader = reader;
-        _dialogs = dialogs;
-        _probe = probe;
-        _userCatalogues = userCatalogues ?? (() => []);
+        _adder = adder;
         _dispatch = dispatch ?? (work => Dispatcher.UIThread.InvokeAsync(work));
         _activity = activity ?? new LibraryActivityTracker();
     }
@@ -52,209 +45,8 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
     // ── add ─────────────────────────────────────────────────────────────
 
     /// <inheritdoc />
-    public async Task<LibraryEditOutcome<AddSourceResult>> AddSourceAsync(AddSourceRequest request, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        var given = new[] { request.KnownSourceId, request.Path, request.Url }.Count(v => !string.IsNullOrWhiteSpace(v));
-        if (given != 1)
-            return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument("knownSourceId", "supply exactly one of knownSourceId, path and url"));
-
-        KnownCatalogueSource? known = null;
-        if (!string.IsNullOrWhiteSpace(request.KnownSourceId))
-        {
-            var id = request.KnownSourceId.Trim();
-            known = KnownCatalogueSources.Find(id)
-                ?? _userCatalogues().FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
-            if (known is null)
-                return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument("knownSourceId", $"no known source '{id}'; call list_known_sources"));
-        }
-        else if (!string.IsNullOrWhiteSpace(request.Url))
-        {
-            if (!Uri.TryCreate(request.Url.Trim(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
-                return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument("url", "expected an http or https URL"));
-            if (_probe is null)
-                return LibraryEditOutcome<AddSourceResult>.Fail(new LibraryChangeRejected("this viewer cannot read online catalogues"));
-            CatalogueProbe probe;
-            try
-            {
-                probe = await _probe(uri, ct).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
-            {
-                return LibraryEditOutcome<AddSourceResult>.Fail(new LibraryChangeRejected($"the URL could not be read ({ex.Message})"));
-            }
-            if (probe.Format is not { } format)
-                return LibraryEditOutcome<AddSourceResult>.Fail(new LibraryChangeRejected("the URL is not a catalogue or feed the Library can read"));
-            known = KnownCatalogueSources.FromUrl(uri, format, probe.Title);
-        }
-
-        LibrarySourceKind? pathKind = null;
-        string? path = null;
-        if (!string.IsNullOrWhiteSpace(request.Path))
-        {
-            path = Path.GetFullPath(request.Path.Trim());
-            if (!File.Exists(path) && !Directory.Exists(path))
-                return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument("path", $"'{path}' does not exist"));
-            pathKind = request.Kind?.Trim().ToLowerInvariant() switch
-            {
-                null or "" => LibraryImportCoordinator.Classify(path),
-                "folder" => LibrarySourceKind.Folder,
-                "exchange_set" or "exchangeset" => LibrarySourceKind.ExchangeSet,
-                "manifest" => LibrarySourceKind.LocalManifest,
-                "s128" or "s-128" => LibrarySourceKind.S128Catalogue,
-                _ => null,
-            };
-            if (pathKind is null)
-                return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument("kind", "expected folder, exchange_set, manifest or s128"));
-        }
-
-        LibraryEditOutcome<AddSourceResult> outcome = default;
-        await _dispatch(async () => outcome = await AddOnUiThreadAsync(request, known, pathKind, path, ct).ConfigureAwait(true)).ConfigureAwait(false);
-        return outcome;
-    }
-
-    private async Task<LibraryEditOutcome<AddSourceResult>> AddOnUiThreadAsync(
-        AddSourceRequest request, KnownCatalogueSource? known, LibrarySourceKind? pathKind, string? path, CancellationToken ct)
-    {
-        var dialog = _dialogs();
-        if (known is not null)
-            dialog.Initialize(known, request.CollectionId);
-        else
-            dialog.Initialize(pathKind!.Value, path, request.CollectionId);
-
-        if (dialog.Kind is not (LibrarySourceKind.Folder or LibrarySourceKind.ExchangeSet or LibrarySourceKind.S128Catalogue))
-        {
-            await dialog.LoadCatalogAsync(ct).ConfigureAwait(true);
-            if (dialog.LoadError is { } error)
-                return LibraryEditOutcome<AddSourceResult>.Fail(new LibraryChangeRejected($"the catalogue could not be loaded: {error}"));
-        }
-
-        if (request.CollectionId is { } collectionId && !dialog.ExistingCollections.Any(c => c.Id == collectionId))
-            return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument("collectionId", "no such collection; call list_library_sources"));
-
-        if (request.InMapView)
-        {
-            if (!dialog.IsSecom)
-                return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument("inMapView", "only a SECOM service can be narrowed to the map view"));
-            if (!dialog.CanScopeSecomToMapView)
-                return LibraryEditOutcome<AddSourceResult>.Fail(new LibraryChangeRejected("there is no map view to narrow to"));
-            await dialog.SetSecomInMapViewAsync(true, ct).ConfigureAwait(true);
-            if (dialog.LoadError is { } areaError)
-                return LibraryEditOutcome<AddSourceResult>.Fail(new LibraryChangeRejected($"the service could not be read for the map view: {areaError}"));
-        }
-
-        // Choices, shape and resolution are applied for a preview too, so it
-        // shows the resulting scope.
-        var options = dialog.FacetGroups.SelectMany(g => g.AllOptions).ToArray();
-        if (request.Choices is { Count: > 0 } choices)
-        {
-            var unknown = new List<string>();
-            foreach (var choice in choices)
-            {
-                var option = options.FirstOrDefault(o => Matches(o.Value, o.Label, choice));
-                if (option is null)
-                    unknown.Add(choice);
-                else
-                    option.IsSelected = true;
-            }
-            if (unknown.Count > 0)
-            {
-                return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument(
-                    "choices", $"unknown choice(s): {string.Join(", ", unknown)}; preview to list them"));
-            }
-            dialog.IncludeAll = request.IncludeAll ?? false;
-        }
-        else if (request.IncludeAll is { } includeAll)
-        {
-            dialog.IncludeAll = includeAll;
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.Shape))
-        {
-            var shape = dialog.ForecastShapes.FirstOrDefault(o => Matches(o.Value, o.Label, request.Shape));
-            if (!dialog.IsS100Forecast || shape is null)
-                return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument("shape", "only a forecast feed has shapes; expected tiles or regional"));
-            dialog.SelectedForecastShape = shape;
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.Resolution))
-        {
-            var resolution = dialog.Resolutions.FirstOrDefault(o => Matches(o.Value, o.Label, request.Resolution));
-            if (resolution is null)
-                return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument("resolution", "not a resolution this catalogue offers; preview to list them"));
-            dialog.SelectedResolution = resolution;
-        }
-
-        if (request.Sync is { } sync)
-        {
-            if (dialog.IsSecom)
-                dialog.SecomSync = sync;
-            else if (dialog.CanKeepDownloaded)
-                dialog.KeepDownloaded = sync;
-            else
-                return LibraryEditOutcome<AddSourceResult>.Fail(new InvalidArgument("sync", "only an online source can be kept downloaded"));
-        }
-
-        dialog.ShowOnMap = request.ShowOnMap;
-
-        if (request.CollectionId is { } target)
-        {
-            dialog.CreateNew = false;
-            dialog.SelectedCollection = dialog.ExistingCollections.First(c => c.Id == target);
-        }
-        else
-        {
-            dialog.CreateNew = true;
-            if (!string.IsNullOrWhiteSpace(request.CollectionName))
-                dialog.NewCollectionName = request.CollectionName.Trim();
-        }
-
-        if (request.Preview)
-            return LibraryEditOutcome<AddSourceResult>.Ok(Describe(dialog, added: false, null, null));
-
-        if (!dialog.ConfirmCommand.CanExecute(null))
-        {
-            return LibraryEditOutcome<AddSourceResult>.Fail(new LibraryChangeRejected(
-                dialog.IncludeAll ? "the dialog cannot add this source as it stands" : "nothing is selected; pass choices or includeAll"));
-        }
-
-        var before = _library.Collections.SelectMany(c => c.Sources).Select(s => s.Id).ToHashSet();
-        dialog.ConfirmCommand.Execute(null);
-        var added = _library.Collections
-            .SelectMany(c => c.Sources.Select(s => (Collection: c, Source: s)))
-            .FirstOrDefault(p => !before.Contains(p.Source.Id));
-        return LibraryEditOutcome<AddSourceResult>.Ok(Describe(dialog, added: true, added.Collection?.Id, added.Source?.Id));
-    }
-
-    private static AddSourceResult Describe(AddToLibraryDialogViewModel dialog, bool added, Guid? collectionId, Guid? sourceId) => new(
-        added,
-        dialog.Kind.ToString(),
-        dialog.Title,
-        dialog.IsLoaded && LibrarySourceKinds.IsOnline(dialog.Kind) ? dialog.CatalogueDetail : null,
-        dialog.IsCatalogueStale,
-        dialog.ForecastEndedNote,
-        dialog.ScopeSummary,
-        [.. dialog.FacetGroups.Select(group => new AddChoiceGroup(
-            group.Title,
-            [.. group.AllOptions.Select(o => new AddChoiceOption(o.Value, o.Label, string.IsNullOrEmpty(o.Detail) ? null : o.Detail, o.IsSelected))]))],
-        dialog.IsS100Forecast
-            ? [.. dialog.ForecastShapes.Select(o => new AddChoiceOption(o.Value ?? string.Empty, o.Label, null, ReferenceEquals(o, dialog.SelectedForecastShape)))]
-            : [],
-        dialog.HasResolutions
-            ? [.. dialog.Resolutions.Select(o => new AddChoiceOption(o.Value ?? string.Empty, o.Label, null, ReferenceEquals(o, dialog.SelectedResolution)))]
-            : [],
-        [.. dialog.ExistingCollections.Select(c => new AddChoiceOption(c.Id.ToString(), c.Definition.Name, null, !dialog.CreateNew && dialog.SelectedCollection?.Id == c.Id))],
-        collectionId,
-        sourceId,
-        dialog.IsSecom ? dialog.SecomSync : dialog.CanKeepDownloaded ? dialog.KeepDownloaded : null,
-        dialog.IsSecom ? dialog.SecomSyncHint : null);
-
-    private static bool Matches(string? value, string label, string wanted)
-    {
-        var w = wanted.Trim();
-        return string.Equals(value, w, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(label, w, StringComparison.OrdinalIgnoreCase);
-    }
+    public Task<LibraryEditOutcome<AddSourceResult>> AddSourceAsync(AddSourceRequest request, CancellationToken ct = default) =>
+        _adder.AddAsync(request, _library, _dispatch, ct);
 
     // ── refresh ─────────────────────────────────────────────────────────
 

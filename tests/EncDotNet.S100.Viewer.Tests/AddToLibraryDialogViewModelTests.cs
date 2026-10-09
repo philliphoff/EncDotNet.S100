@@ -1,6 +1,8 @@
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Noaa;
+using EncDotNet.S100.Collections.Usace;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -22,9 +24,17 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         _context.Dispose();
     }
 
-    private static Task<NoaaEncProductCatalog> LoadFixtureCatalog(Uri _, CancellationToken __) =>
-        Task.FromResult(NoaaEncProductCatalogReader.Read(LibraryTestContext.RepoFile(
-            "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml")));
+    private static readonly KnownCatalogueSource Noaa = KnownCatalogueSources.Find("noaa-enc")!;
+    private static readonly KnownCatalogueSource Usace = KnownCatalogueSources.Find("usace-ienc-rivers")!;
+
+    private static readonly LibraryCatalogueReaders NoaaReaders = new()
+    {
+        NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(LibraryTestContext.RepoFile(
+            "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
+    };
+
+    private static LibraryCatalogueReaders UsaceReaders(string fixture) =>
+        new() { UsaceIenc = (_, _) => Task.FromResult(UsaceIencProductCatalogReader.Read(fixture)) };
 
     [Fact]
     public void Folder_defaults_to_a_new_collection_named_after_the_folder()
@@ -83,21 +93,21 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task Noaa_feed_lists_facets_and_builds_a_scoped_source()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
-        vm.Initialize(LibrarySourceKind.NoaaFeed, null, null);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        vm.Initialize(Noaa, targetCollectionId: null);
         Assert.False(vm.ConfirmCommand.CanExecute(null));
 
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.True(vm.ConfirmCommand.CanExecute(null));
-        var alaska = vm.States.Single(s => s.Value == "AK");
+        var alaska = vm.Choices("States").Single(s => s.Value == "AK");
         Assert.Equal("Alaska (AK)", alaska.Label);
         Assert.Contains("All 6 datasets", vm.SelectionSummary);
 
         alaska.IsSelected = true;
 
         Assert.StartsWith("2 datasets", vm.SelectionSummary);
-        Assert.Equal("NOAA ENC — Alaska", vm.NewCollectionName);
+        Assert.Equal($"{Noaa.Name} — Alaska", vm.NewCollectionName);
 
         vm.ConfirmCommand.Execute(null);
 
@@ -110,24 +120,23 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     public async Task Usace_feed_lists_rivers_and_builds_a_scoped_source()
     {
         var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-u37.xml");
-        var vm = new AddToLibraryDialogViewModel(
-            _library, null, (_, _) => Task.FromResult(EncDotNet.S100.Collections.Usace.UsaceIencProductCatalogReader.Read(fixture)));
-        vm.Initialize(LibrarySourceKind.UsaceFeed, null, null);
+        var vm = new AddToLibraryDialogViewModel(_library, UsaceReaders(fixture));
+        vm.Initialize(Usace, targetCollectionId: null);
 
         Assert.True(vm.IsOnlineFeed);
-        Assert.Equal("USACE Inland ENC", vm.NewCollectionName);
-        var group = Assert.Single(vm.FacetGroups);
-        Assert.Equal("Rivers", group.Title);
+        Assert.Equal(Usace.Name, vm.NewCollectionName);
+        Assert.Empty(vm.FacetGroups);  // until the catalogue is read
 
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(["Allegheny", "Arkansas", "Ohio"], vm.Rivers.Select(r => r.Value));
+        Assert.Equal("Rivers", Assert.Single(vm.FacetGroups).Title);
+        Assert.Equal(["Allegheny", "Arkansas", "Ohio"], vm.Choices().Select(r => r.Value));
         Assert.Contains("All 4 datasets", vm.SelectionSummary);
 
-        vm.Rivers.Single(r => r.Value == "Ohio").IsSelected = true;
+        vm.Choices().Single(r => r.Value == "Ohio").IsSelected = true;
 
         Assert.StartsWith("2 datasets", vm.SelectionSummary);
-        Assert.Equal("USACE Inland ENC — Ohio", vm.NewCollectionName);
+        Assert.Equal($"{Usace.Name} — Ohio", vm.NewCollectionName);
 
         vm.ConfirmCommand.Execute(null);
 
@@ -139,25 +148,26 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task An_unscoped_feed_source_is_named_after_the_catalogue()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
-        vm.Initialize(LibrarySourceKind.NoaaFeed, null, null);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        vm.Initialize(Noaa, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         vm.ConfirmCommand.Execute(null);
 
         var source = Assert.IsType<NoaaEncFeedSource>(Assert.Single(Assert.Single(_library.Collections).Sources).Definition);
         Assert.True(source.Filter.IsUnscoped);
-        Assert.Equal("NOAA ENC", source.DisplayName);
+        Assert.Equal(Noaa.Name, source.DisplayName);
     }
 
     [Fact]
-    public void Noaa_feed_has_three_facet_groups()
+    public async Task Noaa_feed_has_three_facet_groups()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
-        vm.Initialize(LibrarySourceKind.NoaaFeed, null, null);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        vm.Initialize(Noaa, targetCollectionId: null);
+        await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(3, vm.FacetGroups.Count);
-        Assert.Same(vm.States, vm.FacetGroups[0].Options);
+        Assert.Equal(["States", "Coast Guard districts", "Regions"], vm.FacetGroups.Select(g => g.Title));
+        Assert.Same(vm.FacetGroups[0], vm.SelectedFacetGroup);
     }
 
     [Fact]
@@ -166,10 +176,13 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         var buoys = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("usace-ienc-buoys")!;
         Uri? requested = null;
         var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-buoy.xml");
-        var vm = new AddToLibraryDialogViewModel(_library, null, (uri, _) =>
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
         {
-            requested = uri;
-            return Task.FromResult(EncDotNet.S100.Collections.Usace.UsaceIencProductCatalogReader.Read(fixture));
+            UsaceIenc = (uri, _) =>
+            {
+                requested = uri;
+                return Task.FromResult(UsaceIencProductCatalogReader.Read(fixture));
+            },
         });
 
         vm.Initialize(buoys, targetCollectionId: null);
@@ -195,9 +208,8 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-u37.xml");
         var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(
             DateTimeOffset.Parse(today + "T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
-        var vm = new AddToLibraryDialogViewModel(
-            _library, null, (_, _) => Task.FromResult(EncDotNet.S100.Collections.Usace.UsaceIencProductCatalogReader.Read(fixture)), clock);
-        vm.Initialize(LibrarySourceKind.UsaceFeed, null, null);
+        var vm = new AddToLibraryDialogViewModel(_library, UsaceReaders(fixture), clock);
+        vm.Initialize(Usace, targetCollectionId: null);
 
         Assert.Null(vm.CatalogueDateText);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
@@ -211,28 +223,31 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     {
         var known = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("chartcatalogs-ro-ienc")!;
         var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "chartcatalogs-list.xml");
-        var vm = new AddToLibraryDialogViewModel(_library, null, loadCommunityCatalog: (_, _) =>
-            Task.FromResult(EncDotNet.S100.Collections.ChartCatalogs.ChartCatalogsProductCatalogReader.Read(fixture)));
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
+        {
+            CommunityList = (_, _) => Task.FromResult(EncDotNet.S100.Collections.ChartCatalogs.ChartCatalogsProductCatalogReader.Read(fixture)),
+        });
 
         vm.Initialize(known, targetCollectionId: null);
         Assert.Equal(LibrarySourceKind.CommunityFeed, vm.Kind);
         Assert.True(vm.IsSearchable);
-        Assert.Equal("Packages", Assert.Single(vm.FacetGroups).Title);
 
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
+        Assert.Equal("Packages", Assert.Single(vm.FacetGroups).Title);
+
         // The repeated entry is listed once.
-        Assert.Equal(["Base1", "Base2", "XX5RIV01"], vm.Charts.Select(c => c.Value));
-        Assert.Equal("Published 2024-06-12", vm.Charts[0].Detail);
+        Assert.Equal(["Base1", "Base2", "XX5RIV01"], vm.Choices().Select(c => c.Value));
+        Assert.Equal("Published 2024-06-12", vm.Choices()[0].Detail);
         Assert.StartsWith("All 3 packages", vm.SelectionSummary);
         Assert.Contains("2026-09-20", vm.CatalogueDateText);
 
-        vm.ChartSearchText = "1750";
-        var match = Assert.Single(vm.Charts);
+        vm.SearchText = "1750";
+        var match = Assert.Single(vm.Choices());
         match.IsSelected = true;
-        vm.ChartSearchText = string.Empty;
+        vm.SearchText = string.Empty;
 
-        Assert.Equal(3, vm.Charts.Count);
+        Assert.Equal(3, vm.Choices().Count);
         Assert.StartsWith("1 packages", vm.SelectionSummary);
         Assert.Equal($"{known.Name} — River 1750 - 790 (Base2)", vm.NewCollectionName);
 
@@ -260,22 +275,23 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
             EncDotNet.S100.Collections.Feeds.S100Feed.FormatName, 1, "Shared charts",
             new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.Zero), "f1",
             [Item("A", "S-57", 1024), Item("B", "S-101", 2048), Item("C", "S-101", 2048)]);
-        var vm = new AddToLibraryDialogViewModel(_library, null, loadS100Feed: (_, _) => Task.FromResult(feed));
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { S100Feed = (_, _) => Task.FromResult(feed) });
 
         vm.Initialize(known, targetCollectionId: null);
         Assert.Equal(LibrarySourceKind.S100Feed, vm.Kind);
         Assert.True(vm.IsOnlineFeed);
         Assert.Equal("Shared charts", vm.NewCollectionName);
-        Assert.Equal("Products", Assert.Single(vm.FacetGroups).Title);
 
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(["S-101", "S-57"], vm.Products.Select(p => p.Value));
-        Assert.StartsWith("2 datasets", vm.Products[0].Detail);
+        Assert.Equal("Products", Assert.Single(vm.FacetGroups).Title);
+
+        Assert.Equal(["S-101", "S-57"], vm.Choices().Select(p => p.Value));
+        Assert.StartsWith("2 datasets", vm.Choices()[0].Detail);
         Assert.StartsWith("All 3 datasets", vm.SelectionSummary);
         Assert.Contains("2026-09-25", vm.CatalogueDateText);
 
-        vm.Products.Single(p => p.Value == "S-101").IsSelected = true;
+        vm.Choices().Single(p => p.Value == "S-101").IsSelected = true;
 
         Assert.StartsWith("2 datasets", vm.SelectionSummary);
         Assert.Equal("Shared charts — S-101", vm.NewCollectionName);
@@ -296,10 +312,13 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
             [new CatalogFacetValue("S-122", 2, 2048), new CatalogFacetValue("S-124", 5, 5120)],
             7, 7, Truncated: false, EncDotNet.S100.Collections.Secom.SecomApiVersion.V2);
         Uri? described = null;
-        var vm = new AddToLibraryDialogViewModel(_library, null, describeSecom: (uri, _, _) =>
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
         {
-            described = uri;
-            return Task.FromResult(description);
+            Secom = (uri, _, _) =>
+            {
+                described = uri;
+                return Task.FromResult(description);
+            },
         });
 
         vm.Initialize(known, targetCollectionId: null);
@@ -310,11 +329,11 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(new Uri("https://secom.test/api/secom/"), described);
-        Assert.Equal(["S-122", "S-124"], vm.Products.Select(p => p.Value));
-        Assert.StartsWith("5 objects", vm.Products[1].Detail);
+        Assert.Equal(["S-122", "S-124"], vm.Choices().Select(p => p.Value));
+        Assert.StartsWith("5 objects", vm.Choices()[1].Detail);
         Assert.StartsWith("All 7 objects", vm.SelectionSummary);
 
-        vm.Products.Single(p => p.Value == "S-124").IsSelected = true;
+        vm.Choices().Single(p => p.Value == "S-124").IsSelected = true;
         Assert.StartsWith("5 objects", vm.SelectionSummary);
         Assert.Equal("secom.test — S-124", vm.NewCollectionName);
 
@@ -331,8 +350,9 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         var known = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.FromUrl(
             new Uri("https://secom.test/api/secom/"), EncDotNet.S100.Collections.KnownSources.KnownCatalogueFormat.Secom);
         var areas = new List<string?>();
-        var vm = new AddToLibraryDialogViewModel(_library, null,
-            describeSecom: (_, area, _) =>
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
+        {
+            Secom = (_, area, _) =>
             {
                 areas.Add(area);
                 var bytes = area is null ? 500L * 1024 * 1024 : 5120;  // the whole service is too big to sync
@@ -340,7 +360,8 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
                     [new CatalogFacetValue("S-124", area is null ? 90_000 : 5, bytes)], area is null ? 5_000 : 5, area is null ? 90_000 : 5,
                     Truncated: area is null, EncDotNet.S100.Collections.Secom.SecomApiVersion.V2));
             },
-            currentMapView: () => new GeoBounds(49, -124, 49.6, -122.8));
+            CurrentMapView = () => new GeoBounds(49, -124, 49.6, -122.8),
+        });
 
         vm.Initialize(known, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
@@ -369,16 +390,15 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     {
         var known = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("noaa-s102")!;
         var listed = new List<string>();
-        var vm = new AddToLibraryDialogViewModel(
-            _library,
-            null,
-            loadS100Catalogue: (uri, _) =>
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
+        {
+            S100Catalogue = (uri, _) =>
             {
                 using var stream = File.OpenRead(LibraryTestContext.RepoFile(
                     "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-s102-catalog.xml"));
                 return Task.FromResult(EncDotNet.S100.Collections.RemoteCatalogues.RemoteS100CatalogueReader.Read(stream, uri));
             },
-            listS100Folders: (catalogue, folders, _) =>
+            ListS100Folders = (catalogue, folders, _) =>
             {
                 listed.AddRange(folders);
                 IReadOnlyDictionary<Uri, EncDotNet.S100.Collections.RemoteCatalogues.S3Object>? sizes = catalogue.Items
@@ -386,7 +406,8 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
                     .Select(i => ((RemoteItemLocation)i.Location).Uri)
                     .ToDictionary(u => u, u => new EncDotNet.S100.Collections.RemoteCatalogues.S3Object(u, 3_000_000, null));
                 return Task.FromResult<IReadOnlyDictionary<Uri, EncDotNet.S100.Collections.RemoteCatalogues.S3Object>?>(sizes);
-            });
+            },
+        });
 
         var one = LibraryItemViewModel.FormatBytes(3_000_000);
         var two = LibraryItemViewModel.FormatBytes(6_000_000);
@@ -442,15 +463,15 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task Ticking_a_value_chooses_only_what_is_selected()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
-        vm.Initialize(LibrarySourceKind.NoaaFeed, null, null);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        vm.Initialize(Noaa, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
         Assert.True(vm.IncludeAll);
         Assert.Equal("Everything", vm.ScopeDescription);
         Assert.Equal("Nothing selected yet", vm.OnlySelectedSummary);
         Assert.StartsWith("6 cells · ", vm.EverythingSummary);
 
-        vm.States.Single(s => s.Value == "AK").IsSelected = true;
+        vm.Choices("States").Single(s => s.Value == "AK").IsSelected = true;
 
         Assert.False(vm.IncludeAll);
         Assert.True(vm.OnlySelected);
@@ -469,21 +490,21 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task Include_all_builds_an_unscoped_source_and_keeps_the_ticks()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
-        vm.Initialize(LibrarySourceKind.NoaaFeed, null, null);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        vm.Initialize(Noaa, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
-        var alaska = vm.States.Single(s => s.Value == "AK");
+        var alaska = vm.Choices("States").Single(s => s.Value == "AK");
         alaska.IsSelected = true;
-        Assert.Equal("NOAA ENC — Alaska", vm.NewCollectionName);
+        Assert.Equal($"{Noaa.Name} — Alaska", vm.NewCollectionName);
 
         vm.IncludeAll = true;
 
         Assert.True(alaska.IsSelected);
-        Assert.Equal("NOAA ENC", vm.NewCollectionName);
+        Assert.Equal(Noaa.Name, vm.NewCollectionName);
         Assert.Equal("Everything is included; your 1 picks are kept if you switch back", vm.ScopeSummary);
         var source = Assert.IsType<NoaaEncFeedSource>(vm.BuildSource());
         Assert.True(source.Filter.IsUnscoped);
-        Assert.Equal("NOAA ENC", source.DisplayName);
+        Assert.Equal(Noaa.Name, source.DisplayName);
 
         vm.OnlySelected = true;
 
@@ -494,15 +515,15 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     public async Task A_typed_name_is_kept_and_chooses_a_new_collection()
     {
         var existing = _library.AddCollection("Mine", []);
-        var vm = new AddToLibraryDialogViewModel(_library, LoadFixtureCatalog);
-        vm.Initialize(LibrarySourceKind.NoaaFeed, null, existing.Id);
+        var vm = new AddToLibraryDialogViewModel(_library, NoaaReaders);
+        vm.Initialize(Noaa, existing.Id);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
         Assert.True(vm.AddToExisting);
         Assert.Equal("Mine", vm.TargetDescription);
         Assert.Equal("Follows your selection until you type your own.", vm.NameHint);
 
         vm.NewCollectionName = "My charts";
-        vm.States.Single(s => s.Value == "AK").IsSelected = true;
+        vm.Choices("States").Single(s => s.Value == "AK").IsSelected = true;
 
         Assert.True(vm.CreateNew);
         Assert.Equal("New collection", vm.TargetDescription);
@@ -519,8 +540,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     {
         var buoys = EncDotNet.S100.Collections.KnownSources.KnownCatalogueSources.Find("usace-ienc-buoys")!;
         var fixture = LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "usace-ienc-buoy.xml");
-        var vm = new AddToLibraryDialogViewModel(_library, null, (_, _) =>
-            Task.FromResult(EncDotNet.S100.Collections.Usace.UsaceIencProductCatalogReader.Read(fixture)));
+        var vm = new AddToLibraryDialogViewModel(_library, UsaceReaders(fixture));
         vm.Initialize(buoys, targetCollectionId: null);
         Assert.False(vm.IsSingleEntry);
 
@@ -536,8 +556,8 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
     [Fact]
     public async Task Noaa_load_failure_is_reported_and_blocks_confirmation()
     {
-        var vm = new AddToLibraryDialogViewModel(_library, (_, _) => throw new HttpRequestException("offline"));
-        vm.Initialize(LibrarySourceKind.NoaaFeed, null, null);
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { NoaaEnc = (_, _) => throw new HttpRequestException("offline") });
+        vm.Initialize(Noaa, targetCollectionId: null);
 
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 

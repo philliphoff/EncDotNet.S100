@@ -17,8 +17,8 @@ namespace EncDotNet.S100.Mcp.Tools.Library;
 /// <remarks>
 /// <para>
 /// There is no Timeline, so <c>validAt: view_time</c> matches nothing, and no
-/// viewport, so "load as you pan" opens the items now. Sources are added with
-/// a <see cref="LibrarySourceDraft"/>, in the same scopes and words as the
+/// viewport, so "load as you pan" opens the items now. Sources are added by the
+/// shared <see cref="LibrarySourceAdder"/>, in the same scopes and words as the
 /// viewer's Add-to-Library dialog; a SECOM service can be narrowed to a map
 /// view only when <see cref="LibraryCatalogueReaders.CurrentMapView"/> gives one.
 /// </para>
@@ -31,8 +31,7 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
     private readonly Func<IReadOnlyList<KnownCatalogueSource>> _userCatalogues;
     private readonly Func<CollectionSource, FeedHealth?>? _health;
     private readonly TimeProvider _time;
-    private readonly LibraryCatalogueReaders _readers;
-    private readonly Func<Uri, CancellationToken, Task<CatalogueProbe>>? _probe;
+    private readonly LibrarySourceAdder _adder;
 
     // Items of the download batches this host started, by source, for the
     // sources' "Downloading 2 of 5 · …" status lines.
@@ -61,8 +60,7 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
         _userCatalogues = userCatalogues ?? (() => []);
         _health = health;
         _time = time ?? TimeProvider.System;
-        _readers = readers ?? new LibraryCatalogueReaders();
-        _probe = probe;
+        _adder = new LibrarySourceAdder(readers, _userCatalogues, probe, _time);
     }
 
     private CollectionLibrary Library => _operations.Library;
@@ -221,174 +219,8 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
     // ── add ─────────────────────────────────────────────────────────────
 
     /// <inheritdoc />
-    public async Task<LibraryEditOutcome<AddSourceResult>> AddSourceAsync(AddSourceRequest request, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        var given = new[] { request.KnownSourceId, request.Path, request.Url }.Count(v => !string.IsNullOrWhiteSpace(v));
-        if (given != 1)
-            return Fail(new InvalidArgument("knownSourceId", "supply exactly one of knownSourceId, path and url"));
-
-        LibrarySourceDraft? draft;
-        LibrarySourceKind kind;
-        if (!string.IsNullOrWhiteSpace(request.Path))
-        {
-            var path = Path.GetFullPath(request.Path.Trim());
-            if (!File.Exists(path) && !Directory.Exists(path))
-                return Fail(new InvalidArgument("path", $"'{path}' does not exist"));
-            LibrarySourceKind? pathKind = request.Kind?.Trim().ToLowerInvariant() switch
-            {
-                null or "" => LibrarySourceKinds.Classify(path),
-                "folder" => LibrarySourceKind.Folder,
-                "exchange_set" or "exchangeset" => LibrarySourceKind.ExchangeSet,
-                "manifest" => LibrarySourceKind.LocalManifest,
-                "s128" or "s-128" => LibrarySourceKind.S128Catalogue,
-                _ => null,
-            };
-            if (pathKind is not { } local)
-                return Fail(new InvalidArgument("kind", "expected folder, exchange_set, manifest or s128"));
-            kind = local;
-            draft = LibrarySourceDraft.ForPath(local, path);
-        }
-        else
-        {
-            KnownCatalogueSource? known;
-            if (!string.IsNullOrWhiteSpace(request.KnownSourceId))
-            {
-                var id = request.KnownSourceId.Trim();
-                known = KnownCatalogueSources.Find(id)
-                    ?? _userCatalogues().FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
-                if (known is null)
-                    return Fail(new InvalidArgument("knownSourceId", $"no known source '{id}'; call list_known_sources"));
-            }
-            else
-            {
-                if (!Uri.TryCreate(request.Url!.Trim(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
-                    return Fail(new InvalidArgument("url", "expected an http or https URL"));
-                if (_probe is null)
-                    return Fail(new LibraryChangeRejected("this host cannot read online catalogues"));
-                CatalogueProbe probe;
-                try
-                {
-                    probe = await _probe(uri, ct).ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
-                {
-                    return Fail(new LibraryChangeRejected($"the URL could not be read ({ex.Message})"));
-                }
-                if (probe.Format is not { } format)
-                    return Fail(new LibraryChangeRejected("the URL is not a catalogue or feed the Library can read"));
-                known = KnownCatalogueSources.FromUrl(uri, format, probe.Title);
-            }
-
-            kind = LibrarySourceKinds.Of(known.Format);
-            draft = LibrarySourceDraft.ForCatalogue(known, _readers, _time);
-        }
-
-        if (draft is null)
-            return Fail(new LibraryChangeRejected($"this host cannot read {kind} catalogues"));
-
-        // Online catalogues and collection manifests are read for their choices.
-        if (draft.Scope is not null && await draft.LoadAsync(ct).ConfigureAwait(false) is { } error)
-            return Fail(new LibraryChangeRejected($"the catalogue could not be loaded: {error}"));
-
-        var collections = Library.Collections.Where(c => !c.IsSession).ToArray();
-        if (request.CollectionId is { } collectionId && !collections.Any(c => c.Id == collectionId))
-            return Fail(new InvalidArgument("collectionId", "no such collection; call list_library_sources"));
-        if (request.InMapView)
-        {
-            if (draft.Scope is not SecomScope secom)
-                return Fail(new InvalidArgument("inMapView", "only a SECOM service can be narrowed to the map view"));
-            if (!secom.CanScopeToMapView)
-                return Fail(new LibraryChangeRejected("there is no map view to narrow to"));
-            secom.InMapView = true;
-            if (await draft.LoadAsync(ct).ConfigureAwait(false) is { } areaError)
-                return Fail(new LibraryChangeRejected($"the service could not be read for the map view: {areaError}"));
-        }
-
-        // Choices are applied for a preview too, so it shows the resulting scope.
-        if (request.Choices is { Count: > 0 } choices)
-        {
-            var options = draft.Groups.SelectMany(g => g.Options).ToArray();
-            var unknown = new List<string>();
-            foreach (var choice in choices)
-            {
-                if (options.FirstOrDefault(o => Matches(o.Value, o.Label, choice)) is { } option)
-                    option.IsSelected = true;
-                else
-                    unknown.Add(choice);
-            }
-            if (unknown.Count > 0)
-                return Fail(new InvalidArgument("choices", $"unknown choice(s): {string.Join(", ", unknown)}; preview to list them"));
-            draft.IncludeAll = request.IncludeAll ?? false;
-        }
-        else if (request.IncludeAll is { } includeAll)
-        {
-            draft.IncludeAll = includeAll;
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.Shape))
-        {
-            var forecast = draft.Scope as S100ForecastScope;
-            if (forecast?.Shapes.FirstOrDefault(o => Matches(o.Value, o.Label, request.Shape)) is not { } shape)
-                return Fail(new InvalidArgument("shape", "only a forecast feed has shapes; expected tiles or regional"));
-            forecast.SelectedShape = shape;
-        }
-        if (!string.IsNullOrWhiteSpace(request.Resolution))
-        {
-            var resolution = (draft.Scope as S100CatalogueScope)?.Resolutions.FirstOrDefault(o => Matches(o.Value, o.Label, request.Resolution));
-            if (resolution is null)
-                return Fail(new InvalidArgument("resolution", "not a resolution this catalogue offers; preview to list them"));
-            ((S100CatalogueScope)draft.Scope!).SelectedResolution = resolution;
-        }
-        if (request.Sync is { } sync)
-        {
-            if (!draft.CanKeepDownloaded)
-                return Fail(new InvalidArgument("sync", "only an online source can be kept downloaded"));
-            draft.KeepDownloaded = sync;
-        }
-        draft.ShowOnMap = request.ShowOnMap;
-
-        if (request.Preview)
-            return LibraryEditOutcome<AddSourceResult>.Ok(Describe(draft, collections, request.CollectionId, added: false, null, null));
-        if (!draft.CanBuild)
-            return Fail(new LibraryChangeRejected("this source cannot be added as it stands"));
-
-        var (collection, source) = draft.AddTo(Library, request.CollectionId, request.CollectionName);
-        return LibraryEditOutcome<AddSourceResult>.Ok(Describe(draft, collections, request.CollectionId, added: true, collection, source));
-
-        static LibraryEditOutcome<AddSourceResult> Fail(ToolError error) => LibraryEditOutcome<AddSourceResult>.Fail(error);
-    }
-
-    private static AddSourceResult Describe(
-        LibrarySourceDraft draft, IReadOnlyList<LibraryCollection> collections, Guid? target, bool added, Guid? collectionId, Guid? sourceId) => new(
-        added,
-        draft.Kind.ToString(),
-        draft.Title,
-        draft.CatalogueDetail,
-        draft.IsCatalogueStale,
-        draft.ForecastEndedNote,
-        draft.ScopeSummary,
-        [.. draft.Groups.Select(group => new AddChoiceGroup(
-            group.Title,
-            [.. group.Options.Select(o => new AddChoiceOption(o.Value, o.Label, string.IsNullOrEmpty(o.Detail) ? null : o.Detail, o.IsSelected))]))],
-        draft.Scope is S100ForecastScope forecast
-            ? [.. forecast.Shapes.Select(o => new AddChoiceOption(o.Value ?? string.Empty, o.Label, null, o == forecast.SelectedShape))]
-            : [],
-        draft.Scope is S100CatalogueScope { HasResolutions: true } catalogue
-            ? [.. catalogue.Resolutions.Select(o => new AddChoiceOption(o.Value ?? string.Empty, o.Label, null, o == catalogue.SelectedResolution))]
-            : [],
-        [.. collections.Select(c => new AddChoiceOption(c.Id.ToString(), c.Definition.Name, null, target == c.Id))],
-        collectionId,
-        sourceId,
-        draft.CanKeepDownloaded ? draft.KeepDownloaded : null,
-        draft.KeepDownloadedHint);
-
-    private static bool Matches(string? value, string label, string wanted)
-    {
-        var w = wanted.Trim();
-        return string.Equals(value, w, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(label, w, StringComparison.OrdinalIgnoreCase);
-    }
+    public Task<LibraryEditOutcome<AddSourceResult>> AddSourceAsync(AddSourceRequest request, CancellationToken ct = default) =>
+        _adder.AddAsync(request, Library, ct: ct);
 
     // ── refresh ─────────────────────────────────────────────────────────
 

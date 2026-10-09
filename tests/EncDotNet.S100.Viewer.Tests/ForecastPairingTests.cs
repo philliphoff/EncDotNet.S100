@@ -213,13 +213,13 @@ public sealed class ForecastPairingTests : IDisposable
             "rtofs_east" => new ForecastModelSummary(m, Run, 1, 1, 1, null) { TileBounds = [new GeoBounds(33.6, -81.6, 43.2, -72)] },
             _ => new ForecastModelSummary(m, Run, 1, 1, 1, null) { TileBounds = [new GeoBounds(10, 10, 11, 11)] },
         }).ToArray();
-        var vm = new AddToLibraryDialogViewModel(_library, null, loadForecastModels: (_, models, _) => Task.FromResult(Summaries(models)));
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { ForecastModels = (_, models, _) => Task.FromResult(Summaries(models)) });
         vm.Initialize(known, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
         vm.PreselectModelsCovering(area);
 
-        Assert.Equal(["cbofs"], vm.ForecastModels.Where(o => o.IsSelected).Select(o => o.Value));
+        Assert.Equal(["cbofs"], vm.Choices().Where(o => o.IsSelected).Select(o => o.Value));
         Assert.False(vm.IncludeAll);
     }
 
@@ -228,9 +228,11 @@ public sealed class ForecastPairingTests : IDisposable
     {
         var known = KnownCatalogueSources.Find("noaa-s104")!;
         var pilotRun = new DateTimeOffset(2025, 12, 17, 12, 0, 0, TimeSpan.Zero);
-        var vm = new AddToLibraryDialogViewModel(_library, null, timeProvider: _time,
-            loadForecastModels: (_, models, _) => Task.FromResult<IReadOnlyList<ForecastModelSummary>>(
-                [new ForecastModelSummary(models[0], pilotRun, 4, 5_349_334, null, null)]));
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
+        {
+            ForecastModels = (_, models, _) => Task.FromResult<IReadOnlyList<ForecastModelSummary>>(
+                [new ForecastModelSummary(models[0], pilotRun, 4, 5_349_334, null, null)]),
+        }, _time);
 
         vm.Initialize(known, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);

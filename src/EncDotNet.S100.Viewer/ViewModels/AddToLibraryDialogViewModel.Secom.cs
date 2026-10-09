@@ -1,5 +1,3 @@
-using EncDotNet.S100.Collections;
-using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.Library;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -11,10 +9,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 internal sealed partial class AddToLibraryDialogViewModel
 {
-    private readonly Func<Uri, string?, CancellationToken, Task<SecomServiceDescription>>? _describeSecom;
-    private readonly Func<GeoBounds?>? _currentMapView;
-
-    private SecomScope? Secom => _scope as SecomScope;
+    private SecomScope? Secom => Scope as SecomScope;
 
     /// <summary>True when adding a SECOM service.</summary>
     public bool IsSecom => _kind == LibrarySourceKind.Secom;
@@ -50,7 +45,7 @@ internal sealed partial class AddToLibraryDialogViewModel
             return;
         secom.InMapView = inMapView;
         OnPropertyChanged(nameof(SecomInMapView));
-        await LoadScopeAsync(cancellationToken).ConfigureAwait(true);
+        await LoadCatalogAsync(cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>True when there is a map view to narrow the service to.</summary>
@@ -58,7 +53,4 @@ internal sealed partial class AddToLibraryDialogViewModel
 
     /// <summary>"Downloads 9.8 MB now", or why syncing is not advised.</summary>
     public string? SecomSyncHint => Secom?.SyncHint;
-
-    /// <summary>The SECOM filter for the current product selection.</summary>
-    public SecomFilter CurrentSecomFilter => Secom?.CurrentFilter ?? new SecomFilter();
 }
