@@ -36,7 +36,7 @@ public sealed class AddCollectionManifestDialogViewTests
         var adding = new AddToLibraryDialogViewModel(library, null);
         adding.Initialize(LibrarySourceKind.LocalManifest, good, targetCollectionId: null);
         await adding.LoadCatalogAsync();
-        adding.Groups[1].IsSelected = true;
+        adding.Choices()[1].IsSelected = true;
 
         var broken = new AddToLibraryDialogViewModel(library, null);
         broken.Initialize(LibrarySourceKind.LocalManifest, bad, targetCollectionId: null);

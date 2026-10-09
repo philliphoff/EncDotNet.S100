@@ -627,7 +627,8 @@ public partial class App : Application
             sp.GetRequiredService<IExchangeSetService>(),
             sp.GetRequiredService<DatasetsViewModel>(),
             sp.GetService<Services.Notifications.INotificationService>()));
-        services.AddTransient(sp =>
+        // Reads online catalogues for the Add-to-Library dialog and the Library tools (#792).
+        services.AddSingleton(sp =>
         {
             var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer>();
             var usace = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.UsaceIencFeedIndexer>();
@@ -636,18 +637,23 @@ public partial class App : Application
             var s100Catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
             var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
             var secom = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.SecomSourceIndexer>();
-            return new AddToLibraryDialogViewModel(
-                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
-                (uri, ct) => feeds.GetCatalogAsync(uri, cancellationToken: ct),
-                (uri, ct) => usace.GetCatalogAsync(uri, cancellationToken: ct),
-                loadCommunityCatalog: (uri, ct) => community.GetCatalogAsync(uri, cancellationToken: ct),
-                loadS100Feed: (uri, ct) => s100Feeds.GetFeedAsync(uri, cancellationToken: ct),
-                loadS100Catalogue: (uri, ct) => s100Catalogues.GetCatalogueAsync(uri, cancellationToken: ct),
-                listS100Folders: (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct),
-                loadForecastModels: (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct),
-                describeSecom: (uri, area, ct) => secom.DescribeAsync(uri, area, ct),
-                currentMapView: () => MapViewOf(sp.GetService<IMapViewportNotifier>()?.Current));
+            return new EncDotNet.S100.Collections.Library.LibraryCatalogueReaders
+            {
+                NoaaEnc = (uri, ct) => feeds.GetCatalogAsync(uri, cancellationToken: ct),
+                UsaceIenc = (uri, ct) => usace.GetCatalogAsync(uri, cancellationToken: ct),
+                CommunityList = (uri, ct) => community.GetCatalogAsync(uri, cancellationToken: ct),
+                S100Feed = (uri, ct) => s100Feeds.GetFeedAsync(uri, cancellationToken: ct),
+                S100Catalogue = (uri, ct) => s100Catalogues.GetCatalogueAsync(uri, cancellationToken: ct),
+                ListS100Folders = (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct),
+                ForecastModels = (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct),
+                Secom = (uri, area, ct) => secom.DescribeAsync(uri, area, ct),
+                CurrentMapView = () => MapViewOf(sp.GetService<IMapViewportNotifier>()?.Current),
+            };
         });
+        services.AddTransient(sp => new AddToLibraryDialogViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibraryCatalogueReaders>(),
+            sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<Func<AddToLibraryDialogViewModel>>(sp => sp.GetRequiredService<AddToLibraryDialogViewModel>);
         services.AddTransient(sp =>
         {
@@ -1097,9 +1103,11 @@ public partial class App : Application
                 sp.GetRequiredService<LibraryPanelViewModel>(),
                 sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 sp.GetRequiredService<ViewerLibraryController>(),
-                sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
-                sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
-                () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources),
+                new EncDotNet.S100.Mcp.Tools.Library.LibrarySourceAdder(
+                    sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibraryCatalogueReaders>(),
+                    () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources,
+                    sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
+                    sp.GetRequiredService<TimeProvider>())),
             // Only with --mcp-test-hooks: the ui_* tools are for scripted testing.
             sp.GetRequiredService<ViewerSettings>().McpTestHooks ? ViewerUiAutomation.ForApplication() : null,
             sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>(),

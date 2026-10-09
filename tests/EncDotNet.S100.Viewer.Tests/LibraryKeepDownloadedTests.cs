@@ -71,7 +71,7 @@ public sealed class LibraryKeepDownloadedTests : IDisposable
             EncDotNet.S100.Collections.Feeds.S100Feed.FormatName, 1, "Shared charts",
             new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.Zero), "f1",
             [new CollectionItem { Key = "A", ProductSpec = "S-101", Name = "A", Location = new RemoteItemLocation(new Uri(feedUri, "items/A.zip"), 1024) }]);
-        var vm = new AddToLibraryDialogViewModel(_library, null, loadS100Feed: (_, _) => Task.FromResult(feed));
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { S100Feed = (_, _) => Task.FromResult(feed) });
 
         vm.Initialize(known, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);

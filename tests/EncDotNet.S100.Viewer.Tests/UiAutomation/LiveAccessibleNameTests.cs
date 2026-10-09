@@ -128,7 +128,7 @@ public sealed partial class LiveAccessibleNameTests
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
                 Task.FromResult(new CatalogueProbe(null, null, null))),
-            () => new AddToLibraryDialogViewModel(library, loadNoaaCatalog: null));
+            () => new AddToLibraryDialogViewModel(library));
         wizard.Start(null);
         using var host = ViewHost.Show(new AddOnlineCatalogueWizardView { DataContext = wizard }, width: 640, height: 760);
 

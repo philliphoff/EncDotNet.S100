@@ -206,7 +206,7 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         string.Equals(path, folder, StringComparison.OrdinalIgnoreCase)
         || path.StartsWith(folder + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
-    private void ShowDialog(LibrarySourceKind kind, string? path, Guid? targetCollectionId)
+    private void ShowDialog(LibrarySourceKind kind, string path, Guid? targetCollectionId)
     {
         var dialog = _dialogFactory();
         dialog.Initialize(kind, path, targetCollectionId);

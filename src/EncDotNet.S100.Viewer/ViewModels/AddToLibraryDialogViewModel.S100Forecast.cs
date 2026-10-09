@@ -1,6 +1,4 @@
-using System.Collections.ObjectModel;
 using EncDotNet.S100.Collections;
-using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.Library;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -12,15 +10,10 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 internal sealed partial class AddToLibraryDialogViewModel
 {
-    private readonly Func<Uri, IReadOnlyList<ForecastModel>, CancellationToken, Task<IReadOnlyList<ForecastModelSummary>>>? _loadForecastModels;
-
-    private S100ForecastScope? ForecastScope => _scope as S100ForecastScope;
+    private S100ForecastScope? ForecastScope => Scope as S100ForecastScope;
 
     /// <summary>True when adding a forecast feed.</summary>
     public bool IsS100Forecast => _kind == LibrarySourceKind.S100Forecast;
-
-    /// <summary>The forecast feed's models (the one facet).</summary>
-    public ObservableCollection<LibraryChoice> ForecastModels { get; } = [];
 
     /// <summary>How runs download: tiles (the default), or one file per model.</summary>
     public IReadOnlyList<LibraryResolution> ForecastShapes => ForecastScope?.Shapes ?? [];
