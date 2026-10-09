@@ -516,7 +516,7 @@ catalogue would need the palette in the key; bump the processor's
 
 - [Loading datasets](../../docs/loading-datasets.md): open files, folders,
   ZIPs and exchange sets, and use processors.
-- [Embedding the renderer](../../docs/embedding-the-renderer.md): draw
+- [Render images and map tiles](../../docs/embedding-the-renderer.md): draw
   portrayal output in your own map.
 - [S-98 interoperability](../../docs/design/s98-interoperability.md): the
   design behind the layer ordering and suppression rules.
