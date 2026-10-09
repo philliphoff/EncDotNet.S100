@@ -114,6 +114,80 @@ public sealed class SecomRegistryDirectoryTests
     }
 
     [Fact]
+    public async Task A_service_readable_with_the_identity_continues_and_a_refusal_says_whose()
+    {
+        // #832: probes made with the client's MCP identity.
+        const string mrn = "urn:mrn:mcp:device:mcc:soundcharts:test";
+        var directory = Directory(uri => uri.Host == "s124.ccg-gcc.gc.ca"
+            ? new SecomProbeResult(SecomReachability.OpenWithCertificate, mrn) { Identity = mrn }
+            : new SecomProbeResult(SecomReachability.CertificateRefused, "401") { Identity = mrn });
+        directory.ShowRegistryCommand.Execute(null);
+        await SettleAsync(() => directory.IsRegistryLoaded);
+        var khra = directory.Entries.Single(e => e.IsRegistry && e.Name.StartsWith("KHRA", StringComparison.Ordinal));
+        var ccg = directory.Entries.Single(e => e.IsRegistry && e.Source.CatalogUri.Host == "s124.ccg-gcc.gc.ca");
+
+        directory.SelectedEntry = khra;
+        await SettleAsync(() => khra.Reachability is not null);
+        Assert.Equal("Certificate refused", khra.ReachabilityText);
+        Assert.Equal($"Your MCP identity ({mrn}) was presented, but this service does not accept it.", khra.ReachabilityExplanation);
+        Assert.True(khra.IsReachabilityLimited);
+        Assert.False(directory.CanContinueWithSelection);
+
+        directory.SelectedEntry = ccg;
+        await SettleAsync(() => ccg.Reachability is not null);
+        Assert.Equal("Readable with your certificate", ccg.ReachabilityText);
+        Assert.Equal($"It shares data with your MCP identity ({mrn}).", ccg.ReachabilityExplanation);
+        Assert.False(ccg.IsReachabilityLimited);
+        Assert.True(directory.CanContinueWithSelection);
+    }
+
+    [Fact]
+    public async Task Set_secom_identity_loads_reports_refuses_and_clears_for_the_session()
+    {
+        var folder = System.IO.Directory.CreateTempSubdirectory("secom-identity-").FullName;
+        var trust = new SecomServerTrust();
+        var tool = new SetSecomIdentityTool(trust);
+        var ct = TestContext.Current.CancellationToken;
+
+        Assert.False(Ok(await tool.InvokeAsync(null, null, null, ct)).Set);
+
+        var path = Path.Combine(folder, "identity.p12");
+        File.WriteAllBytes(path, SelfSigned("urn:mrn:mcp:device:mcc:soundcharts:test", DateTimeOffset.UtcNow.AddDays(30)));
+        var set = Ok(await tool.InvokeAsync(path, "pw", null, ct));
+        Assert.True(set.Set);
+        Assert.Equal("urn:mrn:mcp:device:mcc:soundcharts:test", set.Mrn);
+        Assert.Null(set.Anchor);  // self-signed: not under MCP MCC
+        Assert.Equal("urn:mrn:mcp:device:mcc:soundcharts:test", trust.Identity?.Mrn);
+
+        // An expired identity, a wrong password and a missing file are refused; the identity stays.
+        var expired = Path.Combine(folder, "expired.p12");
+        File.WriteAllBytes(expired, SelfSigned("urn:mrn:mcp:device:mcc:soundcharts:old", DateTimeOffset.UtcNow.AddDays(-1)));
+        Assert.False((await tool.InvokeAsync(expired, "pw", null, ct)).TryGetValue(out _));
+        Assert.False((await tool.InvokeAsync(path, "wrong", null, ct)).TryGetValue(out _));
+        Assert.False((await tool.InvokeAsync(Path.Combine(folder, "missing.p12"), null, null, ct)).TryGetValue(out _));
+        Assert.NotNull(trust.Identity);
+
+        Assert.False(Ok(await tool.InvokeAsync(null, null, clear: true, ct)).Set);
+        Assert.Null(trust.Identity);
+        System.IO.Directory.Delete(folder, recursive: true);
+    }
+
+    private static T Ok<T>(EncDotNet.S100.Datasets.Pipelines.Query.ToolResult<T> result) =>
+        result.TryGetValue(out var value) ? value : throw new Xunit.Sdk.XunitException("The tool failed.");
+
+    private static byte[] SelfSigned(string mrn, DateTimeOffset notAfter)
+    {
+        using var key = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        var subject = new System.Security.Cryptography.X509Certificates.X500DistinguishedNameBuilder();
+        subject.Add("0.9.2342.19200300.100.1.1", mrn, System.Formats.Asn1.UniversalTagNumber.UTF8String);
+        subject.AddCommonName("Test vessel");
+        var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            subject.Build(), key, System.Security.Cryptography.HashAlgorithmName.SHA256);
+        using var certificate = request.CreateSelfSigned(notAfter.AddDays(-60), notAfter);
+        return certificate.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12, "pw");
+    }
+
+    [Fact]
     public async Task A_registry_that_cannot_be_read_says_so()
     {
         var directory = Directory(_ => new SecomProbeResult(SecomReachability.Open),

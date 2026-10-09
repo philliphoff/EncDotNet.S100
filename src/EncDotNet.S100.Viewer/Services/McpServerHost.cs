@@ -48,6 +48,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly ILibraryReader? _library;
     private readonly ILibraryEditor? _libraryEditor;
     private readonly EncDotNet.S100.Collections.Secom.SecomRegistry? _secomRegistry;
+    private readonly EncDotNet.S100.Collections.Secom.SecomServerTrust? _secomServerTrust;
     private readonly IViewerUiAutomation? _uiAutomation;
     private readonly ILoggerFactory? _loggers;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -79,9 +80,11 @@ internal sealed class McpServerHost : IAsyncDisposable
         ILibraryReader? library = null,
         ILibraryEditor? libraryEditor = null,
         IViewerUiAutomation? uiAutomation = null,
-        EncDotNet.S100.Collections.Secom.SecomRegistry? secomRegistry = null)
+        EncDotNet.S100.Collections.Secom.SecomRegistry? secomRegistry = null,
+        EncDotNet.S100.Collections.Secom.SecomServerTrust? secomServerTrust = null)
     {
         _secomRegistry = secomRegistry;
+        _secomServerTrust = secomServerTrust;
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(settings);
         _catalog = catalog;
@@ -383,6 +386,8 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(LibraryEditMcpAdapters.Create(new RemoveLibrarySourceTool(_libraryEditor)));
             tools.Add(LibraryEditMcpAdapters.Create(new SetLibrarySourceOptionsTool(_libraryEditor)));
             tools.Add(LibraryEditMcpAdapters.Create(new AwaitLibraryIdleTool(_libraryEditor)));
+            if (_secomServerTrust is not null)
+                tools.Add(LibraryMcpAdapters.Create(new SetSecomIdentityTool(_secomServerTrust)));
         }
         // Test hooks only: set_test_clock exists only when the viewer was
         // started with --mcp-test-hooks, which makes its clock adjustable.
