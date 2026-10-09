@@ -12,6 +12,9 @@ internal enum TileContainer
 
     /// <summary>A single PMTiles v3 archive.</summary>
     PmTiles,
+
+    /// <summary>An MBTiles 1.3 SQLite database.</summary>
+    MbTiles,
 }
 
 /// <summary>The encoding of each tile image.</summary>

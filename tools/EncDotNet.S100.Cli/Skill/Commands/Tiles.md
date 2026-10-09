@@ -3,8 +3,10 @@
 `tiles` takes the same input forms as `render`: one dataset, repeated
 `--layer`, or an exchange set (positional, `--from` or `--exchange-set`).
 `-o|--output` is required. An output ending in `.pmtiles` writes one PMTiles
-v3 archive; any other output is a directory of `{z}/{x}/{y}.<ext>` files plus
-a `tiles.json` TileJSON document. Use `--container` to choose explicitly.
+v3 archive and `.mbtiles` one MBTiles 1.3 SQLite database (TMS rows, as the
+format requires); any other output is a directory of `{z}/{x}/{y}.<ext>` files
+plus a `tiles.json` TileJSON document. Use `--container` to choose explicitly.
+An existing archive file at the output path is replaced.
 
 Each zoom level draws only what is visible at its scale (SCAMIN and each
 cell's minimum display scale), measured at the tiled area's centre latitude
