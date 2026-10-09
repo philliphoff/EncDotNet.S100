@@ -439,7 +439,13 @@ public partial class App : Application
         // SECOM requests trust MCP-issued server certificates (#829); every
         // SECOM client below gets a handler from this one validator, and no
         // other client does.
-        services.AddSingleton(_ => new EncDotNet.S100.Collections.Secom.SecomServerTrust());
+        // Revocation of MCP-issued certificates (#833): CRLs are fetched over
+        // plain HTTP and kept with the feed cache; signers and servers share them.
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Secom.SecomRevocation(
+            new System.Net.Http.HttpClient(),
+            sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Secom.SecomServerTrust(
+            revocation: sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>()));
         services.AddSingleton(sp =>
         {
             // SECOM services (issue #804): objects get bounds once downloaded.
@@ -450,7 +456,10 @@ public partial class App : Application
                 new System.Net.Http.HttpClient(trust.CreateHandler()) { Timeout = TimeSpan.FromMinutes(2) },
                 paths.CollectionFeedCacheDirectory,
                 paths.DownloadsDirectory,
-                (path, _) => metadata.TryRead(path));
+                (path, _) => metadata.TryRead(path))
+            {
+                Revocation = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(),
+            };
         });
         services.AddSingleton(sp =>
         {
@@ -502,7 +511,8 @@ public partial class App : Application
                 Timeout = TimeSpan.FromMinutes(10),
             };
             return new Library.LibraryDownloadService(
-                EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(http, downloads, secom),
+                EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(
+                    http, downloads, secom, sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>()),
                 sp.GetService<Services.Notifications.INotificationService>());
         });
         services.AddSingleton(sp =>

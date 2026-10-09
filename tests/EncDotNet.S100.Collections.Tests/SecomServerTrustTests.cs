@@ -154,6 +154,68 @@ public sealed class SecomServerTrustTests(SecomServerTrustTests.Pkis pkis) : ICl
         Assert.Equal("Its certificate does not name this host.", refused.Detail);
     }
 
+    [Theory]
+    [InlineData("not-revoked", SecomRevocationStatus.NotRevoked)]
+    [InlineData("crl-unreachable", SecomRevocationStatus.NotChecked)]
+    public async Task An_anchor_trusted_server_reports_whether_revocation_was_checked(string kind, SecomRevocationStatus expected)
+    {
+        // #833: an unreachable CRL soft-fails; the connection is allowed and says so.
+        var pki = _pki;
+        using var leaf = pki.Leaf(dnsNames: ["localhost"], withCrl: true);
+        await using var server = await TlsServer.StartAsync(leaf, pki.Intermediate);
+        var crls = Crls(pki);
+        crls.Down = kind == "crl-unreachable";
+        var trust = new SecomServerTrust(pki.Anchors, revocation: new SecomRevocation(new HttpClient(crls)));
+
+        using var secom = new HttpClient(trust.CreateHandler());
+        Assert.Equal("ok", await secom.GetStringAsync(server.Uri("/"), Ct));
+        var result = trust.ResultFor("localhost")!;
+        Assert.Equal(SecomServerTrustOutcome.AnchorTrusted, result.Outcome);
+        Assert.Equal(expected, result.Revocation);
+    }
+
+    [Fact]
+    public async Task A_revoked_server_certificate_is_refused_and_probes_say_so()
+    {
+        var pki = _pki;
+        using var leaf = pki.Leaf(dnsNames: ["localhost"], withCrl: true);
+        await using var server = await TlsServer.StartAsync(leaf, pki.Intermediate);
+        var crls = Crls(pki, leaf);
+        var trust = new SecomServerTrust(pki.Anchors, revocation: new SecomRevocation(new HttpClient(crls)));
+
+        using var secom = new HttpClient(trust.CreateHandler());
+        await Assert.ThrowsAsync<HttpRequestException>(() => secom.GetStringAsync(server.Uri("/"), Ct));
+        Assert.Equal(new SecomServerTrustResult(SecomServerTrustOutcome.Revoked, "Test MCP") { Revocation = SecomRevocationStatus.Revoked }, trust.ResultFor("localhost"));
+
+        var registry = new SecomRegistry(new HttpClient(trust.CreateHandler()), serverTrust: trust);
+        var probe = await registry.ProbeAsync(server.Uri("/api/secom"), Ct);
+        Assert.Equal(SecomReachability.UntrustedServer, probe.Reachability);
+        Assert.Equal("Its certificate from Test MCP has been revoked.", probe.Detail);
+    }
+
+    [Fact]
+    public async Task A_refused_certificate_costs_no_crl_fetch()
+    {
+        var pki = _pki;
+        using var leaf = pki.Leaf(dnsNames: ["service.example.test"], withCrl: true);
+        await using var server = await TlsServer.StartAsync(leaf, pki.Intermediate);
+        var crls = Crls(pki);
+        var trust = new SecomServerTrust(pki.Anchors, revocation: new SecomRevocation(new HttpClient(crls)));
+
+        using var secom = new HttpClient(trust.CreateHandler());
+        await Assert.ThrowsAsync<HttpRequestException>(() => secom.GetStringAsync(server.Uri("/"), Ct));
+        Assert.Equal(SecomServerTrustOutcome.WrongHost, trust.ResultFor("localhost")!.Outcome);
+        Assert.Equal(0, crls.Requests);
+    }
+
+    private static SecomRevocationTests.CrlServer Crls(TestPki pki, params X509Certificate2[] revoked)
+    {
+        var crls = new SecomRevocationTests.CrlServer();
+        crls.Crls[TestPki.IntermediateCrlUri.AbsoluteUri] = pki.IntermediateCrl(null, revoked);
+        crls.Crls[TestPki.RootCrlUri.AbsoluteUri] = pki.RootCrl();
+        return crls;
+    }
+
     /// <summary>A root and intermediate CA, and leaves the intermediate issues.</summary>
     public sealed class TestPki : IDisposable
     {
@@ -172,6 +234,27 @@ public sealed class SecomServerTrustTests(SecomServerTrustTests.Pkis pkis) : ICl
 
         public SecomTrustAnchors Anchors => new([new SecomTrustAnchor("Test MCP", Root)], [Intermediate]);
 
+        /// <summary>Where the intermediate's CRL is published; leaves made with <c>withCrl</c> name it.</summary>
+        public static Uri IntermediateCrlUri { get; } = new("http://crl.secom.test/crl/intermediate");
+
+        /// <summary>Where the root's CRL is published; the intermediate names it.</summary>
+        public static Uri RootCrlUri { get; } = new("http://crl.secom.test/crl/root");
+
+        /// <summary>A CRL from the intermediate listing <paramref name="revoked"/>.</summary>
+        public byte[] IntermediateCrl(DateTimeOffset? nextUpdate = null, params X509Certificate2[] revoked) => Crl(Intermediate, nextUpdate, revoked);
+
+        /// <summary>A CRL from the root listing <paramref name="revoked"/>.</summary>
+        public byte[] RootCrl(DateTimeOffset? nextUpdate = null, params X509Certificate2[] revoked) => Crl(Root, nextUpdate, revoked);
+
+        private static byte[] Crl(X509Certificate2 issuer, DateTimeOffset? nextUpdate, X509Certificate2[] revoked)
+        {
+            var builder = new CertificateRevocationListBuilder();
+            foreach (var certificate in revoked)
+                builder.AddEntry(certificate, DateTimeOffset.UtcNow.AddDays(-1), X509RevocationReason.KeyCompromise);
+            var next = nextUpdate ?? DateTimeOffset.UtcNow.AddDays(7);
+            return builder.Build(issuer, 1, next, HashAlgorithmName.SHA256, thisUpdate: next.AddDays(-8));
+        }
+
         public static TestPki Create()
         {
             // Wide enough to hold every leaf, including an expired one.
@@ -181,8 +264,9 @@ public sealed class SecomServerTrustTests(SecomServerTrustTests.Pkis pkis) : ICl
             var root = Authority("CN=Test MCP Root Certificate", rootKey).CreateSelfSigned(from, to);
 
             var intermediateKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-            using var intermediate = Authority("CN=Test MCP Identity Registry", intermediateKey)
-                .Create(root, from, to, RandomNumberGenerator.GetBytes(8));
+            var intermediateRequest = Authority("CN=Test MCP Identity Registry", intermediateKey);
+            intermediateRequest.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([RootCrlUri.AbsoluteUri]));
+            using var intermediate = intermediateRequest.Create(root, from, to, RandomNumberGenerator.GetBytes(8));
             return new TestPki(root, intermediate.CopyWithPrivateKey(intermediateKey), intermediateKey);
         }
 
@@ -192,7 +276,8 @@ public sealed class SecomServerTrustTests(SecomServerTrustTests.Pkis pkis) : ICl
             string? mrn = null,
             IPAddress[]? ipAddresses = null,
             DateTimeOffset? notAfter = null,
-            bool withKey = true)
+            bool withKey = true,
+            bool withCrl = false)
         {
             using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
             var request = new CertificateRequest($"CN={commonName}", key, HashAlgorithmName.SHA256);
@@ -208,6 +293,8 @@ public sealed class SecomServerTrustTests(SecomServerTrustTests.Pkis pkis) : ICl
                 san.AddUserPrincipalName(mrn);  // stands in for the MCP MRN othername
             if (dnsNames.Length > 0 || mrn is not null || ipAddresses is { Length: > 0 })
                 request.CertificateExtensions.Add(san.Build());
+            if (withCrl)
+                request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([IntermediateCrlUri.AbsoluteUri]));
 
             var to = notAfter ?? DateTimeOffset.UtcNow.AddDays(10);
             var issued = request.Create(Intermediate, to.AddDays(-20), to, RandomNumberGenerator.GetBytes(8));

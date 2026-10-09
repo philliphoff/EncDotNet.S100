@@ -228,6 +228,7 @@ public sealed class SecomRegistry
         SecomServerTrustOutcome.NotTrusted => "Its certificate is not issued under a trusted root.",
         SecomServerTrustOutcome.Expired => $"Its certificate from {trust.Anchor} has expired or is not yet valid.",
         SecomServerTrustOutcome.WrongHost => "Its certificate does not name this host.",
+        SecomServerTrustOutcome.Revoked => $"Its certificate from {trust.Anchor} has been revoked.",
         _ => null,
     };
 

@@ -24,6 +24,9 @@ public enum SecomServerTrustOutcome
 
     /// <summary>The certificate does not name the host that was asked for.</summary>
     WrongHost,
+
+    /// <summary>The certificate, or a CA above it, is listed on its issuer's CRL (#833).</summary>
+    Revoked,
 }
 
 /// <summary>The decision about one host's TLS certificate.</summary>
@@ -33,6 +36,17 @@ public sealed record SecomServerTrustResult(SecomServerTrustOutcome Outcome, str
 {
     /// <summary>True when the connection was allowed.</summary>
     public bool Allowed => Outcome is SecomServerTrustOutcome.SystemTrusted or SecomServerTrustOutcome.AnchorTrusted;
+
+    /// <summary>
+    /// For an <see cref="SecomServerTrustOutcome.AnchorTrusted"/> certificate,
+    /// whether its revocation was checked (#833): <see cref="SecomRevocationStatus.NotRevoked"/>,
+    /// or <see cref="SecomRevocationStatus.NotChecked"/> when no checker was
+    /// given or no current CRL could be had (the connection is still allowed).
+    /// A revoked certificate is refused as <see cref="SecomServerTrustOutcome.Revoked"/>.
+    /// The system's own trust decides <see cref="SecomServerTrustOutcome.SystemTrusted"/>
+    /// certificates, so this is <see cref="SecomRevocationStatus.NotChecked"/> for them.
+    /// </summary>
+    public SecomRevocationStatus Revocation { get; init; }
 }
 
 /// <summary>
@@ -56,8 +70,14 @@ public sealed record SecomServerTrustResult(SecomServerTrustOutcome Outcome, str
 /// addresses, and — only when the certificate lists no DNS names — the subject
 /// common name. MCP device certificates (AMSA's, for one) carry the host only in
 /// the common name, with the MRN as the sole alternative name. A certificate the
-/// operating system trusts but that names another host is refused. Revocation
-/// is not checked.
+/// operating system trusts but that names another host is refused.
+/// </para>
+/// <para>
+/// Given a <see cref="SecomRevocation"/>, an anchor-trusted chain is also
+/// checked against its CAs' CRLs (#833): a revoked certificate is refused, and
+/// one whose revocation cannot be checked is allowed with
+/// <see cref="SecomServerTrustResult.Revocation"/> saying so. Certificates the
+/// operating system trusts are left to its own revocation policy.
 /// </para>
 /// </remarks>
 public sealed class SecomServerTrust
@@ -68,14 +88,19 @@ public sealed class SecomServerTrust
     /// <summary>Creates a validator trusting <paramref name="anchors"/>.</summary>
     /// <param name="anchors">The anchors server certificates may chain to; by default <see cref="SecomTrustAnchors.BuiltIn"/>.</param>
     /// <param name="timeProvider">The clock validity periods are judged by.</param>
-    public SecomServerTrust(SecomTrustAnchors? anchors = null, TimeProvider? timeProvider = null)
+    /// <param name="revocation">Checks anchor-trusted chains for revocation; <see langword="null"/> skips the check.</param>
+    public SecomServerTrust(SecomTrustAnchors? anchors = null, TimeProvider? timeProvider = null, SecomRevocation? revocation = null)
     {
         Anchors = anchors ?? SecomTrustAnchors.BuiltIn;
         _time = timeProvider ?? TimeProvider.System;
+        Revocation = revocation;
     }
 
     /// <summary>The anchors server certificates may chain to.</summary>
     public SecomTrustAnchors Anchors { get; }
+
+    /// <summary>Checks anchor-trusted chains for revocation, when set.</summary>
+    public SecomRevocation? Revocation { get; }
 
     /// <summary>
     /// A handler for an <see cref="HttpClient"/> used only for SECOM requests,
@@ -122,14 +147,19 @@ public sealed class SecomServerTrust
             return new SecomServerTrustResult(SecomServerTrustOutcome.WrongHost);
 
         var presented = chain?.ChainElements.Select(e => e.Certificate).Skip(1) ?? [];
-        var (anchor, expired) = Anchors.FindServerAnchor(certificate, presented, _time.GetUtcNow());
-        if (anchor is null)
+        var (anchor, expired) = Anchors.FindServerAnchor(certificate, presented, _time.GetUtcNow(), out var elements);
+        if (anchor is null || elements is null)
             return new SecomServerTrustResult(SecomServerTrustOutcome.NotTrusted);
         if (expired)
             return new SecomServerTrustResult(SecomServerTrustOutcome.Expired, anchor);
         if (!NamesHost(certificate, host))
             return new SecomServerTrustResult(SecomServerTrustOutcome.WrongHost, anchor);
-        return new SecomServerTrustResult(SecomServerTrustOutcome.AnchorTrusted, anchor);
+
+        // Last, so a refused certificate costs no CRL fetch.
+        var revocation = Revocation?.Check(elements).Status ?? SecomRevocationStatus.NotChecked;
+        return revocation == SecomRevocationStatus.Revoked
+            ? new SecomServerTrustResult(SecomServerTrustOutcome.Revoked, anchor) { Revocation = revocation }
+            : new SecomServerTrustResult(SecomServerTrustOutcome.AnchorTrusted, anchor) { Revocation = revocation };
     }
 
     /// <summary>

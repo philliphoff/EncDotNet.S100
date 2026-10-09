@@ -1336,6 +1336,8 @@ internal static class Strings
     public static string Library_Reachability_UnreachableExplanationFormat => Get(nameof(Library_Reachability_UnreachableExplanationFormat));
     public static string Library_Reachability_ExpiredServerExplanationFormat => Get(nameof(Library_Reachability_ExpiredServerExplanationFormat));
     public static string Library_Reachability_WrongHostExplanation => Get(nameof(Library_Reachability_WrongHostExplanation));
+    public static string Library_Reachability_RevokedServerExplanationFormat => Get(nameof(Library_Reachability_RevokedServerExplanationFormat));
+    public static string Library_Reachability_RevocationNotCheckedExplanation => Get(nameof(Library_Reachability_RevocationNotCheckedExplanation));
     public static string Library_Reachability_ServerAnchorFormat => Get(nameof(Library_Reachability_ServerAnchorFormat));
     public static string Menu_LibraryShowOnMap => Get(nameof(Menu_LibraryShowOnMap));
     public static string Menu_LibraryKeepDownloaded => Get(nameof(Menu_LibraryKeepDownloaded));

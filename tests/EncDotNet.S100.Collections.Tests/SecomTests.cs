@@ -388,7 +388,7 @@ public sealed class SecomTests : IDisposable
         var trusting = new EncCellDownloader(new HttpClient(server), downloader.Root) { TrustAnchors = Anchors(signer) };
         var reread = trusting.TryGetDownloaded(item.Name)!.Signature!;
         Assert.True(reread.SignerTrusted);
-        Assert.Equal("valid · trusted (test)", SecomSourceIndexer.Describe(reread));
+        Assert.Equal("valid · trusted (test) · revocation not checked", SecomSourceIndexer.Describe(reread));
 
         // A record written before #823 carries no certificates and keeps its recorded trust.
         var recordPath = Path.Combine(downloader.Root, item.Name, EncCellDownloader.RecordFileName);
