@@ -109,4 +109,12 @@ internal interface IActivityTab : System.ComponentModel.INotifyPropertyChanged
     /// false→true content transition.
     /// </summary>
     bool AutoOpenOnContentSignal { get; }
+
+    /// <summary>
+    /// When <c>true</c>, a <see cref="TabDock.Left"/> tab is shown across the
+    /// whole content area (map and docks) rather than in the left dock's
+    /// column, and closing it returns to the side panel it covered. Used by
+    /// Settings, whose categorised pages need the width (#845).
+    /// </summary>
+    bool FillsContent => false;
 }

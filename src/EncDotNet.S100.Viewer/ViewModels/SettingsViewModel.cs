@@ -18,6 +18,33 @@ internal sealed class SettingsViewModel : ViewModelBase
     private readonly IApplicationControlService? _applicationControl;
     private readonly DialogManager? _dialogManager;
 
+    private SettingsCategory _selectedCategory;
+    /// <summary>The page the Settings panel shows (#845). Kept for the session, not persisted.</summary>
+    public SettingsCategory SelectedCategory
+    {
+        get => _selectedCategory;
+        set
+        {
+            if (SetProperty(ref _selectedCategory, value))
+            {
+                OnPropertyChanged(nameof(SelectedCategoryIndex));
+            }
+        }
+    }
+
+    /// <summary><see cref="SelectedCategory"/> as the index of its tab in the category list.</summary>
+    public int SelectedCategoryIndex
+    {
+        get => (int)_selectedCategory;
+        set
+        {
+            if (Enum.IsDefined((SettingsCategory)value))
+            {
+                SelectedCategory = (SettingsCategory)value;
+            }
+        }
+    }
+
     private Color _accentColor;
     public Color AccentColor
     {

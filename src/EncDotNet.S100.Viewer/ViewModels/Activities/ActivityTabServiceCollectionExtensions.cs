@@ -35,6 +35,7 @@ internal static class ActivityTabServiceCollectionExtensions
     /// while the source reports it visible; when omitted, the tab is
     /// always visible.
     /// </param>
+    /// <param name="fillsContent">When <c>true</c>, the tab is shown across the whole content area (see <see cref="IActivityTab.FillsContent"/>).</param>
     public static IServiceCollection AddActivityTab<TViewModel, TView>(
         this IServiceCollection services,
         string id,
@@ -46,7 +47,8 @@ internal static class ActivityTabServiceCollectionExtensions
         bool persistAsLastSelected = true,
         TabDock dock = TabDock.Left,
         bool autoOpenOnContentSignal = false,
-        Func<IServiceProvider, ITabVisibilitySource?>? visibilitySourceFactory = null)
+        Func<IServiceProvider, ITabVisibilitySource?>? visibilitySourceFactory = null,
+        bool fillsContent = false)
         where TViewModel : class
         where TView : Control, new()
     {
@@ -67,7 +69,8 @@ internal static class ActivityTabServiceCollectionExtensions
             dock,
             autoOpenOnContentSignal,
             visibilitySourceFactory?.Invoke(sp),
-            name));
+            name,
+            fillsContent));
 
         return services;
     }

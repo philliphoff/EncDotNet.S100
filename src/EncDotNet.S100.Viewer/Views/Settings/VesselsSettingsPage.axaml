@@ -1,0 +1,122 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:viewer="using:EncDotNet.S100.Viewer"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.Settings.VesselsSettingsPage"
+             x:DataType="vm:SettingsViewModel">
+
+    <!-- Settings → Vessels: own vessel and the AIS overlay (#845). -->
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+        <StackPanel Classes="settingsPage">
+            <StackPanel Spacing="3">
+                <TextBlock Classes="settingsPageTitle" Text="{x:Static loc:Strings.Settings_Category_Vessels}" />
+                <TextBlock Classes="settingsPageHelp" Text="{x:Static loc:Strings.Settings_Category_Vessels_Help}" />
+            </StackPanel>
+
+            <TextBlock Classes="settingsSection" Text="{x:Static loc:Strings.Settings_OwnVesselSection}" />
+            <TextBlock Classes="settingsHelp" Text="{x:Static loc:Strings.Settings_OwnVesselSection_Help}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_OverlayEnabled_Tooltip}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_OwnVessel_OverlayEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding OwnShipOverlayEnabled}"  AutomationProperties.AutomationId="Settings.OwnShipOverlayEnabled" AutomationProperties.Name="{x:Static loc:Strings.Settings_OwnVessel_OverlayEnabled}"/>
+            </Grid>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_OwnVessel_Length}"
+                           FontSize="12" />
+                <NumericUpDown Value="{Binding OwnShipLengthMetres}"
+                               AutomationProperties.AutomationId="Settings.OwnShipLengthMetres"
+                               AutomationProperties.Name="{x:Static loc:Strings.Settings_OwnVessel_Length}"
+                               Minimum="1"
+                               Maximum="500"
+                               Increment="1"
+                               FormatString="0.#"
+                               ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_Length_Tooltip}"
+                               MinWidth="120"
+                               HorizontalAlignment="Left" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_OwnVessel_Beam}"
+                           FontSize="12" />
+                <NumericUpDown Value="{Binding OwnShipBeamMetres}"
+                               AutomationProperties.AutomationId="Settings.OwnShipBeamMetres"
+                               AutomationProperties.Name="{x:Static loc:Strings.Settings_OwnVessel_Beam}"
+                               Minimum="1"
+                               Maximum="100"
+                               Increment="0.5"
+                               FormatString="0.#"
+                               ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_Beam_Tooltip}"
+                               MinWidth="120"
+                               HorizontalAlignment="Left" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_OwnVessel_BowOffset}"
+                           FontSize="12" />
+                <NumericUpDown Value="{Binding OwnShipBowOffsetMetres}"
+                               AutomationProperties.AutomationId="Settings.OwnShipBowOffsetMetres"
+                               AutomationProperties.Name="{x:Static loc:Strings.Settings_OwnVessel_BowOffset}"
+                               Minimum="0"
+                               Maximum="500"
+                               Increment="0.5"
+                               FormatString="0.#"
+                               ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_BowOffset_Tooltip}"
+                               MinWidth="120"
+                               HorizontalAlignment="Left" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_OwnVessel_PortOffset}"
+                           FontSize="12" />
+                <NumericUpDown Value="{Binding OwnShipPortOffsetMetres}"
+                               AutomationProperties.AutomationId="Settings.OwnShipPortOffsetMetres"
+                               AutomationProperties.Name="{x:Static loc:Strings.Settings_OwnVessel_PortOffset}"
+                               Minimum="0"
+                               Maximum="100"
+                               Increment="0.5"
+                               FormatString="0.#"
+                               ToolTip.Tip="{x:Static loc:Strings.Settings_OwnVessel_PortOffset_Tooltip}"
+                               MinWidth="120"
+                               HorizontalAlignment="Left" />
+            </StackPanel>
+
+            <Separator Margin="0,8,0,0" />
+            <TextBlock Classes="settingsSection" Text="{x:Static loc:Strings.Settings_AisSection}" />
+            <TextBlock Classes="settingsHelp" Text="{x:Static loc:Strings.Settings_AisSection_Help}" />
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Settings_AisEnabledTooltip}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_AisEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding AisEnabled}"  AutomationProperties.AutomationId="Settings.AisEnabled" AutomationProperties.Name="{x:Static loc:Strings.Settings_AisEnabled}"/>
+            </Grid>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_AisApiKey}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBox Text="{Binding AisApiKey, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         AutomationProperties.AutomationId="Settings.AisApiKey"
+                         AutomationProperties.Name="{x:Static loc:Strings.Settings_AisApiKey}"
+                         PasswordChar="•"
+                         ToolTip.Tip="{x:Static loc:Strings.Settings_AisApiKeyTooltip}"
+                         MinWidth="280"
+                         HorizontalAlignment="Left" />
+                <TextBlock Text="{Binding AisApiKeyHint}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_AisActivationSpan}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <NumericUpDown Value="{Binding AisActivationViewportSpanDegrees, Mode=TwoWay}"
+                               AutomationProperties.AutomationId="Settings.AisActivationViewportSpanDegrees"
+                               AutomationProperties.Name="{x:Static loc:Strings.Settings_AisActivationSpan}"
+                               Minimum="0"
+                               Maximum="360"
+                               Increment="5"
+                               FormatString="0.##"
+                               ToolTip.Tip="{x:Static loc:Strings.Settings_AisActivationSpanTooltip}"
+                               MinWidth="160"
+                               HorizontalAlignment="Left" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_AisActivationSpanHint}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -28,7 +28,8 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab, IDisposable
         TabDock dock = TabDock.Left,
         bool autoOpenOnContentSignal = false,
         ITabVisibilitySource? visibility = null,
-        string? name = null)
+        string? name = null,
+        bool fillsContent = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(id);
         ArgumentException.ThrowIfNullOrEmpty(title);
@@ -46,6 +47,7 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab, IDisposable
         PersistAsLastSelected = persistAsLastSelected;
         Dock = dock;
         AutoOpenOnContentSignal = autoOpenOnContentSignal;
+        FillsContent = fillsContent;
 
         _visibility = visibility;
         _isVisible = visibility?.IsVisible ?? true;
@@ -66,6 +68,7 @@ internal sealed class ActivityTab<TViewModel, TView> : IActivityTab, IDisposable
     public bool PersistAsLastSelected { get; }
     public TabDock Dock { get; }
     public bool AutoOpenOnContentSignal { get; }
+    public bool FillsContent { get; }
 
     public Control CreateView() => new TView();
 
