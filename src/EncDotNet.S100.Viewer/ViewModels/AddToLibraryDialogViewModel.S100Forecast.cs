@@ -20,7 +20,7 @@ internal sealed partial class AddToLibraryDialogViewModel
 
     private readonly Func<Uri, IReadOnlyList<ForecastModel>, CancellationToken, Task<IReadOnlyList<ForecastModelSummary>>>? _loadForecastModels;
     private IReadOnlyList<ForecastModelSummary>? _forecastModels;
-    private ResolutionOptionViewModel? _selectedForecastShape;
+    private LibraryResolution? _selectedForecastShape;
 
     /// <summary>True when adding a forecast feed.</summary>
     public bool IsS100Forecast => _kind == LibrarySourceKind.S100Forecast;
@@ -29,14 +29,14 @@ internal sealed partial class AddToLibraryDialogViewModel
     public ObservableCollection<LibraryChoice> ForecastModels { get; } = [];
 
     /// <summary>How runs download: tiles (the default), or one file per model.</summary>
-    public IReadOnlyList<ResolutionOptionViewModel> ForecastShapes { get; } =
+    public IReadOnlyList<LibraryResolution> ForecastShapes { get; } =
     [
         new(TilesShape, Strings.Wizard_ForecastShapeTiles),
         new(RegionalShape, Strings.Wizard_ForecastShapeRegional),
     ];
 
     /// <summary>The chosen download shape; it applies to every model.</summary>
-    public ResolutionOptionViewModel SelectedForecastShape
+    public LibraryResolution SelectedForecastShape
     {
         get => _selectedForecastShape ??= ForecastShapes[0];
         set

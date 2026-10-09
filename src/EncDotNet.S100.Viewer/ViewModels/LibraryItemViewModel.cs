@@ -475,7 +475,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     {
         var c = CultureInfo.CurrentCulture;
         var parts = new List<string>(5) { Item.ProductSpec };
-        if (Library.NavigationPurposes.Of(Item) is { } purpose)
+        if (NavigationPurposes.Of(Item) is { } purpose)
             parts.Add(purpose);
         if (Availability == LibraryAvailability.Outdated && Item.Edition is { } online)
         {

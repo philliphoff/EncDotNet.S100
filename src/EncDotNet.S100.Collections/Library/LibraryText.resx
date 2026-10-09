@@ -429,4 +429,103 @@
   <data name="Wizard_NothingDownloadsFormat" xml:space="preserve">
     <value>{0} · nothing downloads yet</value>
   </data>
+  <data name="Library_CommunityCharts" xml:space="preserve">
+    <value>Packages</value>
+  </data>
+  <data name="Library_CommunitySelectionAllFormat" xml:space="preserve">
+    <value>All {0:N0} packages · sizes unknown</value>
+  </data>
+  <data name="Library_CommunitySelectionFormat" xml:space="preserve">
+    <value>{0:N0} packages · sizes unknown</value>
+  </data>
+  <data name="Library_PublishedFormat" xml:space="preserve">
+    <value>Published {0}</value>
+  </data>
+  <data name="Library_FeedProducts" xml:space="preserve">
+    <value>Products</value>
+  </data>
+  <data name="Library_FeedSelectionAllFormat" xml:space="preserve">
+    <value>All {0:N0} datasets · {1}</value>
+  </data>
+  <data name="Library_FeedSelectionFormat" xml:space="preserve">
+    <value>{0:N0} datasets · {1}</value>
+  </data>
+  <data name="Library_FeedFacetDetailFormat" xml:space="preserve">
+    <value>{0:N0} datasets · {1}</value>
+  </data>
+  <data name="Wizard_EverythingDownloadsFormat" xml:space="preserve">
+    <value>{0:N0} downloads · sizes unknown</value>
+  </data>
+  <data name="Manifest_GroupsTitle" xml:space="preserve">
+    <value>Groups</value>
+  </data>
+  <data name="Manifest_MorePathsFormat" xml:space="preserve">
+    <value>+{0}</value>
+  </data>
+  <data name="Manifest_EverythingOne" xml:space="preserve">
+    <value>1 group · follows the file</value>
+  </data>
+  <data name="Manifest_EverythingFormat" xml:space="preserve">
+    <value>{0} groups · follows the file</value>
+  </data>
+  <data name="Manifest_SelectionOfFormat" xml:space="preserve">
+    <value>{0} of {1} groups</value>
+  </data>
+  <data name="Manifest_SummaryEverything" xml:space="preserve">
+    <value>Everything is included, and groups added to the file later are too.</value>
+  </data>
+  <data name="Manifest_SummaryNothing" xml:space="preserve">
+    <value>Nothing selected. Tick at least one group.</value>
+  </data>
+  <data name="Manifest_SummaryMissingOneFormat" xml:space="preserve">
+    <value>{0} not found on disk. It shows up once the path exists.</value>
+  </data>
+  <data name="Manifest_SummaryMissingManyFormat" xml:space="preserve">
+    <value>{0} not found on disk. They show up once the path exists.</value>
+  </data>
+  <data name="Manifest_SummaryOneFormat" xml:space="preserve">
+    <value>1 group · {0}</value>
+  </data>
+  <data name="Manifest_SummaryManyFormat" xml:space="preserve">
+    <value>{0} groups · {1}</value>
+  </data>
+  <data name="Manifest_ErrorLineFormat" xml:space="preserve">
+    <value>line {0} · {1}</value>
+  </data>
+  <data name="Manifest_TwoFormat" xml:space="preserve">
+    <value>{0} and {1}</value>
+  </data>
+  <data name="Manifest_AndMoreFormat" xml:space="preserve">
+    <value>{0}, {1} and {2} more</value>
+  </data>
+  <data name="Wizard_ResolutionAll" xml:space="preserve">
+    <value>All resolutions</value>
+  </data>
+  <data name="Wizard_JoinAndFormat" xml:space="preserve">
+    <value>{0} and {1}</value>
+    <comment>Joins a list: {0}: the items but the last, comma-separated; {1}: the last item</comment>
+  </data>
+  <data name="Wizard_PurposeResolutionFormat" xml:space="preserve">
+    <value>{0} {1:0.##} m</value>
+    <comment>{0}: navigation purpose (Port); {1}: grid resolution in metres</comment>
+  </data>
+  <data name="Wizard_TilesFormat" xml:space="preserve">
+    <value>{0:N0} tiles</value>
+  </data>
+  <data name="Wizard_TilesSizeFormat" xml:space="preserve">
+    <value>{0:N0} tiles · {1}</value>
+    <comment>{1}: download size</comment>
+  </data>
+  <data name="Wizard_TilesSizingFormat" xml:space="preserve">
+    <value>{0:N0} tiles · sizing…</value>
+    <comment>Shown while the download size is being looked up</comment>
+  </data>
+  <data name="Wizard_TilesOnlineFormat" xml:space="preserve">
+    <value>{0:N0} tiles · {1} online</value>
+    <comment>{1}: total download size</comment>
+  </data>
+  <data name="Wizard_AreasTilesFormat" xml:space="preserve">
+    <value>{0:N0} areas · {1}</value>
+    <comment>{1}: Wizard_TilesSizeFormat or similar</comment>
+  </data>
 </root>
