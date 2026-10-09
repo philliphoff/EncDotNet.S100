@@ -1188,7 +1188,62 @@ TLS trust for the same roots followed in #829 (§7.9).
 >     `serverCertificateAnchor`.
 > - **Not changed.** A service that also wants a client certificate now
 >   probes as NeedsCertificate rather than UntrustedServer. mTLS with the
->   user's MCP identity belongs to the keys & certificates UX.
+>   user's MCP identity followed in #832 (§7.10).
+
+### 7.10 SECOM client identity (#832)
+
+> - **Why.** After §7.9, "Needs a certificate" was the most common state:
+>   20 of 43 registry services answer `Capability` anonymously but share
+>   data only with an MCP client certificate (mutual TLS).
+> - **`SecomClientIdentity`** is an MCP certificate with its private key.
+>   - `Load(path, password)` reads PKCS#12 or PEM (certificate and key,
+>     optionally encrypted). PEM is re-loaded through PKCS#12, because
+>     macOS and Windows can't use a key attached only in memory for
+>     client authentication.
+>   - It reports `Subject`, `Mrn` (the subject `UID`, as MCP identity
+>     registries issue it), `Anchor` (when it chains to a
+>     `SecomTrustAnchors` root) and its validity period.
+>   - It is held in memory only.
+> - **Presented by `SecomServerTrust`'s handlers.**
+>   - `SetIdentity` sets, replaces or clears it at runtime.
+>   - Each handler builds an inner `HttpClientHandler` for the current
+>     identity and swaps it on the next request after a change.
+>     Replaced handlers are kept until the outer one is disposed, so
+>     requests still running finish; their idle connections close on
+>     their own.
+>   - `CreateHandler(presentIdentity: false)` never presents it.
+>   - Non-SECOM clients never see it: they don't use these handlers.
+> - **Probes** go anonymously first, so an Open service stays Open. Only
+>   when that says NeedsCertificate, and an identity is set, they probe
+>   again presenting it:
+>   - **OpenWithCertificate:** the summary answers.
+>   - **CertificateRefused:** still refused.
+>
+>   A service that refuses the handshake itself (the server certificate
+>   was accepted on that connection, yet it failed) counts as
+>   NeedsCertificate, "asks for a client certificate when connecting",
+>   rather than Unreachable. `SecomProbeResult.Identity` names the
+>   identity presented.
+> - **Interim supply, until the keys & certificates UX:**
+>   - `--secom-identity <path>`, with the password from
+>     `SOUNDCHARTS_SECOM_IDENTITY_PASSWORD`;
+>   - the MCP tool `set_secom_identity {path?, password?, clear?}`, which
+>     refuses an expired or not-yet-valid identity.
+>
+>   Both are session-only: nothing writes a key or password to settings.
+> - **Viewer.**
+>   - The directory shows "Readable with your certificate" (and Next
+>     continues) or "Certificate refused", naming the identity.
+>   - The directory is made anew each time it opens, so it probes with
+>     the current identity.
+>   - SECOM indexing and downloads use the same handlers, so an
+>     authorised source lists and downloads like an open one.
+> - **Not yet.**
+>   - Signed request envelopes (v2 POST search, subscriptions).
+>   - Encrypted data.
+>   - Persisted identities.
+>   - Live validation, which waits on an approved MCC organisation and
+>     providers accepting its certificate.
 
 ---
 
