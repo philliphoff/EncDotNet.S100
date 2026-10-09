@@ -17,7 +17,7 @@ namespace EncDotNet.S100.Collections.Tests;
 /// </summary>
 public sealed class SecomRevocationTests(SecomServerTrustTests.Pkis pkis) : IClassFixture<SecomServerTrustTests.Pkis>, IDisposable
 {
-    private readonly SecomServerTrustTests.TestPki _pki = pkis.Trusted;
+    private readonly TestPki _pki = pkis.Trusted;
     private readonly TempDirectory _temp = new();
 
     public void Dispose() => _temp.Dispose();
@@ -99,7 +99,7 @@ public sealed class SecomRevocationTests(SecomServerTrustTests.Pkis pkis) : ICla
     {
         using var leaf = _pki.Leaf(dnsNames: [], withCrl: true);
         var crls = Crls();
-        crls.Crls[SecomServerTrustTests.TestPki.RootCrlUri.AbsoluteUri] = _pki.RootCrl(null, _pki.Intermediate);
+        crls.Crls[TestPki.RootCrlUri.AbsoluteUri] = _pki.RootCrl(null, _pki.Intermediate);
         var (data, metadata) = Signed(leaf);
 
         var check = SecomSignatureVerifier.Verify(data, metadata, _pki.Anchors, revocation: new SecomRevocation(new HttpClient(crls)));
@@ -168,7 +168,7 @@ public sealed class SecomRevocationTests(SecomServerTrustTests.Pkis pkis) : ICla
     {
         using var leaf = _pki.Leaf(dnsNames: [], withKey: false, withCrl: true);
         var crls = Crls();
-        var key = SecomServerTrustTests.TestPki.IntermediateCrlUri.AbsoluteUri;
+        var key = TestPki.IntermediateCrlUri.AbsoluteUri;
         switch (kind)
         {
             case "stale":
@@ -250,8 +250,8 @@ public sealed class SecomRevocationTests(SecomServerTrustTests.Pkis pkis) : ICla
     private CrlServer Crls(params X509Certificate2[] revoked)
     {
         var server = new CrlServer();
-        server.Crls[SecomServerTrustTests.TestPki.IntermediateCrlUri.AbsoluteUri] = _pki.IntermediateCrl(null, revoked);
-        server.Crls[SecomServerTrustTests.TestPki.RootCrlUri.AbsoluteUri] = _pki.RootCrl();
+        server.Crls[TestPki.IntermediateCrlUri.AbsoluteUri] = _pki.IntermediateCrl(null, revoked);
+        server.Crls[TestPki.RootCrlUri.AbsoluteUri] = _pki.RootCrl();
         return server;
     }
 

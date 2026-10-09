@@ -60,6 +60,7 @@ Key types:
   - CRLs are kept in memory and in the cache directory. Each fetch times out after 5 s, and a failed URL is left alone for 5 minutes.
   - The check soft-fails: `NotChecked` when no current CRL can be had, and `Revoked` when a certificate is listed. `CacheOnly` never fetches; read paths use it.
   - Signatures report `SecomSignatureCheck.SignerRevocation`. The item's `signature` property adds " · signer certificate revoked", or " · revocation not checked", after the trust.
+- **`SecomClientIdentity`**: an MCP client certificate with its private key, from PKCS#12 or PEM (#832). It reports subject, MRN, trust anchor and validity. `SecomServerTrust.SetIdentity` makes SECOM handlers present it to services that ask (mutual TLS), and it can change at runtime. Probes report `OpenWithCertificate` or `CertificateRefused`. It is held in memory only; persisting it is the host's job.
 - **`SecomRegistry`** — lists SECOM services from the MCP Maritime Service Registry's anonymous search (#822).
   - It cleans the listing: unusable endpoints, deleted and duplicate entries are dropped, and geometry registered off by whole turns is repaired.
   - It caches the listing on disk.

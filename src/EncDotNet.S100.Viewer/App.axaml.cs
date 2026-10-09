@@ -24,6 +24,9 @@ public partial class App : Application
 {
     internal static ViewerCommandSettings? StartupOptions { get; set; }
 
+    /// <summary>The environment variable holding the password of <c>--secom-identity</c> (#832).</summary>
+    internal const string SecomIdentityPasswordVariable = "SOUNDCHARTS_SECOM_IDENTITY_PASSWORD";
+
     private static IServiceProvider? _services;
 
     /// <summary>
@@ -444,8 +447,26 @@ public partial class App : Application
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Secom.SecomRevocation(
             new System.Net.Http.HttpClient(),
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
-        services.AddSingleton(sp => new EncDotNet.S100.Collections.Secom.SecomServerTrust(
-            revocation: sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>()));
+        services.AddSingleton(sp =>
+        {
+            var trust = new EncDotNet.S100.Collections.Secom.SecomServerTrust(
+                revocation: sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>());
+            // An MCP identity for this run only (#832), until the keys & certificates UX holds one.
+            if (StartupOptions?.SecomIdentity is { Length: > 0 } identityPath)
+            {
+                try
+                {
+                    trust.SetIdentity(EncDotNet.S100.Collections.Secom.SecomClientIdentity.Load(
+                        identityPath, Environment.GetEnvironmentVariable(SecomIdentityPasswordVariable), trust.Anchors));
+                }
+                catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+                {
+                    sp.GetService<ILogger<App>>()?.LogError(ex, "The SECOM identity {Path} could not be loaded", identityPath);
+                }
+            }
+
+            return trust;
+        });
         services.AddSingleton(sp =>
         {
             // SECOM services (issue #804): objects get bounds once downloaded.
@@ -1020,7 +1041,8 @@ public partial class App : Application
                 () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources),
             // Only with --mcp-test-hooks: the ui_* tools are for scripted testing.
             sp.GetRequiredService<ViewerSettings>().McpTestHooks ? ViewerUiAutomation.ForApplication() : null,
-            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>()));
+            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>(),
+            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));

@@ -83,9 +83,25 @@ public static class LibraryMcpAdapters
         return Tool(del, ListSecomServicesTool.Name,
             "Lists SECOM (IEC 63173-2) data services registered in the MCP service registry: name, organisation, product, "
             + "released or provisional, endpoint and area, cleaned of unusable entries. With probe, each is checked: Open "
-            + "(readable without a certificate), NeedsCertificate, UntrustedServer (an MCP-issued TLS certificate this "
-            + "computer does not trust) or Unreachable. Add an Open service with add_library_source url=<endpoint>. "
-            + "Read-only.");
+            + "(readable without a certificate), OpenWithCertificate (readable with the set_secom_identity identity), "
+            + "NeedsCertificate (no identity set), CertificateRefused, UntrustedServer (its TLS certificate is refused) or "
+            + "Unreachable. Add an Open or OpenWithCertificate service with add_library_source url=<endpoint>. Read-only.");
+    }
+
+    /// <summary>Creates <c>set_secom_identity</c>.</summary>
+    public static McpServerTool Create(SetSecomIdentityTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("A PKCS#12 (.p12/.pfx) or PEM file holding an MCP client certificate and its private key; omit to report the current identity.")] string? path = null,
+            [Description("The PKCS#12 or encrypted-key password, if any.")] string? password = null,
+            [Description("True to clear the identity.")] bool? clear = null,
+            CancellationToken ct = default) =>
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(path, password, clear, ct));
+        return Tool(del, SetSecomIdentityTool.Name,
+            "Sets the MCP identity (client certificate) presented to SECOM services that ask for one (mutual TLS), clears "
+            + "it, or reports it: subject, MRN, trust anchor and expiry. For this session only; nothing is persisted. An "
+            + "expired or not-yet-valid identity is refused. Refresh SECOM sources afterwards to list what it can read.");
     }
 
     /// <summary>Creates <c>list_known_sources</c>.</summary>

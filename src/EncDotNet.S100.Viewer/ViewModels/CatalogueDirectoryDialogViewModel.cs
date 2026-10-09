@@ -110,10 +110,11 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
 
     /// <summary>
     /// True when the chosen catalogue can be added: any curated or own
-    /// catalogue, or a registry service that answers without a certificate.
+    /// catalogue, or a registry service that answers without a certificate or
+    /// with this client's MCP identity (#832).
     /// </summary>
     public bool CanContinueWithSelection =>
-        _selected is { } entry && (!entry.IsRegistry || entry.Reachability == SecomReachability.Open);
+        _selected is { } entry && (!entry.IsRegistry || entry.Reachability is SecomReachability.Open or SecomReachability.OpenWithCertificate);
 
     /// <summary>Lists SECOM services from the MCP service registry (#822); the registry is only asked when this runs.</summary>
     public ICommand ShowRegistryCommand { get; }
@@ -533,14 +534,16 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         : _reachability?.Reachability switch
         {
             SecomReachability.Open => Strings.Library_Reachability_Open,
+            SecomReachability.OpenWithCertificate => Strings.Library_Reachability_OpenWithCertificate,
             SecomReachability.NeedsCertificate => Strings.Library_Reachability_NeedsCertificate,
+            SecomReachability.CertificateRefused => Strings.Library_Reachability_CertificateRefused,
             SecomReachability.UntrustedServer => Strings.Library_Reachability_UntrustedServer,
             SecomReachability.Unreachable => Strings.Library_Reachability_Unreachable,
             _ => null,
         };
 
     /// <summary>True when the service cannot be added as things stand (the chip is shown as limited).</summary>
-    public bool IsReachabilityLimited => _reachability is { Reachability: not SecomReachability.Open };
+    public bool IsReachabilityLimited => _reachability is { Reachability: not (SecomReachability.Open or SecomReachability.OpenWithCertificate) };
 
     /// <summary>
     /// Why the service cannot be added yet, for the row, and which trust
@@ -555,6 +558,10 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
             var why = _reachability?.Reachability switch
             {
                 SecomReachability.NeedsCertificate => Strings.Library_Reachability_NeedsCertificateExplanation,
+                SecomReachability.OpenWithCertificate => string.Format(
+                    CultureInfo.CurrentCulture, Strings.Library_Reachability_OpenWithCertificateExplanationFormat, _reachability.Identity),
+                SecomReachability.CertificateRefused => string.Format(
+                    CultureInfo.CurrentCulture, Strings.Library_Reachability_CertificateRefusedExplanationFormat, _reachability.Identity),
                 SecomReachability.UntrustedServer => trust switch
                 {
                     { Outcome: SecomServerTrustOutcome.WrongHost } => Strings.Library_Reachability_WrongHostExplanation,

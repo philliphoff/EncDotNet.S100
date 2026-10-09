@@ -79,11 +79,19 @@ public sealed record SecomServerTrustResult(SecomServerTrustOutcome Outcome, str
 /// <see cref="SecomServerTrustResult.Revocation"/> saying so. Certificates the
 /// operating system trusts are left to its own revocation policy.
 /// </para>
+/// <para>
+/// The handlers also present this client's MCP identity, when one is set with
+/// <see cref="SetIdentity"/>, to SECOM services that ask for a client
+/// certificate (mutual TLS, #832). The identity can change at any time: the
+/// next request through each handler connects with the new one.
+/// </para>
 /// </remarks>
 public sealed class SecomServerTrust
 {
     private readonly ConcurrentDictionary<string, SecomServerTrustResult> _results = new(StringComparer.OrdinalIgnoreCase);
     private readonly TimeProvider _time;
+    private SecomClientIdentity? _identity;
+    private int _identityVersion;
 
     /// <summary>Creates a validator trusting <paramref name="anchors"/>.</summary>
     /// <param name="anchors">The anchors server certificates may chain to; by default <see cref="SecomTrustAnchors.BuiltIn"/>.</param>
@@ -102,15 +110,33 @@ public sealed class SecomServerTrust
     /// <summary>Checks anchor-trusted chains for revocation, when set.</summary>
     public SecomRevocation? Revocation { get; }
 
+    /// <summary>The MCP identity presented to SECOM services that ask for a client certificate, if one is set.</summary>
+    public SecomClientIdentity? Identity => Volatile.Read(ref _identity);
+
+    /// <summary>Raised after <see cref="SetIdentity"/> changes the identity.</summary>
+    public event EventHandler? IdentityChanged;
+
     /// <summary>
-    /// A handler for an <see cref="HttpClient"/> used only for SECOM requests,
-    /// validating server certificates with <see cref="Validate"/>.
+    /// Sets (or, with <see langword="null"/>, clears) the identity presented
+    /// to SECOM services. Handlers connect with it from their next request;
+    /// connections made with the previous identity are no longer used. The
+    /// previous identity is not disposed: its owner may still hold it.
     /// </summary>
-    public HttpClientHandler CreateHandler() => new()
+    public void SetIdentity(SecomClientIdentity? identity)
     {
-        ServerCertificateCustomValidationCallback = (request, certificate, chain, errors) =>
-            request.RequestUri is { } uri && Validate(uri.IdnHost, certificate, chain, errors).Allowed,
-    };
+        Volatile.Write(ref _identity, identity);
+        Interlocked.Increment(ref _identityVersion);
+        IdentityChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// A handler for an <see cref="HttpClient"/> used only for SECOM requests:
+    /// it validates server certificates with <see cref="Validate"/> and, unless
+    /// <paramref name="presentIdentity"/> is false, presents <see cref="Identity"/>
+    /// to a service that asks for a client certificate.
+    /// </summary>
+    /// <param name="presentIdentity">False for a handler that never presents an identity (anonymous probes).</param>
+    public HttpMessageHandler CreateHandler(bool presentIdentity = true) => new IdentityHandler(this, presentIdentity);
 
     /// <summary>
     /// The last decision about <paramref name="host"/>'s certificate, if a
@@ -121,6 +147,9 @@ public sealed class SecomServerTrust
         ArgumentNullException.ThrowIfNull(host);
         return _results.TryGetValue(host, out var result) ? result : null;
     }
+
+    /// <summary>Forgets the last decision about <paramref name="host"/>, so a probe sees only its own.</summary>
+    internal void Forget(string host) => _results.TryRemove(host, out _);
 
     /// <summary>Decides whether to allow a TLS connection to <paramref name="host"/>, and records the decision.</summary>
     /// <param name="host">The host the request was made to.</param>
@@ -133,6 +162,69 @@ public sealed class SecomServerTrust
         var result = Decide(host, certificate, chain, errors);
         _results[host] = result;
         return result;
+    }
+
+    /// <summary>
+    /// Sends through an <see cref="HttpClientHandler"/> made for the current
+    /// identity, replacing it when the identity changes. Replaced handlers are
+    /// kept until this one is disposed, so requests still running on them
+    /// finish; their idle connections close on their own.
+    /// </summary>
+    private sealed class IdentityHandler(SecomServerTrust trust, bool presentIdentity) : HttpMessageHandler
+    {
+        private readonly object _gate = new();
+        private readonly List<HttpMessageInvoker> _retired = [];
+        private HttpMessageInvoker? _current;
+        private int _version = -1;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Current().SendAsync(request, cancellationToken);
+
+        private HttpMessageInvoker Current()
+        {
+            var version = Volatile.Read(ref trust._identityVersion);
+            lock (_gate)
+            {
+                if (_current is not null && (!presentIdentity || _version == version))
+                    return _current;
+
+                if (_current is not null)
+                    _retired.Add(_current);
+                _version = version;
+                return _current = new HttpMessageInvoker(Create(presentIdentity ? trust.Identity : null), disposeHandler: true);
+            }
+        }
+
+        private HttpClientHandler Create(SecomClientIdentity? identity)
+        {
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = (request, certificate, chain, errors) =>
+                    request.RequestUri is { } uri && trust.Validate(uri.IdnHost, certificate, chain, errors).Allowed,
+            };
+            if (identity is not null)
+            {
+                handler.ClientCertificateOptions = ClientCertificateOption.Manual;
+                handler.ClientCertificates.Add(identity.Certificate);
+            }
+
+            return handler;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                lock (_gate)
+                {
+                    _current?.Dispose();
+                    _retired.ForEach(r => r.Dispose());
+                    _retired.Clear();
+                }
+            }
+
+            base.Dispose(disposing);
+        }
     }
 
     private SecomServerTrustResult Decide(string host, X509Certificate2? certificate, X509Chain? chain, SslPolicyErrors errors)
