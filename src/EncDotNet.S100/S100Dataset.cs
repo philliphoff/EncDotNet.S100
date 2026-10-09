@@ -158,8 +158,8 @@ public sealed class S100Dataset : IDisposable
 
     /// <summary>
     /// Whether this dataset can be rendered to a standalone image by the
-    /// headless renderers (vector products and gridded coverages can; some
-    /// shapes such as fixed-station time series cannot).
+    /// headless renderers. <see langword="false"/> when the product's processor
+    /// has no image rendering (of the bundled products, S-131).
     /// </summary>
     public bool CanRenderHeadless => Processor is IHeadlessImageRenderer;
 

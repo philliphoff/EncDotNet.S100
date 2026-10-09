@@ -1,387 +1,427 @@
-# MCP server (viewer-hosted)
+# MCP server
 
-The viewer (SoundCharts) can host a Model Context Protocol (MCP) server so
-external agents — `mcp-inspector`, Claude Desktop, IDE assistants —
-can query the datasets you have loaded in the viewer.
+EncDotNet.S100 exposes its datasets to AI agents through a Model Context
+Protocol (MCP) server. Agents such as `mcp-inspector`, Claude Desktop or an IDE
+assistant can list datasets, query features, sample coverages and render
+images.
 
-The server is **off by default** and **listens on the loopback
-address only**. There is no authentication; the loopback isolation is
-the only protection.
+Two hosts run the server:
+
+| Host | Transport | Datasets | Tools |
+|---|---|---|---|
+| SoundCharts | Streamable HTTP on the loopback address | The datasets loaded in the app | All the tools on this page, except where marked |
+| `s100 mcp serve` | Standard input and output | The datasets you name when you start it, plus any `open_dataset` adds | The [query tools](#query-tools) and [session tools](#session-tools) |
+
+To host the tools in your own application, see the
+[EncDotNet.S100.Mcp README](../src/EncDotNet.S100.Mcp/README.md).
+
+## Turn on the server in SoundCharts
+
+The server is off by default. When it's on, it listens on `127.0.0.1` only and
+has no authentication; see [Security](#security).
+
+1. Choose **Settings** (the gear icon in the activity bar), then
+   **Integrations**.
+2. Under **MCP Server**, turn on **Enable MCP server**.
+3. Optionally set **Port**. Leave it at `0`, the default, to let the system pick
+   a free port. **Reset to auto** forgets a saved port.
+
+The status bar shows `MCP :<port> · <n> clients` while the server is
+listening. Hover over it to see the endpoint URI to give your agent.
+
+To stop the server, turn off **Enable MCP server**. The status bar indicator
+disappears and the port is released.
+
+If the port is already in use, SoundCharts shows **MCP server port
+unavailable**, and the server stays off until you choose a free port. Choose
+**Find another port**, or set the port to `0`.
+
+### Start the server from the command line
+
+For scripted runs, an agent can start SoundCharts with the server on, without
+opening Settings and without changing the saved settings:
+
+```bash
+dotnet run --project src/EncDotNet.S100.Viewer -- --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url path/to/dataset.h5
+```
+
+| Option | Description |
+|---|---|
+| `--mcp` | Starts the server for this run, whatever the saved setting is. |
+| `--mcp-port <port>` | The port. `0`, the default, picks a free port. Implies `--mcp`. |
+| `--mcp-bind <address>` | The address to listen on. Keep the loopback address unless you have a reason to change it; see [Security](#security). Implies `--mcp`. |
+| `--mcp-port-file <path>` | Writes the endpoint URI to this file once the server is listening, so an agent can find a port the system picked. Implies `--mcp`. |
+| `--mcp-test-hooks` | Also registers the [test tools](#test-tools). Implies `--mcp`. It's never saved, so turning on the server in Settings never adds these tools. |
+
+SoundCharts also prints the endpoint to standard output as
+`[MCP] listening on <uri>`.
+
+A run started this way never saves the port to `settings.json`. To keep your
+own settings untouched, and to let parallel runs avoid each other, add
+`--ephemeral` (throwaway settings), `--settings <path>` (another settings file)
+or `--data-dir <path>` (settings and all disk caches under one folder, the most
+isolated option).
+
+The **Automation / agent control** section of the
+[viewer guide](../src/EncDotNet.S100.Viewer/README.md#automation--agent-control)
+lists the other startup options, such as viewport, palette, time step and
+logging, and walks through an agent session.
+
+## Run the headless server
+
+`s100 mcp serve` serves a fixed set of datasets over standard input and output,
+with no app running. Configure your MCP client to start it, for example:
+
+```json
+{
+  "command": "s100",
+  "args": ["mcp", "serve", "path/to/exchange-set.zip"]
+}
+```
+
+The exact shape of the configuration depends on your client. For the input
+forms and options, see [`mcp serve`](cli.md#mcp-serve).
+
+## Connect with mcp-inspector
+
+1. Start the inspector:
+
+   ```bash
+   npx @modelcontextprotocol/inspector
+   ```
+
+2. Set the transport to **Streamable HTTP**.
+3. Paste the endpoint from the SoundCharts status bar, for example
+   `http://127.0.0.1:54321/`, and connect.
+
+The inspector lists the tools described below. If no datasets show up, load
+some in SoundCharts first: the server only sees what's loaded. If the agent
+can't connect, check the endpoint again. With port `0`, the port changes each
+time the server restarts.
 
 ## Field conventions
 
-Every MCP tool in this server follows the same conventions for the
-JSON it returns, so agents do not need to look up units, axes, or
-casing per-field. Anything that deviates is called out in the
-individual field's `[Description]`.
+Every tool follows the same conventions in the JSON it returns, so agents don't
+need to look up units, axes or casing field by field. A field that differs says
+so in its description.
 
 | Concern | Convention |
 |---|---|
 | Coordinate reference system | WGS-84 (EPSG:4326). |
-| Coordinate values | Decimal degrees. Latitude range `-90..+90`; longitude range `-180..+180`. |
-| Bounding boxes | Four scalars labelled `southLatitude`, `westLongitude`, `northLatitude`, `eastLongitude` — never a bare pair. |
-| Times | UTC, ISO-8601. Time intervals are inclusive at both ends. |
+| Coordinate values | Decimal degrees. Latitude `-90..+90`; longitude `-180..+180`. |
+| Bounding boxes | Four labelled values, `southLatitude`, `westLongitude`, `northLatitude`, `eastLongitude`, never a bare pair. |
+| Times | UTC, ISO 8601. Time intervals include both ends. |
 | Distances | Metres. |
-| Depths | Metres, positive down (matches S-102's vertical-datum convention). |
-| Water levels | Metres, positive up (matches S-104's vertical-datum convention). |
-| Current speeds | S-111 encodes `surfaceCurrentSpeed` in knots for every data coding format. Samples report both `speedKnots` (as encoded) and `speedMetresPerSecond` (`kn × 0.514444`). |
-| Bearings | Degrees from true north, clockwise, range `0..360`. |
-| JSON property naming | lower camelCase across every tool (driven by `JsonSerializerDefaults.Web`). |
-| Discriminated unions | Variant carries a `$kind` discriminator string (e.g. `"depth"`, `"waterLevel"`, `"surfaceCurrent"`). |
-| Errors | `isError = true` with payload `{ code, message, details }` — `code` is the stable switch key, `message` is human-readable, `details` carries the typed members of the error. |
-| Dataset identifiers | A `datasetId` is an opaque **plain string** in both directions: tools accept it as a bare string argument and emit it as a bare string in results (e.g. `"id": "synth-warn-1"`), so an id read off one tool's output feeds straight back into another's input. (Legacy `{"value":"…"}` wrapped ids are still accepted on input for compatibility.) |
+| Depths | Metres, positive down, as in S-102. |
+| Water levels | Metres, positive up, as in S-104. |
+| Current speeds | S-111 encodes `surfaceCurrentSpeed` in knots in every data coding format. Samples report both `speedKnots`, as encoded, and `speedMetresPerSecond` (`kn × 0.514444`). |
+| Bearings | Degrees clockwise from true north, `0..360`. |
+| Property names | Lower camelCase in every tool. |
+| Discriminated unions | A `$kind` string names the variant, for example `"depth"`, `"water_level"`, `"water_level_station"`, `"surface_current"` or `"surface_current_station"`. |
+| Errors | `isError = true` with the payload `{ code, message, details }`. `code` is the stable value to switch on, `message` is for people, and `details` carries the error's typed members. |
+| Dataset identifiers | A `datasetId` is a plain string in both directions, for example `"id": "synth-warn-1"`, so an id from one tool's output goes straight into another tool's input. The older `{"value":"…"}` wrapper is still accepted as input. |
 
-Every public property on a tool request, tool result, or `ToolError`
-subtype carries a `[System.ComponentModel.Description]` attribute with
-a single sentence stating the unit / CRS / semantics. A reflection
-contract test (`AnnotationContractTests`) enforces this.
+Every property of a tool request, result or error has a one-sentence
+description of its unit, CRS and meaning.
 
-## Enable it
-
-1. Open the viewer.
-2. Open **Settings** (gear icon in the activity bar).
-3. Scroll to **MCP SERVER**.
-4. Tick **Enable MCP server**.
-5. Optionally set a fixed **Port**. Leave at `0` (the default) to
-   have the OS pick an ephemeral port.
-6. The status bar shows `MCP :{port} · {n} clients` once the server
-   is listening. The tooltip on that indicator gives you the full
-   endpoint URI to hand to your agent.
-
-Untick the checkbox to stop the server; the indicator disappears and
-the TCP port is released.
-
-### Enable it from the command line (agent automation)
-
-For headless / scripted runs an agent can enable and configure the
-MCP server entirely from the CLI, without opening Settings and without
-touching the user's persisted profile:
-
-```bash
-dotnet run --project src/EncDotNet.S100.Viewer -- \
-  --ephemeral --mcp --mcp-port-file /tmp/run/mcp.url \
-  path/to/dataset.h5
-```
-
-- `--mcp` starts the server for the run, overriding the persisted
-  toggle. `--mcp-port <PORT>` and `--mcp-bind <ADDR>` configure the
-  listener (any MCP flag implies `--mcp`).
-- `--mcp-port-file <PATH>` writes the bound endpoint URI to a file
-  once the server is listening, so an agent can discover an ephemeral
-  port (`--mcp-port 0`, the default). The endpoint is also printed to
-  stdout as `[MCP] listening on …`.
-- `--mcp-test-hooks` also registers test-only tools: `set_test_clock`,
-  which moves or freezes the viewer's notion of now, and the `ui_*` UI
-  automation tools, which can click, type into and select anything in
-  the viewer's UI. Use it only for scripted testing; it implies `--mcp`.
-  The flag is never saved, so turning MCP on in Settings never offers
-  these tools.
-- A CLI-driven MCP run **never persists** the bound port back to
-  `settings.json`. Combine with `--ephemeral` (throwaway settings),
-  `--settings <PATH>` (alternate settings file), or `--data-dir <PATH>`
-  (redirect settings **and** all disk caches under one disposable
-  folder — the cleanest isolation for agent runs) to keep the real
-  profile pristine and let parallel runs avoid collisions.
-
-See the **Automation / agent control** section of the
-[viewer README](../src/EncDotNet.S100.Viewer/README.md) for the full
-flag list (viewport, palette, time step, screenshots, logging) and an
-end-to-end walkthrough.
-
-## Connect from `mcp-inspector`
-
-```bash
-npx @modelcontextprotocol/inspector
-```
-
-Set the transport to **Streamable HTTP**, paste the endpoint from the
-viewer's status-bar tooltip (e.g. `http://127.0.0.1:54321/`), and click
-**Connect**. You should see the following tools:
-
-| Tool | Purpose |
-|---|---|
-| `list_datasets` | Summarises every dataset currently loaded in the viewer. Each entry's `spec` is the dataset's product identity: a legacy S-57 cell reports `S-57` (with its real cell bounds) even though it is translated to, and queried through, the S-101 model, so the vector query tools (`identify_features`, `query_features`, `count_features`, `search_features`, …) work on S-57 cells too. |
-| `list_specs` | Lists S-100 product specifications the host can read. |
-| `list_time_steps` | Lists time steps for a time-varying dataset (S-104, S-111, S-421). |
-| `find_at` | Returns every loaded dataset whose declared bounding box contains a lat/lon point (decimal degrees, WGS-84). Bbox-only — does not check per-cell coverage or NoData masks. For the *features* under a point (not just which datasets cover it), use `identify_features`. |
-| `identify_features` | Identifies the vector features at a lat/lon point — the ECDIS cursor-pick — ranked most-specific first (point features before curves before areas; within a primitive the smaller / nearer feature wins). The feature-aware complement to `find_at`. Area features use exact point-in-polygon containment (interior-ring holes honoured); point / curve features match within `radiusMeters` (default 50, area features ignore it). Works across every vector spec (incl. S-101). `longitude` may be anywhere in `[-540, 540]`: data kept in a 0…360 or other continuous longitude frame (e.g. the NWS Alaska S-411, 175°E–225°E) is matched at its own longitude and at the same place one world east or west (210 and −150 find the same feature), as the viewer draws it there. Each match reports the dataset id, spec, feature id and type, geometry primitive, bounds, `containment` (`inside`/`near`), and approximate `distanceMeters`; `maxResults` (default 20) caps the list and sets `truncated`. For S-101 features carrying a `fileReference` / `TXTDSC` / `NTXTDS` attribute, each match also reports `referencedTexts` — the resolved content of the external text files (file name + text) read from the dataset's exchange set — so headless callers see the same referenced text the viewer's pick report shows. |
-| `describe_feature` | Returns spec, feature type, attributes, and (for S-101) resolved geometry for a feature id in a given dataset. Numeric attributes whose Feature Catalogue declares a unit of measure (e.g. S-101 depth-valued attributes such as `depthRangeMinimumValue`, `valueOfSounding`) carry a `unit` (symbol, e.g. `"m"`) and `unitName` (e.g. `"metre"`), so the unit need not be inferred; the S-101 `geometry` block's per-point sounding `depths` array is likewise tagged with `depthUnit` (`"metres"`). Supported specs: S-101, S-401 and S-57 cells (translated to the S-101 model on load; RCID; result carries a `geometry` block with primitive, bounding box, and coordinates), S-102 (`BathymetryCoverage[.01]`; `boundingBox` is WGS-84 degrees, while `gridMetadata` and `nativeExtent` stay in the grid's native CRS, which is metres for a UTM tile), S-104 / S-111 (`WaterLevel`/`SurfaceCurrent[.NN][.Group_KKK]` or bare station identifier), S-124 (`gml:id`), and S-129 (`gml:id` of plan / plan-area / control-point / non-navigable-area). |
-| `describe_feature_type` | Introspects a spec's bundled Feature Catalogue (ISO 19110 / S-100 Part 5) — the schema-discovery counterpart to `count_features` / `query_features`. Call with just a `spec` (e.g. `S-101` or `S-124/1.5.0`) to list every feature type with its attribute count; add a `featureType` (code, name, or alias) to get that type's attribute bindings — each attribute's value type, whether it is mandatory and/or repeatable, and its enumerated listed values (set `includeListedValues=false` to omit large enumerations). Lets an agent build valid attribute predicates without a loaded dataset. The `spec` name is normalised — casing and an optional edition suffix (e.g. `s101` or `S-101/1.2.0`) are accepted and the edition is ignored. Specs with no bundled catalogue return `feature_catalogue_not_available`, whose `details.acceptedSpecs` lists the spec names that do have one. |
-| `query_features` | Returns features whose geometry intersects a spatial query from loaded vector datasets — every GML vector spec plus the ISO 8211-encoded S-101 and S-401 (inland ENC), adapted through the shared feature interface. By default intersection is bounding-box precision; set `precise=true` for **true full-geometry** intersection — point-in-polygon containment for area features (interior-ring holes honoured) and genuine segment crossing, e.g. "which features does this route leg actually cross?". For S-101 the `featureType` filter matches the feature-type acronym (e.g. `LIGHTS`, `BOYLAT`) and each `featureId` is the feature record's decimal RCID. An optional `attributes` predicate set filters on attribute values: pass a code→value map for equality (`{"categoryOfLateralMark":"1"}`) or an array of explicit predicates (`[{"attribute":"valueOfDepth","op":"ge","value":"10"},{"attribute":"objectName","op":"exists"}]`); operators are `exists`, `notExists`, `eq`, `ne`, `contains`, `startsWith`, `gt`, `ge`, `lt`, `le` and combine with logical AND. The result also carries a `typeBreakdown` (per-feature-type counts of the full all-pages match set, reflecting any attribute filter) so an agent can gauge a result before paging. |
-| `count_features` | Enumerates the feature types present in loaded vector datasets and counts how many features of each type they contain — the "what kinds of features, and how many, are in this cell?" discovery question that `describe_feature` can't answer (it needs an id you don't yet have). Works across every vector spec (incl. S-101). Optional `spec`, `datasetId`, and spatial `query` filters. Each tally reports `count` and `withGeometry` (how many are spatially addressable). |
-| `nearest_features` | Ranks the vector features nearest to a lat/lon point by **true geometric distance** — the distance-ranking and containment query that `find_at` (dataset-bbox membership) and `query_features` (feature-bbox intersection) can't answer. Answers "nearest light / buoy / berth to my position?" and "is this point inside any restricted area?" in one call: an area feature containing the point is returned at `distanceMeters` 0 with `containment` `inside`; every other feature reports the true distance to the nearest point on its geometry (nearest point on a segment, not just the nearest vertex) plus the `bearingDegrees` toward it. Works across every vector spec (incl. S-101). Optional `spec`, `datasetId`, `featureType`, and `maxDistanceMeters` filters; `limit` (default 10) caps the nearest-first list and sets `truncated`. |
-| `search_features` | Finds vector features by name — the "where is the feature called X?" question that `query_features` (geometry-first) and `describe_feature` (needs an id you don't have yet) can't answer. Searches every place a name can live: the simple `OBJNAM` / `NOBJNM` / `objectName` attributes (incl. ISO 8211-encoded S-101) and the repeatable complex `featureName` compound's `name` / `displayName` sub-attributes (GML specs). Case-insensitive substring containment by default; set `exact` for whole-name equality or `caseSensitive` for an exact-case match. Optional `spec`, `datasetId`, and spatial `query` scope. Each match reports `matchedName` and `matchedAttribute`. Paginated. |
-| `sample_coverage` | Samples a depth / water-level / current value at a lat/lon from an S-102 / S-104 / S-111 dataset. For S-104 / S-111, a `time` (or `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default rather than a value from the wrong time; see [Times outside the data](#times-outside-the-data). |
-| `sample_coverage_along` | Samples a coverage at each vertex of a polyline. Time handling matches `sample_coverage` for each vertex. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
-| `render_to_image` *(viewer only, read-only)* | Captures the viewer's current map view as a PNG image, returned as an MCP `ImageContentBlock`. Lets an agent see exactly what the user sees for diagnosis of rendering issues (palette banding, NoData voids, augmented-geometry artefacts, missing features, etc.). When `width`/`height` are both omitted the capture is sized to the live on-screen viewport (when laid out) so the PNG matches the user's view pixel-for-pixel rather than letterboxing under the fixed 1024×768 default; the live viewport size is always echoed back as `viewportWidth`/`viewportHeight` so an agent can request a matching aspect ratio or pass those dimensions to `pick_features`. |
-| `set_viewport` *(viewer only, **mutating**)* | Drives the live viewer's map navigator to a specified WGS-84 viewport — exactly one of a bbox (`south`/`west`/`north`/`east`), a centre + web-mercator zoom (`centerLat`/`centerLon`/`zoom`), or a centre + map scale (`centerLat`/`centerLon`/`scaleDenominator`, e.g. `50000` for 1:50 000). Mixing forms, including `zoom` with `scaleDenominator`, is rejected. `scaleDenominator` is converted at the centre latitude with the same 0.28 mm pixel the status bar uses, so the status bar reads it back. An optional `rotation` (degrees clockwise, `0` = north-up; any finite value, normalised to `[0, 360)`) is applied on top of the frame so scripted runs can exercise the rotated-viewport render path (e.g. verifying the live label plane keeps text upright under rotation); it must accompany a frame form — to rotate in place, re-issue the same centre form with the new `rotation`. The result echoes the applied rotation and `scaleDenominator` — the unrounded scale read back from the live map after the change, so it reflects the viewer's zoom limits (1:1 000 at the viewport's own latitude; a zoom-out floor of 1:500 000 000 at the equator, a fixed Mercator resolution that reads 1:500 000 000 × cos(latitude) elsewhere) and, for a bbox, the fit to the control (omitted for a bbox before the map is laid out). **Longitudes past ±180°:** the viewer draws the basemap and chart data one world copy either side of the standard world, so longitudes are accepted in `[-540, 540]` and frame the matching copy. A dataset kept in a continuous frame across the antimeridian (the NWS Alaska S-411, `open_dataset` bounds 175…225) is framed at its own longitudes, e.g. `{south: 69.5, west: 190, north: 74.5, east: 220}` or `{centerLat: 72, centerLon: 205, scaleDenominator: 10000000}` for the Beaufort Sea. The same place in the standard world (`west: -170, east: -140`) shows the same data. A bbox with `west > east` crosses the antimeridian: its east edge is taken one world east (`west: 170, east: -140` frames 170…220); a box may be at most one world wide. The echo reports the framed box in that continuous frame (`west < east`, past ±180° where it was framed) and the live map centre as `centerLat`/`centerLon`. The map keeps its centre within the loaded data and the basemap's world, so a far copy with nothing loaded there may be pulled back; the echoed centre says where the map settled. The companion of `render_to_image`: drive the navigator with `set_viewport`, then capture with `render_to_image` for scripted measurement runs. |
-| `pick_features` *(viewer only)* | The feature-aware inverse of `render_to_image`: resolves the vector features under a point on the live map. Supply EITHER a screen pixel (`x`/`y`) OR a WGS-84 geographic point (`latitude`/`longitude`); mixing or omitting both is rejected. For a pixel measured off a `render_to_image` capture, **also** pass `imageWidth`/`imageHeight` set to the `width`/`height` that tool echoed back — the pick is then resolved with the capture's exact fit geometry, making it a faithful inverse at any image size or aspect ratio. Omit `imageWidth`/`imageHeight` to interpret `x`/`y` in the live on-screen viewport's pixel space instead. The pixel is projected to a geographic point, then delegated to the same ranking as `identify_features`, so the result shape is identical (matches plus `totalMatched`/`truncated`) with an added `source` (`pixel`/`geo`) and the resolved `latitude`/`longitude`. Pixels outside the image/viewport bounds, or before the map is laid out, are rejected. Read-only by default; pass `select: true` to also show the pick on the live viewer — the resolved features populate the Object Information panel and the map draws a **pick highlight** (a screen-constant marker at the pick point plus an outline of the selected feature's geometry), exactly like a user click. The result echoes `selected: true` when this was honoured. Coverage picks (S-102/S-104/S-111) have no vector feature to outline and so are not shown. |
-| `set_palette` *(viewer only, **mutating**)* | Sets the live viewer's active map palette to `Day`, `Dusk`, or `Night` (case-insensitive). Idempotent — no-op when already at the requested palette. Returns the applied and previous palette so callers can detect no-ops. Lets scripted measurement runs drive palette-change scenarios from outside the GUI. |
-| `set_display_category` *(viewer only, **mutating**)* | Sets the live viewer's active ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation`, or `All` (case-insensitive). Idempotent. Counterpart to the `--display-category` CLI flag, but applicable mid-session. |
-| `set_display_mode` *(viewer only, **mutating**)* | Sets the live viewer's explicit per-spec display mode (S-100 Part 9 §11.7). Today only S-411 sea ice declares more than one mode: `ice-concentration` (default), `ice-sod` (stage of development), or `ice-navigational` — a **provisional** concentration-derived preview, *not* a POLARIS/RIO product. Accepts the same friendly tokens as the CLI `render --display-mode` flag, plus raw spec-native mode ids; an optional `spec` selects the product (defaults to `S-411`). Idempotent. Returns the applied and previous mode ids and whether the applied mode is `provisional`. This axis is independent of `set_display_category`. |
-| `set_time_step` *(viewer only, **mutating**)* | Drives the viewer's global time clock to a specific sample for time-aware datasets (S-104 / S-111 / S-411). Supply EITHER `index` (0-based integer into `list_time_steps`) OR `timestamp` (ISO-8601, snapped to the nearest sample). Returns the resolved index and snapped timestamp. Counterpart to the `--time-step` CLI flag, but applicable mid-session. |
-| `set_own_ship` *(viewer only, **mutating**)* | Positions and steers the simulated own-ship. Any subset of `lat`+`lon` (WGS-84 decimal degrees, supplied together), `cog` (course over ground, degrees true `[0, 360)`), `sog` (speed over ground, m/s `>= 0`), `heading` (gyro heading, degrees true — only applied together with `lat`/`lon`), and `hold` (`true` stops the vessel, `false` resumes) may be supplied; at least one actionable field is required. Works independently of the own-ship overlay's visibility, so it can pre-position the vessel before enabling the overlay or capturing a screenshot. Counterpart to the `--own-ship-pos` / `--own-ship-cog` / `--own-ship-sog` CLI flags, but applicable mid-session. |
-| `list_panels` *(viewer only, read-only)* | Lists the viewer's activity panels (the tabs in the left / right / bottom docks) and their current visibility, so an agent can drive and verify the non-render UX (action / report / timeline panels), not just the map. Each panel reports `id`, `title`, `dock` (`Left`\|`Right`\|`Bottom`), `available` (registered in the activity bar right now — a few panels are conditional, e.g. `Vessels` only while the AIS overlay is enabled and `Helm` only while own-ship tracking is enabled), `selected` (the active tab in its dock), `dockOpen` (its dock is expanded), and `showing` (actually visible = `available && selected && dockOpen`). Read-only — snapshots the activity bar without changing it. Call it to discover the valid panel ids for `set_panel` and again afterwards to confirm a show / hide took effect. |
-| `set_panel` *(viewer only, **mutating**)* | Shows or hides one of the viewer's activity panels (a tab in the left / right / bottom dock). `panel` is a panel id from `list_panels` (case-insensitive), e.g. `Datasets`, `LayerStack`, `PickReport`, `Timeline`. `visible` defaults to `true`: showing selects the panel's tab and opens its dock; hiding (`false`) closes the panel's dock when that panel is the one currently shown there (otherwise a no-op). Idempotent — a panel already in the requested state is left untouched. Returns the resulting `showing` state, the `previousShowing` state, and whether it `changed`. Rejects an unknown id (`panel_not_found`) and an attempt to show a panel that is not currently available (`panel_unavailable`, e.g. `Vessels` while the AIS overlay is disabled). Lets scripted runs drive non-render UX from outside the GUI so a code / run / verify loop can assert panel state. |
-| `capture_app_screenshot` *(viewer only, read-only)* | Captures the **whole viewer application window** — the chart plus the surrounding chrome (activity docks, panels, timeline, status bar) — as a PNG, returned as an MCP `ImageContentBlock` alongside a JSON metadata block (`imageFormat`, `byteLength`, and the PNG-decoded `width`/`height`). Complements `render_to_image`, which captures only the map surface: use this to *see* non-render UX (e.g. to visually confirm `set_panel` opened a panel) rather than inferring it from `list_panels`. Pass an optional `scale` (device pixels per logical pixel, clamped to `[0.5, 3]`, default `1`) for a sharper image, e.g. `2` for a Retina-quality capture. Read-only and side-effect free; the window is not mutated. Returns `window_not_ready` when the main window has not been attached yet (or has no on-screen size). |
-| `get_timeline_state` *(viewer only, read-only)* | Reads the Timeline as the user sees it: `mode` (`live` while the view time follows now, else `pinned`), `now`, `viewTime`, the loaded range (`minimum`/`maximum`, `sampleCount`), `coverage` windows (gaps lie between them), forecast `runs`, `nowInCoverage`, `forecastEnded`, the displayed `readout`, `offset` and `summary`, the status `message` and its `messageAction`, the axis `window`, its `preset`, the `step` and its `stepDriver`, the collapsed `gaps` (with their labelled `length`), and per time-aware layer (`layers`) its `drawnTime` (null when it has no data near the view time and hides) with its `previousSample`/`nextSample`, its `time` as its row in the Datasets list shows it (`08:00Z · T+20 h`, `no data · last 18:00Z, 6 h earlier`, `drawing…`), and whether it is `hidden` or `drawing`. `inMapView` says whether the In map view filter is on, `layout` is `lanes` or `strip`, `showOnline` whether lanes also show what the Library knows but has not loaded, and `lanes` lists each lane (`id`, `label`, product `group`, whether it is `listed` or folded outside the map view, whether its footprint is `inMapView`, `expired`, its `time`, whether it is a `library` lane of data not loaded, `newRun`, and its Library `windows` — item id, `online`/`on_disk`/`loaded`, start, end, run — whose ids work with `library_action`). While the map draws a new time the `message` reads `Drawing … · N of M layers ready`. Use it to explain why a layer isn't drawn. Layer times settle after the map's time refresh, so call `await_render_idle` after `set_view_time` before reading them. |
-| `set_view_time` *(viewer only, **mutating**)* | Moves the Timeline as the user does by scrubbing or pressing Now. `time` is `now` (as the Now button: the view then follows now), an ISO-8601 time, or an offset from the view time (`+6h`, `-30m`, `+1d`). `snap` is `exact` (default; layers apply their own time limits, so times between samples can be tested) or `nearest` (the nearest loaded sample). Choosing a time leaves Live mode. Returns the `get_timeline_state` payload; `view_time_not_applied` when no time-aware dataset is loaded. `now` also works past every loaded window: Live follows the clock and layers without data hide. |
-| `step_time` *(viewer only, **mutating**)* | Steps the Timeline as its ‹ › and arrow keys do: `direction` `next` or `previous`, `unit` `10min`, `1h`, `6h`, `1d` (landing on whole units), `sample` (of the step driver layer), `boundary` (dataset/run starts and ends), `data` (the next or previous cluster, skipping gaps) or `current` (the Timeline's chosen step), `count` times. Pins the time. `view_time_not_applied` when there is nothing further that way. |
-| `set_timeline_view` *(viewer only, **mutating**)* | Changes what the Timeline shows, as its preset menu, wheel, drag, In map view checkbox and Collapse to strip do: at most one of a `preset` (`now_6h`, `today`, `next_48h`, `this_run`, `in_view` — the data of the layers in the map view — or `all_loaded`), `zoom` `in` or `out` around the view time, or a custom `start`/`end`; and/or `inMapView` (true lists only the layers whose footprint intersects the map view, which then set the axis; the rest fold into one row), `showOnline` (Library data not loaded: online dashed, on disk outlined) and `layout` (`lanes` or `strip`), applied first. Leaves the view time alone. |
-| `set_dataset_state` *(viewer only, **mutating**)* | Shows or hides a loaded dataset (`visible`) and sets its `opacity` (0..1), as the Datasets list's eye icon and opacity control do; with neither it only reports the state. Use it to switch on datasets that load hidden (gridded S-104 surfaces, duplicate exchange-set variants). Returns the state before and after and whether it `changed`; `dataset_not_found` for an unknown id. |
-| `select_dataset` *(viewer only, **mutating**)* | Selects a loaded dataset in the Datasets panel as a click on its row does (switching the panel to its Datasets tab when needed), so the pinned inspector and the map's validation overlay follow it; `tab` (`dataset` \| `layers` \| `validation`) optionally switches the inspector tab, and the tab is kept otherwise. It does not open the panel: call `set_panel Datasets` first to see it. Returns `id`, `spec`, `previousId`, the `tab` shown, `deferred`, and a `validation` summary: `state` (`ready`, `no_rule_pack`, or `not_loaded`), `total` / `errors` / `warnings` / `infos`, `located` (findings with a location, which the overlay draws) and `message` (the Validation tab's counts summary or empty-state text). Validation runs when a dataset loads, and `open_dataset` returns after it; for a dataset still loading the tool waits up to `timeoutMs` (default 10000). An exchange-set cell deferred until it is in view reports `not_loaded`. Call `await_render_idle` before `capture_app_screenshot` so the overlay has painted. `dataset_not_found` for an unknown id. |
-| `list_notifications` *(viewer only, read-only)* | Lists the notifications on screen, oldest first: `id`, `severity`, `title`, `message`, `createdUtc`, `persistent`, and its action labels. |
-| `dismiss_notification` *(viewer only, **mutating**)* | Dismisses the notification with `id`, or every one (`all`, the default), as the user's close button does. Returns the ids dismissed; `notification_not_found` for an id not on screen. Useful before a screenshot. |
-| `set_test_clock` *(viewer only, **mutating**, test hooks only)* | Registered only when the viewer starts with `--mcp-test-hooks`. Moves (`now`, `advance` such as `+1h`), freezes (`freeze`) or resets (`reset`) the viewer's notion of now, so forecasts age, runs expire and a Live Timeline advances without waiting. Minute-tick consumers (the Timeline, the Library's expiry check) react immediately. |
-| `ui_tree` *(viewer only, read-only, test hooks only)* | Lists the UI as an accessibility client sees it, through Avalonia's automation peers: one root per window and open popup (`kind` `window` or `popup`: context menus and flyouts), each a tree of elements with a `ref` (`e12`; valid while the element stays on screen), `id` (its automation id, see the convention in `tests/EncDotNet.S100.Viewer.Tests/README.md`, e.g. `Datasets.DatasetsTab`, `Library.Tree`, `ActivityBar.Datasets`), `role` (`button`, `listItem`, `tabItem`, `treeItem`, `edit`, `checkBox`, `menuItem`…), `name`, `text` (the visible text of a row, or the tooltip of an icon button, when it has no name), `enabled`, `focused`, `patterns` (the actions it supports: `invoke`, `toggle`, `value`, `rangeValue`, `selectionItem`, `expandCollapse`) with their state (`toggle`, `value`, `selected`, `expanded`), and `bounds` in its window. `filter` `interactive` (default) keeps elements with an id or an action and promotes the children of the rest; `all` lists everything. `root` (an id or ref) lists one subtree; `depth` (default 30) and `maxNodes` (default 400; `truncated` says when it cut) bound the size. The map is one element: use the map tools for chart content. |
-| `ui_invoke` / `ui_set_value` / `ui_toggle` / `ui_select` / `ui_expand` / `ui_collapse` / `ui_focus` / `ui_context_menu` *(viewer only, **mutating**, test hooks only)* | Act on one element as the user does: click a button or menu item (`ui_invoke`); replace a text box's text or set a slider (`ui_set_value`, `value`); flip a check box or toggle button, or set it with `state` `on`/`off` (`ui_toggle`); select a list row, tab, tree node or radio button (`ui_select`); expand or collapse a tree node, expander, combo box or submenu; move keyboard focus (`ui_focus`; leaving a text box runs its lost-focus behaviour, so an in-place rename commits); or open a context menu as a right-click does, selecting the row or node first (`ui_context_menu`). Target by `id` or `ref` (exactly one). An id repeated per row (`Datasets.Row.Remove`) is ambiguous on its own: scope it with `within` (the row's ref or an ancestor's id) or use the ref. Returns the element afterwards. Errors: `ui_element_not_found` (with similar ids on screen), `ui_element_ambiguous` (each match's `ref` and row text), `ui_element_disabled`, `ui_action_not_supported` (with the element's `patterns`). A dialog or popup closing animates for a moment after the call returns; read `ui_tree` again before relying on it being gone. |
-| `list_library_sources` *(viewer only, read-only)* | Lists the Library: each collection (top-level node) with its kind tag (`DIR`, `ZIP`, `WEB`, `AWS`, `LIST`, `FEED`, `SECOM`, `JSON`, `S-128`), item count and status line, and each source with its index state, `indexedAt` (how stale a cached online catalogue is), URL (shared-feed tokens masked) and, unless `counts: false`, item counts by state, and for a synced (kept downloaded) source its last `sync` (objects local and listed, downloaded, pruned, failed, bytes needed when too large), and whether it is shown on the map (`showOnMap`). |
-| `query_library_items` *(viewer only, read-only)* | Finds Library datasets, paged (`page`, `pageSize` 1–500, default 50). Filters: `sourceId` (collection or source), `states` (`online`, `local`, `loaded`, `on_pan`, `update`, `expired`, `missing`, `listed`), `validAt` (`view_time`, as the Library's Valid at view time toggle, or an ISO-8601 time: data whose run or time coverage holds it), `spec`, `text` (as the Library filter box), a bounding box (`south`/`west`/`north`/`east`), or a point (`lat`/`lon`: what covers it, most detailed first, as tapping the map does). Each item reports `id` (`<sourceId>:<key>`), spec, state and tags as its row shows them, edition, issue date, size, bounds, local path, and for forecasts the model, run and `validUntil`. |
-| `describe_library_item` *(viewer only, read-only)* | Returns one item (by `itemId`) with its details pane: groups of labelled fields (Forecast, Product, Coverage, Source, …). `library_item_not_found` for an unknown id. |
-| `list_known_sources` *(viewer only, read-only)* | Lists the Online Catalogue directory: the curated sources and the user's own (`userAdded`), with provider, region, format, URL, edition/size support, product, pilot and not-for-navigation flags, and forecast feeds' models (cadence, horizon). |
-| `set_secom_identity` *(viewer only)* | `signatureAlgorithm` sets what SECOM 2.0 request envelopes are signed with (`ecdsa-384-sha3` by default for P-384 keys). Sets, clears (`clear: true`) or reports the MCP identity (client certificate, PKCS#12 or PEM with its key) that SECOM requests present to services asking for one (#832): subject, MRN, trust anchor, expiry, and `reference` for a stored identity. A file `path` is used for the session only and never persisted. `path` may instead be a stored identity's reference id from Settings → Keys & certificates (`sc-ident:…`, #845), which makes it the identity in use as the page's Use does. Keys and passwords are never returned. An expired identity is refused. `list_secom_services` with `probe` then reports `OpenWithCertificate` or `CertificateRefused`. |
-| `list_secom_services` *(viewer only, read-only)* | Lists SECOM (IEC 63173-2) data services from the MCP service registry (#822): name, organisation, product, released or provisional, endpoint and area, cleaned of unusable entries (localhost, bare hosts, deleted, duplicates). `product` filters (e.g. `S-124`); `probe: true` checks up to 60 services: `Open` (readable without a certificate), `NeedsCertificate`, `OpenWithCertificate` / `CertificateRefused` (with the `set_secom_identity` identity), `NeedsSecom2Search` (lists only through SECOM 2.0's signed requests: no identity set, or the signed request was not accepted), `UntrustedServer` (a TLS certificate refused: under no trusted root, expired, naming another host, or revoked) or `Unreachable`. Probed services also report `serverCertificate` (`SystemTrusted`, `AnchorTrusted`, `NotTrusted`, `Expired`, `WrongHost`, `Revoked`) and `serverCertificateAnchor` (e.g. `MCP MCC`): SECOM requests trust MCP-issued server certificates (#829). For `AnchorTrusted`, `serverCertificateRevocation` is `NotRevoked`, or `NotChecked` when no current CRL could be read; the connection is still allowed then (#833). Add an open one with `add_library_source url=<endpoint>`. |
-| `add_library_source` *(viewer only, **mutating**)* | Adds a Library source through the Add-to-Library dialog's own logic: a known source (`knownSourceId`), a catalogue or feed `url` (including a SECOM service endpoint, read anonymously; `sync` keeps any online source's items downloaded and current (a SECOM service also prunes), `inMapView` narrows a SECOM service to the current map view; `showOnMap` keeps any source's local datasets loading as you pan under one Datasets row, on by default for a synced SECOM service), or a local `path` (folder, exchange set, manifest, S-128; `kind` overrides the guess). Call with `preview: true` first to load the catalogue and list its `choices` (NOAA states / districts / regions, USACE rivers, S-111 models, S-102 areas, manifest groups, feed or SECOM products) with sizes, plus forecast `shapes`, S-100 `resolutions` and existing `collections`. Then add with `choices` (values or labels) or `includeAll`, into `collectionId` or a new collection (`collectionName`). Only indexes; nothing is downloaded. Returns the new collection and source ids. |
-| `refresh_library_source` *(viewer only, **mutating**)* | Re-indexes a collection or source (`id`) or the whole Library, as the panel's Refresh does, waits up to `waitMs` (default 60 s), and reports items `added` / `removed`, items whose state `changed` (by new state, e.g. `update`, `expired`) and `counts` by state. |
-| `library_action` *(viewer only, **mutating**)* | `load`, `load_as_you_pan`, `download` (then load), `download_only`, `update` (newer editions or runs) or `cancel`, on `itemIds` or items selected with the `query_library_items` filters; `cancel` with `all: true` cancels every download. Items the action does not apply to are `skipped` (by state). `dryRun: true` reports the count and `bytes` without acting; `maxBytes` refuses larger downloads (`library_change_rejected`). Downloads run in the background (`await_library_idle`). |
-| `remove_library_source` *(viewer only, **mutating**)* | Removes a collection or source (`id`) from the Library and deletes its cached index; downloaded files stay on disk. Requires `confirm: true`. |
-| `set_library_source_options` *(viewer only, **mutating**)* | Turns **Keep downloaded** (`sync`) and **Show on map** (`showOnMap`) on or off for an existing source (`id`), or for every source of a collection, as the Library tree's menu does (#809). Supply either or both; options not given are left as they are. `sync` applies to online sources only: it is rejected for a single local source and skipped for a collection's local sources. A changed source re-indexes; syncing downloads in the background (`await_library_idle`). Returns each source's `sync`, `showOnMap`, `canSync` and whether it `changed`. |
-| `await_library_idle` *(viewer only, read-only)* | Waits up to `timeoutMs` (default 60 s) until no source is indexing, no download is running and every dataset a `library_action` download or load opens has opened; returns `idle`, `timedOut`, `indexing`, `loading` (datasets still to open, including any still downloading) and the running batch's progress. |
-| `await_render_idle` *(viewer only, read-only)* | Blocks until the live map settles — no completed paint, graphics-refresh request, or active layer fetch for a continuous quiet period — or until a timeout elapses (`quietPeriodMs` default 250, clamped `[0, 10000]`; `timeoutMs` default 5000, clamped `[50, 120000]`). Call it between `set_viewport` and `render_to_image` so the screenshot reflects a settled view instead of racing the render pass. Always waits at least the quiet period and measures the on-screen `InstrumentedMapControl` paint loop, not the offscreen `render_to_image` clone. A layer's busy flag only holds the wait open while that layer keeps emitting render activity; a stale busy flag that never clears (with no paint/refresh for the quiet period) is ignored, so a settled map reports `wentIdle` rather than being forced to `timedOut`. Returns `wentIdle`, `timedOut`, `waitedMs`, and `paintsObserved`. |
-| `get_render_stats` *(viewer only, read-only)* | Reports the cost of the most recently completed on-screen map paint: wall-clock `frameDurationMs`, `intervalMs` since the previous paint, `totalDrawCalls`, and a per-style breakdown (`style`, `calls`, `durationMs`, ordered by descending duration). Also returns a rolling **`window`** object aggregating the most recent paints (up to 4096) so transient expensive frames are not missed once the view settles to a cheap cached repaint: `count`, `firstSequence`/`lastSequence`, and max / mean / p95 for both wall-clock frame time (`frameMaxMs`/`frameMeanMs`/`frameP95Ms`) and summed `VectorStyle` time (`vectorMaxMs`/`vectorMeanMs`/`vectorP95Ms`), plus `maxTotalDrawCalls`. `window.slowestFrame` identifies the maximum-duration paint with its sequence, completion timestamp, whole-frame duration, summed instrumented-style duration, uninstrumented remainder, and draw-call count so an outlier can be correlated with trace activity. Pass `resetWindow: true` to clear the window after reading (the canonical pattern: read+reset before an interaction burst, read again after to capture just that burst). Use it to measure rendering performance across pan / zoom, palette, or time-step changes. Describes the live map paint, not the offscreen `render_to_image` clone; returns `hasData = false` when no paint has occurred yet (the `window` is still reported). Pair with `await_render_idle` so the reported latest paint reflects a settled view. `totalDrawCalls` counts only Mapsui style-renderer draws (basemap, overlays, untiled layers); chart content composited from the tiled vector cache is **not** counted, so a count of 1–2 does not mean the chart drew nothing — confirm visually with `render_to_image` or `capture_app_screenshot`. |
-| `open_dataset` *(viewer only, **mutating**)* | Loads a dataset into the live viewer using its existing open code path, so agents can measure the load hot path. `path` is a single file (S-101 `.000`, HDF5 `.h5`, GML, etc.) OR an exchange set (a folder containing `CATALOG.XML`, or a `.zip` of one); the kind is auto-detected. `spec` optionally forces a product-spec hint (e.g. `S-102`) for single-file loads. Returns the resulting catalog id(s), `spec`, bounding box (`southLatitude`/`westLongitude`/`northLatitude`/`eastLongitude`), `count`, `loadDurationMs`, `timedOut` (exchange-set quiescence), and `skipped` (why catalogued datasets were skipped). When nothing portrayable loads, the `dataset_load_failed` reason quotes the first five problems (an unreadable catalogue, unsupported products, orphan updates). |
-| `close_dataset` *(viewer only, **mutating**)* | Unloads a currently-loaded dataset from the live viewer by its catalog `id` (as returned by `list_datasets` / `open_dataset`), using the viewer's existing close code path so agents can measure the unload hot path. An unknown / already-removed id resolves gracefully as a non-error result with `removed = false`. Returns `removed`, `count`, and `removedDatasets` (`id` + `spec`). |
-| `close_all_datasets` *(viewer only, **mutating**)* | Unloads every currently-loaded dataset from the live viewer through the same close path used by `close_dataset`. Useful for retention loops that repeatedly load → render → unload without restarting the viewer process. Returns `removed`, `count`, and `removedDatasets` (`id` + `spec`). |
-| `create_route` *(viewer only, **mutating**)* | Creates a new, empty editable route in the live viewer's route collection and makes it the active route. Optional `name` and `id` (a GUID is generated when `id` is omitted; ids must be unique). Returns the new route's full state (see `get_route`). Add waypoints with `append_waypoint`. |
-| `list_routes` *(viewer only, read-only)* | Lists every editable route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm`, and `isActive`, plus the collection's `activeRouteId`. |
-| `get_route` *(viewer only, read-only)* | Returns the full state of one route: `routeId`, `name`, `isActive`, `info` (name/author/description/ports/validity/vessel), `waypoints` (`index`, `lat`, `lon`, optional `number`/`name`/`fixed`/`turnRadiusNm`), `legs` (`index`, `geometryType`, computed `distanceNm`/`initialBearingDegrees`, plus the S-421 navigational envelope), and `totalDistanceNm`. Omit `routeId` to read the active route. |
-| `delete_route` *(viewer only, **mutating**)* | Removes a route from the collection. Omit `routeId` to delete the active route. Returns `routeId`, `deleted`, and the new `activeRouteId`. |
-| `append_waypoint` *(viewer only, **mutating**)* | Appends a waypoint (`lat`/`lon`, WGS-84 decimal degrees) to the end of a route, with optional `number`/`name`/`fixed`/`turnRadiusNm`. Omit `routeId` to use the active route. Returns the route's full updated state. |
-| `insert_waypoint` *(viewer only, **mutating**)* | Inserts a waypoint at `index` (in `[0, waypointCount]`; `0` prepends, `waypointCount` appends), splitting the affected leg. Same optional metadata as `append_waypoint`. Omit `routeId` to use the active route. Returns the route's full updated state. |
-| `move_waypoint` *(viewer only, **mutating**)* | Moves the waypoint at `index` (in `[0, waypointCount)`) to a new `lat`/`lon`. Omit `routeId` to use the active route. Returns the route's full updated state. |
-| `delete_waypoint` *(viewer only, **mutating**)* | Removes the waypoint at `index` (in `[0, waypointCount)`), merging the adjacent legs. Omit `routeId` to use the active route. Returns the route's full updated state. |
-| `set_leg_attributes` *(viewer only, **mutating**)* | Updates one leg (`legIndex`, in `[0, legCount)`): its `geometryType` (`loxodrome`\|`geodesic`) and/or navigational envelope (cross-track / channel limits, safety contour & depth, SOG/STW min & max, draft, static & dynamic UKC, safety margin, note — all metres/knots per S-421). All attributes optional; supplied values overwrite, omitted values are unchanged. Omit `routeId` to use the active route. Returns the route's full updated state. |
-| `set_route_info` *(viewer only, **mutating**)* | Updates route metadata (`name`, `author`, `description`, `departurePortId`, `arrivalPortId`, `validityStart`/`validityEnd`) and vessel particulars (`vesselName`/`vesselMmsi`/`vesselImo`/`vesselCallsign`/`vesselLengthMeters`/`vesselBeamMeters`; supplying any vessel field creates the vessel block). All fields optional; supplied values overwrite. Omit `routeId` to use the active route. Returns the route's full updated state. |
-
-> The **(viewer only)** tags above scope each tool to *this* server — the
-> surface a running viewer instance exposes. Most of the session tools are in
-> fact the shared implementation and are equally available from the headless
-> CLI host (`s100 mcp serve`); only the UI-bound tools are truly
-> viewer-specific. See
-> [Shared vs host-specific tool implementations](#shared-vs-host-specific-tool-implementations)
-> below for the exact split.
-
-Every `spec` argument accepts either a string (`"S-101"`, `"S-124/1.5.0"`;
-the edition is optional) or the `{"name":…,"edition":{"major":…,"minor":…,"clarification":…}}`
-object the tools return in their results, so a result's `spec` can be passed
-straight into the next call. `edition` is optional in the object form, and an
-all-zero edition means "any edition". Any other shape is rejected with an
+Every `spec` argument accepts a string (`"S-101"` or `"S-124/1.5.0"`; the
+edition is optional) or the object that tools return,
+`{"name":…,"edition":{"major":…,"minor":…,"clarification":…}}`, so you can pass
+a result's `spec` straight into the next call. In the object form `edition` is
+optional, and an all-zero edition means any edition. Any other shape returns an
 `invalid_argument` error that names `spec`.
 
-### Times outside the data
+## MCP tools
 
-`sample_coverage` and `sample_coverage_along` never return a value for a time the data doesn't cover unless the caller asks for it. This matches the timeline, which shows "No data at this time" rather than a stale frame.
+The **Changes state** column says whether a tool changes the host's state:
+loaded datasets, the view, the time, routes, panels or the Library. Tools
+marked "No" are safe to call at any time. None of the tools edit source
+datasets or write arbitrary files.
 
-- **Dataset selection is time-aware.** Of the S-104 / S-111 datasets covering the point, those whose time range contains the requested time are used. The finest grid wins among them, then the newest run (its `issueDate`/`issueTime`). With two runs or two models loaded at one point, the one that covers the time is sampled even if the other is finer. For station series, runs reporting the same station are chosen between the same way.
-- **Tolerance.** A time within one time-step interval of either end of a dataset's range counts as in range and samples the nearest step. With hourly steps ending at 21:00Z, 21:20Z samples 21:00Z.
-- **Single instant (`time`, or `times: {kind:"instant"}`), strict by default.** A time outside every covering dataset's range returns `time_out_of_range`. Its `details` give `requestedTime`, `datasetId`, `validFrom`, `validTo`, `run` (when the dataset declares an issue time), `nearestStep`, and `candidates` (every covering dataset with its range). Re-ask at `nearestStep`, or tell the user the forecast doesn't reach that far.
-- **Opt in to the nearest step** with `outOfRange: "nearest"`. The result then carries `timeStatus: "before_start"` or `"after_end"`, and `value.sampleTime` is the step that was used. In-range results always carry `timeStatus: "in_range"`. `outOfRange` defaults to `"error"`.
-- **Range / series.** The covered part of the window is returned. When the window reaches past the data, the result has `truncated: true`, and `coveredFrom` / `coveredTo` give the part of the window the data spans. Series instants beyond the data are dropped instead of all snapping to the last step. `time_out_of_range` is returned only when the window doesn't overlap the data at all. `outOfRange` does not affect windowed queries.
+### Query tools
 
-### Read-only vs mutating tools
+Both hosts provide these tools.
 
-Tools fall into two groups:
+| Tool | Changes state | What it does |
+|---|---|---|
+| `list_datasets` | No | Summarises every loaded dataset. Each entry's `spec` is the dataset's product: an S-57 cell reports `S-57`, with its real cell bounds, even though it's translated to and queried through the S-101 model. The vector query tools (`identify_features`, `query_features`, `count_features`, `search_features` and others) work on S-57 cells too. |
+| `list_specs` | No | Lists the product specifications the host can read. |
+| `list_time_steps` | No | Lists the time steps of a time-varying dataset (S-104, S-111, S-421). |
+| `find_at` | No | Returns every loaded dataset whose declared bounding box contains a point. It checks the bounding box only, not per-cell coverage or no-data masks. To find the features at a point, use `identify_features`. |
+| `identify_features` | No | Identifies the vector features at a point, as an ECDIS cursor pick does, ranked most specific first: points before curves before areas, and within a primitive the smaller or nearer feature first. Areas must contain the point (holes count); points and curves match within `radiusMeters` (default 50). Works for every vector product, including S-101. `longitude` can be anywhere in `[-540, 540]`: data kept in a 0…360 or other continuous frame, such as the NWS Alaska S-411 (175°E to 225°E), matches at its own longitude and one world east or west (210 and −150 find the same feature). Each match reports the dataset id, spec, feature id and type, primitive, bounds, `containment` (`inside` or `near`) and approximate `distanceMeters`. `maxResults` (default 20) caps the list and sets `truncated`. For S-101 features with a `fileReference`, `TXTDSC` or `NTXTDS` attribute, each match also reports `referencedTexts`: the name and content of the text files from the dataset's exchange set. |
+| `describe_feature` | No | Returns the spec, feature type, attributes and, for S-101, resolved geometry for a feature id in a dataset. Numeric attributes whose feature catalogue declares a unit, such as `depthRangeMinimumValue` or `valueOfSounding`, carry `unit` (for example `"m"`) and `unitName` (`"metre"`); the sounding `depths` in an S-101 `geometry` block carry `depthUnit` (`"metres"`). Supported: S-101, S-401 and S-57 cells (RCID; the result has a `geometry` block with primitive, bounding box and coordinates); S-102 (`BathymetryCoverage[.01]`; `boundingBox` is in WGS-84 degrees, while `gridMetadata` and `nativeExtent` stay in the grid's native CRS, such as metres for a UTM tile); S-104 and S-111 (`WaterLevel` or `SurfaceCurrent[.NN][.Group_KKK]`, or a bare station identifier); S-124 (`gml:id`); and S-129 (`gml:id` of a plan, plan area, control point or non-navigable area). |
+| `describe_feature_type` | No | Describes a spec's bundled feature catalogue (ISO 19110, S-100 Part 5). With only `spec` (for example `S-101` or `S-124/1.5.0`), lists every feature type with its attribute count. Add `featureType` (code, name or alias) to get that type's attributes: value type, whether mandatory or repeatable, and listed values (`includeListedValues=false` omits large enumerations). Use it to build attribute filters without a loaded dataset. Casing and an edition suffix in `spec` are accepted, and the edition is ignored. A spec with no bundled catalogue returns `feature_catalogue_not_available`, whose `details.acceptedSpecs` lists the specs that have one. |
+| `query_features` | No | Returns features whose geometry intersects a spatial query, from every GML vector product and from S-101 and S-401. Intersection uses bounding boxes by default; `precise=true` tests the full geometry, with point-in-polygon containment for areas (holes count) and real segment crossings, for questions such as "which features does this route leg cross?". For S-101, `featureType` matches the acronym (for example `LIGHTS` or `BOYLAT`) and each `featureId` is the record's decimal RCID. `attributes` filters on values: a code-to-value map for equality (`{"categoryOfLateralMark":"1"}`), or an array of predicates (`[{"attribute":"valueOfDepth","op":"ge","value":"10"},{"attribute":"objectName","op":"exists"}]`). Operators are `exists`, `notExists`, `eq`, `ne`, `contains`, `startsWith`, `gt`, `ge`, `lt` and `le`, combined with AND. The result's `typeBreakdown` counts every match by feature type, across all pages, so you can size a result before paging. |
+| `count_features` | No | Lists the feature types in the loaded vector datasets and how many features of each there are, to answer "what's in this cell?" before you have any ids. Works for every vector product, including S-101. Filters: `spec`, `datasetId` and a spatial `query`. Each count reports `count` and `withGeometry` (how many have geometry). |
+| `nearest_features` | No | Ranks vector features by true distance from a point, for questions such as "nearest light to my position?" or "is this point inside a restricted area?". An area that contains the point is returned at `distanceMeters` 0 with `containment` `inside`. Every other feature reports the distance to the nearest point on its geometry (on a segment, not only a vertex) and `bearingDegrees` toward it. Works for every vector product, including S-101. Filters: `spec`, `datasetId`, `featureType` and `maxDistanceMeters`. `limit` (default 10) caps the list and sets `truncated`. |
+| `search_features` | No | Finds vector features by name. Searches the `OBJNAM`, `NOBJNM` and `objectName` attributes (including S-101) and the `name` and `displayName` of the repeatable `featureName` complex attribute (GML products). Matches case-insensitive substrings by default; `exact` matches whole names and `caseSensitive` matches case. Scope with `spec`, `datasetId` and a spatial `query`. Each match reports `matchedName` and `matchedAttribute`. Paged. |
+| `sample_coverage` | No | Samples a depth, water level or current at a point from an S-102, S-104 or S-111 dataset. For S-104 and S-111, `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). |
+| `sample_coverage_along` | No | Samples a coverage at each vertex of a polyline, with the same time handling as `sample_coverage`. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
 
-* **Read-only** — never mutate viewer state. Safe to call from any
-  agent at any time. Examples: `list_datasets`, `find_at`,
-  `identify_features`, `query_features`, `count_features`,
-  `nearest_features`,
-  `search_features`,
-  `describe_feature_type`, `sample_coverage`, `render_to_image` (which
-  snapshots from a clone of the live `Map`), `pick_features` without
-  `select` (which projects a pixel through the live viewport without
-  changing it),
-  `await_render_idle`,
-  `get_render_stats` (which observe the live render loop without
-  changing it), `list_routes`, and `get_route` (which snapshot the
-  editable route collection without changing it), and `list_panels`
-  (which snapshots the activity bar without changing it), and
-  `capture_app_screenshot` (which snapshots the whole application window
-  without changing it), `get_timeline_state` and `list_notifications`
-  (which snapshot the Timeline and the notifications), and the Library
-  reads `list_library_sources`, `query_library_items`,
-  `describe_library_item`, `list_known_sources` and `await_library_idle`,
-  and, with `--mcp-test-hooks`, `ui_tree`.
-* **Mutating** — modify the live viewer's state (navigator, palette,
-  time step, loaded datasets, routes, etc.). Use only when you intend to
-  drive the viewer's UI from outside. Examples: `set_viewport`,
-  `pick_features` with `select: true` (which publishes the pick to the
-  Object Information panel and draws the pick highlight),
-  `set_palette`, `set_display_category`, `set_display_mode`,
-  `set_time_step`,
-  `set_own_ship`, `open_dataset`, `close_dataset`,
-  `close_all_datasets` (which
-  load / unload datasets through the viewer's own open / close code
-  path), the route-editing family `create_route`, `delete_route`,
-  `append_waypoint`, `insert_waypoint`, `move_waypoint`,
-  `delete_waypoint`, `set_leg_attributes`, and `set_route_info`, and
-  `set_panel` (which shows / hides the viewer's activity panels), and
-  `set_view_time`, `step_time`, `set_timeline_view`, `set_dataset_state`, `select_dataset`, `dismiss_notification` and, with
-  `--mcp-test-hooks`, `set_test_clock` and the `ui_*` actions, and the Library changes
-  `add_library_source`, `refresh_library_source`, `library_action`,
-  `remove_library_source` and `set_library_source_options`.
+### Session tools
 
-Tool descriptions in the registered MCP catalogue identify each tool
-as one or the other; this table is the canonical reference.
+Both hosts provide these tools. They change the host's in-memory state only.
 
-### Shared vs host-specific tool implementations
+| Tool | Changes state | What it does |
+|---|---|---|
+| `open_dataset` | Yes | Loads a dataset through the host's normal open path. `path` is a file (S-101 `.000`, HDF5 `.h5`, GML and others) or an exchange set (a folder with `CATALOG.XML`, or a `.zip` of one), detected automatically. `spec` optionally forces the product for a single file. Returns the new dataset ids, `spec`, bounding box, `count`, `loadDurationMs`, `timedOut` (for exchange sets) and `skipped` (why listed datasets were skipped). When nothing loads, the `dataset_load_failed` reason quotes the first five problems, such as an unreadable catalogue, unsupported products or orphan updates. |
+| `close_dataset` | Yes | Unloads a dataset by its `id` from `list_datasets` or `open_dataset`. An unknown id returns `removed = false`, not an error. Returns `removed`, `count` and `removedDatasets` (`id` and `spec`). |
+| `close_all_datasets` | Yes | Unloads every dataset. Useful for loops that load, render and unload without restarting. Returns `removed`, `count` and `removedDatasets`. |
+| `set_palette` | Yes | Sets the palette to `Day`, `Dusk` or `Night` (case-insensitive). Calling it with the current palette does nothing. Returns the applied and previous palette. |
+| `set_display_category` | Yes | Sets the ECDIS display category to `DisplayBase`, `Standard`, `OtherInformation` or `All` (case-insensitive). Calling it with the current category does nothing. In SoundCharts it matches the `--display-category` startup option. |
+| `set_display_mode` | Yes | Sets a product's display mode (S-100 Part 9 §11.7). Only S-411 sea ice has more than one: `ice-concentration` (default), `ice-sod` (stage of development) or `ice-navigational`, a provisional preview derived from concentration that isn't a POLARIS or RIO product. Accepts the same values as `s100 render --display-mode`, and the product's own mode ids. `spec` selects the product (default `S-411`). Returns the applied and previous mode ids and whether the applied mode is `provisional`. Independent of `set_display_category`. |
+| `set_time_step` | Yes | Moves the time of time-aware datasets (S-104, S-111, S-411) to a sample. Pass `index` (zero-based, from `list_time_steps`) or `timestamp` (ISO 8601, snapped to the nearest sample). Returns the resolved index and timestamp. In SoundCharts it matches the `--time-step` startup option. |
+| `set_viewport` | Yes | Sets the view. The two hosts take different arguments; see [set_viewport](#set_viewport). |
+| `render_to_image` | No | Returns a PNG of the current view as an MCP image. In SoundCharts it shows what the user sees; in `s100 mcp serve` it renders the session's datasets. See [Images](#images). |
 
-Most of these tools share one renderer-neutral implementation. The tool
-logic and its capability seams live in `EncDotNet.S100.Mcp.Tools`, and
-`S100MutableTools` (in `EncDotNet.S100.Mcp`) assembles them for a host.
-Both the desktop viewer and the headless CLI session provide the
-presentation, time, image-render, and dataset-catalog capabilities
-(`IPresentationController`, `ITimeController`, `IImageRenderer`,
-`IMutableDatasetCatalog`) and so run the *same* tool code: `set_palette`,
-`set_display_category`, `set_display_mode`, `set_time_step`,
-`render_to_image` (read-only, but part of the same session tool set),
-`open_dataset`, `close_dataset`, and `close_all_datasets`. The viewer
-adapts its own services onto the seams (see `Services/McpCapabilities/`).
+### Map and window tools
 
-A few tools stay host-specific where the hosts genuinely diverge, rather
-than being forced onto a shape that would fit neither well:
+SoundCharts only.
 
-* `set_viewport` — the viewer drives a **live** Mapsui map and accepts a
-  web-mercator **zoom** level or a **scale denominator**; the CLI renders a
-  **headless** composite addressed by **scale denominator**. The parameter
-  names differ (the viewer's `centerLat`/`centerLon`/`scaleDenominator`, the
-  CLI's `centerLatitude`/`centerLongitude`/`scaleDenominator`). Both honour a
-  clockwise rotation (the viewer's `rotation` on any frame form; the CLI's
-  `rotationDegrees` on the centre + scale form), turning the chart about the
-  image centre while labels stay upright. Only the viewer accepts
-  longitudes past ±180° and antimeridian-crossing boxes; the CLI's stay
-  within `[-180, 180]` with `west < east`. The two keep separate
-  implementations (the viewer's over `IMapViewportController`, the CLI's over
-  `IViewportController`) so the viewer retains zoom-level input.
-* `pick_features`, `capture_app_screenshot`,
-  `set_own_ship`, panels, routes, and the render-observability tools —
-  these need the live viewer UI and have no headless analogue.
+| Tool | Changes state | What it does |
+|---|---|---|
+| `pick_features` | Only with `select: true` | Finds the vector features under a point on the live map. Pass a screen pixel (`x`/`y`) or a geographic point (`latitude`/`longitude`), not both. For a pixel measured on a `render_to_image` capture, also pass `imageWidth`/`imageHeight` set to the `width`/`height` that tool returned, so the pick uses the capture's exact framing. Without them, `x`/`y` are in the on-screen map's pixels. The result has the same shape as `identify_features` (matches, `totalMatched`, `truncated`) plus `source` (`pixel` or `geo`) and the resolved `latitude`/`longitude`. Pixels outside the image or map, or before the map is laid out, are rejected. With `select: true`, the pick is also shown in SoundCharts, as a click does: the features fill the Object Information panel and the map highlights the point and the selected feature's outline. The result then has `selected: true`. Coverage picks (S-102, S-104, S-111) have no outline and aren't shown. |
+| `capture_app_screenshot` | No | Captures the whole app window, including panels, timeline and status bar, as a PNG with a JSON block (`imageFormat`, `byteLength`, `width`, `height`). Use it to see the UI, for example to confirm that `set_panel` opened a panel. `scale` (device pixels per logical pixel, `0.5` to `3`, default `1`) gives a sharper image, such as `2` for a high-DPI capture. Returns `window_not_ready` before the window is shown. |
+| `list_panels` | No | Lists the activity panels in the left, right and bottom docks. Each reports `id`, `title`, `dock` (`Left`, `Right` or `Bottom`), `available` (some panels appear only in some states, such as `Vessels` while the AIS overlay is on and `Helm` while own-ship tracking is on), `selected` (the active tab in its dock), `dockOpen`, and `showing` (`available`, `selected` and `dockOpen` together). Use it to find panel ids for `set_panel` and to confirm a change. |
+| `set_panel` | Yes | Shows or hides a panel. `panel` is an id from `list_panels` (case-insensitive), such as `Datasets`, `LayerStack`, `PickReport` or `Timeline`. `visible` defaults to `true`, which selects the panel's tab and opens its dock. `false` closes the dock if that panel is the one showing. A panel already in the requested state is left alone. Returns `showing`, `previousShowing` and `changed`. Errors: `panel_not_found` for an unknown id, and `panel_unavailable` for a panel that can't be shown now. |
+| `set_own_ship` | Yes | Positions and steers the simulated own ship. Pass any of `lat` and `lon` (together), `cog` (course over ground, degrees true, `[0, 360)`), `sog` (speed over ground, m/s, at least 0), `heading` (degrees true, applied only with `lat`/`lon`) and `hold` (`true` stops the vessel, `false` resumes). At least one is required. Works whether or not the own-ship overlay is visible. Matches the `--own-ship-pos`, `--own-ship-cog` and `--own-ship-sog` startup options. |
+| `await_render_idle` | No | Waits until the live map settles, with no paint, refresh request or layer fetch for `quietPeriodMs` (default 250, `0` to `10000`), or until `timeoutMs` (default 5000, `50` to `120000`). Call it between `set_viewport` and `render_to_image` so the capture shows a settled view. It always waits at least the quiet period and watches the on-screen map, not the `render_to_image` copy. A layer that reports busy but stops painting doesn't hold the wait open. Returns `wentIdle`, `timedOut`, `waitedMs` and `paintsObserved`. |
+| `get_render_stats` | No | Reports the cost of the latest on-screen map paint: `frameDurationMs`, `intervalMs` since the previous paint, `totalDrawCalls`, and a breakdown by `style` (`calls`, `durationMs`, slowest first). A rolling `window` covers up to 4,096 recent paints, so an expensive frame isn't lost once the view settles: `count`, `firstSequence`/`lastSequence`, the maximum, mean and 95th percentile of frame time (`frameMaxMs`, `frameMeanMs`, `frameP95Ms`) and vector style time (`vectorMaxMs`, `vectorMeanMs`, `vectorP95Ms`), and `maxTotalDrawCalls`. `window.slowestFrame` gives the slowest paint's sequence, time, duration, instrumented and uninstrumented time and draw calls. Pass `resetWindow: true` to clear the window after reading, for example before and after an interaction. Returns `hasData = false` before the first paint. `totalDrawCalls` counts map style draws (basemap, overlays, untiled layers) but not chart content from the tile cache, so a count of 1 or 2 doesn't mean the chart is empty; check with `render_to_image`. |
 
-### Image content blocks (`render_to_image`)
+### Timeline tools
 
-`render_to_image` is the first tool in this codebase to return non-text
-MCP content. (`capture_app_screenshot` returns the same `ImageContentBlock`
-+ metadata shape for the whole application window.) The response payload
-is a `CallToolResult` whose `Content` array contains, in order:
+SoundCharts only.
 
-1. an `ImageContentBlock` carrying base64-encoded PNG bytes with
-   `mimeType: "image/png"` — MCP clients render this inline;
-2. a `TextContentBlock` carrying a small JSON metadata envelope
-   (`width`, `height`, `pixelDensity`, `imageFormat`, `byteLength`,
-   optional `viewportWidth`/`viewportHeight`, optional `notes`) so
-   agents still get a structured echo of the rendered dimensions and
-   the live viewport size.
+| Tool | Changes state | What it does |
+|---|---|---|
+| `get_timeline_state` | No | Reads the Timeline as the user sees it: `mode` (`live` while the view time follows now, else `pinned`), `now`, `viewTime`, the loaded range (`minimum`, `maximum`, `sampleCount`), `coverage` windows (gaps lie between them), forecast `runs`, `nowInCoverage`, `forecastEnded`, the displayed `readout`, `offset` and `summary`, the status `message` and `messageAction`, the axis `window`, its `preset`, the `step` and its `stepDriver`, and the collapsed `gaps` with their `length`. For each time-aware layer (`layers`) it gives its `drawnTime` (null when it has no data near the view time and hides), `previousSample` and `nextSample`, its `time` as the Datasets list shows it (`08:00Z · T+20 h`, `no data · last 18:00Z, 6 h earlier`, `drawing…`), and whether it's `hidden` or `drawing`. `inMapView` says whether **In map view** is on, `layout` is `lanes` or `strip`, and `showOnline` says whether lanes also show Library data that isn't loaded. `lanes` lists each lane: `id`, `label`, product `group`, whether it's `listed` or folded away, whether its footprint is `inMapView`, `expired`, its `time`, whether it's a `library` lane, `newRun`, and its Library `windows` (item id, `online`/`on_disk`/`loaded`, start, end, run), whose ids work with `library_action`. While the map draws a new time, `message` reads `Drawing … · N of M layers ready`. Layer times settle after the map refreshes, so call `await_render_idle` after `set_view_time` before reading them. |
+| `set_view_time` | Yes | Moves the Timeline as scrubbing or **Now** does. `time` is `now` (the view then follows now), an ISO 8601 time, or an offset from the view time (`+6h`, `-30m`, `+1d`). `snap` is `exact` (default; layers apply their own time limits, so you can test times between samples) or `nearest` (the nearest loaded sample). Choosing a time leaves Live mode. Returns the `get_timeline_state` payload, or `view_time_not_applied` when no time-aware dataset is loaded. `now` works past every loaded window: Live follows the clock and layers without data hide. |
+| `step_time` | Yes | Steps the Timeline as its step buttons and arrow keys do. `direction` is `next` or `previous`. `unit` is `10min`, `1h`, `6h` or `1d` (landing on whole units), `sample` (of the step-driver layer), `boundary` (dataset and run starts and ends), `data` (the next or previous cluster, skipping gaps) or `current` (the Timeline's chosen step). `count` repeats it. Pins the time. Returns `view_time_not_applied` when there's nothing further that way. |
+| `set_timeline_view` | Yes | Changes what the Timeline shows, as its preset menu, wheel, drag, **In map view** and **Collapse to strip** do. Pass at most one of a `preset` (`now_6h`, `today`, `next_48h`, `this_run`, `in_view` for the data of the layers in the map view, or `all_loaded`), `zoom` (`in` or `out` around the view time), or a custom `start` and `end`. You can also pass `inMapView` (list only the layers whose footprint intersects the map view, which then set the axis; the rest fold into one row), `showOnline` (show Library data that isn't loaded: online dashed, on disk outlined) and `layout` (`lanes` or `strip`), which apply first. Leaves the view time alone. |
 
-When the caller omits both `width` and `height`, the capture is sized
-to the live on-screen viewport (when it has been laid out) so the PNG
-matches the user's view pixel-for-pixel — the fixed 1024×768 default
-otherwise letterboxes the content under `MBoxFit.Fit` against a
-differently shaped viewport. A partial request (only one dimension)
-keeps the static fallback for the omitted side to avoid an arbitrary
-aspect ratio. The live viewport size is reported as
-`viewportWidth`/`viewportHeight` on every successful capture (omitted
-only when the viewport is not yet laid out), so an agent can request a
-matching aspect ratio explicitly or pass those values as the
-`imageWidth`/`imageHeight` inputs to `pick_features`.
+### Dataset and notification tools
 
-The snapshot is captured from a **clone** of the live Mapsui `Map`
-that shares the layer collection but owns its own navigator. The
-live map control is never mutated, so taking a snapshot does not
-disturb the user's view or trigger a redraw on screen. Viewport,
-palette, time step, and loaded datasets reflect the user's current
-view exactly.
+SoundCharts only.
 
-`render_to_image` is one of the **shared session tools** (read-only — it
-snapshots a clone of the live map without mutating it): its tool logic
-lives in `EncDotNet.S100.Mcp.Tools` over the `IImageRenderer` capability
-seam and is assembled by `S100MutableTools` (in `EncDotNet.S100.Mcp`),
-with each host supplying the renderer. The desktop viewer backs it with a
-snapshot of a clone of the live Mapsui `Map` (its `MapsuiMapHost` implements
-`IImageRenderer`); the headless CLI backs it with its Skia
-composite pipeline. Its inverse, `pick_features`, is viewer-only — it
-needs the live navigator to project a screen pixel back to a geographic
-point, and has no headless analogue.
+| Tool | Changes state | What it does |
+|---|---|---|
+| `set_dataset_state` | Yes | Shows or hides a loaded dataset (`visible`) and sets its `opacity` (0 to 1), as the Datasets list's eye icon and opacity control do. With neither, it only reports the state. Use it to show datasets that load hidden, such as gridded S-104 surfaces or duplicate exchange-set variants. Returns the state before and after and `changed`, or `dataset_not_found`. |
+| `select_dataset` | Yes | Selects a loaded dataset in the Datasets panel, as clicking its row does, so the inspector and the map's validation overlay follow it. `tab` (`dataset`, `layers` or `validation`) switches the inspector tab; otherwise the tab is kept. It doesn't open the panel; call `set_panel Datasets` first to see it. Returns `id`, `spec`, `previousId`, the `tab` shown, `deferred`, and a `validation` summary: `state` (`ready`, `no_rule_pack` or `not_loaded`), `total`, `errors`, `warnings`, `infos`, `located` (findings with a location, which the overlay draws) and `message` (the Validation tab's summary or empty-state text). Validation runs when a dataset loads, and `open_dataset` returns after it. For a dataset still loading, the tool waits up to `timeoutMs` (default 10000). An exchange-set cell that isn't loaded until it's in view reports `not_loaded`. Call `await_render_idle` before `capture_app_screenshot` so the overlay has painted. Returns `dataset_not_found` for an unknown id. |
+| `list_notifications` | No | Lists the notifications on screen, oldest first: `id`, `severity`, `title`, `message`, `createdUtc`, `persistent` and their action labels. |
+| `dismiss_notification` | Yes | Dismisses the notification with `id`, or all of them (`all`, the default), as the close button does. Returns the ids dismissed, or `notification_not_found`. Useful before a screenshot. |
 
-## Sample agent prompts
+### Library tools
 
-> "List the datasets loaded in the viewer and their bounding boxes."
->
-> "What is the depth at 47.6062°N, 122.3321°W in the loaded S-102
-> dataset?"
->
-> "Describe feature `LIGHTS.123` in the loaded S-201 dataset."
->
-> "Plan a mid-channel route from the harbour entrance to the marina:
-> create a route, then append waypoints staying clear of the charted
-> safety contour, and set each leg's safety contour and cross-track
-> limits."
+SoundCharts only.
 
-### Route editing workflow
+| Tool | Changes state | What it does |
+|---|---|---|
+| `list_library_sources` | No | Lists the Library. Each collection (top-level node) has its kind tag (`DIR`, `ZIP`, `WEB`, `AWS`, `LIST`, `FEED`, `SECOM`, `JSON` or `S-128`), item count and status line. Each source has its index state, `indexedAt` (how old a cached online catalogue is), URL (shared-feed tokens masked), item counts by state unless `counts: false`, for a source kept downloaded its last `sync` (objects local and listed, downloaded, pruned, failed, bytes needed when too large), and `showOnMap`. |
+| `query_library_items` | No | Finds Library datasets, paged (`page`; `pageSize` 1 to 500, default 50). Filters: `sourceId` (collection or source), `states` (`online`, `local`, `loaded`, `on_pan`, `update`, `expired`, `missing`, `listed`), `validAt` (`view_time`, as the Library's valid-at-view-time toggle does, or an ISO 8601 time: data whose run or time coverage includes it), `spec`, `text` (as the Library filter box), a bounding box (`south`, `west`, `north`, `east`), or a point (`lat`, `lon`: what covers it, most detailed first, as tapping the map does). Each item reports `id` (`<sourceId>:<key>`), spec, state and tags as its row shows them, edition, issue date, size, bounds, local path and, for forecasts, the model, run and `validUntil`. |
+| `describe_library_item` | No | Returns one item (`itemId`) with its details pane: groups of labelled fields (Forecast, Product, Coverage, Source and so on). Returns `library_item_not_found` for an unknown id. |
+| `list_known_sources` | No | Lists the online catalogue directory: the curated sources and the user's own (`userAdded`), with provider, region, format, URL, edition and size support, product, pilot and not-for-navigation flags, and forecast feeds' models (cadence, horizon). |
+| `add_library_source` | Yes | Adds a Library source the way the add dialogs do. Pass a known source (`knownSourceId`), a catalogue or feed `url` (including a SECOM service endpoint, read anonymously), or a local `path` (folder, exchange set, manifest or S-128 catalogue; `kind` overrides the guess). `sync` keeps an online source's items downloaded and current (a SECOM service also prunes). `inMapView` limits a SECOM service to the current map view. `showOnMap` keeps a source's local datasets loading as you pan, under one Datasets row; it's on by default for a synced SECOM service. Call with `preview: true` first to read the catalogue and list its `choices` (NOAA states, districts and regions, USACE rivers, S-111 models, S-102 areas, manifest groups, feed or SECOM products) with sizes, and the forecast `shapes`, S-100 `resolutions` and existing `collections`. Then add with `choices` (values or labels) or `includeAll`, into `collectionId` or a new collection (`collectionName`). It only indexes; nothing is downloaded. Returns the new collection and source ids. |
+| `refresh_library_source` | Yes | Re-indexes a collection or source (`id`), or the whole Library, as **Refresh** does. Waits up to `waitMs` (default 60 seconds) and reports items `added` and `removed`, items whose state `changed` (by new state, such as `update` or `expired`) and `counts` by state. |
+| `library_action` | Yes | Runs `load`, `load_as_you_pan`, `download` (then load), `download_only`, `update` (newer editions or runs) or `cancel` on `itemIds`, or on items chosen with the `query_library_items` filters. `cancel` with `all: true` cancels every download. Items the action doesn't apply to are `skipped`, by state. `dryRun: true` reports the count and `bytes` without acting. `maxBytes` refuses larger downloads with `library_change_rejected`. Downloads run in the background; see `await_library_idle`. |
+| `remove_library_source` | Yes | Removes a collection or source (`id`) and deletes its cached index. Downloaded files stay on disk. Requires `confirm: true`. |
+| `set_library_source_options` | Yes | Turns **Keep downloaded** (`sync`) and **Show on map** (`showOnMap`) on or off for a source (`id`), or for every source in a collection, as the Library tree's menu does. Options you don't pass are left as they are. `sync` applies to online sources only: it's rejected for a single local source and skipped for a collection's local sources. A changed source re-indexes, and syncing downloads in the background (`await_library_idle`). Returns each source's `sync`, `showOnMap`, `canSync` and `changed`. |
+| `await_library_idle` | No | Waits up to `timeoutMs` (default 60 seconds) until no source is indexing, no download is running, and every dataset a `library_action` download or load opens has opened. Returns `idle`, `timedOut`, `indexing`, `loading` (datasets still to open, including those still downloading) and the running batch's progress. |
 
-The route family lets an agent close the *create → inspect → refine*
-loop against loaded datasets. A typical sequence:
+### SECOM tools
 
-1. `create_route` (optionally `name`/`id`) → becomes the active route.
-2. `append_waypoint` / `insert_waypoint` to lay down the geometry; reason
-   about placement with the read-only query tools (`sample_coverage`,
-   `nearest_features`, `find_at`) along each leg.
-3. `move_waypoint` / `delete_waypoint` to refine.
-4. `set_leg_attributes` (geometry type + S-421 navigational envelope) and
-   `set_route_info` (metadata + vessel particulars).
-5. `get_route` / `list_routes` to read back the result.
+SoundCharts only. These tools work with SECOM (IEC 63173-2) data services.
 
-Edits are applied to the same persistent route collection the viewer's
-**Routes** panel and route overlay display, so changes appear live in the
-GUI. Most route tools default to the **active** route when `routeId` is
-omitted. Waypoints are addressed by zero-based `index`; legs by zero-based
-`legIndex` (leg `i` joins waypoint `i` to waypoint `i+1`). The fields
-mirror the in-repo S-421 model so a route projects onto S-421 GML with a
-near-mechanical mapping.
+| Tool | Changes state | What it does |
+|---|---|---|
+| `list_secom_services` | No | Lists SECOM data services from the MCP service registry: name, organisation, product, released or provisional, endpoint and area. Unusable entries (localhost, bare hosts, deleted, duplicates) are left out. `product` filters, for example `S-124`. `probe: true` checks up to 60 services and reports `Open` (readable without a certificate), `NeedsCertificate`, `OpenWithCertificate` or `CertificateRefused` (with the identity from `set_secom_identity`), `NeedsSecom2Search` (lists only through SECOM 2.0 signed requests: no identity is set, or the signed request wasn't accepted), `UntrustedServer` (the TLS certificate was refused: no trusted root, expired, for another host, or revoked) or `Unreachable`. Probed services also report `serverCertificate` (`SystemTrusted`, `AnchorTrusted`, `NotTrusted`, `Expired`, `WrongHost` or `Revoked`) and `serverCertificateAnchor` (for example `MCP MCC`); SECOM requests trust MCP-issued server certificates. For `AnchorTrusted`, `serverCertificateRevocation` is `NotRevoked`, or `NotChecked` when no current revocation list could be read, in which case the connection is still allowed. Add an open service with `add_library_source url=<endpoint>`. |
+| `set_secom_identity` | Yes | Sets, clears (`clear: true`) or reports the MCP identity (a client certificate, as PKCS#12 or PEM with its key) that SECOM requests present to services that ask for one: subject, MRN, trust anchor, expiry, and `reference` for a stored identity. A file `path` is used for this session only and never saved. `path` can instead be a stored identity's reference id from **Settings** > **Keys & certificates** (`sc-ident:…`), which makes it the identity in use. `signatureAlgorithm` sets what SECOM 2.0 request envelopes are signed with (`ecdsa-384-sha3` by default for P-384 keys). Keys and passwords are never returned. An expired identity is refused. After setting one, `list_secom_services` with `probe` reports `OpenWithCertificate` or `CertificateRefused`. |
 
-## Security notes
+### Route tools
 
-- The server binds to `127.0.0.1` only. Other machines on your LAN
-  **cannot** reach it.
-- There is no auth. Any local process on the machine can connect,
-  including malicious code. Only enable MCP when you trust everything
+SoundCharts only. The route tools edit the same route collection that the
+**Routes** panel and route overlay show, so changes appear live. Most default to
+the active route when you omit `routeId`. Waypoints are addressed by zero-based
+`index`, and legs by zero-based `legIndex`; leg `i` joins waypoint `i` to
+waypoint `i+1`. The fields follow the S-421 model, so a route maps onto S-421
+GML directly.
+
+| Tool | Changes state | What it does |
+|---|---|---|
+| `create_route` | Yes | Creates an empty route and makes it the active route. Optional `name` and `id` (a GUID is generated when you omit `id`; ids must be unique). Returns the route's full state, as `get_route` does. |
+| `list_routes` | No | Lists every route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm` and `isActive`, and the collection's `activeRouteId`. |
+| `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs` (`index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, and the S-421 navigational envelope) and `totalDistanceNm`. |
+| `delete_route` | Yes | Removes a route. Returns `routeId`, `deleted` and the new `activeRouteId`. |
+| `append_waypoint` | Yes | Adds a waypoint (`lat`, `lon`) at the end of a route, with optional `number`, `name`, `fixed` and `turnRadiusNm`. Returns the updated route. |
+| `insert_waypoint` | Yes | Inserts a waypoint at `index` (`0` to `waypointCount`; `0` prepends and `waypointCount` appends), splitting the leg there. Takes the same optional fields as `append_waypoint`. Returns the updated route. |
+| `move_waypoint` | Yes | Moves the waypoint at `index` (`0` to `waypointCount - 1`) to a new `lat` and `lon`. Returns the updated route. |
+| `delete_waypoint` | Yes | Removes the waypoint at `index`, merging the legs either side. Returns the updated route. |
+| `set_leg_attributes` | Yes | Updates one leg (`legIndex`): its `geometryType` (`loxodrome` or `geodesic`) and its navigational envelope (cross-track and channel limits, safety contour and depth, minimum and maximum SOG and STW, draft, static and dynamic UKC, safety margin, note; metres and knots as in S-421). Values you pass overwrite; values you omit are unchanged. Returns the updated route. |
+| `set_route_info` | Yes | Updates route metadata (`name`, `author`, `description`, `departurePortId`, `arrivalPortId`, `validityStart`, `validityEnd`) and vessel particulars (`vesselName`, `vesselMmsi`, `vesselImo`, `vesselCallsign`, `vesselLengthMeters`, `vesselBeamMeters`; passing any vessel field creates the vessel block). Values you pass overwrite. Returns the updated route. |
+
+A typical sequence:
+
+1. `create_route` makes a new active route.
+2. `append_waypoint` and `insert_waypoint` lay down the geometry. Use the query
+   tools, such as `sample_coverage`, `nearest_features` and `find_at`, to check
+   each leg.
+3. `move_waypoint` and `delete_waypoint` refine it.
+4. `set_leg_attributes` sets each leg's geometry type and navigational
+   envelope, and `set_route_info` sets the metadata and vessel particulars.
+5. `get_route` or `list_routes` reads back the result.
+
+### Test tools
+
+SoundCharts registers these tools only when it starts with `--mcp-test-hooks`.
+Use them for scripted testing only: the `ui_*` tools can do anything a user can
+do.
+
+| Tool | Changes state | What it does |
+|---|---|---|
+| `set_test_clock` | Yes | Moves (`now`, or `advance` such as `+1h`), freezes (`freeze`) or resets (`reset`) the app's notion of now, so forecasts age, runs expire and a Live Timeline advances without waiting. The Timeline and the Library's expiry check react at once. |
+| `ui_tree` | No | Lists the UI as an accessibility client sees it: one root per window and open popup (`kind` `window` or `popup`, such as context menus and flyouts), each a tree of elements. Each element has a `ref` (such as `e12`, valid while the element stays on screen), `id` (its automation id, such as `Datasets.DatasetsTab`, `Library.Tree` or `ActivityBar.Datasets`; see the convention in the [viewer tests README](https://github.com/philliphoff/EncDotNet.S100/blob/main/tests/EncDotNet.S100.Viewer.Tests/README.md)), `role` (`button`, `listItem`, `tabItem`, `treeItem`, `edit`, `checkBox`, `menuItem` and so on), `name`, `text` (a row's visible text, or an icon button's tooltip, when it has no name), `enabled`, `focused`, `patterns` (the actions it supports: `invoke`, `toggle`, `value`, `rangeValue`, `selectionItem`, `expandCollapse`) with their state (`toggle`, `value`, `selected`, `expanded`), and `bounds` in its window. `filter` `interactive` (default) keeps elements with an id or an action and lifts the children of the rest; `all` lists everything. `root` (an id or ref) lists one subtree. `depth` (default 30) and `maxNodes` (default 400; `truncated` says when it cut) limit the size. The map is one element; use the map tools for chart content. |
+| `ui_invoke`, `ui_set_value`, `ui_toggle`, `ui_select`, `ui_expand`, `ui_collapse`, `ui_focus`, `ui_context_menu` | Yes | Act on one element as the user does: click a button or menu item (`ui_invoke`); replace a text box's text or set a slider (`ui_set_value`, `value`); flip a check box or toggle button, or set it with `state` `on` or `off` (`ui_toggle`); select a list row, tab, tree node or radio button (`ui_select`); expand or collapse a tree node, expander, combo box or submenu; move keyboard focus (`ui_focus`; leaving a text box runs its lost-focus behaviour, so an in-place rename commits); or open a context menu as a right-click does, selecting the row or node first (`ui_context_menu`). Target an element by `id` or `ref`, not both. An id repeated in every row (such as `Datasets.Row.Remove`) is ambiguous alone: scope it with `within` (the row's ref or an ancestor's id), or use the ref. Returns the element afterwards. Errors: `ui_element_not_found` (with similar ids on screen), `ui_element_ambiguous` (each match's `ref` and row text), `ui_element_disabled` and `ui_action_not_supported` (with the element's `patterns`). A closing dialog or popup animates briefly after the call returns, so read `ui_tree` again before relying on it being gone. |
+
+## Times outside the data
+
+`sample_coverage` and `sample_coverage_along` don't return a value for a time
+the data doesn't cover unless you ask for one. This matches the Timeline, which
+shows that there's no data at that time instead of a stale frame.
+
+- **Dataset selection depends on time.** Of the S-104 and S-111 datasets that
+  cover the point, those whose time range contains the requested time are used.
+  The finest grid wins among them, then the newest run (by `issueDate` and
+  `issueTime`). With two runs or two models loaded at one point, the one that
+  covers the time is sampled even if the other is finer. For station series,
+  runs that report the same station are chosen between the same way.
+- **Tolerance.** A time within one time-step interval of either end of a
+  dataset's range counts as in range and samples the nearest step. With hourly
+  steps ending at 21:00Z, 21:20Z samples 21:00Z.
+- **A single instant is strict by default.** For `time`, or `times` with
+  `kind: "instant"`, a time outside every covering dataset's range returns
+  `time_out_of_range`. Its `details` give `requestedTime`, `datasetId`,
+  `validFrom`, `validTo`, `run` (when the dataset declares an issue time),
+  `nearestStep` and `candidates` (every covering dataset with its range). Ask
+  again at `nearestStep`, or tell the user the forecast doesn't reach that far.
+- **Opt in to the nearest step** with `outOfRange: "nearest"`. The result then
+  has `timeStatus: "before_start"` or `"after_end"`, and `value.sampleTime` is
+  the step used. In-range results always have `timeStatus: "in_range"`.
+  `outOfRange` defaults to `"error"`.
+- **Ranges and series return the covered part.** When the window reaches past
+  the data, the result has `truncated: true`, and `coveredFrom` and `coveredTo`
+  give the part the data spans. Series instants beyond the data are dropped
+  instead of all snapping to the last step. `time_out_of_range` is returned only
+  when the window doesn't overlap the data at all. `outOfRange` doesn't affect
+  windows.
+
+## Images
+
+`render_to_image` returns a result whose `Content` array holds, in order:
+
+1. an `ImageContentBlock` with the base64-encoded PNG and
+   `mimeType: "image/png"`, which MCP clients show inline;
+2. a `TextContentBlock` with JSON metadata: `width`, `height`, `pixelDensity`,
+   `imageFormat`, `byteLength`, and optionally `viewportWidth`,
+   `viewportHeight` and `notes`.
+
+`capture_app_screenshot` returns the same two blocks for the whole app window.
+
+In SoundCharts:
+
+- When you omit both `width` and `height`, the capture is sized to the
+  on-screen map, so the PNG matches the user's view pixel for pixel. Otherwise
+  the default is 1024 × 768, which letterboxes the map when its shape differs.
+  If you pass only one dimension, the other keeps the default.
+- `viewportWidth` and `viewportHeight` report the on-screen map size on every
+  capture once the map is laid out. Use them to request a matching aspect
+  ratio, or pass them to `pick_features` as `imageWidth` and `imageHeight`.
+- The capture is taken from a copy of the map that shares its layers but has
+  its own view, so it doesn't disturb the user's view or redraw the screen. The
+  view, palette, time step and loaded datasets match what the user sees.
+
+In `s100 mcp serve`, the image is a headless composite of the session's
+datasets. It fits all of them unless `set_viewport` has set a view.
+
+## Differences between the hosts
+
+Most tools run the same code in both hosts. These differ:
+
+### set_viewport
+
+SoundCharts moves the live map. Pass exactly one of:
+
+- a bounding box: `south`, `west`, `north`, `east`;
+- a centre and Web Mercator zoom: `centerLat`, `centerLon`, `zoom`;
+- a centre and scale: `centerLat`, `centerLon`, `scaleDenominator` (for
+  example `50000` for 1:50,000).
+
+Mixing forms, including `zoom` with `scaleDenominator`, is rejected.
+`scaleDenominator` is converted at the centre latitude with the same 0.28 mm
+pixel the status bar uses, so the status bar reads it back. `rotation`
+(degrees clockwise, `0` is north-up, any finite value, normalised to
+`[0, 360)`) turns the map on top of the frame. It must come with a frame form;
+to rotate in place, repeat the same centre form with the new `rotation`.
+
+The result echoes the applied rotation and `scaleDenominator`, read back from
+the map after the change, so it reflects the zoom limits: 1:1,000 at the view's
+latitude, and a zoom-out limit of 1:500,000,000 at the equator, which reads as
+1:500,000,000 × cos(latitude) elsewhere. For a bounding box it also reflects the
+fit to the map; it's omitted for a bounding box before the map is laid out.
+
+SoundCharts draws the basemap and chart data one world copy either side of the
+standard world, so longitudes from -540 to 540 are accepted and frame the
+matching copy:
+
+- A dataset kept in a continuous frame across the antimeridian, such as the NWS
+  Alaska S-411 (bounds 175 to 225 from `open_dataset`), is framed at its own
+  longitudes. For the Beaufort Sea, use
+  `{south: 69.5, west: 190, north: 74.5, east: 220}` or
+  `{centerLat: 72, centerLon: 205, scaleDenominator: 10000000}`. The same place
+  in the standard world (`west: -170, east: -140`) shows the same data.
+- A box with `west` greater than `east` crosses the antimeridian: its east edge
+  is taken one world east, so `west: 170, east: -140` frames 170 to 220. A box
+  can be at most one world wide.
+- The result reports the framed box in that continuous frame (`west < east`,
+  past ±180° where it was framed) and the map centre as `centerLat` and
+  `centerLon`. The map keeps its centre within the loaded data and the
+  basemap's world, so a far copy with nothing loaded may be pulled back; the
+  echoed centre says where the map settled.
+
+`s100 mcp serve` sets the view for later `render_to_image` calls. Pass either a
+centre and scale (`centerLongitude`, `centerLatitude`, `scaleDenominator`) or a
+bounding box (`minLongitude`, `minLatitude`, `maxLongitude`, `maxLatitude`).
+`rotationDegrees` rotates the centre-and-scale form clockwise about the image
+centre, and labels stay upright. Longitudes stay within -180 to 180, and the
+box's west edge must be less than its east edge. Latitudes must be within the
+Web Mercator limit (±85.05112878°). The result returns the applied view and the
+previous one.
+
+### Tools only SoundCharts has
+
+`pick_features`, `capture_app_screenshot`, `set_own_ship`, the panel, Timeline,
+dataset-state, notification, Library, SECOM and route tools, and the render
+statistics tools need the app's UI, so `s100 mcp serve` doesn't provide them.
+
+## Example prompts
+
+- "List the datasets loaded in the viewer and their bounding boxes."
+- "What is the depth at 47.6062°N, 122.3321°W in the loaded S-102 dataset?"
+- "Describe feature `LIGHTS.123` in the loaded S-201 dataset."
+- "Plan a mid-channel route from the harbour entrance to the marina: create a
+  route, then add waypoints that stay clear of the charted safety contour, and
+  set each leg's safety contour and cross-track limits."
+
+## Security
+
+- SoundCharts listens on `127.0.0.1` by default, so other computers can't
+  reach it. `--mcp-bind` can change the address; keep it on loopback unless you
+  control the network.
+- There's no authentication. Any process on your computer can connect,
+  including malicious code. Turn on the server only when you trust everything
   running locally.
-- Most tools are read-only, but some **mutate viewer state** (loading
-  or unloading datasets, driving the viewport, palette, or time step) —
-  see the read-only vs mutating breakdown above. None can write
-  arbitrary files.
-- The `ui_*` tools can do anything a user can do in the UI, so they are
-  registered only with `--mcp-test-hooks`, a command-line flag that is
-  never saved; turning MCP on in Settings does not offer them.
-
-## Disable from the UI
-
-Untick **Enable MCP server** in Settings. The server stops and the
-port is released immediately.
-
-## Troubleshooting
-
-- **Port already in use.** Choose port `0` (auto) or pick a free port
-  manually. The viewer logs the bind failure to its standard
-  diagnostics output.
-- **Agent times out.** Re-check the endpoint URI from the status bar
-  tooltip — the port changes when MCP is restarted with port `0`.
-- **No datasets show up.** The MCP server only sees datasets that are
-  currently loaded in the viewer. Load some data first.
-
-## Hosting outside the viewer
-
-The viewer is one host; the underlying library
-(`EncDotNet.S100.Mcp`) is UI-agnostic and can be embedded in CLI
-tools or background services. See
-[`src/EncDotNet.S100.Mcp/README.md`](../src/EncDotNet.S100.Mcp/README.md)
-for the embedding API.
+- Many tools change SoundCharts' state, such as loading or unloading datasets
+  or moving the view, palette or time. The **Changes state** column in
+  [MCP tools](#mcp-tools) lists them. None can write arbitrary files.
+- The `ui_*` tools can do anything a user can do, so they're registered only
+  with `--mcp-test-hooks`, which is never saved.
+- `s100 mcp serve` has no network listener. Only the process that starts it can
+  talk to it.

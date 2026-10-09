@@ -1,73 +1,101 @@
 # EncDotNet.S100.Rendering.Scene
 
-The backend-agnostic **vector scene intermediate representation (IR)** for the
-S-100 portrayal pipeline. This assembly holds the neutral seam where resolved
-S-100 Part 9 portrayal output is handed to a rendering backend — it depends only
-on `EncDotNet.S100.Core` and `EncDotNet.S100.Portrayals`, never on SkiaSharp,
-Mapsui, or any GUI framework.
+`EncDotNet.S100.Rendering.Scene` holds the vector scene, the backend-neutral
+intermediate representation (IR) that sits between S-100 Part 9 portrayal and a
+rendering backend. It lowers a portrayal display list into an ordered list of
+fully resolved paint operations that any backend can draw. Reference it when
+you write your own rendering backend, or when you build or inspect scenes
+without depending on SkiaSharp, Mapsui or a UI framework. It depends only on
+`EncDotNet.S100.Core` and `EncDotNet.S100.Portrayals`.
 
-## What lives here
+To rasterise a scene, pair it with
+[`EncDotNet.S100.Renderers.Skia`](../EncDotNet.S100.Renderers.Skia/README.md).
+For the end-to-end path without the `EncDotNet.S100` facade, see
+[Embedding the renderer](../../docs/embedding-the-renderer.md).
 
-| Type | Role |
-|---|---|
-| `VectorScene` / `PaintOp` (+ `PointPaintOp`, `LinePaintOp`, `AreaPaintOp`, `PatternAreaPaintOp`, `TextPaintOp`) | Ordered list of fully-resolved paint operations — world coords in EPSG:3857 m, sizes in logical display px, colours resolved to `RgbaColor`, SCAMIN carried per-op. |
-| `IVectorSceneRenderer<TSurface>` | The named **rendering-backend contract**: implement it to draw a `VectorScene` onto a backend-specific surface. `SkiaDisplayListRenderer` implements `IVectorSceneRenderer<SKCanvas>`; the Mapsui renderer is a conforming consumer of the IR rather than an implementer. |
-| `WorldToScreen` | Backend-neutral EPSG:3857 world → pixel affine derived from a `Viewport` (the `EPSG:3857 → pixels` half of the Part 9 projection). Lets a Skia-free backend project the IR's world coordinates. Wraps ops across the ±180° antimeridian when the viewport is a seam-shifted frame (issue #413). |
-| `SeamAwareBoundsAccumulator` | Computes a seam-aware EPSG:3857 auto-fit extent: detects geometry straddling the ±180° antimeridian (via a longitude-occupancy histogram + largest-empty-arc heuristic) and shifts the western cluster into a contiguous world-X window so dateline-spanning datasets are framed on their true extent (issue #413). |
-| `ResolvedSymbol`, `SymbolAsset` | Resolved point-symbol content + pivot (S-100 Part 9 §11.5). |
-| `VectorSceneBuilder` | Lowers a `DrawingInstruction` display list into a `VectorScene`. Pattern tiles are supplied as PNG bytes through an injected `Func<string, byte[]?>` delegate, so the builder stays rasteriser-free. When it lowers pattern fills it priority-clips them via `PatternPriorityClipper`. |
-| `PatternPriorityClipper` | Backend-neutral NetTopologySuite priority-clipping of tiled pattern area fills (S-100 Part 9 §11.3): subtracts higher-priority pattern areas and opaque non-patterned solid fills (e.g. land) from each lower-priority pattern. Shared by both render paths (the Mapsui feature renderer delegates to it) so headless Skia, the Mapsui TiledScene subsystem, and the Mapsui feature path clip identically. |
-| `PatternClipMemoizer` | Optional delegate a caller injects into `VectorSceneBuilder` to memoize the (palette-independent) pattern-clip result, so a re-build that only changes the palette reuses the geometry instead of repeating the overlay. The Mapsui renderer wires it to its pattern-clip cache for the default TiledScene subsystem. |
-| `ColorResolver` | S-100 colour-token → `RgbaColor` resolution. |
-| `ScaleVisibility` | S-100 Part 9 §11.1 scale-visibility semantics (SCAMIN inclusion). |
-| `WebMercator` | Spherical EPSG:3857 forward projection (the `lat/lon → 3857` half of the S-100 Part 9 projection). |
+## Install
 
-## The rendering-backend seam
-
-Because every backend consumes the same `VectorScene`, the IR is the blessed
-**pluggable rendering-backend contract**: an embedder can implement
-`IVectorSceneRenderer<TSurface>` (or consume the IR directly, as Mapsui does) to
-render S-100 portrayal through a non-Skia/non-Mapsui backend — GPU, server-side
-raster, PDF, SVG. See [`docs/design/rendering-backend-contract.md`](../../docs/design/rendering-backend-contract.md)
-for the end-to-end seam, the IR guarantees, the two shipped backends as worked
-references, and an illustrative SVG backend.
-
-## Who consumes it
-
-- `EncDotNet.S100.Renderers.Skia` — headless rasteriser (`SkiaDisplayListRenderer`, `HeadlessVectorRenderer`).
-- `EncDotNet.S100.Renderers.Mapsui` — Mapsui feature/style adapter.
-- The tiled/async render subsystem (see `docs/design/S100-Render-Subsystem-Design.md`).
-
-Because every backend consumes the same `VectorScene`, the IR is the A/B seam:
-identical portrayal can be driven through different rendering backends for
-apples-to-apples comparison.
-
-## Installation
-
-```sh
+```bash
 dotnet add package EncDotNet.S100.Rendering.Scene
 ```
 
-This package is Mapsui-free and GUI-free. Pair it with
-[`EncDotNet.S100.Renderers.Skia`](../EncDotNet.S100.Renderers.Skia/README.md) to
-rasterise a scene headlessly **without** taking the batteries-included
-`EncDotNet.S100` facade. See the
-[Embedding the renderer](https://github.com/philliphoff/EncDotNet.S100/blob/main/docs/embedding-the-renderer.md)
-guide for the end-to-end path.
+## Lower a display list to a scene
 
-## Stability & versioning
+`VectorSceneBuilder` turns a `DrawingInstruction` display list and the matching
+feature geometry into a `VectorScene`. `ResolveColor` is required; the symbol,
+line-style and pattern resolvers are optional.
 
-The **stable, supported surface** of this package is the set of types documented
-in [What lives here](#what-lives-here): `VectorScene`, the `PaintOp` hierarchy
-(`PointPaintOp`, `LinePaintOp`, `AreaPaintOp`, `PatternAreaPaintOp`,
-`TextPaintOp`), `VectorSceneBuilder`, `PatternPriorityClipper`,
-`PatternClipMemoizer`, `ColorResolver`, `ScaleVisibility`, and `WebMercator`.
-Types that are `internal` or undocumented are implementation detail and may
-change at any time.
+```csharp
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Scene;
 
-All `EncDotNet.S100.*` packages share **one version**, derived from the release
-git tag (there is no per-package version). Versioning follows
-[Semantic Versioning](https://semver.org/): once past `1.0.0`, a breaking change
-to the stable surface above lands only in a **major** bump. While the version is
-below `1.0.0`, the surface is still settling — breaking changes may occur in a
-minor bump and will be called out in the release notes.
+static VectorScene Lower(
+    IReadOnlyList<DrawingInstruction> instructions,
+    IFeatureGeometryProvider geometryProvider,
+    ColorPalette palette)
+{
+    var builder = new VectorSceneBuilder
+    {
+        ResolveColor = ColorResolver.Create(palette),
+    };
+
+    return builder.Build(instructions, geometryProvider);
+}
+```
+
+Each op in `scene.Ops` is in S-100 Part 9 draw order. Coordinates are EPSG:3857
+metres, sizes are logical display pixels (1 px = 0.32 mm), and colours are
+resolved to `RgbaColor`. The XML docs on `PaintOp` give the full unit contract.
+
+## Main types
+
+| Type | Role |
+|---|---|
+| `VectorScene`, `PaintOp` (`PointPaintOp`, `LinePaintOp`, `AreaPaintOp`, `PatternAreaPaintOp`, `TextPaintOp`) | The ordered list of resolved paint operations. Each op carries its own scale minimum (SCAMIN). |
+| `VectorSceneBuilder` | Lowers a `DrawingInstruction` display list into a `VectorScene`. Pattern tiles come in as PNG bytes through the `PatternResolver` delegate (`Func<string, byte[]?>`), so the builder doesn't rasterise anything itself. Pattern fills are priority-clipped with `PatternPriorityClipper`. |
+| `IVectorSceneRenderer<TSurface>` | The contract a rendering backend implements to draw a `VectorScene` onto its own surface type. |
+| `WorldToScreen` | The EPSG:3857-to-pixel transform for a `Viewport`. When the viewport is shifted across the ±180° antimeridian, it wraps ops into that window. |
+| `SeamAwareBoundsAccumulator` | Computes the extent to fit a dataset to. For geometry that straddles the antimeridian, it shifts the western part east so the dataset is framed on its true extent instead of the whole world. |
+| `RotatedViewport` | Geometry for drawing a rotated viewport as a north-up cover that's then rotated onto the output. |
+| `ResolvedSymbol`, `SymbolAsset` | A resolved point symbol and its pivot (S-100 Part 9 §11.5). |
+| `PatternPriorityClipper` | Clips tiled pattern area fills by display priority (S-100 Part 9 §11.3). It subtracts higher-priority pattern areas and opaque solid fills, such as land, from each lower-priority pattern. |
+| `PatternClipMemoizer` | An optional delegate you pass to `VectorSceneBuilder.PatternClipCache` to reuse the clip result. The clip doesn't depend on the palette, so a rebuild that only changes the palette can skip it. |
+| `CoverageSymbolField` | The oriented symbols of a styled coverage grid, such as S-111 current arrows, flattened to EPSG:3857 arrays so every backend places, sizes and thins them the same way. |
+| `ColorResolver` | Resolves S-100 colour tokens to `RgbaColor`. |
+| `ScaleVisibility` | S-100 Part 9 §11.1 scale-visibility rules (SCAMIN inclusion). |
+| `WebMercator` | The spherical EPSG:3857 forward projection (latitude and longitude to EPSG:3857). |
+
+## Write a rendering backend
+
+Every backend consumes the same `VectorScene`, so you can render S-100
+portrayal through a backend other than Skia or Mapsui, such as a GPU, PDF or SVG
+renderer. Implement `IVectorSceneRenderer<TSurface>` when your backend can draw
+a scene to a surface on demand. Project op coordinates with `WorldToScreen`, and
+apply sizes such as stroke width and font size directly in display pixels.
+
+The two shipped backends show both approaches:
+
+- `EncDotNet.S100.Renderers.Skia` implements the interface:
+  `SkiaDisplayListRenderer` is an `IVectorSceneRenderer<SKCanvas>`.
+- `EncDotNet.S100.Renderers.Mapsui` binds a scene to a map layer and draws it on
+  its own per-frame schedule. It consumes the IR without implementing the
+  interface.
+
+Because both backends draw the same scene, you can also compare backends on
+identical portrayal. For the guarantees the IR makes and a sample SVG backend,
+see the [rendering-backend contract](../../docs/design/rendering-backend-contract.md)
+design note.
+
+## Stability and versioning
+
+The supported surface of this package is `VectorScene`, the `PaintOp`
+hierarchy, `VectorSceneBuilder`, `PatternPriorityClipper`, `PatternClipMemoizer`,
+`ColorResolver`, `ScaleVisibility` and `WebMercator`. Internal and undocumented
+types can change at any time.
+
+All `EncDotNet.S100.*` packages share one version, taken from the release git
+tag. Versioning follows [Semantic Versioning](https://semver.org/): from `1.0.0`
+on, a breaking change to the supported surface comes only in a major version.
+Below `1.0.0`, a minor version can include breaking changes, and the release
+notes list them.

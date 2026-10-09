@@ -22,7 +22,7 @@
       href: scenarios/render-s102-to-png.md
     - name: Inspect S-124 warnings
       href: scenarios/inspect-s124-warnings.md
-    - name: Compose S-101 + S-102
+    - name: Compose S-101 and S-102
       href: scenarios/compose-s101-s102.md
 - name: Top APIs
   href: top-apis.md

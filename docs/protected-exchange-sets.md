@@ -1,25 +1,43 @@
 # Reading protected exchange sets
 
-## Why it matters
-
 Commercial ENC and other S-100 data is usually **protected** under the S-100
 Part 15 data protection scheme. Each dataset is encrypted, and the keys to read
-it come in a permit that only one system can use. This guide shows how to read a
-protected exchange set with `EncDotNet.S100`: authenticate the permit, decrypt
-the datasets, and verify their signatures.
+it come in a permit that only one system can use. This guide shows how to read
+a protected exchange set with `EncDotNet.S100`: authenticate the permit with
+`PermitSignatureVerifier`, decrypt the datasets with `PermitKeyProvider` and
+`WithDecryption`, and verify their signatures with `ExchangeSetVerifier`.
 
 It builds on [Loading datasets](loading-datasets.md), which covers
 `S100ExchangeSet`.
 
-## Quick win
+## How Part 15 protection works
+
+| Piece | What it is |
+|---|---|
+| **Cell key** | A random AES-128 key per dataset. The data server encrypts the dataset with it. |
+| **Hardware ID** (`HW_ID`) | A 16-byte identifier of the client system. Permits wrap each cell key with it, so only that system can unwrap the key. |
+| **User permit** | The hardware ID encrypted with the system manufacturer's key (`M_KEY`), plus the manufacturer ID. The client sends it to the data server to get permits. |
+| **`PERMIT.XML`** | One `datasetPermit` per dataset: the wrapped cell key, an expiry date, and the edition or issue date it's valid for. |
+| **`PERMIT.SIGN`** | The data server's signature over `PERMIT.XML`, with the data server's certificate. |
+| **Scheme Administrator (SA) certificate** | The root of trust. It issues data-server certificates; you configure it as a trusted root. |
+| **Catalogue signatures** | Signatures in `CATALOG.XML` over each dataset, which prove it hasn't been altered. |
+
+To read the data, you authenticate `PERMIT.XML` against the SA certificate,
+unwrap each cell key with the hardware ID, and decrypt the datasets. You can
+also verify their signatures.
+
+## Read a protected exchange set
 
 You need three things from outside the exchange set:
 
-- the exchange set itself, with its `PERMIT.XML` and `PERMIT.SIGN` files;
+- the exchange set itself, with its `PERMIT.XML` and `PERMIT.SIGN` files
 - your system's **hardware ID**, which the data server wrapped the dataset keys
-  with;
+  with
 - the **Scheme Administrator certificate** you trust to vouch for the data
-  server.
+  server
+
+If you don't have protected data, [create a test exchange
+set](#create-a-test-exchange-set) that provides all three.
 
 ```csharp
 using System.Security.Cryptography.X509Certificates;
@@ -51,31 +69,12 @@ foreach (var entry in decrypted.Datasets)
 }
 ```
 
-No protected data to hand? [Create a test exchange set](#create-a-test-exchange-set)
-generates everything this example reads.
+`X509CertificateLoader` is available in .NET 9 and later. On .NET 8, load the
+certificate with `new X509Certificate2("scheme-administrator.crt")` instead.
 
-On .NET 8, load the certificate with `new X509Certificate2("scheme-administrator.crt")`
-instead; `X509CertificateLoader` is .NET 9 and later.
+The sections below explain each step and what can go wrong.
 
-## Deep dive
-
-### How the pieces fit
-
-| Piece | What it is |
-|---|---|
-| **Cell key** | A random AES-128 key per dataset. The data server encrypts the dataset with it. |
-| **Hardware ID** (`HW_ID`) | A 16-byte identifier of the client system. Permits wrap each cell key with it, so only that system can unwrap the key. |
-| **User permit** | The hardware ID encrypted with the system manufacturer's key (`M_KEY`), plus the manufacturer ID. The client sends it to the data server to get permits. |
-| **`PERMIT.XML`** | One `datasetPermit` per dataset: the wrapped cell key, an expiry date, and the edition or issue date it's valid for. |
-| **`PERMIT.SIGN`** | The data server's signature over `PERMIT.XML`, with the data server's certificate. |
-| **Scheme Administrator (SA) certificate** | The root of trust. It issues data-server certificates; you configure it as a trusted root. |
-| **Catalogue signatures** | Signatures in `CATALOG.XML` over each dataset, which prove it hasn't been altered. |
-
-The flow is: authenticate `PERMIT.XML` against the SA certificate, unwrap each
-cell key with the hardware ID, decrypt the datasets, and (optionally) verify
-their signatures.
-
-### Getting the hardware ID
+## Get the hardware ID
 
 If your system stores its hardware ID, parse its 32-character hexadecimal form
 with `HardwareId.Parse`. If you have the system's **user permit** and the
@@ -89,37 +88,55 @@ HardwareId hardwareId = UserPermit.Parse(userPermitText).DecryptHardwareId(manuf
 and throws `FormatException` if either is wrong. `UserPermit.Create` goes the
 other way, for a system that needs to issue its own user permit.
 
-### Authenticating the permit
+## Authenticate the permit
 
-`PermitSignatureVerifier.AuthenticateAsync` checks `PERMIT.SIGN`'s ECDSA P-384
-signature over the exact bytes of `PERMIT.XML`. It also checks that the data
-server's certificate chains to one of your `TrustedRoots` and is within its
-validity dates. It returns the parsed permit only if all of that succeeds:
+`PermitSignatureVerifier.AuthenticateAsync` checks that:
+
+- `PERMIT.SIGN` holds a valid ECDSA P-384 signature over the exact bytes of
+  `PERMIT.XML`
+- the data server's certificate chains to one of your `TrustedRoots`
+- the certificate is within its validity dates
+
+It returns the parsed permit only if all of these pass. Otherwise
+`Verification.Outcome` says why:
 
 ```csharp
 if (!authentication.IsAuthenticated)
 {
-    // e.g. CertificateUntrusted, SignatureInvalid, NotSigned, CertificateExpired
+    // For example CertificateUntrusted, SignatureInvalid, NotSigned or CertificateExpired.
     Console.WriteLine($"{authentication.Verification.Outcome}: {authentication.Verification.Detail}");
 }
 ```
 
-Permit authentication always requires a trusted root: it rejects
+- `CertificateUntrusted` means the data server's certificate doesn't chain to
+  any of your `TrustedRoots`. You're trusting the wrong Scheme Administrator,
+  or the permit came from a different scheme.
+- `CertificateExpired` means a certificate is outside its validity dates.
+- `NotSigned` means there's no `PERMIT.SIGN`: you passed `null` for its
+  stream.
+
+Permit authentication always requires a trusted root. It rejects
 `AllowUntrustedCertificates = true`, even though exchange-set signature
 verification accepts it for development. `PermitFile.Read` can parse a permit
 for inspection, but `PermitKeyProvider` refuses a permit that hasn't been
 authenticated.
 
-### Decrypting datasets
+## Decrypt datasets
 
 `PermitKeyProvider` resolves each dataset's cell key. It needs the exchange
-set's catalogue because a permit only applies to the dataset edition, or issue
-date, it was issued for. `WithDecryption(keys)` then returns an exchange set that
-decrypts as it reads; files without a permit (the catalogue, unencrypted support
-files) are read unchanged. Keep the original exchange set alive while you use the
-decrypting one.
+set's catalogue, because a permit applies only to the dataset edition, or issue
+date, it was issued for.
 
-To check whether a dataset can be opened before opening it, evaluate its permit:
+`WithDecryption(keys)` returns an exchange set that decrypts datasets as it
+reads them. Files without a permit, such as the catalogue and unencrypted
+support files, are read unchanged. When the catalogue sets `compressionFlag`
+for any dataset, decrypted datasets are also decompressed. Keep the original
+exchange set open while you use the decrypting one.
+
+### Check permits before opening
+
+To check whether a dataset can be opened before you open it, evaluate its
+permit:
 
 ```csharp
 foreach (var entry in exchangeSet.Datasets)
@@ -139,23 +156,38 @@ foreach (var entry in exchangeSet.Datasets)
 | `IssuedAfterExpiry` | The dataset was issued after the permit expired. |
 | `BaseDatasetMissing` | A protected update's base dataset isn't in the exchange set. |
 
-Expiry is checked against the dataset's **issue date**, not today's date: a
+Expiry is checked against the dataset's **issue date**, not today's date, so a
 permit keeps working for the datasets it was issued for.
 
+### Handle refused permits
+
 Opening a dataset whose permit is refused throws `DatasetPermitException`. Its
-`Evaluation` property carries the result above.
+message names the dataset and the reason, and its `Evaluation` property holds
+the result described above. `EditionMismatch` or `IssuedAfterExpiry` usually
+means the exchange set has a newer edition than your permits cover. Ask your
+data distributor for updated permits.
+
+### Handle a wrong hardware ID
 
 A permit can pass these checks and still hold a key that can't decrypt the
-dataset, most often because the hardware ID is wrong. Reading that dataset
-throws `DatasetDecryptionException` instead (see [Troubleshooting](#troubleshooting)).
+dataset, most often because the hardware ID is wrong.
 
-### Verifying signatures
+> [!IMPORTANT]
+> A **wrong hardware ID** isn't detected when the permit is checked: the cell
+> key unwraps to the wrong value. Reading the dataset then throws
+> `DatasetDecryptionException`, which names the dataset in its message and in
+> `DatasetPath`. If every protected dataset fails this way, check the hardware
+> ID, or the manufacturer key you recovered it with.
+> `DatasetDecryptionException` is a `CryptographicException`. Roughly one wrong
+> key in 256 decrypts without an error and gives unreadable content instead.
+
+## Verify signatures
 
 `ExchangeSetVerifier` checks the catalogue's signatures over each dataset.
 Datasets are usually signed in their **unencrypted** form, so give the verifier
 a `Part15SignatureContentResolver` with your key provider, and it decrypts where
 it needs to. The verifier reads from an asset source, so open the exchange set
-from one you keep:
+from a source that you keep:
 
 ```csharp
 using EncDotNet.S100.Core;
@@ -177,7 +209,7 @@ certificate. The
 [`EncDotNet.S100.ExchangeSets` README](../src/EncDotNet.S100.ExchangeSets/README.md#verification-outcomes)
 explains each outcome, and how missing checksums are treated.
 
-### Trust anchors in development and production
+## Choose trust anchors
 
 In **production**, `TrustedRoots` holds the IHO Scheme Administrator's
 certificate, from the IHO or your data distributor. Treat it as configuration:
@@ -188,7 +220,11 @@ In **development**, use a test Scheme Administrator that you control, such as
 the one [Create a test exchange set](#create-a-test-exchange-set) generates.
 The IHO also publishes test SA certificates for interoperability testing.
 
-### Create a test exchange set
+## Create a test exchange set
+
+If you don't have protected data, generate a test exchange set that the
+example in [Read a protected exchange set](#read-a-protected-exchange-set) can
+read.
 
 > [!CAUTION]
 > This code stands in for a **data server**, to produce test data. A real
@@ -196,10 +232,14 @@ The IHO also publishes test SA certificates for interoperability testing.
 
 The method below creates a protected exchange set from any S-101 cell, such as
 `tests/datasets/S101/S-101/DATASET_FILES/101AA00DS0019.000` in this repository.
-It generates a Scheme Administrator certificate and a data-server certificate,
-encrypts the cell, signs it in `CATALOG.XML`, and issues a signed permit for the
-given hardware ID. `Part15Signer` and `PermitFileWriter` produce the signatures
-and the permit; the catalogue is still written by hand:
+It does the following:
+
+1. Generates a Scheme Administrator certificate and a data-server certificate.
+2. Encrypts the cell and signs its unencrypted bytes in `CATALOG.XML`.
+3. Issues a permit for the given hardware ID and signs it.
+
+`Part15Signer` and `PermitFileWriter` produce the signatures and the permit.
+The method writes the catalogue by hand.
 
 ```csharp
 using System.Security.Cryptography;
@@ -297,8 +337,8 @@ static X509Certificate2 CreateProtectedExchangeSet(string folder, string cellPat
 }
 ```
 
-Generate a hardware ID, create the exchange set, and save the two files the
-[Quick win](#quick-win) reads:
+Generate a hardware ID, create the exchange set, and save the two files that
+[Read a protected exchange set](#read-a-protected-exchange-set) reads:
 
 ```csharp
 var hardwareId = HardwareId.FromBytes(RandomNumberGenerator.GetBytes(16));
@@ -308,35 +348,10 @@ using var saRoot = CreateProtectedExchangeSet("protected-set", "101AA00DS0019.00
 File.WriteAllBytes("scheme-administrator.crt", saRoot.Export(X509ContentType.Cert));
 ```
 
-Change the permit's `editionNumber` or `expiry`, or trust a different root, to
-see each failure described below.
+To see each failure described in this guide, change the permit's
+`editionNumber` or `expiry`, or trust a different root.
 
-## Troubleshooting
+## See also
 
-> [!IMPORTANT]
-> A **wrong hardware ID** isn't detected when the permit is checked: the cell
-> key unwraps to the wrong value. Reading the dataset then throws
-> `DatasetDecryptionException`, which names the dataset in its message and in
-> `DatasetPath`. If every protected dataset fails that way, check the hardware
-> ID, or the manufacturer key you recovered it with. It's a
-> `CryptographicException`, and roughly one wrong key in 256 decrypts without
-> an error and gives unreadable content instead.
-
-> [!NOTE]
-> `CertificateUntrusted` from `AuthenticateAsync` means the data server's
-> certificate doesn't chain to any of your `TrustedRoots`: you're trusting the
-> wrong Scheme Administrator, or the permit came from a different scheme.
-> `CertificateExpired` means a certificate is outside its validity dates.
-
-> [!TIP]
-> `DatasetPermitException` names the dataset and the refusal reason in its
-> message, and in `Evaluation.Outcome`. `EditionMismatch` or
-> `IssuedAfterExpiry` usually means the exchange set carries a newer edition
-> than your permits cover: request updated permits from your data distributor.
-
-## Next step
-
-- [Loading datasets](loading-datasets.md) — exchange sets, updates and asset
-  sources.
-- [`EncDotNet.S100.ExchangeSets` README](../src/EncDotNet.S100.ExchangeSets/README.md)
-  — the Part 15 types and verification outcomes in detail.
+- [`EncDotNet.S100.ExchangeSets` README](../src/EncDotNet.S100.ExchangeSets/README.md):
+  the Part 15 types and verification outcomes in detail.

@@ -1,195 +1,232 @@
 # EncDotNet.S100.Datasets.S411
 
-Library for reading and portraying [IHO/JCOMM S-411](https://iho.int/en/s-411-ice-information) (Ice Information for Surface Navigation) datasets.
+`EncDotNet.S100.Datasets.S411` reads
+[IHO/JCOMM S-411](https://iho.int/en/s-411-ice-information) Ice Information for
+Surface Navigation datasets: GML files (S-100 Part 10b) that describe sea ice
+and lake ice. It reads both the JCOMM operational encoding and the IHO sample
+encoding, projects a dataset into a typed inventory, validates it, and portrays
+it with the S-411 portrayal catalogue in three display modes. Reference it when
+you need typed access to S-411 ice data or its validation rules. To open and
+render any product, including S-411, use the
+[`EncDotNet.S100`](../EncDotNet.S100/README.md) package, which includes this
+one.
 
-S-411 provides a standard data model for distributing sea-ice and lake-ice information as GML-encoded datasets conforming to the S-100 framework.
+## Install
 
-## Features
+```bash
+dotnet add package EncDotNet.S100.Datasets.S411
+```
 
-- Parse S-411 GML datasets (S-100 Part 10b encoding, both `s100gml/1.0` and `s100gml/5.0` profile namespaces)
-- Extract sea-ice features (`SeaIce`, `LakeIce`, `Iceberg`, `IceEdge`, `IceLead`, etc. — see the S-411 1.2.1 Feature Catalogue for the full set)
-- Convert to S-100 Part 9 FeatureXML for portrayal pipeline consumption
-- XSLT-based portrayal via the S-411 Portrayal Catalogue
+## Read a dataset
 
-## Overview
-
-Key types:
-
-- **`S411Dataset`** — root model containing parsed features and dataset identification. `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded from feature geometry (`null` when the dataset carries only geometry-less container features), skipping the XSLT portrayal pipeline.
-- **`S411Feature`** — a geographic feature with type code, geometry, simple attributes, and complex attributes.
-- **`S411ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
-- **`S100GeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature.
-- **`S411FeatureXmlSource`** — `IFeatureXmlSource` adapter that projects an `S411Dataset` into S-100 Part 9 FeatureXML for XSLT portrayal rules.
-- **Feature geometry** reaches the renderers through the shared `FeatureGeometryProvider<TFeature>` (`IFeatureGeometryProvider`, from `EncDotNet.S100.Core`), which the dataset processor builds over the parsed features.
-- **`S411PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
-
-## Typed data model
-
-In addition to the raw `S411Dataset` / `S411Feature` shapes used by the
-portrayal pipeline, the library exposes a strongly-typed projection under
-`EncDotNet.S100.Datasets.S411.DataModel` built on the shared
-`EncDotNet.S100.DataModel` abstractions in `EncDotNet.S100.Core`. This mirrors
-the typed projections added for S-124, S-125, S-128, and S-201 (see PRs
-[#69](https://github.com/philliphoff/EncDotNet.S100/pull/69),
-[#70](https://github.com/philliphoff/EncDotNet.S100/pull/70),
-[#71](https://github.com/philliphoff/EncDotNet.S100/pull/71), and
-[#72](https://github.com/philliphoff/EncDotNet.S100/pull/72)).
-
-Key types:
-
-- **`S411SeaIceInventory`** — top-level projection with a static
-  `From(S411Dataset, out IReadOnlyList<ProjectionDiagnostic>)` factory that
-  walks the source feature bag and produces typed subclasses.
-- **`S411IceFeature`** — abstract base. Concrete subclasses:
-  `S411SeaIce`, `S411LakeIce`, `S411Iceberg`, `S411IceEdge`, `S411IceLead`,
-  `S411IceThickness`, `S411SnowCover`, `S411StageOfMelt`,
-  `S411DataCoverage`, and `S411OtherFeature` (catch-all).
-- **`S411EggCode`** — typed bundle for the WMO egg-code attributes carried
-  by `SeaIce` / `LakeIce` features. Both vocabularies (JCOMM
-  `iceact`/`iceapc`/`icesod`/`iceflz` and the IHO 1.2.1 sample
-  `totalConcentration`/`snowDepth`) feed the same shape. List-valued JCOMM
-  attributes are preserved as raw text because real-world producers
-  serialise them as Python-list-style strings rather than the standard
-  WMO tokenisation.
-- **`S411GeometryKind`** — `None` / `Point` / `Curve` / `Surface`.
-
-Feature-type normalisation maps the JCOMM lowercase short codes
-(`seaice`, `lacice`, `icebrg`, `icelne`, `icethk`, `snwcvr`, `stgmlt`, …)
-to the canonical PascalCase Feature Catalogue class names. Both GML
-shapes therefore land on the same typed subclass, and consumers can
-dispatch on `NormalizedFeatureType` without caring which shape the
-dataset was emitted in. The raw element name remains available on
-`SourceFeatureType`.
-
-S-411 carries no information types and no xlink cross-references, so
-the projection does not need an `XlinkResolver` graph; it still threads
-a `ProjectionContext` so attribute-parse failures surface as
-`ProjectionDiagnostic` entries rather than exceptions. The projection
-only throws when the source dataset has no features at all.
-
-Example:
+Open the dataset, then project it into the typed inventory:
 
 ```csharp
-using var s = File.OpenRead("ice.gml");
-var dataset = S411Dataset.Open(s);
+using EncDotNet.S100.Datasets.S411;
+using EncDotNet.S100.Datasets.S411.DataModel;
+
+using var stream = File.OpenRead("path/to/ice.gml");
+var dataset = S411Dataset.Open(stream);
 var inventory = S411SeaIceInventory.From(dataset, out var diagnostics);
 
 foreach (var seaIce in inventory.IceFeatures.OfType<S411SeaIce>())
 {
-    var conc = seaIce.EggCode?.TotalConcentration;
-    // ... dispatch on seaIce.NormalizedFeatureType / seaIce.GeometryKind
+    var concentration = seaIce.EggCode?.TotalConcentration;
+    Console.WriteLine($"{seaIce.NormalizedFeatureType} ({seaIce.GeometryKind}): total concentration {concentration}");
 }
 ```
 
-## Notes
+## Main types
 
-### Two GML shapes in the wild
+- **`S411Dataset`**: the parsed dataset, with its features and dataset
+  identification. `Open` takes a path or a stream. `SourceDocument` is the
+  parsed `XDocument`. `ReadMetadata` (static, for a path or stream, or on an
+  open dataset) returns the declared product specification and the WGS 84
+  extent of the feature geometry without running portrayal. The extent is
+  `null` when no feature has geometry.
+- **`S411Feature`**: a feature with its type code, geometry, simple attributes
+  and complex attributes. **`S411ComplexAttribute`** holds a complex
+  attribute's sub-attributes. The geometry kind is the shared
+  `S100GeometryType` enum from `EncDotNet.S100.Core`.
+- **`S411SeaIceInventory`**: the typed model. See
+  [Typed data model](#typed-data-model).
+- **`S411SeaIceRules`**: the validation rule set. See [Validate](#validate).
+- **`S411FeatureXmlSource`**: an `IFeatureXmlSource` that converts an
+  `S411Dataset` to S-100 Part 9 FeatureXML for the XSLT rules.
+- **`S411PortrayalCatalogue`**: an `IVectorPortrayalCatalogue` that loads the
+  catalogue's XSLT rules, symbols, line styles, area fills and colour palettes.
 
-S-411 1.2.1 datasets are encountered in two distinctly different XML shapes,
-both of which this reader handles:
+The reader extracts the ice features (`SeaIce`, `LakeIce`, `Iceberg`,
+`IceEdge`, `IceLead` and others; see the S-411 1.2.1 feature catalogue for the
+full set). S-411 has no information types (`<imember>` elements). Feature
+geometry reaches the renderers through the shared
+`FeatureGeometryProvider<TFeature>` from `EncDotNet.S100.Core`.
 
-1. **JCOMM / Canadian-Ice-Service operational shape** (the common case in
-   real-world data). Root element is
-   `<ice:IceDataSet xmlns:ice="http://www.jcomm.info/ice">`, members are
-   wrapped one-per-`<ice:IceFeatureMember>`, and feature elements use the
-   short lowercase codes (`ice:seaice`, `ice:icebrg`, `ice:lacice`,
-   `ice:icelne`, …). Geometry is inline as a direct `<gml:Polygon>` /
-   `<gml:LineString>` / `<gml:Point>` child. The bundled portrayal catalogue
-   was authored against this shape.
+## Typed data model
 
-2. **IHO 1.2.1 sample shape** (transitional; only seen in the official IHO
-   `S-411-Product-Specification` repository's `samples/` folder). Root is a
-   bare `<Dataset>` with a plural `<members>` wrapper holding many feature
-   siblings, and feature class names are PascalCase (`SeaIce`, `Iceberg`,
-   …). The dataset-identification block declares the spec via
+`S411SeaIceInventory`, in the `EncDotNet.S100.Datasets.S411.DataModel`
+namespace, is a read-only projection of `S411Dataset`, built on the shared
+types in the `EncDotNet.S100.DataModel` namespace. The portrayal pipeline
+doesn't use it; it reads `S411Dataset` directly.
+
+- **`S411SeaIceInventory.From(S411Dataset, out IReadOnlyList<ProjectionDiagnostic>)`**
+  builds the inventory. `IceFeatures` lists the typed features.
+- **`S411IceFeature`** is the abstract base. The concrete classes are
+  `S411SeaIce`, `S411LakeIce`, `S411Iceberg`, `S411IceEdge`, `S411IceLead`,
+  `S411IceThickness`, `S411SnowCover`, `S411StageOfMelt`, `S411DataCoverage`,
+  and `S411OtherFeature` for anything else.
+- **`S411EggCode`** holds the WMO egg-code attributes of `SeaIce` and `LakeIce`
+  features. Both vocabularies, JCOMM (`iceact`, `iceapc`, `icesod`, `iceflz`)
+  and the IHO 1.2.1 sample (`totalConcentration`, `snowDepth`), fill the same
+  type. List-valued JCOMM attributes are kept as raw text, because real
+  producers write them as Python-style list strings rather than standard WMO
+  tokens.
+- **`S411GeometryKind`** is `None`, `Point`, `Curve` or `Surface`.
+
+The projection maps the JCOMM short codes (`seaice`, `lacice`, `icebrg`,
+`icelne`, `icethk`, `snwcvr`, `stgmlt` and others) to the feature catalogue's
+class names. Both encodings produce the same typed classes, so you can use
+`NormalizedFeatureType` without knowing which encoding the dataset uses. The
+element name as encoded is in `SourceFeatureType`.
+
+S-411 has no information types and no xlinks, so the projection doesn't resolve
+references. Attributes that don't parse become `ProjectionDiagnostic` entries.
+`From` throws only when the dataset has no features.
+
+## Validate
+
+`S411SeaIceRules`, in the `EncDotNet.S100.Datasets.S411.Validation` namespace,
+is the default rule set for `S411SeaIceInventory`. Rule IDs have the form
+`S411-R-{clause}`. The rules read the typed model, so they work the same for
+both encodings. The `EncDotNet.S100` package's `dataset.Validate()` runs the
+same rule set.
+
+```csharp
+using EncDotNet.S100.Datasets.S411;
+using EncDotNet.S100.Datasets.S411.DataModel;
+using EncDotNet.S100.Datasets.S411.Validation;
+
+var dataset = S411Dataset.Open("path/to/ice.gml");
+var inventory = S411SeaIceInventory.From(dataset, out _);
+var report = S411SeaIceRules.Validate(inventory);
+
+foreach (var finding in report.Findings)
+    Console.WriteLine($"[{finding.Severity}] {finding.RuleId}: {finding.Message}");
+```
+
+To run your own selection of rules, build a
+`ValidationRuleSet<S411SeaIceInventory>`.
+
+| Rule ID | Severity | Checks |
+|---|---|---|
+| `S411-R-3.1` | Error | Feature coordinates are within the WGS 84 latitude and longitude ranges (S-100 Part 10b §6.2). |
+| `S411-R-3.2` | Error | Surface features have a closed ring with at least four coordinates. |
+| `S411-R-3.3` | Error | Curve features have at least two vertices. |
+| `S411-R-4.1` | Warning | Egg-code `totalConcentration` is one of the WMO codes listed in S-411 Annex A. |
+| `S411-R-4.2` | Error | `iceAverageThickness`, when present, is at least 0. |
+| `S411-R-4.3` | Error | Egg-code `snowDepth`, when present, is at least 0. |
+| `S411-R-4.4` | Warning | `icebergSize` is one of the codes listed in S-411 Annex A (1 to 9, 99). |
+| `S411-R-5.1` | Error | Feature identifiers are unique in the dataset. |
+
+## Portrayal
+
+The bundled portrayal catalogue under `EncDotNet.S100.Specifications` is
+byte-identical to the upstream catalogue at
+[iho-ohi/S-411-Product-Specification](https://github.com/iho-ohi/S-411-Product-Specification)
+(version 1.2.1), with nothing edited or added.
+
+### Adapter for the main rule
+
+The upstream `mainRule` (`pc/Rules/main.xsl`) writes a display-list format that
+this library's `Part9DisplayListReader` can't read. For example, it writes
+`<symbol><symbolReference>X</symbolReference></symbol>` instead of
+`<symbol reference="X"/>`. So this library includes an adapter,
+`Adapter/main.xsl`, and `S411PortrayalCatalogue.GetCompiledRuleAsync("mainRule")`
+returns the adapter in place of the catalogue's `mainRule`. All other rules,
+such as sub-templates and simple-symbol templates, load from the unchanged
+catalogue. The adapter handles both encodings.
+
+The catalogue has several top-level XSLT rules: `mainRule`, plus rules for each
+ice class, such as `SeaiceClass1ARule`. Only `mainRule` is an active portrayal
+rule by default. The ice-class rules still load by name through
+`GetCompiledRuleAsync`.
+
+### Display modes
+
+Each S-411 polygon carries the full WMO egg code (`iceact`, `iceapc`, `icesod`,
+`iceflz`), and the upstream catalogue declares three display modes (S-100 Part 9
+§11.7). The adapter takes the active mode as an
+`<xsl:param name="displayMode"/>`, which the vector engine sets from the
+catalogue's `DisplayModeController`.
+
+| Display mode ID | `s100 render --display-mode` | Fill |
+|---|---|---|
+| `IceScientificIceactDisplayMode` (default) | `ice-concentration` | Total concentration, in the WMO `iceact` colours. |
+| `IceScientificIcesodDisplayMode` | `ice-sod` | Stage of development, in the WMO `icesod` colours. |
+| `IceNavigationalDisplayMode` | `ice-navigational` | A provisional preview derived from total concentration, written for the adapter. |
+
+> [!WARNING]
+> The navigational mode isn't a POLARIS or RIO navigational-risk calculation.
+> S-411 1.2.1 has no colours for it, so the adapter uses a provisional
+> traffic-light scale based on total concentration.
+
+The concentration and stage-of-development colours are written into the
+adapter as `#RRGGBB` values, copied from the bundled upstream tables
+(`pc/Rules/seaice_wmo_iceact.xsl` and `seaice_wmo_icesod.xsl`). Those upstream
+files stay the source of the values and stay byte-identical to upstream.
+`S411WmoColourParityTests` parses them, converts each
+`number($iceX)=N -> colorToken` "R G B" entry to `#RRGGBB`, and checks that the
+adapter's tables match. If upstream changes, the build fails. This avoids
+reading the upstream tables with `document()` at render time.
+
+When an egg code isn't in the upstream table (real Canadian Ice Service feeds
+use tenths and list-style codes), the concentration mode uses a colour scale,
+written for the adapter, based on the code's leading digit.
+
+From the command line, `s100 info <dataset>` lists the available modes, and
+`s100 render <dataset> --display-mode <token>` selects one. See
+[Command-line rendering](../../docs/cli.md).
+
+## Encoding notes
+
+S-411 1.2.1 datasets come in two XML shapes. The reader accepts both:
+
+1. **JCOMM / Canadian Ice Service operational shape**, the common case in real
+   data. The root element is
+   `<ice:IceDataSet xmlns:ice="http://www.jcomm.info/ice">`. Each feature is in
+   its own `<ice:IceFeatureMember>`, and feature elements use the short codes
+   (`ice:seaice`, `ice:icebrg`, `ice:lacice`, `ice:icelne` and others).
+   Geometry is a direct `<gml:Polygon>`, `<gml:LineString>` or `<gml:Point>`
+   child. The bundled portrayal catalogue was written for this shape.
+2. **IHO 1.2.1 sample shape**, seen only in the `samples/` folder of the IHO
+   `S-411-Product-Specification` repository. The root is a bare `<Dataset>`
+   with one `<members>` container for all features, and feature class names
+   are PascalCase (`SeaIce`, `Iceberg` and others). The dataset identification
+   declares the specification with
    `<S100:productIdentifier>S-411</S100:productIdentifier>`.
 
-The reader dispatches on the root element and produces an `S411Dataset` from
-either. The original parsed `XDocument` is preserved on `S411Dataset.SourceDocument`
-and passed through unchanged to the XSLT portrayal pipeline so that the
-official catalogue's element names and namespaces are honoured exactly.
+The reader chooses by the root element. It keeps the parsed `XDocument` in
+`S411Dataset.SourceDocument` and passes it unchanged to the XSLT portrayal, so
+the catalogue sees the element names and namespaces it expects.
 
-### Portrayal catalogue
-
-The bundled `pc/` tree under `EncDotNet.S100.Specifications` is **byte-identical
-to the upstream catalogue** at
-[iho-ohi/S-411-Product-Specification](https://github.com/iho-ohi/S-411-Product-Specification)
-(version 1.2.1). No edits, additions, or `<ruleFile>` insertions are made.
-
-The upstream `mainRule` (`pc/Rules/main.xsl`) emits a display-list dialect
-that is incompatible with this codebase's `Part9DisplayListReader` (it uses
-`<symbol><symbolReference>X</symbolReference></symbol>` instead of
-`<symbol reference="X"/>`, etc.). To preserve the catalogue intact while
-still rendering, this library ships an embedded adapter at
-`Adapter/main.xsl`. `S411PortrayalCatalogue.GetCompiledRuleAsync("mainRule")`
-substitutes the adapter for the catalogue's `mainRule` only; all other rule
-references (sub-templates, simple-symbol templates, etc.) are loaded from
-the unmodified PC. The adapter handles both GML shapes described above.
-
-### Selectable display modes (issue #416)
-
-A single S-411 dataset carries the full WMO egg code per polygon (`iceact`,
-`iceapc`, `icesod`, `iceflz`), and the upstream PC declares three display
-modes (S-100 Part 9 §11.7). The adapter honours the active mode via an
-`<xsl:param name="displayMode"/>` threaded in by the vector engine from the
-catalogue's `DisplayModeController`:
-
-| Display-mode id | CLI `--display-mode` token | Fill |
-|---|---|---|
-| `IceScientificIceactDisplayMode` (default) | `ice-concentration` | Total concentration — WMO `iceact` colours |
-| `IceScientificIcesodDisplayMode` | `ice-sod` | Stage of development — WMO `icesod` colours |
-| `IceNavigationalDisplayMode` | `ice-navigational` | **Provisional** preview derived from total concentration (adapter-authored) — **not** a POLARIS/RIO navigational-risk computation |
-
-The concentration and stage-of-development colours are held **inline** in the
-adapter as pre-converted `#RRGGBB` literals, mirrored from the bundled upstream
-tables (`pc/Rules/seaice_wmo_iceact.xsl` / `seaice_wmo_icesod.xsl`). Those
-upstream files remain the canonical source of the values and stay
-byte-identical to upstream; the `S411WmoColourParityTests` xunit test parses
-them, converts each `number($iceX)=N -> colorToken` "R G B" entry to `#RRGGBB`,
-and asserts equality with the adapter's inline tables — so any upstream drift
-fails the build **loudly** rather than silently degrading at render time. This
-keeps the single-source guarantee without runtime `document()` plumbing or
-per-render parse cost. When an egg code is absent from the upstream table
-(real CIS feeds use tenths / list-style codes) the concentration branch falls
-back to an adapter-authored leading-digit ramp. The navigational mode has no
-upstream colours in 1.2.1, so it uses a **provisional** adapter-authored
-traffic-light mapping derived from total concentration; this is a placeholder
-preview only and is **not** a POLARIS/RIO navigational-risk computation. Select
-the mode from the CLI with
-`s100 render <dataset> --display-mode <token>`; the available modes are listed
-by `s100 info <dataset>`.
-
-### Other
-
-- S-411 has no information types (`<imember>` elements); only feature wrappers.
-- Coordinate ordering in `<gml:pos>` / `<gml:posList>` follows the S-100 Part 10b convention of **lat lon** for `EPSG:4326`.
-- The S-411 Portrayal Catalogue ships several top-level XSLT entry points (`mainRule`, plus per-ice-class rules such as `SeaiceClass1ARule`). Only `mainRule` is exposed as an active portrayal rule by default; class-specific rules are still loadable by name via `GetCompiledRule`.
-
-## Validation rules
-
-`EncDotNet.S100.Datasets.S411.Validation.S411SeaIceRules` exposes a pilot
-rule pack (8 rules) for an `S411SeaIceInventory`, mirroring the S-421 rule
-pack (PR [#100](https://github.com/philliphoff/EncDotNet.S100/pull/100)).
-Rule identifiers follow `S411-R-{clause}`:
-
-| Rule | Severity | Summary |
-|------|----------|---------|
-| `S411-R-3.1` | Error | Feature coordinates must lie within WGS-84 lat/lon ranges (S-100 Part 10b §6.2). |
-| `S411-R-3.2` | Error | Surface features must have a closed ring with ≥ 4 coordinates. |
-| `S411-R-3.3` | Error | Curve features must have ≥ 2 vertices. |
-| `S411-R-4.1` | Warning | Egg-code `totalConcentration` must be one of the S-411 Annex A enumerated WMO codes. |
-| `S411-R-4.2` | Error | `iceAverageThickness` must be ≥ 0 when present. |
-| `S411-R-4.3` | Error | Egg-code `snowDepth` must be ≥ 0 when present. |
-| `S411-R-4.4` | Warning | `icebergSize` must be one of the S-411 Annex A enumerated codes (1–9, 99). |
-| `S411-R-5.1` | Error | Feature identifiers must be unique across the dataset. |
-
-Rules bind to the typed projection (`S411SeaIceInventory`, `S411IceFeature`
-subclasses) and are therefore agnostic to the two real-world GML shapes
-(JCOMM/Canadian Ice Service operational shape and IHO 1.2.1 sample shape).
-Use `S411SeaIceRules.Validate(inventory)` for a one-shot run against the
-default rule set, or compose a custom set via
-`ValidationRuleSet<S411SeaIceInventory>`.
+- The reader accepts both the `s100gml/1.0` and `s100gml/5.0` profile
+  namespaces.
+- Coordinates in `<gml:pos>` and `<gml:posList>` are latitude then longitude
+  for `EPSG:4326` (S-100 Part 10b).
 
 ## License
 
-The bundled S-411 specification assets in `EncDotNet.S100.Specifications` are © JCOMM/IHO and used in accordance with their open-publication terms; see <https://github.com/iho-ohi/S-411-Product-Specification>.
+The bundled S-411 specification assets in `EncDotNet.S100.Specifications` are
+© JCOMM/IHO and are used under their open-publication terms; see
+<https://github.com/iho-ohi/S-411-Product-Specification>.
+
+## See also
+
+- [Loading datasets](../../docs/loading-datasets.md): open files, folders, ZIPs
+  and exchange sets through the `EncDotNet.S100` package.
+- [Reading product data](../../docs/reading-product-data.md): features,
+  information types and typed models for each product.
+- [Typed data models](../../docs/typed-data-models.md): the typed
+  root for each product and the shared diagnostic codes.
+- [Custom catalogues and validation](../../docs/catalogues-and-validation.md):
+  run the bundled rules and add your own.

@@ -1,152 +1,160 @@
-# S-100 Map Host sample (`Map.AddS100`)
+# S-100 map host sample (`Map.AddS100`)
 
-A minimal **Avalonia + Mapsui desktop app** that embeds the reusable S-100
-rendering extension in a host that is *not* the bundled Viewer. It is the
-architectural fitness test for [issue #512](https://github.com/philliphoff/EncDotNet.S100/issues/512):
-it proves another UI application can adopt S-100 as a managed layer subsystem
-through the public `Map.AddS100(...)` → `IS100MapSession` API, with its own
-window, control, and interaction — **without referencing
-`EncDotNet.S100.Viewer`**.
+This sample is a small Avalonia and Mapsui desktop app that shows S-100 data
+on its own map. It adds S-100 rendering to a stock Mapsui `MapControl` through
+the public `AddS100(...)` extension and the `IS100MapSession` it returns. It
+has its own window, controls and pointer handling, and doesn't reference
+SoundCharts (`EncDotNet.S100.Viewer`).
 
-It is also the *first application-level caller of `Map.AddS100`*: the in-repo
-Viewer composes the lower-level `MapsuiDatasetLayerSession` by hand, so until this sample
-the public extension had only test coverage.
+Use it as a starting point for adding S-100 layers to your own Mapsui
+application.
 
-## The integration in three steps
+## Prerequisites
 
-The whole embedding is the three steps in [`MainWindow`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/MainWindow.axaml.cs)'s
-constructor. In essence:
+- The .NET 10 SDK.
 
-```csharp
-// 0. One call gives you an IDatasetProcessorFactory seeded with the official
-//    bundled catalogues for every product (from the EncDotNet.S100 package).
-//    It owns long-lived catalogue caches, so dispose it with the session.
-using var factory = BundledDatasetProcessorFactory.Create();
+The sample includes an S-101 cell, `sample-cell.000`. It's the IHO S-101 test
+cell `101AA00DS0008.000`, linked from `tests/datasets/`.
 
-// 1. Attach a session to the control's map AND the Avalonia adapter in one call.
-//    mapControl.AddS100 returns the disposable IS100MapSession (owns all S-100
-//    layers, processors, and rendering) plus the adapter (pointer-pixel picks,
-//    snapshots), and wires a UI-thread redraw marshal so the background renderers
-//    repaint the live control automatically — no process-global hooks.
-var map = new Map { CRS = "EPSG:3857" };
-mapControl.Map = map;
-var (session, adapter) = mapControl.AddS100(new S100MapsuiOptions
-{
-    CrsTransformFactory = new ProjNetCrsTransformFactory(),  // host supplies the CRS
-    DatasetPipelineFactory = factory,                        // enables LoadAsync
-});
+## Run the sample
 
-// 2. Drive it. Navigation stays with Mapsui; the session adds S-100 operations.
-var id = await session.Datasets.LoadAsync("cell.000");
-session.ZoomToDataset(id);
-await session.SetPresentationAsync(MapPresentationState.Default.WithPalette(PaletteType.Night));
-var picks = await adapter.PickAtScreenAsync(session.Query, x, y);
-
-session.Dispose();   // releases every processor, layer, subscription, and cache
-```
-
-Each button and pointer handler in the code-behind is a worked example of one of
-these calls, with comments explaining *why* the API is shaped that way.
-
-## Run it
-
-Desktop GUI:
+From the repository root:
 
 ```bash
 dotnet run --project samples/EncDotNet.S100.Samples.MapHost
 ```
 
-Click **Load cell** to render the bundled S-101 cell, use the palette buttons
-and the **Visible** toggle, drag/wheel to pan and zoom, and **click the map** to
-pick features (the topmost hit is outlined by the reusable pick-highlight
-overlay).
+In the window:
 
-Headless self-check (no window; suitable for CI):
+1. Choose **Load cell** to load and render the bundled S-101 cell. The map
+   zooms to it.
+2. Choose **Day**, **Dusk** or **Night** to change the palette, and clear
+   **Visible** to hide the cell.
+3. Drag to pan and use the mouse wheel to zoom.
+4. Click the map to pick features. The topmost feature is outlined, and the
+   status bar names it.
+5. Choose **Zoom to cell** to frame the cell again, or **Unload** to remove it.
+
+### Run the headless check
+
+The `--smoke` option drives the same session without a window, so it runs in
+CI:
 
 ```bash
 dotnet run --project samples/EncDotNet.S100.Samples.MapHost -- --smoke
 ```
 
-The `--smoke` path drives the same reusable session — attach, `LoadAsync`,
-`ZoomToDataset`, `Query.PickAsync`, dispose — and exits non-zero on failure.
+It attaches a session to a bare `Map`, loads the cell, zooms to it, picks at
+the cell's centre and removes the cell. It ends with:
 
-## What it demonstrates
+```text
+PASS: reusable S-100 session loaded, framed, picked, and tore down headlessly.
+```
 
-Every toolbar control and pointer gesture maps onto the reusable API surface:
+On failure it prints a `FAIL:` line to standard error and exits with code `1`.
 
-| Fitness capability (issue #512)        | API used                                              |
-| -------------------------------------- | ----------------------------------------------------- |
-| attach a session to an existing `Map`  | `map.AddS100(options)`                                |
-| load / unload datasets                 | `session.Datasets.LoadAsync` / `session.RemoveDataset`|
-| change palette (Day / Dusk / Night)    | `session.SetPresentationAsync(state.WithPalette(...))`|
-| toggle a dataset                       | `session.SetVisible(id, …)`                           |
-| zoom via normal Mapsui navigation      | `MapControl` gestures + `session.ZoomToDataset(id)`   |
-| geographic pick + pointer adaptation   | `adapter.PickAtScreenAsync(session.Query, x, y)`      |
-| attach a host overlay layer            | `session.Layers.AddOverlayLayer(layer)`               |
-| highlight a pick                       | `S100PickHighlightLayer.Show(pick)`                   |
-| show the cell extent when zoomed out   | `S100DatasetExtentIndicatorLayer.Show(...)`           |
-| dispose everything                     | `session.Dispose()` / `adapter.Dispose()`             |
+## How it works
 
-## Reading the code
+The integration is in the
+[`MainWindow`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/MainWindow.axaml.cs)
+constructor and event handlers. In outline:
 
-| File                                                   | What it shows                                                                 |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| [`MainWindow.axaml.cs`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/MainWindow.axaml.cs)           | The integration itself: compose, attach, drive, dispose. Start here.          |
-| [`MainWindow.axaml`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/MainWindow.axaml)                 | The toolbar and a stock Mapsui `MapControl` (`AddS100` needs no special subclass). |
-| [`SmokeTest.cs`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/SmokeTest.cs)                          | The same session driven headlessly (the `--smoke` path).                       |
+```csharp
+// Create a processor factory with the bundled catalogues for every product.
+// It holds catalogue caches, so dispose it with the session.
+using var factory = BundledDatasetProcessorFactory.Create();
 
-## Wiring notes
+// Attach a session to the control's map. AddS100 returns the session, which
+// owns the S-100 layers, processors and rendering, and an adapter for pointer
+// picks and snapshots. It also makes background renders repaint the control.
+var map = new Map { CRS = "EPSG:3857" };
+mapControl.Map = map;
+var (session, adapter) = mapControl.AddS100(new S100MapsuiOptions
+{
+    CrsTransformFactory = new ProjNetCrsTransformFactory(),
+    DatasetPipelineFactory = factory,
+});
 
-- `Map.CRS` is set to `EPSG:3857`; the reusable renderer projects datasets to
-  Web Mercator and the pick adapter converts pointer pixels back to WGS-84.
-- The reusable assembly ships no CRS implementation, so the host supplies
-  `ProjNetCrsTransformFactory` (`EncDotNet.S100.Crs.ProjNet`).
-- `Datasets.LoadAsync` needs an `IDatasetProcessorFactory`.
-  `BundledDatasetProcessorFactory.Create()` (from the `EncDotNet.S100`
-  convenience package) returns one seeded with the bundled catalogues for every
-  product in a single call — no hand-wiring of the portrayal/feature catalogue
-  managers, Lua engine, CRS factory, or product registry. Dispose it with the
+// Drive the session. Mapsui still handles navigation.
+var id = await session.Datasets.LoadAsync("cell.000");
+session.ZoomToDataset(id);
+await session.SetPresentationAsync(MapPresentationState.Default.WithPalette(PaletteType.Night));
+var picks = await adapter.PickAtScreenAsync(session.Query, x, y);
+
+// Release every processor, layer, subscription and cache.
+session.Dispose();
+```
+
+Each button and pointer handler in the code-behind calls one part of the API,
+with comments that explain why the API works that way:
+
+| Task | API |
+|---|---|
+| Attach a session to an existing map | `mapControl.AddS100(options)`, or `map.AddS100(options)` for a bare `Map` |
+| Load or unload a dataset | `session.Datasets.LoadAsync(path)`, `session.RemoveDataset(id)` |
+| Change the palette | `session.SetPresentationAsync(state.WithPalette(...))` |
+| Show or hide a dataset | `session.SetVisible(id, visible)` |
+| Zoom to a dataset | `session.ZoomToDataset(id)`, alongside normal `MapControl` gestures |
+| Pick the features under the pointer | `adapter.PickAtScreenAsync(session.Query, x, y)` |
+| Pick at a position, without a UI | `session.Query.PickAsync(new GeographicPickQuery { ... })` |
+| Add a host overlay layer | `session.Layers.AddOverlayLayer(layer)` |
+| Outline a picked feature | `S100PickHighlightLayer.Show(pick)` |
+| Show a cell's extent when it's zoomed out of view | `S100DatasetExtentIndicatorLayer.Show(...)` |
+| Clean up | `adapter.Dispose()`, `session.Dispose()` |
+
+| File | What it shows |
+|---|---|
+| [`MainWindow.axaml.cs`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/MainWindow.axaml.cs) | The integration: create, attach, drive and dispose. Start here. |
+| [`MainWindow.axaml`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/MainWindow.axaml) | The toolbar and a stock Mapsui `MapControl`. `AddS100` doesn't need a special subclass. |
+| [`SmokeTest.cs`](https://github.com/philliphoff/EncDotNet.S100/blob/main/samples/EncDotNet.S100.Samples.MapHost/SmokeTest.cs) | The same session without a window, for `--smoke`. |
+
+### Wiring notes
+
+- **Projection.** The map's `CRS` is `EPSG:3857`. The renderer projects
+  datasets to Web Mercator, and the pick adapter converts pointer pixels back to
+  WGS-84.
+- **CRS transforms.** The rendering assembly has no CRS implementation, so the
+  host supplies one: `ProjNetCrsTransformFactory` from
+  `EncDotNet.S100.Crs.ProjNet`.
+- **Processor factory.** `Datasets.LoadAsync` needs an
+  `IDatasetProcessorFactory`. `BundledDatasetProcessorFactory.Create()`, from
+  the `EncDotNet.S100` package, returns one set up with the bundled catalogues
+  for every product, so you don't set up catalogue managers, the Lua engine,
+  the CRS factory or the product registry yourself. Dispose it with the
   session.
-- The overlays (`S100DatasetExtentIndicatorLayer`, `S100PickHighlightLayer`) are
-  entirely optional — attach the ones you want through
-  `session.Layers.AddOverlayLayer(...)` (the session's host-facing overlay band,
-  above the dataset layers) and drive them with `Show`/`Clear`. Omitting them
-  changes nothing about dataset rendering.
-- Async re-renders (e.g. a palette change) repaint the control automatically: the
-  background cached / scene / tile renderers signal completion through a
-  per-session redraw sink the session stamps onto each dataset layer, and
-  `mapControl.AddS100` wires that sink to a UI-thread `RefreshGraphics`. A host on
-  a bare `Map` can supply its own `S100MapsuiOptions.RedrawMarshal`; omitting it
-  redraws inline (fine for headless). This replaced the former process-global
-  `RequestRedraw` statics (issue #512).
+- **Overlays.** `S100DatasetExtentIndicatorLayer` and `S100PickHighlightLayer`
+  are optional. Add the ones you want with `session.Layers.AddOverlayLayer(...)`,
+  which places them above the dataset layers, and drive them with `Show` and
+  `Clear`. Leaving them out doesn't change dataset rendering.
+- **Repaints.** When a background render finishes, such as after a palette
+  change, the session signals a redraw. `mapControl.AddS100` turns that signal
+  into a `RefreshGraphics` call on the UI thread. With a bare `Map`, supply
+  your own `S100MapsuiOptions.RedrawMarshal`; without one, the session redraws
+  inline, which is fine headlessly.
 
-> **Even less wiring?** This sample composes the session by hand
-> (`MapControl.AddS100(...)` + explicit adapter/session fields and disposal) to
-> show each step. A host that wants the batteries-included path can instead use
-> `S100MapControl` — a `MapControl` subclass that attaches and owns the session,
-> so setup is one `Configure(options)` call and teardown is one `Dispose()`. See
-> the [`Renderers.Mapsui.Avalonia` README](../../src/EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md#one-call-control-s100mapcontrol).
+### Use `S100MapControl` instead
 
-> **Consuming this out of repo?** A real application would reference the
-> published `EncDotNet.S100.*` NuGet packages instead of the project references
-> this in-repo sample uses, but the code in `MainWindow` is identical.
+This sample attaches the session by hand, with explicit fields and disposal,
+to show each step. `S100MapControl` is a `MapControl` subclass that creates and
+owns the session for you: setup is one `Configure(options)` call and cleanup is
+one `Dispose()`. See
+[One-call control](../../src/EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md#one-call-control-s100mapcontrol)
+in the `EncDotNet.S100.Renderers.Mapsui.Avalonia` README.
 
-## A note on package coupling (issue #512 step 9)
+### Package references
 
-`Map.AddS100` no longer references any S-100 product: it takes an
-`IDatasetProcessorFactory` (in `EncDotNet.S100.Core`), so the reusable Mapsui
-extension is product-free. This sample therefore references only
-`Renderers.Mapsui`, `Renderers.Mapsui.Avalonia`, `Crs.ProjNet`, and the
-`EncDotNet.S100` convenience package — the earlier hand-bootstrap that pulled in
-`Datasets.Pipelines`, `Portrayals`, `Specifications`, `Features`, and
-`Scripting.MoonSharp` collapsed to a single `BundledDatasetProcessorFactory.Create()`.
+The sample uses project references so that it builds in this repository. In
+your own app, reference the published packages; the code in `MainWindow` stays
+the same. It needs:
 
-The convenience factory still pulls the products in transitively — that is the
-batteries-included trade-off a host opts into by using it. A host that wants a
-smaller footprint can instead build its own `IDatasetProcessorFactory` (or a
-`DatasetPipelineFactory` with a subset `S100ProductRegistry`) and reference only
-the products it needs.
+- `EncDotNet.S100.Renderers.Mapsui`
+- `EncDotNet.S100.Renderers.Mapsui.Avalonia`
+- `EncDotNet.S100.Crs.ProjNet`
+- `EncDotNet.S100`
 
-The bundled `sample-cell.000` is the IHO S-101 test cell
-`101AA00DS0008.000`, linked from `tests/datasets/` so there is a single source
-of truth.
+`AddS100` itself doesn't depend on any S-100 product. It takes an
+`IDatasetProcessorFactory` from `EncDotNet.S100.Core`. `EncDotNet.S100` brings in
+every product through `BundledDatasetProcessorFactory`. For a smaller app, build
+your own `IDatasetProcessorFactory`, or a `DatasetPipelineFactory` with a
+smaller `S100ProductRegistry`, and reference only the product packages you
+need.

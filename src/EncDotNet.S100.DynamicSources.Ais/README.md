@@ -1,54 +1,90 @@
 # EncDotNet.S100.DynamicSources.Ais
 
-Concrete `IDynamicFeatureSource` for AIS targets, plus the
-driver-agnostic `IAisMessageSource` abstraction.
+`EncDotNet.S100.DynamicSources.Ais` turns AIS messages into vessel targets
+that a map host draws alongside chart data. `AisDynamicFeatureSource`
+implements `IDynamicFeatureSource` from
+[`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md), and
+`IAisMessageSource` is the interface AIS drivers implement. Reference it when
+you add live AIS targets to a host. SoundCharts uses it.
 
-> **Packaging:** this library is not currently published to NuGet.
-> Consume it via project reference, or through the desktop viewer.
+## Install
 
-## What ships here
+This package isn't published to NuGet. Reference the project directly:
+
+```xml
+<ProjectReference Include="path/to/src/EncDotNet.S100.DynamicSources.Ais/EncDotNet.S100.DynamicSources.Ais.csproj" />
+```
+
+You also need a driver, such as
+[`EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo`](../EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/README.md).
+
+## Example: track vessels in an area
+
+```csharp
+using EncDotNet.S100.DynamicSources.Ais;
+using EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo;
+using EncDotNet.S100.Pipelines;
+
+var driver = new AisStreamIoMessageSource(new AisStreamIoOptions { ApiKey = apiKey });
+
+await using var ais = new AisDynamicFeatureSource(
+    "ais",
+    driver,
+    new AisSubscriptionRequest { Area = new BoundingBox(47.0, -123.0, 48.5, -122.0) });
+
+ais.Changed += (_, _) => Console.WriteLine($"{ais.CurrentFeatures.Count} targets");
+
+// Call Sweep on your own schedule, typically once a second, to drop stale targets.
+ais.Sweep(DateTimeOffset.UtcNow);
+```
+
+The `BoundingBox` arguments are south latitude, west longitude, north latitude
+and east longitude.
+
+## Main entry points
 
 | Type | Purpose |
 | --- | --- |
-| `IAisMessageSource` / `IAisSubscription` | Subscription-based contract over a producer of decoded AIS messages. Drivers (aisstream.io WebSocket, local antenna NMEA, recorded-log replay) implement this interface. |
-| `AisSubscriptionRequest` / `AisMessageKinds` | Spatial / MMSI / ship-type-class filters and message-family selector. |
-| `AisPositionReport` / `AisStaticVoyageData` / `AisTargetLost` | Decoded AIS payloads — denormalised so callers don't see message-type numbers. |
-| `AisShipType` / `AisShipTypeClass` (+ `ToClass`, `ToKindToken`) | Raw shiptype codes and the ITU-R M.1371-5 Table 53 display buckets used in `DynamicFeature.Kind`. |
-| `AisNavigationStatus` | Navigation status enum per ITU-R M.1371-5 §3.3.7.2.1. |
-| `AisDimensions` | Hull dimensions (A/B/C/D) folded into length/beam/bow-offset/port-offset. |
-| `AisDynamicFeatureSource` | The actual `IDynamicFeatureSource` — projects each position report to a `DynamicFeature`, merges per-MMSI static / voyage data, and ages stale targets. |
+| `AisDynamicFeatureSource` | The `IDynamicFeatureSource`. It turns each position report into a `DynamicFeature`, merges each MMSI's static and voyage data, and removes targets not heard from within the retention window (6 minutes by default) when you call `Sweep`. `UpdateArea` changes the area filter. |
+| `IAisMessageSource` / `IAisSubscription` | The subscription interface over a source of decoded AIS messages. Drivers implement it, for example for the aisstream.io WebSocket service, a local antenna's NMEA output, or a recorded-log replay. |
+| `AisSubscriptionRequest` / `AisMessageKinds` | Filters by area, MMSI and ship-type class, and selects the message families. |
+| `AisPositionReport` / `AisStaticVoyageData` / `AisTargetLost` | Decoded AIS payloads, with fields named so callers don't need AIS message-type numbers. |
+| `AisShipType` / `AisShipTypeClass` (with `ToClass` and `ToKindToken`) | Raw ship-type codes and the display classes from ITU-R M.1371-5 Table 53, used in `DynamicFeature.Kind`. |
+| `AisNavigationStatus` | Navigation status, per ITU-R M.1371-5 §3.3.7.2.1. |
+| `AisDimensions` | Hull dimensions A, B, C and D, converted to length, beam, bow offset and port offset. |
 
-## Architecture
+## How the layers fit
 
-Three-layer split with the wire format isolated to driver assemblies:
+The wire format stays in the driver assembly:
 
 ```text
 [recorded log | local antenna | aggregator service]
    │   wire bytes
    ▼
-[driver assembly (e.g. .Drivers.AisStreamIo)]
+[driver assembly, such as .Drivers.AisStreamIo]
    │   IAisMessageSource (this assembly)
    ▼
 [AisDynamicFeatureSource]
    │   IDynamicFeatureSource
    ▼
-[viewer / sample]
+[SoundCharts, or your host]
 ```
 
-`AisDynamicFeatureSource` consumes only typed records and is
-unit-testable without any wire-format fixtures.
+`AisDynamicFeatureSource` works only with typed records, so you can test it
+without wire-format fixtures.
 
-## Renderer key
+## Draw the targets
 
-The source advertises `RendererKey = "vessel.ais"`. Register a matching
-`IDynamicFeatureRenderer` in `EncDotNet.S100.Renderers.Mapsui` (the
-`AisVesselRenderer`, ships separately).
+The source sets `RendererKey = "vessel.ais"`. To draw its features, register a
+matching `IDynamicFeatureRenderer` in `EncDotNet.S100.Renderers.Mapsui`;
+`AisVesselRenderer` there does this.
 
 ## See also
 
-- `docs/design/ais-source.md` — full design notes.
-- `docs/design/dynamic-feature-source.md` — base abstractions.
-- `docs/design/ais-zoom-gated-subscription.md` — viewer-side gate
-  that defers the first subscription until the visible viewport
-  has shrunk below a configurable span.
-- `EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo` — production driver.
+- [AIS dynamic feature source](../../docs/design/ais-source.md): the design
+  note.
+- [Dynamic feature sources](../../docs/design/dynamic-feature-source.md): the
+  base interfaces.
+- [AIS zoom-gated subscription](../../docs/design/ais-zoom-gated-subscription.md):
+  how SoundCharts waits to subscribe until the visible area is smaller than a
+  configurable span.

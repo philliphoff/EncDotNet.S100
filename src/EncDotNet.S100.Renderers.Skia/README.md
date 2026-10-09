@@ -1,161 +1,137 @@
 # EncDotNet.S100.Renderers.Skia
 
-Coverage and vector rendering to [SkiaSharp](https://github.com/mono/SkiaSharp) bitmaps.
-
-## Overview
-
-This library renders S-100 coverage and vector data to SkiaSharp bitmaps. It handles pure rasterization without a map control. Key types include:
-
-- **`SkiaCoverageRenderer`** — `ICoverageRenderer<SKBitmap>` implementation that maps coverage grid cells to pixel colors.
-- **`SkiaSvgRasterizer`** — rasterizes SVG portrayal symbols to tiled pattern bitmaps.
-
-### Shared vector rendering core (now `EncDotNet.S100.Rendering.Scene`)
-
-The backend-agnostic **S-100 Part 9 vector rendering core** — `VectorScene`,
-`PaintOp`, `VectorSceneBuilder`, `ColorResolver`, `ScaleVisibility`, and
-`WebMercator` — has been promoted to its own neutral assembly,
+`EncDotNet.S100.Renderers.Skia` rasterises S-100 vector scenes and coverage
+grids to [SkiaSharp](https://github.com/mono/SkiaSharp) bitmaps, with no map
+control or UI framework. Reference it when you render S-100 data to images
+without the `EncDotNet.S100` facade: in a tile server, a batch image job, or your
+own compositor. It draws the vector scene IR from
 [`EncDotNet.S100.Rendering.Scene`](../EncDotNet.S100.Rendering.Scene/README.md),
-so every rendering backend (this library, `EncDotNet.S100.Renderers.Mapsui`, and
-the tiled/async render subsystem) depends on the IR without diamonding through
-`Renderers.Skia`. It lowers a display list into a resolved, projected
-intermediate representation (IR) so the portrayal-correctness logic lives in
-exactly one place:
+which it brings in as a dependency.
 
-- **`VectorSceneBuilder`** (in `Rendering.Scene`) — lowers a `DrawingInstruction`
-  list + `IFeatureGeometryProvider` into an ordered `VectorScene` of `PaintOp`s:
-  applies S-100 Part 9 draw ordering, colour/symbol/line-style resolution,
-  mm→px conversion (`1 px = 0.32 mm`), text-anchor selection, and the
-  `lat/lon → EPSG:3857` projection half.
-- **`PaintOp` / `VectorScene`** (in `Rendering.Scene`) — the IR. `PaintOp`
-  coordinates are EPSG:3857 metres; all sizes are logical display pixels
-  (resolution-independent). See the `PaintOp` XML docs for the full unit contract.
-- **`SkiaDisplayListRenderer`** (in this library, `…Renderers.Skia.Scene`) —
-  `VectorScene` + `Viewport` → `SKBitmap`. The
-  vector analogue of `SkiaCoverageRenderer`, suitable for a tile-serving web API
-  with no Mapsui/GUI dependency. It supplies the second projection half
-  (`EPSG:3857 → screen`) via a `Viewport`-derived affine. Parsed symbol pictures
-  are cached process-wide (keyed by the resolved SVG), point/text ops whose
-  anchor falls outside the viewport (plus `PointCullMarginPx`) are culled before
-  any per-op work, line ops whose projected bounding box (padded by the stroke
-  half-width) misses the cull rectangle are likewise skipped before the native
-  `DrawPath`, and both text and line drawing pool their Skia resources per
-  render (text pools `SKFont`/`SKPaint`; lines reuse one `SKPath`/`SKPaint`, a
-  batched `AddPoly` point buffer, and a per-pattern dash-effect cache) —
-  all of which matter for the tiled subsystem's per-frame overlay, which replays
-  this renderer live every frame. `RenderOnto` takes an optional cull rectangle
-  so a caller that rotates the canvas can expand it to the rotated viewport's
-  bounding box, plus an `OverlayDrawOptions` overload that adds the live
-  Label-plane behaviour: a suppressed-text set (from `LabelDeclutterer`), a
-  screen-space text anchor-rotation that keeps glyphs **upright** under a rotated
-  viewport while pinning the anchor to its feature, point/text draw filters, and
-  per-run glyph fallback in `DrawText` (so codepoints the primary face lacks are
-  drawn via `SKFontManager.MatchCharacter` instead of `.notdef` tofu boxes).
-- **`LabelDeclutterer`** (`…Renderers.Skia.Scene`) — deterministic,
-  priority-driven S-100 Part 9 overlap avoidance for the live label plane. Given
-  a `VectorScene` it returns the set of `TextPaintOp`s to suppress: point symbols
-  reserve their screen footprints first, then text is placed highest-priority-first
-  against a uniform screen-bucket index, with labels yielding to symbols and to
-  higher-priority labels. Pure and machine-independent.
-- **`OverlayDrawOptions`** (`…Renderers.Skia.Scene`) — the options bag for the
-  `RenderOnto` overlay pass (cull bounds, suppressed text, text anchor-rotation +
-  screen centre, and point/text draw filters).
-- **`WebMercator`** (in `Rendering.Scene`) — EPSG:3857 forward projection (matches
-  Mapsui's `SphericalMercator.FromLonLat`; a parity test asserts agreement).
-- **`ScaleVisibility`** (in `Rendering.Scene`) — shared S-100 Part 9 §11.1 scale-visibility rule.
-- **`ColorResolver`** — S-100 colour-token resolution (palette + inline hex).
+For the end-to-end path, from display list to PNG, see
+[Embedding the renderer](../../docs/embedding-the-renderer.md).
 
-**Scope:** the IR covers point, line, solid-area, text, and tiled **pattern**
-area-fill ops. Pattern fills are lowered into the IR as `PatternAreaPaintOp`
-when a pattern resolver is supplied (the headless Skia path and the Mapsui
-TiledScene subsystem) and are priority-clipped by the shared
-`PatternPriorityClipper` — the same NetTopologySuite clip the Mapsui feature
-path applies — so a lower-priority pattern does not bleed through a
-higher-priority pattern or an opaque solid fill. The Mapsui feature path leaves
-the resolver unset and drives its own pattern collection / insert phase (still
-sharing the clipper). Antimeridian (±180°) crossing **is**
-handled for the headless auto-fit: `SeamAwareBoundsAccumulator` (in
-`Rendering.Scene`) frames dateline-spanning datasets on their true extent and
-`WorldToScreen` wraps ops into the shifted window at draw time (issue #413).
-The seam-wrap is opt-out via `SkiaDisplayListRenderer.EnableSeamWrap` /
-`WorldToScreen.Create(viewport, allowSeamWrap)`: the Mapsui **tiled** subsystem
-disables it because it rasterises already-continuous geometry from narrow
-per-tile viewports, where wrapping would teleport off-tile vertices of large
-polygons back across the world (see the tiled renderer's `RasterizeTile`).
+## Install
 
-### Headless rendering & compositing (`…Renderers.Skia.Scene`)
-
-Standalone, Mapsui-free entry points that rasterise a whole dataset (or several)
-to an `SKBitmap`:
-
-- **`HeadlessVectorRenderer`** — lowers a Part 9 display list to a `VectorScene`
-  and rasterises it, auto-fitting the viewport to the scene extent (seam-aware
-  across the ±180° antimeridian via `TryGetSeamAwareWorldBounds`). Its
-  `BuildScene(...)` and `TryGetWorldBounds(...)` seams are reused by the
-  compositor to lower a sub-layer and union its bounds against a *shared*
-  viewport.
-- **`CoverageHeadlessRenderer`** — rasterises a `StyledCoverageLayer` (S-102/104/111).
-  `Render(...)` auto-fits; `DrawOnto(canvas, sharedViewport, layer, w,e,s,n)`
-  projects the grid (and arrows) into a shared viewport's pixel space so coverage
-  registers with vector layers in a composite.
-- **`CompositeLayer`** — an ordered draw unit painted against one explicit
-  `Viewport`: `VectorCompositeLayer` (draws a `VectorScene` via
-  `SkiaDisplayListRenderer.RenderOnto`) and `CoverageCompositeLayer` (draws via
-  `CoverageHeadlessRenderer.DrawOnto`), both on a transparent background so they
-  layer.
-- **`HeadlessCompositeRenderer`** — clears the background once, then paints an
-  ordered `IReadOnlyList<CompositeLayer>` against the shared viewport. The
-  cross-dataset ordering / suppression *decision* is made upstream by the S-98
-  engine in `EncDotNet.S100.Datasets.Pipelines` (`HeadlessCompositor`); this
-  renderer only paints the resolved stack.
-- **`NaturalEarthBasemap`** — the bundled, offline, public-domain **Natural
-  Earth 1:10m land** basemap (issues #295, #411, #731) as a single, Mapsui-free
-  source of land geometry. The embedded asset (`Assets/Basemap/ne_10m_land.bin`,
-  built by `tools/BuildBasemap/BuildBasemap.cs`) holds the full-resolution land
-  plus coarser levels of detail, already projected to EPSG:3857 and cut into
-  tiles. `SelectLevel` picks the coarsest level that stays within a pixel at a
-  given resolution; `GetLandPolygons` returns that level's land for a
-  rectangle; `GetLandScene` lowers the land in a `Viewport` to parchment-filled
-  (`238,232,220`) `AreaPaintOp`s. Both the headless render paths
-  (`HeadlessVectorRenderer.Render` and `CoverageHeadlessRenderer.Render` take a
-  `BasemapKind`; `HeadlessCompositor` prepends the land scene) and the
-  interactive Avalonia viewer's offline basemap consume this same asset, so
-  land is never duplicated.
-
-## Installation
-
-```sh
+```bash
 dotnet add package EncDotNet.S100.Renderers.Skia
 ```
 
-This pulls in [`EncDotNet.S100.Rendering.Scene`](../EncDotNet.S100.Rendering.Scene/README.md)
-(the scene IR) transitively. Together they let you **embed just the renderer +
-IR** — build or lower a `VectorScene` and rasterise it headlessly — without the
-batteries-included `EncDotNet.S100` facade or any Mapsui/GUI dependency. See the
-[Embedding the renderer](https://github.com/philliphoff/EncDotNet.S100/blob/main/docs/embedding-the-renderer.md)
-guide for the end-to-end path.
+If you publish for `linux-arm64`, also follow
+[Linux arm64 native dependency](#linux-arm64-native-dependency).
 
-## Stability & versioning
+## Render a display list to PNG
 
-The **stable, supported surface** of this package is the headless rendering
-entry points: `SkiaDisplayListRenderer` (incl. its `RenderOnto` overloads),
-`HeadlessVectorRenderer`, `CoverageHeadlessRenderer`, `HeadlessCompositeRenderer`,
-the `CompositeLayer` family (`VectorCompositeLayer`, `CoverageCompositeLayer`),
-`OverlayDrawOptions`, `LabelDeclutterer`, `SkiaCoverageRenderer`,
-`SkiaCoverageArrowRenderer`, and `SkiaSvgRasterizer`. Types that are `internal`
-or undocumented (e.g. colour/font helpers, diagnostics) are implementation
-detail and may change at any time.
+`HeadlessVectorRenderer.Render` lowers a display list to a `VectorScene`,
+fits the viewport to the scene's extent and rasterises it:
 
-All `EncDotNet.S100.*` packages share **one version**, derived from the release
-git tag (there is no per-package version). Versioning follows
-[Semantic Versioning](https://semver.org/): once past `1.0.0`, a breaking change
-to the stable surface above lands only in a **major** bump. While the version is
-below `1.0.0`, the surface is still settling — breaking changes may occur in a
-minor bump and will be called out in the release notes.
+```csharp
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Renderers.Skia.Scene;
+using SkiaSharp;
+
+static void RenderToPng(
+    IReadOnlyList<DrawingInstruction> instructions,
+    IFeatureGeometryProvider geometryProvider,
+    ColorPalette palette,
+    Func<string, string?>? symbolProvider,
+    Func<string, LineStyle?>? lineStyleProvider,
+    string outputPath)
+{
+    using SKBitmap bitmap = HeadlessVectorRenderer.Render(
+        instructions,
+        geometryProvider,
+        palette,
+        symbolProvider,
+        lineStyleProvider,
+        symbolScale: 1.0,
+        textScale: 1.0,
+        widthPixels: 1024,
+        heightPixels: 1024,
+        background: RgbaColor.Transparent);
+
+    using var image = SKImage.FromBitmap(bitmap);
+    using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+    File.WriteAllBytes(outputPath, data.ToArray());
+}
+```
+
+Optional parameters add an area-fill provider for pattern fills, hide
+instruction categories, draw the offline basemap underneath (`BasemapKind`), or
+render an explicit `Viewport` instead of fitting one. With an explicit viewport,
+S-100 Part 9 scale-visibility culling applies.
+
+## Main entry points
+
+### Vector scenes
+
+These types are in the `EncDotNet.S100.Renderers.Skia.Scene` namespace.
+
+- **`HeadlessVectorRenderer`**: renders a display list in one call, as above.
+  `BuildScene` and `TryGetWorldBounds` expose the lowering and bounds steps so
+  a compositor can lower a dataset and fit it into a shared viewport.
+  `TryGetSeamAwareWorldBounds` frames datasets that cross the ±180°
+  antimeridian on their true extent.
+- **`SkiaDisplayListRenderer`**: draws a `VectorScene` for a given `Viewport`.
+  It implements `IVectorSceneRenderer<SKCanvas>`. `Render` returns a new
+  bitmap; `RenderOnto` draws onto a canvas you own.
+  - Set `HonorScaleVisibility` to `false` when the viewport is fitted to the
+    data rather than chosen by the user. A fitted scale isn't the dataset's
+    compilation scale and would hide scale-limited detail.
+  - Set `EnableSeamWrap` to `false` when you draw geometry that's already
+    continuous across the antimeridian into a small viewport, such as a map
+    tile. Otherwise, off-tile vertices of large polygons wrap to the other side
+    of the world.
+  - The `RenderOnto` overload that takes `OverlayDrawOptions` draws a label
+    overlay: it can suppress text, keep labels upright under a rotated
+    viewport, and filter which point and text ops it draws.
+- **`LabelDeclutterer`**: given a `VectorScene`, returns the text ops to hide
+  so labels don't overlap symbols or higher-priority labels (S-100 Part 9). Point
+  symbols reserve their screen space first, then labels are placed in priority
+  order. The result is deterministic.
+- **`OverlayDrawOptions`**: the options for an overlay `RenderOnto` pass: cull
+  bounds, suppressed text, text rotation and screen centre, and point and text
+  draw filters.
+
+### Coverage grids
+
+- **`SkiaCoverageRenderer`**: an `ICoverageRenderer<SKBitmap>` that maps
+  coverage grid cells (S-102, S-104, S-111) to pixel colours.
+- **`SkiaCoverageArrowRenderer`**: draws oriented coverage symbols, such as
+  S-111 current arrows.
+- **`CoverageHeadlessRenderer`**: rasterises a `StyledCoverageLayer`. `Render`
+  fits the viewport to the grid; `DrawOnto` draws the grid and arrows into a
+  shared viewport so they line up with vector layers in a composite.
+
+### Composite images
+
+- **`CompositeLayer`**: one layer of a composite, drawn against a shared
+  `Viewport` on a transparent background. Use `VectorCompositeLayer` for a
+  `VectorScene` and `CoverageCompositeLayer` for a coverage layer.
+- **`HeadlessCompositeRenderer`**: clears the background once, then draws an
+  ordered list of `CompositeLayer`s against a shared viewport. It doesn't decide
+  the order or which layers to suppress. The S-98 interoperability engine
+  (`HeadlessCompositor` in `EncDotNet.S100.Datasets.Pipelines`) makes that
+  decision; this renderer draws the result.
+
+### Basemap and symbols
+
+- **`NaturalEarthBasemap`**: the bundled, offline Natural Earth 1:10m land
+  layer (public domain). The data is already projected to EPSG:3857, cut into
+  tiles, and stored at several levels of detail. `SelectLevel` picks the
+  coarsest level that stays within a pixel at a given resolution,
+  `GetLandPolygons` returns that level's land in a rectangle, and
+  `GetLandScene` returns the land in a `Viewport` as `AreaPaintOp`s filled with
+  `LandFill` (RGB 238, 232, 220). The headless renderers, `HeadlessCompositor`
+  and SoundCharts all draw land from this one asset.
+- **`SkiaSvgRasterizer`**: rasterises SVG portrayal symbols into tiled pattern
+  bitmaps.
 
 ## Linux arm64 native dependency
 
-When you publish a **`linux-arm64`** executable that uses this renderer, reference
-the self-contained SkiaSharp native in **your application project**:
+When you publish a `linux-arm64` executable that uses this renderer, reference
+the self-contained SkiaSharp native library in your application project:
 
 ```xml
 <!-- In your app's .csproj -->
@@ -165,15 +141,64 @@ the self-contained SkiaSharp native in **your application project**:
 </ItemGroup>
 ```
 
-The regular `SkiaSharp.NativeAssets.Linux` arm64 `libSkiaSharp.so` declares
-undefined `uuid_*` / `FT_Get_BDF_Property` symbols that abort once
-`fontconfig`/`freetype` load on a normal arm64 host, so any render path crashes
-with `undefined symbol: …`. The `…NoDependencies` build is self-contained and
-renders on both x64 and arm64. Native RID asset selection belongs to the final
-executable, so this library does **not** apply the swap to your build. See
+The arm64 `libSkiaSharp.so` in `SkiaSharp.NativeAssets.Linux` declares
+undefined `uuid_*` and `FT_Get_BDF_Property` symbols. Once `fontconfig` and
+`freetype` load on an ordinary arm64 host, any render crashes with
+`undefined symbol: …`. The `NoDependencies` build is self-contained and renders
+on both x64 and arm64. The executable chooses native assets for its runtime, so
+this library can't make the swap for you. See
 [issue #23](https://github.com/philliphoff/EncDotNet.S100/issues/23).
 
-Text labels render without any system font infrastructure: this package embeds an
-Open Sans face (Apache-2.0) used as a fallback when the host exposes no usable
-system font (e.g. the `NoDependencies` native on a box without `fontconfig`).
+Without `fontconfig`, the host may have no usable system font. The package
+embeds an Open Sans face (Apache-2.0) and uses it for labels in that case; see
+[Embedded render fonts](Assets/Fonts/README.md).
 
+## Stability and versioning
+
+The supported surface of this package is the headless rendering entry points:
+`SkiaDisplayListRenderer` (including its `RenderOnto` overloads),
+`HeadlessVectorRenderer`, `CoverageHeadlessRenderer`,
+`HeadlessCompositeRenderer`, the `CompositeLayer` family
+(`VectorCompositeLayer`, `CoverageCompositeLayer`), `OverlayDrawOptions`,
+`LabelDeclutterer`, `SkiaCoverageRenderer`, `SkiaCoverageArrowRenderer` and
+`SkiaSvgRasterizer`. Internal and undocumented types, such as colour and font
+helpers and diagnostics, can change at any time.
+
+All `EncDotNet.S100.*` packages share one version, taken from the release git
+tag. Versioning follows [Semantic Versioning](https://semver.org/): from `1.0.0`
+on, a breaking change to the supported surface comes only in a major version.
+Below `1.0.0`, a minor version can include breaking changes, and the release
+notes list them.
+
+## How `SkiaDisplayListRenderer` draws a scene
+
+This section is for contributors and for hosts that redraw a scene every frame,
+as the Mapsui tiled renderer does for its symbol overlay.
+
+- **Lowering.** `VectorSceneBuilder` (in `EncDotNet.S100.Rendering.Scene`)
+  applies S-100 Part 9 draw order; colour, symbol and line-style resolution;
+  millimetre-to-pixel conversion (1 px = 0.32 mm); text-anchor selection; and
+  the latitude/longitude-to-EPSG:3857 half of the projection. This renderer
+  applies the other half, EPSG:3857 to screen pixels, from the `Viewport`.
+- **Pattern fills.** When a pattern resolver is supplied, as both the headless
+  path and the Mapsui tiled renderer do, pattern fills are lowered into the
+  scene as `PatternAreaPaintOp`s. `PatternPriorityClipper` clips them so a
+  lower-priority pattern doesn't show through a higher-priority pattern or an
+  opaque solid fill.
+- **Antimeridian.** For a fitted viewport, `SeamAwareBoundsAccumulator` frames
+  datasets that cross ±180° on their true extent, and `WorldToScreen` wraps ops
+  into the shifted window at draw time. Turn this off with `EnableSeamWrap` or
+  `WorldToScreen.Create(viewport, allowSeamWrap)`.
+- **Per-frame cost.** Parsed symbol pictures are cached for the process, keyed
+  by the resolved SVG. Point and text ops whose anchor falls outside the
+  viewport plus `PointCullMarginPx` are skipped before any other work. Line ops
+  whose padded bounding box misses the cull rectangle are skipped before the
+  native draw. Text drawing reuses `SKFont` and `SKPaint` objects for the
+  length of a render; line drawing reuses one `SKPath`, one `SKPaint`, a point
+  buffer and a dash-effect cache.
+- **Rotated viewports.** `RenderOnto` takes an optional cull rectangle so a
+  caller that rotates the canvas can widen it to the rotated viewport's
+  bounding box.
+- **Missing glyphs.** `DrawText` falls back per run of text: characters the
+  primary typeface lacks are drawn with a face from
+  `SKFontManager.MatchCharacter` instead of `.notdef` boxes.

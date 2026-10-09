@@ -1,116 +1,189 @@
 # EncDotNet.S100.Mcp.Tools
 
-Foundation for a Model Context Protocol (MCP) server that exposes
-S-100 datasets to LLM-driven tooling. This project ships **the
-abstraction and the tool surface only** — no MCP protocol code, no
-viewer code, no transport. The `EncDotNet.S100.Mcp` library layers the
-wire protocol on top of it.
+`EncDotNet.S100.Mcp.Tools` contains the logic of the S-100 Model Context
+Protocol (MCP) tools: listing datasets, describing features, spatial queries,
+coverage sampling, session changes and the Library. It has no MCP protocol
+code, transport, Avalonia or viewer dependency. Reference it to call the tools
+in-process, or to build tools for another host.
+[`EncDotNet.S100.Mcp`](../EncDotNet.S100.Mcp/README.md) serves these tools over
+MCP.
 
-> **Packaging:** this library is not currently published to NuGet.
-> Consume it via project reference.
+For what each tool does from an agent's point of view, see the
+[MCP server](../../docs/mcp-server.md) guide.
 
-> **Shared pick foundation (issue #480):** the protocol-neutral catalog,
-> geometry, spec, time, and query types (`IDatasetCatalog`,
-> `LoadedDataset`, `SpecRef`, `BoundingBox`, `IdentifyFeaturesService`,
-> `SampleCoverageService`, `DescribeFeatureService`, `ToolResult<T>`, …)
-> now live in `EncDotNet.S100.Datasets.Pipelines` (namespaces
-> `…Datasets.Pipelines.{Catalog,Geometry,Spec,Time,Query}`) so they can
-> be shared with the headless `s100 identify` CLI command. The MCP tools
-> in this library are thin wrappers over those services.
+## Install
 
-## Field conventions
+This package isn't published to NuGet. Add a project reference:
 
-Every public property on every record that crosses the MCP wire —
-requests, results, payload variants, `ToolError` subtypes, and the
-shared `BoundingBox` / `SpecRef` / `TimeRange` / `DatasetId` types —
-carries a `[System.ComponentModel.Description]` attribute with a
-single-sentence statement of units, coordinate reference system, and
-semantics. The conventions (degrees decimal WGS-84, UTC ISO-8601,
-metres, m/s + knots, depths positive down, bearings 0..360 from true
-north, lower camelCase JSON keys) are documented in
-[`docs/mcp-server.md`](../../docs/mcp-server.md#field-conventions).
-
-A reflection-based test (`AnnotationContractTests` in
-`tests/EncDotNet.S100.Mcp.Tools.Tests`) enforces that every newly
-added wire-crossing property carries a non-empty `[Description]`.
-
-A `DatasetId` serialises as a **bare JSON string** in both directions
-(via `DatasetIdJsonConverter`): tools accept it as a plain-string
-argument and emit it as a plain string in results, so an id read off
-one tool's output feeds straight back into another's input. Legacy
-`{"value":"…"}` wrapped ids are still accepted on input for backward
-compatibility.
-
-## Architecture
-
-```
-┌────────────────────────────────────────────────┐
-│ EncDotNet.S100.Viewer                          │
-│  (PR MCP-2: hosts MCP server,                  │
-│   implements IDatasetCatalog)                  │
-└──────────────────────┬─────────────────────────┘
-                       │
-┌──────────────────────▼─────────────────────────┐
-│ EncDotNet.S100.Mcp                             │
-│  (PR MCP-2: MCP server + transports)           │
-└──────────────────────┬─────────────────────────┘
-                       │
-┌──────────────────────▼─────────────────────────┐
-│ EncDotNet.S100.Mcp.Tools         ← THIS PROJ   │
-│  - IDatasetCatalog + LoadedDataset             │
-│  - ToolResult<T> + ToolError                   │
-│  - ListDatasetsTool / DescribeFeatureTool /    │
-│    SampleCoverageTool                          │
-└──────────────────────┬─────────────────────────┘
-                       │
-┌──────────────────────▼─────────────────────────┐
-│ EncDotNet.S100.Core + EncDotNet.S100.Datasets.*│
-└────────────────────────────────────────────────┘
+```xml
+<ProjectReference Include="path/to/src/EncDotNet.S100.Mcp.Tools/EncDotNet.S100.Mcp.Tools.csproj" />
 ```
 
-The project intentionally has **no MCP SDK, no Avalonia, and no viewer
-reference**. The same tool surface can therefore be hosted by a CLI, a
-headless service, or a different viewer in the future.
+The shared catalog, geometry, time and query types that the tools use, such as
+`IDatasetCatalog`, `GeoQuery`, `ToolResult<T>`, `IdentifyFeaturesService` and
+`SampleCoverageService`, are in `EncDotNet.S100.Datasets.Pipelines`, in the
+`Catalog`, `Geometry`, `Spec`, `Time` and `Query` namespaces. The `s100 identify`
+command uses the same services, so its results match the tools'.
 
-## Geometry primitives
+## Call a tool
 
-Spatial inputs to tools are typed as `GeoQuery`, a discriminated union
-over the four shapes the surface needs:
+Each tool is a class with one `InvokeAsync` method that takes a request record
+and returns `Task<ToolResult<T>>`. Most take an `IDatasetCatalog`, the set of
+datasets the tools can see. `FileDatasetCatalog` builds one from dataset files:
 
-| Variant            | Carries                                | Use case                              |
-|--------------------|----------------------------------------|---------------------------------------|
-| `GeoQuery.Point`    | `GeoPoint(lat, lon)`                   | "at this position"                    |
-| `GeoQuery.Box`      | `GeoBoundingBox(s, w, n, e)`           | "within this rectangle"               |
-| `GeoQuery.Polygon`  | `GeoPolygon(closed ring of GeoPoints)` | "inside this area"                    |
-| `GeoQuery.Polyline` | `GeoPolyline(vertices, corridorWidthMeters?)` | "along this route / line"     |
+```csharp
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.Tools;
 
-Every variant projects to a coarse `GeoBoundingBox` via
-`GetBoundingBox()`. The bbox filters (`SpatialPredicates.Intersects`)
-test a polyline segment by segment: a bounding box matches when it
-touches at least one segment's box, inflated by `CorridorWidthMeters`
-(a half-width) with an equirectangular metres-to-degrees approximation.
-This is suitable for "near this route" coarse filtering and matches the
-precision of the underlying dataset bounding boxes; `precise: true` on
-`query_features` adds the exact point-to-segment distance test.
+string path = args[0];
+string spec = DatasetPipelineFactory.DetectProductSpec(path)
+    ?? throw new InvalidOperationException($"Couldn't detect the product of {path}.");
 
-All inputs are validated with `GeoQueryValidator.Validate(...)`, which
-returns:
+IDatasetCatalog catalog = FileDatasetCatalog.Build(
+    [new FileDatasetInput(new DatasetId("cell"), spec, path)]);
 
-- `null` on success;
-- `InvalidArgument` for a scalar that's out of range (lat/lon, NaN,
-  negative corridor width);
-- `GeometryInvalid` for a composite-shape failure (unclosed polygon
-  ring, polygon with < 4 points, polyline with < 2 vertices, inverted
-  bounding box, antimeridian-crossing bounding box).
+// List the loaded datasets.
+var listed = await new ListDatasetsTool(catalog).InvokeAsync(new ListDatasetsRequest());
+if (listed.TryGetValue(out var summary))
+{
+    foreach (var dataset in summary.Datasets)
+        Console.WriteLine($"{dataset.Id} ({dataset.Spec})");
+}
 
-`SpatialPredicates` exposes the planar primitives every tool reuses:
-`Intersects(box, GeoQuery)`, `Contains(box, GeoPoint)`, and
-`ContainsPoint(polygonRing, GeoPoint)` (ray-cast).
+// Identify the features at a point, most specific first.
+var picked = await new IdentifyFeaturesTool(catalog).InvokeAsync(
+    new IdentifyFeaturesRequest(Latitude: 50.77, Longitude: -1.30, RadiusMeters: 50));
+if (picked.TryGetValue(out var pick))
+{
+    foreach (var match in pick.Features)
+        Console.WriteLine($"{match.FeatureType} {match.FeatureId} ({match.Geometry}, {match.Containment})");
+}
+else if (picked.TryGetError(out var error))
+{
+    Console.WriteLine($"{error.Code}: {error.Message}");
+}
 
-The legacy `FindAtRequest(Latitude, Longitude, ...)` shape continues
-to work; tools that accept a `GeoQuery` carry it as an optional
-`Query` property that, when supplied, takes precedence over the
-scalar lat/lon fields.
+// Find S-101 lights in a box that have a name.
+var lights = await new QueryFeaturesTool(catalog).InvokeAsync(new QueryFeaturesRequest(
+    new GeoQuery.Box(new GeoBoundingBox(50.7, -1.4, 50.8, -1.2)),
+    Spec: new SpecRef("S-101", default),
+    FeatureType: "LIGHTS",
+    Attributes: [new AttributePredicate("objectName", AttributeOperator.Exists, null)]));
+if (lights.TryGetValue(out var page))
+{
+    foreach (var light in page.Features)
+        Console.WriteLine($"{light.FeatureType} {light.FeatureId}");
+}
+```
+
+`SpecRef("S-101", default)` matches every edition of S-101. Pass a
+`SpecVersion` to match one edition.
+
+The tests in
+[`tests/EncDotNet.S100.Mcp.Tools.Tests`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tests/EncDotNet.S100.Mcp.Tools.Tests)
+call every tool.
+
+## Tools
+
+### Query tools
+
+These read an `IDatasetCatalog` and never change it.
+
+| Class | MCP name | What it does |
+|---|---|---|
+| `ListDatasetsTool` | `list_datasets` | Lists the loaded datasets, with an optional product and bounding-box filter. |
+| `ListSpecsTool` | `list_specs` | Lists the product specifications and what each tool supports for them. |
+| `ListTimeStepsTool` | `list_time_steps` | Lists the time steps of a time-varying dataset. |
+| `FindAtTool` | `find_at` | Finds the datasets whose declared bounding box contains a point or intersects a `GeoQuery`. It doesn't check per-cell coverage or no-data masks. |
+| `IdentifyFeaturesTool` | `identify_features` | Picks the features at a point, ranked point before curve before area, with exact containment for areas and a radius in metres for points and curves. S-101 features include the text of the files their `fileReference` attributes name. |
+| `NearestFeaturesTool` | `nearest_features` | Ranks features by true distance to a point, including the nearest point on a segment, with the bearing. An area that contains the point has distance 0. |
+| `QueryFeaturesTool` | `query_features` | Finds the features that intersect a `GeoQuery`, with optional product, feature type, time window and attribute filters, and pages the results. Set `Precise` for full-geometry intersection instead of the bounding-box test. |
+| `CountFeaturesTool` | `count_features` | Counts features by type, for each dataset. |
+| `SearchFeaturesTool` | `search_features` | Finds features by name, in `OBJNAM`, `NOBJNM`, `objectName` and `featureName`. Substring and case-insensitive by default; set `Exact` or `CaseSensitive` to narrow it. |
+| `DescribeFeatureTool` | `describe_feature` | Describes one feature, by dataset and feature ID. |
+| `DescribeFeatureTypeTool` | `describe_feature_type` | Lists a product's feature types, or one type's attributes and allowed values, from the bundled feature catalogue. It needs no catalog or loaded dataset. |
+| `SampleCoverageTool` | `sample_coverage` | Samples an S-102, S-104 or S-111 coverage at a point, at one time or over a time window. |
+| `SampleCoverageAlongTool` | `sample_coverage_along` | Samples a coverage at each vertex of a polyline. A vertex with no value has an error instead of failing the whole call. |
+
+The vector tools (`identify_features`, `nearest_features`, `query_features`,
+`count_features` and `search_features`) work on every vector product: S-101,
+S-401, S-57 (through its S-101 translation) and the GML products. For S-101,
+S-401 and S-57, the feature type is the acronym, such as `LIGHTS`, and the
+feature ID is the record ID.
+
+`query_features` attribute predicates are ANDed together and compare a
+feature's simple attributes, with the attribute code matched without regard to
+case. The operators are `Exists`, `NotExists`, `Eq`, `Ne`, `Contains`,
+`StartsWith`, `Gt`, `Ge`, `Lt` and `Le`. The numeric operators compare both
+sides as numbers. Over MCP, the `attributes` parameter takes either a map of
+code to value, which tests equality, or an array of
+`{attribute, op, value}` objects.
+
+### Session tools
+
+These are in the `Mutable/` folder. Each takes a capability that the host
+supplies, such as `IPresentationController`, `ITimeController`,
+`IViewportController`, `IImageRenderer` or `IMutableDatasetCatalog`:
+`OpenDatasetTool`, `CloseDatasetTool`, `CloseAllDatasetsTool`,
+`SetPaletteTool`, `SetDisplayCategoryTool`, `SetDisplayModeTool`,
+`SetTimeStepTool`, `SetViewportTool` and `RenderToImageTool`.
+SoundCharts and `s100 mcp serve` both run them. To build them as MCP tools, use
+`S100MutableTools` in [`EncDotNet.S100.Mcp`](../EncDotNet.S100.Mcp/README.md#add-host-tools).
+
+### Library tools
+
+These are in the `Library/` folder and read or change a Library through
+`ILibraryReader` and `ILibraryEditor`:
+
+- Read: `ListLibrarySourcesTool`, `QueryLibraryItemsTool`,
+  `DescribeLibraryItemTool`, `ListKnownSourcesTool`, `ListSecomServicesTool`.
+- Change: `AddLibrarySourceTool`, `RefreshLibrarySourceTool`,
+  `LibraryActionTool`, `RemoveLibrarySourceTool`,
+  `SetLibrarySourceOptionsTool`, `AwaitLibraryIdleTool`,
+  `SetSecomIdentityTool`.
+
+`HeadlessLibrary` implements both interfaces over the Library core, for a host
+without view models.
+
+### Viewer-only tools
+
+Some tools need the live viewer UI, such as `pick_features`,
+`capture_app_screenshot` and the panel, route and render-statistics tools. They
+live in SoundCharts, not here. See
+[Tools only SoundCharts has](../../docs/mcp-server.md#tools-only-soundcharts-has).
+
+## Results and errors
+
+`ToolResult<T>` holds either a value or a `ToolError`. Use `TryGetValue` and
+`TryGetError` to read it. Tools don't throw to report a failure; every failure
+is a typed `ToolError` with a stable `Code` and a `Message`.
+
+### Errors
+
+| Code | When |
+|---|---|
+| `invalid_argument` | A request property failed validation, such as a latitude outside −90 to 90. |
+| `geometry_invalid` | A `GeoQuery` shape is invalid, such as an unclosed polygon ring or a bounding box that crosses the antimeridian. |
+| `dataset_not_found` | The dataset ID isn't in the catalog. |
+| `dataset_closed_during_query` | The dataset was unloaded while the tool read it. You can retry once it's reopened. |
+| `dataset_load_failed` | A recognized path produced no dataset, such as an empty or unsupported exchange set. |
+| `feature_not_found` | The feature ID isn't in the dataset. |
+| `feature_type_not_found` | The feature type isn't in the product's feature catalogue. |
+| `feature_catalogue_not_available` | There's no bundled feature catalogue for the product. |
+| `spec_not_supported_for_tool` | The tool doesn't support the dataset's product. |
+| `not_supported_yet` | The tool supports the product, but not this dataset's shape, such as an S-104 data coding format other than 2. |
+| `no_dataset_covers_point` | No loaded dataset's bounds contain the point. |
+| `out_of_bounds` | The point is outside every loaded dataset of the requested product. |
+| `no_data_at_point` | The grid cell at the point holds the product's no-data value. |
+| `time_out_of_range` | The requested time is outside the time range of every dataset that covers the point. |
+| `host_not_ready` | A session tool's capability isn't attached yet. You can retry once the host is ready. |
+| `library_source_not_found` | No Library collection or source has the ID. |
+| `library_item_not_found` | No Library item has the ID. |
+| `library_change_rejected` | A Library change can't be done as asked; the message says why. |
 
 ## `IDatasetCatalog`
 
@@ -122,346 +195,96 @@ public interface IDatasetCatalog
 }
 ```
 
-**Why a property, not a method?** "What is loaded right now" reads more
-naturally as state than as an operation. The catalog implementation
-publishes a fresh `IReadOnlyList<LoadedDataset>` on every change.
-Consumers capture the reference once and use it for the duration of an
-operation without taking any lock.
+A host implements `IDatasetCatalog` to expose its loaded datasets.
+`FileDatasetCatalog` is a fixed catalog built from files, which `s100 identify`
+uses; the viewer has its own live implementation.
 
-**Why `LoadedDatasetData` is a discriminated union.** Each spec
-contributes either a typed DataModel (vector products — S-122, S-124,
-S-125, S-127, S-128, S-129, S-201, S-411, S-421) or a coverage source
-(HDF5-encoded coverage products — S-102, S-104, S-111). Tool code
-pattern-matches on the variants:
+- **`Datasets` is a snapshot.** The catalog publishes a new list on every
+  change. A tool reads the property once and uses that list for the whole call,
+  without locking.
+- **`LoadedDatasetData` is a closed set of variants.** Vector products carry
+  their data model, such as `S101DatasetData` or `S124DatasetData`. Coverage
+  products carry a coverage source, such as `S102CoverageData`, or a station
+  series, such as `S104StationSeriesData`. Tools pattern-match on the variant.
+- **Coverage handles belong to the host.** A dataset can be unloaded between
+  the snapshot and the read. Tools catch `ObjectDisposedException` and return
+  `dataset_closed_during_query`. The host must publish the new snapshot before
+  it disposes the handle.
 
-```csharp
-return dataset.Data switch
-{
-    S124DatasetData s124 => DescribeS124(s124.Model, ...),
-    S102CoverageData cov => SampleS102(cov.Source, ...),
-    _ => ToolResult<T>.Err(new SpecNotSupportedForTool(dataset.Spec, name)),
-};
+## Spatial queries
+
+Tools that take an area take a `GeoQuery`, which has four variants:
+
+| Variant | Holds | Use it for |
+|---|---|---|
+| `GeoQuery.Point` | `GeoPoint(Latitude, Longitude)` | At a position. |
+| `GeoQuery.Box` | `GeoBoundingBox(SouthLatitude, WestLongitude, NorthLatitude, EastLongitude)` | Within a rectangle. |
+| `GeoQuery.Polygon` | `GeoPolygon(Ring)`, a closed ring of `GeoPoint` | Inside an area. |
+| `GeoQuery.Polyline` | `GeoPolyline(Vertices, CorridorWidthMeters)` | Along a route or line. |
+
+Over MCP, the `query` (or `polyline`) parameter takes the same shapes as a JSON
+object. A JSON string that contains the object also works.
+
+```json
+{"kind": "point",    "latitude": 47.6, "longitude": -122.3}
+{"kind": "box",      "south": 47, "west": -123, "north": 48, "east": -122}
+{"kind": "polygon",  "ring": [[47, -123], [48, -123], [48, -122], [47, -123]]}
+{"kind": "polyline", "vertices": [[47.6, -122.3], [47.7, -122.4]], "corridorWidthMeters": 1000}
 ```
 
-**Best-effort coverage handles.** Coverage variants carry live handles
-whose lifetime is owned by the host (e.g. the viewer). A dataset can be
-unloaded between the catalog snapshot and the actual read. Tool
-implementations wrap reads in `try / catch (ObjectDisposedException)`
-and surface `DatasetClosedDuringQuery`. The host is responsible for
-publishing the next snapshot before disposing the handle.
+- **Coarse matching.** Each variant has a bounding box, from
+  `GetBoundingBox()`. `SpatialPredicates.Intersects` tests a polyline one
+  segment at a time: a box matches when it touches a segment's box, widened by
+  `CorridorWidthMeters` on each side with an equirectangular approximation.
+  This matches the precision of the dataset bounding boxes. `Precise` on
+  `query_features` adds the exact geometry test.
+- **Validation.** `GeoQueryValidator.Validate` returns `null` for a valid
+  query, `invalid_argument` for an out-of-range or `NaN` value or a negative
+  corridor width, and `geometry_invalid` for a polygon ring that isn't closed
+  or has fewer than 4 points, a polyline with fewer than 2 vertices, or an
+  inverted or antimeridian-crossing bounding box.
+- **Predicates.** `SpatialPredicates` also has `Contains(box, point)` and
+  `ContainsPoint(ring, point)`, a ray-cast point-in-polygon test.
+- **Point requests.** Requests such as `FindAtRequest` take `Latitude` and
+  `Longitude`, and an optional `Query` that replaces them when you set it.
 
-## Tool contract
+## Feature describers
 
-Every tool exposes a single async method that returns
-`Task<ToolResult<T>>` where `T` is the result record:
+`describe_feature` describes a feature through a describer for its product,
+registered in `FeatureDescriberRegistry`:
 
-```csharp
-public sealed class ListDatasetsTool
-{
-    public ListDatasetsTool(IDatasetCatalog catalog);
-    public Task<ToolResult<ListDatasetsResult>> InvokeAsync(
-        ListDatasetsRequest request,
-        CancellationToken cancellationToken = default);
-}
-```
+| Product | Describer | Feature ID |
+|---|---|---|
+| S-101, S-401, S-57 | `S101FeatureDescriber` | The record ID (RCID), such as `42`. The result includes the geometry: primitive, bounding box and coordinates. Information associations are followed, and the linked information type's attributes are included. |
+| S-102 | `S102FeatureDescriber` | The coverage path `BathymetryCoverage.01`. `BathymetryCoverage` also works. |
+| S-104 | `S104FeatureDescriber` | The coverage path `WaterLevel[.NN][.Group_KKK]`, or a station identifier. |
+| S-111 | `S111FeatureDescriber` | The coverage path `SurfaceCurrent[.NN][.Group_KKK]`, or a station identifier. |
+| S-124 | `S124FeatureDescriber` | The warning feature's `gml:id`. |
+| S-129 | `S129FeatureDescriber` | The `gml:id` of the plan metadata, plan area, non-navigable or almost non-navigable area, or control point feature. |
+| S-122, S-125, S-127, S-128, S-131, S-201, S-411, S-421 | `GmlFeatureDescriber` | The feature's `gml:id`. |
 
-`ToolResult<T>` is a small local discriminated union (`OkResult` /
-`ErrResult`) — there is no NuGet dependency on
-`OneOf` / `LanguageExt`. Tools never throw into the calling code; every
-failure case is reified as a typed `ToolError`. This keeps the eventual
-MCP-error wire format flexible while giving in-process callers a typed
-surface to match on.
+- For S-102, S-104 and S-111, the result describes the coverage instance:
+  origin, spacing, grid size, CRS, bounding box, no-data value, value ranges,
+  and the number of time steps and stations. Coverage instances don't reference
+  each other, so `References` is always empty.
+- `GmlFeatureDescriber` returns the feature's attributes, but its references
+  are always an empty list. Each of those products models references with its
+  own types, which aren't resolved yet.
+- A product without a describer returns `spec_not_supported_for_tool`.
 
-The five error variants implemented in this PR:
+## Field conventions
 
-| Code                          | When                                                                  |
-|-------------------------------|-----------------------------------------------------------------------|
-| `dataset_not_found`           | The requested `DatasetId` is not in the snapshot.                     |
-| `dataset_closed_during_query` | The coverage handle threw `ObjectDisposedException` mid-read.         |
-| `no_dataset_covers_point`     | No loaded dataset's bounds contain the requested lat/lon.             |
-| `feature_not_found`           | The named feature is not present in the named dataset.                |
-| `spec_not_supported_for_tool` | The tool does not (yet) support the requested spec.                   |
-| `invalid_argument`            | A request property failed validation (e.g. latitude / longitude out of WGS-84 range). |
-| `geometry_invalid`            | A composite-shape input failed validation (unclosed polygon ring, antimeridian-crossing bbox, etc.). |
+Every public property that crosses the MCP wire, on requests, results, payload
+variants, `ToolError` types and the shared types such as `BoundingBox`,
+`SpecRef`, `TimeRange` and `DatasetId`, has a
+`[System.ComponentModel.Description]` attribute. Its one sentence states the
+units, coordinate reference system and meaning. `AnnotationContractTests` in
+`tests/EncDotNet.S100.Mcp.Tools.Tests` fails when a new property doesn't have
+one. For the conventions themselves, such as WGS-84 decimal degrees, UTC
+ISO-8601 times and depths positive down, see
+[Field conventions](../../docs/mcp-server.md#field-conventions).
 
-## Spec strategy pattern
-
-`DescribeFeatureTool` dispatches per-spec through
-`FeatureDescriberRegistry` keyed on `SpecRef.Name`. Each describer
-implements an internal `ISpecFeatureDescriber` strategy.
-
-## Host-injected tools
-
-The catalog tools above are catalog-only and live in this assembly. A
-host (e.g. the Avalonia viewer) may inject additional tools at
-runtime via `S100McpServerOptions.AdditionalTools` in
-`EncDotNet.S100.Mcp`. The viewer uses this extension point to expose
-`render_to_image`, which captures the live map as a PNG — that tool
-necessarily depends on Mapsui / Skia and therefore deliberately does
-not live here. When `width`/`height` are omitted it sizes the capture
-to the live viewport (echoing `viewportWidth`/`viewportHeight` on every
-capture) so the snapshot matches the user's view without letterboxing.
-The viewer also injects `pick_features`, the
-feature-aware inverse of `render_to_image`: it projects a pixel
-through the live navigator's web-mercator viewport to a geographic
-point and then delegates to the same ranking as `identify_features`.
-When the pixel comes from a `render_to_image` capture, the caller
-passes that capture's `imageWidth`/`imageHeight` (conveniently, the
-`viewportWidth`/`viewportHeight` the capture echoed) so the pick uses
-the snapshot's exact fit geometry rather than the live viewport's,
-making it a faithful inverse at any image size. Because it needs the
-live navigator, it too lives in the viewer rather than here. See
-`docs/mcp-server.md` for details.
-
-The registry currently wires six describers:
-
-| Spec   | Describer                  | Feature id convention                                                                                       |
-|--------|----------------------------|-------------------------------------------------------------------------------------------------------------|
-| S-101  | `S101FeatureDescriber`     | Record identifier (RCID), e.g. `42`. Result carries a `geometry` block (primitive, bounding box, resolved coordinates). |
-| S-102  | `S102FeatureDescriber`     | Coverage path `BathymetryCoverage[.01]` (bare `BathymetryCoverage` accepted).                               |
-| S-104  | `S104FeatureDescriber`     | Coverage path `WaterLevel[.NN][.Group_KKK]` (dcf2 grid / dcf8 station-series), or a bare station identifier. |
-| S-111  | `S111FeatureDescriber`     | Coverage path `SurfaceCurrent[.NN][.Group_KKK]` (dcf2 / dcf8), or a bare station identifier.                 |
-| S-124  | `S124FeatureDescriber`     | GML `gml:id` of the warning feature.                                                                        |
-| S-129  | `S129FeatureDescriber`     | GML `gml:id` of the plan-metadata, plan-area, (almost-)non-navigable-area, or control-point feature.        |
-
-For the coverage describers (S-102/S-104/S-111) the result returns
-instance-level metadata (origin, spacing, grid dimensions, CRS,
-bounding box, NoData value, value ranges, time-step counts, station
-counts, ...) — coverage instances do not xlink to each other, so
-`References` is always empty. Specs without a registered describer
-return `SpecNotSupportedForTool`.
-
-## Usage
-
-```csharp
-using EncDotNet.S100.Mcp.Tools;
-using EncDotNet.S100.Datasets.Pipelines.Catalog;
-using EncDotNet.S100.Datasets.Pipelines.Geometry;
-
-// A host (e.g. the viewer) implements IDatasetCatalog and publishes
-// LoadedDataset instances whenever its loaded set changes.
-IDatasetCatalog catalog = host.Catalog;
-
-var list = new ListDatasetsTool(catalog);
-var describe = new DescribeFeatureTool(catalog);
-var sample = new SampleCoverageTool(catalog);
-var sampleAlong = new SampleCoverageAlongTool(catalog);
-var findAt = new FindAtTool(catalog);
-var identifyFeatures = new IdentifyFeaturesTool(catalog);
-var nearestFeatures = new NearestFeaturesTool(catalog);
-var queryFeatures = new QueryFeaturesTool(catalog);
-var countFeatures = new CountFeaturesTool(catalog);
-var searchFeatures = new SearchFeaturesTool(catalog);
-
-var listed = await list.InvokeAsync(new ListDatasetsRequest());
-if (listed.TryGetValue(out var summary))
-{
-    foreach (var ds in summary.Datasets)
-    {
-        Console.WriteLine($"{ds.Id} ({ds.Spec})");
-    }
-}
-
-// Which loaded datasets cover this point? (bbox-only — does not check
-// per-cell coverage or NoData masks.)
-var hits = await findAt.InvokeAsync(new FindAtRequest(
-    Latitude: 50.77,
-    Longitude: -1.30));
-if (hits.TryGetValue(out var hit))
-{
-    foreach (var ds in hit.Datasets)
-    {
-        Console.WriteLine($"{ds.Id} ({ds.Spec}) covers the point.");
-    }
-}
-
-// Which *features* are under this point? identify_features is the
-// feature-aware cursor-pick: it ranks matches most-specific first
-// (point before curve before area; smaller / nearer wins), uses exact
-// point-in-polygon containment for areas, and a metre radius for
-// point / curve features. Works across every vector spec incl. S-101.
-var picked = await identifyFeatures.InvokeAsync(new IdentifyFeaturesRequest(
-    Latitude: 50.77,
-    Longitude: -1.30,
-    RadiusMeters: 50));
-if (picked.TryGetValue(out var pick))
-{
-    foreach (var m in pick.Features)
-    {
-        Console.WriteLine($"{m.Spec} {m.FeatureType} {m.FeatureId} ({m.Geometry}, {m.Containment}).");
-        // S-101 features may reference external text files (fileReference /
-        // TXTDSC / NTXTDS); they are resolved from the exchange set so
-        // headless consumers see the same text the viewer shows.
-        foreach (var t in m.ReferencedTexts)
-        {
-            Console.WriteLine($"  referenced: {t.FileName} -> {t.Text}");
-        }
-    }
-}
-
-// What is the nearest feature to my position, and am I inside any area?
-// nearest_features ranks by TRUE geometric distance (nearest point on a
-// segment, not just the nearest vertex). An area containing the point is
-// returned at distance 0 with containment "inside"; everything else
-// reports the distance and the bearing toward its nearest point.
-var nearest = await nearestFeatures.InvokeAsync(new NearestFeaturesRequest(
-    Latitude: 50.77,
-    Longitude: -1.30,
-    FeatureType: null,
-    MaxDistanceMeters: 5000,
-    Limit: 5));
-if (nearest.TryGetValue(out var near))
-{
-    foreach (var m in near.Features)
-    {
-        Console.WriteLine($"{m.FeatureType} {m.FeatureId}: {m.DistanceMeters:F0} m ({m.Containment}).");
-    }
-}
-
-var depth = await sample.InvokeAsync(new SampleCoverageRequest(
-    new SpecRef("S-102", new SpecVersion(2, 1, 0)),
-    Latitude: 47.6,
-    Longitude: -122.3));
-
-if (depth.TryGetValue(out var ok) && ok.Value is DepthSample d)
-{
-    Console.WriteLine($"Depth at point: {d.DepthMeters} m");
-}
-
-// What features overlap a bounding box? query_features works across
-// every GML-encoded spec (S-122/S-124/S-125/S-127/S-128/S-129/S-131/
-// S-201/S-411/S-421) via the shared IS100Feature abstraction, plus the
-// ISO 8211-encoded S-101 and S-401 (whose pipeline Feature records implement
-// IS100Feature directly — its FeatureType filter matches the
-// feature-type acronym and FeatureId is the decimal RCID). Pass any
-// GeoQuery variant — point, bbox, polygon, or polyline (with optional
-// corridor width). Results are paginated.
-var features = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
-    new GeoQuery.Box(new GeoBoundingBox(47.5, -122.5, 47.7, -122.2)),
-    Spec: new SpecRef("S-124", default),       // any S-124 edition
-    FeatureType: "NavwarnPart",
-    PageSize: 50));
-if (features.TryGetValue(out var page))
-{
-    foreach (var match in page.Features)
-    {
-        Console.WriteLine($"{match.Spec} {match.FeatureType} {match.FeatureId}");
-    }
-}
-
-// Filter on attribute values with the optional Attributes predicate set.
-// Predicates combine with logical AND and are evaluated against each
-// feature's simple attributes (case-insensitive key lookup). Operators:
-// Exists, NotExists, Eq, Ne, Contains, StartsWith, Gt, Ge, Lt, Le
-// (numeric operators parse both sides as invariant doubles). Over the
-// wire the `attributes` parameter accepts either a code→value map
-// (all equality) or an array of explicit {attribute, op, value} objects.
-var deepLights = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
-    new GeoQuery.Box(new GeoBoundingBox(47.5, -122.5, 47.7, -122.2)),
-    Spec: new SpecRef("S-101", default),
-    FeatureType: "LIGHTS",
-    Attributes:
-    [
-        new AttributePredicate("categoryOfLight", AttributeOperator.Eq, "8"),
-        new AttributePredicate("objectName", AttributeOperator.Exists, null),
-    ]));
-
-// Set Precise for true full-geometry intersection instead of the default
-// bounding-box test: point-in-polygon containment for areas (interior-ring
-// holes honoured) and genuine segment crossing — e.g. "which features does
-// this route leg actually cross?". A leg endpoint inside an area, or a leg
-// that crosses an area boundary or a curve, counts.
-var crossed = await queryFeatures.InvokeAsync(new QueryFeaturesRequest(
-    new GeoQuery.Polyline(new GeoPolyline(
-    [
-        new GeoPoint(47.60, -122.40),
-        new GeoPoint(47.62, -122.30),
-    ])),
-    Precise: true));
-
-// What kinds of features, and how many, are in a cell? count_features
-// answers the discovery question describe_feature can't (it needs an id
-// you don't yet have). Works across every vector spec incl. S-101.
-// Optionally scope to one dataset / spec / spatial envelope.
-var counts = await countFeatures.InvokeAsync(new CountFeaturesRequest(
-    Spec: new SpecRef("S-101", default)));
-if (counts.TryGetValue(out var tally))
-{
-    foreach (var t in tally.Types)
-    {
-        Console.WriteLine($"{t.DatasetId} {t.FeatureType}: {t.Count} ({t.WithGeometry} located)");
-    }
-}
-
-// Where is the feature called "X"? search_features answers the
-// name-oriented question that query_features (geometry-first) and
-// describe_feature (needs an id) can't. It searches every place a name
-// can live — the simple OBJNAM / NOBJNM / objectName attributes (incl.
-// S-101) and the complex featureName.name / .displayName sub-attributes
-// (GML specs). Case-insensitive substring by default; set Exact for
-// whole-name equality, CaseSensitive for an exact-case match. Optional
-// spec / dataset / spatial scope.
-var byName = await searchFeatures.InvokeAsync(new SearchFeaturesRequest(
-    "Nab Tower",
-    Spec: new SpecRef("S-101", default)));
-if (byName.TryGetValue(out var hits))
-{
-    foreach (var hit in hits.Features)
-    {
-        Console.WriteLine($"{hit.FeatureType} {hit.FeatureId}: {hit.MatchedName} (via {hit.MatchedAttribute})");
-    }
-}
-
-// What attributes is a feature type allowed to have, and what are the
-// legal values of its enumerations? describe_feature_type introspects a
-// spec's bundled Feature Catalogue (no loaded dataset required) — the
-// schema-discovery counterpart to count_features. Omit FeatureType to
-// list every type; supply one for full attribute detail.
-var schema = new DescribeFeatureTypeTool();
-var buoy = await schema.InvokeAsync(new DescribeFeatureTypeRequest(
-    new SpecRef("S-101", default),
-    FeatureType: "BuoyLateral"));
-if (buoy.TryGetValue(out var typeInfo))
-{
-    foreach (var attr in typeInfo.FeatureTypes[0].Attributes)
-    {
-        var card = attr.Mandatory ? "required" : "optional";
-        Console.WriteLine($"{attr.Code} ({attr.ValueType}, {card}): {attr.ListedValues.Count} listed values");
-    }
-}
-
-// Sample a coverage product at every vertex of a polyline. Useful for
-// route-level questions like "minimum depth along this leg" or "max
-// current speed along this transit". Per-vertex misses (OutOfBounds /
-// NoDataAtPoint) surface as null entries rather than aborting the
-// whole call, so a partial route still returns usable data.
-var route = new GeoPolyline(
-[
-    new GeoPoint(47.60, -122.35),
-    new GeoPoint(47.62, -122.33),
-    new GeoPoint(47.64, -122.31),
-]);
-var depths = await sampleAlong.InvokeAsync(new SampleCoverageAlongRequest(
-    new SpecRef("S-102", new SpecVersion(2, 1, 0)),
-    route));
-if (depths.TryGetValue(out var series))
-{
-    foreach (var s in series.Samples)
-    {
-        var d = s.Result?.Value as DepthSample;
-        Console.WriteLine($"v{s.VertexIndex} depth={d?.DepthMeters}m");
-    }
-}
-```
-
-## Out of scope (PR MCP-1)
-
-- MCP protocol / server / transports — PR MCP-2.
-- Viewer changes — PR MCP-2.
-- Pan/zoom/screenshot tools.
-- Search / NL tools.
-- Write-back tools.
-- Comprehensive xlink reference resolution for backfilled describers
-  (S-122/S-125/S-127/S-128/S-131/S-201/S-411/S-421 return their
-  feature attributes via the generic `GmlFeatureDescriber`, but
-  references arrive as an empty list pending per-spec resolution).
+A `DatasetId` is a plain JSON string in both directions, through
+`DatasetIdJsonConverter`, so an ID from one tool's result can go straight into
+another tool's request. A wrapped `{"value":"…"}` ID is still accepted as
+input.

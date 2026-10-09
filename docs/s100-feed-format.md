@@ -1,28 +1,25 @@
 # S-100 feed format
 
-## Why it exists
+An S-100 feed is EncDotNet.S100's own JSON format for publishing datasets to
+other computers. `s100 feed serve` serves a feed over HTTP, and
+`s100 feed export` writes one as static files for any web host. SoundCharts on
+another computer adds the feed's URL to its Library and lists the datasets
+there.
 
-An **S-100 feed** is this project's own, simple JSON format for publishing
-datasets to other machines (issue #680). A feed can be served over HTTP by
-`s100 feed serve`, or written as static files by `s100 feed export` for any web
-host. Another machine's viewer then adds the feed's URL as an online catalogue
-in its Library.
+A feed carries the metadata the Library indexes locally, such as coverage
+polygons, bounds, editions, updates, display scales and usage bands, so a
+reader can show coverage before downloading anything. The Library reads
+standard catalogues too, but none of them fit this job:
 
-The Library can already read standard catalogues, but none of them fit this job:
+- An S-100 `CATALOG.XML` describes only S-100 datasets, not S-57 cells or loose
+  datasets.
+- S-128 is heavyweight and has no download URLs.
+- NOAA's product catalogue is specific to NOAA ENCs.
 
-- **S-100 `CATALOG.XML`** describes only S-100 datasets. It cannot describe
-  S-57 cells or loose datasets.
-- **S-128** is heavyweight and carries no download URLs.
-- **NOAA's product catalogue** is specific to NOAA ENCs.
+## Example
 
-A feed carries the same metadata the Library indexes locally: coverage
-polygons, bounds, editions, updates, display scales and usage bands. So a
-reader can show coverage before downloading anything.
-
-## Document
-
-A feed is one JSON document, conventionally named `feed.json`. It is written
-compact; it is shown indented here:
+A feed is one JSON document, named `feed.json` by convention. It's written
+compact; here it's indented:
 
 ```json
 {
@@ -75,84 +72,121 @@ compact; it is shown indented here:
 }
 ```
 
-- **Header fields:**
-  - `format` must be `encdotnet-s100-feed`.
-  - `machine` (optional) is the publishing computer's name. `s100 feed serve`
-    sets it, and the viewer names a shared feed after it.
-  - A reader rejects a `version` newer than it knows.
-- **`fingerprint`:** changes whenever the published data changes. A server
-  uses it as the HTTP `ETag`, so readers can revalidate with conditional
-  requests.
-- **Items:** have the shape of the Library index (`CollectionItem`). Unknown
-  properties are ignored.
-- **What is published:** only items whose files are present on the publishing
-  machine.
-- **Coverage:** S-100 items can carry `coverage` polygons as well as `bounds`.
-  In `bounds`, `crossesAntimeridian` and `longitudeSpan` are derived and ignored
-  on reading. A bounding box that crosses ±180° has `west` greater than `east`.
-- **Item `location`:** always `remote`, with these fields:
-  - `uri` is the item's download, **relative to the feed's URL**, so the
-    same feed works behind any host, port or static web host.
-  - `package` is the item's opaque id, a hash of its key. It never reveals,
-    or reaches, a path on the publisher.
-  - `layout` says where the item's files lie inside the download.
-  - `sizeBytes` is the total size of those files, uncompressed.
-  - `lastModified` is when the newest of them changed.
+## Feed properties
+
+| Property | Required | Description |
+|---|---|---|
+| `format` | Yes | Always `encdotnet-s100-feed`. A reader rejects any other value. |
+| `version` | Yes | `1`. A reader rejects a version newer than it knows. |
+| `title` | No | The feed's title, such as the published folder's name. |
+| `generatedAt` | Yes | When the feed was generated, ISO 8601. |
+| `fingerprint` | No | Changes whenever the published data changes. `s100 feed serve` uses it as the HTTP `ETag`, so readers can revalidate with conditional requests. |
+| `machine` | No | The publishing computer's name. `s100 feed serve` sets it, and SoundCharts names a shared feed after it. |
+| `items` | Yes | The published datasets. See [Item properties](#item-properties). |
+
+A feed lists only items whose files are present on the publishing computer.
+
+## Item properties
+
+Items have the shape of a Library index entry (`CollectionItem`). Unknown
+properties are ignored.
+
+| Property | Description |
+|---|---|
+| `key` | The item's identifier, unique within the feed: an S-57 cell name, an exchange-set-relative dataset path, or a loose file's relative path. |
+| `productSpec` | The product specification, such as `S-57` or `S-101`. |
+| `productSpecVersion` | The product specification's edition, when known, such as `2.0.0`. |
+| `name` | The dataset's name, such as the cell name. |
+| `title` | A descriptive title. |
+| `groupKey` | The exchange set the item belongs to, or absent for a loose dataset. |
+| `edition`, `update` | The edition number, and the number of the latest update. |
+| `issueDate`, `updateApplicationDate` | The issue date of the latest file, and the edition's update application date. `YYYY-MM-DD`. |
+| `compilationScale`, `minimumDisplayScale`, `maximumDisplayScale` | Scale denominators: the compilation scale (S-57 `CSCL`), and the coarsest and finest scales the dataset is meant to be displayed at. |
+| `usageBand` | The ENC usage band, 1 to 6, from an S-57 cell name. |
+| `status` | `unknown`, `active`, `superseded`, `cancelled` or `planned`. |
+| `bounds` | The bounding box, or absent when the publisher couldn't read it (the item is then listed but not drawn): `south`, `west`, `north`, `east`. A box that crosses ±180° has `west` greater than `east`. `crossesAntimeridian` and `longitudeSpan` are derived and ignored on reading. |
+| `coverage` | S-100 items can also carry coverage polygons. |
+| `location` | Where to download the item. See [Item location](#item-location). |
+| `properties` | Other facts as string pairs, such as `producingAgency`. |
+
+## Item location
+
+An item's `location` in a feed always has `kind` `remote`:
+
+| Property | Description |
+|---|---|
+| `uri` | The item's download, relative to the feed's URL, so the same feed works on any host, port or static web host. |
+| `package` | The item's opaque id, a hash of its key. It never reveals or leads to a path on the publishing computer. |
+| `layout` | Where the item's files are inside the download: `relativePath` (the base file), `updateRelativePaths` (update files, in order) and `catalogueRelativePath` (the exchange-set catalogue, or absent for a loose dataset). |
+| `sizeBytes` | The total uncompressed size of the item's files. |
+| `lastModified` | When the newest of the item's files changed. |
 
 ## Downloads
 
-Each item downloads as a zip (`items/<id>.zip`). The zip holds the item's
+Each item downloads as a zip, `items/<id>.zip`. The zip holds the item's
 exchange-set catalogue, base file and updates, at their paths relative to the
-item's root. Files are never outside that root.
+item's root. No file is outside that root.
 
-The reader extracts the zip into a folder of its own and opens the dataset at
-`layout.relativePath`, with the catalogue and updates beside it. That is the
-same layout it would have on the publishing machine.
+A reader extracts the zip into a folder of its own and opens the dataset at
+`layout.relativePath`, with the catalogue and updates beside it, as they were on
+the publishing computer.
 
-## Serving a feed
+## Serve a feed
 
 `s100 feed serve <path>` serves `feed.json` and the item zips over HTTP:
 
-```
+```bash
 s100 feed serve charts/ --host 0.0.0.0
 ```
 
-- **Scope:** by default the server listens on localhost only. On another
-  address it adds a random access token as the first path segment
-  (`http://<host>:8100/<token>/feed.json`). Item URLs are relative, so they
-  carry the token too.
-- **Caching:** the feed's `ETag` is derived from its fingerprint, so an
-  unchanged folder answers conditional requests with `304 Not Modified`.
+- **Access.** By default the server listens on this computer only. On any
+  other address it adds a random access token as the first path segment, as in
+  `http://<host>:8100/<token>/feed.json`. Item URLs are relative, so they carry
+  the token too.
+- **Caching.** The feed's `ETag` comes from its fingerprint, so an unchanged
+  folder answers conditional requests with `304 Not Modified`.
 
-See the [CLI reference](../tools/EncDotNet.S100.Cli/README.md) for the options.
+For the options, see [`feed serve`](cli.md#feed-serve).
 
-## Exporting a static feed
+## Export a static feed
 
-`s100 feed export <path> --out <directory>` writes `feed.json` and the item
-zips as files, for any static web host:
+`s100 feed export <path> --out <directory>` writes `feed.json` and the item zips
+as files, for any static web host:
 
-```
+```bash
 s100 feed export charts/ --out site/charts
 ```
 
-- **Incremental:** re-exporting rewrites only the items whose files changed.
-- **Always consistent:** `feed.json` is written last, so it always lists zips
-  that exist.
-- **Caching:** a static host supplies its own caching headers, such as `ETag`
-  or `Last-Modified`. Readers revalidate with those.
+- **Incremental.** Exporting again rewrites only the items whose files
+  changed.
+- **Consistent.** `feed.json` is written last, so it only lists zips that
+  exist.
+- **Caching.** The web host supplies its own caching headers, such as `ETag` or
+  `Last-Modified`, and readers revalidate with those.
 
-## Using a feed in the viewer
+For the options, see [`feed export`](cli.md#feed-export).
 
-In the viewer, open **Library → Online Catalogue**, choose **Add a catalogue by
-URL** and add the feed's URL with **Check & add**. The viewer recognises the feed from its `format` property and
-lets you choose which products to include.
+## Use a feed in SoundCharts
 
-- **On the map:** the feed's items appear with their coverage.
-- **Downloads:** each download goes to `downloads/feeds/<host>-<port>-<hash>/`.
-- **Revalidation:** the feed is revalidated at most once a minute, with a
-  conditional request.
+1. In the Library, choose **Add** > **Connect to a shared feed…**.
+2. Paste the feed's URL into **Feed URL** and choose **Connect**. SoundCharts
+   checks that the URL answers with a feed before adding it.
 
-## Building feeds in code
+You can also add a feed's URL from **Add** > **Browse online catalogues…**
+with **Add a catalogue by URL** and **Check & add**. SoundCharts recognises a
+feed by its `format` property, and you choose which products to include.
+
+- The feed's items appear on the map with their coverage.
+- Downloads go to the `feeds/<host>-<port>-<hash>/` folder under SoundCharts'
+  downloads folder.
+- SoundCharts revalidates the feed at most once a minute, with a conditional
+  request.
+
+## Read and write feeds in code
+
+The feed types are in the `EncDotNet.S100.Collections.Feeds` namespace of the
+`EncDotNet.S100.Collections` package. To publish a folder, index it in place,
+build a feed from the index, and write each item's zip:
 
 ```csharp
 using EncDotNet.S100.Collections;
@@ -173,5 +207,11 @@ using (var zip = File.Create(S100Feed.ItemId(item) + ".zip"))
     await S100FeedPackager.WriteZipAsync(zip, (LocalItemLocation)item.Location);
 ```
 
-On the reading side, `S100Feed.Read(stream, feedUri)` resolves each item's
-URL against the address the feed was fetched from.
+`CollectionIndexer.CreateDefault()` without a `DatasetProbe` recognises loose
+S-57 cells only, without bounds. Pass a probe to read metadata from other loose
+dataset files.
+
+To read a feed, call `S100Feed.Read(stream, feedUri)`. It resolves each item's
+relative URL against `feedUri`, the address the feed was fetched from. It
+throws `JsonException` for a document that isn't a feed, and
+`NotSupportedException` for a newer format version.

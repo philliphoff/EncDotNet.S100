@@ -1,26 +1,28 @@
 # EncDotNet.S100
 
-The batteries-included on-ramp for IHO S-100 nautical data. Open a dataset, read
-its features, and render it to an image **without hand-wiring feature or portrayal
-catalogues** — the official catalogues bundled in
-[`EncDotNet.S100.Specifications`](../EncDotNet.S100.Specifications/README.md) are
-discovered and wired for you.
+`EncDotNet.S100` is the facade package for IHO S-100 data. It opens a dataset,
+detects its product specification, reads its features and renders it to an
+image. It uses the official feature and portrayal catalogues bundled in
+[`EncDotNet.S100.Specifications`](../EncDotNet.S100.Specifications/README.md),
+so you don't have to load or wire catalogues yourself. Reference it unless you
+need to assemble the readers and pipelines yourself; see
+[Use the lower-level packages](#use-the-lower-level-packages).
 
 ## Install
 
-```sh
+```bash
 dotnet add package EncDotNet.S100
 ```
 
-That single package transitively brings in the readers, the pipeline factory, the
-Lua/MoonSharp portrayal engine, the bundled specifications, and the headless Skia
-renderer.
+The package brings in the product readers, the dataset pipeline factory, the
+MoonSharp Lua portrayal engine, the bundled specifications and the headless
+Skia renderer.
 
-### Linux arm64 native dependency
+### Publish for Linux arm64
 
-If you publish a **`linux-arm64`** application that uses this facade (or the Skia
-renderer directly), reference the self-contained SkiaSharp native in **your
-executable project**:
+If you publish a `linux-arm64` application that uses this package, or the Skia
+renderer directly, reference the self-contained SkiaSharp native library in
+your executable project:
 
 ```xml
 <!-- In your app's .csproj -->
@@ -30,32 +32,36 @@ executable project**:
 </ItemGroup>
 ```
 
-The regular `SkiaSharp.NativeAssets.Linux` arm64 `libSkiaSharp.so` declares
-undefined `uuid_*` / `FT_Get_BDF_Property` symbols that abort the process once
-`fontconfig`/`freetype` load on a normal arm64 desktop or container. The
-`…NoDependencies` build is self-contained and renders on both x64 and arm64.
-Native RID asset selection belongs to the final executable, so this package does
-**not** force the swap on your behalf. See
+The arm64 `libSkiaSharp.so` in the regular `SkiaSharp.NativeAssets.Linux`
+package declares undefined `uuid_*` and `FT_Get_BDF_Property` symbols. The
+process aborts once `fontconfig` and `freetype` load, on a normal arm64 desktop
+or container. The `NoDependencies` build is self-contained and renders on both
+x64 and arm64. The final executable selects native assets for its runtime
+identifier, so this package can't make the swap for you. See
 [issue #23](https://github.com/philliphoff/EncDotNet.S100/issues/23).
 
-
-## Quickstart — render a dataset to PNG
+## Render a dataset to PNG
 
 ```csharp
 using EncDotNet.S100;
 
-using var dataset = S100Dataset.Open("chart.000");      // detects the product spec
+using var dataset = S100Dataset.Open("path/to/dataset.000"); // detects the product specification
 using var renderer = new PngS100DatasetRenderer();
-byte[] png = await renderer.RenderAsync(dataset);        // bundled FC + PC
+byte[] png = await renderer.RenderAsync(dataset);
 File.WriteAllBytes("out.png", png);
 ```
 
-`RenderAsync(dataset)` is the one-call path: it uses the bundled feature and
-portrayal catalogues for the dataset's product specification.
+`RenderAsync(dataset)` uses the bundled feature and portrayal catalogues for
+the dataset's product specification. `dataset.CanRenderHeadless` is `false` for
+products that have no image rendering; of the bundled products, that's S-131.
 
 ### Render options
 
+Pass `S100RendererOptions` to set the image size, palette, symbol scale and
+time step:
+
 ```csharp
+using EncDotNet.S100;
 using EncDotNet.S100.Pipelines; // PaletteType
 
 byte[] png = await renderer.RenderAsync(dataset, new S100RendererOptions
@@ -64,18 +70,22 @@ byte[] png = await renderer.RenderAsync(dataset, new S100RendererOptions
     Height = 1536,
     Palette = PaletteType.Night,
     SymbolScale = 1.25,
-    TimeStep = 0,            // time-aware products (S-104, S-111)
+    TimeStep = 0, // time-varying products, such as S-104 and S-111
 });
 ```
 
-## Open from a folder, ZIP, or exchange set
+`S100RendererOptions` also has `TextScale`, `Background`, `HiddenCategories`,
+`Basemap`, `DisplayModeId` and `EcdisDisplay`.
 
-`S100Dataset.OpenAsync` opens a dataset inside any `IAssetSource` (a
+## Open a dataset from a folder, ZIP or exchange set
+
+`S100Dataset.OpenAsync` opens a dataset inside any `IAssetSource`: a
 `FileSystemAssetSource` folder, a `ZipAssetSource` archive, or a decorator over
-either), detecting its product specification from the content just as `Open` does
+either. It detects the product specification from the content, as `Open` does
 for a loose file:
 
 ```csharp
+using EncDotNet.S100;
 using EncDotNet.S100.Core;
 
 using var zip = ZipAssetSource.Create("S101.zip");
@@ -83,8 +93,9 @@ using var dataset = await S100Dataset.OpenAsync(zip, "S-101/DATASET_FILES/101AA0
 ```
 
 `S100ExchangeSet` opens an S-100 exchange set from a folder, its `CATALOG.XML`,
-or a `.zip`, and lists its datasets. An S-101 base cell and the sequential updates
-the set ships for it are one entry, opened with the updates applied:
+or a `.zip`, and lists its datasets. An S-101 base cell and the sequential
+updates the set includes for it are one entry, which opens with the updates
+applied:
 
 ```csharp
 await using var exchangeSet = await S100ExchangeSet.OpenAsync("S101.zip");
@@ -95,32 +106,40 @@ foreach (var entry in exchangeSet.Datasets)
 }
 ```
 
-For an encrypted (S-100 Part 15) exchange set, build an `IDatasetKeyProvider`
-from the set's `Catalogue` (typically a `PermitKeyProvider` over an authenticated
-permit) and read through `exchangeSet.WithDecryption(keys)`; see
+To read an encrypted (S-100 Part 15) exchange set, build an
+`IDatasetKeyProvider` from the set's `Catalogue`, usually a `PermitKeyProvider`
+over an authenticated permit, and read through
+`exchangeSet.WithDecryption(keys)`. See
 [Reading protected exchange sets](../../docs/protected-exchange-sets.md).
 
-See [Loading datasets](../../docs/loading-datasets.md) for the full guide:
-caching, S-101 updates, custom asset sources, and the lower-level processor API.
+[Loading datasets](../../docs/loading-datasets.md) covers caching, S-101
+updates, custom asset sources and the lower-level processor API.
 
 ## Read features
 
-Feature access lives on the **feature catalogue**, because decoding a feature's
-type name and attributes presupposes one:
+Feature access is on the feature catalogue, because decoding a feature's type
+name and attributes needs one:
 
 ```csharp
-var fc = S100FeatureCatalogue.Bundled(dataset.Spec.Name);
+using EncDotNet.S100;
+using EncDotNet.S100.Datasets.Pipelines; // FeatureInfo
 
-foreach (var summary in fc.EnumerateFeatures(dataset))
+using var featureCatalogue = S100FeatureCatalogue.Bundled(dataset.Spec.Name);
+
+foreach (var summary in featureCatalogue.EnumerateFeatures(dataset))
     Console.WriteLine($"{summary.FeatureRef}: {summary.FeatureType}");
 
-FeatureInfo? info = fc.GetFeature(dataset, someFeatureRef);
+FeatureInfo? info = featureCatalogue.GetFeature(dataset, someFeatureRef);
 ```
 
-## Custom catalogues
+Coverage products (S-102, S-104, S-111) have no features to list.
+[Reading product data](../../docs/reading-product-data.md) shows typed access
+to each product's features, grids and time series.
 
-A **layer** pairs a dataset with the catalogues used to interpret and portray it.
-Supply your own to override the bundled defaults:
+## Use your own catalogues
+
+An `S100Layer` pairs a dataset with the catalogues used to interpret and
+portray it. Set either catalogue to override the bundled one:
 
 ```csharp
 var layer = new S100Layer
@@ -133,77 +152,72 @@ var layer = new S100Layer
 byte[] png = await renderer.RenderAsync(layer);
 ```
 
-When `FeatureCatalogue` / `PortrayalCatalogue` are left `null`, the bundled
-catalogue for the dataset's product specification is used.
+When `FeatureCatalogue` or `PortrayalCatalogue` is `null`, the layer uses the
+bundled catalogue for the dataset's product specification.
 
-## Validate
+## Validate a dataset
 
 `dataset.Validate()` runs the product's bundled validation rules and returns a
-`ValidationReport` of findings, or `null` when the product has no rule pack. See
-[Custom catalogues and validation](../../docs/catalogues-and-validation.md),
-which also shows how to add your own rules.
+`ValidationReport` of findings. It returns `null` when the product has no rule
+pack. [Custom catalogues and validation](../../docs/catalogues-and-validation.md)
+also shows how to add your own rules.
 
-## Layering — the grow-up story
+## Render several datasets into one image
 
-`S100Layer` is the composable unit, so growing from a single chart to a stacked
-view (e.g. an S-101 chart under S-102 bathymetry and S-411 sea ice) is "add more
-layers." Both paths ship today:
+`PngS100DatasetRenderer` also renders an ordered list of layers, bottom-most
+first, such as an S-101 chart under S-102 bathymetry:
 
 ```csharp
 using var renderer = new PngS100DatasetRenderer();
 
-// Single layer:
-byte[] one = await renderer.RenderAsync(dataset);
-
-// Composite — an ordered list, bottom-most first:
-byte[] many = await renderer.RenderAsync(
+byte[] png = await renderer.RenderAsync(
     new[]
     {
-        new S100Layer { Dataset = enc },    // S-101
-        new S100Layer { Dataset = bathy },  // S-102
+        new S100Layer { Dataset = enc },   // S-101
+        new S100Layer { Dataset = bathy }, // S-102
     },
     new S100CompositeOptions { Width = 2048, Height = 1536 });
 ```
 
-The composite overload (`IS100CompositeRenderer<byte[]>`) drives the
-renderer-neutral **S-98 interoperability engine** for cross-dataset paint
-ordering and depth suppression (e.g. the S-101-under-S-102 interleave and the
-R-101-102-B depth-shading suppression, S-98 Annex A §A-6.9.1), then paints all
-layers against one shared viewport. Supply `S100CompositeOptions.Viewport` to
-pin the framing, or leave it null to fit the **union** extent of all active
-layers. The whole path is Mapsui-free.
+This overload (`IS100CompositeRenderer<byte[]>`) runs the S-98
+interoperability engine for cross-dataset paint ordering and depth
+suppression, such as the S-101-under-S-102 interleave and the R-101-102-B
+depth-shading suppression (S-98 Annex A §A-6.9.1). It then paints all layers
+against one shared viewport. Set `S100CompositeOptions.Viewport` to fix the
+framing, or leave it `null` to fit the union of the extents of all active
+layers. [Compose S-101 and S-102](../../docs/scenarios/compose-s101-s102.md)
+walks through an example.
 
-## Renderers are generic in their result
+## Renderer result types
 
-`IS100DatasetRenderer<TResult>` is parameterised on the result type.
-`PngS100DatasetRenderer` implements `IS100DatasetRenderer<byte[]>` (PNG bytes).
-The same abstraction extends to other encoders (JPEG/WebP), to in-memory bitmaps,
-and — once the Mapsui decoupling
-([#189](https://github.com/philliphoff/EncDotNet.S100/issues/189)) lands — to a
-Mapsui layer renderer, without changing the contract.
+`IS100DatasetRenderer<TResult>` is generic in its result type.
+`PngS100DatasetRenderer` implements `IS100DatasetRenderer<byte[]>` and returns
+PNG bytes. Another renderer can return a different encoding or an in-memory
+bitmap through the same interface.
 
-> **Mapsui note.** The public API of this package is Mapsui-free (it returns
-> `byte[]`, `FeatureSummary`, and `FeatureInfo` — never Mapsui types). Mapsui is
-> currently a *transitive* dependency of the underlying pipeline; when #189 lands
-> it drops out with no change to this package's API.
+The public API of this package doesn't use Mapsui types. It returns `byte[]`,
+`FeatureSummary` and `FeatureInfo`, and the package has no Mapsui dependency.
 
-## À-la-carte (advanced)
+## Use the lower-level packages
 
-This facade is purely additive. Advanced users who need full control can keep
-using a per-spec reader with an injected catalogue, or drive
-`DatasetPipelineFactory`
-([`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md))
-directly.
+This package adds to the lower-level packages; it doesn't replace them. For
+full control, use a product reader with a catalogue you inject, or drive
+`DatasetPipelineFactory` in
+[`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
+directly. [Top APIs](../../docs/top-apis.md) lists the main entry points in
+each package.
 
 ## Reuse and disposal
 
-- `S100Dataset` and `PngS100DatasetRenderer` are `IDisposable`; dispose them.
-- Datasets are parsed lazily, on first use, so they read from their source after
-  `Open`/`OpenAsync` returns. `S100Dataset.OpenAsync(source, …)` and
-  `S100ExchangeSet.OpenAsync(source, …)` borrow the `IAssetSource` you pass: keep
-  it alive until the datasets are disposed, then dispose it yourself.
-  `S100ExchangeSet.OpenAsync(path)` owns the source it creates; dispose datasets
-  opened from an exchange set before the exchange set.
-- A `PngS100DatasetRenderer` instance may render many datasets sequentially; it
-  caches the bundled pipeline host so repeated renders reuse warmed catalogue
-  parse caches. Concurrent use of one instance is not supported.
+- `S100Dataset`, `S100FeatureCatalogue` and `PngS100DatasetRenderer` are
+  `IDisposable`. Dispose them.
+- A dataset is parsed lazily, on first use, so it reads from its source after
+  `Open` or `OpenAsync` returns.
+  - `S100Dataset.OpenAsync(source, …)` and `S100ExchangeSet.OpenAsync(source, …)`
+    borrow the `IAssetSource` you pass. Keep it alive until you've disposed the
+    datasets, then dispose it yourself.
+  - `S100ExchangeSet.OpenAsync(path)` owns the source it creates. Dispose
+    datasets opened from an exchange set before the exchange set.
+- A `PngS100DatasetRenderer` can render many datasets one after another. It
+  caches the bundled pipeline host, so repeated renders reuse the parsed
+  catalogues. Don't use one instance from several threads at once.

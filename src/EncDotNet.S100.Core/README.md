@@ -1,28 +1,277 @@
 # EncDotNet.S100.Core
 
-Core abstractions and pipeline framework for working with S-100 based nautical chart data.
+`EncDotNet.S100.Core` holds the abstractions and pipeline framework that the
+other EncDotNet.S100 packages share: asset sources, HDF5 and Lua interfaces,
+the coverage and vector portrayal pipelines, the validation framework, dataset
+metadata, spec-version checks and dynamic feature sources. Reference it
+directly when you write a product reader, an HDF5 or Lua backend, a validation
+rule pack or a rendering host. If you only want to open and render datasets,
+use the [`EncDotNet.S100`](../EncDotNet.S100/README.md) facade, which brings
+this package in.
 
-## Overview
+## Install
 
-This library provides the foundational types used across the EncDotNet.S100 libraries, including:
-
-- **Asset sources** — `IAssetSource` abstraction for reading files from directories (`FileSystemAssetSource`) or ZIP archives (`ZipAssetSource`).
-- **HDF5 abstractions** — `IHdf5File` and `IHdf5Group` interfaces for reading HDF5 data without binding to a specific HDF5 library.
-- **HDF5 reader exceptions** — `S100DatasetSchemaException` (a required attribute/group is missing or malformed) and `S100DatasetNotSupportedException` (the file uses an optional spec feature the reader doesn't yet implement). Both carry product, file, group path, spec reference, and a `.WithFile(...)` helper used by processor layers to attach the source file name. `S100DatasetSchemaException` also carries an optional `AdditionalContext` (and `.WithAdditionalContext(...)` helper), preserved across `.WithFile(...)`, that readers use to append explanatory context — for example a note that the dataset declares an unexpected product-specification edition that may explain the failure. `Hdf5RequiredAttributeExtensions` provides `ReadRequiredDoubleAttribute` / `ReadRequiredInt64Attribute` / `ReadRequiredStringAttribute` that translate backend "missing attribute" failures into these typed exceptions.
-- **Lua scripting abstractions** — `ILuaEngine` and `ILuaContext` interfaces for running sandboxed Lua portrayal scripts, plus the `S100LuaHost` host API.
-- **Coverage pipeline** — `ICoverageSource`, `ICoverageRenderer<T>`, `CoveragePipeline`, and supporting types (`GridGeoreferencer`, `CoverageColorScheme`, `StyledCoverageLayer`) for rendering gridded data. `ICoveragePortrayalCatalogue.ResolveColorScheme` returns `CoverageColorScheme?`; catalogues that only emit symbology (e.g. S-111's arrow-only portrayal) return `null` and the coverage renderers throw if invoked on a layer with a null scheme. `CoveragePipeline.ProcessAsync` accepts an optional `Viewport?` (and, for grids authored in a non-EPSG:4326 CRS, an `ICrsTransform? wgs84ToNative`); when supplied it uses `GridRegion.FromViewport` to sample only the cells that fall inside the viewport at the viewport's ground resolution — clamping the subset to the intersection of the viewport bbox and the grid extent, and deriving a stride so ground resolution ≤ cell size is honoured (issue #487). Coverage sampling applies on initial layer construction; live pan/zoom re-sampling of the built Mapsui coverage layer is a follow-up (see issue #486). The georeferencer on the emitted `StyledCoverageLayer` is built from the *sampled* subset's `GridMetadata` (subset-adjusted origin + stride-scaled spacing) rather than the source's full-grid metadata so subset+stride sampling is drawn in its true geographic location.
-- **Vector pipeline** — `IVectorSource`, `IVectorPortrayalCatalogue`, `VectorPipeline`, and the `DrawingInstruction` hierarchy (`AreaInstruction`, `LineInstruction`, `PointInstruction`, `TextInstruction`) modelled directly on the S-100 Part 9 display list. Portrayal-rule execution is pluggable behind `IVectorRuleExecutor` (the engine-agnostic rule stage the pipeline runs and merges). Two engine siblings implement it: `Pipelines.Vector.Xslt.XsltRuleExecutor` (S-100 Part 9 §9.4 — owns FeatureXML acquisition, rule selection, XSLT transformation, and display-list assembly) and `Pipelines.Vector.Lua.LuaRuleExecutor` (S-100 Part 9A). `VectorPipeline` itself is now reduced to running the built-in XSLT executor, appending the optional injected Lua executor's output, then applying the shared viewing-group / display-plane filter and priority sort; it no longer contains any XSLT-specific code. The Lua executor is a single product-agnostic executor driven entirely by injected seams (`ILuaDataProvider` / `ILuaDataProviderFactory` host bridge, `LuaContextParameterBinding` mariner→parameter mapping, `IFeatureAnchorProvider`, and `IDrawingInstructionTransform`), so S-101 and S-131 share one executor and supply only their product-specific seams. `DrawingInstructionParser` also lives here.
-- **Validation framework** (`EncDotNet.S100.Validation`) — spec-agnostic types for expressing normative-clause checks against the typed data models: `IValidationRule<TModel>`, `ValidationRuleSet<TModel>` (lint-pass runner that collects all findings and traps per-rule exceptions), `ValidationFinding` (rule id, severity, message, optional `GeoPosition`/`BoundingBox`, related feature id), `ValidationSeverity`, `ValidationContext` (carries `ReferenceTime` and an opaque `IServiceProvider?` for Tier-3 cross-dataset rules), `ValidationReport`, and a fluent `ValidationRuleBuilder` (`RuleFor<T>("rule-id").Check(predicate, msg).Build()` and `.Yield(producer)` for multi-finding rules). Per-spec rule packs live in the respective `EncDotNet.S100.Datasets.Sxxx/Validation/` folder rather than in separate projects. **All fifteen validated products** (S-101, S-102, S-104, S-111, S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421, plus S-57 via delegation to S-101) ship a rule pack. S-401 (IEHG inland ENC) is read and portrayed but ships **no** rule pack — the S-101 pack asserts S-101 normative clauses and is deliberately not run against inland data, so `Validate()` reports "no rules available" for it. For vector products the rule pack reads from a spec-aligned **façade** (the S-101 pattern is `S101DatasetView` / `S101FeatureView` / `S101AttributeView`) instead of the raw reader types, keeping the door open for a future typed `DataModel` projection without breaking rule code. Coverage records expose a `GroupPath` field (`BathymetryCoverage.GroupPath` on S-102, `WaterLevelCoverage.GroupPath` on S-104) that rule packs use as the per-coverage `ValidationFinding.RelatedFeatureId`.
-- **`Part9DisplayListReader`** — parses the Part 9 display-list XML produced by XSLT-based portrayal pipelines (S-124 / S-129 / S-421) into the same unified `DrawingInstruction` hierarchy that S-101's Lua pipeline emits, so a single renderer can consume both.
-- **Portrayal-instruction caching** (`Pipelines.Vector.Caching`) — a cross-load cache of the *post-pipeline* `DrawingInstruction` list so re-opening a previously-portrayed dataset can skip the (for S-101, multi-second MoonSharp Part 9A Lua) portrayal run. `IPortrayalInstructionCache.GetOrCompute(key, factory)` is implemented by `InMemoryPortrayalInstructionCache` (bounded LRU, holds list references) and `DiskPortrayalInstructionCache` (persists each list as a `.dlist` sidecar via `DrawingInstructionSerializer`, with atomic temp+move writes, an LRU byte cap, and corruption / `FormatVersion`-mismatch treated as a miss so a stale or partial file never breaks a render). The caller is responsible for a key that fully captures every portrayal input; `S101DatasetProcessor` does this with a content hash over the dataset bytes, the feature- and portrayal-catalogue content (including overrides and Lua rules), and the engine assembly versions. Caching at the post-pipeline boundary (rather than raw Lua-emitted strings) means a hit reproduces the exact list a fresh run would, without bypassing any later stage.
-- **Phased dataset metadata** — `DatasetMetadata` (with `SpecRef Spec`, `BoundingBox? Extent`, `int? HorizontalCrsEpsg`, `DisplayScaleRange? DisplayScale`, `TimeCoverage? TimeCoverage`) is the product-agnostic "peek" result every dataset reader returns from its `ReadMetadata` path — the cheap facts (declared spec, geographic extent, display-scale window, temporal span) a host needs to place a dataset on the map and decide whether a full parse + portrayal is worth it, without doing that work. This makes loading a "loose" (catalogue-less) folder of datasets phased: probe many cheaply, frame a viewport from the union of their extents, and defer each full load until it is brought into view (issue #460). Only `Spec` is guaranteed; a `null` optional means "not cheaply available — fall back to a full load." `Gml.GmlDatasetMetadata.Create(specName, declaredEdition, features)` is the shared helper the GML products use to fold feature geometry into an extent. A cross-session **metadata sidecar cache** (`Metadata` namespace) persists this peek result so a later session need not re-parse: `DatasetMetadataSerializer` frames a `DatasetMetadata` into a small versioned binary blob (corruption / `FormatVersion` mismatch → miss), and `IDatasetMetadataCache` / `DiskDatasetMetadataCache` store one `.dmeta` sidecar per dataset keyed by the source file's last-write time + length (any mismatch, or an unwritable/corrupt entry, is a miss that never breaks loading), with atomic temp+move writes and an LRU byte cap — the same robustness contract as the portrayal-instruction cache (issue #467 WS3).
-- **Shared types** — `IPortrayalCatalogue`, `ICrsTransform`, `Viewport`, `MarinerSettings` (S-100 Part 9 §4.2 mariner selections, including the four depth contours and S-101 portrayal toggles such as `FourShades`, `SimplifiedSymbols`, `RadarOverlay`, `NationalLanguage`), `DepthUnit` and the `DepthFormatting` helper for locale-invariant depth conversion / formatting / parsing across metres, feet, fathoms, and combined fathoms-and-feet, `BoundingBox`, `RgbaColor`, `ColorPalette`.
-- **Data-coverage geometry** (`DataModel.CoverageArea`) — the EPSG:4326 (lat/lon, S-100 Part 10b §6.2) data-coverage footprint of a vector cell: an `ExteriorRing` plus optional `InteriorRings` (no-coverage holes). It is surfaced by the S-101/S-57 processors (from `DataCoverage` surfaces with `categoryOfCoverage = 1`) so a host can suppress a coarser cell's contribution where a finer, overlapping in-band cell provides coverage ("larger-scale-in", issue #438 Phase 2).
-- **Spec-version assessment** — `SpecRef` / `CatalogueRef` / `SpecVersion` plus `SpecCompatibility.Classify(declared, implemented)` (S-100 Edition 5.2.1 Part 2 §6) and `SpecVersionAssessment`. The assessment compares a dataset's *declared* product-specification edition against the **edition(s) this application supports** (never against the floating Feature/Portrayal Catalogue version, which would raise false alarms — and which the catalogue files cannot supply anyway, since an FC/PC declares only its own version, not the product-spec edition it targets); `IsWarning` is true only when the application supports an older edition on the same major or no edition on the declared major, and `BuildMessage()` renders the user-facing note. `Gml.GmlDatasetIdentification.ReadDeclaredEdition(root)` extracts the declared edition from a GML dataset's `DatasetIdentificationInformation/productEdition` (S-100 GML 5.0 or legacy 1.0 profile). See issue #248.
-- **Dynamic feature sources** (`EncDotNet.S100.DynamicSources`) — graphics-agnostic abstraction for push-driven point/track/area features (own-ship, AIS, route preview, sensor overlays, etc.) that sit alongside static datasets in the rendering surface: `IDynamicFeatureSource` (snapshot + `Changed` event), `DynamicFeature` (geometry vocabulary reused from the static vector pipeline — same `GeometryType` enum and `(Latitude, Longitude)` tuple convention), `DynamicMotion` sidecar for moving point features, `DynamicVesselGeometry` sidecar for vessel dimensions (length, beam, CCRP/GPS-antenna offsets per IEC 62388 — semantically matches AIS Type 5 `dimA`/`dimB`/`dimC`/`dimD`), `DynamicSourceMetadata` (carries `DisplayName` and `RendererKey` for DI-keyed renderer resolution in `EncDotNet.S100.Renderers.Mapsui`), `DynamicFeaturesChanged` + `DynamicSourceChangeKind`, and the optional `DynamicFeatureTracker<TInbound>` helper for adapters with aging semantics (AIS sleep/lost timers, stale-sensor styling). See [`docs/design/dynamic-feature-source.md`](../../docs/design/dynamic-feature-source.md) for the full design rationale.
-
-## Installation
-
-```sh
+```bash
 dotnet add package EncDotNet.S100.Core
 ```
+
+## Example: read a file from a folder or ZIP
+
+Readers get their files through `IAssetSource`, so the same code reads from a
+folder or a ZIP archive:
+
+```csharp
+using EncDotNet.S100.Core;
+
+using IAssetSource source = FileSystemAssetSource.Create("path/to/exchange-set");
+// or: using IAssetSource source = ZipAssetSource.Create("path/to/exchange-set.zip");
+
+await using Stream catalogue = await source.OpenAsync("CATALOG.XML");
+```
+
+## Main entry points
+
+### Asset sources
+
+`IAssetSource` (namespace `EncDotNet.S100.Core`) reads files by relative path.
+`FileSystemAssetSource` reads from a folder, `ZipAssetSource` from a ZIP
+archive, and `CachingAssetSource` caches reads from another source.
+
+### HDF5
+
+`IHdf5File` and `IHdf5Group` (namespace `EncDotNet.S100.Hdf5`) read HDF5 data
+without binding to a specific HDF5 library.
+[`EncDotNet.S100.Hdf5.PureHdf`](../EncDotNet.S100.Hdf5.PureHdf/README.md)
+implements them.
+
+HDF5 readers throw two exception types:
+
+- `S100DatasetSchemaException`: a required attribute or group is missing or
+  malformed.
+- `S100DatasetNotSupportedException`: the file uses an optional part of the
+  specification that the reader doesn't implement yet.
+
+Both carry the product, file, group path and specification reference, and a
+`WithFile(...)` helper that processors use to attach the source file name.
+`S100DatasetSchemaException` also carries an optional `AdditionalContext`, set
+with `WithAdditionalContext(...)` and kept across `WithFile(...)`. Readers use
+it to add an explanation, such as a note that the dataset declares an
+unexpected product-specification edition.
+
+`Hdf5RequiredAttributeExtensions` provides `ReadRequiredDoubleAttribute`,
+`ReadRequiredInt64Attribute` and `ReadRequiredStringAttribute`. They turn a
+backend's "missing attribute" failure into these typed exceptions.
+
+### Lua scripting
+
+`ILuaEngine` and `ILuaContext` (namespace `EncDotNet.S100.Scripting`) run
+sandboxed Lua portrayal scripts. `S100LuaHost` is the host API the scripts
+call.
+[`EncDotNet.S100.Scripting.MoonSharp`](../EncDotNet.S100.Scripting.MoonSharp/README.md)
+implements the engine.
+
+### Coverage pipeline
+
+`ICoverageSource`, `ICoverageRenderer<T>` and `CoveragePipeline` (namespace
+`EncDotNet.S100.Pipelines.Coverage`) render gridded data, with
+`GridGeoreferencer`, `CoverageColorScheme` and `StyledCoverageLayer`.
+
+- `ICoveragePortrayalCatalogue.ResolveColorScheme` returns
+  `CoverageColorScheme?`. Catalogues that only emit symbols, such as S-111's
+  arrow-only portrayal, return `null`. The coverage renderers throw if you pass
+  them a layer with a `null` scheme.
+- `CoveragePipeline.ProcessAsync` takes an optional `Viewport`. When you pass
+  one, it uses `GridRegion.FromViewport` to sample only the cells inside the
+  viewport, at the viewport's ground resolution. It clamps the subset to the
+  intersection of the viewport and the grid extent, and picks a stride so the
+  ground resolution isn't finer than the cell size. Without a viewport it
+  samples the full grid.
+- For a grid in a CRS other than EPSG:4326, also pass `wgs84ToNative`, an
+  `ICrsTransform` from WGS 84 to the grid's CRS.
+- The georeferencer on the resulting `StyledCoverageLayer` is built from the
+  sampled subset's `GridMetadata`: its origin is adjusted for the subset and
+  its spacing scaled by the stride. A sampled subset is drawn at its true
+  location.
+- Viewport sampling happens when the pipeline builds the layer.
+- `ICoverageSource` can also serve an overview pyramid (S-100 Part 10c):
+  `AvailableOverviewLevels` lists the levels and `SelectOverviewLevel` picks one.
+  `CoveragePyramid` and `CoveragePyramidBuilder` (namespace
+  `EncDotNet.S100.Pipelines.Coverage.Pyramid`) build one in memory.
+
+### Vector pipeline
+
+`IVectorSource`, `IVectorPortrayalCatalogue` and `VectorPipeline` (namespace
+`EncDotNet.S100.Pipelines.Vector`) run vector portrayal. The output is the
+`DrawingInstruction` hierarchy (`AreaInstruction`, `LineInstruction`,
+`PointInstruction`, `TextInstruction`), modelled on the S-100 Part 9 display
+list.
+
+- Rule execution is pluggable behind `IVectorRuleExecutor`. There are two
+  implementations:
+  - `Pipelines.Vector.Xslt.XsltRuleExecutor` (S-100 Part 9 §9.4) gets the
+    FeatureXML, selects rules, runs the XSLT transformation and assembles the
+    display list.
+  - `Pipelines.Vector.Lua.LuaRuleExecutor` (S-100 Part 9A) is one
+    product-independent executor. Products supply their own parts through
+    `ILuaDataProvider` and `ILuaDataProviderFactory` (the host bridge),
+    `LuaContextParameterBinding` (mariner settings to context parameters),
+    `IFeatureAnchorProvider` and `IDrawingInstructionTransform`. S-101 and
+    S-131 share the executor this way.
+- `VectorPipeline` runs the built-in XSLT executor, appends the output of an
+  optional injected Lua executor, then filters by viewing group and display
+  plane and sorts by priority. It contains no XSLT-specific code.
+- `DrawingInstructionParser` parses Lua-emitted drawing instructions.
+- `Part9DisplayListReader` parses the Part 9 display-list XML produced by the
+  XSLT pipelines (S-124, S-129, S-421) into the same `DrawingInstruction`
+  hierarchy that S-101's Lua pipeline emits, so one renderer handles both.
+
+### Portrayal-instruction caching
+
+`IPortrayalInstructionCache` (namespace
+`EncDotNet.S100.Pipelines.Vector.Caching`) caches the `DrawingInstruction` list
+that the vector pipeline produces. When you reopen a dataset you've portrayed
+before, a cache hit skips the portrayal run, which for S-101 is a Lua run
+taking several seconds.
+
+- `GetOrCompute(key, factory)` returns the cached list or computes it.
+- `InMemoryPortrayalInstructionCache` is a bounded LRU cache that holds list
+  references.
+- `DiskPortrayalInstructionCache` writes each list to a `.dlist` file with
+  `DrawingInstructionSerializer`. Writes go to a temporary file and are then
+  moved into place, and an LRU byte cap bounds the cache. A corrupt file or a
+  `FormatVersion` mismatch counts as a miss, so a stale or partial file never
+  breaks a render.
+- You supply a key that captures every portrayal input. `S101DatasetProcessor`
+  hashes the dataset bytes, the feature and portrayal catalogue content
+  (including overrides and Lua rules) and the engine assembly versions.
+- The cache stores the pipeline's final output, so a hit returns exactly the
+  list a fresh run would produce.
+
+### Dataset metadata
+
+`DatasetMetadata` (namespace `EncDotNet.S100.Core`) is what every dataset
+reader returns from its `ReadMetadata` path: the facts a host can get without a
+full parse and portrayal.
+
+- It has `Spec` (`SpecRef`), `Extent` (`BoundingBox?`), `HorizontalCrsEpsg`
+  (`int?`), `DisplayScale` (`DisplayScaleRange?`) and `TimeCoverage`
+  (`TimeCoverage?`).
+- Only `Spec` is always set. A `null` optional value means it isn't available
+  cheaply; load the dataset fully to get it.
+- A host can use it to load a folder of datasets with no catalogue in phases:
+  read every dataset's metadata, frame the viewport from the union of their
+  extents, and load each dataset fully when it comes into view.
+- `Gml.GmlDatasetMetadata.Create(specName, declaredEdition, features)` folds
+  feature geometry into an extent for the GML products.
+
+The `EncDotNet.S100.Core.Metadata` namespace caches metadata between sessions:
+
+- `DatasetMetadataSerializer` writes a `DatasetMetadata` to a small versioned
+  binary blob. A corrupt blob or a `FormatVersion` mismatch counts as a miss.
+- `IDatasetMetadataCache` and `DiskDatasetMetadataCache` store one `.dmeta`
+  file per dataset, keyed by the source file's last-write time and length.
+  Any mismatch, or an unwritable or corrupt entry, is a miss and never breaks
+  loading. Writes are atomic and an LRU byte cap bounds the cache, as for the
+  portrayal-instruction cache.
+
+### Validation
+
+The `EncDotNet.S100.Validation` namespace has the product-independent types
+for checking normative clauses against the typed data models:
+
+- `IValidationRule<TModel>` is one rule.
+- `ValidationRuleSet<TModel>` runs a set of rules, collects every finding, and
+  catches exceptions from individual rules.
+- `ValidationFinding` has the rule id, severity, message, an optional
+  `GeoPosition` or `BoundingBox`, and a related feature id.
+- `ValidationSeverity` and `ValidationReport`.
+- `ValidationContext` carries `ReferenceTime` and an optional
+  `IServiceProvider` for rules that look across datasets.
+- `ValidationRuleBuilder` builds rules fluently:
+  `RuleFor<T>("rule-id").Check(predicate, message).Build()`, or
+  `.Yield(producer)` for rules that return several findings.
+
+Each product's rule pack lives in the `Validation/` folder of its
+`EncDotNet.S100.Datasets.Sxxx` project.
+
+- S-101, S-102, S-104, S-111, S-122, S-124, S-125, S-127, S-128, S-129, S-131,
+  S-201, S-411 and S-421 ship a rule pack. S-57 delegates to the S-101 pack.
+- S-401 (IEHG Inland ENC) is read and portrayed but has no rule pack. The S-101
+  pack checks S-101 clauses and doesn't run against inland data, so
+  `Validate()` reports that no rules are available.
+- Rule packs for vector products read from a façade that follows the
+  specification, not from the raw reader types. For S-101 that's
+  `S101DatasetView`, `S101FeatureView` and `S101AttributeView`. Rule code then
+  doesn't change if a typed data model replaces the reader types later.
+- Coverage records have a `GroupPath` (`BathymetryCoverage.GroupPath` in S-102,
+  `WaterLevelCoverage.GroupPath` in S-104). Rule packs use it as the
+  `ValidationFinding.RelatedFeatureId` for each coverage.
+
+[Custom catalogues and validation](../../docs/catalogues-and-validation.md)
+shows how to run the bundled rules and write your own.
+
+### Spec-version assessment
+
+`SpecRef`, `CatalogueRef` and `SpecVersion` identify product specifications
+and catalogues. `SpecCompatibility.Classify(declared, implemented)` compares
+two editions (S-100 Edition 5.2.1 Part 2 §6).
+
+`SpecVersionAssessment` compares a dataset's declared product-specification
+edition with the editions the application supports.
+
+- It doesn't compare against the feature or portrayal catalogue version. A
+  catalogue declares only its own version, not the product-specification
+  edition it targets, so that comparison would give false warnings.
+- `IsWarning` is `true` only when the application supports an older edition on
+  the same major version, or no edition on the declared major version.
+- `BuildMessage()` returns the note to show the user.
+- `Gml.GmlDatasetIdentification.ReadDeclaredEdition(root)` reads the declared
+  edition from a GML dataset's
+  `DatasetIdentificationInformation/productEdition` (S-100 GML 5.0 or the
+  legacy 1.0 profile).
+
+### Shared types
+
+- `IPortrayalCatalogue`, `ICrsTransform`, `ICrsTransformFactory`, `Viewport`,
+  `BoundingBox`, `RgbaColor` and `ColorPalette` (namespace
+  `EncDotNet.S100.Pipelines`).
+- `MarinerSettings`: the S-100 Part 9 §4.2 mariner selections, including the
+  four depth contours and S-101 portrayal options such as `FourShades`,
+  `SimplifiedSymbols`, `RadarOverlay` and `NationalLanguage`.
+- `DepthUnit` and `DepthFormatting`: culture-invariant conversion, formatting
+  and parsing of depths in metres, feet, fathoms, and fathoms and feet.
+- [`EncDotNet.S100.Crs.ProjNet`](../EncDotNet.S100.Crs.ProjNet/README.md)
+  implements `ICrsTransformFactory`.
+
+### Data-coverage geometry
+
+`DataModel.CoverageArea` is the data-coverage footprint of a vector cell, in
+EPSG:4326 latitude and longitude (S-100 Part 10b §6.2). It has an
+`ExteriorRing` and optional `InteriorRings` (holes with no coverage). The S-101
+and S-57 processors build it from `DataCoverage` surfaces with
+`categoryOfCoverage = 1`. A host uses it to hide a coarser cell where a finer,
+overlapping cell in the display band has coverage.
+
+### Dynamic feature sources
+
+The `EncDotNet.S100.DynamicSources` namespace describes features that change
+over time and are pushed to the host, such as own ship, AIS targets, route
+previews and sensor overlays. They're drawn alongside static datasets. The
+types don't depend on any graphics library.
+
+- `IDynamicFeatureSource` provides a snapshot of features and a `Changed`
+  event.
+- `DynamicFeature` uses the same geometry vocabulary as the static vector
+  pipeline: the `GeometryType` enum and `(Latitude, Longitude)` tuples.
+- `DynamicMotion` adds motion to a moving point feature.
+- `DynamicVesselGeometry` adds vessel dimensions: length, beam, and the CCRP
+  and GPS-antenna offsets (IEC 62388). It matches the AIS type 5
+  `dimA`/`dimB`/`dimC`/`dimD` fields.
+- `DynamicSourceMetadata` carries `DisplayName` and `RendererKey`.
+  `EncDotNet.S100.Renderers.Mapsui` uses the key to find the renderer.
+- `DynamicFeaturesChanged` and `DynamicSourceChangeKind` describe a change.
+- `DynamicFeatureTracker<TInbound>` helps adapters that age features out, such
+  as AIS sleep and lost timers or stale-sensor styling.
+
+[Dynamic feature sources](../../docs/design/dynamic-feature-source.md)
+explains the design.

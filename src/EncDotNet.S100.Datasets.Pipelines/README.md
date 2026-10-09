@@ -1,283 +1,341 @@
 # EncDotNet.S100.Datasets.Pipelines
 
-Per-spec `IDatasetProcessor` implementations, the S-98 interoperability
-authority, and the validation runner consumed by the viewer and the
-MCP server.
+This package turns a dataset file into a dataset processor (`IDatasetProcessor`)
+that renders, picks, lists features and validates in the same way for every
+product. It contains one processor per product, the `DatasetPipelineFactory`
+that detects a file's product and creates its processor, the exchange-set
+loader, the headless pick services, and the headless compositor that applies
+the S-98 interoperability rules. SoundCharts, `s100` and the MCP server are
+built on it.
 
-> **Looking for the easy path?** Most consumers should use the
-> [`EncDotNet.S100`](../EncDotNet.S100/README.md) facade package, which wires this
-> factory to the bundled feature and portrayal catalogues and exposes a small
-> "open → render / read features" API. Use this package directly only when you
-> need full control over catalogues, CRS handling, or the pipeline itself.
+Most applications should use the [`EncDotNet.S100`](../EncDotNet.S100/README.md)
+package, which sets this package up with the bundled feature and portrayal
+catalogues. Reference this package directly when you need control over the
+catalogues, the CRS handling or the pipeline itself.
 
-This package is published to NuGet (`IsPackable=true`) so the facade — and
-advanced à-la-carte consumers — can depend on it.
+## Install
 
-## Overview
+```bash
+dotnet add package EncDotNet.S100.Datasets.Pipelines
+```
 
-Each supported product ships an `IDatasetProcessor` that owns a parsed
-dataset and exposes a uniform surface for rendering, picking,
-enumerating features, and validating:
+## Create a processor and validate a dataset
 
-| Processor | Spec | Pipeline |
+The example uses `BundledDatasetProcessorFactory` from the `EncDotNet.S100`
+package, which creates processors with the bundled catalogues:
+
+```csharp
+using EncDotNet.S100;
+using EncDotNet.S100.Datasets.Pipelines;
+
+using var factory = BundledDatasetProcessorFactory.Create();
+IDatasetProcessor processor = factory.CreateProcessor("path/to/dataset.000");
+
+Console.WriteLine($"{processor.Spec}, extent {processor.Metadata.Extent}");
+
+var report = processor.Validate();
+if (report is null)
+    Console.WriteLine("No rule pack for this product.");
+else
+    foreach (var finding in report.Findings)
+        Console.WriteLine($"{finding.RuleId} {finding.Severity}: {finding.Message}");
+
+(processor as IDisposable)?.Dispose();
+```
+
+Keep the factory alive while you use its processors; it owns the catalogue
+caches they share.
+
+To choose the catalogues, Lua engine or CRS transforms yourself, construct a
+`DatasetPipelineFactory`. It takes a `PortrayalCatalogueManager`, an
+`ILuaEngine`, an `ICrsTransformFactory`, a `FeatureCatalogueManager` and an
+`IDisplayPlaneAuthorityProvider`, plus an optional shared
+`IPortrayalInstructionCache` and an optional `S100ProductRegistry`. A registry
+with a subset of products gives you a host that handles only those products.
+[Loading datasets](../../docs/loading-datasets.md) shows the processor API in
+more detail.
+
+## Main types
+
+- **`IDatasetProcessor`**: a parsed dataset with rendering, picking, feature
+  listing, metadata and validation.
+- **`DatasetPipelineFactory`**: detects a file's product and creates its
+  processor. See [Product detection](#product-detection).
+- **`ExchangeSetLoader`**: reads an S-100 exchange-set catalogue and returns one
+  processor per dataset.
+- **`S100Products`** and **`S100ProductRegistration`**: the products a factory
+  can create, and how each one is recognised.
+- **`DatasetProcessorOwner`**: owns the processors loaded into a map. See
+  [Processor lifetime](#processor-lifetime).
+- **`MapPresentationState`** and **`MapDataset`**: renderer-neutral snapshots
+  of a map's display settings and of each dataset on it. See
+  [Map presentation](#map-presentation).
+- **`HeadlessCompositor`**: draws several datasets into one image with the
+  S-98 rules. See [S-98 interoperability](#s-98-interoperability).
+- **`ValidationRunner`**: runs any processor's validation for a host. See
+  [Validation](#validation).
+- The pick services in the `.Query` namespace and the dataset catalog in
+  `.Catalog`. See [Pick services and dataset catalog](#pick-services-and-dataset-catalog).
+
+Some of these types, including `IDatasetProcessor`, `DatasetProcessorOwner`,
+`MapPresentationState`, `MapDataset` and the S-98 engine, are compiled into
+`EncDotNet.S100.Core` but use the `EncDotNet.S100.Datasets.Pipelines`
+namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
+
+## Processors
+
+| Processor | Product | Portrayal |
 |---|---|---|
-| `S101DatasetProcessor` | S-101 | Vector (Lua portrayal) |
-| `S102DatasetProcessor` | S-102 | Coverage (Lua portrayal) |
-| `S104DatasetProcessor` | S-104 | Coverage (hand-coded palette) |
-| `S111DatasetProcessor` | S-111 | Coverage (arrow symbology) |
-| `S122DatasetProcessor` | S-122 | Vector (XSLT portrayal) |
-| `S124DatasetProcessor` | S-124 | Vector (XSLT portrayal) |
-| `S125DatasetProcessor` | S-125 | Vector (XSLT portrayal) |
-| `S127DatasetProcessor` | S-127 | Vector (XSLT portrayal) |
-| `S128DatasetProcessor` | S-128 | Vector (XSLT portrayal) |
-| `S129DatasetProcessor` | S-129 | Vector (XSLT portrayal) |
-| `S131DatasetProcessor` | S-131 | Vector (Lua portrayal) |
-| `S201DatasetProcessor` | S-201 | Vector (XSLT portrayal) |
-| `S411DatasetProcessor` | S-411 | Vector (XSLT portrayal) |
-| `S421DatasetProcessor` | S-421 | Vector (XSLT portrayal) |
-| `S57DatasetProcessor`  | S-57 (legacy) | Translates to S-101 (maritime ENC) or S-401 (inland ENC), then delegates to the S-101 vector pipeline with that product's catalogues |
+| `S101DatasetProcessor` | S-101, S-401 | Vector, Lua |
+| `S102DatasetProcessor` | S-102 | Coverage, Lua |
+| `S104DatasetProcessor` | S-104 | Coverage, built-in colour bands |
+| `S111DatasetProcessor` | S-111 | Coverage, arrow symbols |
+| `S122DatasetProcessor` | S-122 | Vector, XSLT |
+| `S124DatasetProcessor` | S-124 | Vector, XSLT |
+| `S125DatasetProcessor` | S-125 | Vector, XSLT |
+| `S127DatasetProcessor` | S-127 | Vector, XSLT |
+| `S128DatasetProcessor` | S-128 | Vector, XSLT |
+| `S129DatasetProcessor` | S-129 | Vector, XSLT |
+| `S131DatasetProcessor` | S-131 | Vector, Lua |
+| `S201DatasetProcessor` | S-201 | Vector, XSLT |
+| `S411DatasetProcessor` | S-411 | Vector, XSLT |
+| `S421DatasetProcessor` | S-421 | Vector, XSLT |
+| `S57DatasetProcessor` | S-57 | Translated to S-101 (maritime ENC) or S-401 (inland ENC), then drawn by the S-101 vector pipeline with that product's catalogues |
 
-`DatasetPipelineFactory` discriminates an input file by extension,
-HDF5 signature, or GML application namespace and returns the matching
-processor wrapped in an `IDatasetProcessor`. Its source-based GML sniff
-is also available through `DetectProductSpecFromSourceAsync(...)` for
-exchange-set callers whose catalogue metadata omits a machine-readable
-product identifier (notably JCOMM S-411 catalogues). `ExchangeSetLoader`
-walks an S-100 exchange-set catalogue and yields one processor per
-dataset entry.
+`S101DatasetProcessor` handles S-401 inland ENCs when it's created with the
+S-401 catalogues.
 
-Detection is **data-driven per product**, not a central switch: each
-`S100ProductRegistration` in `S100Products` declares *both* how to
-construct its processor *and* how to recognize its files — each GML
-product's namespace / `productIdentifier` shape via `MatchGml`
-(`DatasetGmlMatcher`, fed a parse-once `GmlRootInfo`), and each ISO 8211
-product's envelope shape via `MatchIso8211` (`DatasetIso8211Matcher`, fed a
-read-once `Iso8211RootInfo`). The factory reads a GML document's root — or
-an ISO 8211 dataset's envelope — once and returns the spec of the first
-registered product whose matcher claims it, so adding a product means
-adding one registration to `S100Products` — no edit to the factory.
+## Product detection
 
-The `.000` extension is shared by three products, so the envelope decides:
-S-57 is claimed by the S-57-only `DSPM` field in its Data Descriptive
-Record, while S-101 and S-401 (IEHG inland ENC) are claimed by the product
-identifier each declares in its `DSID` record's `PRSP` subfield
-(`INT.IHO.S-101.…` / `INT.IHO.S-401.…`). An S-57 cell's `PRSP` is instead a
-small integer naming its S-57 product specification — `1` for a maritime ENC,
-`10` for an inland ENC (IENC) — which `Iso8211RootInfo.DeclaresS57ProductSpecification`
-tests against the `S57ProductSpecification` codes. An inland S-57 cell is still
-an S-57 cell, so it keeps the `S-57` identity; the declared code only decides
-which catalogue portrays it (issue #608, see *Product identity vs. portrayal
-spec*). A cell that declares no `PRSP`,
-or one whose product has no registration in the host's registry, falls back
-to S-101 — so a host that registers a subset never routes a cell to a
-product it cannot build. The recognized product-identifier set that
-`MapProductIdentifierToSpec` accepts is likewise derived from the built-in
-registration list (`S100Products.All`). The `.h5` coverage
-(S-102/104/111) header read stays in the factory as a small closed set.
+`DatasetPipelineFactory` recognises a file by its extension, its HDF5
+signature or its GML application namespace, and returns the matching processor.
+`DetectProductSpecFromSourceAsync(...)` runs the same GML check on a file in an
+asset source. Use it for exchange sets whose catalogue has no machine-readable
+product identifier, such as JCOMM S-411 catalogues.
 
-### Processor lifecycle ownership
+Each product describes its own detection. An `S100ProductRegistration` in
+`S100Products` says both how to construct the processor and how to recognise
+the product's files:
 
-`DatasetProcessorOwner` is the renderer- and UI-neutral lifecycle boundary for
-processors loaded into a map. It is keyed by host-stable `MapDatasetId`, rejects
-duplicate identities without taking ownership of the rejected processor, and
-uses `DatasetProcessorLease` to defer removal disposal while a render or other
-operation is still using a processor. Disposing the owner deterministically
-retires every processor and disposes the current `IDisposable` processor
-implementations exactly once.
+- A GML product matches on its namespace and `productIdentifier` through
+  `MatchGml`, using a `GmlRootInfo` read once per document.
+- An ISO 8211 product matches on its file envelope through `MatchIso8211`,
+  using an `Iso8211RootInfo` read once per file.
 
-The component belongs in this aggregate pipeline package because it owns
-`IDatasetProcessor` instances across product specifications while depending on
-neither Mapsui nor a UI framework. Layer rendering, S-98 composition, time
-registration, and presentation refresh remain outside this first lifecycle
-slice.
+The factory reads the root of a GML document, or the envelope of an ISO 8211
+file, once, and returns the first registered product whose matcher accepts it.
+To add a product, you add a registration to `S100Products`; the factory
+doesn't change. The product identifiers `MapProductIdentifierToSpec` accepts
+also come from the registrations (`S100Products.All`). The HDF5 products
+(S-102, S-104, S-111) are recognised by a header check in the factory.
 
-### Headless pick services and catalog (issue #480)
+Three products share the `.000` extension, so the envelope decides:
 
-The protocol-neutral "pick" logic — identify the vector features and
-sample the coverage values at a geographic point — lives here so it can
-be shared by the MCP tools (`EncDotNet.S100.Mcp.Tools`) and the CLI
-`s100 identify` command without either depending on the other:
+- **S-57** is recognised by the `DSPM` field in its Data Descriptive Record,
+  which only S-57 has.
+- **S-101** and **S-401** are recognised by the product identifier in the
+  `PRSP` subfield of the `DSID` record (`INT.IHO.S-101.…` or
+  `INT.IHO.S-401.…`).
+
+An S-57 cell's `PRSP` is a small integer naming its S-57 product
+specification: `1` for a maritime ENC, `10` for an inland ENC (IENC).
+`Iso8211RootInfo.DeclaresS57ProductSpecification` tests it against the
+`S57ProductSpecification` codes. An inland S-57 cell is still an S-57 cell and
+keeps the `S-57` identity; the code only decides which catalogue portrays it
+(see [Product identity and portrayal product](#product-identity-and-portrayal-product)).
+A cell that declares no `PRSP`, or whose product isn't in the host's registry,
+is treated as S-101. A host that registers only some products never gets a
+processor it can't build.
+
+## Processor lifetime
+
+`DatasetProcessorOwner` owns the processors loaded into a map, independent of
+any renderer or UI framework. It's keyed by a host-stable `MapDatasetId`. It
+rejects a duplicate ID without taking ownership of the rejected processor.
+While a render or other operation holds a `DatasetProcessorLease`, removing
+the processor doesn't dispose it until the lease is released. Disposing the
+owner retires every processor and disposes each `IDisposable` processor
+exactly once. Layer rendering, S-98 composition, time registration and
+refreshing the display are outside its scope.
+
+## Dataset metadata
+
+`IDatasetProcessor.Metadata` is a `DatasetMetadata`: the declared product,
+geographic extent, horizontal CRS, display scale window and time coverage. It's
+derived from the dataset the processor has already parsed, not from a second
+read of the file. Use it to frame a view, register a layer, show an
+out-of-scale indicator or decide visibility.
+
+Each processor calculates the value once:
+
+- GML processors calculate the raw WGS 84 envelope in one pass over the
+  features, shared with the padded render extent (`ComputeGeographicExtent`),
+  so later renders don't walk every coordinate again.
+- HDF5 processors (S-102, S-104, S-111) take the extent and CRS from the
+  georeferencing the coverage source has already read, without reading the
+  values again. S-104 and S-111 station series (format 8) use the union of
+  their station positions.
+
+The default interface implementation carries only `Spec`, so a processor that
+can't supply an extent cheaply still compiles.
+
+## Declared edition check
+
+Every processor sets `IDatasetProcessor.Spec` to the product specification
+edition the dataset declares: the HDF5 `productSpecification` root attribute,
+the S-101 `ProductSpecificationEdition`, or the GML `productEdition`.
+`IDatasetProcessor.VersionAssessment` (`SpecVersionAssessment?`) compares that
+edition with the editions this library supports for the product, using
+`SupportedSpecEditions.Assess(...)`.
+
+`SupportedSpecEditions` lists product specification editions, not catalogue
+versions. A feature or portrayal catalogue declares only its own version, not
+the product edition it targets, so the supported editions are listed in code.
+When the declared edition differs in a way that may affect rendering,
+`VersionAssessment.IsWarning` is `true`. `s100 info`, `s100 render` and the
+SoundCharts dataset list show the warning without blocking.
+
+## Product identity and portrayal product
+
+`IDatasetProcessor.Spec` is the dataset's product identity: what it is. Use it
+for labels, validation, links to the specification and the edition check.
+`IDatasetProcessor.PortrayalSpec` is the product whose feature catalogue,
+portrayal catalogue and ECDIS display conventions process and draw the
+dataset. The two are the same for every native S-100 product. They differ only
+for S-57 cells, which keep the identity `S-57` while acting as the product
+they're translated into.
+
+`SpecConventions` holds the default mapping (`PortrayalSpecFor(SpecRef)`,
+`PortrayalSpecName(string)`), which maps `S-57` to `S-101`. The default
+`PortrayalSpec` uses it.
+
+An inland S-57 cell (`DSID`/`PRSP` = 10) is translated into S-401 and drawn
+with the S-401 catalogues, so `S57DatasetProcessor` sets `PortrayalSpec` per
+cell. If the host has no S-401 portrayal catalogue, it uses S-101, so a host
+that registers only S-101 still loads inland cells.
+
+When you resolve a catalogue, store viewing-group or display-category state, or
+choose a display mode, use the processor's `PortrayalSpec`. The string mapping
+is only a default before the dataset loads: SoundCharts' `DatasetEntry.PortrayalSpec`
+starts from it and is corrected when the processor loads. When you label or
+validate a dataset, use `Spec`.
+
+Catalog entries follow the same rule. A `LoadedDataset` for an S-57 cell
+reports `Spec` `S-57`, whether `LoadedDatasetProjector` creates it from the
+loaded `S57DatasetProcessor` or from the cell's bytes, even though its payload
+is an `S101DatasetData`. From bytes, the projector reads the cell with the S-57
+reader and translates it into the product the cell declares (S-101, or S-401
+for an inland ENC), as the processor does. It never opens S-57 bytes with
+`S101Dataset.Open`. It has no portrayal catalogues, so it doesn't fall back to
+S-101 when S-401 is missing.
+
+## S-101 sequential updates
+
+An S-101 cell can come as a base (`….000`) and ordered update files (`….001`,
+`….002`, …). The updates are applied to the base before portrayal (S-100
+Part 10a). `S101UpdateApplicator` in `EncDotNet.S100.Datasets.S101` applies
+them; this package finds them:
+
+- **In an exchange set**, `S101ExchangeSetUpdatePlan.Build(...)` pairs each
+  base cell with its updates from the same catalogue, ordered by
+  `updateNumber`. `ExchangeSetLoader` and SoundCharts use it, then call
+  `DatasetPipelineFactory.CreateS101ProcessorWithUpdates(source, baseRelativePath, updateRelativePaths)`.
+- **For a loose file**, `S101FilesystemUpdateDiscovery.FindSequentialUpdates(baseFilePath)`
+  finds update files next to the base cell. `s100` uses it, then calls
+  `DatasetPipelineFactory.CreateS101ProcessorWithUpdates(baseFilePath, updateFilePaths)`.
+  `DatasetPipelineFactory.CreateProcessorWithFilesystemUpdates(baseFilePath)`
+  does both steps.
+
+Application is best-effort. A missing, out-of-order or unreadable update is
+recorded in `S101DatasetProcessor.UpdateReport`, and the partly updated cell
+still renders. Updates aren't applied across exchange sets or directories.
+
+## Portrayal output without Mapsui
+
+This package doesn't depend on Mapsui, so headless users such as the
+`EncDotNet.S100` facade and `s100` don't pull it in. Processors don't build
+Mapsui layers. Instead they return renderer-neutral portrayal output:
+
+- `IVectorPortrayalSource.BuildVectorPortrayalAsync(...)` returns a
+  `VectorPortrayalResult`. It holds the drawing instructions, a geometry
+  provider, the resolved palette and assets, the EPSG:3857 extent, layer keys,
+  the scale at which the cell goes out of its scale band, the cell's coverage
+  areas (`CoverageAreas`, EPSG:4326 polygons from its `DataCoverage` surfaces,
+  used to suppress overlap between cells), and the S-98 display plane
+  metadata.
+- `ICoveragePortrayalSource.BuildCoveragePortrayalAsync(...)` returns a
+  `CoveragePortrayalResult`. It holds the `StyledCoverageLayer`s, the viewport
+  and georeferencing, feature info, layer keys, and, for S-111, the arrow
+  symbol scheme with its SVGs prepared.
+
+Both methods run under the processor's render lock and copy everything they
+return, so the result is safe to use from another assembly. Converting the
+output to Mapsui layers, and the `MapsuiDatasetResult` type, are in
+[`EncDotNet.S100.Renderers.Mapsui`](../EncDotNet.S100.Renderers.Mapsui/README.md)
+(`MapsuiDatasetRenderer`), which references this package. The renderer-neutral
+S-98 types (`IDisplayPlaneAuthority`, `DisplayPlaneAuthorityProvider`) stay
+here; the Mapsui stack entries are in the renderer.
+
+The ProjNet implementation of `ICrsTransformFactory` is in the separate
+[`EncDotNet.S100.Crs.ProjNet`](../EncDotNet.S100.Crs.ProjNet/README.md)
+package, so CRS handling doesn't need Mapsui either.
+
+## Map presentation
+
+`MapPresentationState` is an immutable snapshot of the display settings shared
+by every dataset on a map: palette, symbol and text scale, ECDIS settings,
+mariner settings, and the product-specific display modes in
+`EcdisDisplaySettings.ActiveDisplayModes`. Its constructor copies the ECDIS
+collections, so you can reuse one snapshot across concurrent renders.
+
+`presentation.CreateRenderContext(processor, selectedTime)` picks the
+product-specific `RenderContext` from `processor.PortrayalSpec` and applies all
+the map-wide settings. S-104, S-111 and S-411 contexts carry the selected time;
+other products ignore it. Use `presentation.ApplyTo(context, processor.PortrayalSpec)`
+when you need your own context with a viewport, basemap or instruction filter.
+
+`IMapPresentationController.SetPresentationAsync` applies a new
+`MapPresentationState` for a host or session that owns loaded datasets. It
+takes the state explicitly and applies it asynchronously, without exposing UI
+refresh events or renderer types. Implementations keep ownership of the
+processors, refreshes and disposal. The Mapsui backend's
+`MapsuiDatasetLayerSession` uses the snapshot directly to create product
+contexts, render layers, compose S-98, apply time filters and combine refreshes.
+
+`MapDatasetId` and `MapDataset` are the matching per-dataset snapshot.
+`MapDataset` combines `DatasetMetadata` (extent, CRS, display scale and time
+coverage) with visibility and active flags, opacity, available and current
+time, `MapDatasetSubLayer` state, the `ValidationReport` and the
+`SpecVersionAssessment`. It contains no rendered layers, localized strings, UI
+commands or framework events. SoundCharts projects its loaded datasets into
+this model. `MapsuiDatasetLayerSession` uses it as the identity and display
+state of each dataset when layers are replaced. The session also uses
+`IInteroperabilityAuthorityProvider` and `MarinerSettings` to handle S-98
+ordering, suppression, authority changes and the active dataset's layer band,
+so SoundCharts doesn't have to.
+
+## Pick services and dataset catalog
+
+The pick logic, which finds the vector features and samples the coverage values
+at a geographic point, is shared by the MCP tools
+(`EncDotNet.S100.Mcp.Tools`) and `s100 identify`, so neither depends on the
+other:
 
 | Namespace | Contents |
 |---|---|
-| `.Query` | `IdentifyFeaturesService`, `SampleCoverageService`, `DescribeFeatureService` and their request / result records, plus the neutral `ToolResult<T>` / `ToolError` result types the services return. |
-| `.Catalog` | `IDatasetCatalog`, `LoadedDataset` / `LoadedDatasetData`, `DatasetId`; `LoadedDatasetProjector` (the one place a product-spec name is mapped to its per-spec `Open` reader and matching `LoadedDatasetData` variant + bounds); and `FileDatasetCatalog`, a read-only file-backed catalog. |
-| `.Geometry` | Point / polyline / bounding-box helpers used by the pick services. |
-| `.Spec` | `SpecRef` and spec-capability metadata. |
-| `.Time` | `FeatureValidity` and the time-window query helpers. |
+| `.Query` | `IdentifyFeaturesService`, `SampleCoverageService`, `DescribeFeatureService` and their request and result records, and the `ToolResult<T>` and `ToolError` types they return. |
+| `.Catalog` | `IDatasetCatalog`, `LoadedDataset`, `LoadedDatasetData` and `DatasetId`; `LoadedDatasetProjector`, which maps a product name to its reader, `LoadedDatasetData` variant and bounds; and `FileDatasetCatalog`, a read-only catalog backed by files. |
+| `.Geometry` | Point, polyline and bounding box helpers for the pick services. |
+| `.Spec` | `FeatureDescriberRegistry`, which `DescribeFeatureService` uses to describe a feature per product, and the `FeatureAccessor`, `FeatureGeometryQuery` and `FeatureNames` helpers. |
+| `.Time` | `FeatureValidity` and the time window query helpers. |
 
-`LoadedDatasetProjector` is used by both the Avalonia viewer's
-`ViewerDatasetCatalog` and the headless `FileDatasetCatalog`, so a pick
-run from the CLI produces byte-identical catalog entries to one run in
-the viewer. (One exception: the viewer projects legacy S-57 cells from its
-resident `S57DatasetProcessor`, so its entry also reflects any exchange-set
-updates the processor folded in.) The MCP `identify_features` / `sample_coverage` /
-`describe_feature` tools are thin wrappers that map `ToolResult<T>` onto
-the MCP protocol.
-
-### Metadata as a parse byproduct (issue #467 / #460)
-
-`IDatasetProcessor.Metadata` exposes the lightweight, product-agnostic
-`Core.DatasetMetadata` (declared spec, geographic extent, horizontal CRS,
-display-scale window, time coverage) **derived once from the dataset the
-processor already parsed** — never a second parse or a separate
-`ReadMetadata(path)` call. Hosts that need to frame a viewport, register a
-layer, draw an out-of-scale indicator, or gate visibility read it from the
-open processor rather than re-reading the file.
-
-The value is memoized per processor. GML processors compute the raw
-(unpadded) WGS-84 envelope with a single feature scan that is **shared**
-with the padded render extent (`ComputeGeographicExtent`), so repeated
-renders no longer re-walk every coordinate. HDF5 (S-102/104/111) derive
-the extent + CRS from the coverage source's already-read georeferencing
-metadata (no `values` payload is re-read); S-104/S-111 fixed-station
-(dcf8) datasets union their station coordinates. The default interface
-implementation carries only `Spec`, so a processor that cannot cheaply
-supply an extent still compiles.
-
-### Declared-edition assessment (issue #248)
-
-Every processor populates `IDatasetProcessor.Spec` with the dataset's
-*declared* product-specification edition (HDF5 `productSpecification`
-root attribute, S-101 `ProductSpecificationEdition`, or GML
-`productEdition`) and exposes an optional
-`IDatasetProcessor.VersionAssessment` (`SpecVersionAssessment?`). The
-assessment is computed by `SupportedSpecEditions.Assess(...)`, which
-compares the declared edition against the **editions this application
-supports** for that product (the central `SupportedSpecEditions`
-table — product-spec editions, *not* catalogue version numbers; an
-FC/PC declares only its own version, never the product-spec edition it
-targets, so the supported edition must be asserted in code). When
-the declared edition diverges in a way that may degrade rendering,
-`VersionAssessment.IsWarning` is true and surfaces non-blockingly in
-the CLI (`s100 info` / `render`) and the viewer's dataset list.
-
-### Product identity vs. portrayal spec (issue #450)
-
-`IDatasetProcessor.Spec` is the dataset's **product identity** — what it
-*is* (labels, validation rebadging, examiner links, version assessment).
-`IDatasetProcessor.PortrayalSpec` is the specification whose Feature
-Catalogue, Portrayal Catalogue, and ECDIS display conventions actually
-process and draw it. The two coincide for every native S-100 product and
-diverge only for legacy S-57 cells, which keep identity `S-57` while
-acting as the S-100 product they are translated into in-memory. The
-conventional mapping lives in one place — `SpecConventions`
-(`PortrayalSpecFor(SpecRef)` / `PortrayalSpecName(string)`), which the
-default `PortrayalSpec` member delegates to — and maps `S-57` to `S-101`.
-
-That is the whole story for a maritime ENC, but not for an inland one: an
-S-57 cell declaring the inland ENC product specification (`DSID`/`PRSP` = 10)
-is translated into S-401 and portrayed with the S-401 catalogues (issue #608),
-so `S57DatasetProcessor` overrides `PortrayalSpec` per cell. It falls back to
-S-101 when the host has no S-401 portrayal catalogue, so a host that registers
-only S-101 still loads inland cells. Callers resolving a catalogue, keying
-viewing-group / display-category state, or selecting a display mode must
-therefore key off the processor's `PortrayalSpec`; the string mapping is only
-a pre-load default (the viewer's `DatasetEntry.PortrayalSpec` starts from it
-and is corrected once the processor loads). Callers labelling or validating
-use `Spec`.
-
-Catalog entries follow the same rule: a `LoadedDataset` for an S-57 cell
-reports `Spec` `S-57` whether `LoadedDatasetProjector` projects it from the
-resident `S57DatasetProcessor` or from the cell's bytes, even though its
-payload is an `S101DatasetData`. The stream path reads the bytes with the
-S-57 reader and translates them into the product the cell declares (S-101, or
-S-401 for an inland ENC), the same way the processor does. It never opens
-S-57 bytes with `S101Dataset.Open`. Having no portrayal catalogues, the stream
-path does not apply the processor's fall-back to S-101 when S-401 is missing.
-
-### S-101 sequential updates (S-100 Part 10a)
-
-An S-101 cell may ship as a base (`….000`) plus ordered update files
-(`….001`, `….002`, …). Updates are folded into the base to produce an
-"up-to-date" dataset before portrayal. The merge engine lives in
-`EncDotNet.S100.Datasets.S101` (`S101UpdateApplicator`); this library
-supplies the two ways callers locate the pieces:
-
-- **From an exchange set** — `S101ExchangeSetUpdatePlan.Build(...)`
-  groups a catalogue's entries so each base cell is paired with its
-  in-set updates (ordered by `updateNumber`). `ExchangeSetLoader` and
-  the viewer use this, then call
-  `DatasetPipelineFactory.CreateS101ProcessorWithUpdates(source, baseRelativePath, updateRelativePaths)`.
-- **From a loose file** — `S101FilesystemUpdateDiscovery.FindSequentialUpdates(baseFilePath)`
-  finds sibling update files in the base cell's directory. The CLI
-  uses this, then calls
-  `DatasetPipelineFactory.CreateS101ProcessorWithUpdates(baseFilePath, updateFilePaths)`.
-
-Application is **best-effort**: a missing, out-of-order, or unreadable
-update is recorded in `S101DatasetProcessor.UpdateReport` but never
-prevents the (partially) updated cell from rendering. Cross-exchange-set
-/ cross-directory application is intentionally not supported.
-
-## Mapsui-free render seam (issue #189)
-
-This package is **Mapsui-free** so headless consumers (the
-[`EncDotNet.S100`](../EncDotNet.S100/README.md) facade and the `s100`
-CLI) do not acquire Mapsui as a transitive dependency. The processors
-do not build `ILayer`s; instead they expose a narrow, renderer-neutral
-portrayal-output seam:
-
-- `IVectorPortrayalSource.BuildVectorPortrayalAsync(...)` →
-  `VectorPortrayalResult` — immutable drawing-instruction slices,
-  geometry provider, resolved palette / asset snapshot, EPSG:3857
-  extent, layer keys, the out-of-scale-band cutoff *value*, the cell's
-  data-coverage footprints (`CoverageAreas`, a `CoverageArea` list in
-  EPSG:4326 resolved from `DataCoverage` surfaces — used for cross-cell
-  overlap suppression, issue #438 Phase 2), and Mapsui-free S-98
-  display-plane metadata.
-- `ICoveragePortrayalSource.BuildCoveragePortrayalAsync(...)` →
-  `CoveragePortrayalResult` — materialized `StyledCoverageLayer`(s)
-  plus viewport/georef, info, layer keys, and (S-111) the arrow symbol
-  scheme with prewarmed SVGs.
-
-Both build methods run under the processor's render gate and snapshot
-everything so the result is safe to convert in another assembly. The
-`payload → ILayer` conversion — and the Mapsui-owned
-`MapsuiDatasetResult` — live in **`EncDotNet.S100.Renderers.Mapsui`**
-(`MapsuiDatasetRenderer`),
-which references this package (not the other way round). The map-free
-S-98 concepts (`IDisplayPlaneAuthority`, `DisplayPlaneAuthorityProvider`)
-stay here; the Mapsui-typed stack entries moved to the renderer.
-
-The `ProjNet`-based `ICrsTransformFactory` implementation lives in the
-separate **`EncDotNet.S100.Crs.ProjNet`** package, keeping CRS handling
-Mapsui-free too.
-
-### Renderer-neutral map presentation
-
-`MapPresentationState` is the immutable, UI- and renderer-neutral snapshot of
-presentation choices shared across every dataset on a map: palette, symbol and
-text scale, ECDIS settings, mariner settings, and the product-specific display
-modes carried by `EcdisDisplaySettings.ActiveDisplayModes`. Its constructor
-defensively freezes the ECDIS collections, so a host can safely reuse the
-snapshot across concurrent renders.
-
-Call `presentation.CreateRenderContext(processor, selectedTime)` to select the
-product-specific `RenderContext` from `processor.PortrayalSpec` and apply all
-map-wide choices in one step. S-104, S-111, and S-411 contexts carry the selected
-time; static products ignore it. `presentation.ApplyTo(context,
-processor.PortrayalSpec)` remains available when a caller needs to supply a
-request-specific context carrying a viewport, basemap, or instruction filter.
-
-`IMapPresentationController.SetPresentationAsync` is the corresponding
-application boundary for a host or session that owns loaded datasets. The
-controller accepts the immutable state explicitly and applies it asynchronously
-without exposing UI refresh events or renderer types. Implementations retain
-processor, refresh, and disposal ownership. The Mapsui backend consumes the
-snapshot directly in `MapsuiDatasetLayerSession`, which owns product-context creation,
-layer rendering, S-98 composition, time gating, and refresh coalescing.
-
-`MapDatasetId` and `MapDataset` provide the corresponding per-dataset snapshot.
-`MapDataset` combines `DatasetMetadata` (including extent, CRS, display-scale,
-and temporal coverage) with independent visibility and active flags, opacity,
-available/current time, `MapDatasetSubLayer` state, `ValidationReport`, and
-`SpecVersionAssessment`. The contract contains no rendered layers, localized
-strings, UI commands, or framework events. The Viewer projects its existing
-loaded entry state into this model, while `MapsuiDatasetLayerSession` treats it as the
-authoritative identity and display-state snapshot across layer replacements.
-The session also consumes `IInteroperabilityAuthorityProvider` and
-`MarinerSettings` to own S-98 ordering, suppression, authority changes, and the
-final active dataset layer band without coupling those concerns to the Viewer.
+SoundCharts' `ViewerDatasetCatalog` and the headless `FileDatasetCatalog` both
+use `LoadedDatasetProjector`, so a pick from `s100` produces the same catalog
+entries as one in SoundCharts. The exception is S-57: SoundCharts projects S-57
+cells from their loaded `S57DatasetProcessor`, so its entries include any
+exchange-set updates the processor applied. The MCP `identify_features`,
+`sample_coverage` and `describe_feature` tools map `ToolResult<T>` onto the MCP
+protocol.
 
 ## Validation
 
@@ -287,183 +345,178 @@ Every processor implements `IDatasetProcessor.Validate()`:
 ValidationReport? Validate();
 ```
 
-The contract is uniform across coverage and vector products:
+It works the same way for every product:
 
-- **Lazy + cached.** The first call runs the spec's normative rule
-  pack (from the matching `EncDotNet.S100.Datasets.Sxxx.Validation`
-  namespace) against the parsed dataset and caches the resulting
-  `ValidationReport` on a private field. Subsequent calls return the
-  cached report. Validation does not depend on the current palette,
-  opacity, or selected time step, so the cache is correct for the
-  processor's lifetime.
-- **Pure function of the parsed dataset.** Findings carry rule id,
-  severity, message, an optional `GeoPosition` / `BoundingBox`, and a
-  `RelatedFeatureId` (the FOID for vector features, the HDF5 group
-  path for coverage records).
-- **`null` means "no rule pack"; `ValidationReport.Empty` means
-  "rules evaluated, nothing found".** All fifteen supported products
-  now ship a rule pack, so `null` is exotic; the distinction matters
-  for client UIs that want to show "not validated" rather than
-  "clean".
-- **Schema failures degrade gracefully.** Coverage processors wrap
-  the rule run in a `try` / `catch (S100DatasetSchemaException)` and
-  surface a single `Sxxx-PROJ-SCHEMA` finding carrying the offending
-  `GroupPath`, attribute name, and spec reference. Vector processors
-  reserve `Sxxx-PROJ-PARSE` for the same purpose.
+- **Runs once.** The first call runs the product's rule pack (from its
+  `EncDotNet.S100.Datasets.Sxxx.Validation` namespace) on the parsed dataset
+  and caches the `ValidationReport`. Later calls return the cached report.
+  Validation doesn't depend on palette, opacity or time step, so the cache is
+  valid for the processor's lifetime.
+- **Depends only on the parsed dataset.** Each finding has a rule ID, a
+  severity, a message, an optional `GeoPosition` or `BoundingBox`, and a
+  `RelatedFeatureId`: the feature identifier for vector features, or the HDF5
+  group path for coverages.
+- **`null` means there's no rule pack; `ValidationReport.Empty` means the rules
+  ran and found nothing.** Every product in the table above has a rule pack,
+  but an S-401 dataset returns `null`, and so does a processor that doesn't
+  override `Validate()`. A UI can use the difference to show "not validated"
+  rather than "no findings".
+- **Schema failures become findings.** Coverage processors catch
+  `S100DatasetSchemaException` and return a single `Sxxx-PROJ-SCHEMA` finding
+  with the `GroupPath`, attribute name and specification reference. Vector
+  processors reserve `Sxxx-PROJ-PARSE` for the same purpose.
 
-### Render caching (S-101)
+For the rules each pack checks, see the product package READMEs, for example
+[`EncDotNet.S100.Datasets.S101`](../EncDotNet.S100.Datasets.S101/README.md#validation).
+To write your own rules, see
+[Custom catalogues and validation](../../docs/catalogues-and-validation.md).
 
-`S101DatasetProcessor` caches the Part 9A Lua drawing-instruction list
-between renders. That list is a pure function of the
-`MarinerSettings` and the effective ECDIS display state (display
-category plus hidden S-101 viewing groups / display planes) — it does
-**not** depend on the palette or the symbol / text scale, which are
-applied later by the Mapsui renderer. So a Day/Dusk/Night palette
-switch (the dominant re-render trigger) reuses the cached instructions
-and skips the multi-second Lua pipeline. The cache key is built by the
-internal `BuildPortrayalCacheKey`; `PortrayalCacheHits` /
-`PortrayalCacheMisses` counters (internal, exposed via
-`InternalsVisibleTo`) let tests assert the hit/miss behaviour.
+### Validate S-57 cells
 
-Because the cache key must be a faithful summary of everything that
-feeds the pipeline, `EcdisDisplayExtensions.ApplyTo` clears any prior
-viewing-group user overrides before applying the current hidden set, so
-the catalogue's effective visibility is a pure function of the settings
-value rather than of call history. The portrayal build
-(`BuildVectorPortrayalAsync`) is serialized by a `SemaphoreSlim` gate:
-the processor holds one long-lived catalogue whose palette /
-viewing-group / display-plane state is mutated per build and read
-throughout, and the viewer fires re-renders re-entrantly.
+`S57DatasetProcessor` returns a report built from two passes:
 
-That single-slot cache only helps re-renders of an *already-open*
-processor. A **cross-load** cache (`IPortrayalInstructionCache`, from
-`EncDotNet.S100.Core`'s `Pipelines.Vector.Caching`) closes the gap so a
-*fresh* processor re-opening a previously-portrayed cell — even after a
-restart, when the host injects a `DiskPortrayalInstructionCache` — skips
-the multi-second Lua run entirely. On a single-slot miss the pipeline
-run is wrapped in `GetOrCompute(key, factory)`, keyed by
-`"{portrayalContentHash}|{BuildPortrayalCacheKey(...)}"`. The
-`GetPortrayalContentHashAsync()` prefix (memoized) is a SHA-256 over the
-dataset content, the **resolved** feature- and portrayal-catalogue
-content (both via `ICatalogueProvider<T>.GetCatalogueHashAsync` — the FC
-hash is the SHA-256 of the resolved FC XML; the PC hash is an aggregate
-SHA-256 of the PC XML plus the bytes of every referenced asset it
-declares, including every rule file's Lua source, symbols and palettes),
-and the module version ids of the pipeline / executor / Lua-engine /
-portrayals / features assemblies — so any change to the dataset, an FC /
-PC override, the bundled rules, or the engine yields a miss and a
-recompute (it hashes *actual content*, never declared version strings
-alone). The same hash also strengthens the pattern-clip cache key.
-`SharedInstructionCacheHits` (internal) lets tests assert cross-load
-reuse. When no shared cache is injected the processor falls back to a
-bounded in-memory instruction cache, so tools and tests exercise the
-same path. This assumes S-101 portrayal is Lua-only (true for the
-bundled catalogue), which keeps the instruction list independent of
-palette and scale; an XSLT S-101 catalogue would require adding the
-palette to the key (bump the processor's `PortrayalContentFormatVersion`).
+1. **Before translation**, `S57PreTranslationRules.Default` checks the raw
+   `EncDotNet.S57.S57Document` for things that don't survive translation, such
+   as `DSID` and `DSPM` presence and `M_COVR` coverage.
+2. **After translation**, `S101DatasetRules.Default` checks the translated
+   S-101 document. This pass runs only for a maritime cell. An inland cell is
+   translated into S-401, which has no rule pack (the S-101 pack checks S-101
+   clauses), so its report is the first pass only.
 
-### `S57DatasetProcessor` — pre-translation + delegation
+The two reports are joined with finding order kept and counters summed. Rule
+IDs from the second pass get the prefix `S101-as-S57/`, so `S101-R-2.1` shows
+as `S101-as-S57/S101-R-2.1` and you can tell which stage a finding came from.
+Findings from the first pass keep their `S57-*` IDs.
 
-`S57DatasetProcessor` is the only processor that produces a composite
-report. It runs two passes:
+### ValidationRunner
 
-1. **Pre-translation** rules over the raw `EncDotNet.S57.S57Document`
-   (`S57PreTranslationRules.Default`) — things that don't survive
-   translation, e.g. DSID / DSPM presence, `M_COVR` coverage.
-2. **Post-translation** rules over the translated S-101 document via
-   the standard `S101DatasetRules.Default`. This pass runs only for a
-   maritime cell: an inland cell is translated into S-401, which has no rule
-   pack (the S-101 pack asserts S-101 normative clauses), so its report is
-   the pre-translation pass alone.
-
-The two reports are joined by the internal `ConcatReports.Concat`
-helper, which preserves finding order, sums counters, and optionally
-**rebadges** the second report's rule ids with a prefix. The
-processor uses `rebadgePrefix: "S101-as-S57/"` so a finding from
-S-101 rule `S101-R-2.1` surfaces as `S101-as-S57/S101-R-2.1` and the
-user can tell at a glance which layer of the pipeline a problem came
-from. Pre-translation findings keep their `S57-*` ids verbatim.
-
-`ConcatReports` is internal to this assembly and shared with the
-matching test project via `InternalsVisibleTo`.
-
-### `ValidationRunner`
-
-`ValidationRunner` is the spec-agnostic entry point used by the
-viewer and the MCP server: given an `IDatasetProcessor` it calls
-`Validate()` and translates the result into the host's preferred
-shape (UI rows, MCP tool response, etc.) without each consumer
-needing to know the spec-specific rule namespaces.
+`ValidationRunner` is the product-neutral entry point SoundCharts and the MCP
+server use. Given an `IDatasetProcessor`, it calls `Validate()` and converts
+the result into the host's shape, such as UI rows or an MCP tool response,
+without the host knowing each product's rule namespace.
 
 ## S-98 interoperability
 
-`Interoperability/` houses the renderer-neutral S-98 inter-product plumbing
-(`InteroperabilityAuthority`, `LayerStackBuilder`, `S98RuleContext`,
-`S98DefaultRules`, `S98SuppressionPolicy`, plus the load-order
-`LoadOrderInteroperabilityAuthority` fallback). The engine operates on
-Mapsui-free `SubLayerStackItem` / `StackPayload` values: the authority assigns
-each sub-layer a display plane (Under Radar / Standard / Over Radar / Dynamic
-Arrows) and a within-plane priority, then evaluates a set of inter-product
-rules (R-101-102, R-101-124, R-104, R-111) to drop or transform sub-layers that
-other loaded products supersede. Suppression filters encoding-neutral
-`DrawingInstruction`s (matched to their `VectorFeatureTag`) rather than Mapsui
-`IFeature`s, so the *same* decision drives both renderers.
+The S-98 engine is in the `EncDotNet.S100.Datasets.Pipelines.Interoperability`
+namespace: `InteroperabilityAuthority`, `LayerStackBuilder`, `S98RuleContext`,
+`S98DefaultRules`, `S98SuppressionPolicy`, and the load-order fallback
+`LoadOrderInteroperabilityAuthority`. It works on renderer-neutral
+`SubLayerStackItem` and `StackPayload` values.
 
-Two consumers share this single source of truth:
+The authority gives each sub-layer a display plane (Under Radar, Standard, Over
+Radar or Dynamic Arrows) and a priority within that plane. It then applies the
+inter-product rules (R-101-102, R-101-124, R-104, R-111), which drop or change
+sub-layers that other loaded products supersede. Suppression filters
+`DrawingInstruction`s, matched by their `VectorFeatureTag`, rather than Mapsui
+features, so the same decision drives both renderers:
 
-- The **Mapsui viewer** re-platforms onto it — `DatasetLoaderService` sorts and
-  suppresses `SubLayerStackItem`s, then maps the ruled items back to prebuilt
-  `ILayer`s.
-- The **headless `HeadlessCompositor`** (top-level namespace) drives the same
-  engine and lowers each ordered vector / coverage sub-layer into a Skia
-  `CompositeLayer`, painting all datasets against one shared viewport with no
-  Mapsui dependency — reproducing the viewer's cross-dataset draw order and
-  depth suppression (e.g. the S-101-under-S-102 interleave, S-98 Annex A
-  §A-6.9.1). The `EncDotNet.S100` facade's `IReadOnlyList<S100Layer>` overload
-  is the public on-ramp.
+- **SoundCharts**: `DatasetLoaderService` orders and suppresses
+  `SubLayerStackItem`s, then maps the result back to the Mapsui layers it has
+  built.
+- **`HeadlessCompositor`**: runs the same engine and turns each ordered vector
+  or coverage sub-layer into a Skia `CompositeLayer`. It paints all datasets in
+  one shared viewport without Mapsui, with the same order and depth suppression
+  as SoundCharts, such as drawing S-101 under S-102 (S-98 Annex A §A-6.9.1).
+  The public entry point is the `EncDotNet.S100` facade's
+  `IReadOnlyList<S100Layer>` render overload.
 
-See [`docs/design/s98-interoperability.md`](../../docs/design/s98-interoperability.md)
-for the full design rationale.
+For the design, see [S-98 interoperability](../../docs/design/s98-interoperability.md).
 
 ## Other utilities
 
 - `MapPresentationState`, `IMapPresentationController`, `MapDataset`,
-  `MapDatasetId`, `MapDatasetSubLayer`,
-  `EcdisDisplaySettings`, `FeatureInfoBuilder`, `PickAttribute`,
-  `CoveragePickHelper`, `StationTimeSeriesSnapshot` — shared building
-  blocks for the per-processor `Render` / `GetFeatureInfo` /
-  `GetCoverageInfo` paths.
-- `IceEggCode` / `IceEggCodeBuilder` — a render-ready projection of an
-  S-411 sea-ice / lake-ice feature's WMO / SIGRID-3 "egg code"
-  (S-411 Ed 1.2.1 Annex A). `IceEggCodeBuilder.Build` assembles the
-  total concentration (`iceact`), up to three in-oval ice types
-  (partial concentration `iceapc`, stage of development `icesod`, form
-  of ice `iceflz`), and the thinner fourth / fifth ice classes flanked
-  *outside* the oval (Cd/Ce, Sd/Se, Fd/Fe) plus snow depth as a caption.
-  `S411DatasetProcessor` surfaces it on `FeatureInfo.EggCode` and
-  enriches each cell with its Feature-Catalogue enumeration definition
-  (via `FeatureCatalogueDecoder.ResolveListedValueDefinition`) so the
-  pick report can show the prose meaning on hover.
-- `ExternalTextFileResolver` — resolves the textual content of external
-  files named by S-100 `fileReference` attributes (S-101 FC; alias
-  `TXTDSC` / `NTXTDS`, e.g. on Caution Area, Tidal Stream Panel Data)
-  from the dataset's exchange-set asset source. When the exchange-set
-  catalogue's `supportFileDiscoveryMetadata` is supplied (built by
-  `ExchangeSetLoader` and passed through the factory), the file is located
-  through it first — the canonical ECDIS mechanism, which honours the
-  catalogue-declared `support/` sub-directory — before falling back to
-  probing the dataset directory, the exchange-set root, and a sibling
-  `support/` directory. `S101DatasetProcessor` uses it (via
-  `FeatureInfoBuilder.ResolveFileReferences`) to populate
-  `PickAttribute.ExternalText`, so a pick / object-info consumer can show
-  the referenced text the way an ECDIS does. Presentation layers can
-  then call `FeatureInfoBuilder.CollectResolvedFileReferences` /
-  `WithoutResolvedFileReferences` to lift those resolved blocks out of the
-  key/value attribute table into a dedicated "referenced text" section.
-- `GmlDatasetProcessorBase` — common base for the GML-encoded vector
-  processors (S-122 / S-124 / S-125 / S-127 / S-128 / S-129 / S-131 /
-  S-201 / S-411 / S-421).
-- `AssetSourceHelpers` — exchange-set + loose-dataset bootstrapping.
-- `Diagnostics/` — `ActivitySource` / `Meter` instrumentation
-  consumed by the OpenTelemetry exporter (see
-  [`docs/observability.md`](../../docs/observability.md)).
+  `MapDatasetId`, `MapDatasetSubLayer`, `EcdisDisplaySettings`,
+  `FeatureInfoBuilder`, `PickAttribute`, `CoveragePickHelper` and
+  `StationTimeSeriesSnapshot`: shared building blocks for the processors'
+  render, feature info and coverage info methods.
+- `IceEggCode` and `IceEggCodeBuilder`: the WMO / SIGRID-3 "egg code" of an
+  S-411 sea-ice or lake-ice feature, ready to draw (S-411 Ed 1.2.1 Annex A).
+  `IceEggCodeBuilder.Build` assembles the total concentration (`iceact`), up to
+  three ice types inside the oval (partial concentration `iceapc`, stage of
+  development `icesod`, form of ice `iceflz`), the thinner fourth and fifth
+  ice classes outside the oval (Cd/Ce, Sd/Se, Fd/Fe), and snow depth as a
+  caption. `S411DatasetProcessor` returns it in `FeatureInfo.EggCode` and adds
+  each value's feature catalogue definition (through
+  `FeatureCatalogueDecoder.ResolveListedValueDefinition`), so a pick report
+  can show the meaning on hover.
+- `ExternalTextFileResolver`: reads the text of external files named by S-100
+  `fileReference` attributes (S-101 feature catalogue; S-57 `TXTDSC` and
+  `NTXTDS`, for example on Caution Area and Tidal Stream Panel Data) from the
+  dataset's exchange-set asset source. When the exchange-set catalogue's
+  `supportFileDiscoveryMetadata` is available (`ExchangeSetLoader` builds it
+  and passes it through the factory), the file is found through it first, as
+  an ECDIS does, which honours the `support/` folder the catalogue declares.
+  Otherwise it looks in the dataset folder, the exchange-set root, and a
+  sibling `support/` folder. `S101DatasetProcessor` uses it, through
+  `FeatureInfoBuilder.ResolveFileReferences`, to fill
+  `PickAttribute.ExternalText`, so a pick report can show the referenced text.
+  `FeatureInfoBuilder.CollectResolvedFileReferences` and
+  `WithoutResolvedFileReferences` move those texts out of the attribute table
+  into their own section.
+- `GmlDatasetProcessorBase`: the base class for the GML processors (S-122,
+  S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421).
+- `AssetSourceHelpers`: set-up helpers for exchange sets and loose datasets.
+- `Diagnostics/`: the `ActivitySource` and `Meter` instrumentation that the
+  OpenTelemetry exporter uses. See [Observability](../../docs/observability.md).
+
+## S-101 render caching
+
+This section describes internals, for contributors.
+
+`S101DatasetProcessor` caches the Lua drawing instructions between renders.
+They depend only on the `MarinerSettings` and the ECDIS display state (display
+category and hidden S-101 viewing groups and display planes). They don't depend
+on the palette or the symbol and text scale, which the renderer applies later.
+So a Day, Dusk or Night palette switch, the most common re-render, reuses the
+cached instructions and skips the Lua portrayal, which can take several
+seconds. The internal `BuildPortrayalCacheKey` builds the key, and the internal
+`PortrayalCacheHits` and `PortrayalCacheMisses` counters (visible to tests
+through `InternalsVisibleTo`) let tests check it.
+
+The key has to summarise everything that feeds the portrayal, so
+`EcdisDisplayExtensions.ApplyTo` clears earlier viewing-group overrides before
+it applies the current hidden set. The catalogue's visibility then depends only
+on the settings, not on the order of earlier calls. `BuildVectorPortrayalAsync`
+is serialized by a `SemaphoreSlim`: the processor keeps one catalogue whose
+palette, viewing-group and display-plane state changes on each build, and
+SoundCharts can start a new render while one is running.
+
+That cache only helps an open processor. A shared cache
+(`IPortrayalInstructionCache`, in `EncDotNet.S100.Core`'s
+`Pipelines.Vector.Caching`) lets a new processor for a cell portrayed before
+skip the Lua run, including after a restart when the host passes a
+`DiskPortrayalInstructionCache`. On a miss in the processor's own cache, the
+pipeline runs inside `GetOrCompute(key, factory)` with the key
+`"{portrayalContentHash}|{BuildPortrayalCacheKey(...)}"`.
+
+`GetPortrayalContentHashAsync()` (calculated once) is a SHA-256 over:
+
+- the dataset content;
+- the resolved feature and portrayal catalogue content, from
+  `ICatalogueProvider<T>.GetCatalogueHashAsync`: the SHA-256 of the feature
+  catalogue XML, and a SHA-256 over the portrayal catalogue XML and the bytes
+  of every asset it declares, including each rule file's Lua source, symbols
+  and palettes;
+- the module version IDs of the pipeline, executor, Lua engine, portrayal and
+  feature assemblies.
+
+Any change to the dataset, a catalogue override, the bundled rules or the
+engine therefore misses and recomputes. The hash covers content, never only
+declared version strings. The same hash strengthens the pattern-clip cache key.
+The internal `SharedInstructionCacheHits` counter lets tests check reuse. With
+no shared cache, the processor uses a bounded in-memory cache, so tools and
+tests run the same code.
+
+This relies on S-101 portrayal being Lua only, as the bundled catalogue is,
+which keeps the instructions independent of palette and scale. An XSLT S-101
+catalogue would need the palette in the key; bump the processor's
+`PortrayalContentFormatVersion` if you add it.
+
+## See also
+
+- [Loading datasets](../../docs/loading-datasets.md): open files, folders,
+  ZIPs and exchange sets, and use processors.
+- [Embedding the renderer](../../docs/embedding-the-renderer.md): draw
+  portrayal output in your own map.
+- [S-98 interoperability](../../docs/design/s98-interoperability.md): the
+  design behind the layer ordering and suppression rules.

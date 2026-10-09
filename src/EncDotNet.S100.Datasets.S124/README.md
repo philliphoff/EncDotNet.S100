@@ -1,69 +1,30 @@
 # EncDotNet.S100.Datasets.S124
 
-Library for reading and portraying [IHO S-124](https://iho.int/en/s-124-navigational-warnings) (Navigational Warnings) datasets.
+`EncDotNet.S100.Datasets.S124` reads
+[IHO S-124](https://iho.int/en/s-124-navigational-warnings) Navigational
+Warnings datasets: GML files (S-100 Part 10b) that carry NAVAREA, coastal and
+local warnings. It parses a dataset into features and information types,
+projects it into a typed model, validates it, and loads the S-124 portrayal
+catalogue. Reference it when you need typed access to S-124 warnings or their
+validation rules. To open and render any product, including S-124, use the
+[`EncDotNet.S100`](../EncDotNet.S100/README.md) package, which includes this
+one.
 
-S-124 provides a standard data model for distributing navigational warnings (NAVAREA, coastal, local) as GML-encoded datasets conforming to the S-100 framework.
+## Install
 
-## Features
-
-- Parse S-124 GML datasets (S-100 Part 10b encoding)
-- Extract navigational warning features (`NavwarnPart`, `NavwarnAreaAffected`, `TextPlacement`)
-- Convert to S-100 Part 9 FeatureXML for portrayal pipeline consumption
-- XSLT-based portrayal via the S-124 Portrayal Catalogue
-
-## Overview
-
-Key types include:
-
-- **`S124Dataset`** — root model containing parsed features, information types, and dataset identification. `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded from feature geometry (`null` when the dataset carries only geometry-less container features), skipping the XSLT portrayal pipeline.
-- **`S124Feature`** — a geographic feature with type code, geometry, simple attributes, complex attributes, and `xlink:href` references (`GmlReference`).
-- **`S124InformationType`** — a non-geographic information type instance (e.g. `NavwarnPreamble`).
-- **`S124ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
-- **`S100GeometryType`** — shared enum (from `EncDotNet.S100.Core`) describing the geometry primitive type of a feature.
-- **FeatureXML projection** — there is no S-124-specific source type: the S-124 dataset processor in `EncDotNet.S100.Datasets.Pipelines` projects an `S124Dataset` into S-100 Part 9 FeatureXML for the XSLT portrayal rules with the shared `GmlFeatureXmlSource<TFeature>` from `EncDotNet.S100.Core`.
-- **`S124PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
-
-### Strongly-typed data model
-
-The types above expose the dataset as a feature bag — schema-agnostic, well
-suited for the portrayal pipeline, but inconvenient when client code wants to
-inspect a warning's preamble, parts, or references directly. The
-`EncDotNet.S100.Datasets.S124.DataModel` namespace layers a strongly-typed
-projection on top:
-
-- **`S124NavigationalWarning.From(dataset, out diagnostics)`** — projects an
-  `S124Dataset` into a typed object graph rooted at the navigational warning,
-  resolving `xlink:href` cross-references and parsing primitive values.
-- **`S124NavwarnPreamble`** with a typed `MessageSeriesIdentifier`
-  (warning number / year / agency), general area, locality, classification.
-- **`S124NavwarnPart`** with restriction code, warning information text,
-  geometry, and resolved `AffectedAreas` / `TextPlacements`.
-- **`S124AffectedArea`**, **`S124TextPlacement`** — features resolved through
-  the FC associations `areaAffected` and `TextAssociation` respectively.
-- **`S124WarningReference`** with reference category and message reference.
-- **`S124SpatialQuality`** with quality-of-position code.
-- Anything the typed model does not understand is preserved on each object's
-  `ExtraAttributes` dictionary, so extension and future-edition attributes
-  round-trip verbatim.
-- Projection failures (unresolved xlinks, unparseable values, duplicate
-  preambles) surface as `ProjectionDiagnostic` entries (from
-  `EncDotNet.S100.DataModel`) rather than exceptions. Only a fully empty
-  dataset throws.
-
-## Installation
-
-```sh
+```bash
 dotnet add package EncDotNet.S100.Datasets.S124
 ```
 
-### Quick start (typed model)
+## Read a dataset
+
+Open the dataset, then project it into the typed model:
 
 ```csharp
-using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Datasets.S124.DataModel;
 
-var dataset = S124Dataset.Open("navwarn.gml");
+var dataset = S124Dataset.Open("path/to/navwarn.gml");
 var warning = S124NavigationalWarning.From(dataset, out var diagnostics);
 
 var msi = warning.Preamble?.MessageSeriesIdentifier;
@@ -78,43 +39,117 @@ foreach (var part in warning.Parts)
         Console.WriteLine($"    affected area {area.Id} ({area.GeometryKind})");
 }
 
-foreach (var d in diagnostics) Console.WriteLine(d);
+foreach (var diagnostic in diagnostics)
+    Console.WriteLine(diagnostic);
 ```
 
-## Validation
+## Main types
 
-The `EncDotNet.S100.Datasets.S124.Validation` namespace provides a pack of
-normative rules built on the `EncDotNet.S100.Validation` framework. Rule
-identifiers follow the convention `S124-R-{clause}`, traceable back to the
-S-124 (Edition 1.0.0) Feature Catalogue or to S-100 Part 10b for shared
-encoding constraints.
+- **`S124Dataset`**: the parsed dataset, with its features, information types
+  and dataset identification. `Open` takes a path or a stream.
+  `ReadMetadata` (static, for a path or stream, or on an open dataset) returns
+  the declared product specification and the WGS 84 extent of the feature
+  geometry without running portrayal. The extent is `null` when no feature has
+  geometry.
+- **`S124Feature`**: a feature with its type code, geometry, simple attributes,
+  complex attributes and `xlink:href` references (`GmlReference`).
+  **`S124ComplexAttribute`** holds a complex attribute's sub-attributes. The
+  geometry kind is the shared `S100GeometryType` enum from
+  `EncDotNet.S100.Core`.
+- **`S124InformationType`**: an information type without geometry, such as
+  `NavwarnPreamble`.
+- **`S124NavigationalWarning`**: the typed model. See
+  [Typed data model](#typed-data-model).
+- **`S124NavigationalWarningRules`**: the validation rule set. See
+  [Validate](#validate).
+- **`S124PortrayalCatalogue`**: an `IVectorPortrayalCatalogue` that loads the
+  catalogue's XSLT rules, symbols, line styles, area fills and colour palettes.
+
+The reader extracts the features `NavwarnPart`, `NavwarnAreaAffected` and
+`TextPlacement`.
+
+## Typed data model
+
+`S124Dataset` is a feature bag: attributes are strings keyed by code, and
+references are unresolved. The `EncDotNet.S100.Datasets.S124.DataModel`
+namespace projects it into typed objects:
+
+- **`S124NavigationalWarning.From(dataset, out diagnostics)`** builds the
+  typed graph, rooted at the warning. It resolves `xlink:href` references and
+  parses values.
+- **`S124NavwarnPreamble`** has a typed `MessageSeriesIdentifier` (warning
+  number, year and production agency), the general area, locality, title,
+  NAVAREA and NAVTEX values, and promulgating authority.
+- **`S124NavwarnPart`** has the restriction code, the warning text, geometry,
+  and the resolved `AffectedAreas` and `TextPlacements`.
+- **`S124AffectedArea`** and **`S124TextPlacement`** are the features reached
+  through the feature catalogue associations `areaAffected` and
+  `TextAssociation`.
+- **`S124WarningReference`** has the reference category and message
+  reference.
+- **`S124SpatialQuality`** has the quality-of-position code.
+
+Each object keeps attributes the model doesn't read in its `ExtraAttributes`
+dictionary, so extension and later-edition attributes aren't lost. Unresolved
+xlinks, values that don't parse and duplicate preambles become
+`ProjectionDiagnostic` entries (from `EncDotNet.S100.DataModel`) instead of
+exceptions. `From` throws only when the dataset has no features and no
+information types.
+
+## Validate
+
+`S124NavigationalWarningRules`, in the
+`EncDotNet.S100.Datasets.S124.Validation` namespace, is the default rule set for
+the typed model. It's built on the validation types in the
+`EncDotNet.S100.Validation` namespace. Rule IDs have the form `S124-R-{clause}`
+and trace to the S-124 Edition 1.0.0 Feature Catalogue, or to S-100 Part 10b for
+shared encoding rules. The `EncDotNet.S100` package's `dataset.Validate()` runs
+the same rule set.
 
 ```csharp
 using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Datasets.S124.DataModel;
 using EncDotNet.S100.Datasets.S124.Validation;
 
-var dataset = S124Dataset.Open("navwarn.gml");
+var dataset = S124Dataset.Open("path/to/navwarn.gml");
 var warning = S124NavigationalWarning.From(dataset, out _);
-
 var report = S124NavigationalWarningRules.Validate(warning);
+
 foreach (var finding in report.Findings)
     Console.WriteLine($"[{finding.Severity}] {finding.RuleId}: {finding.Message}");
 ```
 
-The default rule set covers eight Tier-1/Tier-2 rules:
+| Rule ID | Severity | Checks |
+|---|---|---|
+| `S124-R-1.1` | Error | The warning contains at least one `NavwarnPart`. |
+| `S124-R-2.1` | Error | The warning includes a `NavwarnPreamble`. |
+| `S124-R-2.2` | Error | `messageSeriesIdentifier` has a positive warning number and a plausible year. |
+| `S124-R-3.1` | Error | `NAVAREA` is one of the IMO NAVAREA codes (I to XXI). |
+| `S124-R-4.1` | Error | All coordinates are within the WGS 84 latitude and longitude ranges. |
+| `S124-R-4.2` | Error | Surface exterior rings are closed and have at least four positions. |
+| `S124-R-5.1` | Warning | Each `NavwarnPart` has non-empty warning text. |
+| `S124-R-6.1` | Error | A `References` information type that sets `referenceCategory` includes `messageReference`. |
 
-| Rule | Description |
-|---|---|
-| `S124-R-1.1` | A navigational warning must contain at least one `NavwarnPart`. |
-| `S124-R-2.1` | Every navigational warning must include a `NavwarnPreamble`. |
-| `S124-R-2.2` | `messageSeriesIdentifier` must carry a positive warning number and a plausible year. |
-| `S124-R-3.1` | `NAVAREA` must be one of the IMO NAVAREA codes (I…XXI). |
-| `S124-R-4.1` | All coordinates must lie within the WGS-84 lat/lon ranges. |
-| `S124-R-4.2` | Surface exterior rings must be closed and contain at least four positions. |
-| `S124-R-5.1` | Each `NavwarnPart` must carry non-empty warning text. |
-| `S124-R-6.1` | A `References` information type that sets `referenceCategory` must include `messageReference`. |
+The rules check one dataset at a time. Cross-dataset checks, such as resolving
+the warning that a cancellation refers to, aren't included. Projection
+problems, such as a duplicate preamble, are reported in the diagnostics from
+`From`, not as findings.
 
-Tier-3 cross-dataset rules (e.g. resolving the referenced warning of a
-cancellation against a sibling catalogue) are out of scope for this pack.
+## Portrayal
 
+The S-124 dataset processor in `EncDotNet.S100.Datasets.Pipelines` converts an
+`S124Dataset` to S-100 Part 9 FeatureXML with the shared
+`GmlFeatureXmlSource<TFeature>` from `EncDotNet.S100.Core`, then runs the
+bundled S-124 portrayal catalogue's XSLT rules over it. There's no
+S-124-specific FeatureXML source type.
+
+## See also
+
+- [Loading datasets](../../docs/loading-datasets.md): open files, folders, ZIPs
+  and exchange sets through the `EncDotNet.S100` package.
+- [Reading product data](../../docs/reading-product-data.md): features,
+  information types and typed models for each product.
+- [Typed data models](../../docs/typed-data-models.md): the typed
+  root for each product and the shared diagnostic codes.
+- [Custom catalogues and validation](../../docs/catalogues-and-validation.md):
+  run the bundled rules and add your own.
