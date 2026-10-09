@@ -88,10 +88,11 @@ public enum SecomReachability
     CertificateRefused,
 
     /// <summary>
-    /// It has no <c>GetSummary</c> GET (404) but has SECOM 2.0's POST
-    /// GetSummary (<c>POST …/v2/object/search/summary</c>, an enveloped and
-    /// signed filter), which this client does not support yet. Not a
-    /// certificate matter in itself.
+    /// It has no <c>GetSummary</c> GET (404), only SECOM 2.0's POST GetSummary
+    /// (<c>POST …/v2/object/search/summary</c>), whose filter must be signed
+    /// with an MCP identity (#838). Without one it cannot be listed; with one
+    /// that the service neither accepts nor refuses outright, the
+    /// <see cref="SecomProbeResult.Detail"/> holds its answer.
     /// </summary>
     NeedsSecom2Search,
 
@@ -242,7 +243,9 @@ public sealed class SecomRegistry
 
         // Anonymously first: a service that answers without the identity is Open.
         var result = await ProbeServiceAsync(AnonymousClient, serviceUri, cancellationToken).ConfigureAwait(false);
-        if (result.Reachability == SecomReachability.NeedsCertificate && _serverTrust?.Identity is { } identity)
+        if (result.Reachability == SecomReachability.NeedsSecom2Search && _serverTrust?.Identity is { } signing)
+            result = await ProbeSignedSearchAsync(serviceUri, signing, cancellationToken).ConfigureAwait(false);
+        else if (result.Reachability == SecomReachability.NeedsCertificate && _serverTrust?.Identity is { } identity)
         {
             var identified = await ProbeServiceAsync(_httpClient, serviceUri, cancellationToken).ConfigureAwait(false);
             result = identified switch
@@ -265,6 +268,29 @@ public sealed class SecomRegistry
         return result.Reachability == SecomReachability.UntrustedServer && RefusalReason(trust) is { } reason
             ? result with { Detail = reason, ServerTrust = trust }
             : result with { ServerTrust = trust };
+    }
+
+    /// <summary>
+    /// Lists one page through SECOM 2.0's signed POST summary with the
+    /// identity (#838): readable, refused (401/403), or still not readable,
+    /// with the service's answer.
+    /// </summary>
+    private async Task<SecomProbeResult> ProbeSignedSearchAsync(Uri serviceUri, SecomClientIdentity identity, CancellationToken cancellationToken)
+    {
+        var client = new SecomClient(_httpClient, serviceUri) { Signer = _serverTrust!.CreateSigner, UsesPostInterfaces = true };
+        try
+        {
+            await client.GetSummaryPageAsync(new SecomQuery(PageSize: 1), 1, cancellationToken).ConfigureAwait(false);
+            return new SecomProbeResult(SecomReachability.OpenWithCertificate, identity.DisplayName) { Identity = identity.DisplayName };
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            return new SecomProbeResult(SecomReachability.CertificateRefused, ex.Message) { Identity = identity.DisplayName };
+        }
+        catch (Exception ex) when (IsProbeFailure(ex, cancellationToken))
+        {
+            return new SecomProbeResult(SecomReachability.NeedsSecom2Search, ex.Message) { Identity = identity.DisplayName };
+        }
     }
 
     private static string? RefusalReason(SecomServerTrustResult trust) => trust.Outcome switch
@@ -308,18 +334,17 @@ public sealed class SecomRegistry
             await client.GetSummaryPageAsync(new SecomQuery(PageSize: 1), 1, cancellationToken).ConfigureAwait(false);
             return new SecomProbeResult(SecomReachability.Open);
         }
+        catch (SecomIdentityRequiredException)
+        {
+            // SECOM 2.0 services (KHRA, KRISO) list only through the signed POST
+            // summary and have no GET summary (404): not a certificate matter yet.
+            // The client found the POST form; their serviceVersion is no guide.
+            return new SecomProbeResult(SecomReachability.NeedsSecom2Search, "It lists its objects only through SECOM 2.0's signed requests, which need an MCP identity.");
+        }
         catch (Exception ex) when (IsProbeFailure(ex, cancellationToken))
         {
             if (Classify(ex, host) is { } failed)
                 return failed;
-
-            // SECOM 2.0 services (KHRA, KRISO) list only through the enveloped POST
-            // GetSummary and have no GET summary (404): not a certificate matter.
-            // Their serviceVersion is no guide (KRISO states its own 0.1.0, 1.0.0).
-            if (capability is not null
-                && ex is HttpRequestException { StatusCode: HttpStatusCode.NotFound }
-                && await client.HasPostSummaryAsync(cancellationToken).ConfigureAwait(false))
-                return new SecomProbeResult(SecomReachability.NeedsSecom2Search, "It lists its objects only through SECOM 2.0's signed POST summary, which is not supported yet.");
 
             // It answers Capability as SECOM but not an anonymous GetSummary;
             // otherwise it is not a SECOM service.
@@ -350,6 +375,9 @@ public sealed class SecomRegistry
             TaskCanceledException => new SecomProbeResult(SecomReachability.Unreachable, "The service did not answer in time."),
             HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden } =>
                 new SecomProbeResult(SecomReachability.NeedsCertificate, ex.Message) { Refusal = true },
+            // Request/response services (KRISO's port call, TCS, …) list nothing.
+            HttpRequestException { StatusCode: HttpStatusCode.NotImplemented } =>
+                new SecomProbeResult(SecomReachability.Unreachable, "It does not offer GetSummary, so it cannot be listed."),
             _ => null,
         };
     }

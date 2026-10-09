@@ -183,6 +183,14 @@ public enum RemoteEnvelope
     /// <see cref="RemoteItemLocation.Layout"/> names.
     /// </summary>
     Secom = 1,
+
+    /// <summary>
+    /// A SECOM 2.0 <c>Get</c> through the signed POST form (#838): a signed
+    /// filter naming the object's <c>dataReference</c> (from the location's
+    /// GET URI) is posted to <c>…/v2/object/search</c>; the response is a
+    /// <c>Get</c> response, handled as <see cref="Secom"/>. It needs an MCP identity.
+    /// </summary>
+    SecomPost = 2,
 }
 
 /// <summary>

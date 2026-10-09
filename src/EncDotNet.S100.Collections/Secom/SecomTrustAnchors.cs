@@ -184,9 +184,21 @@ public sealed partial class SecomTrustAnchors
     private string? AnchorNamed(X509Certificate2 root) =>
         Roots.FirstOrDefault(r => r.Certificate.RawData.AsSpan().SequenceEqual(root.RawData))?.Name;
 
+    /// <summary>
+    /// Whether <paramref name="thumbprint"/> names <paramref name="certificate"/>:
+    /// SHA-1, SHA-256, or SHA-384 (what SECOM 2.0 states, #838).
+    /// </summary>
     private static bool Names(X509Certificate2 certificate, string thumbprint) =>
         string.Equals(thumbprint, certificate.Thumbprint, StringComparison.OrdinalIgnoreCase)
-        || string.Equals(thumbprint, Convert.ToHexString(SHA256.HashData(certificate.RawData)), StringComparison.OrdinalIgnoreCase);
+        || string.Equals(thumbprint, Convert.ToHexString(SHA256.HashData(certificate.RawData)), StringComparison.OrdinalIgnoreCase)
+        || string.Equals(thumbprint, Convert.ToHexString(SHA384.HashData(certificate.RawData)), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The root <paramref name="leaf"/> chains to among these anchors (time
+    /// validity ignored), or <see langword="null"/> when it reaches none.
+    /// </summary>
+    internal X509Certificate2? FindRoot(X509Certificate2 leaf) =>
+        BuildChain(leaf, []) is { Length: > 0 } elements ? elements[^1] : null;
 
     private static SecomTrustAnchors LoadBuiltIn()
     {

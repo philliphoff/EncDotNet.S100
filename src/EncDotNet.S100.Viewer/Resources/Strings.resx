@@ -3212,10 +3212,14 @@
     <value>This service's TLS certificate is not issued under a root this computer or SoundCharts trusts.</value>
   </data>
   <data name="Library_Reachability_NeedsSecom2Search" xml:space="preserve">
-    <value>Uses SECOM 2.0 search</value>
+    <value>Needs a signed request</value>
   </data>
   <data name="Library_Reachability_NeedsSecom2SearchExplanation" xml:space="preserve">
-    <value>This service lists its data through SECOM 2.0's signed search, which SoundCharts does not support yet.</value>
+    <value>This service lists its data only through SECOM 2.0's signed requests, which need your MCP identity, and none is set.</value>
+  </data>
+  <data name="Library_Reachability_Secom2SearchRejectedFormat" xml:space="preserve">
+    <value>A request signed with your MCP identity ({0}) was not accepted: {1}</value>
+    <comment>{0}: the identity's MRN; {1}: what the service answered</comment>
   </data>
   <data name="Library_Reachability_OpenWithCertificate" xml:space="preserve">
     <value>Readable with your certificate</value>

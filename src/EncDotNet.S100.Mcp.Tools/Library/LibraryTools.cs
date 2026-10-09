@@ -226,7 +226,7 @@ public sealed record SecomServiceInfo(
     [property: Description("'Released' or 'Provisional' (test).")] string Status,
     [property: Description("The SECOM endpoint; pass it as url to add_library_source.")] string Endpoint,
     [property: Description("The area it covers, as [south, west, north, east], or null.")] double[]? Bounds,
-    [property: Description("With probe: 'Open' (readable without a certificate), 'OpenWithCertificate' (readable with the identity from set_secom_identity), 'NeedsCertificate' (no identity set), 'CertificateRefused' (the identity was presented and refused), 'NeedsSecom2Search' (a SECOM 2.0 service, listed through signed search; not supported yet), 'UntrustedServer' (TLS certificate refused) or 'Unreachable'; otherwise null.")] string? Reachability,
+    [property: Description("With probe: 'Open' (readable without a certificate), 'OpenWithCertificate' (readable with the identity from set_secom_identity), 'NeedsCertificate' (no identity set), 'CertificateRefused' (the identity was presented and refused), 'NeedsSecom2Search' (lists only through SECOM 2.0 signed requests: no identity set, or the signed request was not accepted), 'UntrustedServer' (TLS certificate refused) or 'Unreachable'; otherwise null.")] string? Reachability,
     [property: Description("With probe: what the service answered, or null.")] string? Detail,
     [property: Description("With probe: the decision on the server's TLS certificate — 'SystemTrusted', 'AnchorTrusted' (issued under a SECOM trust anchor such as MCP MCC), 'NotTrusted', 'Expired', 'WrongHost' or 'Revoked' (listed on its CA's CRL); null when unknown.")] string? ServerCertificate = null,
     [property: Description("With probe: the trust anchor the server certificate chains to (e.g. 'MCP MCC'), or null.")] string? ServerCertificateAnchor = null,
@@ -238,7 +238,12 @@ public sealed record SecomIdentityDto(
     [property: Description("The certificate's subject common name.")] string? Subject = null,
     [property: Description("The MRN it was issued to, e.g. 'urn:mrn:mcp:device:mcc:…'.")] string? Mrn = null,
     [property: Description("The trust anchor it chains to (e.g. 'MCP MCC'), or null when it chains to none of them.")] string? Anchor = null,
-    [property: Description("When it expires.")] DateTimeOffset? NotAfter = null);
+    [property: Description("When it expires.")] DateTimeOffset? NotAfter = null)
+{
+    /// <summary>The algorithm SECOM 2.0 request envelopes are signed with, e.g. 'ecdsa-384-sha3'.</summary>
+    [Description("The algorithm SECOM 2.0 request envelopes are signed with, e.g. 'ecdsa-384-sha3'.")]
+    public string? SignatureAlgorithm { get; init; }
+}
 
 /// <summary>
 /// Sets, clears or reports the MCP identity (client certificate) presented to
@@ -254,8 +259,24 @@ public sealed class SetSecomIdentityTool(EncDotNet.S100.Collections.Secom.SecomS
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
     /// <summary>Loads the identity at <paramref name="path"/>, clears it, or (with neither) reports it.</summary>
-    public Task<ToolResult<SecomIdentityDto>> InvokeAsync(string? path, string? password, bool? clear, CancellationToken ct = default)
+    public Task<ToolResult<SecomIdentityDto>> InvokeAsync(
+        string? path, string? password, bool? clear, string? signatureAlgorithm = null, CancellationToken ct = default)
     {
+        if (signatureAlgorithm is not null)
+        {
+            var previous = _trust.EnvelopeSignatureReference;
+            _trust.EnvelopeSignatureReference = signatureAlgorithm.Length == 0 ? null : signatureAlgorithm;
+            try
+            {
+                _ = _trust.CreateSigner();
+            }
+            catch (InvalidDataException ex)
+            {
+                _trust.EnvelopeSignatureReference = previous;
+                return Task.FromResult(ToolResult<SecomIdentityDto>.Err(new InvalidArgument("signatureAlgorithm", ex.Message)));
+            }
+        }
+
         if (clear == true)
         {
             _trust.SetIdentity(null);
@@ -286,9 +307,24 @@ public sealed class SetSecomIdentityTool(EncDotNet.S100.Collections.Secom.SecomS
         return Task.FromResult(ToolResult<SecomIdentityDto>.Ok(Describe(identity)));
     }
 
-    private static SecomIdentityDto Describe(EncDotNet.S100.Collections.Secom.SecomClientIdentity? identity) => identity is null
+    private SecomIdentityDto Describe(EncDotNet.S100.Collections.Secom.SecomClientIdentity? identity) => identity is null
         ? new SecomIdentityDto(false)
-        : new SecomIdentityDto(true, identity.Subject, identity.Mrn, identity.Anchor, identity.NotAfter);
+        : new SecomIdentityDto(true, identity.Subject, identity.Mrn, identity.Anchor, identity.NotAfter)
+        {
+            SignatureAlgorithm = SafeSignatureReference(),
+        };
+
+    private string? SafeSignatureReference()
+    {
+        try
+        {
+            return _trust.CreateSigner()?.SignatureReference;
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
+    }
 }
 
 /// <summary>Lists SECOM services from the MCP service registry (MCP <c>list_secom_services</c>, #822).</summary>

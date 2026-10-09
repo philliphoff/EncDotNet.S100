@@ -480,6 +480,8 @@ public partial class App : Application
                 (path, _) => metadata.TryRead(path))
             {
                 Revocation = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(),
+                // SECOM 2.0 services that list only through signed requests (#838).
+                Signer = trust.CreateSigner,
             };
         });
         services.AddSingleton(sp =>
@@ -527,13 +529,14 @@ public partial class App : Application
             // the item names its own (community lists: one per list).
             var downloads = sp.GetRequiredService<ViewerDataPaths>().DownloadsDirectory;
             var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-            var secom = new System.Net.Http.HttpClient(sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>().CreateHandler())
+            var trust = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>();
+            var secom = new System.Net.Http.HttpClient(trust.CreateHandler())
             {
                 Timeout = TimeSpan.FromMinutes(10),
             };
             return new Library.LibraryDownloadService(
                 EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(
-                    http, downloads, secom, sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>()),
+                    http, downloads, secom, sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(), trust.CreateSigner),
                 sp.GetService<Services.Notifications.INotificationService>());
         });
         services.AddSingleton(sp =>

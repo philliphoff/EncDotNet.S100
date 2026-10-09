@@ -20,15 +20,19 @@ namespace EncDotNet.S100.Collections.Secom;
 /// version that answered.
 /// </para>
 /// <para>
-/// Signed requests (the edition 2 <c>POST</c> search interfaces), mutual TLS,
-/// access requests and encrypted data need an MCP certificate and are not
-/// supported yet; see <c>docs/design/dataset-collections.md</c> §7.5.
+/// A SECOM 2.0 service with no GET summary but the enveloped POST forms
+/// (<c>POST …/v2/object/search/summary</c> and <c>…/v2/object/search</c>, as
+/// KHRA and KRISO have) is listed and read through them, signed by
+/// <see cref="Signer"/>, once a GET summary answers 404 (#838). Access
+/// requests and encrypted data are not supported yet; see
+/// <c>docs/design/dataset-collections.md</c> §7.5.
 /// </para>
 /// </remarks>
 public sealed class SecomClient
 {
     private readonly HttpClient _httpClient;
     private SecomApiVersion? _version;
+    private bool _post;
 
     /// <summary>Creates a client for the service at <paramref name="serviceUri"/>.</summary>
     /// <param name="httpClient">The client used for requests.</param>
@@ -54,6 +58,29 @@ public sealed class SecomClient
     /// that succeeded; <see langword="null"/> before then.
     /// </summary>
     public SecomApiVersion? ApiVersion => _version;
+
+    /// <summary>
+    /// The signer for SECOM 2.0 POST requests (#838): this client's MCP
+    /// identity, when one is set; <see langword="null"/> or returning
+    /// <see langword="null"/> when there is none.
+    /// </summary>
+    public Func<SecomEnvelopeSigner?>? Signer { get; init; }
+
+    /// <summary>
+    /// True when this client lists and reads through the SECOM 2.0 POST forms:
+    /// set to start with them (a service known to need them), or found when a
+    /// GET summary answered 404 and the POST form exists.
+    /// </summary>
+    public bool UsesPostInterfaces
+    {
+        get => _post;
+        init
+        {
+            _post = value;
+            if (value)
+                _version = SecomApiVersion.V2;
+        }
+    }
 
     /// <summary>
     /// Returns the service URI in canonical form: query and fragment dropped,
@@ -110,8 +137,47 @@ public sealed class SecomClient
         ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
 
         var filtered = query.GeometryWkt is { Length: > 0 } || query.ValidFrom is not null || query.ValidTo is not null;
+        if (!_post)
+        {
+            try
+            {
+                return await GetSummaryPageByGetAsync(query, page, filtered, cancellationToken).ConfigureAwait(false);
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+            {
+                // No GET summary, but the SECOM 2.0 POST form: list through it from now on.
+                var post = await PostSummaryStatusAsync(cancellationToken).ConfigureAwait(false);
+                if (post == HttpStatusCode.NotImplemented)
+                {
+                    throw new HttpRequestException(
+                        "The service does not implement GetSummary (501).", ex, HttpStatusCode.NotImplemented);
+                }
+
+                if (!HasPostSummary(post))
+                    throw;
+                _post = true;
+                _version = SecomApiVersion.V2;
+            }
+        }
+
+        try
+        {
+            return await SendPostAsync(
+                Resolve(SecomApiVersion.V2, "object/search/summary", []),
+                signer => signer.SummaryRequest(query, page, DateTimeOffset.UtcNow),
+                root => SecomJson.ReadSummaryPage(root),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex) when (filtered && ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return new SecomSummaryPage([], 0, null);
+        }
+    }
+
+    private async Task<SecomSummaryPage> GetSummaryPageByGetAsync(SecomQuery query, int page, bool filtered, CancellationToken cancellationToken)
+    {
         if (filtered && _version is null)
-            await GetSummaryPageAsync(new SecomQuery(PageSize: 1), 1, cancellationToken).ConfigureAwait(false);
+            await GetSummaryPageByGetAsync(new SecomQuery(PageSize: 1), 1, filtered: false, cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -183,10 +249,41 @@ public sealed class SecomClient
     public Task<SecomDataObject?> GetAsync(string dataReference, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(dataReference);
+        if (_post)
+        {
+            return SendPostAsync(
+                Resolve(SecomApiVersion.V2, "object/search", []),
+                signer => signer.GetRequest(dataReference, DateTimeOffset.UtcNow),
+                root => SecomJson.ReadDataObjects(root).FirstOrDefault(),
+                cancellationToken);
+        }
+
         return SendAsync(
             v => GetObjectUri(dataReference, v),
             (root, _) => SecomJson.ReadDataObjects(root).FirstOrDefault(),
             cancellationToken);
+    }
+
+    /// <summary>
+    /// The request that <c>Get</c>s an object through the SECOM 2.0 POST form
+    /// (<c>POST …/v2/object/search</c>), for hosts that fetch it themselves
+    /// (the downloader). <paramref name="getObjectUri"/> is the object's GET
+    /// URI (<see cref="GetObjectUri"/>), which names the service and the data
+    /// reference.
+    /// </summary>
+    /// <exception cref="ArgumentException">The URI names no data reference.</exception>
+    public static HttpRequestMessage CreatePostGetRequest(Uri getObjectUri, SecomEnvelopeSigner signer, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(getObjectUri);
+        ArgumentNullException.ThrowIfNull(signer);
+        var dataReference = getObjectUri.Query.TrimStart('?').Split('&')
+            .Select(p => p.Split('=', 2))
+            .Where(p => p.Length == 2 && p[0] == "dataReference")
+            .Select(p => Uri.UnescapeDataString(p[1]))
+            .FirstOrDefault()
+            ?? throw new ArgumentException("The URI names no dataReference.", nameof(getObjectUri));
+        var service = NormalizeServiceUri(getObjectUri);
+        return PostRequest(new Uri(service, "v2/object/search"), signer.GetRequest(dataReference, now));
     }
 
     /// <summary>
@@ -248,7 +345,7 @@ public sealed class SecomClient
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException(
-                string.Create(CultureInfo.InvariantCulture, $"SECOM {uri.AbsolutePath} answered {(int)response.StatusCode} {response.ReasonPhrase}."),
+                string.Create(CultureInfo.InvariantCulture, $"SECOM {uri.AbsolutePath} answered {Status(response)}."),
                 null,
                 response.StatusCode);
         }
@@ -270,25 +367,81 @@ public sealed class SecomClient
         }
     }
 
+    private async Task<T> SendPostAsync<T>(
+        Uri uri, Func<SecomEnvelopeSigner, System.Text.Json.Nodes.JsonObject> body, Func<JsonElement, T> read, CancellationToken cancellationToken)
+    {
+        var signer = Signer?.Invoke() ?? throw new SecomIdentityRequiredException(
+            $"SECOM {uri.AbsolutePath} lists and serves objects only through SECOM 2.0's signed requests, which need an MCP identity.");
+        using var request = PostRequest(uri, body(signer));
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                string.Create(CultureInfo.InvariantCulture, $"SECOM POST {uri.AbsolutePath} answered {Status(response)}."),
+                null,
+                response.StatusCode);
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        JsonDocument document;
+        try
+        {
+            document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"SECOM POST {uri.AbsolutePath} did not answer with JSON.", ex);
+        }
+
+        using (document)
+        {
+            return read(document.RootElement);
+        }
+    }
+
+    /// <summary>"404 Not Found", or just "404" when the service sends no reason phrase.</summary>
+    private static string Status(HttpResponseMessage response) =>
+        string.IsNullOrWhiteSpace(response.ReasonPhrase)
+            ? ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)
+            : string.Create(CultureInfo.InvariantCulture, $"{(int)response.StatusCode} {response.ReasonPhrase}");
+
+    private static HttpRequestMessage PostRequest(Uri uri, System.Text.Json.Nodes.JsonObject body)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, uri)
+        {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Accept.ParseAdd("application/json");
+        return request;
+    }
+
     /// <summary>
     /// True when the service has SECOM 2.0's POST GetSummary
     /// (<c>POST …/v2/object/search/summary</c>, an enveloped and signed
-    /// filter): an empty request is answered with anything but 404. KHRA and
-    /// KRISO list objects only through it; they have no GET summary.
+    /// filter): an empty request is answered, if not with 404, 405 or 501.
+    /// KHRA and KRISO list objects only through it; they have no GET summary.
     /// </summary>
-    internal async Task<bool> HasPostSummaryAsync(CancellationToken cancellationToken)
+    internal async Task<bool> HasPostSummaryAsync(CancellationToken cancellationToken) =>
+        HasPostSummary(await PostSummaryStatusAsync(cancellationToken).ConfigureAwait(false));
+
+    private static bool HasPostSummary(HttpStatusCode? status) =>
+        status is { } code and not (HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotImplemented);
+
+    /// <summary>What an empty POST GetSummary is answered with, or <see langword="null"/> when nothing answered.</summary>
+    private async Task<HttpStatusCode?> PostSummaryStatusAsync(CancellationToken cancellationToken)
     {
         try
         {
-            using var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+            using var content = new StringContent("{}", Encoding.UTF8, "application/json");
             using var response = await _httpClient
                 .PostAsync(Resolve(SecomApiVersion.V2, "object/search/summary", []), content, cancellationToken)
                 .ConfigureAwait(false);
-            return response.StatusCode != System.Net.HttpStatusCode.NotFound;
+            return response.StatusCode;
         }
         catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
         {
-            return false;
+            return null;
         }
     }
 
@@ -317,5 +470,18 @@ public sealed class SecomClient
             yield return ("validTo", to.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture));
         yield return ("page", page.ToString(CultureInfo.InvariantCulture));
         yield return ("pageSize", Math.Max(1, query.PageSize).ToString(CultureInfo.InvariantCulture));
+    }
+}
+
+/// <summary>
+/// A SECOM 2.0 service needs a signed request, and no MCP identity is set to
+/// sign it (#838).
+/// </summary>
+public sealed class SecomIdentityRequiredException : HttpRequestException
+{
+    /// <summary>Creates the exception.</summary>
+    public SecomIdentityRequiredException(string message)
+        : base(message)
+    {
     }
 }

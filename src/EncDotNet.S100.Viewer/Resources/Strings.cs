@@ -1338,6 +1338,7 @@ internal static class Strings
     public static string Library_Reachability_WrongHostExplanation => Get(nameof(Library_Reachability_WrongHostExplanation));
     public static string Library_Reachability_NeedsSecom2Search => Get(nameof(Library_Reachability_NeedsSecom2Search));
     public static string Library_Reachability_NeedsSecom2SearchExplanation => Get(nameof(Library_Reachability_NeedsSecom2SearchExplanation));
+    public static string Library_Reachability_Secom2SearchRejectedFormat => Get(nameof(Library_Reachability_Secom2SearchRejectedFormat));
     public static string Library_Reachability_RevokedServerExplanationFormat => Get(nameof(Library_Reachability_RevokedServerExplanationFormat));
     public static string Library_Reachability_RevocationNotCheckedExplanation => Get(nameof(Library_Reachability_RevocationNotCheckedExplanation));
     public static string Library_Reachability_OpenWithCertificate => Get(nameof(Library_Reachability_OpenWithCertificate));

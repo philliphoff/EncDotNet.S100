@@ -113,6 +113,23 @@ public sealed class SecomServerTrust
     /// <summary>The MCP identity presented to SECOM services that ask for a client certificate, if one is set.</summary>
     public SecomClientIdentity? Identity => Volatile.Read(ref _identity);
 
+    /// <summary>
+    /// The SECOM <c>digitalSignatureReference</c> SECOM 2.0 request envelopes
+    /// are signed with (#838), e.g. <c>ecdsa-384-sha2</c>; <see langword="null"/>
+    /// (the default) follows the identity's key. A service checks a search
+    /// envelope with the algorithm it is configured for, so this may need
+    /// matching to it.
+    /// </summary>
+    public string? EnvelopeSignatureReference { get; set; }
+
+    /// <summary>
+    /// A signer for SECOM 2.0 request envelopes with the current
+    /// <see cref="Identity"/>, or <see langword="null"/> when none is set.
+    /// </summary>
+    /// <exception cref="InvalidDataException">The identity cannot sign with <see cref="EnvelopeSignatureReference"/>.</exception>
+    public SecomEnvelopeSigner? CreateSigner() =>
+        Identity is { } identity ? new SecomEnvelopeSigner(identity, Anchors, EnvelopeSignatureReference) : null;
+
     /// <summary>Raised after <see cref="SetIdentity"/> changes the identity.</summary>
     public event EventHandler? IdentityChanged;
 

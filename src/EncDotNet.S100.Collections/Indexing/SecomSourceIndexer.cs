@@ -49,6 +49,13 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     private readonly object _gate = new();
     private readonly Dictionary<string, Listing> _recent = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The signer for services that list only through SECOM 2.0's signed POST
+    /// forms (#838): this client's MCP identity when one is set. Without one,
+    /// such a service fails to list with <see cref="SecomIdentityRequiredException"/>.
+    /// </summary>
+    public Func<SecomEnvelopeSigner?>? Signer { get; init; }
+
     /// <summary>Creates an indexer.</summary>
     /// <param name="httpClient">The client used to call services.</param>
     /// <param name="cacheDirectory">Where the last list of each service is kept; <see langword="null"/> for none.</param>
@@ -145,7 +152,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         var fingerprint = listing.Stale is null ? Fingerprint(secom, listing) : null;
         var folder = DownloadFolderFor(serviceUri);
         var downloader = _downloadsRoot is null ? null : new EncCellDownloader(_httpClient, Path.Combine(_downloadsRoot, folder)) { Revocation = Revocation };
-        var client = new SecomClient(_httpClient, serviceUri, listing.Version);
+        var client = new SecomClient(_httpClient, serviceUri, listing.Version) { Signer = Signer, UsesPostInterfaces = listing.Post };
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var items = new List<CollectionItem>();
         var exchangeSets = 0;
@@ -251,7 +258,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
                 summary.LastModified,
                 folder,
                 Layout: new PackageLayout(name + FileExtension(product, summary.Name), []),
-                Envelope: RemoteEnvelope.Secom);
+                Envelope: client.UsesPostInterfaces ? RemoteEnvelope.SecomPost : RemoteEnvelope.Secom);
 
         return new CollectionItem
         {
@@ -362,10 +369,13 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         Listing listing;
         try
         {
-            var client = new SecomClient(_httpClient, serviceUri);
+            var client = new SecomClient(_httpClient, serviceUri) { Signer = Signer };
             var query = new SecomQuery(GeometryWkt: source.Filter.GeometryWkt, PageSize: 250);
             var list = await client.GetSummariesAsync(query, _maxItems, cancellationToken).ConfigureAwait(false);
-            listing = new Listing(list.Items, list.TotalItems, list.Truncated, client.ApiVersion ?? SecomApiVersion.V2, now);
+            listing = new Listing(list.Items, list.TotalItems, list.Truncated, client.ApiVersion ?? SecomApiVersion.V2, now)
+            {
+                Post = client.UsesPostInterfaces,
+            };
             Save(key, listing);
             lock (_gate)
                 _errors.Remove(serviceUri.AbsoluteUri);
@@ -463,7 +473,8 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         }
 
         var listed = Convert.ToHexString(hash.GetHashAndReset())[..16];
-        return $"{FingerprintVersion}:{listing.Version}:{listed}:{source.Filter.ToCanonicalString()}:{downloads}";
+        var post = listing.Post ? "+post" : string.Empty;
+        return $"{FingerprintVersion}:{listing.Version}{post}:{listed}:{source.Filter.ToCanonicalString()}:{downloads}";
     }
 
     private static CollectionItemStatus Status(string? status) => status?.Trim().ToUpperInvariant() switch
@@ -526,6 +537,9 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     {
         [System.Text.Json.Serialization.JsonIgnore]
         public string? Stale { get; init; }
+
+        /// <summary>True when the service is listed and read through the signed SECOM 2.0 POST forms (#838).</summary>
+        public bool Post { get; init; }
     }
 
     [System.Text.Json.Serialization.JsonSerializable(typeof(Listing))]

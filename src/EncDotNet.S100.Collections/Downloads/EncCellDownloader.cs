@@ -146,6 +146,13 @@ public sealed partial class EncCellDownloader
     public HttpClient? SecomHttpClient { get; init; }
 
     /// <summary>
+    /// The signer for <see cref="RemoteEnvelope.SecomPost"/> downloads: this
+    /// client's MCP identity when one is set (#838). Without one, such a
+    /// download fails with <see cref="SecomIdentityRequiredException"/>.
+    /// </summary>
+    public Func<SecomEnvelopeSigner?>? SecomSigner { get; init; }
+
+    /// <summary>
     /// Returns the downloaded copy of <paramref name="cellName"/> (a cell or
     /// package name), or <see langword="null"/> when it has not been
     /// downloaded (or its record is unreadable or its files are gone).
@@ -240,9 +247,17 @@ public sealed partial class EncCellDownloader
 
         try
         {
-            var http = remote.Envelope == RemoteEnvelope.Secom ? SecomHttpClient ?? _httpClient : _httpClient;
+            var isSecom = remote.Envelope is RemoteEnvelope.Secom or RemoteEnvelope.SecomPost;
+            var http = isSecom ? SecomHttpClient ?? _httpClient : _httpClient;
+            using var request = remote.Envelope == RemoteEnvelope.SecomPost
+                ? SecomClient.CreatePostGetRequest(
+                    remote.Uri,
+                    SecomSigner?.Invoke() ?? throw new SecomIdentityRequiredException(
+                        $"{item.Name} can only be fetched with a signed SECOM 2.0 request, which needs an MCP identity."),
+                    _time.GetUtcNow())
+                : new HttpRequestMessage(HttpMethod.Get, remote.Uri);
             using (var response = await http
-                .GetAsync(remote.Uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .ConfigureAwait(false))
             {
                 response.EnsureSuccessStatusCode();
@@ -261,7 +276,7 @@ public sealed partial class EncCellDownloader
 
             cancellationToken.ThrowIfCancellationRequested();
             SignatureRecord? signature = null;
-            if (remote.Envelope == RemoteEnvelope.Secom)
+            if (isSecom)
             {
                 signature = UnwrapSecom(item, remote, zipPath, staging, TrustAnchors, Revocation, _time.GetUtcNow());
             }

@@ -1371,6 +1371,66 @@ TLS trust for the same roots followed in #829 (§7.9).
 >     freshness.
 >   - Delta CRLs and `certificateHold` removal; MCP uses neither.
 
+### 7.12 SECOM 2.0 signed requests (#838)
+
+> - **Interfaces.** These are what GLA's SECOMLib implements (Apache-2.0,
+>   read 2026-10-09). SECOM 2.0 keeps the GET forms and adds POST forms
+>   whose filter travels in a signed envelope:
+>   - `POST …/v2/object/search/summary` for GetSummary;
+>   - `POST …/v2/object/search` for Get.
+>
+>   KHRA and the KRISO hosts have only the POST forms.
+> - **Envelope.**
+>   - Fields: the filter fields in declared order, then
+>     `envelopeSignatureCertificate` (base64 DER), a SHA-384
+>     `envelopeRootCertificateThumbprint` of the root (lower-case hex), and
+>     `envelopeSignatureTime` (`yyyy-MM-ddTHH:mm:ssZ`).
+>   - `envelopeSignature` is hex DER ECDSA over the UTF-8 canonical
+>     string: the values joined with `.`, where absent is empty, times are
+>     epoch seconds, lists are joined with `,` and container types are
+>     numbers.
+>   - `SecomEnvelopeSigner` builds both bodies. The root comes from
+>     `SecomTrustAnchors` (MCP Root for an MCC identity); a certificate
+>     under no anchor names itself.
+> - **Algorithm.** A search envelope names none; SECOMLib checks it with
+>   the server's configured algorithm (DMA's services sign data with
+>   `ecdsa-384-sha3`).
+>   - The default follows the key: SHA3-384 for P-384 (the MCP curve),
+>     SHA-256 otherwise.
+>   - `SecomServerTrust.EnvelopeSignatureReference`, or
+>     `set_secom_identity {signatureAlgorithm}`, overrides it.
+> - **Client.** `SecomClient` switches to the POST forms
+>   (`UsesPostInterfaces`) when a GET summary answers 404 and an empty POST
+>   summary is answered with anything but 404, 405 or 501.
+>   - A 501 means the service implements no GetSummary at all (KRISO's
+>     port call, TCS, …): Unreachable, "cannot be listed".
+>   - Without an identity a POST request throws
+>     `SecomIdentityRequiredException`.
+> - **Index and download.**
+>   - The indexer remembers the POST mode with the cached listing, and
+>     gives items `RemoteEnvelope.SecomPost`.
+>   - `EncCellDownloader` then posts a signed Get, built from the item's
+>     GET URI by `SecomClient.CreatePostGetRequest`, through the SECOM
+>     client.
+>   - The host gives both `SecomServerTrust.CreateSigner`, so they sign
+>     with whatever identity is current.
+>   - Data signatures may state SHA-384 root thumbprints;
+>     `SecomTrustAnchors` accepts SHA-1, SHA-256 and SHA-384.
+> - **Probe.**
+>   - Without an identity: NeedsSecom2Search ("needs your MCP identity").
+>   - With one, it lists a page signed:
+>     - OpenWithCertificate;
+>     - CertificateRefused for 401 or 403;
+>     - otherwise NeedsSecom2Search with the service's answer.
+> - **Live on 2026-10-09, with a throwaway self-signed identity:**
+>   - The format is accepted: KHRA's earlier "missing required data"
+>     became **403**, and KRISO answers **401**. Both are certificate
+>     refusals an approved MCC identity should pass.
+>   - AMSA answers 500.
+>   - Census: Open 6, CertificateRefused 16, NeedsSecom2Search 1 (AMSA),
+>     UntrustedServer 1, Unreachable 19. Without an identity,
+>     NeedsSecom2Search is 14.
+
 ---
 
 ## 8. Implementation slices

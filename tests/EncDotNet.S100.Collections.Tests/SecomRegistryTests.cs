@@ -115,6 +115,7 @@ public sealed class SecomRegistryTests : IDisposable
     [InlineData("down", SecomReachability.Unreachable)]
     [InlineData("untrusted-tls", SecomReachability.UntrustedServer)]
     [InlineData("secom2", SecomReachability.NeedsSecom2Search)]
+    [InlineData("no-summary", SecomReachability.Unreachable)]
     public async Task Probes_classify_what_a_service_answers(string behaviour, SecomReachability expected)
     {
         var registry = new SecomRegistry(new HttpClient(new ServiceServer(behaviour)));
@@ -164,6 +165,10 @@ public sealed class SecomRegistryTests : IDisposable
                 "refuses" => Status(HttpStatusCode.Unauthorized),
                 "website" => Status(HttpStatusCode.NotFound),
                 // SECOM 2.0 (KHRA, KRISO): Capability answers, no GET summary (404), a POST summary (400 for {}).
+                // Capability answers; neither summary form is implemented (KRISO port call).
+                "no-summary" => capability ? Json(Capability2)
+                    : path.EndsWith("/object/search/summary", StringComparison.Ordinal) ? Status(HttpStatusCode.NotImplemented)
+                    : Status(HttpStatusCode.NotFound),
                 "secom2" => capability ? Json(Capability2)
                     : path.EndsWith("/object/search/summary", StringComparison.Ordinal) ? Status(HttpStatusCode.BadRequest)
                     : Status(HttpStatusCode.NotFound),
