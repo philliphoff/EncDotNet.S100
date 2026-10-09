@@ -1148,6 +1148,7 @@ logs to a file, `-v` / `--verbose` raises the level to Debug, and
 | `--mcp-bind <ADDR>` | MCP bind address; implies `--mcp` |
 | `--mcp-port-file <PATH>` | Write the bound MCP endpoint URI here |
 | `--mcp-test-hooks` | Register test-only MCP tools (`set_test_clock`); implies `--mcp` |
+| `--secom-identity <PATH>` | Present this MCP client certificate (PKCS#12 or PEM with its key) to SECOM services that ask for one, for this run only; the password comes from `SOUNDCHARTS_SECOM_IDENTITY_PASSWORD` |
 | `--settings <PATH>` | Use an alternate settings file |
 | `--data-dir <PATH>` | Redirect all settings + caches under one folder (or `S100_DATA_DIR`) |
 | `--ephemeral` | Throwaway settings, never persisted |

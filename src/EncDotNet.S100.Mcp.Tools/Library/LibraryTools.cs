@@ -226,10 +226,69 @@ public sealed record SecomServiceInfo(
     [property: Description("'Released' or 'Provisional' (test).")] string Status,
     [property: Description("The SECOM endpoint; pass it as url to add_library_source.")] string Endpoint,
     [property: Description("The area it covers, as [south, west, north, east], or null.")] double[]? Bounds,
-    [property: Description("With probe: 'Open' (readable without a certificate), 'NeedsCertificate', 'UntrustedServer' (TLS certificate refused) or 'Unreachable'; otherwise null.")] string? Reachability,
+    [property: Description("With probe: 'Open' (readable without a certificate), 'OpenWithCertificate' (readable with the identity from set_secom_identity), 'NeedsCertificate' (no identity set), 'CertificateRefused' (the identity was presented and refused), 'UntrustedServer' (TLS certificate refused) or 'Unreachable'; otherwise null.")] string? Reachability,
     [property: Description("With probe: what the service answered, or null.")] string? Detail,
     [property: Description("With probe: the decision on the server's TLS certificate — 'SystemTrusted', 'AnchorTrusted' (issued under a SECOM trust anchor such as MCP MCC), 'NotTrusted', 'Expired' or 'WrongHost'; null when unknown.")] string? ServerCertificate = null,
     [property: Description("With probe: the trust anchor the server certificate chains to (e.g. 'MCP MCC'), or null.")] string? ServerCertificateAnchor = null);
+
+/// <summary>The MCP identity SECOM requests present (MCP <c>set_secom_identity</c>, #832).</summary>
+public sealed record SecomIdentityDto(
+    [property: Description("True when an identity is set.")] bool Set,
+    [property: Description("The certificate's subject common name.")] string? Subject = null,
+    [property: Description("The MRN it was issued to, e.g. 'urn:mrn:mcp:device:mcc:…'.")] string? Mrn = null,
+    [property: Description("The trust anchor it chains to (e.g. 'MCP MCC'), or null when it chains to none of them.")] string? Anchor = null,
+    [property: Description("When it expires.")] DateTimeOffset? NotAfter = null);
+
+/// <summary>
+/// Sets, clears or reports the MCP identity (client certificate) presented to
+/// SECOM services that ask for one (MCP <c>set_secom_identity</c>, #832). For
+/// this session only: nothing is persisted.
+/// </summary>
+public sealed class SetSecomIdentityTool(EncDotNet.S100.Collections.Secom.SecomServerTrust trust, TimeProvider? timeProvider = null)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "set_secom_identity";
+
+    private readonly EncDotNet.S100.Collections.Secom.SecomServerTrust _trust = trust ?? throw new ArgumentNullException(nameof(trust));
+    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+
+    /// <summary>Loads the identity at <paramref name="path"/>, clears it, or (with neither) reports it.</summary>
+    public Task<ToolResult<SecomIdentityDto>> InvokeAsync(string? path, string? password, bool? clear, CancellationToken ct = default)
+    {
+        if (clear == true)
+        {
+            _trust.SetIdentity(null);
+            return Task.FromResult(ToolResult<SecomIdentityDto>.Ok(new SecomIdentityDto(false)));
+        }
+
+        if (string.IsNullOrWhiteSpace(path))
+            return Task.FromResult(ToolResult<SecomIdentityDto>.Ok(Describe(_trust.Identity)));
+
+        EncDotNet.S100.Collections.Secom.SecomClientIdentity identity;
+        try
+        {
+            identity = EncDotNet.S100.Collections.Secom.SecomClientIdentity.Load(path, password, _trust.Anchors);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            return Task.FromResult(ToolResult<SecomIdentityDto>.Err(new LibraryChangeRejected($"the identity could not be loaded ({ex.Message})")));
+        }
+
+        if (!identity.IsValidAt(_time.GetUtcNow()))
+        {
+            var reason = $"the identity is valid from {identity.NotBefore:yyyy-MM-dd} to {identity.NotAfter:yyyy-MM-dd}, not now";
+            identity.Dispose();
+            return Task.FromResult(ToolResult<SecomIdentityDto>.Err(new LibraryChangeRejected(reason)));
+        }
+
+        _trust.SetIdentity(identity);
+        return Task.FromResult(ToolResult<SecomIdentityDto>.Ok(Describe(identity)));
+    }
+
+    private static SecomIdentityDto Describe(EncDotNet.S100.Collections.Secom.SecomClientIdentity? identity) => identity is null
+        ? new SecomIdentityDto(false)
+        : new SecomIdentityDto(true, identity.Subject, identity.Mrn, identity.Anchor, identity.NotAfter);
+}
 
 /// <summary>Lists SECOM services from the MCP service registry (MCP <c>list_secom_services</c>, #822).</summary>
 public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.SecomRegistry registry)

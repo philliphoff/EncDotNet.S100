@@ -37,6 +37,10 @@ internal sealed class ViewerCommandSettings : CommandSettings
     [Description("Write the bound MCP endpoint URI to this file once the server is listening, so an agent can discover an ephemeral port. Implies --mcp.")]
     public string? McpPortFile { get; set; }
 
+    [CommandOption("--secom-identity <PATH>")]
+    [Description("Present this MCP client certificate (PKCS#12 or PEM with its key) to SECOM services that ask for one, for this run only. The password, if any, is read from the SOUNDCHARTS_SECOM_IDENTITY_PASSWORD environment variable.")]
+    public string? SecomIdentity { get; set; }
+
     [CommandOption("--mcp-test-hooks")]
     [Description("Register test-only MCP tools such as set_test_clock, which moves or freezes the viewer's notion of now. For scripted testing only. Implies --mcp.")]
     public bool McpTestHooks { get; set; }

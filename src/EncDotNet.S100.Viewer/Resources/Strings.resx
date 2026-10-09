@@ -3257,10 +3257,24 @@
     <value>Not reachable</value>
   </data>
   <data name="Library_Reachability_NeedsCertificateExplanation" xml:space="preserve">
-    <value>This service answers, but only shares data with a registered client certificate. Certificates are not supported yet.</value>
+    <value>This service answers, but only shares data with a registered MCP client certificate, and none is set.</value>
   </data>
   <data name="Library_Reachability_UntrustedServerExplanation" xml:space="preserve">
     <value>This service's TLS certificate is not issued under a root this computer or SoundCharts trusts.</value>
+  </data>
+  <data name="Library_Reachability_OpenWithCertificate" xml:space="preserve">
+    <value>Readable with your certificate</value>
+  </data>
+  <data name="Library_Reachability_CertificateRefused" xml:space="preserve">
+    <value>Certificate refused</value>
+  </data>
+  <data name="Library_Reachability_OpenWithCertificateExplanationFormat" xml:space="preserve">
+    <value>It shares data with your MCP identity ({0}).</value>
+    <comment>{0}: the identity's MRN, e.g. urn:mrn:mcp:device:mcc:…</comment>
+  </data>
+  <data name="Library_Reachability_CertificateRefusedExplanationFormat" xml:space="preserve">
+    <value>Your MCP identity ({0}) was presented, but this service does not accept it.</value>
+    <comment>{0}: the identity's MRN, e.g. urn:mrn:mcp:device:mcc:…</comment>
   </data>
   <data name="Library_Reachability_ExpiredServerExplanationFormat" xml:space="preserve">
     <value>This service's TLS certificate from {0} has expired or is not yet valid.</value>
