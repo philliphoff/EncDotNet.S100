@@ -4,7 +4,6 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
-using EncDotNet.S100.Collections.Manifests;
 using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -23,10 +22,7 @@ internal sealed record EditedManifestSource(Guid CollectionId, LocalManifestSour
 internal sealed partial class AddToLibraryDialogViewModel
 {
     private readonly List<LibraryChoice> _allGroups = [];
-    private CollectionManifestDocument? _manifest;
-    private IReadOnlyList<string> _manifestProblems = [];
     private EditedManifestSource? _editing;
-    private IReadOnlyCollection<string>? _pendingPicks;
     private ICommand? _changeManifestCommand;
     private ICommand? _reloadManifestCommand;
     private ICommand? _openManifestCommand;
@@ -63,16 +59,18 @@ internal sealed partial class AddToLibraryDialogViewModel
         () => { if (_path is { } path) OpenManifest?.Invoke(path); });
 
     /// <summary>The manifest's title, or its file name without the suffix.</summary>
-    public string ManifestTitle => _manifest?.Title ?? DefaultName(_path);
+    public string ManifestTitle => ManifestScope?.Title ?? DefaultName(_path);
+
+    private CollectionManifestScope? ManifestScope => _scope as CollectionManifestScope;
 
     /// <summary>The manifest's full path.</summary>
     public string ManifestPath => _path ?? string.Empty;
 
     /// <summary>One line per problem that makes the manifest unreadable ("line 12 · groups[5].id: …").</summary>
-    public IReadOnlyList<string> ManifestProblems => _manifestProblems;
+    public IReadOnlyList<string> ManifestProblems => ManifestScope?.Problems ?? [];
 
     /// <summary>True when the manifest could not be read.</summary>
-    public bool HasManifestProblems => _manifestProblems.Count > 0;
+    public bool HasManifestProblems => ManifestProblems.Count > 0;
 
     /// <summary>True when the manifest was read and its groups are shown.</summary>
     public bool ShowsManifestGroups => IsManifest && !HasManifestProblems;
@@ -103,8 +101,9 @@ internal sealed partial class AddToLibraryDialogViewModel
 
         Initialize(LibrarySourceKind.LocalManifest, source.Path, collectionId);
         _editing = new EditedManifestSource(collectionId, source);
-        _includeAll = source.Filter.IsUnscoped;
-        _pendingPicks = source.Filter.Groups.ToArray();
+        SetIncludeAll(source.Filter.IsUnscoped);
+        if (ManifestScope is { } scope)
+            scope.PendingPicks = source.Filter.Groups.ToArray();
         OnPropertyChanged(string.Empty);
         RefreshCanConfirm();
     }
@@ -112,53 +111,13 @@ internal sealed partial class AddToLibraryDialogViewModel
     private string ManifestBaseName => ManifestTitle;
 
     private bool CanConfirmManifest =>
-        _manifest is not null && !_isLoading && !HasManifestProblems
-        && (_includeAll || HasSelection)
+        ManifestScope?.CanBuild == true && !_isLoading
         && (IsEditing || (_createNew ? !string.IsNullOrWhiteSpace(_newCollectionName) : _selectedCollection is not null));
 
-    private string ManifestEverythingSummary => _allGroups.Count == 1
-        ? Strings.Manifest_EverythingOne
-        : string.Format(CultureInfo.CurrentCulture, Strings.Manifest_EverythingFormat, _allGroups.Count);
-
-    /// <summary>Names of the groups that matter and are missing: the ticked ones, or all of them for Everything.</summary>
-    private string[] MissingInScope => _allGroups
-        .Where(o => o.IsMissing && (_includeAll || o.IsSelected))
-        .Select(o => o.Label)
-        .ToArray();
-
-    private string ManifestScopeSummary
-    {
-        get
-        {
-            if (!_includeAll && !HasSelection)
-                return Strings.Manifest_SummaryNothing;
-
-            if (MissingInScope is { Length: > 0 } missing)
-            {
-                return string.Format(
-                    CultureInfo.CurrentCulture,
-                    missing.Length == 1 ? Strings.Manifest_SummaryMissingOneFormat : Strings.Manifest_SummaryMissingManyFormat,
-                    JoinNames(missing));
-            }
-
-            if (_includeAll)
-                return Strings.Manifest_SummaryEverything;
-
-            var names = string.Join(", ", _allGroups.Where(o => o.IsSelected).Select(o => o.Label));
-            var count = SelectedCount;
-            return count == 1
-                ? string.Format(CultureInfo.CurrentCulture, Strings.Manifest_SummaryOneFormat, names)
-                : string.Format(CultureInfo.CurrentCulture, Strings.Manifest_SummaryManyFormat, count, names);
-        }
-    }
-
-    private bool IsManifestSummaryWarning => (!_includeAll && !HasSelection) || MissingInScope.Length > 0;
+    private bool IsManifestSummaryWarning => ManifestScope?.IsSummaryWarning == true;
 
     /// <summary>"IC-ENC", or "IC-ENC — Belgium and Germany" for a selection.</summary>
-    private string AutoManifestName =>
-        _includeAll || DescribeManifestSelection() is not { } selection
-            ? ManifestBaseName
-            : $"{ManifestBaseName} — {selection}";
+    private string AutoManifestName => ManifestScope?.AutoName ?? ManifestBaseName;
 
     private void ResetManifest()
     {
@@ -166,10 +125,7 @@ internal sealed partial class AddToLibraryDialogViewModel
             option.PropertyChanged -= OnFacetChanged;
         _allGroups.Clear();
         Groups.Clear();
-        _manifest = null;
-        _manifestProblems = [];
         _editing = null;
-        _pendingPicks = null;
     }
 
     private async Task ChangeManifestAsync()
@@ -178,6 +134,8 @@ internal sealed partial class AddToLibraryDialogViewModel
             return;
 
         _path = path;
+        if (ManifestScope is { } scope)
+            scope.ManifestPath = path;
         OnPropertyChanged(nameof(ManifestPath));
         OnPropertyChanged(nameof(SourceDescription));
         await LoadManifestAsync().ConfigureAwait(true);
@@ -185,42 +143,22 @@ internal sealed partial class AddToLibraryDialogViewModel
 
     private async Task LoadManifestAsync(CancellationToken cancellationToken = default)
     {
-        if (_path is not { } path)
+        if (ManifestScope is not { } scope)
             return;
-
-        // Keep the picks across a reload (or a different file) where the ids still exist.
-        var picks = _pendingPicks ?? _allGroups.Where(o => o.IsSelected).Select(o => o.Value).ToArray();
-        _pendingPicks = null;
 
         IsLoading = true;
         try
         {
-            var (manifest, summary, problems) = await Task.Run(() => Read(path), cancellationToken).ConfigureAwait(true);
-            _manifest = manifest;
-            _manifestProblems = problems;
+            // The scope keeps the picks across a reload (or a different file) where the ids still exist.
+            await scope.LoadAsync(cancellationToken).ConfigureAwait(true);
 
             foreach (var option in _allGroups)
                 option.PropertyChanged -= OnFacetChanged;
             _allGroups.Clear();
-
-            if (manifest is not null)
+            foreach (var option in scope.ManifestGroups)
             {
-                var selected = new HashSet<string>(picks, StringComparer.OrdinalIgnoreCase);
-                foreach (var (group, info) in manifest.Groups.Zip(summary))
-                {
-                    var option = new LibraryChoice(group.Id, group.DisplayName, string.Empty)
-                    {
-                        PathText = group.Paths[0],
-                        MorePathsText = group.Paths.Count > 1
-                            ? string.Format(CultureInfo.CurrentCulture, Strings.Manifest_MorePathsFormat, group.Paths.Count - 1)
-                            : null,
-                        PathsTooltip = string.Join(Environment.NewLine, group.Paths),
-                        IsMissing = info.MissingPathCount > 0,
-                        IsSelected = selected.Contains(group.Id),
-                    };
-                    option.PropertyChanged += OnFacetChanged;
-                    _allGroups.Add(option);
-                }
+                option.PropertyChanged += OnFacetChanged;
+                _allGroups.Add(option);
             }
 
             ShowMatchingCharts();
@@ -232,71 +170,33 @@ internal sealed partial class AddToLibraryDialogViewModel
             RaiseManifestChanged();
             OnPropertyChanged(nameof(Title));
         }
-
-        static (CollectionManifestDocument?, IReadOnlyList<CollectionManifestGroupSummary>, IReadOnlyList<string>) Read(string path)
-        {
-            try
-            {
-                var manifest = CollectionManifest.ReadFile(path);
-                return (manifest, CollectionManifest.Summarize(manifest, Path.GetDirectoryName(Path.GetFullPath(path))!), []);
-            }
-            catch (CollectionManifestException ex)
-            {
-                return (null, [], ex.Problems.Select(Describe).ToArray());
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-                or System.Text.Json.JsonException or NotSupportedException)
-            {
-                return (null, [], [ex.Message]);
-            }
-        }
-
-        static string Describe(CollectionManifestProblem problem) => problem.Line is { } line
-            ? string.Format(CultureInfo.CurrentCulture, Strings.Manifest_ErrorLineFormat, line, problem)
-            : problem.ToString();
     }
 
     private void UpdateManifestSelection()
     {
-        if (_manifest is null)
+        if (ManifestScope is not { IsLoaded: true } scope)
             return;
 
-        SelectionSummary = string.Format(
-            CultureInfo.CurrentCulture, Strings.Manifest_SelectionOfFormat, SelectedCount, _allGroups.Count);
+        SelectionSummary = scope.SelectionSummary;
 
         // In edit mode the collection keeps its name; otherwise the name follows the selection.
         if (!IsEditing)
-            FollowSelectionInName(_includeAll || !HasSelection, () => DescribeManifestSelection()!);
+            FollowSelectionInName(scope.IsEverything, () => scope.DescribeSelection()!);
     }
 
     private LocalManifestSource BuildManifestSource(Guid id)
     {
-        var filter = _includeAll
-            ? LocalManifestFilter.All
-            : new LocalManifestFilter { Groups = _allGroups.Where(o => o.IsSelected).Select(o => o.Value).ToArray() };
-
+        var scope = ManifestScope!;
         if (_editing is { Source: var existing })
-            return existing with { Path = _path!, Filter = filter };
+            return existing with { Path = _path!, Filter = scope.CurrentFilter };
 
         // The source is named like the collection would be, so an added-to-existing
         // source reads "IC-ENC — Belgium"; a new collection's source takes its name.
-        var name = _createNew && !string.IsNullOrWhiteSpace(_newCollectionName) ? _newCollectionName.Trim() : AutoManifestName;
-        return new LocalManifestSource(id, name, _path!, filter);
+        return (LocalManifestSource)scope.Build(id, _createNew ? _newCollectionName : null);
     }
 
     /// <summary>"Belgium", "Belgium and Germany", "Belgium, Germany and 2 more"; null when nothing is ticked.</summary>
-    private string? DescribeManifestSelection()
-    {
-        var labels = _allGroups.Where(o => o.IsSelected).Select(o => o.Label).ToArray();
-        return labels.Length == 0 ? null : JoinNames(labels);
-    }
-
-    private static string JoinNames(IReadOnlyList<string> names) => names.Count switch
-    {
-        1 => names[0],
-        2 => string.Format(CultureInfo.CurrentCulture, Strings.Manifest_TwoFormat, names[0], names[1]),
-        _ => string.Format(CultureInfo.CurrentCulture, Strings.Manifest_AndMoreFormat, names[0], names[1], names.Count - 2),
-    };
+    private string? DescribeManifestSelection() => ManifestScope?.DescribeSelection();
 
     private void RaiseManifestChanged()
     {

@@ -287,11 +287,9 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
         if (draft is null)
             return Fail(new LibraryChangeRejected($"this host cannot add {kind} sources yet; add them in the viewer"));
 
-        if (LibrarySourceKinds.IsOnline(kind))
-        {
-            if (await draft.LoadAsync(ct).ConfigureAwait(false) is { } error)
-                return Fail(new LibraryChangeRejected($"the catalogue could not be loaded: {error}"));
-        }
+        // Online catalogues and collection manifests are read for their choices.
+        if (draft.Scope is not null && await draft.LoadAsync(ct).ConfigureAwait(false) is { } error)
+            return Fail(new LibraryChangeRejected($"the catalogue could not be loaded: {error}"));
 
         var collections = Library.Collections.Where(c => !c.IsSession).ToArray();
         if (request.CollectionId is { } collectionId && !collections.Any(c => c.Id == collectionId))
@@ -323,7 +321,12 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
         if (!string.IsNullOrWhiteSpace(request.Shape))
             return Fail(new InvalidArgument("shape", "only a forecast feed has shapes; expected tiles or regional"));
         if (!string.IsNullOrWhiteSpace(request.Resolution))
-            return Fail(new InvalidArgument("resolution", "not a resolution this catalogue offers; preview to list them"));
+        {
+            var resolution = (draft.Scope as S100CatalogueScope)?.Resolutions.FirstOrDefault(o => Matches(o.Value, o.Label, request.Resolution));
+            if (resolution is null)
+                return Fail(new InvalidArgument("resolution", "not a resolution this catalogue offers; preview to list them"));
+            ((S100CatalogueScope)draft.Scope!).SelectedResolution = resolution;
+        }
         if (request.Sync is { } sync)
         {
             if (!draft.CanKeepDownloaded)
@@ -356,7 +359,9 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
             group.Title,
             [.. group.Options.Select(o => new AddChoiceOption(o.Value, o.Label, string.IsNullOrEmpty(o.Detail) ? null : o.Detail, o.IsSelected))]))],
         [],
-        [],
+        draft.Scope is S100CatalogueScope { HasResolutions: true } catalogue
+            ? [.. catalogue.Resolutions.Select(o => new AddChoiceOption(o.Value ?? string.Empty, o.Label, null, o == catalogue.SelectedResolution))]
+            : [],
         [.. collections.Select(c => new AddChoiceOption(c.Id.ToString(), c.Definition.Name, null, target == c.Id))],
         collectionId,
         sourceId,
