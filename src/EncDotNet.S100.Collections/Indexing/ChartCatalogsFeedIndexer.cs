@@ -113,6 +113,9 @@ public sealed class ChartCatalogsFeedIndexer : ICollectionSourceIndexer
 
         var catalog = await Task.Run(() => ChartCatalogsProductCatalogReader.Read(snapshot.FilePath), cancellationToken)
             .ConfigureAwait(false);
+        // Fingerprinted before the downloads are read, so a package that lands
+        // while this runs changes the next fingerprint (see SecomSourceIndexer).
+        var fingerprint = Fingerprint(snapshot, feed, catalog);
         var folder = DownloadFolderFor(feed.CatalogUri);
         var downloader = Downloader(folder);
 
@@ -131,7 +134,7 @@ public sealed class ChartCatalogsFeedIndexer : ICollectionSourceIndexer
             progress?.Report(new IndexProgress(items.Count, null));
         }
 
-        return new SourceIndex(source.Id, DateTimeOffset.UtcNow, Fingerprint(snapshot, feed, catalog), items, diagnostics);
+        return new SourceIndex(source.Id, DateTimeOffset.UtcNow, fingerprint, items, diagnostics);
     }
 
     /// <summary>

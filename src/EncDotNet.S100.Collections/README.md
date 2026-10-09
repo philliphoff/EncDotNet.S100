@@ -96,7 +96,7 @@ The `EncDotNet.S100.Collections.Library` namespace holds a host-neutral library:
   - `OnlineSyncPolicy` covers NOAA/USACE, community lists, S-100 feeds and catalogues, and forecast feeds. It downloads newer editions, packages and runs, and never prunes, because those folders hold hand-made downloads too.
   - It downloads new and changed objects, up to `LibrarySyncOptions.MaxBytes`, and prunes copies no source of the service still lists.
   - It never prunes from a stale or capped listing, nor a copy the host says is in use.
-  - It re-indexes once so downloads get their bounds. `StatusOf` and `Synced` report each source's last sync.
+  - It re-indexes once so downloads get their bounds (and SECOM objects their signature). Indexers that read downloaded copies fingerprint them before reading, so a download that lands mid-index still changes the next fingerprint. `StatusOf` and `Synced` report each source's last sync.
   - `LibraryDownloads.DownloadedNames`/`Delete` and `EncCellDownloader.ListDownloaded`/`Delete` are the deletion side.
 - **`LibraryDownloads`** — downloads online items (ENC cells, community packages, S-100 feeds and the NOAA forecast catalogues) through `EncCellDownloader`, at most three at a time:
   - Progress is a plain `LibraryDownloadProgress` (polled, raised as `ProgressChanged`, or passed to an `IProgress`), with per-item `StatusOf`.
@@ -105,7 +105,7 @@ The `EncDotNet.S100.Collections.Library` namespace holds a host-neutral library:
 - **`LibraryLoader`** — opens items into a host's session:
   - `Plan` skips what can't be opened and groups the rest by exchange set.
   - Each group opens through the host's `ILibraryDatasetOpener`. The viewer's opener registers the group with its exchange-set service. `CatalogLibraryOpener` in `EncDotNet.S100.Mcp.Tools` loads it into any `IMutableDatasetCatalog`.
-- **`LibraryOperations`** — the actions a headless host runs: load, and download (then re-index packages or open the downloads).
+- **`LibraryOperations`** — the actions a headless host runs: load, and download (then re-index the downloaded items' sources, waiting for packages, or open the downloads).
   - Every operation is tracked by a `LibraryActivityTracker` from the call until its datasets are open.
   - `AwaitIdleAsync` therefore never reports idle between a download finishing and its datasets opening.
 

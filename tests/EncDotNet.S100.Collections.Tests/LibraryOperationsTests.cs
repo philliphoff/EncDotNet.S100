@@ -216,6 +216,35 @@ public sealed class LibraryOperationsTests : IDisposable
         Assert.Same(folder, select(new RemoteItemLocation(new Uri("https://example.test/y.h5"), DownloadFolder: "noaa-s111")));
     }
 
+    [Fact]
+    public async Task A_downloaded_secom_object_shows_its_signature_without_a_manual_refresh()
+    {
+        using var signer = SecomTests.Signer.Create();
+        var data = System.Text.Encoding.UTF8.GetBytes("<S124:Dataset/>");
+        var server = new SecomTests.FakeSecomServer(SecomTests.Summaries(2));
+        server.Objects["ref-0001"] = (data, signer.Sign(data));
+        var http = new HttpClient(server);
+        var downloadsRoot = Path.Combine(_context.Root, "downloads");
+        var library = _context.CreateLibrary(CollectionIndexer.CreateDefault(
+            feeds: [new SecomSourceIndexer(http, downloadsRoot: downloadsRoot)]));
+        using var _ = library;
+        library.Initialize();
+        var definition = new SecomSource(Guid.NewGuid(), null, new Uri("https://secom.test/api/secom"), SecomFilter.All);
+        library.AddCollection("Warnings", [definition]);
+        await library.WhenIdle().WaitAsync(TestContext.Current.CancellationToken);
+        LibrarySource Source() => library.Collections.SelectMany(c => c.Sources).Single(s => s.Id == definition.Id);
+        var item = Source().Index!.Items.Single(i => i.Key == "ref-0001");
+        Assert.False(item.Properties.ContainsKey("signature"));
+
+        var operations = new LibraryOperations(
+            library, new LibraryDownloads(LibraryDownloads.ManagedFolders(http, downloadsRoot)), new LibraryLoader(new FakeOpener()));
+        var outcome = await operations.DownloadAsync([(item, Source())], load: false, cancellationToken: TestContext.Current.CancellationToken);
+        await library.WhenIdle().WaitAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, outcome.Download.Downloaded);
+        Assert.Equal("valid · signer not trusted", Source().Index!.Items.Single(i => i.Key == "ref-0001").Properties["signature"]);
+    }
+
     /// <summary>Opens every group (optionally after a gate) and remembers what it opened.</summary>
     private sealed class FakeOpener : ILibraryDatasetOpener
     {

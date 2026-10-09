@@ -132,6 +132,10 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
                 serviceUri.AbsoluteUri));
         }
 
+        // Fingerprinted before the downloads are read: a download that lands
+        // while this runs (a sync of an earlier index) then changes the next
+        // fingerprint, so the re-index after it is not skipped as unchanged.
+        var fingerprint = listing.Stale is null ? Fingerprint(secom, listing) : null;
         var folder = DownloadFolderFor(serviceUri);
         var downloader = _downloadsRoot is null ? null : new EncCellDownloader(_httpClient, Path.Combine(_downloadsRoot, folder));
         var client = new SecomClient(_httpClient, serviceUri, listing.Version);
@@ -165,7 +169,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         return new SourceIndex(
             source.Id,
             _time.GetUtcNow(),
-            listing.Stale is null ? Fingerprint(secom, listing) : null,
+            fingerprint,
             items,
             diagnostics);
     }

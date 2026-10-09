@@ -403,6 +403,45 @@ public sealed class SecomTests : IDisposable
         Assert.Equal("valid · signer trust not checked", SecomSourceIndexer.Describe(old));
     }
 
+    [Fact]
+    public async Task A_download_landing_during_an_index_is_picked_up_by_the_next_one()
+    {
+        using var signer = Signer.Create();
+        var data = Encoding.UTF8.GetBytes("<S124:Dataset/>");
+        var server = new FakeSecomServer(Summaries(2));
+        server.Objects["ref-0001"] = (data, signer.Sign(data));
+        server.Objects["ref-0002"] = (data, signer.Sign(data));
+        var downloads = Path.Combine(_temp.Path, "downloads");
+        var listed = await new SecomSourceIndexer(new HttpClient(server)).IndexAsync(Source(), null, Ct);
+        var folder = ((RemoteItemLocation)listed.Items[0].Location).DownloadFolder!;
+        var downloader = new EncCellDownloader(new HttpClient(server), Path.Combine(downloads, folder));
+        await downloader.DownloadAsync(listed.Items.Single(i => i.Key == "ref-0002"), cancellationToken: Ct);
+
+        // Object 1 lands (a sync) after the index has read it, while it probes object 2.
+        var landed = false;
+        DatasetProbe probe = (path, _) =>
+        {
+            if (!landed)
+            {
+                landed = true;
+                downloader.DownloadAsync(listed.Items.Single(i => i.Key == "ref-0001"), cancellationToken: Ct).GetAwaiter().GetResult();
+            }
+
+            return new DatasetMetadata { Spec = new SpecRef("S-124", default), Extent = new BoundingBox(49, -127, 51, -125) };
+        };
+        var indexer = CollectionIndexer.CreateDefault(
+            feeds: [new SecomSourceIndexer(new HttpClient(server), downloadsRoot: downloads, probe: probe)]);
+        var source = Source();
+        var during = await indexer.IndexAsync(source, cancellationToken: Ct);
+        Assert.True(landed);
+        Assert.False(during.Items.Single(i => i.Key == "ref-0001").Properties.ContainsKey("signature"));
+
+        // The re-index after the sync is not skipped as unchanged.
+        var after = await indexer.IndexAsync(source, during, cancellationToken: Ct);
+        Assert.NotSame(during, after);
+        Assert.All(after.Items, i => Assert.Equal("valid · signer not trusted", i.Properties["signature"]));
+    }
+
     private static SecomTrustAnchors Anchors(Signer signer) =>
         new([new SecomTrustAnchor("test", signer.Certificate)]);
 

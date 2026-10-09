@@ -110,6 +110,25 @@ public sealed class LibrarySyncTests : IDisposable
     }
 
     [Fact]
+    public async Task A_synced_object_shows_its_signature_without_a_manual_refresh()
+    {
+        using var signer = SecomTests.Signer.Create();
+        var (library, sync, server) = Create(objects: 2);
+        var data = Encoding.UTF8.GetBytes("<S124:Dataset/>");
+        server.Objects["ref-0001"] = (data, signer.Sign(data));
+        var source = Source();
+        library.Initialize();
+        library.AddCollection("Warnings", [source]);
+
+        await SettleAsync(library, sync);
+
+        var item = ItemsOf(library, source).Single(i => i.Key == "ref-0001");
+        Assert.Equal("valid · signer not trusted", item.Properties["signature"]);
+        Assert.Equal("Test Service", item.Properties["signer"]);
+        Assert.Equal("unsigned", ItemsOf(library, source).Single(i => i.Key == "ref-0002").Properties["signature"]);
+    }
+
+    [Fact]
     public async Task Objects_no_longer_listed_or_cancelled_are_pruned_unless_another_source_lists_them()
     {
         var (library, sync, server) = Create(objects: 4);
