@@ -49,6 +49,11 @@ aren't installed. Earlier releases bundled the regular native library, which
 failed to load without `libfontconfig.so.1` on `linux-x64` and failed with
 `undefined symbol: uuid_parse` on `linux-arm64`.
 
+`s100 tiles` writes MBTiles through `Microsoft.Data.Sqlite`, so each archive
+also carries SQLite's native library for its runtime (`libe_sqlite3`, about
+1.5 to 2 MB). Only the CLI references SQLite; SoundCharts doesn't, and
+`ViewerSqliteDecouplingTests` keeps it that way.
+
 Release builds check the latest GitHub release at most once every 24 hours and
 cache the result in the local application-data folder. See
 [Update notices](../../docs/cli.md#update-notices) for what the user sees.

@@ -88,7 +88,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | Command | What it does |
 |---|---|
 | [`render`](#render) | Renders a dataset, a composite of datasets, or a whole exchange set to an image, or writes a dataset's display list as JSON. |
-| [`tiles`](#tiles) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder or a PMTiles archive. |
+| [`tiles`](#tiles) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude. |
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
@@ -330,8 +330,14 @@ The container comes from the output path:
   [PMTiles](https://docs.protomaps.com/pmtiles/) version 3 archive, which a
   static web host can serve. Identical tiles are stored once. The archive's
   metadata holds the same TileJSON fields.
+- **MBTiles.** An output ending in `.mbtiles` is written as one
+  [MBTiles](https://github.com/mapbox/mbtiles-spec) 1.3 SQLite database, the
+  format many tile servers read. Rows are numbered from the south, as MBTiles
+  requires. The `metadata` table holds the standard keys plus `tileSize` and
+  the display settings, prefixed `s100:`.
 
-Set `--container` to choose the container whatever the extension.
+Set `--container` to choose the container whatever the extension. An existing
+`.pmtiles` or `.mbtiles` file at the output path is replaced.
 
 ### Tiles options
 
@@ -340,8 +346,8 @@ Set `--container` to choose the container whatever the extension.
 | `--layer <path>` | none | Adds a dataset as a composite layer. Repeat it for each dataset. |
 | `--exchange-set`, `--from <path>` | none | Tiles an exchange set: a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a `.zip`. Can't be combined with `--layer`. |
 | `--only <specs>` | all | Exchange-set form only. Tiles only these product specifications, comma-separated. |
-| `-o`, `--output <path>` | required | A folder, or a `.pmtiles` file. Its parent folder must exist. |
-| `--container <kind>` | from the output | `xyz` (a folder) or `pmtiles`. |
+| `-o`, `--output <path>` | required | A folder, a `.pmtiles` file or a `.mbtiles` file. Its parent folder must exist. |
+| `--container <kind>` | from the output | `xyz` (a folder), `pmtiles` or `mbtiles`. |
 | `--min-zoom <0-24>` | from the data | Lowest zoom level. See [Zoom levels](#zoom-levels). |
 | `--max-zoom <0-24>` | from the data | Highest zoom level. |
 | `--bbox <minLon,minLat,maxLon,maxLat>` | the data's extent | Writes only the tiles that cover this WGS-84 bounding box. |
@@ -371,6 +377,7 @@ s100 tiles enc.000 -o tiles/
 s100 tiles enc.000 -o chart.pmtiles --min-zoom 10 --max-zoom 15
 s100 tiles --layer enc.000 --layer bathy.h5 -o chart.pmtiles --tile-size 512
 s100 tiles exchange-set/ -o tiles/ --format webp --skip-empty
+s100 tiles enc.000 -o chart.mbtiles --max-zoom 16
 s100 tiles --from exchange-set.zip -o night.pmtiles --bbox -1.5,50.0,-1.0,50.5 --palette night
 ```
 
@@ -425,8 +432,6 @@ Pass `--yes` to skip the question, or narrow `--bbox` or the zoom range.
   level, so grid sampling and current-arrow spacing suit its resolution.
 - **S-101 updates.** As with `render`, the exchange-set form doesn't apply
   S-101 update files.
-- **Containers.** MBTiles isn't supported yet
-  ([#858](https://github.com/philliphoff/EncDotNet.S100/issues/858)).
 
 ## info
 

@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
+using EncDotNet.S100.TestSupport;
+using Microsoft.Data.Sqlite;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Cli.Tests;
@@ -109,6 +111,110 @@ public sealed class TilesCommandTests
     }
 
     [Fact]
+    public void Mbtiles_output_holds_the_same_tiles_as_the_xyz_output_in_tms_rows()
+    {
+        Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
+
+        var xyz = TempPath("xyz");
+        var mbtiles = TempPath("db") + ".mbtiles";
+        try
+        {
+            string[] common = ["--min-zoom", "12", "--max-zoom", "14"];
+            Assert.Equal(0, CliApp.Build().Run(["tiles", S57, "-o", xyz, .. common]));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", S57, "-o", mbtiles, .. common]));
+
+            using var connection = new SqliteConnection(
+                new SqliteConnectionStringBuilder { DataSource = mbtiles, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+            connection.Open();
+
+            var metadata = new Dictionary<string, string>();
+            using (var command = new SqliteCommand("SELECT name, value FROM metadata", connection))
+            using (var reader = command.ExecuteReader())
+            {
+                while (reader.Read())
+                    metadata[reader.GetString(0)] = reader.GetString(1);
+            }
+
+            Assert.Equal("png", metadata["format"]);
+            Assert.Equal("overlay", metadata["type"]);
+            Assert.Equal("12", metadata["minzoom"]);
+            Assert.Equal("14", metadata["maxzoom"]);
+            Assert.Equal(4, metadata["bounds"].Split(',').Length);
+            Assert.Equal("day", metadata["s100:palette"]);
+
+            var xyzTiles = Directory.GetFiles(xyz, "*.png", SearchOption.AllDirectories);
+            using var count = new SqliteCommand("SELECT COUNT(*) FROM tiles", connection);
+            Assert.Equal((long)xyzTiles.Length, (long)count.ExecuteScalar()!);
+
+            using var select = new SqliteCommand(
+                "SELECT tile_data FROM tiles WHERE zoom_level = $z AND tile_column = $x AND tile_row = $y", connection);
+            foreach (var path in xyzTiles)
+            {
+                var parts = Path.GetRelativePath(xyz, path).Split(Path.DirectorySeparatorChar);
+                int zoom = int.Parse(parts[0]);
+                int x = int.Parse(parts[1]);
+                int y = int.Parse(Path.GetFileNameWithoutExtension(parts[2]));
+                select.Parameters.Clear();
+                select.Parameters.AddWithValue("$z", zoom);
+                select.Parameters.AddWithValue("$x", x);
+                select.Parameters.AddWithValue("$y", (1 << zoom) - 1 - y); // TMS row
+                Assert.Equal(File.ReadAllBytes(path), (byte[]?)select.ExecuteScalar());
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(xyz))
+                Directory.Delete(xyz, recursive: true);
+            if (File.Exists(mbtiles))
+                File.Delete(mbtiles);
+        }
+    }
+
+    [Fact]
+    public void Mbtiles_replaces_an_existing_file_and_removes_an_unfinished_one()
+    {
+        var path = TempPath("replace") + ".mbtiles";
+        try
+        {
+            File.WriteAllText(path, "not a database");
+            using (var sink = new MbTilesTileSink(path))
+            {
+                sink.Write(1, 0, 0, [1, 2, 3]);
+            }
+
+            // Disposed without Complete: nothing is left behind.
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Cli_closure_reaches_SQLite()
+    {
+        // The positive control for the viewer's ViewerSqliteDecouplingTests:
+        // the same walk finds SQLite where it is referenced.
+        var cliPath = Path.Combine(AppContext.BaseDirectory, "s100.dll");
+
+        Assert.Contains("Microsoft.Data.Sqlite", MapsuiDependencyClosure.FindReferences(cliPath, "Microsoft.Data.Sqlite"));
+    }
+
+    [Theory]
+    [InlineData("out.pmtiles", null, "PmTiles")]
+    [InlineData("out.MBTiles", null, "MbTiles")]
+    [InlineData("out", null, "Xyz")]
+    [InlineData("out", "mbtiles", "MbTiles")]
+    [InlineData("out.pmtiles", "xyz", "Xyz")]
+    public void Container_comes_from_the_option_or_the_extension(string output, string? option, string expected)
+    {
+        Assert.True(Commands.TilesCommand.TryResolveContainer(option, output, out var container));
+        Assert.Equal(expected, container.ToString());
+    }
+
+    [Fact]
     public void Skip_empty_leaves_out_tiles_with_nothing_drawn()
     {
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
@@ -158,7 +264,7 @@ public sealed class TilesCommandTests
 
     [Theory]
     [InlineData("--tile-size", "300")]
-    [InlineData("--container", "mbtiles")]
+    [InlineData("--container", "zip")]
     [InlineData("--format", "gif")]
     [InlineData("--metatile", "0")]
     [InlineData("--min-zoom", "25")]

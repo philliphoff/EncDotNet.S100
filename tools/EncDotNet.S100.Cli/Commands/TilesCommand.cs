@@ -17,8 +17,8 @@ namespace EncDotNet.S100.Cli.Commands;
 
 /// <summary>
 /// <c>s100 tiles</c> renders one or more S-100 datasets as an XYZ Web-Mercator
-/// raster tile pyramid, written as a directory of <c>{z}/{x}/{y}</c> images or a
-/// single PMTiles archive, for use in web maps such as MapLibre, Leaflet and
+/// raster tile pyramid, written as a directory of <c>{z}/{x}/{y}</c> images, a
+/// PMTiles archive or an MBTiles database, for use in web maps such as MapLibre, Leaflet and
 /// OpenLayers.
 /// </summary>
 /// <remarks>
@@ -60,11 +60,11 @@ internal sealed class TilesCommand : Command<TilesCommand.Settings>
         public string? Only { get; init; }
 
         [CommandOption("-o|--output <PATH>")]
-        [Description("Output path: a directory for --container xyz, or a .pmtiles file for --container pmtiles. Required.")]
+        [Description("Output path: a directory for --container xyz, a .pmtiles file for --container pmtiles, or a .mbtiles file for --container mbtiles. An existing archive file is replaced. Required.")]
         public string? Output { get; init; }
 
         [CommandOption("--container <KIND>")]
-        [Description("Tile container: xyz (a {z}/{x}/{y}.<ext> directory plus a tiles.json TileJSON file) or pmtiles (one PMTiles v3 archive, static-hostable). Default: pmtiles when the output ends in .pmtiles, otherwise xyz.")]
+        [Description("Tile container: xyz (a {z}/{x}/{y}.<ext> directory plus a tiles.json TileJSON file), pmtiles (one PMTiles v3 archive, static-hostable) or mbtiles (one MBTiles 1.3 SQLite database, for tile servers). Default: from the output extension (.pmtiles or .mbtiles), otherwise xyz.")]
         public string? Container { get; init; }
 
         [CommandOption("--min-zoom <ZOOM>")]
@@ -214,7 +214,7 @@ internal sealed class TilesCommand : Command<TilesCommand.Settings>
             if (string.IsNullOrWhiteSpace(Output))
                 return ValidationResult.Error("An output path is required (-o|--output).");
             if (!TryResolveContainer(Container, Output, out _))
-                return ValidationResult.Error($"Unknown --container '{Container}'. Use xyz or pmtiles.");
+                return ValidationResult.Error($"Unknown --container '{Container}'. Use xyz, pmtiles or mbtiles.");
             var parent = Path.GetDirectoryName(Path.GetFullPath(Output));
             if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
                 return ValidationResult.Error($"Output directory does not exist: {parent}");
@@ -437,9 +437,12 @@ internal sealed class TilesCommand : Command<TilesCommand.Settings>
         }
 
         var outputPath = settings.Output!;
-        using ITileSink sink = container == TileContainer.PmTiles
-            ? new PmTilesTileSink(outputPath)
-            : new XyzDirectoryTileSink(outputPath, format);
+        using ITileSink sink = container switch
+        {
+            TileContainer.PmTiles => new PmTilesTileSink(outputPath),
+            TileContainer.MbTiles => new MbTilesTileSink(outputPath),
+            _ => new XyzDirectoryTileSink(outputPath, format),
+        };
 
         var encodeFormat = format switch
         {
@@ -519,7 +522,7 @@ internal sealed class TilesCommand : Command<TilesCommand.Settings>
 
         var skippedNote = settings.SkipEmpty ? $", {skipped:N0} empty skipped" : string.Empty;
         AnsiConsole.MarkupLineInterpolated(
-            $"[green]Wrote[/] {outputPath} ([grey]{(container == TileContainer.PmTiles ? "pmtiles" : "xyz")}, {TileSetMetadata.FormatToken(format)}, zoom {minZoom}–{maxZoom}, {written:N0} tile(s){skippedNote}[/])");
+            $"[green]Wrote[/] {outputPath} ([grey]{container.ToString().ToLowerInvariant()}, {TileSetMetadata.FormatToken(format)}, zoom {minZoom}–{maxZoom}, {written:N0} tile(s){skippedNote}[/])");
         return 0;
     }
 
@@ -674,9 +677,12 @@ internal sealed class TilesCommand : Command<TilesCommand.Settings>
         switch (container?.Trim().ToLowerInvariant())
         {
             case null or "":
-                resolved = Path.GetExtension(outputPath).Equals(".pmtiles", StringComparison.OrdinalIgnoreCase)
-                    ? TileContainer.PmTiles
-                    : TileContainer.Xyz;
+                resolved = Path.GetExtension(outputPath).ToLowerInvariant() switch
+                {
+                    ".pmtiles" => TileContainer.PmTiles,
+                    ".mbtiles" => TileContainer.MbTiles,
+                    _ => TileContainer.Xyz,
+                };
                 return true;
             case "xyz":
             case "dir":
@@ -685,6 +691,9 @@ internal sealed class TilesCommand : Command<TilesCommand.Settings>
                 return true;
             case "pmtiles":
                 resolved = TileContainer.PmTiles;
+                return true;
+            case "mbtiles":
+                resolved = TileContainer.MbTiles;
                 return true;
             default:
                 resolved = TileContainer.Xyz;

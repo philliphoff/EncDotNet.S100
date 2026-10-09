@@ -6,7 +6,8 @@ namespace EncDotNet.S100.TestSupport;
 /// <summary>
 /// Walks the transitive managed-assembly reference closure of a root assembly
 /// (resolving each reference from the root's own directory) to detect whether
-/// any reachable assembly references <c>Mapsui*</c>.
+/// any reachable assembly references <c>Mapsui*</c>, or another dependency a
+/// project must stay free of.
 /// </summary>
 /// <remarks>
 /// This is the proof for issue #189: the <c>EncDotNet.S100</c> facade, the
@@ -23,7 +24,18 @@ internal static class MapsuiDependencyClosure
     /// </summary>
     /// <param name="rootAssemblyPath">Path to the assembly to inspect.</param>
     /// <returns>A sorted set of offending Mapsui assembly reference names (empty when clean).</returns>
-    public static IReadOnlyCollection<string> FindMapsuiReferences(string rootAssemblyPath)
+    public static IReadOnlyCollection<string> FindMapsuiReferences(string rootAssemblyPath) =>
+        FindReferences(rootAssemblyPath, "Mapsui");
+
+    /// <summary>
+    /// Returns the set of assembly names starting with any of
+    /// <paramref name="prefixes"/> that are reachable from
+    /// <paramref name="rootAssemblyPath"/> via metadata references.
+    /// </summary>
+    /// <param name="rootAssemblyPath">Path to the assembly to inspect.</param>
+    /// <param name="prefixes">Assembly-name prefixes to report, compared case-insensitively.</param>
+    /// <returns>A sorted set of matching assembly reference names (empty when clean).</returns>
+    public static IReadOnlyCollection<string> FindReferences(string rootAssemblyPath, params string[] prefixes)
     {
         var fullRoot = Path.GetFullPath(rootAssemblyPath);
         var dir = Path.GetDirectoryName(fullRoot)!;
@@ -50,7 +62,7 @@ internal static class MapsuiDependencyClosure
 
             foreach (var referenceName in ReadAssemblyReferenceNames(path))
             {
-                if (referenceName.StartsWith("Mapsui", StringComparison.OrdinalIgnoreCase))
+                if (prefixes.Any(prefix => referenceName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
                 {
                     offenders.Add(referenceName);
                 }
