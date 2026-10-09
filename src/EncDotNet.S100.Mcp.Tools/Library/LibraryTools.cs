@@ -271,14 +271,14 @@ public sealed class SetSecomIdentityTool(EncDotNet.S100.Collections.Secom.SecomS
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
-            return Task.FromResult(ToolResult<SecomIdentityDto>.Err(new LibraryChangeRejected($"the identity could not be loaded ({ex.Message})")));
+            return Task.FromResult(ToolResult<SecomIdentityDto>.Err(new InvalidArgument("path", ex.Message)));
         }
 
         if (!identity.IsValidAt(_time.GetUtcNow()))
         {
             var reason = $"the identity is valid from {identity.NotBefore:yyyy-MM-dd} to {identity.NotAfter:yyyy-MM-dd}, not now";
             identity.Dispose();
-            return Task.FromResult(ToolResult<SecomIdentityDto>.Err(new LibraryChangeRejected(reason)));
+            return Task.FromResult(ToolResult<SecomIdentityDto>.Err(new InvalidArgument("path", reason)));
         }
 
         _trust.SetIdentity(identity);
