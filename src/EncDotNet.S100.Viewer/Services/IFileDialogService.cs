@@ -50,4 +50,10 @@ internal interface IFileDialogService
 
     /// <summary>Opens a file picker for a collection manifest (<c>*.s100collection.json</c>).</summary>
     Task<string?> OpenCollectionManifestAsync(TopLevel? topLevel);
+
+    /// <summary>Opens a file picker for an MCP identity: a PKCS#12 (<c>.p12</c>, <c>.pfx</c>) or PEM file (#845).</summary>
+    Task<string?> OpenSecomIdentityAsync(TopLevel? topLevel);
+
+    /// <summary>Opens a file picker for PEM certificates, e.g. a trust anchor (#845).</summary>
+    Task<string?> OpenCertificateAsync(TopLevel? topLevel);
 }

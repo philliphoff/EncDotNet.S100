@@ -1148,7 +1148,7 @@ logs to a file, `-v` / `--verbose` raises the level to Debug, and
 | `--mcp-bind <ADDR>` | MCP bind address; implies `--mcp` |
 | `--mcp-port-file <PATH>` | Write the bound MCP endpoint URI here |
 | `--mcp-test-hooks` | Register test-only MCP tools (`set_test_clock`); implies `--mcp` |
-| `--secom-identity <PATH>` | Present this MCP client certificate (PKCS#12 or PEM with its key) to SECOM services that ask for one, for this run only; the password comes from `SOUNDCHARTS_SECOM_IDENTITY_PASSWORD` |
+| `--secom-identity <PATH>` | Present this MCP client certificate (PKCS#12 or PEM with its key) to SECOM services that ask for one, for this run only, overriding the identity chosen in Settings → Keys & certificates; the password comes from `SOUNDCHARTS_SECOM_IDENTITY_PASSWORD` |
 | `--settings <PATH>` | Use an alternate settings file |
 | `--data-dir <PATH>` | Redirect all settings + caches under one folder (or `S100_DATA_DIR`) |
 | `--ephemeral` | Throwaway settings, never persisted |
@@ -1215,6 +1215,35 @@ application-data location. Persisted across sessions:
   prebuild, vector path cache, line simplification) — all default on
   (**Settings → Advanced → Base-plane rendering**).
 - MCP server enable / disable.
+- References to imported MCP identities and the identity in use, the
+  trusted authorities added from files, and built-in roots turned off
+  (see below). Never a private key or password.
+
+### Keys & certificates
+
+**Settings → Keys & certificates** (#845) holds what SoundCharts uses to
+prove who you are and decide who to trust:
+
+- **Identities.** MCP client certificates with their private keys, from
+  the MCP management portal. **Import identity…** reads a `.p12` or a PEM
+  certificate and key, shows what the certificate says (MRN, vessel
+  attributes, issuer, the authority it chains to, validity, key), and
+  asks for a name. The identity in use is presented to SECOM services
+  that ask for a certificate. Rows warn when a certificate ends within
+  30 days, has ended, or was revoked; the same warning appears under the
+  category name. A revoked identity in use is dropped at once. Each
+  identity has a reference id (`sc-ident:…`) that `set_secom_identity`
+  accepts.
+- **Trusted authorities.** The built-in MCP root, which can be turned off
+  but not removed, and roots added from PEM files.
+- **System IDs.** For protected (Part 15) datasets; not available yet.
+
+Private keys live in the platform key store: the Keychain on macOS, the
+Windows certificate store, and on Linux .NET's certificate store under
+`~/.dotnet/corefx/cryptography/x509stores`, which only file permissions
+protect. Runs with `--ephemeral` keep them in memory. `--secom-identity`
+still works and wins for its run, shown as a "From command line" row.
+**Reset all settings** deletes stored identities' keys too.
 
 Older settings shapes are migrated forward silently; missing values
 fall back to documented defaults.

@@ -38,7 +38,7 @@ internal sealed class ViewerCommandSettings : CommandSettings
     public string? McpPortFile { get; set; }
 
     [CommandOption("--secom-identity <PATH>")]
-    [Description("Present this MCP client certificate (PKCS#12 or PEM with its key) to SECOM services that ask for one, for this run only. The password, if any, is read from the SOUNDCHARTS_SECOM_IDENTITY_PASSWORD environment variable.")]
+    [Description("Present this MCP client certificate (PKCS#12 or PEM with its key) to SECOM services that ask for one, for this run only, overriding the identity chosen in Settings > Keys & certificates. The password, if any, is read from the SOUNDCHARTS_SECOM_IDENTITY_PASSWORD environment variable.")]
     public string? SecomIdentity { get; set; }
 
     [CommandOption("--mcp-test-hooks")]

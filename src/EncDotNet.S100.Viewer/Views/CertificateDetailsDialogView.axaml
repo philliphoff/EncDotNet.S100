@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:keys="using:EncDotNet.S100.Viewer.ViewModels.Keys"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.CertificateDetailsDialogView"
+             x:DataType="keys:CertificateDetailsDialogViewModel"
+             Width="520">
+
+    <!-- An identity's or authority's certificate details (#845); never the private key. -->
+    <UserControl.Styles>
+        <Style Selector="SelectableTextBlock.mono">
+            <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,Menlo,monospace" />
+        </Style>
+        <Style Selector="SelectableTextBlock.destructive">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="18,14,18,14" RowSpacing="12">
+        <TextBlock Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold" />
+        <ItemsControl Grid.Row="1" ItemsSource="{Binding Fields}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="8" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="keys:KeysField">
+                    <Grid ColumnDefinitions="110,*" ColumnSpacing="12">
+                        <TextBlock Text="{Binding Label}" FontSize="12" Opacity="0.65" />
+                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12" TextWrapping="Wrap"
+                                             Classes.mono="{Binding IsMono}"
+                                             Classes.destructive="{Binding IsDestructive}" />
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button Grid.Row="2" HorizontalAlignment="Right" Classes="Outline"
+                Content="{x:Static loc:Strings.Keys_Details_Close}" Command="{Binding CloseCommand}" IsDefault="True"
+                AutomationProperties.AutomationId="CertificateDetails.Close" />
+    </Grid>
+</UserControl>

@@ -19,6 +19,13 @@ public sealed class SecomClientIdentity : IDisposable
 {
     private const string UidOid = "0.9.2342.19200300.100.1.1";
 
+    // MCP attributes an Identity Registry writes into the subject alternative
+    // name as otherName entries (MCP PKI documentation, "Certificate attributes").
+    private const string FlagStateOid = "2.25.323100633285601570573910217875371967771";
+    private const string CallSignOid = "2.25.208070283325144527098121348946972755227";
+    private const string ImoNumberOid = "2.25.291283622413876360871493815653100799259";
+    private const string MmsiOid = "2.25.328433707816814908768060331477217690907";
+
     private SecomClientIdentity(X509Certificate2 certificate, string? anchor)
     {
         Certificate = certificate;
@@ -27,6 +34,12 @@ public sealed class SecomClientIdentity : IDisposable
         Mrn = SubjectAttribute(certificate, UidOid) is { } uid && uid.StartsWith("urn:mrn:", StringComparison.OrdinalIgnoreCase) ? uid : null;
         NotBefore = new DateTimeOffset(certificate.NotBefore.ToUniversalTime(), TimeSpan.Zero);
         NotAfter = new DateTimeOffset(certificate.NotAfter.ToUniversalTime(), TimeSpan.Zero);
+        Issuer = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: true);
+        var attributes = AlternativeNameAttributes(certificate);
+        FlagState = attributes.GetValueOrDefault(FlagStateOid);
+        CallSign = attributes.GetValueOrDefault(CallSignOid);
+        ImoNumber = attributes.GetValueOrDefault(ImoNumberOid);
+        Mmsi = attributes.GetValueOrDefault(MmsiOid);
     }
 
     /// <summary>The certificate, with its private key.</summary>
@@ -37,6 +50,21 @@ public sealed class SecomClientIdentity : IDisposable
 
     /// <summary>The MRN the certificate was issued to (its subject <c>UID</c>), when it has one.</summary>
     public string? Mrn { get; }
+
+    /// <summary>The issuer's common name, e.g. "MCP Identity Registry".</summary>
+    public string Issuer { get; }
+
+    /// <summary>The vessel's flag state, when the certificate carries the MCP attribute.</summary>
+    public string? FlagState { get; }
+
+    /// <summary>The vessel's call sign, when the certificate carries the MCP attribute.</summary>
+    public string? CallSign { get; }
+
+    /// <summary>The vessel's IMO number, when the certificate carries the MCP attribute.</summary>
+    public string? ImoNumber { get; }
+
+    /// <summary>The vessel's MMSI, when the certificate carries the MCP attribute.</summary>
+    public string? Mmsi { get; }
 
     /// <summary>The trust anchor the certificate chains to (e.g. "MCP MCC"), or <see langword="null"/> for none.</summary>
     public string? Anchor { get; }
@@ -76,9 +104,18 @@ public sealed class SecomClientIdentity : IDisposable
     /// <param name="path">The file.</param>
     /// <param name="password">The PKCS#12 or encrypted-key password, if any.</param>
     /// <param name="anchors">The anchors to report <see cref="Anchor"/> against; by default <see cref="SecomTrustAnchors.BuiltIn"/>.</param>
+    /// <param name="keyStorageFlags">
+    /// How the private key is held, e.g. <see cref="X509KeyStorageFlags.Exportable"/>
+    /// or <see cref="X509KeyStorageFlags.PersistKeySet"/> for a host that adds the
+    /// identity to a platform key store; by default the platform's default.
+    /// </param>
     /// <exception cref="FileNotFoundException">The file does not exist.</exception>
     /// <exception cref="InvalidDataException">The file holds no certificate with a private key, or the password is wrong.</exception>
-    public static SecomClientIdentity Load(string path, string? password = null, SecomTrustAnchors? anchors = null)
+    public static SecomClientIdentity Load(
+        string path,
+        string? password = null,
+        SecomTrustAnchors? anchors = null,
+        X509KeyStorageFlags keyStorageFlags = X509KeyStorageFlags.DefaultKeySet)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
         if (!File.Exists(path))
@@ -88,7 +125,9 @@ public sealed class SecomClientIdentity : IDisposable
         try
         {
             var bytes = File.ReadAllBytes(path);
-            certificate = IsPem(bytes) ? FromPem(File.ReadAllText(path), password) : FromPkcs12(bytes, password);
+            certificate = IsPem(bytes)
+                ? FromPem(File.ReadAllText(path), password, keyStorageFlags)
+                : FromPkcs12(bytes, password, keyStorageFlags);
         }
         catch (CryptographicException ex)
         {
@@ -117,22 +156,63 @@ public sealed class SecomClientIdentity : IDisposable
     /// attached in memory is not usable for client authentication on macOS
     /// and Windows, whose TLS stacks need a key they can find again.
     /// </summary>
-    private static X509Certificate2 FromPem(string pem, string? password)
+    private static X509Certificate2 FromPem(string pem, string? password, X509KeyStorageFlags keyStorageFlags)
     {
         using var attached = string.IsNullOrEmpty(password)
             ? X509Certificate2.CreateFromPem(pem, pem)
             : X509Certificate2.CreateFromEncryptedPem(pem, pem, password);
         var transfer = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
-        return FromPkcs12(attached.Export(X509ContentType.Pkcs12, transfer), transfer);
+        return FromPkcs12(attached.Export(X509ContentType.Pkcs12, transfer), transfer, keyStorageFlags);
     }
 
-    private static X509Certificate2 FromPkcs12(byte[] bytes, string? password)
+    private static X509Certificate2 FromPkcs12(byte[] bytes, string? password, X509KeyStorageFlags keyStorageFlags)
     {
 #if NET10_0_OR_GREATER
-        return X509CertificateLoader.LoadPkcs12(bytes, password);
+        return X509CertificateLoader.LoadPkcs12(bytes, password, keyStorageFlags);
 #else
-        return new X509Certificate2(bytes, password);
+        return new X509Certificate2(bytes, password, keyStorageFlags);
 #endif
+    }
+
+    /// <summary>
+    /// The subject alternative name's otherName entries that hold a string,
+    /// by type OID: where an MCP Identity Registry puts vessel attributes.
+    /// </summary>
+    private static Dictionary<string, string> AlternativeNameAttributes(X509Certificate2 certificate)
+    {
+        var attributes = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (certificate.Extensions["2.5.29.17"] is not { } extension)
+            return attributes;
+
+        try
+        {
+            // GeneralNames ::= SEQUENCE OF GeneralName; otherName [0] { type-id OID, value [0] EXPLICIT ANY }.
+            var names = new AsnReader(extension.RawData, AsnEncodingRules.DER).ReadSequence();
+            while (names.HasData)
+            {
+                var tag = names.PeekTag();
+                if (!tag.HasSameClassAndValue(new Asn1Tag(TagClass.ContextSpecific, 0)))
+                {
+                    names.ReadEncodedValue();
+                    continue;
+                }
+
+                var otherName = names.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true));
+                var type = otherName.ReadObjectIdentifier();
+                var value = otherName.ReadSequence(new Asn1Tag(TagClass.ContextSpecific, 0, isConstructed: true));
+                if (value.HasData && value.PeekTag() is { TagClass: TagClass.Universal } inner
+                    && (UniversalTagNumber)inner.TagValue is UniversalTagNumber.UTF8String or UniversalTagNumber.PrintableString or UniversalTagNumber.IA5String)
+                {
+                    attributes.TryAdd(type, value.ReadCharacterString((UniversalTagNumber)inner.TagValue));
+                }
+            }
+        }
+        catch (AsnContentException)
+        {
+            // A malformed name: no attributes.
+        }
+
+        return attributes;
     }
 
     private static string? SubjectAttribute(X509Certificate2 certificate, string oid)

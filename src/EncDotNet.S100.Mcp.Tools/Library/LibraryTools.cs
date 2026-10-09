@@ -240,18 +240,49 @@ public sealed record SecomIdentityDto(
     [property: Description("The trust anchor it chains to (e.g. 'MCP MCC'), or null when it chains to none of them.")] string? Anchor = null,
     [property: Description("When it expires.")] DateTimeOffset? NotAfter = null)
 {
+    /// <summary>The stored identity's reference id (e.g. 'sc-ident:4f9c2a7e'), or null for one loaded from a file for this session.</summary>
+    [Description("The stored identity's reference id (e.g. 'sc-ident:4f9c2a7e'), or null for one loaded from a file for this session.")]
+    public string? Reference { get; init; }
+
     /// <summary>The algorithm SECOM 2.0 request envelopes are signed with, e.g. 'ecdsa-384-sha3'.</summary>
     [Description("The algorithm SECOM 2.0 request envelopes are signed with, e.g. 'ecdsa-384-sha3'.")]
     public string? SignatureAlgorithm { get; init; }
 }
 
 /// <summary>
-/// Sets, clears or reports the MCP identity (client certificate) presented to
-/// SECOM services that ask for one (MCP <c>set_secom_identity</c>, #832). For
-/// this session only: nothing is persisted.
+/// A host's stored MCP identities (#845), which <see cref="SetSecomIdentityTool"/>
+/// can choose by reference id (<c>sc-ident:xxxxxxxx</c>) instead of a file.
 /// </summary>
-public sealed class SetSecomIdentityTool(EncDotNet.S100.Collections.Secom.SecomServerTrust trust, TimeProvider? timeProvider = null)
+public interface ISecomIdentityReferences
 {
+    /// <summary>
+    /// Uses the stored identity <paramref name="referenceId"/> from now on (as
+    /// choosing it in the host's UI does) and returns it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No such identity, it was revoked, or its key is gone.</exception>
+    EncDotNet.S100.Collections.Secom.SecomClientIdentity Use(string referenceId);
+
+    /// <summary>The reference id of a stored identity, or <see langword="null"/> for one that is not stored.</summary>
+    string? ReferenceOf(EncDotNet.S100.Collections.Secom.SecomClientIdentity identity);
+}
+
+/// <summary>
+/// Sets, clears or reports the MCP identity (client certificate) presented to
+/// SECOM services that ask for one (MCP <c>set_secom_identity</c>, #832). A
+/// file is used for this session only; a stored identity chosen by reference
+/// id (#845) is used as the host's own choice.
+/// </summary>
+/// <param name="trust">The trust whose identity is set.</param>
+/// <param name="timeProvider">The clock validity is judged by.</param>
+/// <param name="references">The host's stored identities, for reference ids; <see langword="null"/> where there are none.</param>
+public sealed class SetSecomIdentityTool(
+    EncDotNet.S100.Collections.Secom.SecomServerTrust trust,
+    TimeProvider? timeProvider = null,
+    ISecomIdentityReferences? references = null)
+{
+    /// <summary>The prefix of a stored identity's reference id.</summary>
+    public const string ReferencePrefix = "sc-ident:";
+
     /// <summary>The MCP tool name.</summary>
     public const string Name = "set_secom_identity";
 
@@ -286,6 +317,20 @@ public sealed class SetSecomIdentityTool(EncDotNet.S100.Collections.Secom.SecomS
         if (string.IsNullOrWhiteSpace(path))
             return Task.FromResult(ToolResult<SecomIdentityDto>.Ok(Describe(_trust.Identity)));
 
+        if (path.Trim().StartsWith(ReferencePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            if (references is null)
+                return Task.FromResult(ToolResult<SecomIdentityDto>.Err(new InvalidArgument("path", "this server has no stored identities; give a .p12 or PEM file")));
+            try
+            {
+                return Task.FromResult(ToolResult<SecomIdentityDto>.Ok(Describe(references.Use(path.Trim()))));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Task.FromResult(ToolResult<SecomIdentityDto>.Err(new InvalidArgument("path", ex.Message)));
+            }
+        }
+
         EncDotNet.S100.Collections.Secom.SecomClientIdentity identity;
         try
         {
@@ -312,6 +357,7 @@ public sealed class SetSecomIdentityTool(EncDotNet.S100.Collections.Secom.SecomS
         : new SecomIdentityDto(true, identity.Subject, identity.Mrn, identity.Anchor, identity.NotAfter)
         {
             SignatureAlgorithm = SafeSignatureReference(),
+            Reference = references?.ReferenceOf(identity),
         };
 
     private string? SafeSignatureReference()

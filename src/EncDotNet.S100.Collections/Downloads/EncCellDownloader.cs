@@ -125,7 +125,18 @@ public sealed partial class EncCellDownloader
     /// judged against these each time its record is read, so changing them
     /// needs no re-download.
     /// </summary>
-    public SecomTrustAnchors TrustAnchors { get; init; } = SecomTrustAnchors.BuiltIn;
+    public SecomTrustAnchors TrustAnchors
+    {
+        get => TrustAnchorsSource();
+        init => TrustAnchorsSource = () => value;
+    }
+
+    /// <summary>
+    /// Where <see cref="TrustAnchors"/> come from, read each time a signer is
+    /// judged: a host whose anchors change (a root turned off or added, #845)
+    /// passes e.g. <c>() =&gt; serverTrust.Anchors</c>.
+    /// </summary>
+    public Func<SecomTrustAnchors> TrustAnchorsSource { get; init; } = static () => SecomTrustAnchors.BuiltIn;
 
     /// <summary>
     /// Checks a trusted SECOM signer for revocation (issue #833); <see langword="null"/>

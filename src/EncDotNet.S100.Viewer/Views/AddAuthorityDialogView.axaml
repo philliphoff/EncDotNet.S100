@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:keys="using:EncDotNet.S100.Viewer.ViewModels.Keys"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.AddAuthorityDialogView"
+             x:DataType="keys:AddAuthorityDialogViewModel"
+             Width="480">
+
+    <!-- Add a trusted authority from a PEM file (#845 F1). -->
+    <UserControl.Styles>
+        <Style Selector="SelectableTextBlock.mono">
+            <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,Menlo,monospace" />
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*,Auto" Margin="18,14,18,14" RowSpacing="12">
+        <StackPanel Spacing="4">
+            <TextBlock Text="{x:Static loc:Strings.Keys_AddAuthority_Title}" FontSize="14.5" FontWeight="SemiBold" />
+            <TextBlock Text="{x:Static loc:Strings.Keys_AddAuthority_Intro}" FontSize="12.5" Opacity="0.65" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Spacing="12">
+            <TextBlock Text="{Binding FileName}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12.5" FontWeight="SemiBold" />
+            <Border Background="{DynamicResource MutedBackgroundColor}" BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="1" CornerRadius="6" Padding="12,11" IsVisible="{Binding HasCertificate}">
+                <ItemsControl ItemsSource="{Binding Fields}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="7" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="keys:KeysField">
+                            <Grid ColumnDefinitions="96,*" ColumnSpacing="12">
+                                <TextBlock Text="{Binding Label}" FontSize="12" Opacity="0.65" />
+                                <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12" TextWrapping="Wrap"
+                                                     Classes.mono="{Binding IsMono}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+            <Grid ColumnDefinitions="96,*" ColumnSpacing="12" IsVisible="{Binding HasCertificate}">
+                <TextBlock Text="{x:Static loc:Strings.Keys_AddAuthority_Name}" FontSize="12" Opacity="0.65" VerticalAlignment="Center" />
+                <TextBox Grid.Column="1" Text="{Binding Name}"
+                         AutomationProperties.AutomationId="AddAuthority.Name"
+                         AutomationProperties.Name="{x:Static loc:Strings.Keys_AddAuthority_Name}"
+                         AutomationProperties.HelpText="{x:Static loc:Strings.Keys_AddAuthority_Name_Help}" />
+            </Grid>
+            <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}"
+                       FontSize="11.5" Foreground="{DynamicResource DestructiveColor}" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}"
+                    AutomationProperties.AutomationId="AddAuthority.Cancel" />
+            <Button Classes="Primary" Content="{x:Static loc:Strings.Keys_AddAuthority_Add}" Command="{Binding AddCommand}"
+                    IsEnabled="{Binding CanAdd}" IsDefault="True"
+                    AutomationProperties.AutomationId="AddAuthority.Add" />
+        </StackPanel>
+    </Grid>
+</UserControl>

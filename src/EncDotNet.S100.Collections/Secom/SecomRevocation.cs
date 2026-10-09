@@ -25,7 +25,11 @@ public enum SecomRevocationStatus
 /// <summary>The result of <see cref="SecomRevocation.Check"/>.</summary>
 /// <param name="Status">What was found.</param>
 /// <param name="Detail">Which certificate was revoked, or why the check could not be made.</param>
-public sealed record SecomRevocationResult(SecomRevocationStatus Status, string? Detail = null);
+public sealed record SecomRevocationResult(SecomRevocationStatus Status, string? Detail = null)
+{
+    /// <summary>When the CRL says the certificate was revoked, for <see cref="SecomRevocationStatus.Revoked"/>.</summary>
+    public DateTimeOffset? RevokedAt { get; init; }
+}
 
 /// <summary>
 /// Checks SECOM certificate chains against the certificate revocation lists
@@ -159,7 +163,7 @@ public sealed class SecomRevocation
             if (_shared.Current(url, issuer, _fetch, out error) is not { } crl)
                 continue;
             return crl.Revoked.TryGetValue(Serial(certificate.GetSerialNumber(), littleEndian: true), out var at)
-                ? new SecomRevocationResult(SecomRevocationStatus.Revoked, $"The certificate of {name} was revoked on {at:yyyy-MM-dd}.")
+                ? new SecomRevocationResult(SecomRevocationStatus.Revoked, $"The certificate of {name} was revoked on {at:yyyy-MM-dd}.") { RevokedAt = at }
                 : new SecomRevocationResult(SecomRevocationStatus.NotRevoked);
         }
 
