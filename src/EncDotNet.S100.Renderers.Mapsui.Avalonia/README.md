@@ -13,7 +13,9 @@ stays independent of any UI framework. It owns the session, layer creation,
 processors, S-98 composition, presentation state, automatic framing or other
 host UX policy.
 
-For a complete Avalonia host, see the
+For a step-by-step introduction, see
+[Add S-100 data to a Mapsui app](../../docs/mapsui-app.md). For a complete
+Avalonia host, see the
 [MapHost sample](../../samples/EncDotNet.S100.Samples.MapHost/README.md).
 
 ## Install
