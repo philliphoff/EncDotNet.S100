@@ -88,9 +88,10 @@ public enum SecomReachability
     CertificateRefused,
 
     /// <summary>
-    /// It refuses the <c>GetSummary</c> GET but has the SECOM 2.0 search
-    /// interface (a signed <c>POST …/v2/object/search</c>), which this client
-    /// does not support yet. Not a certificate matter in itself.
+    /// It has no <c>GetSummary</c> GET (404) but has SECOM 2.0's POST
+    /// GetSummary (<c>POST …/v2/object/search/summary</c>, an enveloped and
+    /// signed filter), which this client does not support yet. Not a
+    /// certificate matter in itself.
     /// </summary>
     NeedsSecom2Search,
 
@@ -311,13 +312,13 @@ public sealed class SecomRegistry
             if (Classify(ex, host) is { } failed)
                 return failed;
 
-            // SECOM 2.0 services (AMSA, KHRA, KRISO) list through a signed POST
-            // search and answer the GET summary with 404: not a certificate matter.
+            // SECOM 2.0 services (KHRA, KRISO) list only through the enveloped POST
+            // GetSummary and have no GET summary (404): not a certificate matter.
             // Their serviceVersion is no guide (KRISO states its own 0.1.0, 1.0.0).
             if (capability is not null
                 && ex is HttpRequestException { StatusCode: HttpStatusCode.NotFound }
-                && await client.HasSearchInterfaceAsync(cancellationToken).ConfigureAwait(false))
-                return new SecomProbeResult(SecomReachability.NeedsSecom2Search, "It lists its objects through SECOM 2.0 search, which is not supported yet.");
+                && await client.HasPostSummaryAsync(cancellationToken).ConfigureAwait(false))
+                return new SecomProbeResult(SecomReachability.NeedsSecom2Search, "It lists its objects only through SECOM 2.0's signed POST summary, which is not supported yet.");
 
             // It answers Capability as SECOM but not an anonymous GetSummary;
             // otherwise it is not a SECOM service.

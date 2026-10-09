@@ -163,9 +163,9 @@ public sealed class SecomRegistryTests : IDisposable
                 "signed-search-only" => capability ? Json(Capability) : Status(HttpStatusCode.NotFound),
                 "refuses" => Status(HttpStatusCode.Unauthorized),
                 "website" => Status(HttpStatusCode.NotFound),
-                // SECOM 2.0 (AMSA, KHRA, KRISO): Capability answers, the GET summary is 404.
+                // SECOM 2.0 (KHRA, KRISO): Capability answers, no GET summary (404), a POST summary (400 for {}).
                 "secom2" => capability ? Json(Capability2)
-                    : path.EndsWith("/object/search", StringComparison.Ordinal) ? Status(HttpStatusCode.BadRequest)
+                    : path.EndsWith("/object/search/summary", StringComparison.Ordinal) ? Status(HttpStatusCode.BadRequest)
                     : Status(HttpStatusCode.NotFound),
                 _ => throw new InvalidOperationException(behaviour),
             };
