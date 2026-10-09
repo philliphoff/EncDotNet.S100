@@ -33,6 +33,27 @@ public sealed class TestPki : IDisposable
 
     public SecomTrustAnchors Anchors => new([new SecomTrustAnchor("Test MCP", Root)], [Intermediate]);
 
+    /// <summary>Where the intermediate's CRL is published (#833); leaves made with <c>withCrl</c> name it.</summary>
+    public static Uri IntermediateCrlUri { get; } = new("http://crl.secom.test/crl/intermediate");
+
+    /// <summary>Where the root's CRL is published; the intermediate names it.</summary>
+    public static Uri RootCrlUri { get; } = new("http://crl.secom.test/crl/root");
+
+    /// <summary>A CRL from the intermediate listing <paramref name="revoked"/>.</summary>
+    public byte[] IntermediateCrl(DateTimeOffset? nextUpdate = null, params X509Certificate2[] revoked) => Crl(Intermediate, nextUpdate, revoked);
+
+    /// <summary>A CRL from the root listing <paramref name="revoked"/>.</summary>
+    public byte[] RootCrl(DateTimeOffset? nextUpdate = null, params X509Certificate2[] revoked) => Crl(Root, nextUpdate, revoked);
+
+    private static byte[] Crl(X509Certificate2 issuer, DateTimeOffset? nextUpdate, X509Certificate2[] revoked)
+    {
+        var builder = new CertificateRevocationListBuilder();
+        foreach (var certificate in revoked)
+            builder.AddEntry(certificate, DateTimeOffset.UtcNow.AddDays(-1), X509RevocationReason.KeyCompromise);
+        var next = nextUpdate ?? DateTimeOffset.UtcNow.AddDays(7);
+        return builder.Build(issuer, 1, next, HashAlgorithmName.SHA256, thisUpdate: next.AddDays(-8));
+    }
+
     public static TestPki Create()
     {
         // Wide enough to hold every leaf, including an expired one.
@@ -42,8 +63,9 @@ public sealed class TestPki : IDisposable
         var root = Authority("CN=Test MCP Root Certificate", rootKey).CreateSelfSigned(from, to);
 
         var intermediateKey = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        using var intermediate = Authority("CN=Test MCP Identity Registry", intermediateKey)
-            .Create(root, from, to, RandomNumberGenerator.GetBytes(8));
+        var intermediateRequest = Authority("CN=Test MCP Identity Registry", intermediateKey);
+        intermediateRequest.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([RootCrlUri.AbsoluteUri]));
+        using var intermediate = intermediateRequest.Create(root, from, to, RandomNumberGenerator.GetBytes(8));
         return new TestPki(root, intermediate.CopyWithPrivateKey(intermediateKey), intermediateKey);
     }
 
@@ -54,7 +76,8 @@ public sealed class TestPki : IDisposable
         string? mrn = null,
         IPAddress[]? ipAddresses = null,
         DateTimeOffset? notAfter = null,
-        bool withKey = true)
+        bool withKey = true,
+        bool withCrl = false)
     {
         using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
         var request = new CertificateRequest($"CN={commonName}", key, HashAlgorithmName.SHA256);
@@ -70,6 +93,8 @@ public sealed class TestPki : IDisposable
             san.AddUserPrincipalName(mrn);  // stands in for the MCP MRN othername
         if (dnsNames.Length > 0 || mrn is not null || ipAddresses is { Length: > 0 })
             request.CertificateExtensions.Add(san.Build());
+        if (withCrl)
+            request.CertificateExtensions.Add(CertificateRevocationListBuilder.BuildCrlDistributionPointExtension([IntermediateCrlUri.AbsoluteUri]));
 
         return Issue(request, key, notAfter, withKey);
     }

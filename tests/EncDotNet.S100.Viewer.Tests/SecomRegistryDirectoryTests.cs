@@ -90,7 +90,7 @@ public sealed class SecomRegistryDirectoryTests
         {
             "s124.ccg-gcc.gc.ca" => new SecomProbeResult(SecomReachability.Open)
             {
-                ServerTrust = new SecomServerTrustResult(SecomServerTrustOutcome.AnchorTrusted, "MCP MCC"),
+                ServerTrust = new SecomServerTrustResult(SecomServerTrustOutcome.AnchorTrusted, "MCP MCC") { Revocation = SecomRevocationStatus.NotRevoked },
             },
             _ => new SecomProbeResult(SecomReachability.UntrustedServer, "Its certificate does not name this host.")
             {
@@ -111,6 +111,35 @@ public sealed class SecomRegistryDirectoryTests
         await SettleAsync(() => ccg.Reachability is not null);
         Assert.Equal("Its server certificate is from MCP MCC.", ccg.ReachabilityExplanation);
         Assert.True(directory.CanContinueWithSelection);
+    }
+
+    [Fact]
+    public async Task The_explanation_says_when_a_server_certificate_is_revoked_or_its_revocation_unchecked()
+    {
+        // #833: a revoked certificate is refused; an unchecked one is allowed and says so.
+        var directory = Directory(uri => uri.Host switch
+        {
+            "s124.ccg-gcc.gc.ca" => new SecomProbeResult(SecomReachability.Open)
+            {
+                ServerTrust = new SecomServerTrustResult(SecomServerTrustOutcome.AnchorTrusted, "MCP MCC"),
+            },
+            _ => new SecomProbeResult(SecomReachability.UntrustedServer, "Its certificate from MCP MCC has been revoked.")
+            {
+                ServerTrust = new SecomServerTrustResult(SecomServerTrustOutcome.Revoked, "MCP MCC") { Revocation = SecomRevocationStatus.Revoked },
+            },
+        });
+        directory.ShowRegistryCommand.Execute(null);
+        await SettleAsync(() => directory.IsRegistryLoaded);
+        var khra = directory.Entries.Single(e => e.IsRegistry && e.Name.StartsWith("KHRA", StringComparison.Ordinal));
+        var ccg = directory.Entries.Single(e => e.IsRegistry && e.Source.CatalogUri.Host == "s124.ccg-gcc.gc.ca");
+
+        directory.SelectedEntry = khra;
+        await SettleAsync(() => khra.Reachability is not null);
+        Assert.Equal("This service's TLS certificate from MCP MCC has been revoked, so the connection was refused.", khra.ReachabilityExplanation);
+
+        directory.SelectedEntry = ccg;
+        await SettleAsync(() => ccg.Reachability is not null);
+        Assert.Equal("Its server certificate is from MCP MCC. Whether it has been revoked could not be checked.", ccg.ReachabilityExplanation);
     }
 
     [Fact]

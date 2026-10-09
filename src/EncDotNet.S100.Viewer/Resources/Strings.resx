@@ -3232,6 +3232,13 @@
   <data name="Library_Reachability_WrongHostExplanation" xml:space="preserve">
     <value>This service's TLS certificate does not name its address, so the connection was refused.</value>
   </data>
+  <data name="Library_Reachability_RevokedServerExplanationFormat" xml:space="preserve">
+    <value>This service's TLS certificate from {0} has been revoked, so the connection was refused.</value>
+    <comment>{0}: the trust anchor's name, e.g. "MCP MCC"</comment>
+  </data>
+  <data name="Library_Reachability_RevocationNotCheckedExplanation" xml:space="preserve">
+    <value>Whether it has been revoked could not be checked.</value>
+  </data>
   <data name="Library_Reachability_ServerAnchorFormat" xml:space="preserve">
     <value>Its server certificate is from {0}.</value>
     <comment>{0}: the trust anchor's name, e.g. "MCP MCC" (Maritime Connectivity Platform)</comment>

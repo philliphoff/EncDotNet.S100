@@ -1102,8 +1102,8 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 >     certificate from it.
 >   - Hosts add roots with `With(...)`. The keys & certificates settings
 >     surface comes later.
-> - **Chain.** `FindAnchor` builds the chain with custom root trust,
->   ignores time validity and does not check revocation. The stated
+> - **Chain.** `FindAnchor` builds the chain with custom root trust and
+>   ignores time validity. Revocation is checked separately (§7.11). The stated
 >   `publicRootCertificateThumbprint` must name a CA in the chain, by
 >   SHA-1 or SHA-256:
 >   - CCG states the root.
@@ -1127,12 +1127,13 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 >   - "valid · trusted (MCP MCC)";
 >   - "valid · signer not trusted";
 >   - "valid · signer trust not checked";
+>   - for a trusted signer, " · signer certificate revoked" or
+>     " · revocation not checked" appended (§7.11);
 >   - any of these with " · signer certificate expired" appended;
 >   - or "invalid", "unsigned", "not checked (unknown algorithm)".
 > - **Later.**
->   - Revocation (OCSP and CRL, at the MCP endpoints the certificates
->     name).
 >   - User-added anchors in the keys & certificates UX.
+>   - Revocation (CRL) followed in #833 (§7.11).
 
 TLS trust for the same roots followed in #829 (§7.9).
 
@@ -1156,9 +1157,8 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   - the chain reaches a `SecomTrustAnchors` root, with the server's
 >     intermediates or the anchors' own;
 >   - every certificate is within its validity period (unlike signers);
->   - the certificate names the host.
->
->   Revocation is not checked.
+>   - the certificate names the host;
+>   - the certificate and its CAs are not revoked (#833, §7.11).
 > - **Host names, never skipped.**
 >   - A certificate the system trusts but that names another host is
 >     refused, never widened.
@@ -1176,7 +1176,7 @@ TLS trust for the same roots followed in #829 (§7.9).
 >     same as OpenSSL's default.
 > - **Outcomes.** Each host's decision is kept (`ResultFor(host)`):
 >   `SystemTrusted`, `AnchorTrusted` (with the anchor's name),
->   `NotTrusted`, `Expired` or `WrongHost`.
+>   `NotTrusted`, `Expired`, `WrongHost` or (#833) `Revoked`.
 > - **Probes and the viewer.**
 >   - `SecomRegistry` (given the validator) attaches the decision to
 >     `SecomProbeResult.ServerTrust`, and replaces the platform's TLS
@@ -1244,6 +1244,113 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   - Persisted identities.
 >   - Live validation, which waits on an approved MCC organisation and
 >     providers accepting its certificate.
+
+### 7.11 SECOM certificate revocation (#833)
+
+> - **What the MCP endpoints do (checked 2026-10-08).** MCP certificates
+>   name a CRL distribution point and an OCSP responder. CCG's signer and
+>   KRISO's `weather.gmdrt.org` server certificate both name
+>   `http://api.maritimeconnectivity.net/x509/api/certificates/crl/urn:mrn:mcp:ca:mcc:mcp-idreg-new`
+>   and the matching `…/ocsp/…` responder.
+>   - The intermediate's CRL answered 200 in about 0.6 s: about 9.5 KB, 133
+>     entries, with a signature that verifies against the built-in
+>     intermediate. Neither CCG's nor KRISO's serial was listed.
+>   - **It is PEM** (`application/x-pem-file`), not the DER RFC 5280
+>     requires, so a DER-only reader rejects it.
+>   - It is re-signed on every request: `thisUpdate` is now and
+>     `nextUpdate` is now + 7 days. It has no CRL number.
+>   - The root's CRL, which the intermediate names, is PEM, has no
+>     entries, and is valid for a year.
+>   - OCSP answered "good" for CCG. The CA itself signs the responses,
+>     and they carry no `nextUpdate`.
+>   - A copy of the CRL is the test fixture `mcp-idreg-new-crl.pem`.
+> - **CRL, read by us; OCSP later.** `SecomRevocation` fetches and checks
+>   CRLs itself instead of using `X509RevocationMode.Online`:
+>   - platform revocation behaves differently on each OS, and not every
+>     platform accepts PEM CRLs;
+>   - one CRL covers every certificate its CA issued, so indexing a
+>     source costs one fetch per CA, where OCSP would cost one request
+>     per certificate.
+>
+>   It reads DER or PEM. A CRL is used only when:
+>   - its issuer name is the issuing CA's subject;
+>   - its signature verifies with that CA's key (ECDSA or RSA, SHA-2);
+>   - it is current: `thisUpdate` has passed, allowing 5 minutes of clock
+>     skew, and `nextUpdate` has not.
+>
+>   Every certificate in the chain except the root is checked against its
+>   issuer's CRL, so a revoked intermediate revokes everything under it.
+>   Only chains that reach a `SecomTrustAnchors` root are checked. The
+>   system's own trust (`SystemTrusted`) keeps the system's revocation
+>   policy.
+> - **Online fetch, offline cache.** CRLs are kept in memory and on disk,
+>   as `crl-<hash>.crl` in the feed cache directory, next to the SECOM and
+>   registry caches.
+>   - A copy is fetched again after 24 h (`RefreshAfter`), even while it is
+>     still current, because MCP's week-long `nextUpdate` would otherwise
+>     hide a week of revocations.
+>   - When a refetch fails, a copy that is still current is used.
+>   - Offline, the disk copy serves until its `nextUpdate`.
+> - **Timeouts.** Each fetch is abandoned after 5 s (`FetchTimeout`).
+>   After a failure, the URL is left alone for 5 minutes
+>   (`RetryAfterFailure`), so an absent responder costs one timeout per
+>   CA per interval, not one per object or per handshake. One fetch per
+>   URL runs at a time; concurrent checks wait for it instead of fetching
+>   too. Responses over 8 MB are refused.
+> - **Soft-fail, except when revoked.** When no current CRL can be had,
+>   the result is `NotChecked`, it is shown, and the caller carries on.
+>   Charts and warnings are public safety information, and an absent CRL
+>   responder should not hide them. A listed certificate is always
+>   `Revoked`:
+>   - **TLS:** the connection is refused as `SecomServerTrustOutcome.Revoked`.
+>     The probe says "Its certificate from MCP MCC has been revoked.", and
+>     the directory row explains it. An anchor-trusted connection whose
+>     revocation could not be checked is allowed.
+>     `SecomServerTrustResult.Revocation` says so, the row adds "Whether
+>     it has been revoked could not be checked.", and
+>     `list_secom_services` reports `serverCertificateRevocation`.
+>     Revocation is checked last, so a certificate refused for another
+>     reason costs no fetch.
+>   - **Signatures:** a revoked signer does not refuse the download. The
+>     data still matches its signature. It is shown instead, in
+>     `SecomSignatureCheck.SignerRevocation`, and the `signature`
+>     property reads "valid · trusted (MCP MCC) · signer certificate
+>     revoked".
+> - **Separate from trust and expiry.** Revocation has its own field
+>   (`SignerRevocation`, `SecomServerTrustResult.Revocation`) and its own
+>   outcome (`Revoked`), and it is checked only for a trusted chain. In the
+>   `signature` property it sits between trust and expiry:
+>   - "valid · trusted (MCP MCC)" means every check passed, including
+>     revocation;
+>   - "valid · trusted (MCP MCC) · revocation not checked";
+>   - "valid · trusted (MCP MCC) · signer certificate revoked · signer
+>     certificate expired".
+> - **Re-checked on read, from the cache.** As with trust (§7.8), a
+>   recorded download's signer is judged again whenever its record is
+>   read, from the certificates in `.source.json`.
+>   - Reads use `SecomRevocation.CacheOnly` and never wait on the network,
+>     because download status is read from the UI.
+>   - Index runs (`SecomSourceIndexer`, in the background) and downloads
+>     may fetch.
+>   - `.source.json` records the result as `revocation`. A signer once
+>     found revoked stays revoked when no CRL is at hand, since
+>     revocation is permanent.
+>   - Records written before #833 read "revocation not checked" until
+>     their CRL is fetched.
+> - **Composition (viewer).** One `SecomRevocation` is shared, with a
+>   plain `HttpClient`, because CRLs are plain HTTP, and the feed cache
+>   directory. It goes to `SecomServerTrust`, `SecomSourceIndexer` and
+>   `LibraryDownloads.ManagedFolders`.
+> - **Caveats.**
+>   - A CA may drop an entry once the certificate expires (RFC 5280
+>     §3.3), so "not revoked" is weaker for an expired signer. MCP's CRL
+>     still lists revocations from 2025.
+>   - Without a trusted timestamp, a revocation applies whenever the
+>     object was signed.
+> - **Later.**
+>   - OCSP, as a fallback when a certificate names no CRL, or for
+>     freshness.
+>   - Delta CRLs and `certificateHold` removal; MCP uses neither.
 
 ---
 
