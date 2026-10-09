@@ -465,7 +465,8 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         return product switch
         {
             "S-101" or "S-57" or "S-401" => ".000",
-            "S-102" or "S-104" or "S-111" or "S-412" or "S-413" or "S-414" => ".h5",
+            // S-412 (weather warnings) is GML; S-413/S-414 are unpublished but expected to carry HDF5 grids.
+            "S-102" or "S-104" or "S-111" or "S-413" or "S-414" => ".h5",
             "RTZ" => ".rtz",
             "Unknown" or "OTHER" => ".dat",
             _ => ".gml",
