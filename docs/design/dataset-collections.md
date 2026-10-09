@@ -1244,6 +1244,21 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   - Persisted identities.
 >   - Live validation, which waits on an approved MCC organisation and
 >     providers accepting its certificate.
+> - **Correction (2026-10-09): SECOM 2.0 search.** Most "Needs a
+>   certificate" services were not refusing a certificate.
+>   - AMSA, KHRA and the KRISO hosts list objects only through SECOM
+>     2.0's signed `POST …/v2/object/search`. They answer our GET
+>     `…/v2/object/summary` with 404.
+>   - The probe now tells them apart:
+>     - **NeedsSecom2Search:** after a 404 summary, an empty POST to the
+>       search interface is answered with anything but 404.
+>     - **CertificateRefused** is kept for active refusals (401, 403, or
+>       a TLS-level refusal) of the identity.
+>   - `serviceVersion` is no guide: KRISO states its own versions (0.1.0,
+>     1.0.0).
+>   - Live on 2026-10-09: Open 6, NeedsSecom2Search 18, NeedsCertificate
+>     2 (Fintraffic and FTIA, 403), UntrustedServer 1, Unreachable 16.
+>   - Supporting the signed search is the next slice.
 
 ---
 

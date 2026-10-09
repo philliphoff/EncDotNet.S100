@@ -270,6 +270,27 @@ public sealed class SecomClient
         }
     }
 
+    /// <summary>
+    /// True when the service has the SECOM 2.0 search interface
+    /// (<c>POST …/v2/object/search</c>): an empty request is answered with
+    /// anything but 404. Services implementing it list objects only through it.
+    /// </summary>
+    internal async Task<bool> HasSearchInterfaceAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+            using var response = await _httpClient
+                .PostAsync(Resolve(SecomApiVersion.V2, "object/search", []), content, cancellationToken)
+                .ConfigureAwait(false);
+            return response.StatusCode != System.Net.HttpStatusCode.NotFound;
+        }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            return false;
+        }
+    }
+
     private Uri Resolve(SecomApiVersion version, string path, IEnumerable<(string Name, string Value)> parameters)
     {
         var query = new StringBuilder();

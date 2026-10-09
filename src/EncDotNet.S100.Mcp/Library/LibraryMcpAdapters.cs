@@ -84,7 +84,8 @@ public static class LibraryMcpAdapters
             "Lists SECOM (IEC 63173-2) data services registered in the MCP service registry: name, organisation, product, "
             + "released or provisional, endpoint and area, cleaned of unusable entries. With probe, each is checked: Open "
             + "(readable without a certificate), OpenWithCertificate (readable with the set_secom_identity identity), "
-            + "NeedsCertificate (no identity set), CertificateRefused, UntrustedServer (its TLS certificate is refused) or "
+            + "NeedsCertificate (no identity set), CertificateRefused, NeedsSecom2Search (SECOM 2.0 signed search, not "
+            + "supported yet), UntrustedServer (its TLS certificate is refused) or "
             + "Unreachable. Add an Open or OpenWithCertificate service with add_library_source url=<endpoint>. Read-only.");
     }
 
