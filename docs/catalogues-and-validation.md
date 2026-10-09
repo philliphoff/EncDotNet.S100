@@ -1,18 +1,97 @@
 # Custom catalogues and validation
 
-## Why it matters
-
 Every dataset is interpreted through two catalogues from its product
-specification: the **feature catalogue** (S-100 Part 5), which defines its
-feature types and attributes, and the **portrayal catalogue** (S-100 Part 9),
-which defines how they're drawn. `EncDotNet.S100` bundles the official ones,
-but you may need a newer edition, or your own symbology. This guide shows how to
-use your own catalogues, how to check a dataset against its product's
-validation rules, and how to add rules of your own.
+specification. The **feature catalogue** (S-100 Part 5) defines its feature
+types and attributes. The **portrayal catalogue** (S-100 Part 9) defines how
+they're drawn. `EncDotNet.S100` bundles the official catalogues, but you might
+need a newer edition or your own symbology. This guide shows how to:
 
-## Quick win
+- use your own catalogues with `S100FeatureCatalogue`,
+  `S100PortrayalCatalogue` and `S100Layer`
+- check a dataset against its product's validation rules with `Validate()`
+- add rules of your own with `ValidationRuleBuilder` and
+  `ValidationRuleSet<T>`
 
-Run a dataset's product validation rules and list what they find:
+The examples use files from
+[`tests/datasets`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tests/datasets).
+
+## Use your own feature catalogue
+
+Load a feature catalogue with `S100FeatureCatalogue.FromStream`. Use it to read
+features, or pair it with a dataset in a layer to render:
+
+```csharp
+using EncDotNet.S100;
+
+using var featureCatalogue = S100FeatureCatalogue.FromStream(File.OpenRead("FeatureCatalogue.xml"));
+using var dataset = S100Dataset.Open("navwarn_surface.gml");
+
+foreach (var feature in featureCatalogue.EnumerateFeatures(dataset))
+    Console.WriteLine($"{feature.FeatureRef}: {feature.FeatureTypeName ?? feature.FeatureType}");
+```
+
+`FromStream` reads the whole stream, so you can dispose the stream as soon as
+it returns. Use a catalogue for the dataset's product: feature type and
+attribute names are looked up by code, so a catalogue for another product
+resolves nothing.
+
+## Use your own portrayal catalogue
+
+A portrayal catalogue is a folder: `portrayal_catalogue.xml` plus the rules,
+symbols, line styles, area fills and colour profiles it lists. Point
+`S100PortrayalCatalogue.FromAssetSource` at the folder, or at a ZIP archive of
+it, and render through a layer:
+
+```csharp
+using EncDotNet.S100;
+using EncDotNet.S100.Core;
+
+using var portrayalFolder = FileSystemAssetSource.Create("my-s124-portrayal");
+using var dataset = S100Dataset.Open("navwarn_surface.gml");
+using var renderer = new PngS100DatasetRenderer();
+
+var layer = new S100Layer
+{
+    Dataset = dataset,
+    PortrayalCatalogue = S100PortrayalCatalogue.FromAssetSource(portrayalFolder),
+};
+byte[] png = await renderer.RenderAsync(layer);
+```
+
+A layer can set `FeatureCatalogue`, `PortrayalCatalogue`, both or neither. Any
+catalogue you leave `null` is the bundled one. The composite
+`RenderAsync(IReadOnlyList<S100Layer>, …)` also takes layers, so each dataset
+in a composite can have its own catalogues.
+
+> [!IMPORTANT]
+> Include every file that `portrayal_catalogue.xml` lists. A missing rule file
+> fails the render with a `FileNotFoundException` that names it, but a missing
+> symbol is skipped and the image renders without it. If the output looks
+> incomplete, compare your folder with the bundled catalogue's.
+
+## Start from a bundled catalogue
+
+To make your own catalogue, start from a copy of the bundled one. In this
+repository they're under
+[`src/EncDotNet.S100.Specifications/content/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/src/EncDotNet.S100.Specifications/content),
+one folder per product (for example `S124/`). In each, `fc/` holds the feature
+catalogue and `pc/` the portrayal catalogue folder.
+
+In an application that uses the package, get the bundled feature catalogue with
+`Specification.OpenFeatureCatalogueAsync`:
+
+```csharp
+using EncDotNet.S100.Specifications;
+
+await using (var bundled = await Specification.OpenFeatureCatalogueAsync("S-124"))
+await using (var copy = File.Create("FeatureCatalogue.xml"))
+    await bundled.CopyToAsync(copy);
+```
+
+## Validate a dataset
+
+`Validate()` runs the product's bundled rule pack against the parsed dataset.
+These are the same rules SoundCharts shows.
 
 ```csharp
 using EncDotNet.S100;
@@ -29,94 +108,33 @@ else
         Console.WriteLine($"{finding.Severity} {finding.RuleId}: {finding.Message}");
 ```
 
-## Deep dive
+Every product in the library has a rule pack except S-401 inland ENC, which
+uses the S-101 reader but not its rules.
 
-### Your own feature catalogue
+> [!NOTE]
+> `Validate()` returns `null` when the product has no rule pack. That isn't a
+> pass. A report with no findings (`IsValid`) means the rules ran and found
+> nothing.
 
-Load a feature catalogue with `S100FeatureCatalogue.FromStream`, then use it to
-read features, or pair it with a dataset in a layer to render:
+The report has these members (namespace `EncDotNet.S100.Validation`):
 
-```csharp
-using var featureCatalogue = S100FeatureCatalogue.FromStream(File.OpenRead("FeatureCatalogue.xml"));
-using var dataset = S100Dataset.Open("navwarn_surface.gml");
+- `HasErrors` and `HasWarnings` summarize the report.
+  `FindingsOfSeverity(ValidationSeverity.Error)` filters it.
+- Each finding has a `RuleId` (for example `S124-R-1.1`), a `Severity` and a
+  `Message`. Where possible it also has a location (`Point` or `BoundingBox`)
+  and the `RelatedFeatureId` it concerns.
 
-foreach (var feature in featureCatalogue.EnumerateFeatures(dataset))
-    Console.WriteLine($"{feature.FeatureRef}: {feature.FeatureTypeName ?? feature.FeatureType}");
-```
+The report is cached with the dataset, so calling `Validate()` again returns
+the same report without running the rules again.
 
-`FromStream` reads the whole stream, so you can dispose it straight away. The
-catalogue should be for the dataset's product: feature type and attribute names
-are looked up by code, so a catalogue for another product resolves nothing.
+## Write your own rules
 
-### Your own portrayal catalogue
+Rules run against a product's typed model or dataset type. To get one, see
+[Reading product data](reading-product-data.md). Build rules with
+`ValidationRuleBuilder`:
 
-A portrayal catalogue is a folder: `portrayal_catalogue.xml` plus the rules,
-symbols, line styles, area fills and colour profiles it lists. Point
-`S100PortrayalCatalogue.FromAssetSource` at the folder, or at a ZIP of it, and
-render through a layer:
-
-```csharp
-using EncDotNet.S100.Core;
-
-using var portrayalFolder = FileSystemAssetSource.Create("my-s124-portrayal");
-using var dataset = S100Dataset.Open("navwarn_surface.gml");
-using var renderer = new PngS100DatasetRenderer();
-
-var layer = new S100Layer
-{
-    Dataset = dataset,
-    PortrayalCatalogue = S100PortrayalCatalogue.FromAssetSource(portrayalFolder),
-};
-byte[] png = await renderer.RenderAsync(layer);
-```
-
-A layer can set `FeatureCatalogue`, `PortrayalCatalogue`, both, or neither; any
-catalogue left `null` is the bundled one. Layers also work with the composite
-`RenderAsync(IReadOnlyList<S100Layer>, …)`, so each dataset in a composite can
-have its own catalogues.
-
-### Starting from the bundled catalogues
-
-The easiest way to make your own catalogue is to change a copy of the bundled
-one. In this repository they're under
-`src/EncDotNet.S100.Specifications/content/<product>/`: `fc/` holds the feature
-catalogue and `pc/` the portrayal catalogue folder. In an application using the
-package, get the bundled feature catalogue with
-`Specification.OpenFeatureCatalogueAsync` (namespace
-`EncDotNet.S100.Specifications`):
-
-```csharp
-using EncDotNet.S100.Specifications;
-
-await using (var bundled = await Specification.OpenFeatureCatalogueAsync("S-124"))
-await using (var copy = File.Create("FeatureCatalogue.xml"))
-    await bundled.CopyToAsync(copy);
-```
-
-### Running the bundled validation rules
-
-`Validate()` runs the product's bundled rule pack, the same rules the S-100
-Viewer shows, against the parsed dataset. Every product in the library has one
-except S-401 inland ENC, which reuses the S-101 reader but not its rules, and
-returns `null`.
-
-- `null` means the product has no rule pack; a report with no findings
-  (`IsValid`) means the rules ran and found nothing.
-- `HasErrors` and `HasWarnings` summarise the report, and
-  `FindingsOfSeverity(ValidationSeverity.Error)` filters it (namespace
-  `EncDotNet.S100.Validation`).
-- Each finding has a `RuleId` (for example `S124-R-1.1`), a `Severity`, a
-  `Message`, and where possible a location (`Point` or `BoundingBox`) and the
-  `RelatedFeatureId` it concerns.
-
-The report is cached with the dataset, so calling `Validate()` again is cheap.
-
-### Your own rules
-
-Rules run against a product's typed model or dataset type. See
-[Reading product data](reading-product-data.md) for how to get one. Build
-rules with `ValidationRuleBuilder`: `Check` for one pass-or-fail condition, or
-`Yield` to report several findings, such as one per offending feature:
+- `Check` reports one pass-or-fail condition.
+- `Yield` reports any number of findings, such as one per offending feature.
 
 ```csharp
 using EncDotNet.S100.Datasets.S124;
@@ -151,7 +169,10 @@ foreach (var finding in rules.Run(warning).Findings)
     Console.WriteLine($"{finding.Severity} {finding.RuleId}: {finding.Message}");
 ```
 
-Rule sets are immutable: `Add` and `Remove(ruleId)` return a new set and leave
+A failed `Check` reports its description as the message, unless you pass a
+`failureMessage`.
+
+Rule sets are immutable. `Add` and `Remove(ruleId)` return a new set and leave
 the product's `Default` pack unchanged. Start from `Default` to extend the
 product's rules, or from `ValidationRuleSet<T>.Empty` to run only your own. A
 rule that throws becomes an `Error` finding instead of stopping the run.
@@ -160,21 +181,8 @@ Each product's rule pack is a static `Default` property on a class in the
 product's `Validation` namespace, such as `S124NavigationalWarningRules` or
 `S102DatasetRules`. The per-product READMEs list the rules.
 
-## Troubleshooting
+## Next steps
 
-> [!IMPORTANT]
-> A custom portrayal catalogue must include every file that
-> `portrayal_catalogue.xml` lists. A missing rule file fails the render with a
-> `FileNotFoundException` naming it, but a missing symbol is skipped and the image
-> renders without it. If output looks incomplete, compare your folder with the
-> bundled catalogue's.
-
-> [!NOTE]
-> `Validate()` returning `null` isn't a pass: it means no rules exist for the
-> product. Check `report.IsValid` for a pass.
-
-## Next step
-
-- [Reading product data](reading-product-data.md) — the typed models and
-  dataset types rules run against.
-- [Top APIs](top-apis.md) — the main entry point in each package.
+- [Reading product data](reading-product-data.md): the typed models and dataset
+  types that rules run against.
+- [Top APIs](top-apis.md): the main entry points in each package.

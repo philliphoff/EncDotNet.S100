@@ -1,244 +1,253 @@
 # EncDotNet.S100.Datasets.S128
 
-Reader and portrayal-pipeline integration for IHO S-128 (Catalogue of
-Nautical Products) datasets, encoded as GML per S-100 Part 10b.
+`EncDotNet.S100.Datasets.S128` reads IHO S-128 Catalogue of Nautical Products
+datasets: GML files (S-100 Part 10b) in which one agency lists the nautical
+products it produces and their coverage. It parses a dataset, offers queries
+over its product entries, projects it into a typed catalogue with resolved
+supersession links, validates it, and portrays the coverages. Reference it when
+you need to query an S-128 catalogue or validate it. To open and render any
+product, including S-128, use the
+[`EncDotNet.S100`](../EncDotNet.S100/README.md) package, which includes this
+one.
 
-## Upstream source
+## Install
 
-| Property | Value |
-|---|---|
-| Edition | **2.0.0** |
-| Application namespace | `http://www.iho.int/S128/2.0` |
-| Upstream repo | [`iho-ohi/S-128-Product-Specification-Development`](https://github.com/iho-ohi/S-128-Product-Specification-Development) |
-| Pinned commit | `c266c43820ceadcf5b71ceb2a084c279c3a51801` |
-| Bundled assets | FC + entire PC tree (byte-identical to upstream) |
+```bash
+dotnet add package EncDotNet.S100.Datasets.S128
+```
 
-The bundled FC and PC live under
-`src/EncDotNet.S100.Specifications/content/S128/{fc,pc}/` and are surfaced
-through the standard `Specification.OpenFeatureCatalogueAsync()` /
-`Specification.CreatePortrayalCatalogueSource()` factory methods.
+## Read a dataset
 
-## What S-128 encodes
-
-An S-128 dataset is a *catalogue* of the nautical products produced by a
-single agency. Each "feature" describes one product and its coverage:
-
-| Feature class | Encodes |
-|---|---|
-| `ElectronicProduct` | ENCs (S-101), digital cells, online services |
-| `PhysicalProduct` | Paper charts and printed publications |
-| `S100Service` | HDF5-based services such as S-104 / S-111 |
-
-Plus metadata records modelled in the FC as information types but
-encoded as features inside the inline `<S128:members>` container in the
-upstream sample (`DistributorInformation`, `ProducerInformation`,
-`ContactDetails`, `CatalogueSectionHeader`).
-
-## Public surface
-
-| Type | Purpose |
-|---|---|
-| `S128Dataset` | Root data model: `Features`, `InformationTypes`, lazy `Entries` projection. `ReadMetadata()` / static `ReadMetadata(path)` / `ReadMetadata(stream)` is the phased-loading "peek" path (issue #460): declared spec + raw WGS-84 extent from feature geometry (`null` when geometry-less), skipping XSLT portrayal |
-| `S128DatasetReader` | GML parser. Use `S128Dataset.Open(path)` for the typical case |
-| `S128Feature`, `S128InformationType` | FC-faithful feature/information instances |
-| `S128ProductEntry` | Façade over an `S128Feature` whose type is one of the navigational product classes; surfaces strongly-typed accessors (`ProductSpecificationName`, `Status`, `CoverageRing`, etc.) |
-| `S128ProductStatus` | Heuristic enum: `InForce | Superseded | Withdrawn | Planned | Unknown` |
-| `S128CatalogueQuery` | Static helpers: `FilterByExtent`, `FilterByProductType`, `FilterBySpecification`, `FilterByStatus` |
-| `S128ProductCatalogue` (`DataModel/`) | Strongly-typed projection of the dataset as a catalogue of typed `S128CatalogueEntry` subclasses with resolved `Supersedes`/`SupersededBy` navigation. See [Strongly-typed data model](#strongly-typed-data-model). |
-| `S128CatalogueRules` (`Validation/`) | Default pilot rule pack for `S128ProductCatalogue` (rule IDs `S128-R-12.*` traced to S-128 § 12). See [Validation](#validation). |
-| `S128FeatureXmlSource` | Projects the dataset into the S-100 Part 9 FeatureXML neutral form consumed by the bundled XSLT |
-| `S128PortrayalCatalogue` | `IVectorPortrayalCatalogue` over the bundled PC (Day / Dusk / Night palettes), with the outline-only adapter on the `main` rule (see [Outline-only coverages](#outline-only-coverages)) |
-
-## Outline-only coverages
-
-The bundled portrayal catalogue is the IHO upstream's, unedited. Its rules
-fill each product's coverage with `CHYLW` / `CHGRN` / `CHMGD` at
-transparency 0.30 (70 % opaque) on `displayPlane` `OVERRADAR`, and the
-S-98 layer stack puts S-128 on `OtherChartOverlays`, above the ENC's line
-work. Nested products (a harbour cell inside an approach cell) compound to
-about 91 % opaque and hide the chart, against S-98 Main §9.2.1.
-
-Upstream has since reached the same view: issue
-[#51](https://github.com/iho-ohi/S-128-Product-Specification-Development/issues/51)
-recommends outlines only, and the Lua port of the catalogue
-([#56](https://github.com/iho-ohi/S-128-Product-Specification-Development/pull/56))
-comments the fills out. `S128PortrayalCatalogue` does the same with an
-adapter, `Adapter/outlineOnly.xsl`. It `xsl:import`s the upstream
-`main.xsl` and, for `ElectronicProduct`, `PhysicalProduct` and
-`S100Service` surfaces, keeps everything the upstream rule emits except its
-`areaInstruction`. Coverages draw as the upstream dashed outlines.
-
-`S128CoverageOverlayTests` checks that the adapter output equals the
-upstream output minus the fills, and that the upstream rule still emits
-them. When a catalogue refresh drops the fills, that test fails and the
-adapter can be removed. Moving to the upstream Lua catalogue is tracked in
-#763.
-
-## Producer-bug compensations
-
-The reader inherits the four mitigations applied to other GML-encoded
-products in this codebase (S-122 in particular). When real-world S-128
-samples surface, edge cases here may need expanding.
-
-1. **`s100gml` namespace tolerance.** Accepts
-   `http://www.iho.int/s100gml/5.0` (canonical for 2.0.0),
-   `http://www.iho.int/s100gml/1.0`, and the legacy profile namespace
-   `http://www.iho.int/S100/profile/s100gml/1.0`.
-2. **`<member>` and `<members>` containers.** Both the wrapper and inline
-   variants are accepted; the upstream 2.0.0 sample uses inline
-   `<S128:members>`.
-3. **Comma-and-whitespace tokenisation in `gml:posList`/`gml:pos`.** Handles
-   `lon,lat lon,lat` tokens smuggled in via the `gml:coordinates`
-   convention.
-4. **lon-lat axis-order swap heuristic.** When a `<gml:Envelope>` is
-   present and parsed coords clearly fall outside as-is but inside when
-   swapped, the reader globally flips axes. Skipped silently when no
-   envelope is declared (the upstream 2.0.0 sample omits it).
-5. **`gml:gmlId` identifier fallback.** Some S-128 **GML 1.0** IC-ENC/DK
-   catalogue datasets key features with the non-standard `gml:gmlId`
-   attribute instead of `gml:id`. The reader accepts either; without this
-   the feature identifier is empty and the geometry provider drops the
-   feature (rendering blank — see issue #243).
-6. **Exterior-less polygons.** Some GML 1.0 datasets emit
-   `<gml:Polygon><gml:posList>…` directly, omitting the
-   `<gml:exterior>/<gml:LinearRing>` wrapper. The shared
-   `GmlCoordinateParser` falls back to a direct `posList`/`pos` sequence
-   under the surface as the exterior ring.
-7. **Single-ordinate `<gml:pos>` rings.** Some GML 1.0 datasets split each
-   coordinate's ordinates across consecutive single-value `<gml:pos>`
-   elements (`<gml:pos>41.68</gml:pos><gml:pos>21.61</gml:pos>…`). The
-   shared `GmlCoordinateParser` detects this and flattens the ordinates
-   into (lat, lon) pairs.
-
-> **Note on GML 1.0 datasets.** Compensations 5–7 recover *geometry* from
-> the older S-128 GML 1.0 encoding so those catalogues are no longer blank.
-> Full *portrayal* of GML 1.0 feature classes (`ElectronicChart`,
-> `PaperChart`, …) and a reliable axis order for lon-lat datasets that ship
-> no `<gml:Envelope>` are tracked separately in issue #247.
-
-## Status heuristic
-
-S-128 2.0.0 does not surface a single `status` enum on product entries.
-`S128ProductEntry.Status` is derived as follows:
-
-1. If `serviceStatus` is present → `Planned (1)`, `InForce (2)`,
-   `Withdrawn (3)`.
-2. Else if `distributionStatus` is present → `InForce (1)` /
-   `Withdrawn (2)`.
-3. Otherwise defaults to `InForce`.
-
-Resolution of `theReference` xlink references with
-`ProductMapping/categoryOfProductMapping=1` (supersedes) is handled by
-the typed-model projection — see
-[Strongly-typed data model](#strongly-typed-data-model).
-
-## Strongly-typed data model
-
-`EncDotNet.S100.Datasets.S128.DataModel.S128ProductCatalogue` projects
-the feature-bag `S128Dataset` into a strongly-typed catalogue with:
-
-- Polymorphic `Products` collection over the common
-  `S128CatalogueEntry` base; instances are sealed
-  `S128ElectronicProduct`, `S128PhysicalProduct`, or `S128Service`.
-- Dedicated typed records for `Producers`, `Distributors`,
-  `Contacts`, and `SectionHeaders` metadata.
-- **Resolved supersedes navigation.** Every `theReference` xlink with
-  `ProductMapping/categoryOfProductMapping=1`
-  ("Higher Priority Alternative", S-128 § 12) is resolved at
-  projection time. Each entry exposes `Supersedes` (forward
-  traversal) and `SupersededBy` (reverse traversal, populated by
-  inverting the forward map). Cycles and chains tolerated.
-- Other `categoryOfProductMapping` values surface in
-  `RelatedProducts` with their raw category text preserved for
-  future-edition compatibility.
-- Permissive projection: unresolved xlinks and parse failures emit
-  `ProjectionDiagnostic` entries rather than throwing. The projection
-  only throws when both `Features` and `InformationTypes` are empty.
-
-### Quick start (typed model)
+Open the dataset, then project it into the typed catalogue:
 
 ```csharp
 using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Datasets.S128.DataModel;
 
-var dataset = S128Dataset.Open("catalogue.gml");
+var dataset = S128Dataset.Open("path/to/catalogue.gml");
 var catalogue = S128ProductCatalogue.From(dataset, out var diagnostics);
 
 foreach (var product in catalogue.Products)
 {
     Console.WriteLine($"{product.FeatureType} {product.Id} " +
-        $"(ed. {product.EditionNumber}, spec {product.ProductSpecificationName})");
+        $"(edition {product.EditionNumber}, spec {product.ProductSpecificationName})");
 
     foreach (var superseded in product.Supersedes)
-        Console.WriteLine($"  supersedes → {superseded.Id}");
+        Console.WriteLine($"  supersedes {superseded.Id}");
 
     foreach (var successor in product.SupersededBy)
-        Console.WriteLine($"  superseded by → {successor.Id}");
+        Console.WriteLine($"  superseded by {successor.Id}");
 }
 
-foreach (var d in diagnostics)
-    Console.WriteLine(d);
+foreach (var diagnostic in diagnostics)
+    Console.WriteLine(diagnostic);
 ```
 
-## Coordinate ordering
+## Main types
 
-Per S-100 Part 10b §6.2, all coordinates inside `<gml:pos>` /
-`<gml:posList>` for `EPSG:4326` are **lat lon**.
+| Type | Purpose |
+|---|---|
+| `S128Dataset` | The parsed dataset: `Features`, `InformationTypes`, and `Entries`, a lazily built list of product entries. `Open` takes a path or a stream. `ReadMetadata` (static, for a path or stream, or on an open dataset) returns the declared product specification and the WGS 84 extent of the feature geometry without running portrayal; the extent is `null` when no feature has geometry. |
+| `S128Feature`, `S128InformationType` | Features and information types as the feature catalogue defines them. |
+| `S128ProductEntry` | A view of an `S128Feature` whose type is a product class, with typed accessors such as `ProductSpecificationName`, `Status` and `CoverageRing`. |
+| `S128ProductStatus` | The derived status of an entry: `InForce`, `Superseded`, `Withdrawn`, `Planned` or `Unknown`. See [Product status](#product-status). |
+| `S128CatalogueQuery` | Static filters over entries: `FilterByExtent`, `FilterByProductType`, `FilterBySpecification` and `FilterByStatus`. |
+| `S128ProductCatalogue` | The typed catalogue, in the `DataModel` namespace. See [Typed data model](#typed-data-model). |
+| `S128CatalogueRules` | The validation rule set, in the `Validation` namespace. See [Validate](#validate). |
+| `S128FeatureXmlSource` | Converts the dataset to the S-100 Part 9 FeatureXML form that the bundled XSLT reads. |
+| `S128PortrayalCatalogue` | An `IVectorPortrayalCatalogue` over the bundled portrayal catalogue (Day, Dusk and Night palettes), with an outline-only adapter on the `main` rule. See [Portrayal](#portrayal). |
 
-## Validation
+## What an S-128 dataset contains
 
-`Validation/S128CatalogueRules.cs` ships a pilot pack of seven Tier-1 /
-Tier-2 rules over `S128ProductCatalogue`. Rule identifiers follow the
-convention `S128-R-{clause}` and trace to clauses of S-128 Edition
-2.0.0 (§ 12 Feature Catalogue, plus S-100 Part 10b §6 for geometry).
+Each feature describes one product and its coverage:
 
-| Rule ID | Severity | Summary |
-|---|---|---|
-| `S128-R-12.1` | Error | When present, every catalogue entry's `editionNumber` is ≥ 1. |
-| `S128-R-12.2` | Error | When both are present, `issueDate ≤ updateDate`. |
-| `S128-R-12.3` | Error | Every coverage coordinate lies in the WGS-84 lat/lon ranges. |
-| `S128-R-12.4` | Error | `Surface` exterior rings have ≥ 4 vertices and are closed. |
-| `S128-R-12.5` | Error | Product `gml:id` values are unique across the catalogue. |
-| `S128-R-12.6` | Warning | `onlineResource/linkage` values parse as absolute URIs when present. |
-| `S128-R-12.7` | Warning | The catalogue carries at least one `ProducerInformation` or `DistributorInformation` record. |
+| Feature class | Describes |
+|---|---|
+| `ElectronicProduct` | ENCs (S-101), digital cells, online services |
+| `PhysicalProduct` | Paper charts and printed publications |
+| `S100Service` | HDF5-based services such as S-104 and S-111 |
 
-Run the default pack:
+The upstream sample also has metadata records that the feature catalogue models
+as information types but that are encoded as features inside the inline
+`<S128:members>` container: `DistributorInformation`, `ProducerInformation`,
+`ContactDetails` and `CatalogueSectionHeader`.
+
+## Typed data model
+
+`S128ProductCatalogue`, in the `EncDotNet.S100.Datasets.S128.DataModel`
+namespace, projects `S128Dataset` into a typed catalogue:
+
+- `Products` lists every product through the `S128CatalogueEntry` base class.
+  Each entry is an `S128ElectronicProduct`, `S128PhysicalProduct` or
+  `S128Service`.
+- `Producers`, `Distributors`, `Contacts` and `SectionHeaders` hold the
+  metadata records.
+- **Supersession is resolved.** Every `theReference` xlink with
+  `ProductMapping/categoryOfProductMapping=1` ("Higher Priority Alternative",
+  S-128 §12) is resolved during projection. Each entry's `Supersedes` lists the
+  products it supersedes, and `SupersededBy` lists the products that supersede
+  it. Chains and cycles are allowed.
+- References with other `categoryOfProductMapping` values are in
+  `RelatedProducts`, with the category text kept as encoded.
+- Unresolved xlinks and values that don't parse become `ProjectionDiagnostic`
+  entries. `From` throws only when the dataset has no features and no
+  information types.
+
+## Product status
+
+S-128 2.0.0 has no single status attribute on a product. `S128ProductEntry.Status`
+derives one:
+
+1. If `serviceStatus` is present: 1 is `Planned`, 2 is `InForce`, 3 is
+   `Withdrawn`.
+2. Otherwise, if `distributionStatus` is present: 1 is `InForce`, 2 is
+   `Withdrawn`.
+3. Otherwise, the status is `InForce`.
+
+Supersession comes from the typed catalogue's `Supersedes` and `SupersededBy`,
+not from `Status`.
+
+## Validate
+
+`S128CatalogueRules`, in the `EncDotNet.S100.Datasets.S128.Validation`
+namespace, is the default rule set for `S128ProductCatalogue`. Rule IDs have the
+form `S128-R-{clause}` and trace to S-128 Edition 2.0.0 (§12, Feature
+Catalogue), or to S-100 Part 10b §6 for geometry. The `EncDotNet.S100` package's
+`dataset.Validate()` runs the same rule set.
 
 ```csharp
 using EncDotNet.S100.Datasets.S128;
 using EncDotNet.S100.Datasets.S128.DataModel;
 using EncDotNet.S100.Datasets.S128.Validation;
 
-await using var stream = File.OpenRead("catalogue.gml");
+await using var stream = File.OpenRead("path/to/catalogue.gml");
 var dataset = S128Dataset.Open(stream);
 var catalogue = S128ProductCatalogue.From(dataset, out _);
-
 var report = S128CatalogueRules.Validate(catalogue);
-foreach (var f in report.Findings)
-    Console.WriteLine($"[{f.Severity}] {f.RuleId}: {f.Message}");
+
+foreach (var finding in report.Findings)
+    Console.WriteLine($"[{finding.Severity}] {finding.RuleId}: {finding.Message}");
 ```
 
-Tier-3 cross-dataset rules (e.g. cross-referencing catalogue entries
-against actually loaded S-1xx datasets) are deferred until the MCP
-`validate_all` surface lands.
+| Rule ID | Severity | Checks |
+|---|---|---|
+| `S128-R-12.1` | Error | Each entry's `editionNumber`, when present, is at least 1. |
+| `S128-R-12.2` | Error | When both are present, `issueDate` is on or before `updateDate`. |
+| `S128-R-12.3` | Error | Coverage coordinates are within the WGS 84 latitude and longitude ranges. |
+| `S128-R-12.4` | Error | Surface exterior rings have at least four vertices and are closed. |
+| `S128-R-12.5` | Error | Product `gml:id` values are unique in the catalogue. |
+| `S128-R-12.6` | Warning | `onlineResource/linkage` values, when present, parse as absolute URIs. |
+| `S128-R-12.7` | Warning | The catalogue has at least one `ProducerInformation` or `DistributorInformation` record. |
+
+The rules check one catalogue at a time. Checking entries against the datasets
+you've actually loaded isn't included.
 
 ## Portrayal
 
-The bundled `main.xsl` includes per-feature templates
-(`ElectronicProduct.xsl`, `PhysicalProduct.xsl`, `S100Service.xsl`,
-`DistributorInformation.xsl`) plus `simpleLineStyle.xsl` /
-`textStyle.xsl` and a `Default.xsl` fallback. **No locally-authored XSLT
-ships in this PR** — status-driven (in-force / superseded / withdrawn /
-planned) styling is not in the upstream PC and is left as a TODO.
+The bundled portrayal catalogue is the upstream IHO one, unchanged. Its
+`main.xsl` includes per-feature templates (`ElectronicProduct.xsl`,
+`PhysicalProduct.xsl`, `S100Service.xsl`, `DistributorInformation.xsl`), plus
+`simpleLineStyle.xsl`, `textStyle.xsl` and a `Default.xsl` fallback. This
+library adds no styling of its own; for example, entries aren't styled by
+status.
 
-## Out of scope (this release)
+### Outline-only coverages
 
-- Status-driven local XSLT styling (in-force / superseded /
-  withdrawn / planned). The data-model side of supersedes is now
-  resolved via `S128ProductCatalogue`; the corresponding XSLT
-  portrayal hook is still deferred.
-- Auto-downloading datasets pointed at by `onlineResource.linkage` URLs.
-- Dataset authoring / serialisation.
-- Multi-language label resolution.
-- A dedicated catalogue browser side panel in the viewer (datasets load
-  through the existing pipeline and render as coverage polygons).
+The upstream rules fill each product's coverage with `CHYLW`, `CHGRN` or
+`CHMGD` at transparency 0.30 (70% opaque) on display plane `OVERRADAR`, and the
+S-98 layer stack puts S-128 on `OtherChartOverlays`, above the ENC's line work.
+Nested products, such as a harbour cell inside an approach cell, add up to
+about 91% opaque and hide the chart, contrary to S-98 Main §9.2.1.
+
+Upstream reached the same view:
+[issue #51](https://github.com/iho-ohi/S-128-Product-Specification-Development/issues/51)
+recommends outlines only, and the Lua port of the catalogue
+([pull request #56](https://github.com/iho-ohi/S-128-Product-Specification-Development/pull/56))
+comments the fills out. `S128PortrayalCatalogue` does the same with an adapter,
+`Adapter/outlineOnly.xsl`. The adapter imports the upstream `main.xsl` with
+`xsl:import`. For `ElectronicProduct`, `PhysicalProduct` and `S100Service`
+surfaces, it keeps everything the upstream rule emits except its
+`areaInstruction`, so coverages draw as the upstream dashed outlines.
+
+`S128CoverageOverlayTests` checks that the adapter's output equals the upstream
+output without the fills, and that the upstream rule still emits them. When a
+catalogue update drops the fills, that test fails and the adapter can be
+removed. Moving to the upstream Lua catalogue is tracked in
+[issue #763](https://github.com/philliphoff/EncDotNet.S100/issues/763).
+
+## Encoding notes
+
+Coordinates in `<gml:pos>` and `<gml:posList>` are latitude then longitude for
+`EPSG:4326` (S-100 Part 10b §6.2).
+
+The reader handles these producer variations, most of which it shares with the
+other GML products:
+
+1. **`s100gml` namespaces.** It accepts `http://www.iho.int/s100gml/5.0` (the
+   namespace for 2.0.0), `http://www.iho.int/s100gml/1.0`, and the older
+   profile namespace `http://www.iho.int/S100/profile/s100gml/1.0`.
+2. **`<member>` and `<members>` containers.** It accepts both the wrapper and
+   the inline form. The upstream 2.0.0 sample uses inline `<S128:members>`.
+3. **Commas in `gml:posList` and `gml:pos`.** It accepts `lon,lat lon,lat`
+   pairs written in the `gml:coordinates` style.
+4. **Longitude-first coordinates.** When the dataset has a `<gml:Envelope>`,
+   and the parsed coordinates clearly fall outside it as parsed but inside it
+   when swapped, the reader swaps the axes for the whole dataset. Without an
+   envelope it doesn't check; the upstream 2.0.0 sample has none.
+5. **`gml:gmlId` identifiers.** Some S-128 GML 1.0 catalogue datasets from
+   IC-ENC and Denmark identify features with a non-standard `gml:gmlId`
+   attribute instead of `gml:id`. The reader accepts either. Without this, the
+   feature identifier is empty and the feature doesn't render.
+6. **Polygons without an exterior.** Some GML 1.0 datasets write
+   `<gml:Polygon><gml:posList>...` directly, without the
+   `<gml:exterior>/<gml:LinearRing>` wrapper. The shared `GmlCoordinateParser`
+   reads a `posList` or `pos` sequence directly under the surface as the
+   exterior ring.
+7. **One ordinate per `<gml:pos>`.** Some GML 1.0 datasets split each
+   coordinate across consecutive single-value `<gml:pos>` elements
+   (`<gml:pos>41.68</gml:pos><gml:pos>21.61</gml:pos>...`). The shared
+   `GmlCoordinateParser` detects this and pairs the values as latitude and
+   longitude.
+
+Items 5 to 7 recover geometry from S-128 GML 1.0 catalogues, which otherwise
+render blank. Two GML 1.0 gaps remain, tracked in
+[issue #247](https://github.com/philliphoff/EncDotNet.S100/issues/247): full
+portrayal of the GML 1.0 feature classes (`ElectronicChart`, `PaperChart` and
+others), and a reliable axis order for longitude-first datasets that have no
+`<gml:Envelope>`.
+
+## Limitations
+
+- Entries aren't styled by status (in force, superseded, withdrawn, planned).
+  The typed catalogue resolves supersession, but the portrayal doesn't use it.
+- Datasets that `onlineResource/linkage` URLs point to aren't downloaded.
+- Writing S-128 datasets isn't supported.
+- Labels aren't resolved by language.
+- The viewer has no catalogue browser panel for S-128. Datasets load through the
+  standard pipeline and draw as coverage outlines.
+
+## Bundled specification
+
+| Property | Value |
+|---|---|
+| Edition | 2.0.0 |
+| Application namespace | `http://www.iho.int/S128/2.0` |
+| Upstream repository | [`iho-ohi/S-128-Product-Specification-Development`](https://github.com/iho-ohi/S-128-Product-Specification-Development) |
+| Pinned commit | `c266c43820ceadcf5b71ceb2a084c279c3a51801` |
+| Bundled assets | Feature catalogue and the whole portrayal catalogue, byte-identical to upstream |
+
+The feature and portrayal catalogues are in
+[`src/EncDotNet.S100.Specifications/content/S128/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/src/EncDotNet.S100.Specifications/content/S128)
+and load through `Specification.OpenFeatureCatalogueAsync()` and
+`Specification.CreatePortrayalCatalogueSource()`.
+
+## See also
+
+- [Loading datasets](../../docs/loading-datasets.md): open files, folders, ZIPs
+  and exchange sets through the `EncDotNet.S100` package.
+- [Reading product data](../../docs/reading-product-data.md): features,
+  information types and typed models for each product.
+- [Typed data models](../../docs/typed-data-models.md): the typed
+  root for each product and the shared diagnostic codes.
+- [Custom catalogues and validation](../../docs/catalogues-and-validation.md):
+  run the bundled rules and add your own.

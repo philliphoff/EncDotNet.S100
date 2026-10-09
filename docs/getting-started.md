@@ -119,8 +119,8 @@ dotnet run -- path/to/dataset.000
 The program prints the detected product and its features, then writes
 `out.png` to the project folder.
 
-`CanRenderHeadless` is `false` for dataset shapes that have no image
-rendering, such as fixed-station time series.
+`CanRenderHeadless` is `false` for products that have no image rendering;
+of the bundled products, that's S-131.
 
 The runnable
 [Quickstart sample](../samples/EncDotNet.S100.Samples.Quickstart/README.md)

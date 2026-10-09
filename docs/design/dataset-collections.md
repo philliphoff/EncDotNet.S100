@@ -741,7 +741,7 @@ This is the same mechanism as large S-57 sets, generalized:
 >   location.
 > - **Update detection:** basic detection landed early. A copy older
 >   than the feed shows **UPDATE**, and downloading again replaces it.
->   "Update all" is simply "Download N" on a list that includes outdated
+>   "Update all" is "Download N" on a list that includes outdated
 >   cells.
 > - **Live check:** real NOAA cells (with and without updates, including
 >   a western-Pacific cell) downloaded and re-indexed with matching
@@ -971,7 +971,7 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 2. **Later: an identity and a "keys & certificates" store.** An MCP
    client certificate, mutual TLS, signed v2 POST search, access
    requests and encryption. Design the store with the Part 15
-   permit/key UX as one shared surface. This is what unlocks the chart
+   permit/key UX as one shared surface. This is what enables the chart
    products (KHRA S-101/S-128, KRISO S-102).
 
 ### 7.6 Show on map and one row per source (#809)

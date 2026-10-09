@@ -1,101 +1,170 @@
 # EncDotNet.S100.Datasets.S104
 
-Reader and coverage pipeline for S-104 Water Level Information for Surface Navigation datasets.
+This package reads S-104 Water Level Information for Surface Navigation
+datasets from HDF5 files: water-level grids per time step, and time series at
+fixed stations. It also draws them as a colour-banded surface and validates
+them against the S-104 Edition 2.0.0 checklist. Reference it when you need the
+water levels directly, for example to sample a tide curve at a position. To
+open and render a dataset without wiring catalogues yourself, use the
+[`EncDotNet.S100`](../EncDotNet.S100/README.md) package instead.
 
-## Overview
+## Install
 
-This library reads S-104 datasets from HDF5 files and provides gridded and positioned-station water-level time series for the portrayal pipeline. Key types include:
+```bash
+dotnet add package EncDotNet.S100.Datasets.S104
+dotnet add package EncDotNet.S100.Hdf5.PureHdf
+```
 
-- **`S104Dataset`** — root model containing horizontal CRS, vertical datum, data coding format, and time-step coverages.
-- **`S104DatasetReader`** — reads regular-grid DCF2 plus existing time-major DCF1 and station-major DCF8 datasets. DCF1 uses each `Group_NNN/timePoint` as the authoritative timestamp, including non-uniform axes, and transposes time-major values into the shared station-series model. The reader targets the Edition 2.0.0 HDF5 layout while retaining compatibility with older declared editions; schema failures raise `S100DatasetSchemaException`. The `waterLevelTrend` compound member accepts the signed/unsigned integer widths encountered in production, including IC-ENC's Int16 representation.
-- **`S104CoverageSource`** — `ICoverageSource` adapter for the coverage pipeline.
-- **`S104PortrayalCatalogue`** — viewer-parity heatmap catalogue with hand-coded Day / Dusk / Night band tables (see *Portrayal* below).
-- **`WaterLevelCoverage`**, **`WaterLevelValue`** — water level data models. `WaterLevelCoverage.GroupPath` carries the HDF5 instance path (e.g. `/WaterLevel/WaterLevel.01`) and is used by the validation rule pack as the per-coverage `RelatedFeatureId`.
-- **`S104TimeSeriesSampler`** — samples a regular-grid (dcf=2) dataset at an arbitrary geographic point across its time steps, returning an `S104TimeSeries` (nearest cell + a per-step `S104TimeSeriesPoint` list of height/trend, ordered by time and optionally windowed to a `from`/`to` range). This is the shared kernel for depth-over-time visualisations and tide reconciliation; the MCP `sample_coverage` windowed path delegates its nearest-cell and containment math to it. Nearest-cell selection operates in the coverage's geographic space (EPSG:4326 per S-104 Ed 2.0.0) without reprojection; NoData cells (`FillValue`, `-9999f`) report a `null` height.
+`EncDotNet.S100.Hdf5.PureHdf` provides the HDF5 reader the example uses.
+
+## Read a dataset
+
+A file holds either a regular grid per time step or a series of values per
+station. `ReadAny` returns whichever the file contains:
+
+```csharp
+using EncDotNet.S100.Datasets.S104;
+using EncDotNet.S100.Hdf5.PureHdf;
+
+using var file = PureHdfFile.Open("path/to/dataset.h5");
+
+switch (S104DatasetReader.ReadAny(file))
+{
+    case S104DatasetData.GriddedCoverage gridded:
+        foreach (WaterLevelCoverage step in gridded.Dataset.Coverages.Take(3))
+            Console.WriteLine($"{step.TimePoint:u}: {step.Values.Length} cells");
+        break;
+
+    case S104DatasetData.StationSeries stations:
+        foreach (WaterLevelStation station in stations.Dataset.Stations)
+            Console.WriteLine($"{station.Identifier}: {station.NumberOfTimes} samples");
+        break;
+}
+```
+
+Each `WaterLevelValue` has a `Height` in metres relative to the dataset's
+vertical datum and a `Trend`: 1 (decreasing), 2 (increasing), 3 (steady) or
+0 (unknown). Grid cells without data hold the fill value `-9999`. For more,
+see [Reading product data](../../docs/reading-product-data.md).
+
+## Main types
+
+- **`S104Dataset`**: a gridded dataset, with its horizontal CRS, vertical
+  datum, data coding format and one coverage per time step.
+- **`S104DatasetReader`**: reads data coding formats 2 (regular grid), 1
+  (time-major station series) and 8 (station-major station series).
+  - For format 1, each `Group_NNN/timePoint` is the timestamp, including on
+    uneven time axes. The time-major values are transposed into the same
+    per-station model as format 8.
+  - The reader targets the Edition 2.0.0 HDF5 layout and still reads datasets
+    that declare older editions. Schema errors throw
+    `S100DatasetSchemaException`.
+  - The `waterLevelTrend` compound member accepts the signed and unsigned
+    integer widths found in production data, including IC-ENC's `Int16`.
+- **`WaterLevelCoverage`** and **`WaterLevelValue`**: a grid at one time step
+  and its values. `WaterLevelCoverage.GroupPath` is the HDF5 path of the
+  coverage, such as `/WaterLevel/WaterLevel.01`. Validation findings use it as
+  `RelatedFeatureId`.
+- **`S104StationSeriesDataset`** and **`WaterLevelStation`**: a station series
+  and one station's heights and trends.
+- **`S104TimeSeriesSampler`**: samples a regular-grid (format 2) dataset at a
+  geographic position across its time steps. It returns an `S104TimeSeries`:
+  the nearest cell and an `S104TimeSeriesPoint` per step with height and
+  trend, in time order and optionally limited to a `from`/`to` range. It finds
+  the nearest cell in the coverage's geographic coordinates (EPSG:4326 in
+  S-104 Ed 2.0.0) without reprojecting. Cells with the fill value report a
+  `null` height. The MCP server's `sample_coverage` tool uses it for time
+  windows.
+- **`S104CoverageSource`**: the `ICoverageSource` for the coverage pipeline.
+- **`S104PortrayalCatalogue`**: the colour bands for the water-level surface.
+  See [Portrayal](#portrayal).
+
+The `S104DatasetProcessor` that renders, samples and validates a dataset is in
+[`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md).
 
 ## Portrayal
 
-S-104 Edition 2.0.0 **does not define an official portrayal catalogue** — the spec
-treats water-level data as input to ECDIS depth adjustment rather than a visual
-layer. `S104PortrayalCatalogue` therefore ships **hand-coded** Day / Dusk / Night
-band tables synthesised for viewer parity with the other coverage products
-(S-102, S-111):
+S-104 Edition 2.0.0 has no portrayal catalogue. The specification treats water
+levels as input for ECDIS depth adjustment rather than as a layer to draw. So
+that S-104 can be shown like the other coverage products (S-102, S-111),
+`S104PortrayalCatalogue` defines its own Day, Dusk and Night colour bands:
 
-| Palette | Band styling                                                                                  | NoData fill                |
-|---------|-----------------------------------------------------------------------------------------------|----------------------------|
-| Day     | ColorBrewer-style diverging blue (below datum) → green (above datum), preserved byte-for-byte | transparent (`#00000000`)  |
-| Dusk    | Day with saturation × 0.70 and lightness × 0.85                                               | dim cool grey (`#4A4A4AFF`)|
-| Night   | ECDIS night-mode dark navy / olive, all luminance < 0.2                                       | darker dim grey (`#1A1A1AFF`)|
+| Palette | Bands | No-data fill |
+|---------|-------|--------------|
+| Day | A diverging scale from blue (below datum) to green (above datum), in the style of ColorBrewer | Transparent (`#00000000`) |
+| Dusk | Day, with saturation × 0.70 and lightness × 0.85 | Dim grey (`#4A4A4AFF`) |
+| Night | Dark navy to olive, in the ECDIS night style, all with luminance below 0.2 | Darker grey (`#1A1A1AFF`) |
 
-`SwitchPalette(PaletteType)` actually swaps the active band table (the pre-PR-H
-implementation was a no-op). `ResolveColorScheme` populates
-`CoverageColorScheme.NoDataColor` so the renderer paints S-104 fill cells
-(`S104CoverageSource.FillValue`, `-9999f`) with the active palette's no-data
-colour rather than leaving them transparent.
+`SwitchPaletteAsync(PaletteType)` switches the active band table. `ResolveColorScheme`
+sets `CoverageColorScheme.NoDataColor`, so the renderer paints fill-value cells
+(`S104CoverageSource.FillValue`, `-9999`) in the active palette's no-data
+colour.
 
-If IHO publishes an official S-104 portrayal catalogue, the bundled
-`content/S104/pc/` directory (today `.gitkeep`-only by design) will be the
-landing point and this catalogue will be re-wired against it.
+The `content/S104/pc/` folder in `EncDotNet.S100.Specifications` is empty. If
+the IHO publishes an S-104 portrayal catalogue, it goes there and this
+catalogue will use it.
 
-### Visibility and water-area clipping (issue #483)
+### Visibility and clipping to water
 
-Because the heatmap is non-normative, the **gridded surface** (data coding
-format 2) loads **hidden by default** in the viewer — the user can reveal it
-from the layer controls. Discrete **positioned-station glyphs** (data coding formats 1 and 8)
-remain visible by default; they are point features and are unaffected.
-`S104DatasetProcessor.IsGriddedSurface` distinguishes the two so the loader only
-defaults the surface hidden.
+The colour bands aren't defined by the specification, so SoundCharts loads the
+gridded surface (data coding format 2) hidden. You can show it from the layer
+controls. Station glyphs (formats 1 and 8) are point features and are shown by
+default. `S104DatasetProcessor.IsGriddedSurface` tells the two apart.
 
-When the surface is shown alongside an S-101 ENC, the S-98 interoperability rule
+When the surface is shown with an S-101 ENC, the S-98 interoperability rule
 `R-101-104-B` (`S98DefaultRules.R_101_104_B_ClipSurfaceToWater`) attaches the
-ENC's `LandArea` geometry to the surface sub-layer (`GridCoverageSubLayer.LandAreaMask`).
-The coverage renderers (`MapsuiCoverageRenderer` and the headless
-`CoverageHeadlessRenderer`) then clip the rasterised surface to water at
-**output-pixel resolution**: `CoverageLandClip.BuildLandPath` projects the land
-polygons (honouring interior water rings via even–odd fill) into the destination
-pixel space and the surface is drawn under an antialiased
-`SKClipOperation.Difference` clip. Pixel-accurate clipping is essential because
-real S-104 grids are often very coarse (e.g. the Rotterdam sample is only 5×6
-cells ≈ 1 km each); an earlier per-cell mask could only toggle whole grid cells
-and so straddled piers and basins. The surface is thus layered like S-102
-bathymetry — beneath ENC line work and clipped to water — so it never bleeds
-over land.
+ENC's `LandArea` geometry to the surface sub-layer
+(`GridCoverageSubLayer.LandAreaMask`). The coverage renderers
+(`MapsuiCoverageRenderer` and the headless `CoverageHeadlessRenderer`) then
+clip the surface to water at output-pixel resolution.
+`CoverageLandClip.BuildLandPath` projects the land polygons into pixel space,
+keeping interior water rings with even-odd fill, and the surface is drawn under
+an antialiased `SKClipOperation.Difference` clip. Clipping per pixel rather
+than per grid cell matters because S-104 grids are often coarse: the Rotterdam
+sample is 5×6 cells of about 1 km each. The surface is layered like S-102
+bathymetry, under the ENC's line work and clipped to water, so it doesn't cover
+land.
 
 ## Validation
 
-A bundled rule pack
-(`EncDotNet.S100.Datasets.S104.Validation.S104DatasetRules.Default`)
-evaluates a typed `S104Dataset` against the S-104 Edition 2.0.0
-checklist and emits a `ValidationReport` of findings. The pack is
-invoked automatically by `S104DatasetProcessor.Validate()` and is
-also runnable directly:
+The bundled rule pack, `EncDotNet.S100.Datasets.S104.Validation.S104DatasetRules.Default`,
+checks an `S104Dataset` against the S-104 Edition 2.0.0 checklist and returns a
+`ValidationReport`. `S104DatasetProcessor.Validate()` runs it for you. To run it
+directly:
 
 ```csharp
+using EncDotNet.S100.Datasets.S104.Validation;
+
 var report = S104DatasetRules.Default.Run(dataset);
 foreach (var finding in report.Findings)
     Console.WriteLine($"{finding.RuleId} {finding.Severity}: {finding.Message}");
 ```
 
-| Rule id                  | Severity | Checks                                                                                                                  |
-|--------------------------|----------|-------------------------------------------------------------------------------------------------------------------------|
-| `S104-R-1.1`             | Error    | Each coverage's `Values.Length` equals `NumPointsLatitudinal × NumPointsLongitudinal`.                                  |
-| `S104-R-1.2`             | Error    | `DataCodingFormat` is in the supported gridded set `{2, 3}`.                                                            |
-| `S104-R-2.1`             | Warning  | `Coverages` are strictly increasing by `TimePoint` (one finding at first violation; cascade suppression).               |
-| `S104-R-2.2`             | Warning  | Successive `TimePoint` deltas vary by no more than ±10% of the median delta (skipped when `Coverages.Count < 3`).       |
-| `S104-R-3.1`             | Warning  | `MethodWaterLevelProduct` is set when `Coverages.Count > 1`.                                                            |
-| `S104-R-4.1`             | Warning  | Non-NODATA water-level values lie in `[-15, 15]` m (one finding per offending coverage; `-9999f`/NaN/±Infinity skipped).|
-| `S104-R-4.2`             | Error    | Each coverage's origin and `origin + (numPoints - 1) × spacing` extent are valid in `HorizontalCRS` (WGS-84 ranges without antimeridian wrap when geographic; UTM bounds, reprojecting to WGS 84, when projected). |
-| `S104-PROJ-SCHEMA`       | Error    | Defensive surrogate: emitted when the underlying HDF5 dataset fails schema-level parsing inside `Validate()`.           |
-| `S104-STATION-SHAPE`     | Error    | Station timestamps, heights, trends, and declared sample count disagree.                                               |
-| `S104-STATION-TIME`      | Error    | Explicit station timestamps are not strictly increasing.                                                              |
-| `S104-STATION-TREND`     | Error    | A station contains a trend code outside 0–3.                                                                           |
+| Rule ID | Severity | Checks |
+|---------|----------|--------|
+| `S104-R-1.1` | Error | Each coverage's `Values.Length` equals `NumPointsLatitudinal × NumPointsLongitudinal`. |
+| `S104-R-1.2` | Error | `DataCodingFormat` is a supported gridded format: 2 or 3. |
+| `S104-R-2.1` | Warning | `Coverages` are in strictly increasing `TimePoint` order. One finding at the first violation. |
+| `S104-R-2.2` | Warning | The intervals between `TimePoint`s are within ±10% of the median interval. Skipped when there are fewer than three coverages. |
+| `S104-R-3.1` | Warning | `MethodWaterLevelProduct` is set when there's more than one coverage. |
+| `S104-R-4.1` | Warning | Water levels other than the fill value are within [-15, 15] m. There's one finding per coverage with values outside the range. `-9999`, `NaN` and ±`Infinity` are skipped. |
+| `S104-R-4.2` | Error | Each coverage's origin and far corner (`origin + (numPoints - 1) × spacing`) are valid in `HorizontalCRS`: within WGS 84 ranges and not crossing the antimeridian when geographic; within UTM bounds, and reprojectable to WGS 84, when projected. |
+| `S104-PROJ-SCHEMA` | Error | The HDF5 dataset failed schema parsing inside `Validate()`. |
+| `S104-PROJ-UNSUPPORTED` | Error | The reader raised `S100DatasetNotSupportedException` inside `Validate()`. |
+| `S104-STATION-SHAPE` | Error | A station's timestamps, heights, trends and declared sample count disagree. |
+| `S104-STATION-TIME` | Error | A station's explicit timestamps aren't strictly increasing. |
+| `S104-STATION-TREND` | Error | A station has a trend code outside 0–3. |
 
-R-2.1 and R-2.2 are the **time-axis rule patterns**; they are the
-template the S-111 (V-3) rule pack reuses against
-`SurfaceCurrentCoverage`.
+`S104DatasetProcessor` checks station series itself with the `S104-STATION-*`
+rules, because the rule pack works on gridded `S104Dataset`s. The S-111 rule
+pack reuses the time-axis checks in `S104-R-2.1` and `S104-R-2.2`.
 
-## Installation
+For the validation API and your own rules, see
+[Custom catalogues and validation](../../docs/catalogues-and-validation.md).
 
-```sh
-dotnet add package EncDotNet.S100.Datasets.S104
-```
+## See also
+
+- [Reading product data](../../docs/reading-product-data.md): read grids and
+  station series for S-104 and S-111.
+- [S-98 interoperability](../../docs/design/s98-interoperability.md): how
+  S-104 is layered with other products.

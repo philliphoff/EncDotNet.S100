@@ -1,85 +1,152 @@
 # EncDotNet.S100.Datasets.S129
 
-Support for S-129 Under Keel Clearance Management datasets (S-100 Part 10b GML encoding).
+`EncDotNet.S100.Datasets.S129` reads IHO S-129 Under Keel Clearance Management
+datasets: GML files (S-100 Part 10b) that hold one under-keel clearance (UKC)
+plan for a vessel's passage, with its plan area, non-navigable areas and
+control points. It parses a dataset, projects it into a typed plan, validates
+it, and loads the S-129 portrayal catalogue. Reference it when you need typed
+access to a UKC plan or its validation rules. To open and render any product,
+including S-129, use the [`EncDotNet.S100`](../EncDotNet.S100/README.md)
+package, which includes this one.
 
-## Overview
+## Install
 
-This library reads S-129 datasets from GML files and provides an XSLT-based portrayal pipeline for under keel clearance features. Two API surfaces are offered:
+```bash
+dotnet add package EncDotNet.S100.Datasets.S129
+```
 
-### Raw GML (feature-bag) surface
+## Read a dataset
 
-- **`S129Dataset`** — root model containing parsed features and dataset identification. `ReadMetadata()` (plus static `ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec and the raw WGS-84 extent folded from feature geometry (`null` when the dataset carries only geometry-less container features), skipping the XSLT portrayal pipeline.
-- **`S129Feature`** — a geographic feature with type code, geometry, simple attributes, complex attributes, and `xlink:href` references.
-- **`S129ComplexAttribute`** — a complex attribute instance containing sub-attribute values.
-- **`S129Reference`** — an `xlink:href` cross-reference carried on a feature's child element (S-100 Part 10b §7.2).
-- **`S100GeometryType`** — enum describing the geometry primitive type of a feature.
-- **`S129PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT rules, symbols, line styles, area fills, and color palettes.
-
-### Strongly-typed data model
-
-Mirrors the projection pattern introduced for S-124 / S-125 / S-128 / S-201 (PRs #69–#72). Lives under `DataModel/`:
-
-- **`S129UnderKeelClearancePlan`** — root typed projection of an `S129Dataset` as a single UKC plan (one plan, one plan area, N non-navigable / almost-non-navigable surfaces, ordered control points). Built via `S129UnderKeelClearancePlan.From(dataset, out diagnostics)`.
-- **`S129UkcPlanMetadata`** — the `UnderKeelClearancePlan` feature with typed `fixedTimeRange`, `generationTime`, `maximumDraught`, vessel id, and a typed `S129ExternalReference` to the source S-421 route.
-- **`S129UkcPlanArea`**, **`S129NonNavigableArea`**, **`S129AlmostNonNavigableArea`** — typed surface features.
-- **`S129ControlPoint`** — typed point feature with the per-waypoint UKC time-step measurement (`distanceAboveUKCLimit`, `expectedPassingTime`, `expectedPassingSpeed`). Control points are returned **ordered by expected passing time** (stable; gaps preserved — the typed model does not interpolate across explicit producer gaps).
-- **`S129TimeRange`**, **`S129FeatureName`**, **`S129ExternalReference`** — shared sub-types.
-- **`S129GeometryKind`** — `None` / `Point` / `Surface`.
-
-Projection issues — duplicate plan features, attribute parse failures, unresolved xlinks — surface as `ProjectionDiagnostic` entries (codes from the shared `EncDotNet.S100.DataModel` set: `feature.duplicate`, `attribute.parse.double`, `attribute.parse.datetime`, `xlink.unresolved`, `feature.geometry.missing`). The projection only throws `InvalidOperationException` for a fully empty dataset.
-
-### Cross-product references
-
-In S-129 Edition 2.0.0, links to the source S-421 route / S-102 bathymetry / S-104 water level are **textual** (the producer records identifiers, not `xlink:href` URLs). The typed projection preserves these on the plan as `S129ExternalReference` values; resolving them against an actual S-421 / S-102 / S-104 dataset is the caller's responsibility, and the typed model never requires those datasets to be present.
+Open the dataset, then project it into the typed plan:
 
 ```csharp
-var dataset = S129Dataset.Open("12900MCTDS130TS.gml");
+using EncDotNet.S100.Datasets.S129;
+using EncDotNet.S100.Datasets.S129.DataModel;
+
+var dataset = S129Dataset.Open("path/to/ukc-plan.gml");
 var typed = S129UnderKeelClearancePlan.From(dataset, out var diagnostics);
 
 Console.WriteLine($"Vessel: {typed.Plan?.VesselId}");
-Console.WriteLine($"Route:  {typed.Plan?.SourceRoute?.Identifier} v{typed.Plan?.SourceRoute?.Version}");
-Console.WriteLine($"Plan window: {typed.Plan?.FixedTimeRange?.Start} → {typed.Plan?.FixedTimeRange?.End}");
+Console.WriteLine($"Route: {typed.Plan?.SourceRoute?.Identifier} version {typed.Plan?.SourceRoute?.Version}");
+Console.WriteLine($"Plan window: {typed.Plan?.FixedTimeRange?.Start} to {typed.Plan?.FixedTimeRange?.End}");
 
 foreach (var cp in typed.ControlPoints)
 {
     Console.WriteLine(
-        $"  {cp.FeatureName?.Name,-6} @ {cp.ExpectedPassingTime:HH:mm:ss}  " +
+        $"  {cp.FeatureName?.Name,-6} at {cp.ExpectedPassingTime:HH:mm:ss}  " +
         $"UKC margin: {cp.DistanceAboveUkcLimit:F2} m");
 }
 ```
 
-## Installation
+## Main types
 
-```sh
-dotnet add package EncDotNet.S100.Datasets.S129
+- **`S129Dataset`**: the parsed dataset, with its features and dataset
+  identification. `Open` takes a path or a stream. `ReadMetadata` (static, for
+  a path or stream, or on an open dataset) returns the declared product
+  specification and the WGS 84 extent of the feature geometry without running
+  portrayal. The extent is `null` when no feature has geometry.
+- **`S129Feature`**: a feature with its type code, geometry, simple attributes,
+  complex attributes and `xlink:href` references. **`S129ComplexAttribute`**
+  holds a complex attribute's sub-attributes.
+- **`S129Reference`**: an `xlink:href` reference on a feature's child element
+  (S-100 Part 10b §7.2).
+- **`S129UnderKeelClearancePlan`**: the typed plan. See
+  [Typed data model](#typed-data-model).
+- **`S129UkcRules`**: the validation rule set. See [Validate](#validate).
+- **`S129PortrayalCatalogue`**: an `IVectorPortrayalCatalogue` that loads the
+  catalogue's XSLT rules, symbols, line styles, area fills and colour palettes.
+
+## Typed data model
+
+The `EncDotNet.S100.Datasets.S129.DataModel` namespace projects an
+`S129Dataset` into one UKC plan:
+
+- **`S129UnderKeelClearancePlan`** is the root, built with
+  `S129UnderKeelClearancePlan.From(dataset, out diagnostics)`. It has one plan,
+  one plan area, any number of non-navigable and almost-non-navigable areas,
+  and the control points.
+- **`S129UkcPlanMetadata`** (`Plan`) is the `UnderKeelClearancePlan` feature,
+  with a typed `FixedTimeRange`, `GenerationTime`, `MaximumDraught`, vessel ID,
+  and an `S129ExternalReference` to the source S-421 route (`SourceRoute`).
+- **`S129UkcPlanArea`**, **`S129NonNavigableArea`** and
+  **`S129AlmostNonNavigableArea`** are the surface features.
+- **`S129ControlPoint`** is a point feature with the UKC values for one
+  waypoint: `DistanceAboveUkcLimit`, `ExpectedPassingTime` and
+  `ExpectedPassingSpeed`. `ControlPoints` is ordered by expected passing time.
+  The sort is stable, and gaps are kept: the model doesn't interpolate across
+  gaps the producer left.
+- **`S129TimeRange`**, **`S129FeatureName`** and **`S129ExternalReference`**
+  are shared value types.
+- **`S129GeometryKind`** is `None`, `Point` or `Surface`.
+
+Duplicate plan features, attributes that don't parse and unresolved xlinks
+become `ProjectionDiagnostic` entries, with the shared codes
+`feature.duplicate`, `attribute.parse.double`, `attribute.parse.datetime`,
+`xlink.unresolved` and `feature.geometry.missing`. `From` throws an
+`InvalidOperationException` only when the dataset has no features.
+
+### References to other products
+
+In S-129 Edition 2.0.0, the links to the source S-421 route, S-102 bathymetry
+and S-104 water levels are text: the producer records identifiers, not
+`xlink:href` URLs. The typed plan keeps them as `S129ExternalReference` values.
+It never needs those datasets. To resolve the references against loaded
+datasets, use
+[`EncDotNet.S100.Datasets.S129.Fusion`](../EncDotNet.S100.Datasets.S129.Fusion/README.md),
+which also samples S-102 and S-104 at control points and binds control points
+to an S-421 route.
+
+## Validate
+
+`S129UkcRules`, in the `EncDotNet.S100.Datasets.S129.Validation` namespace,
+exposes each rule as an `IValidationRule<S129UnderKeelClearancePlan>` property
+and combines them in `S129UkcRules.Default`. `S129UkcRules.Validate(plan)` runs
+the default set. Rule IDs have the form `S129-R-{clause}`, and each rule's XML
+documentation cites the S-129 Edition 2.0.0 feature catalogue element it checks.
+The `EncDotNet.S100` package's `dataset.Validate()` runs the same rule set.
+
+```csharp
+using EncDotNet.S100.Datasets.S129;
+using EncDotNet.S100.Datasets.S129.DataModel;
+using EncDotNet.S100.Datasets.S129.Validation;
+
+var dataset = S129Dataset.Open("path/to/ukc-plan.gml");
+var plan = S129UnderKeelClearancePlan.From(dataset, out _);
+var report = S129UkcRules.Validate(plan);
+
+foreach (var finding in report.Findings)
+    Console.WriteLine($"[{finding.Severity}] {finding.RuleId}: {finding.Message}");
 ```
+
+| Rule ID | Severity | Checks |
+|---|---|---|
+| `S129-R-1.1` | Error | The plan's `fixedTimeRange` start isn't after its end. |
+| `S129-R-2.1` | Error | Control-point `expectedPassingTime` values strictly increase. |
+| `S129-R-3.1` | Error | All feature coordinates are within the WGS 84 latitude and longitude ranges (S-100 Part 10b §6.2). |
+| `S129-R-3.2` | Error | The `UnderKeelClearancePlanArea`, when present, has at least three coordinates. |
+| `S129-R-4.1` | Error | The plan's `maximumDraught`, when present, is greater than 0. |
+| `S129-R-5.1` | Error | Control-point UKC and speed values are finite. |
+| `S129-R-5.2` | Warning | Each control point has a point position. |
+
+The rules check one dataset at a time. Cross-dataset checks, such as comparing a
+control point's UKC margin with an S-102 bathymetric grid, aren't included. A
+rule that needs other datasets would reach them through
+`ValidationContext.Services`.
+
+## Portrayal
+
+The S-129 dataset processor in `EncDotNet.S100.Datasets.Pipelines` runs the
+bundled S-129 portrayal catalogue's XSLT rules over the dataset.
 
 ## See also
 
-- [`EncDotNet.S100.Datasets.S129.Fusion`](../EncDotNet.S100.Datasets.S129.Fusion/README.md)
-  — cross-product data-layer helpers that fuse an
-  `S129UnderKeelClearancePlan` with the S-102 / S-104 / S-421 datasets
-  it references (timeline iteration, reference resolution, route
-  binding). Strictly additive on top of the types in this library.
-
-## Validation
-
-The `Validation/` namespace provides a default rule pack for the typed
-projection (mirroring the pattern introduced for S-421 in PR #100):
-
-- **`S129UkcRules`** — a static class exposing each rule as a typed
-  `IValidationRule<S129UnderKeelClearancePlan>` property, composed
-  into `S129UkcRules.Default` (a `ValidationRuleSet<…>`), with a
-  `Validate(plan)` convenience wrapper that runs the default set.
-- Rule identifiers follow `S129-R-{clause}` and cite the relevant
-  S-129 Edition 2.0.0 feature-catalogue elements in their XML doc
-  comments. The pilot set covers seven Tier-1 / Tier-2 rules:
-  plan-validity-period inversion, control-point time monotonicity,
-  WGS-84 coordinate bounds across every feature, plan-area geometry
-  populated, positive maximum draught, finite UKC / speed
-  measurements, and control-point geometry presence.
-- Tier-3 cross-dataset rules — e.g. comparing a control point's UKC
-  margin against a sibling S-102 bathymetric grid — are intentionally
-  deferred to the MCP `validate_all` surface and the
-  `EncDotNet.S100.Datasets.S129.Fusion` library.
-
+- [Loading datasets](../../docs/loading-datasets.md): open files, folders, ZIPs
+  and exchange sets through the `EncDotNet.S100` package.
+- [Reading product data](../../docs/reading-product-data.md): features,
+  information types and typed models for each product.
+- [Typed data models](../../docs/typed-data-models.md): the typed
+  root for each product and the shared diagnostic codes.
+- [Custom catalogues and validation](../../docs/catalogues-and-validation.md):
+  run the bundled rules and add your own.
+- [`EncDotNet.S100.Datasets.S129.Fusion`](../EncDotNet.S100.Datasets.S129.Fusion/README.md):
+  combine a UKC plan with the S-102, S-104 and S-421 datasets it refers to.

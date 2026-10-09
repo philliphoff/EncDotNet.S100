@@ -1,149 +1,50 @@
 # Embedding the renderer
 
-The batteries-included [`EncDotNet.S100`](getting-started.md) facade is the
-easiest way to open a dataset and render it to an image. But if you already have
-a display list (or want to build a scene yourself) and only need the
-**renderer**, you can depend on two small, headless, Mapsui-free packages
-instead of the whole facade:
+The [`EncDotNet.S100`](../src/EncDotNet.S100/README.md) package opens a dataset
+and renders it to an image in one call. If you already have a display list, or
+want to build and draw a scene yourself, you can reference only the renderer
+packages instead:
 
-| Package | Role |
+| Package | Contents |
 |---|---|
-| [`EncDotNet.S100.Rendering.Scene`](https://github.com/philliphoff/EncDotNet.S100/blob/main/src/EncDotNet.S100.Rendering.Scene/README.md) | The backend-neutral **scene IR** — `VectorScene`, the `PaintOp` hierarchy, `VectorSceneBuilder`, `ColorResolver`, `ScaleVisibility`, `WebMercator`. Depends only on `EncDotNet.S100.Core` and `EncDotNet.S100.Portrayals`. |
-| [`EncDotNet.S100.Renderers.Skia`](https://github.com/philliphoff/EncDotNet.S100/blob/main/src/EncDotNet.S100.Renderers.Skia/README.md) | The headless **SkiaSharp rasteriser** — `SkiaDisplayListRenderer`, `HeadlessVectorRenderer`, `CoverageHeadlessRenderer`, `HeadlessCompositeRenderer`. |
+| [`EncDotNet.S100.Rendering.Scene`](../src/EncDotNet.S100.Rendering.Scene/README.md) | The renderer-neutral scene model: `VectorScene`, the `PaintOp` types, `VectorSceneBuilder`, `ColorResolver`, `ScaleVisibility` and `WebMercator`. It depends only on `EncDotNet.S100.Core` and `EncDotNet.S100.Portrayals`. |
+| [`EncDotNet.S100.Renderers.Skia`](../src/EncDotNet.S100.Renderers.Skia/README.md) | The headless SkiaSharp rasteriser: `SkiaDisplayListRenderer`, `HeadlessVectorRenderer`, `CoverageHeadlessRenderer` and `HeadlessCompositeRenderer`. |
 
-Neither package references Mapsui, Avalonia, or any GUI framework, so this is the
-seam to embed into a tile-serving web API, a batch image job, or the library half
-of a future web/WASM target.
+Neither package references Mapsui, Avalonia or any other UI framework, so you
+can use them in a tile server, a batch image job or another headless host. To
+show S-100 data on an interactive Mapsui map instead, see
+[Attach to a Mapsui map](#attach-to-a-mapsui-map).
 
-Hosts that own dataset processors can also capture map-wide portrayal choices in
-`MapPresentationState` from `EncDotNet.S100.Datasets.Pipelines`. The immutable
-snapshot carries palette, symbol/text scale, ECDIS and mariner settings, including
-per-product display modes, and projects them onto a product `RenderContext`:
+## Install
 
-```csharp
-var presentation = new MapPresentationState(
-    PaletteType.Day,
-    symbolScale: 1.0,
-    textScale: 1.0,
-    ecdisSettings,
-    marinerSettings);
-
-DateTime? selectedTime = null;
-RenderContext context = presentation.CreateRenderContext(
-    processor,
-    selectedTime);
-```
-
-This presentation layer is renderer-neutral: it does not reference Mapsui,
-Avalonia, or SkiaSharp. The factory selects the product context and carries the
-selected time for S-104, S-111, and S-411. Hosts that need a request-specific
-viewport, basemap, or instruction filter can construct that context and call
-`presentation.ApplyTo(context, processor.PortrayalSpec)` instead. Hosts that
-manage loaded datasets can expose
-`IMapPresentationController.SetPresentationAsync(presentation, cancellationToken)`
-to apply the snapshot explicitly. The boundary does not own the supplied state
-or prescribe processor, layer, renderer, or UI lifecycles.
-
-Loaded dataset state has the same renderer-neutral seam:
-
-```csharp
-var dataset = new MapDataset(
-    new MapDatasetId("US5WA50M.000"),
-    "US5WA50M.000",
-    processor.Metadata,
-    availableTimes: timeSteps,
-    validation: processor.Validate(),
-    versionAssessment: processor.VersionAssessment);
-```
-
-`MapDataset` snapshots metadata and extent, independent visibility and active
-state, opacity, available/current time, sub-layer state, validation, and version
-assessment. It intentionally excludes rendered layers, UI commands, framework
-events, and localized strings so a future map session can own the state without
-depending on Viewer, Mapsui, or Avalonia.
-
-The Viewer now follows that boundary throughout its loaded-dataset lifecycle:
-its dataset and sub-layer view-models project `MapDataset` /
-`MapDatasetSubLayer` snapshots while retaining only UI commands, localized
-labels, selection, and registration metadata. Map-wide Viewer inputs are similarly projected into one current
-`MapPresentationState`, then applied through `IMapPresentationController`
-rather than a presentation-specific refresh event. `MapsuiDatasetLayerSession` combines
-that state with its leased processors and selected dataset times, so neither
-render-context construction nor processor/layer ownership remains in Viewer
-state.
-
-The Viewer's live map adapter is also segregated by responsibility. Its
-`MapsuiMapHost` implements separate internal capabilities for layer-band
-collection, viewport/navigation, coordinate conversion, snapshot rendering, and
-redraw invalidation. Dataset loading receives only the layer and viewport
-capabilities; overlays receive only layer collection; MCP and feedback services
-use typed late-bound accessors for only the viewport, conversion, or snapshot
-capability they need. There is no aggregate `IMapHost` facade.
-
-The Viewer composition above predates the reusable entry point. New non-Viewer
-hosts should instead call `map.AddS100(crsTransformFactory, options)`
-(`EncDotNet.S100.Renderers.Mapsui`), which composes the layer bands, processor
-ownership, dataset renderer, session, and navigator and returns a disposable
-`IS100MapSession` — see that package's README. It renders caller-supplied
-processors via `AddDatasetAsync`, and — when `options.DatasetPipelineFactory` is
-supplied — loads a single standalone file/cell from a path via
-`s100.Datasets.LoadAsync(path)`. Exchange-set folder/ZIP loading and DI helpers
-are later additions.
-
-Layer ownership uses the reusable `MapsuiLayerBands` component against
-`Mapsui.Map`, and viewport behavior delegates to `MapsuiMapNavigator` against
-`Map.Navigator`. Both mutate the supplied map directly without requiring
-Avalonia. Automatic zoom after dataset load remains Viewer policy.
-
-Hosts that use Avalonia can opt into
-`EncDotNet.S100.Renderers.Mapsui.Avalonia`. Its disposable
-`AvaloniaMapsuiMapAdapter` attaches to a live `CaptureSynchronizedMapControl`
-and owns UI-thread invalidation, control-state coordinate conversion, current
-view PNG snapshots, and Avalonia control capture. The capture-synchronized
-control brackets the live Skia paint so offscreen capture cannot race shared GPU
-images. The optional adapter does not own datasets, processors, presentation,
-S-98 composition, or host UX.
-
-## Why it matters
-
-This is the smallest seam for teams that already own portrayal outputs or want
-direct control over rendering without the full facade package.
-
-## Quick win
-
-```sh
+```bash
 dotnet add package EncDotNet.S100.Renderers.Skia
 ```
 
-Expected result: headless rasterization support in your app with no Mapsui/Avalonia dependency.
+The Skia package brings in `EncDotNet.S100.Rendering.Scene`. Reference
+`EncDotNet.S100.Rendering.Scene` on its own if you only build a `VectorScene`
+and don't use Skia types.
 
-```sh
-dotnet add package EncDotNet.S100.Renderers.Skia
-```
+## How rendering works
 
-Adding the renderer transitively brings in the scene IR. Add
-`EncDotNet.S100.Rendering.Scene` explicitly if you build a `VectorScene` without
-touching Skia types.
+Rendering has two steps, so the portrayal logic and the rasteriser stay
+independent:
 
-## The two layers
+1. **Lowering.** `VectorSceneBuilder` (in `Rendering.Scene`) turns a
+   `DrawingInstruction` display list, the S-100 Part 9 portrayal output, into a
+   `VectorScene`: an ordered list of `PaintOp`s in EPSG:3857 metres, with sizes
+   in logical pixels and colours resolved to `RgbaColor`.
+2. **Rasterising.** `SkiaDisplayListRenderer` (in `Renderers.Skia`) draws a
+   `VectorScene` and a `Viewport` to an `SKBitmap`.
 
-The renderer is split into two seams so the portrayal-correctness logic and the
-rasteriser stay independent:
+Every backend consumes the same scene, so you can draw one scene through
+different backends and compare the results.
 
-1. **Lowering** — a `DrawingInstruction` display list (S-100 Part 9 portrayal
-   output) is lowered into a `VectorScene`: an ordered list of fully-resolved
-   `PaintOp`s in EPSG:3857 metres with sizes in logical pixels and colours
-   resolved to `RgbaColor`. This is `VectorSceneBuilder` (in `Rendering.Scene`).
-2. **Rasterising** — a `VectorScene` + `Viewport` is drawn to an `SKBitmap` by
-   `SkiaDisplayListRenderer` (in `Renderers.Skia`). Because every backend
-   consumes the same IR, the same scene can be driven through a different
-   backend for apples-to-apples comparison.
+## Render a display list in one call
 
-## Rendering a display list in one call
-
-If you have a display list plus the catalogue providers (symbol SVG, line style,
-colour palette), `HeadlessVectorRenderer.Render` does both steps and auto-fits
-the viewport to the scene extent:
+With a display list and the catalogue providers (symbol SVG, line style and
+colour palette), `HeadlessVectorRenderer.Render` does both steps and fits the
+viewport to the scene's extent:
 
 ```csharp
 using EncDotNet.S100.Renderers.Skia.Scene;
@@ -153,7 +54,7 @@ SKBitmap bitmap = HeadlessVectorRenderer.Render(
     instructions,          // IReadOnlyList<DrawingInstruction>
     geometryProvider,      // IFeatureGeometryProvider
     palette,               // ColorPalette
-    symbolProvider,        // Func<string, string?>?  (name -> SVG)
+    symbolProvider,        // Func<string, string?>? (symbol name to SVG)
     lineStyleProvider,     // Func<string, LineStyle?>?
     symbolScale: 1.0,
     textScale: 1.0,
@@ -166,10 +67,13 @@ using var data = image.Encode(SKEncodedImageFormat.Png, 100);
 File.WriteAllBytes("out.png", data.ToArray());
 ```
 
-## Rendering into an explicit viewport
+Optional parameters add an area-fill provider, hidden instruction categories,
+the offline basemap and an explicit `Viewport`.
 
-For a tile server (or any caller that owns the projection), lower the scene once
-and draw it onto your own canvas / viewport with `SkiaDisplayListRenderer`:
+## Render into an explicit viewport
+
+A tile server, or any caller that owns the projection, can build the scene once
+and draw it into its own viewport or canvas with `SkiaDisplayListRenderer`:
 
 ```csharp
 using EncDotNet.S100.Rendering.Scene;
@@ -178,71 +82,157 @@ using SkiaSharp;
 
 VectorScene scene = new VectorSceneBuilder
 {
-    ResolveColor = ColorResolver.Create(palette), // Func<string?, RgbaColor>, required
-    // SymbolResolver / LineStyleProvider / PatternResolver are optional
+    ResolveColor = ColorResolver.Create(palette), // required
+    // SymbolResolver, LineStyleProvider and PatternResolver are optional.
 }.Build(instructions, geometryProvider);
 
 var renderer = new SkiaDisplayListRenderer
 {
     Background = RgbaColor.Transparent,
-    HonorScaleVisibility = true, // an explicit viewport carries a real scale
+    HonorScaleVisibility = true, // an explicit viewport has a real scale
 };
 
-// Render == allocate a bitmap and draw:
+// Allocate a bitmap and draw into it.
 SKBitmap tile = renderer.Render(scene, viewport);
 
-// …or draw onto an existing canvas (compositing an overlay, etc.):
+// Or draw onto an existing canvas, for example to composite an overlay.
 renderer.RenderOnto(canvas, scene, viewport);
 ```
 
-Set `HonorScaleVisibility = false` when the viewport is synthesised from a fitted
-extent (an auto-fit / "render the whole dataset" call), because a fitted scale
-denominator is not the dataset's compilation scale and would wrongly cull
-scale-ranged detail.
+`HonorScaleVisibility` hides features outside their display-scale range. Set it
+to `false` when the viewport is fitted to the data's extent, as in a "render
+the whole dataset" call: a fitted scale isn't the dataset's compilation scale,
+so scale visibility would hide detail it shouldn't. If your output is blank or
+missing detail, check the viewport's extent and this setting first.
 
-## Compositing multiple datasets
+## Composite several datasets
 
-To paint several vector and coverage datasets into one image with a shared
-viewport, wrap each as a `CompositeLayer` (`VectorCompositeLayer` /
-`CoverageCompositeLayer`) and paint the ordered stack with
-`HeadlessCompositeRenderer`. The cross-dataset ordering / suppression *decision*
-(S-98 interoperability) is made upstream; this renderer only paints the resolved
-stack.
+To draw several vector and coverage datasets into one image with a shared
+viewport, wrap each as a `CompositeLayer` (`VectorCompositeLayer` or
+`CoverageCompositeLayer`) and draw the ordered stack with
+`HeadlessCompositeRenderer`. The order and suppression between datasets (S-98
+interoperability) are decided before this step; the renderer only draws the
+stack it's given. See [S-98 interoperability](design/s98-interoperability.md).
 
-## Coverage products
+## Render coverage products
 
-Coverage products (S-102 / S-104 / S-111) rasterise through
-`CoverageHeadlessRenderer` (whole-layer, auto-fit) or `SkiaCoverageRenderer`
-(`ICoverageRenderer<SKBitmap>`, cell → colour) rather than the vector path.
+Coverage products (S-102, S-104 and S-111) don't go through the vector path.
+Use `CoverageHeadlessRenderer` to draw a whole layer fitted to its extent, or
+`SkiaCoverageRenderer` (an `ICoverageRenderer<SKBitmap>` that maps cells to
+colours).
 
-## Stability & versioning
+## Describe map-wide presentation
 
-The **stable, supported surface** is the documented type set of each package
-(see their READMEs). `internal` and undocumented types are implementation detail
-and may change at any time.
+A host that owns dataset processors can keep its map-wide portrayal choices in
+one `MapPresentationState` (namespace `EncDotNet.S100.Datasets.Pipelines`). It's
+an immutable snapshot of palette, symbol and text scale, ECDIS and mariner
+settings, and display modes per product. It creates a product `RenderContext`
+for a processor:
 
-All `EncDotNet.S100.*` packages share **one version**, derived from the release
-git tag — there is no per-package version, and these two packages move in lockstep
-with the facade. Versioning follows [Semantic Versioning](https://semver.org/):
-once past `1.0.0`, a breaking change to a documented surface lands only in a
-**major** bump. While the version is below `1.0.0`, the surface is still settling
-— breaking changes may occur in a minor bump and will be called out in the
-release notes.
+```csharp
+using EncDotNet.S100.Datasets.Pipelines;
 
-## Linux arm64 note
+var presentation = new MapPresentationState(
+    PaletteType.Day,
+    symbolScale: 1.0,
+    textScale: 1.0,
+    ecdisSettings,
+    marinerSettings);
 
-When you publish a `linux-arm64` executable that uses the Skia renderer, reference
-the self-contained SkiaSharp native in your **application** project — see the
-[`Renderers.Skia` README](https://github.com/philliphoff/EncDotNet.S100/blob/main/src/EncDotNet.S100.Renderers.Skia/README.md#linux-arm64-native-dependency)
-([issue #23](https://github.com/philliphoff/EncDotNet.S100/issues/23)).
+DateTime? selectedTime = null;
+RenderContext context = presentation.CreateRenderContext(processor, selectedTime);
+```
 
-## Troubleshooting
+`CreateRenderContext` picks the context type for the product and carries the
+selected time for S-104, S-111 and S-411. If a request needs its own viewport,
+basemap or instruction filter, build that context yourself and call
+`presentation.ApplyTo(context, processor.PortrayalSpec)`.
 
-> [!IMPORTANT]
-> If your output is blank or clipped, verify your viewport extent and scale-visibility handling (`HonorScaleVisibility`).
+A host that manages loaded datasets can implement
+`IMapPresentationController.SetPresentationAsync(presentation, cancellationToken)`
+(namespace `EncDotNet.S100.Maps`) to apply a snapshot. The state doesn't own
+processors, layers, renderers or UI, and doesn't reference Mapsui, Avalonia or
+SkiaSharp.
 
-## Next step
+## Track loaded datasets
 
-- [Top APIs](top-apis.md)
-- [Command-line rendering](cli.md)
-- [S-98 interoperability design note](design/s98-interoperability.md)
+`MapDataset` is the matching snapshot for one loaded dataset:
+
+```csharp
+using EncDotNet.S100.Datasets.Pipelines;
+
+var dataset = new MapDataset(
+    new MapDatasetId("US5WA50M.000"),
+    "US5WA50M.000",
+    processor.Metadata,
+    availableTimes: timeSteps,
+    validation: processor.Validate(),
+    versionAssessment: processor.VersionAssessment);
+```
+
+It holds the metadata and extent, visibility, active state, opacity, available
+and current time, sub-layer state, validation report and version assessment. It
+leaves out rendered layers, UI commands, framework events and localized
+strings, so a map session can own it without depending on any UI.
+
+## Attach to a Mapsui map
+
+To show S-100 data on an interactive map, reference
+`EncDotNet.S100.Renderers.Mapsui` and call `map.AddS100(options)` on a
+`Mapsui.Map`. Set `CrsTransformFactory` on the `S100MapsuiOptions`, for example
+to a `ProjNetCrsTransformFactory` from `EncDotNet.S100.Crs.ProjNet`.
+
+`AddS100` builds the layer bands, processor owner, dataset renderer, dataset
+session and navigator, and returns them as one disposable `IS100MapSession`:
+
+- `AddDatasetAsync` adds a dataset from a processor you created.
+- `session.Datasets.LoadAsync(path)` loads a single file or cell from a path,
+  when you set `DatasetPipelineFactory` on the options. Loading an exchange-set
+  folder or ZIP isn't supported yet.
+- `AddS100Mapsui` registers an `IS100MapSessionFactory` for dependency
+  injection. You register an `ICrsTransformFactory` yourself.
+
+Layer order uses `MapsuiLayerBands` on the `Mapsui.Map`, and navigation uses
+`MapsuiMapNavigator` on `Map.Navigator`. Both change the map directly and don't
+need Avalonia. The
+[Renderers.Mapsui README](../src/EncDotNet.S100.Renderers.Mapsui/README.md#add-s-100-data-to-a-map)
+has a complete example, the options, and picking.
+
+For an Avalonia app, reference `EncDotNet.S100.Renderers.Mapsui.Avalonia`. Its
+`S100MapControl` attaches a session to itself. Or call `mapControl.AddS100(options)`
+on a Mapsui `MapControl`, which returns the session and an
+`AvaloniaMapsuiMapAdapter`. The adapter handles redraws on the UI thread,
+coordinate conversion, PNG captures of the current view and Avalonia control
+capture. Use it with a `CaptureSynchronizedMapControl`, which keeps an
+offscreen capture from racing the live Skia paint over shared GPU images. The
+adapter doesn't own datasets, processors, presentation, S-98 composition or host
+UX. See the
+[Renderers.Mapsui.Avalonia README](../src/EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md).
+
+## Publish for Linux arm64
+
+When you publish a `linux-arm64` executable that uses the Skia renderer,
+reference the self-contained SkiaSharp native library in your application
+project. See
+[Linux arm64 native dependency](../src/EncDotNet.S100.Renderers.Skia/README.md#linux-arm64-native-dependency)
+in the Renderers.Skia README.
+
+## Versions and supported surface
+
+The supported surface of each package is the set of types its README
+documents. `internal` and undocumented types can change at any time.
+
+All `EncDotNet.S100.*` packages share one version, taken from the release tag,
+so the renderer packages always match the facade. Versions follow
+[Semantic Versioning](https://semver.org/). Below `1.0.0`, the API is still
+settling: a minor version can include breaking changes, and the release notes
+list them. From `1.0.0`, breaking changes to a documented surface come only in a
+major version.
+
+## See also
+
+- [Top APIs](top-apis.md): the main entry points in each package.
+- [Command-line rendering](cli.md): render datasets with `s100` instead of
+  code.
+- [S-98 interoperability](design/s98-interoperability.md): how composite layers
+  are ordered.

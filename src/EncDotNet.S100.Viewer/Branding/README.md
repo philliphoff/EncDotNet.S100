@@ -1,59 +1,75 @@
-# Viewer branding assets
+# SoundCharts branding assets
 
-This folder contains the master art for the SoundCharts (S-100 Viewer) application and
-all generated icon / installer assets that the build and CI pipeline
-consume.
+This folder holds the master art for the SoundCharts icon and macOS installer,
+and the icon and installer files generated from it. The build, the CI release
+workflow and the documentation site use these files.
 
-## Source files (edit these)
+## Source files
 
-| File                  | Purpose                                                                 |
-| --------------------- | ----------------------------------------------------------------------- |
-| `icon.svg`            | Master 1024×1024 application icon. Geometric ENC-inspired chart fragment. |
-| `dmg-background.svg`  | Master 540×380 background image for the macOS `.dmg` installer window. |
-| `Generate.sh`         | Regenerates every binary artifact below from the two source SVGs.       |
+Edit these files, then [regenerate the assets](#regenerate-the-assets).
 
-## Generated files (committed; do not hand-edit)
+| File | Purpose |
+|---|---|
+| `icon.svg` | Master application icon, 1024×1024. |
+| `dmg-background.svg` | Master background for the macOS `.dmg` installer window, 540×380. |
+| `Generate.sh` | Script that regenerates every generated file below from the two SVGs. |
 
-| File                       | Used by                                                                 |
-| -------------------------- | ----------------------------------------------------------------------- |
-| `AppIcon.png` (1024)       | Avalonia `Window.Icon` via `avares://`. Also serves as a 1× source for Linux. |
-| `AppIcon.icns`             | macOS `.app` bundle (`Contents/Resources/AppIcon.icns`, referenced by `Info.plist`'s `CFBundleIconFile`). |
-| `AppIcon.ico`              | Windows executable icon (`<ApplicationIcon>` in the viewer csproj). Multi-resolution: 16/32/48/64/128/256. |
-| `dmg-background.png`       | 540×380 background for the macOS installer DMG.                         |
-| `dmg-background@2x.png`    | 1080×760 retina background (kept alongside; ready if/when we move to UDIF retina mode). |
-| `png/AppIcon-NN.png`       | Per-resolution PNGs at 16/32/48/64/128/256/512/1024 for Linux icon themes, About dialog reuse, README previews. |
+## Generated files
 
-## How it is wired in
+These files are committed. Don't edit them by hand.
 
-- **Avalonia window icon** — `src/EncDotNet.S100.Viewer/EncDotNet.S100.Viewer.csproj` declares `Branding/AppIcon.png` as an `AvaloniaResource`, and `MainWindow.axaml` sets `Icon="avares://SoundCharts/Branding/AppIcon.png"`.
-- **Windows .exe icon** — the same csproj sets `<ApplicationIcon>Branding\AppIcon.ico</ApplicationIcon>`, so `dotnet publish --runtime win-…` embeds the icon into the executable resource.
-- **macOS .app icon** — `Info.plist` sets `CFBundleIconFile=AppIcon`. The CI build copies `Branding/AppIcon.icns` into `SoundCharts.app/Contents/Resources/`.
-- **macOS DMG** — the CI workflow builds the DMG read-write, stages `Branding/dmg-background.png` into a hidden `.background/` folder, then uses AppleScript to set the window bounds, icon size, icon positions, and background image before converting to compressed UDZO.
+| File | Used by |
+|---|---|
+| `AppIcon.png` (1024×1024) | The Avalonia window icon. Also the 1024 px source for Linux. |
+| `AppIcon.icns` | The macOS `.app` bundle icon and the DMG volume icon. |
+| `AppIcon.ico` | The Windows executable icon. Contains 16, 32, 48, 64, 128 and 256 px images. |
+| `dmg-background.png` | The macOS installer DMG background, 540×380. |
+| `dmg-background@2x.png` | A 1080×760 Retina version of the DMG background. The CI workflow doesn't use it yet. |
+| `png/AppIcon-<size>.png` | Single-size PNGs at 16, 32, 48, 64, 128, 256, 512 and 1024 px, for Linux icon themes and other reuse. |
 
-## Regenerating
+## How the build uses the assets
 
-Re-run after editing either SVG. macOS only (uses `sips` + `iconutil`).
-Pillow is required for the `.ico` packer:
+- **Window icon**: `EncDotNet.S100.Viewer.csproj` includes
+  `Branding/AppIcon.png` as an `AvaloniaResource`, and `MainWindow.axaml`
+  sets `Icon="avares://SoundCharts/Branding/AppIcon.png"`.
+- **Windows executable icon**: the same project file sets
+  `<ApplicationIcon>Branding\AppIcon.ico</ApplicationIcon>`, so
+  `dotnet publish` for a `win-*` runtime embeds the icon in the executable.
+- **macOS app icon**: `Info.plist` sets `CFBundleIconFile` to `AppIcon`, and
+  the CI workflow copies `AppIcon.icns` into
+  `SoundCharts.app/Contents/Resources/`.
+- **macOS DMG**: the CI workflow builds the DMG with
+  [create-dmg](https://github.com/create-dmg/create-dmg), using
+  `dmg-background.png` as the window background and `AppIcon.icns` as the
+  volume icon. The window size and icon positions in
+  [`ci.yml`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.github/workflows/ci.yml)
+  must match the layout drawn in `dmg-background.svg`.
+- **Documentation site**: `docfx.json` uses `icon.svg` as the site logo and
+  favicon.
+
+## Regenerate the assets
+
+Run the script after you edit either SVG. It needs macOS, because it uses
+`sips` and `iconutil`, and Python 3 with Pillow to write the `.ico` file.
 
 ```bash
 python3 -m pip install --user Pillow
 ./Generate.sh
 ```
 
-The script overwrites `AppIcon.png`, `AppIcon.icns`, `AppIcon.ico`, the
-DMG background PNGs, and the `png/` directory. Commit the changes
-alongside any source SVG edits.
+The script overwrites `AppIcon.png`, `AppIcon.icns`, `AppIcon.ico`, both DMG
+background PNGs and the `png/` folder. Commit the regenerated files with the
+SVG change.
 
-## Design notes
+## Icon design
 
-The icon uses a geometric, faceted treatment of the standard S-100
-chart palette:
+The icon is a geometric, faceted treatment of the S-100 chart palette:
 
-- buff land (`#e7cf8e`) with a desaturated gold coastline,
-- stepped depth bands from shallow (`#c9deec`) to deepest (`#5d9bd3`),
-- two layers of simplified contour lines, and
-- a `0b3a67` navy "frame" that doubles as the icon's rounded-rect mask
-  (the bezel is part of the artwork, not an OS-applied mask).
+- Buff land (`#e7cf8e`) with a desaturated gold coastline.
+- Stepped depth bands, from shallow (`#c9deec`) to deepest (`#5d9bd3`).
+- Two layers of simplified contour lines.
+- A navy (`#0b3a67`) frame that is also the icon's rounded-rectangle mask.
+  The bezel is part of the artwork; the operating system doesn't apply it.
 
-Land occupies the upper-left and the open chart extends toward the
-lower-right, mirroring how the viewer naturally renders ENC tiles.
+Land fills the upper left, and open water extends toward the lower right, the
+way a chart of a coastline usually appears in SoundCharts.

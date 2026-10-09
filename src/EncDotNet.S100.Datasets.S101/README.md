@@ -1,230 +1,310 @@
 # EncDotNet.S100.Datasets.S101
 
-Reader and Lua portrayal pipeline for S-101 Electronic Navigational Chart (ENC) datasets.
+This package reads and writes S-101 Electronic Navigational Chart (ENC)
+datasets, which are ISO 8211 files (S-100 Part 10a), and runs the S-100
+Part 9A Lua portrayal rules that turn their features into drawing
+instructions. It also applies sequential update files and validates a cell
+against the S-101 Edition 2.0.0 checklist. Reference it when you need the
+cell's records, features, updates or validation directly. To open and render a
+dataset without wiring catalogues yourself, use the
+[`EncDotNet.S100`](../EncDotNet.S100/README.md) package instead.
 
-## Overview
+The same package also reads and portrays S-401 inland ENC datasets, which
+share the Part 10a encoding and the Part 9A portrayal model. See
+[S-401 inland ENCs](#s-401-inland-encs).
 
-This library reads S-101 datasets encoded in ISO 8211 format and executes the S-100 Part 9A Lua portrayal pipeline to produce drawing instructions. Key types include:
+## Install
 
-> **Also serves S-401.** IEHG inland ENC shares the S-100 Part 10a encoding and
-> the Part 9A Lua portrayal model, so it is read by this same library and
-> portrayed by `S101DatasetProcessor` with the bundled S-401 catalogues
-> (`S101DatasetProcessor` takes the catalogue spec; `S101VectorSource` reports
-> whichever product the dataset's DSID declares). Nothing here is S-101-only
-> except the validation rule pack.
+```bash
+dotnet add package EncDotNet.S100.Datasets.S101
+```
 
+## Read a dataset
 
-- **`S101Dataset`** — parsed ENC dataset containing features from ISO 8211 records. `ReadMetadata()` (and the static `S101Dataset.ReadMetadata(path)` / `ReadMetadata(stream)`) is the phased-loading "peek" path (issue #460): it returns a `DatasetMetadata` with the declared spec, the geographic extent (from a geometry scan; `null` when the dataset carries no coordinates), and the `DisplayScale` window read cheaply from the `DataCoverage` `minimumDisplayScale` / `maximumDisplayScale` attributes — without running the Part 9A Lua portrayal pipeline.
-- **`S101Document`**, **`S101DocumentReader`** — low-level ISO 8211 record parsing.
-- **`S101DocumentWriter`** — the symmetric inverse of `S101DocumentReader`: encodes an `S101Document` back to an ISO/IEC 8211 S-101 dataset (`byte[]` / stream / file). Used by the S-57 → S-101 conversion path (`s100 s57 convert`). It emits a Data Descriptive Record (DDR) plus one data record per dataset / spatial / feature / information object; a document read from a `.000` and written back round-trips through the reader. See below.
-- **`S101LuaRuleExecutor`** — `ILuaVectorRuleExecutor` implementation that wraps the product-agnostic `LuaRuleExecutor` from `EncDotNet.S100.Core`, supplying the S-101 seams: the `S101LuaDataProvider` host bridge, the mariner→context-parameter bindings, a feature-anchor provider for augmented line tessellation, and the SAFCON contour-label transform.
-- **`S101PortrayalCatalogue`** — `IVectorPortrayalCatalogue` implementation that loads XSLT/Lua rules, symbols, line styles, area fills, and color palettes.
-- **`S101VectorSource`** — `IVectorSource` implementation for the vector pipeline. Surface geometry resolves both the exterior ring (`Feature.Coordinates`) and any interior rings / holes (`Feature.InteriorRings`) from the RIAS field (USAG = 2), so a sea/depth area encoded around islands (S-100 Part 10a surface topology) renders with the land cut out instead of painting solidly over every `LandArea`.
-- **`S101SoundingSampler`** — returns the nearest individual charted `Sounding` (per-point Z) to an arbitrary WGS-84 position. S-101 stores soundings as multipoint spatial records (RCNM = 115) carrying many depth triples per feature, so nearest-sounding search descends to the per-point Z ordinates rather than ranking whole features by centroid. Used by the viewer's depth-assimilation pick report (issue #479).
-- **`S101UpdateApplicator`**, **`S101Document.ApplyChanges`** — sequential update support (see below).
-- **`DrawingInstructionParser`** (in `EncDotNet.S100.Core`) — parses the semicolon-separated key:value strings emitted by the Lua portrayal pipeline into the unified `DrawingInstruction` hierarchy. Honours text alignment (`TextAlignHorizontal` / `TextAlignVertical`), mm offsets (`LocalOffset`), foreground / background colour with optional transparency, line placement, and the `AugmentedPoint:GeographicCRS,…` anchor override used by SOUNDG / DepthNoBottomFound rules. Augmented line geometry (`AugmentedRay`, `ArcByRadius`, `AugmentedPath`) is fully supported — sector-light limit lines and arcs, directional-light rays, and all-around-light circles are tessellated into polylines and carried through `LineInstruction.CoordinatesOverride` to the renderer.
+```csharp
+using EncDotNet.S100.Datasets.S101;
 
-## Bundled-adapter Lua patches
+S101Dataset cell = S101Dataset.Open("path/to/dataset.000");
+Console.WriteLine($"{cell.DatasetName}: {cell.FeatureCount} features");
 
-`content/S101/pc/` stays **byte-identical** to the upstream IHO S-101
-portrayal catalogue. When upstream Lua has a defect that breaks
-real-world cells, the `S101LuaDataProvider` ships a small adapter patch
-(via its ordered `PostLoadScripts`) that monkey-patches the offending
-global rather than editing the bundled catalogue. Current patches:
+foreach (var feature in new S101VectorSource(cell).GetFeatures().Take(5))
+    Console.WriteLine($"{feature.Id} {feature.FeatureType} ({feature.GeometryType})");
+```
 
-- **`contains`** — restores a missing global the upstream catalogue
-  relies on without defining.
-- **`GetFeatureName` / `PortrayFeatureName`** — upstream gates name
-  selection on both `name` AND `nameUsage`, but the S-101 FC declares
-  `nameUsage` with multiplicity `0..1`. Cells that omit it are
-  FC-conformant but rendered nameless. The patch treats a missing
-  `nameUsage` as the default `1` while preserving the original
-  language-matching semantics, so area / point feature names
-  (BuiltUpArea, SeaAreaNamedWaterArea, churches, …) emit correctly.
+`S101Dataset` holds the ISO 8211 records as they're encoded. `S101VectorSource`
+resolves them into features with WGS 84 geometry and named attributes.
+[Reading product data](../../docs/reading-product-data.md) covers this in more
+detail.
 
-If upstream fixes a defect, the corresponding patch is dropped.
+## Main types
 
-## Portrayal diagnostics and trace output
+- **`S101Dataset`**: a parsed cell. `Open` reads a file or stream,
+  `OpenWithUpdates` applies update files (see
+  [Apply sequential updates](#apply-sequential-updates)), and `FromDocument`
+  wraps an `S101Document` you already have.
+- **`S101Dataset.ReadMetadata`**: reads a cell's `DatasetMetadata` without
+  running the portrayal. It's available as a static method for a path or a
+  stream, and as an instance method. The metadata holds the declared product
+  specification, the geographic extent from a scan of the geometry (`null`
+  when the cell has no coordinates), and the `DisplayScale` window from the
+  `DataCoverage` `minimumDisplayScale` and `maximumDisplayScale` attributes.
+- **`S101Document`** and **`S101DocumentReader`**: the ISO 8211 records. See
+  [Record types](#record-types).
+- **`S101DocumentWriter`**: encodes an `S101Document` back to ISO 8211. See
+  [Write a dataset](#write-a-dataset).
+- **`S101VectorSource`**: the `IVectorSource` for the vector pipeline. Surfaces
+  resolve both the exterior ring (`Feature.Coordinates`) and any interior rings
+  (`Feature.InteriorRings`) from the `RIAS` field (`USAG` = 2). A depth area
+  encoded around islands (S-100 Part 10a surface topology) renders with the
+  land cut out.
+- **`S101PortrayalCatalogue`**: the `IVectorPortrayalCatalogue`. It loads the
+  rules, symbols, line styles, area fills and colour palettes.
+- **`S101LuaRuleExecutor`**: the `ILuaVectorRuleExecutor` for S-101. It wraps
+  the product-neutral `LuaRuleExecutor` from `EncDotNet.S100.Core` and supplies
+  the S-101 parts: the `S101LuaDataProvider` host bridge, the bindings from
+  mariner settings to context parameters, a feature-anchor provider for
+  augmented line geometry, and the `SAFCON` contour label transform.
+- **`S101SoundingSampler`**: returns the charted sounding nearest to a WGS 84
+  position. S-101 stores soundings as multipoint records (`RCNM` = 115) with
+  many depths per feature, so the search compares individual depth points, not
+  whole features. The viewer's depth pick report uses it.
+- **`S101UpdateApplicator`** and **`S101Document.ApplyChanges`**: sequential
+  update support.
+- **`S101LegacyFeatureNames`**: maps feature class names from editions before
+  2.0.0. See [Feature names from earlier editions](#feature-names-from-earlier-editions).
 
-The S-100 Part 9A rules emit `Debug.Trace` diagnostics for **expected,
-spec-compliant fallbacks** — most visibly the `OBSTRN07` rule raising
-*"Neither valueOfSounding or defaultClearanceDepth have a value"* for an
-`Obstruction` / `Wreck` / `UnderwaterAwashRock` feature that legitimately
-carries no depth value, after which `main.lua` substitutes Default
-symbology and the cell still renders. These are **not** errors.
+The `S101DatasetProcessor` that renders, picks and validates an S-101 cell is
+in [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md).
 
-`S101LuaDataProvider` therefore routes all Lua/host diagnostic trace
-output through an injectable sink (the optional `trace` constructor
-parameter). When omitted, messages go to `System.Diagnostics.Trace`,
-which is silent on standard output unless a listener is attached — so
-these high-volume, benign fallbacks no longer pollute render/validation
-output. Pass an explicit `Action<string>` to capture or surface them
-(for example behind a verbose/debug flag or in tests). The bundled CLI
-wires this to `--debug`: `s100 render … --debug` mirrors the
-`[Lua]`/`[Host]` diagnostics to **stderr** while keeping stdout (and the
-PNG result) unchanged.
+`DrawingInstructionParser`, in `EncDotNet.S100.Core`, parses the
+`key:value;…` strings the Lua rules emit into `DrawingInstruction` objects. It
+handles text alignment (`TextAlignHorizontal`, `TextAlignVertical`), offsets in
+millimetres (`LocalOffset`), foreground and background colour with optional
+transparency, line placement, and the `AugmentedPoint:GeographicCRS,…` anchor
+that the sounding and `DepthNoBottomFound` rules use. Augmented line geometry
+(`AugmentedRay`, `ArcByRadius`, `AugmentedPath`) is tessellated into polylines
+and passed to the renderer through `LineInstruction.CoordinatesOverride`. That
+covers sector light limits and arcs, directional light rays, and all-round
+light circles.
 
-## Legacy feature-name compatibility
+## Apply sequential updates
 
-The bundled Portrayal Catalogue is **S-101 Edition 2.0.0**, whose Lua
-rule modules use the 2.0.0 (word-reversed) feature class names —
-`LateralBuoy.lua` defining `function LateralBuoy`, dispatched by
-`main.lua` via `require(feature.Code)` then `_G[feature.Code](...)`.
-Datasets authored against an earlier edition of the S-101 Feature
-Catalogue report the **pre-2.0.0** names (`BuoyLateral`,
-`BeaconCardinal`, `MooringWarpingFacility`, …). Those names match no
-2.0.0 rule module, so the dispatcher's `require` fails and the feature
-falls back to **DEFAULT** (`QUESMRK1`) symbology.
+An S-101 cell is issued as a base dataset (`….000`, application profile `1`)
+and ordered update files (`….001`, `….002`, …, application profile `2`).
+Updates carry insert, delete and modify instructions at record and element
+level (S-100 Part 10a). You apply them in order to get the up-to-date cell.
 
-`S101LegacyFeatureNames.Normalize` maps the legacy class names to their
-2.0.0 equivalents so the correct rule runs. This covers both the
-word-reordered buoy/beacon classes (`BuoyLateral` → `LateralBuoy`,
-`BeaconCardinal` → `CardinalBeacon`, …) and classes that were **merged**
-in 2.0.0: `RestrictedAreaNavigational` / `RestrictedAreaRegulatory` →
-`RestrictedArea`, `TrafficSeparationZone` / `TrafficSeparationLine` →
-`SeparationZoneOrLine`, and `BuoyEmergencyWreckMarking` /
-`BuoyNewDangerMarking` → `EmergencyWreckMarkingBuoy`. Because simple
-attribute names are stable across these editions, only the feature
-**class** name needs remapping. The shim is applied **only** at the
-portrayal boundary (`S101LuaDataProvider.HostFeatureGetCode`); feature
-names are left as-authored everywhere else (document reader, vector
-source, validation, info panels).
+- **`S101Dataset.OpenWithUpdates(basePath, updatePaths)`** opens a base cell,
+  applies its update files, and reports the outcome in
+  `S101Dataset.UpdateReport`.
+- **`S101UpdateApplicator.Apply(baseDocument, orderedUpdates, out report)`**
+  applies an ordered list of update documents to a base document and returns
+  an `S101UpdateReport`.
+- **`S101Document.ApplyChanges(update)`** applies one update and returns a new
+  document. It mirrors `EncDotNet.S57.S57Document.ApplyChanges`.
 
-`MooringWarpingFacility` was structurally removed in 2.0.0, so it is
-mapped conditionally on `categoryOfMooringWarpingFacility`
-(dolphin → `Dolphin`, bollard → `Bollard`, post/pile → `Pile`,
-mooring buoy → `MooringBuoy`); categories without a clean 2.0.0
-equivalent — and instances with an absent or empty category — are
-routed to the `Default` rule module so the dispatcher's `require`
-always resolves (DEFAULT symbology) instead of throwing
-`module 'MooringWarpingFacility' not found`. These conditional
-targets are approximations — only the class name is aliased, not the
-attributes the 2.0.0 rule reads — so symbology may be generic, and a
-target rule that rejects the feature's geometric primitive simply
-errors inside the dispatcher's `pcall` and falls back to DEFAULT
-(no regression versus today).
+Application is best-effort. An unreadable file, or an invalid or
+non-contiguous update, is recorded in the report, and you can still use the
+partly updated cell.
+
+In an exchange set, `ExchangeSetLoader` groups each base cell with the update
+files for it in the same set (`S101ExchangeSetUpdatePlan`) and returns one
+up-to-date processor per cell. An update whose base cell isn't in the set is
+reported as a warning. Updates aren't applied across exchange sets. See
+[Loading datasets](../../docs/loading-datasets.md).
+
+## Write a dataset
+
+`S101DocumentWriter` is the inverse of `S101DocumentReader`. It encodes an
+`S101Document` as an ISO 8211 S-101 dataset:
+
+```csharp
+using EncDotNet.S100.Datasets.S101;
+
+byte[] bytes = S101DocumentWriter.Write(document);
+S101DocumentWriter.WriteToFile("path/to/output.000", document);
+await S101DocumentWriter.WriteToFileAsync("path/to/output.000", document);
+```
+
+The writer emits a Data Descriptive Record (DDR) covering every field it writes,
+with field tags, subfield names and binary formats that match the S-101
+encoding. Then it writes:
+
+1. A `DSID` record: identification, structure information, and the feature,
+   attribute, information and association code catalogues.
+2. The spatial records: `PRID`, `MRID`, `CRID`, `CCID` and `SRID`.
+3. The feature records: `FRID`, `FOID`, `ATTR`, `SPAS`, `FACS` and `INAS`.
+4. The information records: `IRID` and `ATTR`.
+
+A document read from a `.000` file and written back reads as the same document.
+Feature-to-feature associations (`FACS`) are written too. The S-57 translator
+produces them for bridge and range-system aggregations.
+
+`s100 s57 convert` uses this writer: it translates an S-57 base cell to an
+`S101Document` and writes it as a base S-101 cell (application profile `1`).
+See [Bringing S-57 into the pipeline](../../docs/s57-to-s101.md).
+
+## Portrayal
+
+The bundled portrayal catalogue is S-101 Edition 2.0.0. Its Lua rules run
+through `S101LuaRuleExecutor` and `S101LuaDataProvider`.
+
+### Patches to the bundled Lua rules
+
+The files in `content/S101/pc/` in `EncDotNet.S100.Specifications` are
+byte-identical to the IHO S-101 portrayal catalogue. When an upstream rule has
+a defect that breaks real cells, `S101LuaDataProvider` patches the affected
+global function after loading, through its ordered `PostLoadScripts`, instead
+of editing the catalogue. The current patches are:
+
+- **`contains`**: defines a global function that the upstream rules use but
+  don't define.
+- **`GetFeatureName` and `PortrayFeatureName`**: the upstream rules only pick a
+  name when both `name` and `nameUsage` are present, but the S-101 feature
+  catalogue declares `nameUsage` as optional (`0..1`). Cells that omit it are
+  valid but render without names. The patch treats a missing `nameUsage` as the
+  default `1` and keeps the language matching, so area and point feature names
+  (built-up areas, named sea areas, churches, and so on) are drawn.
+
+A patch is removed when upstream fixes the defect.
+
+### Portrayal trace messages
+
+The Part 9A rules write `Debug.Trace` messages for expected fallbacks that the
+specification allows. For example, the `OBSTRN07` rule reports "Neither
+valueOfSounding or defaultClearanceDepth have a value" for an `Obstruction`,
+`Wreck` or `UnderwaterAwashRock` with no depth value. `main.lua` then uses the
+default symbology and the cell still renders. These messages aren't errors.
+
+`S101LuaDataProvider` sends all Lua and host trace output to the optional
+`trace` constructor parameter, an `Action<string>`. If you don't pass one,
+messages go to `System.Diagnostics.Trace`, which prints nothing unless a
+listener is attached. Pass your own action to capture them, for example behind
+a debug option or in tests. `s100 render … --debug` writes the `[Lua]` and
+`[Host]` messages to standard error and leaves standard output and the PNG
+unchanged.
+
+### Feature names from earlier editions
+
+The S-101 Edition 2.0.0 Lua rules use the 2.0.0 feature class names: for
+example, `LateralBuoy.lua` defines `function LateralBuoy`. `main.lua` runs a
+feature's rule with `require(feature.Code)` and then `_G[feature.Code](...)`.
+Cells made against an earlier S-101 feature catalogue use the older names
+(`BuoyLateral`, `BeaconCardinal`, `MooringWarpingFacility`, …). No 2.0.0 rule
+matches them, so `require` fails and the feature is drawn with the default
+symbol (`QUESMRK1`).
+
+`S101LegacyFeatureNames.Normalize` maps the older class names to their 2.0.0
+equivalents so the right rule runs. It covers:
+
+- Buoy and beacon classes whose words were reordered: `BuoyLateral` →
+  `LateralBuoy`, `BeaconCardinal` → `CardinalBeacon`, and so on.
+- Classes merged in 2.0.0: `RestrictedAreaNavigational` and
+  `RestrictedAreaRegulatory` → `RestrictedArea`; `TrafficSeparationZone` and
+  `TrafficSeparationLine` → `SeparationZoneOrLine`; `BuoyEmergencyWreckMarking`
+  and `BuoyNewDangerMarking` → `EmergencyWreckMarkingBuoy`.
+
+Simple attribute names didn't change between these editions, so only the
+feature class name is mapped. The mapping applies only where the portrayal
+asks for the feature code (`S101LuaDataProvider.HostFeatureGetCode`). The
+reader, vector source, validation and feature info keep the names as encoded.
+
+`MooringWarpingFacility` was removed in 2.0.0, so its mapping depends on
+`categoryOfMooringWarpingFacility`: dolphin → `Dolphin`, bollard → `Bollard`,
+post or pile → `Pile`, mooring buoy → `MooringBuoy`. Other categories, and a
+missing or empty category, map to the `Default` rule, so `require` always
+finds a module and the feature gets the default symbology instead of failing
+with `module 'MooringWarpingFacility' not found`. These mappings are
+approximate. Only the class name changes, not the attributes the 2.0.0 rule
+reads, so the symbol may be generic. If the target rule rejects the feature's
+geometry type, the error is caught by the `pcall` in `main.lua` and the
+feature falls back to the default symbology.
+
+## S-401 inland ENCs
+
+S-401 is the Inland ENC Harmonization Group (IEHG) inland ENC product. It
+uses the same encoding and portrayal model as S-101, so this package reads it
+and `S101DatasetProcessor` portrays it with the bundled S-401 catalogues. The
+processor takes the catalogue's product specification as a parameter.
+`S101VectorSource` reports the product that the dataset's `DSID` record
+declares. Everything in this package except the validation rule pack applies
+to S-401 too. For the bundled S-401 catalogues, see
+[S-401 bundled catalogues](../EncDotNet.S100.Specifications/content/S401/README.md).
+
+## Record types
+
+`S101DocumentReader` reads these ISO 8211 record types:
+
+| Tag | Record type | Contents |
+|-----|-------------|----------|
+| DSID | Dataset identification | Version, edition, product specification |
+| DSSI | Dataset structure information | `COMF` and `SOMF` scaling factors |
+| PRID | Point | One 2D coordinate |
+| MRID | Multipoint | 3D sounding arrays in the `C3IL` field (`VCID` leader and a repeating `YCOO`/`XCOO`/`ZCOO` group) |
+| CRID | Curve | An ordered coordinate sequence |
+| CCID | Composite curve | References to curves |
+| SRID | Surface | Ring-based polygon geometry |
+| FRID | Feature | Feature type, attributes, spatial associations |
+| IRID | Information type | Records that features refer to |
+
+Every record identifier field also carries `RVER` (record version) and `RUIN`
+(record update instruction). The association and attribute fields carry their
+per-element update instructions (`SAUI`, `FAUI`, `IUIN`, `ATIN`). The reader
+keeps all of these so updates can be applied.
 
 ## Validation
 
-A bundled rule pack
-(`EncDotNet.S100.Datasets.S101.Validation.S101DatasetRules.Default`)
-evaluates a typed view over an `S101Document` against the S-101
-Edition 2.0.0 checklist and emits a `ValidationReport` of findings.
-The view types under `Validation/` (`S101DatasetView`,
-`S101FeatureView`, `S101AttributeView`) are the **spec-aligned façade**
-the pack reads from — they keep rule code decoupled from the raw
-`S101FeatureRecord` shape so a future typed `DataModel` projection
-can replace them without rewriting the rules.
-
-The pack is invoked automatically by `S101DatasetProcessor.Validate()`
-and can also be run directly:
+The bundled rule pack, `EncDotNet.S100.Datasets.S101.Validation.S101DatasetRules.Default`,
+checks a cell against the S-101 Edition 2.0.0 checklist and returns a
+`ValidationReport`. `S101DatasetProcessor.Validate()` runs it for you. To run it
+directly:
 
 ```csharp
+using EncDotNet.S100.Datasets.S101.Validation;
+
 var view = S101DatasetView.From(document, decoder);
 var report = S101DatasetRules.Default.Run(view);
 ```
 
-| Rule id            | Severity | Checks                                                                                                              |
-|--------------------|----------|---------------------------------------------------------------------------------------------------------------------|
-| `S101-R-1.1`       | Error    | Feature type code resolves to an FC acronym.                                                                        |
-| `S101-R-1.2`       | Error    | Attribute code resolves AND is bound where it sits: a top-level row (`PAIX` 0) to the host feature class (walks the FC `SuperType` chain), a sub-attribute row to the complex attribute its `PAIX` points at. |
-| `S101-R-2.1`       | Error    | FOID uniqueness — one finding per duplicate, with the first occurrence as anchor.                                   |
-| `S101-R-3.1`       | Error    | Spatial associations resolve into the correct record dictionary (point, curve, surface, composite curve).           |
-| `S101-R-3.2`       | Error    | Surface ring closure plus rejection of rings with fewer than three distinct points. Each ring is walked in its encoded orientation (ring association, composite-curve component and curve). |
-| `S101-R-3.3`       | Error    | Composite curve continuity (end of segment N equals start of segment N+1).                                          |
-| `S101-R-4.1`       | Warning  | Enumerated attribute values fall in the FC-declared domain.                                                         |
-| `S101-R-5.1`       | Warning  | Resolved (lat, lon) coordinates lie in WGS-84 ranges.                                                               |
-| `S101-R-5.2`       | Warning  | Information associations resolve to a known information record.                                                     |
-| `S101-PROJ-PARSE`  | —        | Placeholder reserving the namespace for future parser-diagnostic findings; body intentionally empty.                |
+`decoder` is a `FeatureCatalogueDecoder` over the S-101 feature catalogue. The
+rules read the cell through the view types in `Validation/` (`S101DatasetView`,
+`S101FeatureView`, `S101AttributeView`), which use the feature catalogue's
+names instead of the raw `S101FeatureRecord` shape. That keeps the rules
+independent of the record layout.
 
-Findings about a feature carry its location — the position of a
-single-point feature, otherwise the WGS-84 envelope of its geometry — and
-geometry findings carry the ring's envelope and the vertex at the gap
-(`S101-R-3.2`) or the discontinuity (`S101-R-3.3`), so map overlays can
-mark them.
+| Rule ID | Severity | Checks |
+|---------|----------|--------|
+| `S101-R-1.1` | Error | The feature type code resolves to a feature catalogue acronym. |
+| `S101-R-1.2` | Error | The attribute code resolves and is bound where it sits: a top-level row (`PAIX` 0) to the feature class (following the catalogue's `SuperType` chain), and a sub-attribute row to the complex attribute its `PAIX` points at. |
+| `S101-R-2.1` | Error | Feature identifiers (`FOID`) are unique. Each duplicate is one finding, anchored on the first occurrence. |
+| `S101-R-3.1` | Error | Spatial associations resolve to the right record type (point, curve, surface, composite curve). |
+| `S101-R-3.2` | Error | Surface rings are closed and have at least three distinct points. Each ring is walked in its encoded orientation (ring association, composite curve component and curve). |
+| `S101-R-3.3` | Error | Composite curves are continuous: the end of segment N equals the start of segment N+1. |
+| `S101-R-4.1` | Warning | Enumerated attribute values are in the domain the feature catalogue declares. |
+| `S101-R-5.1` | Warning | Resolved latitude and longitude are within WGS 84 ranges. |
+| `S101-R-5.2` | Warning | Information associations resolve to a known information record. |
+| `S101-PROJ-PARSE` | — | Reserved for future parser findings. It has no checks yet. |
 
-The same `S101DatasetRules.Default` entry point is reused by S-57
-post-translation delegation (see
-[`EncDotNet.S100.Datasets.S57`](../EncDotNet.S100.Datasets.S57/README.md)),
-with findings rebadged as `S101-as-S57/<rule-id>` so the user can
-tell which layer of the pipeline a problem came from.
+A finding about a feature carries its location: the position of a single-point
+feature, or else the WGS 84 envelope of its geometry. Geometry findings also
+carry the ring's envelope and the vertex at the gap (`S101-R-3.2`) or the break
+(`S101-R-3.3`), so a map overlay can mark them.
 
-## Record types
+The S-57 pipeline runs the same pack on translated S-57 cells and prefixes the
+rule IDs with `S101-as-S57/`, so you can tell which stage a finding came from.
+See [`EncDotNet.S100.Datasets.S57`](../EncDotNet.S100.Datasets.S57/README.md#validation).
 
-`S101DocumentReader` parses the following ISO 8211 record types:
+The pack doesn't run on S-401 datasets: `Validate()` returns `null` for them,
+which means no rule pack is available.
 
-| Tag | Record type | Notes |
-|-----|-------------|-------|
-| DSID | Dataset identification | Version, edition, product spec |
-| DSSI | Dataset structure info | COMF / SOMF scaling factors |
-| PRID | Point | Single 2D coordinate |
-| MRID | MultiPoint | 3D sounding arrays via C3IL field (VCID leader + YCOO/XCOO/ZCOO repeating group) |
-| CRID | Curve segment | Ordered coordinate sequences |
-| CCID | Composite curve | References to curve segments |
-| SRID | Surface | Ring-based polygon geometry |
-| FRID | Feature | Object class, attributes, spatial associations |
-| IRID | Information type | Metadata records referenced by features |
+For your own rules and the validation API, see
+[Custom catalogues and validation](../../docs/catalogues-and-validation.md).
 
-Every record-id field also carries `RVER` (record version) and `RUIN`
-(record update instruction), and the feature/information association and
-attribute fields carry their inline per-element update instructions
-(`SAUI` / `FAUI` / `IUIN` / `ATIN`). These are read into the model to
-drive sequential update application.
+## See also
 
-## Writing datasets
-
-`S101DocumentWriter` is the inverse of `S101DocumentReader`: it serializes an
-`S101Document` to an ISO/IEC 8211 S-101 dataset.
-
-```csharp
-byte[] bytes = S101DocumentWriter.Write(document);
-S101DocumentWriter.WriteToFile("cell.000", document);
-await S101DocumentWriter.WriteToFileAsync("cell.000", document);
-```
-
-The writer authors a Data Descriptive Record (DDR) covering every field it
-emits (field tags, subfield names, and binary formats matching the canonical
-S-101 encoding), followed by a DSID record (identification, structure info, and
-the feature/attribute/information/association code catalogues), the spatial
-records (`PRID`, `MRID`, `CRID`, `CCID`, `SRID`), the feature records (`FRID`,
-`FOID`, `ATTR`, `SPAS`, `FACS`, `INAS`), and the information records (`IRID`,
-`ATTR`). A document read from a real `.000` and written back is equivalent when
-read again. Feature-to-feature associations (`FACS`) are serialized and
-round-trip when present, although the S-57 translator does not currently produce
-any.
-
-This is the encoder behind the `s100 s57 convert` CLI command, which translates
-an S-57 base cell to `S101Document` and writes it as a base S-101 cell
-(application profile `1`).
-
-
-## Sequential updates
-
-Like S-57, an S-101 cell is distributed as a base dataset (`….000`,
-application profile `1`) plus ordered update files (`….001`, `….002`, …,
-application profile `2`). Updates carry record- and element-level
-insert / delete / modify instructions (S-100 Part 10a) that must be
-applied in sequence to obtain the up-to-date cell.
-
-- **`S101Document.ApplyChanges(update)`** merges one update document into
-  a new document (pure; the design mirrors `EncDotNet.S57.S57Document.ApplyChanges`).
-- **`S101UpdateApplicator.Apply(base, orderedUpdates, out report)`** folds
-  an ordered update list onto a base cell and returns an `S101UpdateReport`.
-  Application is **best-effort**: an unreadable file, or an invalid /
-  non-contiguous update, is recorded in the report and never prevents the
-  (partially) updated dataset from being used.
-- **`S101Dataset.OpenWithUpdates(basePath, updatePaths)`** opens a base
-  cell and applies its update files, exposing the outcome via
-  `S101Dataset.UpdateReport`.
-
-Within an exchange set, `ExchangeSetLoader` groups each S-101 base cell
-with the update files that target it **in the same set**
-(`S101ExchangeSetUpdatePlan`) and emits a single up-to-date processor per
-cell; updates with no in-set base surface as a best-effort warning.
-Cross-exchange-set application is not yet supported.
-
-## Installation
-
-```sh
-dotnet add package EncDotNet.S100.Datasets.S101
-```
+- [Reading product data](../../docs/reading-product-data.md): S-101 features
+  alongside the other products.
+- [Loading datasets](../../docs/loading-datasets.md): exchange sets and updates
+  through the `EncDotNet.S100` facade.
+- [Bringing S-57 into the pipeline](../../docs/s57-to-s101.md): read S-57 cells
+  through this package's portrayal.

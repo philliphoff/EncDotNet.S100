@@ -7,7 +7,7 @@
 > env knob, the snapshot/path-cache renderers, the `set_render_subsystem` MCP
 > tool, and the viewer's subsystem picker — have been removed. The A/B framing in
 > the sections and appendices below is retained as **historical design record**;
-> read "the B arm" as simply "the renderer". The within-B `VectorSceneMode`
+> read "the B arm" as "the renderer". The within-B `VectorSceneMode`
 > (Tiled vs Single) selection axis remains. (The orphaned line-LOD pyramid
 > producer was retired under #601.)
 
@@ -736,7 +736,7 @@ The serialized instruction list already encodes the active display category, the
 selected safety contour, and every other setting that changes *which* features
 and *which* portrayal are drawn; the serializer's `FormatVersion` is folded in
 implicitly (it is the first field). A change to any input yields a different
-namespace, so old tiles are simply orphaned and reclaimed by the byte-budget LRU
+namespace, so old tiles are orphaned and reclaimed by the byte-budget LRU
 sweep — never served stale. A hash *collision* is the only stale-portrayal risk,
 and SHA-256 over the full resolved content makes that negligible; a spurious hash
 *difference* only costs a re-rasterise.

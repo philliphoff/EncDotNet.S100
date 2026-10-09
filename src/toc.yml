@@ -14,6 +14,8 @@
       href: EncDotNet.S100.Portrayals/README.md
     - name: EncDotNet.S100.ExchangeSets
       href: EncDotNet.S100.ExchangeSets/README.md
+    - name: EncDotNet.S100.Collections
+      href: EncDotNet.S100.Collections/README.md
     - name: EncDotNet.S100.Specifications
       href: EncDotNet.S100.Specifications/README.md
 - name: Encoding, scripting and CRS backends
@@ -70,7 +72,7 @@
       href: EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md
 - name: Applications and hosts (not packaged)
   items:
-    - name: EncDotNet.S100.Viewer
+    - name: SoundCharts (EncDotNet.S100.Viewer)
       href: EncDotNet.S100.Viewer/README.md
     - name: EncDotNet.S100.Mcp
       href: EncDotNet.S100.Mcp/README.md

@@ -1,146 +1,162 @@
 # S-411 sea-ice preview generator (sample)
 
-A proof-of-concept Bash script that generates **S-411 sea-ice "quicklook"
-previews** using the [`s100` CLI](../../tools/EncDotNet.S100.Cli/README.md).
+This sample is a Bash script that makes PNG previews of S-411 sea-ice data with
+[`s100 render`](../../docs/cli.md#render). It works like the previews on the
+[BSIS Ice Portal](https://www.bsis-ice.de/IcePortal/ILP_S411.shtml): it
+downloads each region's published S-411 exchange set, extracts the GML dataset
+and renders it. Use it as an example of running `s100` in an unattended batch
+job.
 
-It mirrors the idea behind the
-[BSIS Ice Portal](https://www.bsis-ice.de/IcePortal/ILP_S411.shtml) previews:
-download the published S-411 exchange-set ZIPs, extract the GML dataset, and
-rasterise a PNG. Here the rendering is done entirely by `s100 render` — so the
-same machinery the desktop viewer uses also drives an unattended batch job.
-
-The published ZIP names are dated and rotate (often daily). Instead of
-hard-coding a snapshot, the script **discovers the current ZIP** for each region
-by scanning the live portal index for a stable per-region pattern, so it keeps
-working day-to-day. A `COMPARE=1` mode additionally downloads the matching BSIS
-quicklook(s) next to our render for side-by-side inspection.
+The portal's file names include a date and change, often daily. The script
+finds the current file for each region by matching a fixed pattern against the
+live portal index, so you don't need to update it as new files are published.
 
 ## Prerequisites
 
-- .NET 10 SDK
-- `bash`, `curl`, `unzip`
-- A built CLI:
+- The .NET 10 SDK.
+- `bash`, `curl` and `unzip`.
+- A Release build of `s100`. From the repository root:
 
   ```bash
   dotnet build tools/EncDotNet.S100.Cli -c Release
   ```
 
-## Usage
+## Run the script
 
-From anywhere in the repo:
+You can run the script from any folder in the repository. With no arguments,
+it renders the `cw-greenland`, `hudson-bay` and `alaska` regions into
+`./s411-previews`:
 
 ```bash
-# Render the default region set into ./s411-previews
 samples/s411-previews/s411_previews.sh
-
-# Choose an output directory and explicit regions
-samples/s411-previews/s411_previews.sh /tmp/out north-atlantic hudson-bay
-
-# Render every known region
-samples/s411-previews/s411_previews.sh /tmp/out all
-
-# Render + fetch the BSIS quicklooks for side-by-side comparison
-COMPARE=1 samples/s411-previews/s411_previews.sh /tmp/out cw-greenland
 ```
 
-Available region keys: `cw-greenland`, `nw-greenland`, `ne-greenland`,
-`se-greenland`, `sw-greenland`, `ce-greenland`, `cape-farewell`, `qaanaaq`
-(DMI Greenland); `canada-east`, `hudson-bay`, `eastern-arctic`,
-`western-arctic` (CIS); `alaska` (US NWS); `north-atlantic` (Met.no). Use `all`
-to render them all. Add more by extending the `region_zip_pattern` /
-`region_conc_image` / `region_sod_image` lookups with entries from the BSIS
-portal.
-
-### Environment overrides
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `S100` | runs the Release DLL via `dotnet` | Command used to invoke the CLI (e.g. a published `s100` binary). |
-| `WIDTH` / `HEIGHT` | `1600` | Output size in pixels. |
-| `PALETTE` | `day` | `day` \| `dusk` \| `night`. |
-| `EXTRA_OPTS` | _empty_ | Extra flags forwarded verbatim to `s100 render` (e.g. `--no-text`, `--basemap offline`). |
-| `COMPARE` | `0` | When `1`, also download the BSIS quicklook(s) for each region to `previews/<key>.bsis-conc.png` / `.bsis-sod.png`. If ImageMagick's `montage` is on `PATH`, a combined `previews/<key>.compare.png` contact sheet is produced. |
+Pass an output folder, then one or more region keys, or `all`:
 
 ```bash
-# Use an installed global tool and a larger night-palette canvas
-S100="s100" WIDTH=2048 HEIGHT=2048 PALETTE=night \
+samples/s411-previews/s411_previews.sh /tmp/out north-atlantic hudson-bay
+samples/s411-previews/s411_previews.sh /tmp/out all
+```
+
+For each region, the script prints the file it found and the preview it wrote.
+It skips a region whose file it can't find, download or render, and goes on to
+the next.
+
+### Regions
+
+| Source | Region keys |
+|---|---|
+| DMI (Greenland) | `cw-greenland`, `nw-greenland`, `ne-greenland`, `se-greenland`, `sw-greenland`, `ce-greenland`, `cape-farewell`, `qaanaaq` |
+| CIS (Canada) | `canada-east`, `hudson-bay`, `eastern-arctic`, `western-arctic` |
+| US NWS | `alaska` |
+| Met.no | `north-atlantic` |
+
+To add a region, add entries to the `region_zip_pattern`, `region_conc_image`
+and `region_sod_image` functions in the script, using the file names on the
+BSIS portal. If a region stops resolving, its file-name pattern has probably
+changed; update its `region_zip_pattern` entry from the
+[portal index](https://www.bsis-ice.de/IcePortal/ILP_S411.shtml).
+
+### Settings
+
+Set these environment variables to change how the script renders:
+
+| Variable | Default | Description |
+|---|---|---|
+| `S100` | `dotnet` with the Release `s100.dll` | The command that runs `s100`, such as the path to a downloaded `s100` binary. |
+| `WIDTH`, `HEIGHT` | `1600` | The image size in pixels. |
+| `PALETTE` | `day` | `day`, `dusk` or `night`. |
+| `EXTRA_OPTS` | empty | More options for `s100 render`, added after `--width`, `--height` and `--palette`. |
+| `COMPARE` | `0` | `1` also downloads the BSIS previews for comparison. See [Compare with the BSIS previews](#compare-with-the-bsis-previews). |
+
+For example, to use a downloaded `s100` and a larger image in the night
+palette:
+
+```bash
+S100="path/to/s100" WIDTH=2048 HEIGHT=2048 PALETTE=night \
   samples/s411-previews/s411_previews.sh
 ```
 
 ## Output
 
-```
+```text
 <out-dir>/
-  data/ILP_S411.shtml        cached portal index (used for ZIP discovery)
-  data/<region>.zip          downloaded exchange set
-  data/<region>/...          extracted contents
-  previews/<region>.png      rendered preview
-  previews/<region>.bsis-conc.png   BSIS concentration quicklook   (COMPARE=1)
-  previews/<region>.bsis-sod.png    BSIS stage-of-development quicklook (COMPARE=1)
-  previews/<region>.compare.png     contact sheet, if `montage` present (COMPARE=1)
+  data/ILP_S411.shtml               the cached portal index
+  data/<region>.zip                 the downloaded exchange set
+  data/<region>/...                 the extracted exchange set
+  previews/<region>.png             the rendered preview
+  previews/<region>.bsis-conc.png   the BSIS concentration preview (COMPARE=1)
+  previews/<region>.bsis-sod.png    the BSIS stage-of-development preview (COMPARE=1)
+  previews/<region>.compare.png     a side-by-side sheet (COMPARE=1, with montage)
 ```
 
-## Notes & caveats
+The output isn't meant to be committed.
 
-- **Current ZIPs are discovered automatically.** The script scans the live
-  portal index for a stable per-region pattern (the rotating date is wildcarded)
-  and picks the most recent match, so it keeps working as the portal updates. If
-  a region stops resolving, its file-name scheme likely changed — update the
-  `region_zip_pattern` entry from <https://www.bsis-ice.de/IcePortal/ILP_S411.shtml>.
-- **Clean-fill previews:** to mirror the BSIS portal's text-free look, pass
-  `--no-text` to the CLI (or set `EXTRA_OPTS=--no-text` and have the script
-  forward it). For example:
+## Change the preview
+
+Pass `s100 render` options through `EXTRA_OPTS`:
+
+- **Hide the labels.** `--no-text` removes the S-411 egg-code labels and leaves
+  the fills, ice-edge lines and symbols, like the BSIS previews.
+  `--hide text,points` also removes point symbols.
 
   ```bash
   EXTRA_OPTS="--no-text" samples/s411-previews/s411_previews.sh
   ```
 
-  This suppresses the S-411 egg-code labels at the renderer level while
-  leaving the fills, ice-edge lines, and symbols untouched. Use
-  `--hide text,points` to also drop point symbols.
-- **Offline land basemap:** pass `--basemap offline` (headless; no online
-  tiles) to composite the bundled Natural Earth 1:10m land layer beneath the
-  ice, so floes and ice edges read against the coastline instead of a bare
-  background. Combine with `--no-text` for a clean, geo-referenced quicklook:
+- **Add land.** `--basemap offline` draws the bundled Natural Earth 1:10m land
+  layer under the ice, so you can see the coastline. It doesn't use online
+  tiles.
 
   ```bash
   EXTRA_OPTS="--no-text --basemap offline" samples/s411-previews/s411_previews.sh
   ```
-- This is sample/PoC code, not a supported product. Generated output under the
-  chosen directory is intentionally not committed.
-- Data © the respective ice services (CIS, DMI, Met.no, US NWS/NIC, AARI, SHN,
-  …) via the BSIS Ice Portal; respect their terms of use.
 
-## Parity with the BSIS quicklooks
+- **Show the stage of development.** The default display mode shows total
+  concentration. `--display-mode ice-sod` shows the stage of development
+  instead.
 
-The BSIS quicklooks are produced by a short bespoke Python script. Running this
-sample with `COMPARE=1` against today's data (e.g. DMI CentralWest-Greenland)
-shows how close `s100 render` gets to them, and where the honest gaps are.
+  ```bash
+  EXTRA_OPTS="--display-mode ice-sod" samples/s411-previews/s411_previews.sh
+  ```
 
-**What matches.** The underlying S-411 data is reproduced faithfully — ice-edge
-polygons, fjord tongues, and offshore patches line up with the BSIS
-concentration quicklook essentially polygon-for-polygon. Reading, parsing, and
-coverage of the live GML are not in question.
+For every `render` option, see [Command-line rendering](../../docs/cli.md#render).
 
-**What differs.** `s100 render` rasterises the *chart layer* using the bundled
-S-411 portrayal catalogue; the BSIS script composes a full *figure*. Concretely:
+## Compare with the BSIS previews
 
-| Aspect | BSIS quicklook | `s100 render` today |
+With `COMPARE=1`, the script also downloads the BSIS concentration preview and,
+where the portal publishes one, the stage-of-development preview, for each
+region. If ImageMagick's `montage` is on your `PATH`, it also puts your render
+and the BSIS previews side by side in `previews/<region>.compare.png`.
+
+```bash
+COMPARE=1 samples/s411-previews/s411_previews.sh /tmp/out cw-greenland
+```
+
+The comparison shows that `s100 render` reproduces the S-411 data: the
+ice-edge polygons, fjord tongues and offshore patches line up with the BSIS
+concentration preview. The differences come from how the image is composed.
+`s100 render` draws the chart layer with the S-411 portrayal; the BSIS previews
+are complete figures made by a separate script.
+
+| Aspect | BSIS preview | `s100 render` |
 |---|---|---|
-| **Basemap** | Blue ocean + white land + lat/lon graticule + title + axes | Ice polygons only, on a transparent/white canvas (no land/ocean layer) |
-| **Concentration palette** | Vivid WMO ramp (green→yellow→orange→red for low→high) | Muted tan/peach ramp from the bundled S-411 PC |
-| **Stage of development (SOD)** | Separate brown/green "thickness" map | Not produced (the bundled PC portrays concentration) |
-| **Projection** | Equirectangular (level rectangle) | Web-Mercator (slightly rotated) |
-| **Extent** | Fixed regional frame incl. surrounding coast | Auto-fit to the ice-polygon bounds |
+| Background | Blue ocean, white land, a latitude and longitude grid, a title and axes | No background map by default. `--basemap offline` adds land; there's no ocean colour, grid, title or axes. |
+| Concentration colours | A WMO colour ramp, green to red from low to high | WMO total-concentration colours, in the default `ice-concentration` mode. |
+| Stage of development | A separate map | A separate render with `--display-mode ice-sod`. |
+| Projection | Equirectangular | Web Mercator. |
+| Extent | A fixed frame for each region, including the nearby coast | Fitted to the data. Use `--bbox` for a fixed frame. |
 
-**Out of scope entirely.** Most BSIS region pages also publish ~12 **POLARIS**
-navigational-risk maps — one per ice class (PC1–PC7, 1As/1A/1B/1C, none),
-coloured by Risk Index Outcome. Those are a *computed decision-support product*,
-not a portrayal of the source data, and there is no POLARIS/RIO engine in this
-codebase. `COMPARE` mode therefore only fetches the CONC/SOD quicklooks.
+Most BSIS region pages also publish POLARIS navigational-risk maps, one for each
+ice class, coloured by risk index outcome. These are calculated
+decision-support products, not a portrayal of the data, and EncDotNet.S100 has
+no POLARIS calculation. The `ice-navigational` display mode is a provisional
+preview derived from total concentration, not a POLARIS result. `COMPARE` mode
+downloads only the concentration and stage-of-development previews.
 
-**Bottom line.** For the *data/geometry* this is effectively a drop-in; for a
-*standalone quicklook figure* it is not, chiefly because there is no basemap
-compositing and the concentration palette differs. Closing those would be
-feature work (a land/ocean context layer + a WMO concentration palette + an SOD
-portrayal), tracked separately from this sample.
+## Data and terms of use
+
+The S-411 data comes from the ice services (CIS, DMI, Met.no, US NWS/NIC, AARI,
+SHN and others) through the BSIS Ice Portal. Follow their terms of use.
+
+This is sample code, not a supported product.
