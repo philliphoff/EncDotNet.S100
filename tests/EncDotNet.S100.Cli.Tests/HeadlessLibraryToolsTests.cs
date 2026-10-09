@@ -17,6 +17,7 @@ public sealed class HeadlessLibraryToolsTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), "headless-tools-" + Guid.NewGuid().ToString("N"));
     private readonly HeadlessMutableCatalog _catalog = new();
     private readonly CollectionLibrary _library;
+    private readonly LibraryOperations _operations;
     private readonly HeadlessLibrary _host;
 
     public HeadlessLibraryToolsTests()
@@ -26,7 +27,7 @@ public sealed class HeadlessLibraryToolsTests : IDisposable
             CollectionIndexer.CreateDefault(),
             new CollectionLibraryOptions(Path.Combine(_root, "collections.json"), Path.Combine(_root, "index-cache")));
         _library.Initialize();
-        var operations = new LibraryOperations(
+        var operations = _operations = new LibraryOperations(
             _library,
             new LibraryDownloads(LibraryDownloads.ManagedFolders(new HttpClient(), Path.Combine(_root, "downloads"))),
             new LibraryLoader(new CatalogLibraryOpener(_catalog)));
@@ -181,19 +182,52 @@ public sealed class HeadlessLibraryToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task Kinds_not_yet_shared_and_catalogues_without_a_reader_are_refused()
+    public async Task Catalogues_without_a_reader_are_refused()
     {
         var tool = new AddLibrarySourceTool(_host);
 
-        // S-111 forecasts still add only in the viewer's dialog (#792 chunk 3c).
+        // This host was given no catalogue readers.
         Assert.True((await tool.InvokeAsync(
             new AddSourceRequest("noaa-s111", null, null, null, null, null, null, null, null, null, Preview: true), Ct)).TryGetError(out var forecast));
         Assert.Equal("library_change_rejected", forecast!.Code);
-
-        // This host was given no catalogue readers.
         Assert.True((await tool.InvokeAsync(
             new AddSourceRequest("noaa-enc", null, null, null, null, null, null, null, null, null, Preview: true), Ct)).TryGetError(out var noaa));
         Assert.Equal("library_change_rejected", noaa!.Code);
+    }
+
+    [Fact]
+    public async Task A_forecast_feed_and_a_secom_service_are_added_with_their_shape_and_sync()
+    {
+        var run = DateTimeOffset.UtcNow.AddHours(-1);
+        var readers = new LibraryCatalogueReaders
+        {
+            ForecastModels = (_, models, _) => Task.FromResult<IReadOnlyList<ForecastModelSummary>>(
+                [.. models.Select(m => new ForecastModelSummary(m, run, 4, 4_000, 9_000, null))]),
+            Secom = (_, _, _) => Task.FromResult(new SecomServiceDescription(
+                [new CatalogFacetValue("S-124", 5, 5_120)], 5, 5, Truncated: false, Collections.Secom.SecomApiVersion.V2)),
+        };
+        var host = new HeadlessLibrary(_operations, readers: readers);
+        var tool = new AddLibrarySourceTool(host);
+
+        var forecast = Value(await tool.InvokeAsync(
+            new AddSourceRequest("noaa-s111", null, null, null, ["cbofs"], null, null, null, Shape: "regional", null, Preview: false), Ct));
+        Assert.True(forecast.Added);
+        Assert.Equal("regional", Assert.Single(forecast.Shapes, o => o.Selected).Value);
+        Assert.Null(forecast.Note);
+        var feed = Assert.IsType<S100ForecastFeedSource>(_library.Collections.SelectMany(c => c.Sources).Single(s => s.Id == forecast.SourceId).Definition);
+        Assert.Equal(ForecastShape.Regional, feed.Shape);
+
+        // No map view here; a small service syncs by default.
+        Assert.True((await tool.InvokeAsync(
+            new AddSourceRequest("ccg-s124-secom", null, null, null, null, null, null, null, null, null, Preview: true, InMapView: true), Ct))
+            .TryGetError(out var noView));
+        Assert.Equal("library_change_rejected", noView!.Code);
+        var secom = Value(await tool.InvokeAsync(
+            new AddSourceRequest("ccg-s124-secom", null, null, null, null, null, null, null, null, null, Preview: false), Ct));
+        Assert.True(secom.Sync);
+        Assert.StartsWith("Downloads ", secom.SyncNote, StringComparison.Ordinal);
+        var service = Assert.IsType<SecomSource>(_library.Collections.SelectMany(c => c.Sources).Single(s => s.Id == secom.SourceId).Definition);
+        Assert.True(service.Sync);
     }
 
     [Fact]

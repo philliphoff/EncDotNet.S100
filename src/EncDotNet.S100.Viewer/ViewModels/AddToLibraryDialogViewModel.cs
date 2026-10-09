@@ -97,7 +97,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     private LibraryCollection? _selectedCollection;
     private bool _isLoading;
     private string? _loadError;
-    // The core's scope of a NOAA or USACE catalogue (#792); other kinds still keep their own state here.
+    // The core's scope of the online catalogue or manifest being added (#792).
     private LibraryCatalogueScope? _scope;
     private string _selectionSummary = string.Empty;
 
@@ -393,12 +393,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     }
 
     /// <summary>True once the catalogue has been read.</summary>
-    public bool IsLoaded => _kind switch
-    {
-        LibrarySourceKind.S100Forecast => _forecastModels is not null,
-        LibrarySourceKind.Secom => _secom is not null,
-        _ => _scope?.IsLoaded == true,
-    };
+    public bool IsLoaded => _scope?.IsLoaded == true;
 
     /// <summary>True when the catalogue has been read and it lists more than one choice.</summary>
     public bool ShowsChoices => IsLoaded && !_isLoading && !IsSingleEntry;
@@ -419,54 +414,17 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     public bool IsSingleEntry => SingleEntry is not null;
 
     /// <summary>The catalogue's only download, when it lists just one; otherwise <see langword="null"/>.</summary>
-    public LibraryChoice? SingleEntry
-    {
-        get
-        {
-            return _kind switch
-            {
-                LibrarySourceKind.S100Forecast when _forecastModels is [var model] => new(
-                    model.Model.Id,
-                    model.Model.Name,
-                    string.Join(" · ", new[]
-                    {
-                        string.Format(CultureInfo.CurrentCulture, Strings.Wizard_TilesFormat, model.TileCount),
-                        model.TileBytes is { } bytes ? LibraryItemViewModel.FormatBytes(bytes) : null,
-                    }.OfType<string>())),
-                _ => _scope?.SingleEntry,
-            };
-        }
-    }
+    public LibraryChoice? SingleEntry => _scope?.SingleEntry;
 
     /// <summary>"12,345 cells · 1.2 GB" (or "N downloads · sizes unknown") for the whole catalogue.</summary>
-    public string EverythingSummary
-    {
-        get
-        {
-            switch (_kind)
-            {
-                case not (LibrarySourceKind.S100Forecast or LibrarySourceKind.Secom) when _scope is { IsLoaded: true }:
-                    return _scope.EverythingSummary;
-                case LibrarySourceKind.S100Forecast when _forecastModels is not null:
-                    return ForecastEverythingSummary;
-                case LibrarySourceKind.Secom when _secom is not null:
-                    return SecomEverythingSummary;
-                default:
-                    return string.Empty;
-            }
-
-        }
-    }
+    public string EverythingSummary => _scope is { IsLoaded: true } scope ? scope.EverythingSummary : string.Empty;
 
     /// <summary>The "Only what I select" sub-line: the selection summary, or "Nothing selected yet".</summary>
     public string OnlySelectedSummary => HasSelection ? _selectionSummary : Strings.Wizard_NothingSelected;
 
     /// <summary>The summary under the facet list.</summary>
     public string ScopeSummary =>
-        _scope is not null ? _scope.ScopeSummary
-        : IsS100Forecast && (_includeAll || HasSelection)
-            ? LibrarySourceText.NothingDownloads(_selectionSummary)
-        : LibrarySourceText.ScopeSummary(_includeAll, SelectedCount, _selectionSummary);
+        _scope?.ScopeSummary ?? LibrarySourceText.ScopeSummary(_includeAll, SelectedCount, _selectionSummary);
 
     /// <summary>True when <see cref="ScopeSummary"/> asks the user to tick something.</summary>
     public bool IsScopeSummaryWarning => IsManifest ? IsManifestSummaryWarning : !_includeAll && !HasSelection;
@@ -581,19 +539,16 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
             LibrarySourceKind.S100Feed when _loadS100Feed is not null => new S100FeedScope(CatalogUri, _loadS100Feed),
             LibrarySourceKind.CommunityFeed when _loadCommunityCatalog is not null => new CommunityListScope(CatalogUri, _loadCommunityCatalog),
             LibrarySourceKind.S100Catalogue when _loadS100Catalogue is not null => new S100CatalogueScope(CatalogUri, _loadS100Catalogue, _listS100Folders),
+            LibrarySourceKind.S100Forecast when _loadForecastModels is not null && known is { Models.Count: > 0 }
+                => new S100ForecastScope(CatalogUri, known.Models, _loadForecastModels, _time),
+            LibrarySourceKind.Secom when _describeSecom is not null => new SecomScope(CatalogUri, _describeSecom, _currentMapView),
             LibrarySourceKind.LocalManifest when path is not null => new CollectionManifestScope(path),
             _ => null,
         };
         if (_scope is not null)
             _scope.Changed += OnScopeSizesChanged;
         ResetManifest();
-        _forecastModels = null;
-        _secom = null;
-        _secomArea = null;
-        _secomSync = false;
-        _secomSyncEdited = false;
         _keepDownloaded = false;
-        _selectedForecastShape = null;
         ForecastModels.Clear();
         _catalogueDate = null;
         _includeAll = true;
@@ -614,32 +569,10 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>Fetches the feed's catalogue and populates the facet lists.</summary>
     public async Task LoadCatalogAsync(CancellationToken cancellationToken = default)
     {
-        if (_kind is LibrarySourceKind.NoaaFeed or LibrarySourceKind.UsaceFeed or LibrarySourceKind.S100Feed
-            or LibrarySourceKind.CommunityFeed or LibrarySourceKind.S100Catalogue)
-        {
-            await LoadScopeAsync(cancellationToken).ConfigureAwait(true);
-            return;
-        }
-
         if (_kind == LibrarySourceKind.LocalManifest)
-        {
             await LoadManifestAsync(cancellationToken).ConfigureAwait(true);
-            return;
-        }
-
-
-        if (_kind == LibrarySourceKind.S100Forecast)
-        {
-            await LoadForecastModelsAsync(cancellationToken).ConfigureAwait(true);
-            return;
-        }
-
-        if (_kind == LibrarySourceKind.Secom)
-        {
-            await LoadSecomAsync(cancellationToken).ConfigureAwait(true);
-            return;
-        }
-
+        else
+            await LoadScopeAsync(cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>Re-reads what a scope changed on its own (a remote catalogue's sizes arriving).</summary>
@@ -686,6 +619,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
                     {
                         LibrarySourceKind.NoaaFeed => [States, CoastGuardDistricts, Regions],
                         LibrarySourceKind.UsaceFeed => [Rivers],
+                        LibrarySourceKind.S100Forecast => [ForecastModels],
                         _ => [Products],
                     };
                     foreach (var (target, group) in targets.Zip(_scope.Groups))
@@ -749,11 +683,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         : (_createNew ? !string.IsNullOrWhiteSpace(_newCollectionName) : _selectedCollection is not null)
         && _kind switch
         {
-            LibrarySourceKind.NoaaFeed or LibrarySourceKind.UsaceFeed or LibrarySourceKind.CommunityFeed
-                or LibrarySourceKind.S100Feed or LibrarySourceKind.S100Catalogue => _scope?.IsLoaded == true && !_isLoading,
-            LibrarySourceKind.S100Forecast => _forecastModels is not null && !_isLoading,
-            LibrarySourceKind.Secom => _secom is not null && !_isLoading,
-            _ => !string.IsNullOrEmpty(_path),
+            LibrarySourceKind.Folder or LibrarySourceKind.ExchangeSet or LibrarySourceKind.S128Catalogue => !string.IsNullOrEmpty(_path),
+            _ => _scope?.IsLoaded == true && !_isLoading,
         };
 
     private void RefreshCanConfirm() => ((RelayCommand)ConfirmCommand).NotifyCanExecuteChanged();
@@ -815,40 +746,13 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
             LibrarySourceKind.ExchangeSet => new ExchangeSetSource(id, null, _path!),
             LibrarySourceKind.S128Catalogue => new S128CatalogueSource(id, null, _path!),
             LibrarySourceKind.LocalManifest => BuildManifestSource(id),
-            LibrarySourceKind.S100Forecast => BuildForecastSource(id),
-            LibrarySourceKind.Secom => BuildSecomSource(id),
             _ when _scope is not null => _scope.Build(id, FeedName),
             _ => throw new InvalidOperationException($"Cannot build a {_kind} source."),
         };
     }
 
     /// <summary>Describes the ticked values ("Alaska, Hawaii"), or <see langword="null"/> when nothing is ticked.</summary>
-    private string? DescribeSelection() => _kind switch
-    {
-        LibrarySourceKind.S100Forecast => DescribeForecastSelection(),
-        LibrarySourceKind.Secom => DescribeSecomProducts(CurrentSecomFilter),
-        _ => _scope?.DescribeSelection(),
-    };
-
-    private void Populate(
-        ObservableCollection<LibraryChoice> target,
-        IEnumerable<CatalogFacetValue> values,
-        Func<CatalogFacetValue, string> label,
-        Func<CatalogFacetValue, string>? detail = null)
-    {
-        foreach (var option in target)
-            option.PropertyChanged -= OnFacetChanged;
-        target.Clear();
-
-        foreach (var value in values)
-        {
-            var option = detail is null
-                ? new LibraryChoice(value, label(value))
-                : new LibraryChoice(value.Value, label(value), detail(value));
-            option.PropertyChanged += OnFacetChanged;
-            target.Add(option);
-        }
-    }
+    private string? DescribeSelection() => _scope?.DescribeSelection();
 
     /// <summary>Shows a core scope's choices, following their ticks.</summary>
     private void Populate(ObservableCollection<LibraryChoice> target, IReadOnlyList<LibraryChoice> options)
@@ -917,31 +821,28 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         OnPropertyChanged(nameof(ToggleShownText));
         if (IsManifest)
             RaiseManifestChanged();
+        if (IsS100Forecast)
+        {
+            OnPropertyChanged(nameof(HasForecastShapes));
+            OnPropertyChanged(nameof(ForecastEndedNote));
+            OnPropertyChanged(nameof(HasForecastEndedNote));
+        }
+        if (IsSecom)
+        {
+            OnPropertyChanged(nameof(SecomSync));
+            OnPropertyChanged(nameof(SecomSyncHint));
+        }
     }
 
     private void UpdateSelection()
     {
-
-        if (_kind == LibrarySourceKind.Secom)
-        {
-            UpdateSecomSelection();
-            return;
-        }
-
         if (_kind == LibrarySourceKind.LocalManifest)
         {
             UpdateManifestSelection();
             return;
         }
 
-
-        if (_kind == LibrarySourceKind.S100Forecast)
-        {
-            UpdateForecastSelection();
-            return;
-        }
-
-        // The other online catalogues: the core scope sums the selection.
+        // The online catalogues: the core scope sums the selection.
         if (_scope is not { IsLoaded: true } scope)
             return;
 

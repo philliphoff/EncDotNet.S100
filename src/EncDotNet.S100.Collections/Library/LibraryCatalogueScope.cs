@@ -109,7 +109,7 @@ public abstract class LibraryCatalogueScope
             await load().ConfigureAwait(false);
             return null;
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or System.Xml.XmlException or TaskCanceledException
+        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or System.Xml.XmlException or TaskCanceledException
             or System.Text.Json.JsonException or NotSupportedException)
         {
             return ex.Message;

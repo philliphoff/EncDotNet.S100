@@ -1,5 +1,6 @@
 using EncDotNet.S100.Collections.ChartCatalogs;
 using EncDotNet.S100.Collections.Feeds;
+using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Noaa;
@@ -10,8 +11,7 @@ namespace EncDotNet.S100.Collections.Tests;
 
 /// <summary>
 /// Adding a Library source without the viewer's dialog (#792 chunk 3c): the
-/// core scopes and draft, for the kinds moved so far (local paths, NOAA ENC,
-/// USACE Inland ENC).
+/// core scopes and draft, for every kind the viewer's dialog adds.
 /// </summary>
 public sealed class LibrarySourceDraftTests
 {
@@ -93,13 +93,14 @@ public sealed class LibrarySourceDraftTests
     }
 
     [Fact]
-    public void Local_paths_are_drafted_by_kind_and_unmoved_kinds_are_not()
+    public void Local_paths_are_drafted_by_kind_and_catalogues_need_a_reader()
     {
         var folder = LibrarySourceDraft.ForPath(LibrarySourceKind.Folder, "/charts/harbour")!;
         Assert.Equal("harbour", folder.SuggestedName);
         Assert.IsType<LocalFolderSource>(folder.Build());
         Assert.False(folder.CanKeepDownloaded);
 
+        Assert.Throws<ArgumentException>(() => LibrarySourceDraft.ForPath(LibrarySourceKind.NoaaFeed, "/charts"));
         Assert.Null(LibrarySourceDraft.ForCatalogue(Known("noaa-s111"), Readers));
     }
 
@@ -229,5 +230,131 @@ public sealed class LibrarySourceDraftTests
         var source = Assert.IsType<S100CatalogueFeedSource>(draft.Build());
         Assert.Contains(source.Filter.Folders, f => f == area.Value || f == draft.Groups[0].Key);
         Assert.StartsWith(area.Label, source.DisplayName, StringComparison.Ordinal);
+    }
+
+    private static readonly DateTimeOffset Run = new(2026, 10, 1, 6, 0, 0, TimeSpan.Zero);
+
+    /// <summary>A summary per model: cbofs and tbofs with tiles, dbofs unreadable.</summary>
+    private static Task<IReadOnlyList<ForecastModelSummary>> Summaries(IReadOnlyList<ForecastModel> models) =>
+        Task.FromResult<IReadOnlyList<ForecastModelSummary>>(
+        [
+            .. models.Select(m => m.Id switch
+            {
+                "cbofs" => new ForecastModelSummary(m, Run, 58, 25_000_000, 40_000_000, null),
+                "tbofs" => new ForecastModelSummary(m, Run, 12, 5_000_000, 9_000_000, null),
+                _ => new ForecastModelSummary(m, null, 0, null, null, null, "offline"),
+            }),
+        ]);
+
+    [Fact]
+    public async Task A_forecast_feed_offers_its_models_and_shapes()
+    {
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(Run.AddHours(1));
+        var readers = new LibraryCatalogueReaders { ForecastModels = (_, models, _) => Summaries(models) };
+        var draft = LibrarySourceDraft.ForCatalogue(Known("noaa-s111"), readers, time)!;
+
+        Assert.Null(await draft.LoadAsync(Ct));
+
+        var scope = Assert.IsType<S100ForecastScope>(draft.Scope);
+        var models = Assert.Single(draft.Groups).Options;
+        Assert.Contains(models, o => o.Value == "dbofs" && o.Detail == "dbofs · catalogue unavailable");
+        var cbofs = models.Single(o => o.Value == "cbofs");
+        Assert.StartsWith("cbofs · every 6 h · 58 tiles", cbofs.Detail, StringComparison.Ordinal);
+        Assert.True(scope.HasShapes);
+        Assert.Null(draft.ForecastEndedNote);
+        Assert.Equal(new DateOnly(2026, 10, 1), scope.CatalogueDate);
+
+        // Runs are listed, not downloaded.
+        Assert.NotEqual(scope.SelectionSummary, draft.ScopeSummary);
+
+        scope.SelectedShape = scope.Shapes[1];
+        Assert.DoesNotContain("tiles", cbofs.Detail, StringComparison.Ordinal);
+        cbofs.IsSelected = true;
+        draft.IncludeAll = false;
+        Assert.Equal("NOAA S-111 Surface currents — Chesapeake Bay", draft.SuggestedName);
+
+        var source = Assert.IsType<S100ForecastFeedSource>(draft.Build());
+        Assert.Equal(ForecastShape.Regional, source.Shape);
+        Assert.Equal(["cbofs"], source.Models.Select(m => m.Id));
+        Assert.Equal("Chesapeake Bay", source.DisplayName);
+
+        // dbofs's run is unknown, so it may not have ended.
+        time.Advance(TimeSpan.FromDays(14));
+        Assert.Null(draft.ForecastEndedNote);
+    }
+
+    [Fact]
+    public async Task A_forecast_feed_whose_every_run_has_ended_says_so()
+    {
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(Run.AddDays(14));
+        var readers = new LibraryCatalogueReaders
+        {
+            ForecastModels = (_, models, _) => Task.FromResult<IReadOnlyList<ForecastModelSummary>>(
+                [.. models.Select(m => new ForecastModelSummary(m, Run, 1, 1_000, 1_000, null))]),
+        };
+        var draft = LibrarySourceDraft.ForCatalogue(Known("noaa-s111"), readers, time)!;
+
+        Assert.Null(await draft.LoadAsync(Ct));
+
+        Assert.StartsWith("Forecast ended ", draft.ForecastEndedNote, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_forecast_feed_whose_models_all_fail_is_not_loaded()
+    {
+        var readers = new LibraryCatalogueReaders
+        {
+            ForecastModels = (_, models, _) => Task.FromResult<IReadOnlyList<ForecastModelSummary>>(
+                [.. models.Select(m => new ForecastModelSummary(m, null, 0, null, null, null, "offline"))]),
+        };
+        var draft = LibrarySourceDraft.ForCatalogue(Known("noaa-s111"), readers)!;
+
+        Assert.Equal("offline", await draft.LoadAsync(Ct));
+        Assert.False(draft.IsLoaded);
+        Assert.False(draft.CanBuild);
+    }
+
+    [Fact]
+    public async Task A_secom_service_offers_its_products_syncs_small_selections_and_narrows_to_the_map_view()
+    {
+        var areas = new List<string?>();
+        var readers = new LibraryCatalogueReaders
+        {
+            Secom = (_, area, _) =>
+            {
+                areas.Add(area);
+                var bytes = area is null ? 500L * 1024 * 1024 : 5120;  // the whole service is too big to sync
+                return Task.FromResult(new SecomServiceDescription(
+                    [new CatalogFacetValue("S-124", area is null ? 90_000 : 5, bytes)], area is null ? 5_000 : 5, area is null ? 90_000 : 5,
+                    Truncated: area is null, Secom.SecomApiVersion.V2));
+            },
+            CurrentMapView = () => new GeoBounds(49, -124, 49.6, -122.8),
+        };
+        var draft = LibrarySourceDraft.ForCatalogue(Known("ccg-s124-secom"), readers)!;
+
+        Assert.Null(await draft.LoadAsync(Ct));
+
+        var scope = Assert.IsType<SecomScope>(draft.Scope);
+        Assert.Equal("S-124", Assert.Single(Assert.Single(draft.Groups).Options).Value);
+        Assert.True(draft.CanKeepDownloaded);
+        Assert.False(draft.KeepDownloaded);  // too big (and capped) to sync by default
+        Assert.NotNull(draft.KeepDownloadedHint);
+
+        Assert.True(scope.CanScopeToMapView);
+        scope.InMapView = true;
+        Assert.Null(await draft.LoadAsync(Ct));
+
+        Assert.Equal([null, "POLYGON((-124 49,-122.8 49,-122.8 49.6,-124 49.6,-124 49))"], areas);
+        Assert.True(draft.KeepDownloaded);  // now small: synced by default
+        Assert.StartsWith("Downloads ", draft.KeepDownloadedHint, StringComparison.Ordinal);
+        Assert.Equal("S-124 Navigational warnings — Canada — map area", draft.SuggestedName);
+
+        var source = Assert.IsType<SecomSource>(draft.Build());
+        Assert.True(source.Sync);
+        Assert.True(source.ShowOnMap);
+        Assert.Equal(areas[1], source.Filter.GeometryWkt);
+
+        draft.KeepDownloaded = false;
+        Assert.False(Assert.IsType<SecomSource>(draft.Build()).Sync);
     }
 }

@@ -18,9 +18,9 @@ namespace EncDotNet.S100.Mcp.Tools.Library;
 /// <para>
 /// There is no Timeline, so <c>validAt: view_time</c> matches nothing, and no
 /// viewport, so "load as you pan" opens the items now. Sources are added with
-/// a <see cref="LibrarySourceDraft"/>, which covers the kinds whose add logic
-/// has moved out of the viewer's dialog so far (#792 chunk 3c); other kinds are
-/// refused.
+/// a <see cref="LibrarySourceDraft"/>, in the same scopes and words as the
+/// viewer's Add-to-Library dialog; a SECOM service can be narrowed to a map
+/// view only when <see cref="LibraryCatalogueReaders.CurrentMapView"/> gives one.
 /// </para>
 /// <para>All members are safe to call from any thread.</para>
 /// </remarks>
@@ -285,7 +285,7 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
         }
 
         if (draft is null)
-            return Fail(new LibraryChangeRejected($"this host cannot add {kind} sources yet; add them in the viewer"));
+            return Fail(new LibraryChangeRejected($"this host cannot read {kind} catalogues"));
 
         // Online catalogues and collection manifests are read for their choices.
         if (draft.Scope is not null && await draft.LoadAsync(ct).ConfigureAwait(false) is { } error)
@@ -295,7 +295,15 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
         if (request.CollectionId is { } collectionId && !collections.Any(c => c.Id == collectionId))
             return Fail(new InvalidArgument("collectionId", "no such collection; call list_library_sources"));
         if (request.InMapView)
-            return Fail(new InvalidArgument("inMapView", "only a SECOM service can be narrowed to the map view"));
+        {
+            if (draft.Scope is not SecomScope secom)
+                return Fail(new InvalidArgument("inMapView", "only a SECOM service can be narrowed to the map view"));
+            if (!secom.CanScopeToMapView)
+                return Fail(new LibraryChangeRejected("there is no map view to narrow to"));
+            secom.InMapView = true;
+            if (await draft.LoadAsync(ct).ConfigureAwait(false) is { } areaError)
+                return Fail(new LibraryChangeRejected($"the service could not be read for the map view: {areaError}"));
+        }
 
         // Choices are applied for a preview too, so it shows the resulting scope.
         if (request.Choices is { Count: > 0 } choices)
@@ -319,7 +327,12 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
         }
 
         if (!string.IsNullOrWhiteSpace(request.Shape))
-            return Fail(new InvalidArgument("shape", "only a forecast feed has shapes; expected tiles or regional"));
+        {
+            var forecast = draft.Scope as S100ForecastScope;
+            if (forecast?.Shapes.FirstOrDefault(o => Matches(o.Value, o.Label, request.Shape)) is not { } shape)
+                return Fail(new InvalidArgument("shape", "only a forecast feed has shapes; expected tiles or regional"));
+            forecast.SelectedShape = shape;
+        }
         if (!string.IsNullOrWhiteSpace(request.Resolution))
         {
             var resolution = (draft.Scope as S100CatalogueScope)?.Resolutions.FirstOrDefault(o => Matches(o.Value, o.Label, request.Resolution));
@@ -353,12 +366,14 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
         draft.Title,
         draft.CatalogueDetail,
         draft.IsCatalogueStale,
-        null,
+        draft.ForecastEndedNote,
         draft.ScopeSummary,
         [.. draft.Groups.Select(group => new AddChoiceGroup(
             group.Title,
             [.. group.Options.Select(o => new AddChoiceOption(o.Value, o.Label, string.IsNullOrEmpty(o.Detail) ? null : o.Detail, o.IsSelected))]))],
-        [],
+        draft.Scope is S100ForecastScope forecast
+            ? [.. forecast.Shapes.Select(o => new AddChoiceOption(o.Value ?? string.Empty, o.Label, null, o == forecast.SelectedShape))]
+            : [],
         draft.Scope is S100CatalogueScope { HasResolutions: true } catalogue
             ? [.. catalogue.Resolutions.Select(o => new AddChoiceOption(o.Value ?? string.Empty, o.Label, null, o == catalogue.SelectedResolution))]
             : [],
@@ -366,7 +381,7 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
         collectionId,
         sourceId,
         draft.CanKeepDownloaded ? draft.KeepDownloaded : null,
-        null);
+        draft.KeepDownloadedHint);
 
     private static bool Matches(string? value, string label, string wanted)
     {
