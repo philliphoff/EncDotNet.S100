@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -22,10 +23,10 @@ internal sealed partial class AddToLibraryDialogViewModel
     private ResolutionOptionViewModel? _selectedForecastShape;
 
     /// <summary>True when adding a forecast feed.</summary>
-    public bool IsS100Forecast => _kind == AddToLibraryKind.S100Forecast;
+    public bool IsS100Forecast => _kind == LibrarySourceKind.S100Forecast;
 
     /// <summary>The forecast feed's models (the one facet).</summary>
-    public ObservableCollection<FacetOptionViewModel> ForecastModels { get; } = [];
+    public ObservableCollection<LibraryChoice> ForecastModels { get; } = [];
 
     /// <summary>How runs download: tiles (the default), or one file per model.</summary>
     public IReadOnlyList<ResolutionOptionViewModel> ForecastShapes { get; } =
@@ -107,7 +108,7 @@ internal sealed partial class AddToLibraryDialogViewModel
             ForecastModels.Clear();
             foreach (var summary in _forecastModels)
             {
-                var option = new FacetOptionViewModel(summary.Model.Id, summary.Model.Name, string.Empty) { Note = OverlapNote(summary) };
+                var option = new LibraryChoice(summary.Model.Id, summary.Model.Name, string.Empty) { Note = OverlapNote(summary) };
                 option.PropertyChanged += OnFacetChanged;
                 ForecastModels.Add(option);
             }

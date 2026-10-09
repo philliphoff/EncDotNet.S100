@@ -154,13 +154,46 @@ public sealed class HeadlessLibraryToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task Adding_a_source_is_refused_until_the_add_logic_is_shared()
+    public async Task A_folder_is_previewed_then_added_by_path()
     {
-        var result = await new AddLibrarySourceTool(_host).InvokeAsync(
-            new AddSourceRequest("noaa-enc", null, null, null, null, null, null, null, null, null, Preview: true), Ct);
+        var folder = Path.Combine(_root, "harbour");
+        Directory.CreateDirectory(folder);
+        File.Copy(TestData("US5MA1BO.000"), Path.Combine(folder, "US5MA1BO.000"));
+        var tool = new AddLibrarySourceTool(_host);
 
-        Assert.True(result.TryGetError(out var error));
-        Assert.Equal("library_change_rejected", error!.Code);
+        var preview = Value(await tool.InvokeAsync(
+            new AddSourceRequest(null, folder, null, null, null, null, null, null, null, null, Preview: true), Ct));
+        Assert.False(preview.Added);
+        Assert.Equal("Folder", preview.Kind);
+        Assert.Null(preview.CatalogueDetail);
+        Assert.DoesNotContain(_library.Collections, c => !c.IsSession);
+
+        var added = Value(await tool.InvokeAsync(
+            new AddSourceRequest(null, folder, null, null, null, null, null, "Harbour charts", null, null, Preview: false), Ct));
+        Assert.True(added.Added);
+        Assert.NotNull(added.SourceId);
+        await _library.WhenIdle().WaitAsync(TimeSpan.FromSeconds(30), Ct);
+
+        var collection = Assert.Single(_library.Collections, c => !c.IsSession);
+        Assert.Equal("Harbour charts", collection.Definition.Name);
+        Assert.Equal(added.CollectionId, collection.Id);
+        Assert.Equal(1, collection.ItemCount);
+    }
+
+    [Fact]
+    public async Task Kinds_not_yet_shared_and_catalogues_without_a_reader_are_refused()
+    {
+        var tool = new AddLibrarySourceTool(_host);
+
+        // S-111 forecasts still add only in the viewer's dialog (#792 chunk 3c).
+        Assert.True((await tool.InvokeAsync(
+            new AddSourceRequest("noaa-s111", null, null, null, null, null, null, null, null, null, Preview: true), Ct)).TryGetError(out var forecast));
+        Assert.Equal("library_change_rejected", forecast!.Code);
+
+        // This host was given no catalogue readers.
+        Assert.True((await tool.InvokeAsync(
+            new AddSourceRequest("noaa-enc", null, null, null, null, null, null, null, null, null, Preview: true), Ct)).TryGetError(out var noaa));
+        Assert.Equal("library_change_rejected", noaa!.Code);
     }
 
     [Fact]
