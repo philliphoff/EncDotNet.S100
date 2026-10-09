@@ -1,7 +1,8 @@
 # EncDotNet.S100.Cli (`s100`)
 
 This project builds `s100`, the cross-platform command-line tool for S-100
-datasets. `s100` renders datasets and exchange sets to images, and inspects,
+datasets. `s100` renders datasets and exchange sets to images and web-map
+tile sets, and inspects,
 identifies, validates, converts and serves them. It uses the same portrayal and
 validation code as the libraries and SoundCharts, with a headless Skia
 renderer, so it runs in scripts and CI without a UI.
@@ -58,7 +59,7 @@ cache the result in the local application-data folder. See
 |---|---|
 | [`Commands/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tools/EncDotNet.S100.Cli/Commands) | One Spectre.Console.Cli command class for each command, with its settings. |
 | [`Infrastructure/CliApp.cs`](https://github.com/philliphoff/EncDotNet.S100/blob/main/tools/EncDotNet.S100.Cli/Infrastructure/CliApp.cs) | Registers each command with its description and examples. |
-| [`Infrastructure/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tools/EncDotNet.S100.Cli/Infrastructure) | Shared code: input resolution for datasets, layers and exchange sets, the headless MCP session, feed publishing and the update check. |
+| [`Infrastructure/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tools/EncDotNet.S100.Cli/Infrastructure) | Shared code: input resolution for datasets, layers and exchange sets, the headless MCP session, feed publishing, the tile containers (`Tiles/`) and the update check. |
 | [`Skill/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tools/EncDotNet.S100.Cli/Skill) | Guidance that `s100 --skill` adds to the generated command reference. |
 | [`tests/EncDotNet.S100.Cli.Tests`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tests/EncDotNet.S100.Cli.Tests) | Tests for every command. |
 

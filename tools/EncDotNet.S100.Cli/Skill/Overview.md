@@ -11,6 +11,7 @@ command offers it, and treat paths as local filesystem paths.
 | Validate a dataset or verify an exchange set | `s100 validate` |
 | Query features or coverage values at a position | `s100 identify` |
 | Render one dataset, multiple layers, or an exchange set | `s100 render` |
+| Write XYZ raster tiles (folder or PMTiles) for a web map | `s100 tiles` |
 | Convert an S-57 base cell to S-101 (or an inland ENC cell to S-401) | `s100 s57 convert` |
 | Serve the read-only query tools to an MCP client over stdio | `s100 mcp serve` |
 | Publish datasets to other machines' viewers over HTTP | `s100 feed serve` |
@@ -27,7 +28,8 @@ command offers it, and treat paths as local filesystem paths.
   a directory, `CATALOG.XML`, or a ZIP whose root contains `CATALOG.XML`.
 - Coordinates are WGS 84 longitude/latitude unless an option explicitly says
   otherwise. `identify` takes separate latitude and longitude options;
-  `render --bbox` and `--center` use longitude before latitude.
+  `render --bbox`, `tiles --bbox` and `--center` use longitude before
+  latitude.
 - S-101 sibling sequential updates (`.001`, `.002`, and so on) are normally
   discovered beside a base `.000` cell. Read each command's guidance because
   composite rendering deliberately handles updates differently.
