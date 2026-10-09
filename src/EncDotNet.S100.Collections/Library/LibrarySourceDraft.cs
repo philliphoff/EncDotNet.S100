@@ -1,5 +1,6 @@
 using EncDotNet.S100.Collections.ChartCatalogs;
 using EncDotNet.S100.Collections.Feeds;
+using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Noaa;
 using EncDotNet.S100.Collections.RemoteCatalogues;
@@ -30,6 +31,15 @@ public sealed record LibraryCatalogueReaders
 
     /// <summary>Lists a remote S-100 catalogue's folders for their file sizes; sizes stay unknown without.</summary>
     public Func<RemoteS100Catalogue, IReadOnlyList<string>, CancellationToken, Task<IReadOnlyDictionary<Uri, S3Object>?>>? ListS100Folders { get; init; }
+
+    /// <summary>Reads each forecast model's latest run.</summary>
+    public Func<Uri, IReadOnlyList<ForecastModel>, CancellationToken, Task<IReadOnlyList<ForecastModelSummary>>>? ForecastModels { get; init; }
+
+    /// <summary>Reads what a SECOM service offers, optionally within an area (WKT).</summary>
+    public Func<Uri, string?, CancellationToken, Task<SecomServiceDescription>>? Secom { get; init; }
+
+    /// <summary>The map view a SECOM service can be narrowed to; it cannot be without.</summary>
+    public Func<GeoBounds?>? CurrentMapView { get; init; }
 }
 
 /// <summary>
@@ -38,13 +48,10 @@ public sealed record LibraryCatalogueReaders
 /// name it suggests, and the source it makes. Uses the same scopes and words
 /// as the viewer's Add-to-Library dialog.
 /// </summary>
-/// <remarks>
-/// Kinds move here from the dialog one at a time; <see cref="IsSupported"/>
-/// says which a draft can add so far.
-/// </remarks>
 public sealed class LibrarySourceDraft
 {
     private readonly TimeProvider _time;
+    private bool _keepDownloaded;
 
     private LibrarySourceDraft(LibrarySourceKind kind, string? path, KnownCatalogueSource? known, LibraryCatalogueScope? scope, TimeProvider? time)
     {
@@ -55,23 +62,20 @@ public sealed class LibrarySourceDraft
         _time = time ?? TimeProvider.System;
     }
 
-    /// <summary>True for the kinds a draft can add so far.</summary>
-    /// <param name="kind">The kind.</param>
-    public static bool IsSupported(LibrarySourceKind kind) => kind is not (LibrarySourceKind.S100Forecast or LibrarySourceKind.Secom);
-
-    /// <summary>A draft for a local path, or null when its kind is not supported yet.</summary>
+    /// <summary>A draft for a local path.</summary>
     /// <param name="kind">What the path is.</param>
     /// <param name="path">The full path.</param>
-    public static LibrarySourceDraft? ForPath(LibrarySourceKind kind, string path)
+    /// <exception cref="ArgumentException"><paramref name="kind"/> is an online kind.</exception>
+    public static LibrarySourceDraft ForPath(LibrarySourceKind kind, string path)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
-        if (!IsSupported(kind) || LibrarySourceKinds.IsOnline(kind))
-            return null;
+        if (LibrarySourceKinds.IsOnline(kind))
+            throw new ArgumentException($"A {kind} source is not added by path.", nameof(kind));
         var scope = kind == LibrarySourceKind.LocalManifest ? new CollectionManifestScope(path) : null;
         return new LibrarySourceDraft(kind, path, null, scope, null);
     }
 
-    /// <summary>A draft for a known online catalogue, or null when its kind is not supported yet or has no reader.</summary>
+    /// <summary>A draft for a known online catalogue, or null when its kind has no reader.</summary>
     /// <param name="known">The catalogue.</param>
     /// <param name="readers">Reads catalogues.</param>
     /// <param name="time">The clock (catalogue age); the system clock when null.</param>
@@ -88,6 +92,9 @@ public sealed class LibrarySourceDraft
             LibrarySourceKind.S100Feed when readers.S100Feed is { } feed => new S100FeedScope(uri, feed),
             LibrarySourceKind.CommunityFeed when readers.CommunityList is { } list => new CommunityListScope(uri, list),
             LibrarySourceKind.S100Catalogue when readers.S100Catalogue is { } catalogue => new S100CatalogueScope(uri, catalogue, readers.ListS100Folders),
+            LibrarySourceKind.S100Forecast when readers.ForecastModels is { } forecast && known.Models.Count > 0
+                => new S100ForecastScope(uri, known.Models, forecast, time),
+            LibrarySourceKind.Secom when readers.Secom is { } secom => new SecomScope(uri, secom, readers.CurrentMapView),
             _ => null,
         };
         return scope is null ? null : new LibrarySourceDraft(kind, null, known, scope, time);
@@ -144,11 +151,30 @@ public sealed class LibrarySourceDraft
         ? LibrarySourceText.SuggestedName(feed, Scope.IsEverything, () => Scope.DescribeSelection()!)
         : LibrarySourceText.DefaultName(Path);
 
-    /// <summary>True when the source is online, so its items can be kept downloaded (#809).</summary>
-    public bool CanKeepDownloaded => LibrarySourceKinds.IsOnline(Kind) && Kind != LibrarySourceKind.Secom;
+    /// <summary>True when the source is online, so its items can be kept downloaded (#809; a SECOM service's sync, #807).</summary>
+    public bool CanKeepDownloaded => LibrarySourceKinds.IsOnline(Kind);
 
-    /// <summary>True to keep the source's items downloaded and current on each refresh.</summary>
-    public bool KeepDownloaded { get; set; }
+    /// <summary>
+    /// True to keep the source's items downloaded and current on each refresh.
+    /// Off by default, except for a SECOM service whose selection is small (<see cref="SecomScope.Sync"/>).
+    /// </summary>
+    public bool KeepDownloaded
+    {
+        get => Scope is SecomScope secom ? secom.Sync : _keepDownloaded;
+        set
+        {
+            if (Scope is SecomScope secom)
+                secom.Sync = value;
+            else
+                _keepDownloaded = value;
+        }
+    }
+
+    /// <summary>For a SECOM service, what keeping it downloaded means ("Downloads 9.8 MB now"); otherwise null.</summary>
+    public string? KeepDownloadedHint => (Scope as SecomScope)?.SyncHint;
+
+    /// <summary>For a forecast feed whose every run has ended, a note saying so; otherwise null.</summary>
+    public string? ForecastEndedNote => (Scope as S100ForecastScope)?.ForecastEndedNote;
 
     /// <summary>Whether the source is shown on the map; null for the kind's default.</summary>
     public bool? ShowOnMap { get; set; }
@@ -178,7 +204,8 @@ public sealed class LibrarySourceDraft
             LibrarySourceKind.LocalManifest => Scope!.Build(id, newCollectionName),
             _ => Scope!.Build(id, LibrarySourceText.FeedName(Kind, Known)),
         };
-        if (CanKeepDownloaded && KeepDownloaded)
+        // A SECOM scope builds its own sync choice.
+        if (CanKeepDownloaded && Scope is not SecomScope && KeepDownloaded)
             source = source with { Sync = true };
         return ShowOnMap is { } show ? source with { ShowOnMap = show } : source;
     }

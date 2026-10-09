@@ -3112,21 +3112,6 @@
   <data name="Library_SecomInMapView" xml:space="preserve">
     <value>Only objects in the current map view</value>
   </data>
-  <data name="Library_SecomSyncSizeFormat" xml:space="preserve">
-    <value>Downloads {0} now</value>
-  </data>
-  <data name="Library_SecomSyncTooLargeFormat" xml:space="preserve">
-    <value>{0} — too much to sync; narrow it to the map view</value>
-  </data>
-  <data name="Library_SecomSyncTruncated" xml:space="preserve">
-    <value>The service offers more than can be listed; narrow it to the map view</value>
-  </data>
-  <data name="Library_SecomAreaNameFormat" xml:space="preserve">
-    <value>{0} (map area)</value>
-  </data>
-  <data name="Library_SecomMapArea" xml:space="preserve">
-    <value>map area</value>
-  </data>
   <data name="Menu_LibraryKeepDownloaded" xml:space="preserve">
     <value>Keep downloaded</value>
   </data>
@@ -3228,18 +3213,6 @@
   </data>
   <data name="Library_Format_Secom" xml:space="preserve">
     <value>SECOM service</value>
-  </data>
-  <data name="Library_SecomFacetDetailFormat" xml:space="preserve">
-    <value>{0:N0} objects · {1}</value>
-  </data>
-  <data name="Library_SecomSelectionAllFormat" xml:space="preserve">
-    <value>All {0:N0} objects · {1}</value>
-  </data>
-  <data name="Library_SecomSelectionFormat" xml:space="preserve">
-    <value>{0:N0} objects · {1}</value>
-  </data>
-  <data name="Library_SecomSelectionTruncatedFormat" xml:space="preserve">
-    <value>First {0:N0} of {1:N0} objects · {2} — narrow to an area to see the rest</value>
   </data>
   <data name="Button_Back" xml:space="preserve">
     <value>Back</value>
@@ -3429,48 +3402,8 @@
   <data name="Library_BulkCheckForRuns" xml:space="preserve">
     <value>Check for new runs</value>
   </data>
-  <data name="Wizard_ForecastModelsTitle" xml:space="preserve">
-    <value>Models</value>
-  </data>
   <data name="Wizard_ForecastShapeTitle" xml:space="preserve">
     <value>Download as</value>
-  </data>
-  <data name="Wizard_ForecastShapeTiles" xml:space="preserve">
-    <value>Tiles</value>
-  </data>
-  <data name="Wizard_ForecastShapeRegional" xml:space="preserve">
-    <value>One file per model</value>
-  </data>
-  <data name="Wizard_ForecastShapeTilesHint" xml:space="preserve">
-    <value>Tiles use the S-102 grid and can load on pan</value>
-  </data>
-  <data name="Wizard_ForecastShapeRegionalHint" xml:space="preserve">
-    <value>One file covers the model's whole water body</value>
-  </data>
-  <data name="Wizard_OverlapsFormat" xml:space="preserve">
-    <value>Overlaps {0}</value>
-    <comment>{0}: the smaller models this regional model covers, e.g. "cbofs, dbofs"</comment>
-  </data>
-  <data name="Wizard_ModelUnavailableFormat" xml:space="preserve">
-    <value>{0} · catalogue unavailable</value>
-    <comment>{0}: model code</comment>
-  </data>
-  <data name="Wizard_CadenceDaily" xml:space="preserve">
-    <value>daily</value>
-  </data>
-  <data name="Wizard_CadenceHoursFormat" xml:space="preserve">
-    <value>every {0:N0} h</value>
-  </data>
-  <data name="Wizard_OneFile" xml:space="preserve">
-    <value>one file</value>
-  </data>
-  <data name="Wizard_ModelsPerRunFormat" xml:space="preserve">
-    <value>{0:N0} models · {1} per run</value>
-    <comment>{1}: the size of one run of the chosen models</comment>
-  </data>
-  <data name="Wizard_ModelsPerRoundFormat" xml:space="preserve">
-    <value>{0:N0} models · {1} per round of runs</value>
-    <comment>{1}: the size of one run of every model</comment>
   </data>
   <data name="Wizard_Review_UpdatesForecast" xml:space="preserve">
     <value>Manual. Refresh looks for a newer run, and Update downloads it and replaces the run you have. Runs past their forecast window are marked Expired.</value>
@@ -3513,10 +3446,6 @@
   </data>
   <data name="Library_Chip_Pilot" xml:space="preserve">
     <value>Pilot</value>
-  </data>
-  <data name="Wizard_ForecastEndedFormat" xml:space="preserve">
-    <value>Forecast ended {0}; no newer run published. Once downloaded, it shows as Expired until NOAA publishes a new run, which Refresh will find.</value>
-    <comment>{0}: the date the latest run's forecast window ended</comment>
   </data>
   <data name="Menu_LibraryAddCurrents" xml:space="preserve">
     <value>Add currents for this area</value>
