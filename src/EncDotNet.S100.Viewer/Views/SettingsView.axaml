@@ -72,6 +72,18 @@
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
 
+        <Style Selector="TextBlock.settingsNavStatus">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.settingsNavStatus.warning">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="TextBlock.settingsNavStatus.destructive">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+
         <!-- Page layout shared by Views/Settings/*SettingsPage. -->
         <Style Selector="StackPanel.settingsPage">
             <Setter Property="Spacing" Value="16" />
@@ -129,6 +141,24 @@
                  AutomationProperties.AutomationId="Settings.Category.Integrations"
                  AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Integrations}">
             <settings:IntegrationsSettingsPage />
+        </TabItem>
+        <!-- The status line under the label is the Settings warning for an
+             identity that ends within 30 days or was revoked (#845 A2). -->
+        <TabItem AutomationProperties.AutomationId="Settings.Category.Keys"
+                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Keys}"
+                 AutomationProperties.HelpText="{Binding KeysAndCertificates.StatusText}"
+                 IsVisible="{Binding KeysAndCertificates, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TabItem.Header>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="{x:Static loc:Strings.Settings_Category_Keys}" />
+                    <TextBlock Classes="settingsNavStatus"
+                               Classes.destructive="{Binding KeysAndCertificates.StatusIsDestructive, FallbackValue=False}"
+                               Classes.warning="{Binding KeysAndCertificates.StatusIsWarning, FallbackValue=False}"
+                               Text="{Binding KeysAndCertificates.StatusText}"
+                               IsVisible="{Binding KeysAndCertificates.HasStatus, FallbackValue=False}" />
+                </StackPanel>
+            </TabItem.Header>
+            <settings:KeysAndCertificatesSettingsPage DataContext="{Binding KeysAndCertificates}" />
         </TabItem>
         <TabItem Header="{x:Static loc:Strings.Settings_Category_Advanced}"
                  AutomationProperties.AutomationId="Settings.Category.Advanced"

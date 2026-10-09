@@ -1039,7 +1039,7 @@
     <value>Reset all settings?</value>
   </data>
   <data name="Settings_ResetAll_ConfirmMessage" xml:space="preserve">
-    <value>This returns the viewer to a clean, just-installed state. All settings and recently-opened files are reset and every on-disk cache is deleted. The viewer will restart. This cannot be undone.</value>
+    <value>This returns the viewer to a clean, just-installed state. All settings and recently-opened files are reset, imported identities and their private keys are deleted, and every on-disk cache is deleted. The viewer will restart. This cannot be undone.</value>
   </data>
   <data name="Settings_ResetAll_ConfirmButton" xml:space="preserve">
     <value>Reset everything</value>
@@ -3960,5 +3960,465 @@
   </data>
   <data name="Settings_Category_Advanced_Help" xml:space="preserve">
     <value>Renderer tuning and maintenance. Most people never need to change these.</value>
+  </data>
+  <data name="Settings_Category_Keys" xml:space="preserve">
+    <value>Keys &amp; certificates</value>
+  </data>
+  <data name="Settings_Category_Keys_Help" xml:space="preserve">
+    <value>Everything SoundCharts uses to prove who you are, decide who to trust, and open protected charts.</value>
+  </data>
+  <data name="Keys_Tab_Identities" xml:space="preserve">
+    <value>Identities</value>
+  </data>
+  <data name="Keys_Tab_Authorities" xml:space="preserve">
+    <value>Trusted authorities</value>
+  </data>
+  <data name="Keys_Tab_SystemIds" xml:space="preserve">
+    <value>System IDs</value>
+  </data>
+  <data name="Label_KeysTabs" xml:space="preserve">
+    <value>Keys and certificates tabs</value>
+  </data>
+  <data name="Keys_Identities_Intro" xml:space="preserve">
+    <value>SECOM identities: a certificate and its private key, issued to you, your vessel or your organisation on the MCP portal. SoundCharts presents the one in use to SECOM services that ask for a certificate.</value>
+  </data>
+  <data name="Keys_ImportIdentity" xml:space="preserve">
+    <value>Import identity…</value>
+  </data>
+  <data name="Keys_ImportIdentity_Help" xml:space="preserve">
+    <value>Import a .p12 or PEM certificate and private key from the MCP management portal</value>
+  </data>
+  <data name="Keys_Identities_EmptyTitle" xml:space="preserve">
+    <value>No identities</value>
+  </data>
+  <data name="Keys_Identities_EmptyBody" xml:space="preserve">
+    <value>Open SECOM services work without one. Some services need a certificate from your organisation. Get it from the MCP management portal, then import the .p12 or PEM files.</value>
+  </data>
+  <data name="Keys_Identities_NoteFormat" xml:space="preserve">
+    <value>Private keys stay in {0}. After import they're never shown, copied or exported. The settings file stores only references: thumbprint, MRN, name and end date.</value>
+    <comment>{0}: where keys are kept, e.g. "the Keychain" (Keys_Store_*).</comment>
+  </data>
+  <data name="Keys_Store_MacOS" xml:space="preserve">
+    <value>the Keychain</value>
+  </data>
+  <data name="Keys_Store_Windows" xml:space="preserve">
+    <value>the Windows certificate store</value>
+  </data>
+  <data name="Keys_Store_Linux" xml:space="preserve">
+    <value>.NET's certificate store in your home folder (~/.dotnet/corefx/cryptography/x509stores), protected only by your account's file permissions</value>
+  </data>
+  <data name="Keys_Store_Memory" xml:space="preserve">
+    <value>memory for this run only, because settings are not being saved</value>
+  </data>
+  <data name="Keys_Revoked_TitleFormat" xml:space="preserve">
+    <value>{0}'s certificate was revoked</value>
+    <comment>{0}: the identity's name.</comment>
+  </data>
+  <data name="Keys_Revoked_BodyFormat" xml:space="preserve">
+    <value>{0} reported it revoked on {1}. SoundCharts has stopped using it, and SECOM services that asked for it now connect anonymously.</value>
+    <comment>{0}: the issuing CA; {1}: the date.</comment>
+  </data>
+  <data name="Keys_ChooseAnother" xml:space="preserve">
+    <value>Choose another identity…</value>
+  </data>
+  <data name="Keys_ChooseAnother_Help" xml:space="preserve">
+    <value>Use another stored identity or import a new one</value>
+  </data>
+  <data name="Keys_StatusLine_EndsFormat" xml:space="preserve">
+    <value>{0}'s certificate {1}</value>
+    <comment>{0}: the identity's name; {1}: "ends in 12 days" (lower case).</comment>
+  </data>
+  <data name="Keys_StatusLine_EndedFormat" xml:space="preserve">
+    <value>{0}'s certificate has ended</value>
+    <comment>{0}: the identity's name.</comment>
+  </data>
+  <data name="Keys_Status_EndsToday" xml:space="preserve">
+    <value>Ends today</value>
+  </data>
+  <data name="Keys_Status_EndsInOneDay" xml:space="preserve">
+    <value>Ends in 1 day</value>
+  </data>
+  <data name="Keys_Status_EndsInDaysFormat" xml:space="preserve">
+    <value>Ends in {0} days</value>
+  </data>
+  <data name="Keys_Status_Ended" xml:space="preserve">
+    <value>Ended</value>
+  </data>
+  <data name="Keys_Status_Revoked" xml:space="preserve">
+    <value>Revoked</value>
+  </data>
+  <data name="Keys_Status_NotYetValid" xml:space="preserve">
+    <value>Not valid yet</value>
+  </data>
+  <data name="Keys_Status_Expired" xml:space="preserve">
+    <value>Expired</value>
+  </data>
+  <data name="Keys_Status_Off" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="Keys_Kind_Vessel" xml:space="preserve">
+    <value>VESSEL</value>
+  </data>
+  <data name="Keys_Kind_Organisation" xml:space="preserve">
+    <value>ORGANISATION</value>
+  </data>
+  <data name="Keys_Kind_Device" xml:space="preserve">
+    <value>DEVICE</value>
+  </data>
+  <data name="Keys_Kind_Service" xml:space="preserve">
+    <value>SERVICE</value>
+  </data>
+  <data name="Keys_Kind_Person" xml:space="preserve">
+    <value>PERSON</value>
+  </data>
+  <data name="Keys_Kind_Test" xml:space="preserve">
+    <value>TEST</value>
+  </data>
+  <data name="Keys_Badge_InUse" xml:space="preserve">
+    <value>IN USE</value>
+  </data>
+  <data name="Keys_Badge_ThisRun" xml:space="preserve">
+    <value>THIS RUN ONLY</value>
+  </data>
+  <data name="Keys_Badge_BuiltIn" xml:space="preserve">
+    <value>BUILT IN</value>
+  </data>
+  <data name="Keys_Badge_Secom" xml:space="preserve">
+    <value>SECOM</value>
+  </data>
+  <data name="Keys_Identity_SubFormat" xml:space="preserve">
+    <value>Issued by {0} · ends {1} · {2}</value>
+    <comment>{0}: the issuing CA; {1}: the end date; {2}: Keys_Usage_*.</comment>
+  </data>
+  <data name="Keys_Usage_InUse" xml:space="preserve">
+    <value>used for SECOM services that ask for a certificate</value>
+  </data>
+  <data name="Keys_Usage_NotInUse" xml:space="preserve">
+    <value>not in use</value>
+  </data>
+  <data name="Keys_Usage_Overridden" xml:space="preserve">
+    <value>chosen for use; the command line overrides it this run</value>
+  </data>
+  <data name="Keys_Identity_FromCommandLine" xml:space="preserve">
+    <value>From command line</value>
+  </data>
+  <data name="Keys_Identity_FromMcp" xml:space="preserve">
+    <value>Set through the MCP server</value>
+  </data>
+  <data name="Keys_Identity_TemporarySubFormat" xml:space="preserve">
+    <value>Issued by {0} · ends {1} · used for this run only, not saved</value>
+    <comment>{0}: the issuing CA; {1}: the end date.</comment>
+  </data>
+  <data name="Keys_UnknownIssuer" xml:space="preserve">
+    <value>an unknown authority</value>
+  </data>
+  <data name="Keys_ReferenceLabel" xml:space="preserve">
+    <value>Reference for CLI and MCP server</value>
+  </data>
+  <data name="Keys_Action_Details" xml:space="preserve">
+    <value>Details</value>
+  </data>
+  <data name="Keys_Action_Replace" xml:space="preserve">
+    <value>Replace…</value>
+  </data>
+  <data name="Keys_Action_Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Keys_Action_Use" xml:space="preserve">
+    <value>Use</value>
+  </data>
+  <data name="Keys_Action_StopUsing" xml:space="preserve">
+    <value>Stop using</value>
+  </data>
+  <data name="Keys_Action_View" xml:space="preserve">
+    <value>View</value>
+  </data>
+  <data name="Keys_Action_TurnOff" xml:space="preserve">
+    <value>Turn off</value>
+  </data>
+  <data name="Keys_Action_TurnOn" xml:space="preserve">
+    <value>Turn on</value>
+  </data>
+  <data name="Keys_Authorities_Intro" xml:space="preserve">
+    <value>Who SoundCharts trusts to vouch for others. A signer counts as trusted, not just valid, only if it chains to one of these. MCP roots are built in because operating systems don't include them.</value>
+  </data>
+  <data name="Keys_AddAuthority" xml:space="preserve">
+    <value>Add from file…</value>
+  </data>
+  <data name="Keys_AddAuthority_Help" xml:space="preserve">
+    <value>Trust the root certificate in a PEM file</value>
+  </data>
+  <data name="Keys_Authorities_Note" xml:space="preserve">
+    <value>Self-signed sample data still opens. Its badge reads "Signed · untrusted source". Authorities for protected datasets (Part 15) will be listed here too.</value>
+  </data>
+  <data name="Keys_Authority_SubFormat" xml:space="preserve">
+    <value>{0} · valid {1} to {2} · {3}</value>
+    <comment>{0}: the organisation; {1}, {2}: dates; {3}: Keys_Authority_*Origin.</comment>
+  </data>
+  <data name="Keys_Authority_BuiltInOrigin" xml:space="preserve">
+    <value>built in, can be turned off but not removed</value>
+  </data>
+  <data name="Keys_Authority_AddedOriginFormat" xml:space="preserve">
+    <value>added from file {0}</value>
+    <comment>{0}: the date it was added.</comment>
+  </data>
+  <data name="Keys_ExpiredAuthority_Title" xml:space="preserve">
+    <value>An authority certificate has expired</value>
+  </data>
+  <data name="Keys_ExpiredAuthority_BodyFormat" xml:space="preserve">
+    <value>{0} expired {1}. Servers and signers that chain to it are no longer trusted.</value>
+    <comment>{0}: the authority's name; {1}: the date.</comment>
+  </data>
+  <data name="Keys_ExpiredAuthority_Action" xml:space="preserve">
+    <value>Replace…</value>
+  </data>
+  <data name="Keys_ExpiredAuthority_Action_Help" xml:space="preserve">
+    <value>Add a current certificate for this authority from a PEM file</value>
+  </data>
+  <data name="Keys_FingerprintShortFormat" xml:space="preserve">
+    <value>SHA-256 {0} … {1}</value>
+    <comment>{0}: the first 12 hex digits in groups of four; {1}: the last four.</comment>
+  </data>
+  <data name="Keys_SystemIds_Intro" xml:space="preserve">
+    <value>For protected datasets (Part 15). Permits are made for a system ID. SoundCharts will try each one until a cell opens.</value>
+  </data>
+  <data name="Keys_SystemIds_EmptyTitle" xml:space="preserve">
+    <value>No system ID yet</value>
+  </data>
+  <data name="Keys_SystemIds_EmptyBody" xml:space="preserve">
+    <value>Protected charts are tied to a computer. Add the system ID your permits were made for, or generate one for this computer.</value>
+  </data>
+  <data name="Keys_SystemIds_SetUp" xml:space="preserve">
+    <value>Set up this computer…</value>
+  </data>
+  <data name="Keys_SystemIds_SetUp_Help" xml:space="preserve">
+    <value>Coming with protected-dataset support</value>
+  </data>
+  <data name="Keys_Import_Title" xml:space="preserve">
+    <value>Import identity</value>
+  </data>
+  <data name="Keys_Import_ReplaceTitle" xml:space="preserve">
+    <value>Replace identity</value>
+  </data>
+  <data name="Keys_Import_StepFormat" xml:space="preserve">
+    <value>Step {0} of 3 · {1}</value>
+    <comment>{0}: the step number; {1}: Keys_Import_Step*.</comment>
+  </data>
+  <data name="Keys_Import_StepFile" xml:space="preserve">
+    <value>File</value>
+  </data>
+  <data name="Keys_Import_StepCheck" xml:space="preserve">
+    <value>Check</value>
+  </data>
+  <data name="Keys_Import_StepUse" xml:space="preserve">
+    <value>Use</value>
+  </data>
+  <data name="Keys_Import_Unlock" xml:space="preserve">
+    <value>Unlock</value>
+  </data>
+  <data name="Keys_Import_Import" xml:space="preserve">
+    <value>Import</value>
+  </data>
+  <data name="Keys_Import_Done" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="Keys_Import_Back" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="Keys_Import_FileIntro" xml:space="preserve">
+    <value>Use the files from the MCP management portal: the .p12, or the PEM certificate and private key together.</value>
+  </data>
+  <data name="Keys_Import_Pkcs12Kind" xml:space="preserve">
+    <value>PKCS #12 · contains a certificate and a private key</value>
+  </data>
+  <data name="Keys_Import_PemKind" xml:space="preserve">
+    <value>PEM · a certificate and its private key</value>
+  </data>
+  <data name="Keys_Import_Change" xml:space="preserve">
+    <value>Change…</value>
+  </data>
+  <data name="Keys_Import_Change_Help" xml:space="preserve">
+    <value>Choose another identity file</value>
+  </data>
+  <data name="Keys_Import_Password" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="Keys_Import_Password_Help" xml:space="preserve">
+    <value>The password of the .p12 file or encrypted key, if it has one</value>
+  </data>
+  <data name="Keys_Import_PasswordFootnote" xml:space="preserve">
+    <value>The portal shows the private key only once. If you no longer have these files, you'll need a new certificate from your organisation.</value>
+  </data>
+  <data name="Keys_Import_FileMissing" xml:space="preserve">
+    <value>The file is no longer there. Choose it again.</value>
+  </data>
+  <data name="Keys_Import_CannotRead" xml:space="preserve">
+    <value>The file could not be unlocked. Check the password, and that it holds a certificate with its private key.</value>
+  </data>
+  <data name="Keys_Import_ChainsToFormat" xml:space="preserve">
+    <value>{0} · trusted</value>
+    <comment>{0}: the trust anchor's name, e.g. "MCP MCC".</comment>
+  </data>
+  <data name="Keys_Import_NotTrusted" xml:space="preserve">
+    <value>Not a trusted authority</value>
+  </data>
+  <data name="Keys_Import_Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Keys_Import_Name_Help" xml:space="preserve">
+    <value>How this identity is listed in SoundCharts</value>
+  </data>
+  <data name="Keys_Import_KeyStoreNoteFormat" xml:space="preserve">
+    <value>The private key goes into {0}. SoundCharts won't show, copy or export it again, so keep the original file somewhere safe.</value>
+    <comment>{0}: where keys are kept (Keys_Store_*).</comment>
+  </data>
+  <data name="Keys_Import_Ended" xml:space="preserve">
+    <value>This certificate has ended, so it can't be used. Get a new one from your organisation.</value>
+  </data>
+  <data name="Keys_Import_StoreRefusedFormat" xml:space="preserve">
+    <value>SoundCharts could not add the key to {0}.</value>
+    <comment>{0}: where keys are kept (Keys_Store_*).</comment>
+  </data>
+  <data name="Keys_Import_ImportedFormat" xml:space="preserve">
+    <value>{0} imported</value>
+    <comment>{0}: the identity's name.</comment>
+  </data>
+  <data name="Keys_Import_UseForSecom" xml:space="preserve">
+    <value>Use for SECOM services that ask for a certificate</value>
+  </data>
+  <data name="Keys_Import_UseHelp" xml:space="preserve">
+    <value>One identity is in use at a time. You can change it later in Keys &amp; certificates.</value>
+  </data>
+  <data name="Keys_Field_Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Keys_Field_Mrn" xml:space="preserve">
+    <value>MRN</value>
+  </data>
+  <data name="Keys_Field_Vessel" xml:space="preserve">
+    <value>Vessel</value>
+  </data>
+  <data name="Keys_Field_Subject" xml:space="preserve">
+    <value>Subject</value>
+  </data>
+  <data name="Keys_Field_IssuedBy" xml:space="preserve">
+    <value>Issued by</value>
+  </data>
+  <data name="Keys_Field_ChainsTo" xml:space="preserve">
+    <value>Chains to</value>
+  </data>
+  <data name="Keys_Field_Valid" xml:space="preserve">
+    <value>Valid</value>
+  </data>
+  <data name="Keys_Field_Key" xml:space="preserve">
+    <value>Key</value>
+  </data>
+  <data name="Keys_Field_Thumbprint" xml:space="preserve">
+    <value>Thumbprint</value>
+  </data>
+  <data name="Keys_Field_Reference" xml:space="preserve">
+    <value>Reference</value>
+  </data>
+  <data name="Keys_Field_KeyStore" xml:space="preserve">
+    <value>Private key in</value>
+  </data>
+  <data name="Keys_Field_Revoked" xml:space="preserve">
+    <value>Revoked on</value>
+  </data>
+  <data name="Keys_Field_Organisation" xml:space="preserve">
+    <value>Organisation</value>
+  </data>
+  <data name="Keys_Field_Sha256" xml:space="preserve">
+    <value>SHA-256</value>
+  </data>
+  <data name="Keys_Field_Origin" xml:space="preserve">
+    <value>Origin</value>
+  </data>
+  <data name="Keys_ValidRangeFormat" xml:space="preserve">
+    <value>{0} to {1}</value>
+    <comment>{0}, {1}: dates.</comment>
+  </data>
+  <data name="Keys_Vessel_ImoFormat" xml:space="preserve">
+    <value>IMO {0}</value>
+  </data>
+  <data name="Keys_Vessel_MmsiFormat" xml:space="preserve">
+    <value>MMSI {0}</value>
+  </data>
+  <data name="Keys_Vessel_FlagFormat" xml:space="preserve">
+    <value>flag {0}</value>
+  </data>
+  <data name="Keys_KeyEllipticCurveFormat" xml:space="preserve">
+    <value>Elliptic curve {0}</value>
+    <comment>{0}: the curve, e.g. "P-384".</comment>
+  </data>
+  <data name="Keys_KeyRsaFormat" xml:space="preserve">
+    <value>RSA {0}-bit</value>
+    <comment>{0}: the key size in bits.</comment>
+  </data>
+  <data name="Keys_Remove_TitleFormat" xml:space="preserve">
+    <value>Remove {0}?</value>
+    <comment>{0}: the identity's name.</comment>
+  </data>
+  <data name="Keys_Remove_InUseBody" xml:space="preserve">
+    <value>This identity is in use. SECOM services will connect anonymously and lose access to anything that needs a certificate.</value>
+  </data>
+  <data name="Keys_Remove_NotInUseBody" xml:space="preserve">
+    <value>No sources use this identity.</value>
+  </data>
+  <data name="Keys_Remove_FootnoteFormat" xml:space="preserve">
+    <value>The private key is deleted from {0}. To use this identity again, you'll need the original .p12 or PEM files.</value>
+    <comment>{0}: where keys are kept (Keys_Store_*).</comment>
+  </data>
+  <data name="Keys_Remove_Confirm" xml:space="preserve">
+    <value>Remove identity</value>
+  </data>
+  <data name="Keys_RemoveAuthority_TitleFormat" xml:space="preserve">
+    <value>Remove {0}?</value>
+    <comment>{0}: the authority's name.</comment>
+  </data>
+  <data name="Keys_RemoveAuthority_Body" xml:space="preserve">
+    <value>Servers and signers that chain only to this authority will no longer be trusted.</value>
+  </data>
+  <data name="Keys_RemoveAuthority_Confirm" xml:space="preserve">
+    <value>Remove authority</value>
+  </data>
+  <data name="Keys_AddAuthority_Title" xml:space="preserve">
+    <value>Add trusted authority</value>
+  </data>
+  <data name="Keys_AddAuthority_Intro" xml:space="preserve">
+    <value>SECOM servers and signers that chain to this root will count as trusted. Add only a root you got from a source you trust.</value>
+  </data>
+  <data name="Keys_AddAuthority_Name" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Keys_AddAuthority_Name_Help" xml:space="preserve">
+    <value>How things that chain to this root are labelled, e.g. MCP MCC</value>
+  </data>
+  <data name="Keys_AddAuthority_Add" xml:space="preserve">
+    <value>Add authority</value>
+  </data>
+  <data name="Keys_AddAuthority_CannotRead" xml:space="preserve">
+    <value>The file holds no root certificate SoundCharts can read.</value>
+  </data>
+  <data name="Keys_Details_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="FilePicker_SecomIdentityTitle" xml:space="preserve">
+    <value>Import identity</value>
+  </data>
+  <data name="FilePicker_SecomIdentityType" xml:space="preserve">
+    <value>Identity (.p12, .pfx, PEM)</value>
+  </data>
+  <data name="FilePicker_CertificateTitle" xml:space="preserve">
+    <value>Add trusted authority</value>
+  </data>
+  <data name="FilePicker_CertificateType" xml:space="preserve">
+    <value>Certificates (PEM)</value>
+  </data>
+  <data name="Keys_Revoked_Notification" xml:space="preserve">
+    <value>SoundCharts has stopped using it. SECOM services that asked for it now connect anonymously.</value>
+  </data>
+  <data name="Keys_Revoked_NotificationAction" xml:space="preserve">
+    <value>Keys &amp; certificates</value>
   </data>
 </root>

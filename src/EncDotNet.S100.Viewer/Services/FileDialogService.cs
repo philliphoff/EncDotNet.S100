@@ -173,4 +173,25 @@ internal sealed class FileDialogService : IFileDialogService
 
         return files is { Count: > 0 } ? files[0].TryGetLocalPath() : null;
     }
+
+    public Task<string?> OpenSecomIdentityAsync(TopLevel? topLevel) =>
+        OpenOneAsync(topLevel, Strings.FilePicker_SecomIdentityTitle, Strings.FilePicker_SecomIdentityType, ["*.p12", "*.pfx", "*.pem"]);
+
+    public Task<string?> OpenCertificateAsync(TopLevel? topLevel) =>
+        OpenOneAsync(topLevel, Strings.FilePicker_CertificateTitle, Strings.FilePicker_CertificateType, ["*.pem", "*.crt", "*.cer"]);
+
+    private static async Task<string?> OpenOneAsync(TopLevel? topLevel, string title, string typeName, string[] patterns)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType(typeName) { Patterns = patterns }, FilePickerFileTypes.All],
+        });
+
+        return files is { Count: > 0 } ? files[0].TryGetLocalPath() : null;
+    }
 }

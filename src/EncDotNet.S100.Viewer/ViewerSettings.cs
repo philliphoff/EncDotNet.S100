@@ -514,6 +514,25 @@ internal sealed partial class ViewerSettings
     /// <summary>Default S-100 Examiner base URL.</summary>
     public const string DefaultS100ExaminerBaseUrl = "https://s100examiner.com/";
 
+    /// <summary>
+    /// MCP identities the user imported (#845): references only. Each private
+    /// key lives in the platform key store (<see cref="SecomIdentityReference.KeyStore"/>);
+    /// neither key nor password is ever written here.
+    /// </summary>
+    public List<SecomIdentityReference> SecomIdentities { get; set; } = new();
+
+    /// <summary>
+    /// The <see cref="SecomIdentityReference.Id"/> of the identity SECOM requests
+    /// present to services that ask for a certificate, or <c>null</c> for none.
+    /// </summary>
+    public string? SecomIdentityInUse { get; set; }
+
+    /// <summary>Trust anchors the user added from PEM files (#845): public certificates, no secrets.</summary>
+    public List<TrustedAuthorityReference> TrustedAuthorities { get; set; } = new();
+
+    /// <summary>SHA-256 fingerprints (hex) of built-in trust anchors the user turned off (#845).</summary>
+    public List<string> DisabledBuiltInAuthorities { get; set; } = new();
+
     /// <summary>Maximum number of dataset paths kept in <see cref="RecentDatasetPaths"/>.</summary>
     public const int MaxRecentDatasets = 10;
 
@@ -722,4 +741,63 @@ public sealed class WindowPlacement
 
     /// <summary>Whether the window was maximized.</summary>
     public bool IsMaximized { get; set; }
+}
+
+/// <summary>
+/// A stored MCP identity (#845): what the Keys &amp; certificates page shows and
+/// how to find the key again. Never the private key or its password.
+/// </summary>
+public sealed class SecomIdentityReference
+{
+    /// <summary>The reference id for the CLI and MCP server: <c>sc-ident:</c> and the first 8 hex digits of the thumbprint.</summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>The name the user gave it.</summary>
+    public string DisplayName { get; set; } = "";
+
+    /// <summary>The MRN it was issued to, when the certificate carries one.</summary>
+    public string? Mrn { get; set; }
+
+    /// <summary>The certificate's subject common name.</summary>
+    public string? Subject { get; set; }
+
+    /// <summary>The issuing CA's common name.</summary>
+    public string? Issuer { get; set; }
+
+    /// <summary>The certificate's SHA-1 thumbprint (hex), by which the key store finds it.</summary>
+    public string Thumbprint { get; set; } = "";
+
+    /// <summary>When the certificate becomes valid.</summary>
+    public DateTimeOffset NotBefore { get; set; }
+
+    /// <summary>When the certificate expires.</summary>
+    public DateTimeOffset NotAfter { get; set; }
+
+    /// <summary>What it identifies: <c>Vessel</c>, <c>Organisation</c>, <c>Device</c>, <c>Service</c>, <c>Person</c> or <c>Test</c>.</summary>
+    public string Kind { get; set; } = "";
+
+    /// <summary>The key store holding the private key, e.g. <c>x509:CurrentUser/My</c>.</summary>
+    public string KeyStore { get; set; } = "";
+
+    /// <summary>When its CA reported it revoked, once a revocation check found it so.</summary>
+    public DateTimeOffset? RevokedAt { get; set; }
+}
+
+/// <summary>A trust anchor the user added from a PEM file (#845).</summary>
+public sealed class TrustedAuthorityReference
+{
+    /// <summary>A stable id: the root's SHA-256 fingerprint (hex).</summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>The name the user gave it, reported as the anchor of what chains to it.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>What it is trusted for: <c>Secom</c> (Part 15 authorities come later).</summary>
+    public string Kind { get; set; } = "Secom";
+
+    /// <summary>The PEM certificates: the root and any intermediates.</summary>
+    public string Pem { get; set; } = "";
+
+    /// <summary>When it was added.</summary>
+    public DateTimeOffset AddedAt { get; set; }
 }

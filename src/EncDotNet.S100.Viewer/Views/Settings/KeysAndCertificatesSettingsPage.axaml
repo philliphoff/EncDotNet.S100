@@ -1,0 +1,488 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:keys="using:EncDotNet.S100.Viewer.ViewModels.Keys"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.Settings.KeysAndCertificatesSettingsPage"
+             x:DataType="keys:KeysAndCertificatesViewModel">
+
+    <!--
+      Settings → Keys & certificates (#845): one page, three tabs (Identities,
+      Trusted authorities, System IDs). Each tab: an intro with its toolbar,
+      then an error banner (if any), the empty state or the row list, then a
+      note. Private keys are never shown here: rows carry only what the
+      certificate says and the reference id.
+    -->
+    <UserControl.Resources>
+        <FontFamily x:Key="KeysMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
+
+        <!-- B4 row anatomy, shared by identities and authorities. -->
+        <DataTemplate x:Key="KeysRowTemplate" x:DataType="keys:KeysRow">
+            <Border Classes="keysRow" Opacity="{Binding Opacity}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                    <Border Classes="keysIconTile" Width="30" Height="30" CornerRadius="7" VerticalAlignment="Top">
+                        <Panel>
+                            <ic:FluentIcon Icon="ContactCard" IconVariant="Regular" FontSize="15"
+                                           IsVisible="{Binding !IsAuthority}" />
+                            <ic:FluentIcon Icon="Shield" IconVariant="Regular" FontSize="15"
+                                           IsVisible="{Binding IsAuthority}" />
+                        </Panel>
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="3">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <ItemsControl ItemsSource="{Binding Badges}" VerticalAlignment="Center">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" Spacing="5" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="keys:KeysBadge">
+                                            <Panel Classes="keysBadge"
+                                                   Classes.accent="{Binding IsAccent}"
+                                                   Classes.warning="{Binding IsWarning}"
+                                                   Classes.success="{Binding IsSuccess}"
+                                                   Classes.destructive="{Binding IsDestructive}">
+                                                <Border Classes="tint" CornerRadius="3" />
+                                                <TextBlock Text="{Binding Text}" />
+                                            </Panel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="5" IsVisible="{Binding HasStatus}">
+                                <ic:FluentIcon Icon="Clock" IconVariant="Regular" FontSize="12"
+                                               Classes="keysTone warning" IsVisible="{Binding StatusShowsClock}" />
+                                <ic:FluentIcon Icon="Prohibited" IconVariant="Regular" FontSize="12"
+                                               Classes="keysTone destructive" IsVisible="{Binding StatusIsRevoked}" />
+                                <TextBlock Classes="keysStatus"
+                                           Classes.warning="{Binding StatusIsWarning}"
+                                           Classes.destructive="{Binding StatusIsDestructive}"
+                                           Classes.muted="{Binding StatusIsNeutral}"
+                                           Text="{Binding Status}" />
+                            </StackPanel>
+                        </Grid>
+                        <SelectableTextBlock Text="{Binding Mono}" IsVisible="{Binding HasMono}"
+                                             FontFamily="{StaticResource KeysMonoFont}" FontSize="12" TextWrapping="Wrap" />
+                        <TextBlock Classes="keysSub" Text="{Binding Sub}" />
+                        <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasReference}">
+                            <TextBlock Classes="keysSub" FontSize="11" VerticalAlignment="Center"
+                                       Text="{x:Static loc:Strings.Keys_ReferenceLabel}" />
+                            <Border Classes="keysRef">
+                                <SelectableTextBlock Text="{Binding Reference}"
+                                                     FontFamily="{StaticResource KeysMonoFont}" FontSize="11" />
+                            </Border>
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Actions}" IsVisible="{Binding HasActions}" Margin="0,4,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="6" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="keys:KeysRowAction">
+                                    <Button Classes="Outline keysChip"
+                                            Classes.destructive="{Binding IsDestructive}"
+                                            Content="{Binding Label}"
+                                            Command="{Binding Command}"
+                                            AutomationProperties.AutomationId="{Binding Id, StringFormat=Keys.Row.{0}}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- Underline tabs (B2): label, then a count in mono, or "!" in red. -->
+        <Style Selector="TabControl.keysTabs">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ItemsPanel">
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="22" />
+                </ItemsPanelTemplate>
+            </Setter>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,0,1">
+                            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                        </Border>
+                        <ContentPresenter Name="PART_SelectedContentHost"
+                                          Margin="0,16,0,0"
+                                          Content="{TemplateBinding SelectedContent}"
+                                          ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+                    </DockPanel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="TabControl.keysTabs > TabItem">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel Background="Transparent">
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                          Padding="0,9,0,8" />
+                        <Border Name="PART_Underline" Height="2" VerticalAlignment="Bottom" Background="Transparent" />
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="TabControl.keysTabs > TabItem:selected">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="TabControl.keysTabs > TabItem:selected /template/ Border#PART_Underline">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBlock.keysCount">
+            <Setter Property="FontFamily" Value="{StaticResource KeysMonoFont}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.keysCount.error">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+
+        <Style Selector="TextBlock.keysIntro">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="MaxWidth" Value="560" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style Selector="TextBlock.keysNote">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="Button.keysToolbar">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+
+        <!-- Rows. -->
+        <Style Selector="Border.keysList">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+        <Style Selector="Border.keysRow">
+            <Setter Property="Padding" Value="14,13" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+        </Style>
+        <Style Selector="Border.keysIconTile">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="Border.keysIconTile ic|FluentIcon">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="TextBlock.keysSub">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="Border.keysRef">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="5,0" />
+        </Style>
+        <Style Selector="TextBlock.keysStatus">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.keysStatus.warning">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="ic|FluentIcon.keysTone.warning">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="TextBlock.keysStatus.destructive">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="ic|FluentIcon.keysTone.destructive">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="TextBlock.keysStatus.muted">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="Button.keysChip">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="9,0" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="Medium" />
+        </Style>
+        <Style Selector="Button.keysChip.destructive /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+
+        <!-- Badges: small caps on a tint of their tone. -->
+        <Style Selector="Panel.keysBadge > TextBlock">
+            <Setter Property="FontSize" Value="9.5" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="LetterSpacing" Value="0.4" />
+            <Setter Property="Margin" Value="6,1" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="Panel.keysBadge > Border.tint">
+            <Setter Property="Background" Value="{DynamicResource MutedColor}" />
+            <Setter Property="Opacity" Value="0.14" />
+        </Style>
+        <Style Selector="Panel.keysBadge.accent > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Panel.keysBadge.accent > Border.tint">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Panel.keysBadge.warning > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="Panel.keysBadge.warning > Border.tint">
+            <Setter Property="Background" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="Panel.keysBadge.success > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessColor}" />
+        </Style>
+        <Style Selector="Panel.keysBadge.success > Border.tint">
+            <Setter Property="Background" Value="{DynamicResource SuccessColor}" />
+        </Style>
+        <Style Selector="Panel.keysBadge.destructive > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="Panel.keysBadge.destructive > Border.tint">
+            <Setter Property="Background" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+
+        <!-- B5 error banner: destructive border and tint, a red "!" disc. -->
+        <Style Selector="Border.keysBannerTint">
+            <Setter Property="Background" Value="{DynamicResource DestructiveColor}" />
+            <Setter Property="Opacity" Value="0.07" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Border.keysBannerEdge">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Opacity" Value="0.4" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Border.keysBannerDisc">
+            <Setter Property="Background" Value="{DynamicResource DestructiveColor}" />
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+
+        <!-- B6 empty state: dashed outline. -->
+        <Style Selector="Rectangle.keysDashed">
+            <Setter Property="Stroke" Value="{DynamicResource BorderColor}" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="StrokeDashArray" Value="4,3" />
+            <Setter Property="RadiusX" Value="8" />
+            <Setter Property="RadiusY" Value="8" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+        <StackPanel Classes="settingsPage">
+            <StackPanel Spacing="3">
+                <TextBlock Classes="settingsPageTitle" Text="{x:Static loc:Strings.Settings_Category_Keys}" />
+                <TextBlock Classes="settingsPageHelp" Text="{x:Static loc:Strings.Settings_Category_Keys_Help}" />
+            </StackPanel>
+
+            <TabControl Classes="keysTabs"
+                        AutomationProperties.AutomationId="Keys.Tabs"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_KeysTabs}"
+                        SelectedIndex="{Binding SelectedTabIndex}">
+
+                <!-- C: Identities -->
+                <TabItem AutomationProperties.AutomationId="Keys.Tab.Identities"
+                         AutomationProperties.Name="{x:Static loc:Strings.Keys_Tab_Identities}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <TextBlock Text="{x:Static loc:Strings.Keys_Tab_Identities}" />
+                            <TextBlock Classes="keysCount" Classes.error="{Binding IdentitiesHasError}" Text="{Binding IdentitiesCount}" />
+                        </StackPanel>
+                    </TabItem.Header>
+                    <StackPanel Spacing="16">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <TextBlock Classes="keysIntro" Text="{x:Static loc:Strings.Keys_Identities_Intro}" />
+                            <Button Grid.Column="1" Classes="Outline keysToolbar"
+                                    Content="{x:Static loc:Strings.Keys_ImportIdentity}"
+                                    Command="{Binding ImportIdentityCommand}"
+                                    AutomationProperties.AutomationId="Keys.Identities.Import"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Keys_ImportIdentity_Help}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Keys_ImportIdentity_Help}" />
+                        </Grid>
+
+                        <!-- C5: the revoked identity -->
+                        <Panel IsVisible="{Binding HasRevokedBanner}">
+                            <Border Classes="keysBannerTint" />
+                            <Border Classes="keysBannerEdge" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11" Margin="14,12">
+                                <Border Classes="keysBannerDisc">
+                                    <TextBlock Text="!" Foreground="White" FontSize="11" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="{Binding RevokedBannerTitle}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding RevokedBannerBody}" FontSize="12.5" Opacity="0.65" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Panel Grid.Column="2" VerticalAlignment="Center">
+                                    <Button Classes="Outline keysToolbar"
+                                            Content="{x:Static loc:Strings.Keys_ChooseAnother}"
+                                            IsVisible="{Binding HasAlternativeIdentities}"
+                                            AutomationProperties.AutomationId="Keys.Identities.ChooseAnother"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Keys_ChooseAnother_Help}">
+                                        <Button.Flyout>
+                                            <MenuFlyout ItemsSource="{Binding AlternativeIdentities}" Placement="BottomEdgeAlignedRight">
+                                                <MenuFlyout.ItemContainerTheme>
+                                                    <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="keys:KeysRowAction">
+                                                        <Setter Property="Header" Value="{Binding Label}" />
+                                                        <Setter Property="Command" Value="{Binding Command}" />
+                                                        <Setter Property="CommandParameter" Value="{Binding Id}" />
+                                                        <Setter Property="AutomationProperties.AutomationId" Value="Keys.Identities.ChooseAnother.Item" />
+                                                    </ControlTheme>
+                                                </MenuFlyout.ItemContainerTheme>
+                                            </MenuFlyout>
+                                        </Button.Flyout>
+                                    </Button>
+                                    <Button Classes="Outline keysToolbar"
+                                            Content="{x:Static loc:Strings.Keys_ChooseAnother}"
+                                            IsVisible="{Binding !HasAlternativeIdentities}"
+                                            Command="{Binding ImportIdentityCommand}"
+                                            AutomationProperties.AutomationId="Keys.Identities.ChooseAnotherImport"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Keys_ImportIdentity_Help}" />
+                                </Panel>
+                            </Grid>
+                        </Panel>
+
+                        <!-- C4: empty -->
+                        <Panel IsVisible="{Binding IsIdentitiesEmpty}">
+                            <Rectangle Classes="keysDashed" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14" Margin="18">
+                                <Border Classes="keysIconTile" Width="38" Height="38" CornerRadius="9" VerticalAlignment="Center">
+                                    <ic:FluentIcon Icon="ContactCard" IconVariant="Regular" FontSize="18" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Static loc:Strings.Keys_Identities_EmptyTitle}" FontSize="13.5" FontWeight="SemiBold" />
+                                    <TextBlock Text="{x:Static loc:Strings.Keys_Identities_EmptyBody}" FontSize="12.5" Opacity="0.65" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Button Grid.Column="2" Classes="Primary" VerticalAlignment="Center"
+                                        Content="{x:Static loc:Strings.Keys_ImportIdentity}"
+                                        Command="{Binding ImportIdentityCommand}"
+                                        AutomationProperties.AutomationId="Keys.Identities.EmptyImport"
+                                        AutomationProperties.HelpText="{x:Static loc:Strings.Keys_ImportIdentity_Help}" />
+                            </Grid>
+                        </Panel>
+
+                        <Border Classes="keysList" IsVisible="{Binding HasIdentityRows}">
+                            <ItemsControl ItemsSource="{Binding IdentityRows}" ItemTemplate="{StaticResource KeysRowTemplate}" />
+                        </Border>
+
+                        <TextBlock Classes="keysNote" Text="{Binding IdentitiesNote}" IsVisible="{Binding HasIdentityRows}" />
+                    </StackPanel>
+                </TabItem>
+
+                <!-- F: Trusted authorities -->
+                <TabItem AutomationProperties.AutomationId="Keys.Tab.Authorities"
+                         AutomationProperties.Name="{x:Static loc:Strings.Keys_Tab_Authorities}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <TextBlock Text="{x:Static loc:Strings.Keys_Tab_Authorities}" />
+                            <TextBlock Classes="keysCount" Classes.error="{Binding AuthoritiesHasError}" Text="{Binding AuthoritiesCount}" />
+                        </StackPanel>
+                    </TabItem.Header>
+                    <StackPanel Spacing="16">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <TextBlock Classes="keysIntro" Text="{x:Static loc:Strings.Keys_Authorities_Intro}" />
+                            <Button Grid.Column="1" Classes="Outline keysToolbar"
+                                    Content="{x:Static loc:Strings.Keys_AddAuthority}"
+                                    Command="{Binding AddAuthorityCommand}"
+                                    AutomationProperties.AutomationId="Keys.Authorities.Add"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Keys_AddAuthority_Help}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Keys_AddAuthority_Help}" />
+                        </Grid>
+
+                        <!-- F3: an expired authority -->
+                        <Panel IsVisible="{Binding HasExpiredAuthorityBanner}">
+                            <Border Classes="keysBannerTint" />
+                            <Border Classes="keysBannerEdge" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11" Margin="14,12">
+                                <Border Classes="keysBannerDisc">
+                                    <TextBlock Text="!" Foreground="White" FontSize="11" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                    <TextBlock Text="{x:Static loc:Strings.Keys_ExpiredAuthority_Title}" FontSize="13" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding ExpiredAuthorityBannerBody}" FontSize="12.5" Opacity="0.65" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Button Grid.Column="2" Classes="Outline keysToolbar" VerticalAlignment="Center"
+                                        Content="{x:Static loc:Strings.Keys_ExpiredAuthority_Action}"
+                                        Command="{Binding AddAuthorityCommand}"
+                                        AutomationProperties.AutomationId="Keys.Authorities.Replace"
+                                        AutomationProperties.HelpText="{x:Static loc:Strings.Keys_ExpiredAuthority_Action_Help}" />
+                            </Grid>
+                        </Panel>
+
+                        <Border Classes="keysList">
+                            <ItemsControl ItemsSource="{Binding AuthorityRows}" ItemTemplate="{StaticResource KeysRowTemplate}" />
+                        </Border>
+
+                        <TextBlock Classes="keysNote" Text="{x:Static loc:Strings.Keys_Authorities_Note}" />
+                    </StackPanel>
+                </TabItem>
+
+                <!-- G: System IDs, layout only until Part 15 support -->
+                <TabItem AutomationProperties.AutomationId="Keys.Tab.SystemIds"
+                         AutomationProperties.Name="{x:Static loc:Strings.Keys_Tab_SystemIds}">
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <TextBlock Text="{x:Static loc:Strings.Keys_Tab_SystemIds}" />
+                            <TextBlock Classes="keysCount" Text="0" />
+                        </StackPanel>
+                    </TabItem.Header>
+                    <StackPanel Spacing="16">
+                        <TextBlock Classes="keysIntro" Text="{x:Static loc:Strings.Keys_SystemIds_Intro}" />
+                        <Panel>
+                            <Rectangle Classes="keysDashed" />
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14" Margin="18">
+                                <Border Classes="keysIconTile" Width="38" Height="38" CornerRadius="9" VerticalAlignment="Center">
+                                    <ic:FluentIcon Icon="Laptop" IconVariant="Regular" FontSize="18" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{x:Static loc:Strings.Keys_SystemIds_EmptyTitle}" FontSize="13.5" FontWeight="SemiBold" />
+                                    <TextBlock Text="{x:Static loc:Strings.Keys_SystemIds_EmptyBody}" FontSize="12.5" Opacity="0.65" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Button Grid.Column="2" Classes="Primary" VerticalAlignment="Center"
+                                        Content="{x:Static loc:Strings.Keys_SystemIds_SetUp}"
+                                        IsEnabled="False"
+                                        ToolTip.Tip="{x:Static loc:Strings.Keys_SystemIds_SetUp_Help}"
+                                        ToolTip.ShowOnDisabled="True"
+                                        AutomationProperties.AutomationId="Keys.SystemIds.SetUp"
+                                        AutomationProperties.HelpText="{x:Static loc:Strings.Keys_SystemIds_SetUp_Help}" />
+                            </Grid>
+                        </Panel>
+                    </StackPanel>
+                </TabItem>
+            </TabControl>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

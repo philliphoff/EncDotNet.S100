@@ -23,6 +23,9 @@ internal enum SettingsCategory
     /// <summary>The MCP server and Feature Catalogue eXaminer links.</summary>
     Integrations,
 
+    /// <summary>MCP identities, trusted authorities and system IDs (#845).</summary>
+    KeysAndCertificates,
+
     /// <summary>Renderer tuning and maintenance.</summary>
     Advanced,
 }

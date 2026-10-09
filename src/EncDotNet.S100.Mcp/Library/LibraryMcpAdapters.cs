@@ -95,7 +95,7 @@ public static class LibraryMcpAdapters
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [Description("A PKCS#12 (.p12/.pfx) or PEM file holding an MCP client certificate and its private key; omit to report the current identity.")] string? path = null,
+            [Description("A PKCS#12 (.p12/.pfx) or PEM file holding an MCP client certificate and its private key, or a stored identity's reference id from the viewer's Keys & certificates settings (e.g. 'sc-ident:4f9c2a7e'); omit to report the current identity.")] string? path = null,
             [Description("The PKCS#12 or encrypted-key password, if any.")] string? password = null,
             [Description("True to clear the identity.")] bool? clear = null,
             [Description("The algorithm SECOM 2.0 request envelopes are signed with: 'ecdsa-384-sha3', 'ecdsa-384-sha2', 'ecdsa-256-sha2-256' or 'ecdsa-256-sha3-256'; '' to follow the key (the default). Services check search envelopes with the algorithm they are configured for.")] string? signatureAlgorithm = null,
@@ -103,8 +103,10 @@ public static class LibraryMcpAdapters
             McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(path, password, clear, signatureAlgorithm, ct));
         return Tool(del, SetSecomIdentityTool.Name,
             "Sets the MCP identity (client certificate) presented to SECOM services that ask for one (mutual TLS), clears "
-            + "it, or reports it: subject, MRN, trust anchor and expiry. For this session only; nothing is persisted. An "
-            + "expired or not-yet-valid identity is refused. Refresh SECOM sources afterwards to list what it can read.");
+            + "it, or reports it: subject, MRN, trust anchor, expiry and reference id. A file is used for this session only "
+            + "and nothing of it is persisted; a stored identity's reference id (sc-ident:…) makes it the identity in use, as "
+            + "choosing it in Settings does. Private keys and passwords are never returned. An expired or not-yet-valid "
+            + "identity is refused. Refresh SECOM sources afterwards to list what it can read.");
     }
 
     /// <summary>Creates <c>list_known_sources</c>.</summary>

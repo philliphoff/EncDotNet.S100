@@ -27,6 +27,33 @@ public partial class App : Application
     /// <summary>The environment variable holding the password of <c>--secom-identity</c> (#832).</summary>
     internal const string SecomIdentityPasswordVariable = "SOUNDCHARTS_SECOM_IDENTITY_PASSWORD";
 
+    /// <summary>
+    /// Checks the MCP identity in use for revocation now (the Keys &amp;
+    /// certificates page repeats it daily), and tells the user when one is
+    /// revoked, with a way to the page (#845 C5, H4).
+    /// </summary>
+    private void WatchSecomIdentity(SettingsViewModel settingsVm)
+    {
+        var keys = _services!.GetRequiredService<ViewModels.Keys.KeysAndCertificatesViewModel>();
+        var trust = _services!.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>();
+        var notifications = _services!.GetService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>();
+        trust.IdentityRevoked += (_, e) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            notifications?.Create(string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Keys_Revoked_TitleFormat,
+                    _services!.GetRequiredService<EncDotNet.S100.Viewer.Services.Secom.SecomIdentityStore>().Identities
+                        .FirstOrDefault(r => string.Equals(r.Thumbprint, e.Identity.Certificate.Thumbprint, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                        ?? e.Identity.Subject))
+                .WithSeverity(EncDotNet.S100.Viewer.Services.Notifications.NotificationSeverity.Error)
+                .WithContent(Strings.Keys_Revoked_Notification)
+                .WithAction(Strings.Keys_Revoked_NotificationAction, () =>
+                {
+                    settingsVm.ShowKeysAndCertificates();
+                    _services!.GetRequiredService<MainViewModel>().SelectTab("Settings");
+                })
+                .Persistent()
+                .Show());
+        _ = keys.CheckRevocationAsync();
+    }
+
     private static IServiceProvider? _services;
 
     /// <summary>
@@ -172,7 +199,10 @@ public partial class App : Application
         _services.GetRequiredService<ShadUI.DialogManager>()
             .Register<Views.AddOnlineCatalogueWizardView, ViewModels.AddOnlineCatalogueWizardViewModel>()
             .Register<Views.SharedFeedDialogView, ViewModels.SharedFeedDialogViewModel>()
-            .Register<Views.AddCollectionManifestDialogView, ViewModels.AddCollectionManifestDialogViewModel>();
+            .Register<Views.AddCollectionManifestDialogView, ViewModels.AddCollectionManifestDialogViewModel>()
+            .Register<Views.ImportIdentityDialogView, ViewModels.Keys.ImportIdentityDialogViewModel>()
+            .Register<Views.AddAuthorityDialogView, ViewModels.Keys.AddAuthorityDialogViewModel>()
+            .Register<Views.CertificateDetailsDialogView, ViewModels.Keys.CertificateDetailsDialogViewModel>();
 
         // Register every S-100 style and layer renderer before instrumentation
         // wraps Mapsui's style registry. The renderer package owns the required
@@ -218,6 +248,7 @@ public partial class App : Application
         // Failures are logged but never block app startup.
         var mcpHost = _services.GetRequiredService<McpServerHost>();
         var settingsVm = _services.GetRequiredService<SettingsViewModel>();
+        WatchSecomIdentity(settingsVm);
         settingsVm.McpSettingsChanged += () =>
         {
             _ = mcpHost.Apply().ContinueWith(t =>
@@ -447,26 +478,51 @@ public partial class App : Application
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Secom.SecomRevocation(
             new System.Net.Http.HttpClient(),
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
+        // Keys & certificates (#845): private keys of imported MCP identities
+        // live in the platform key store; a run whose settings are not saved
+        // keeps them in memory, so nothing outlives it.
+        services.AddSingleton<Services.Secom.ISecomKeyStore>(sp => sp.GetRequiredService<ViewerSettings>().IsReadOnly
+            ? new Services.Secom.InMemorySecomKeyStore()
+            : new Services.Secom.PlatformSecomKeyStore());
         services.AddSingleton(sp =>
         {
-            var trust = new EncDotNet.S100.Collections.Secom.SecomServerTrust(
-                revocation: sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>());
-            // An MCP identity for this run only (#832), until the keys & certificates UX holds one.
+            var settings = sp.GetRequiredService<ViewerSettings>();
+            var logger = sp.GetService<ILogger<App>>();
+            // --secom-identity overrides the stored identity for this run (#832, #845 H2).
+            EncDotNet.S100.Collections.Secom.SecomClientIdentity? commandLine = null;
             if (StartupOptions?.SecomIdentity is { Length: > 0 } identityPath)
             {
                 try
                 {
-                    trust.SetIdentity(EncDotNet.S100.Collections.Secom.SecomClientIdentity.Load(
-                        identityPath, Environment.GetEnvironmentVariable(SecomIdentityPasswordVariable), trust.Anchors));
+                    commandLine = EncDotNet.S100.Collections.Secom.SecomClientIdentity.Load(
+                        identityPath, Environment.GetEnvironmentVariable(SecomIdentityPasswordVariable));
                 }
                 catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
                 {
-                    sp.GetService<ILogger<App>>()?.LogError(ex, "The SECOM identity {Path} could not be loaded", identityPath);
+                    logger?.LogError(ex, "The SECOM identity {Path} could not be loaded", identityPath);
                 }
             }
 
-            return trust;
+            return new Services.Secom.SecomCredentials(
+                settings,
+                sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(),
+                sp.GetRequiredService<Services.Secom.ISecomKeyStore>(),
+                commandLine,
+                logger);
         });
+        services.AddSingleton(sp => sp.GetRequiredService<Services.Secom.SecomCredentials>().Trust);
+        services.AddSingleton(sp => sp.GetRequiredService<Services.Secom.SecomCredentials>().Identities);
+        services.AddSingleton(sp => sp.GetRequiredService<Services.Secom.SecomCredentials>().Authorities);
+        services.AddSingleton<ViewModels.Keys.IKeysDialogs>(sp => new Services.Secom.KeysDialogs(
+            sp.GetRequiredService<ShadUI.DialogManager>(),
+            sp.GetRequiredService<IFileDialogService>(),
+            sp.GetRequiredService<ViewerSettings>().McpTestHooks
+                ? (Func<string?>)(static () => Environment.GetEnvironmentVariable(EncDotNet.S100.Viewer.Services.Secom.KeysDialogs.TestPickVariable))
+                : null));
+        services.AddSingleton(sp => new ViewModels.Keys.KeysAndCertificatesViewModel(
+            sp.GetRequiredService<Services.Secom.SecomIdentityStore>(),
+            sp.GetRequiredService<Services.Secom.TrustedAuthorityStore>(),
+            sp.GetRequiredService<ViewModels.Keys.IKeysDialogs>()));
         services.AddSingleton(sp =>
         {
             // SECOM services (issue #804): objects get bounds once downloaded.
@@ -536,7 +592,9 @@ public partial class App : Application
             };
             return new Library.LibraryDownloadService(
                 EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(
-                    http, downloads, secom, sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(), trust.CreateSigner),
+                    http, downloads, secom, sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(), trust.CreateSigner,
+                    // Signers are judged against the anchors the user chose (#845).
+                    () => trust.Anchors),
                 sp.GetService<Services.Notifications.INotificationService>());
         });
         services.AddSingleton(sp =>
@@ -1045,7 +1103,8 @@ public partial class App : Application
             // Only with --mcp-test-hooks: the ui_* tools are for scripted testing.
             sp.GetRequiredService<ViewerSettings>().McpTestHooks ? ViewerUiAutomation.ForApplication() : null,
             sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>(),
-            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>()));
+            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>(),
+            new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>())));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));

@@ -1132,7 +1132,7 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 >   - any of these with " · signer certificate expired" appended;
 >   - or "invalid", "unsigned", "not checked (unknown algorithm)".
 > - **Later.**
->   - User-added anchors in the keys & certificates UX.
+>   - User-added anchors in the keys & certificates UX (done in §7.13).
 >   - Revocation (CRL) followed in #833 (§7.11).
 
 TLS trust for the same roots followed in #829 (§7.9).
@@ -1224,7 +1224,7 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   NeedsCertificate, "asks for a client certificate when connecting",
 >   rather than Unreachable. `SecomProbeResult.Identity` names the
 >   identity presented.
-> - **Interim supply, until the keys & certificates UX:**
+> - **Interim supply, until the keys & certificates UX (§7.13 now stores identities):**
 >   - `--secom-identity <path>`, with the password from
 >     `SOUNDCHARTS_SECOM_IDENTITY_PASSWORD`;
 >   - the MCP tool `set_secom_identity {path?, password?, clear?}`, which
@@ -1432,6 +1432,77 @@ TLS trust for the same roots followed in #829 (§7.9).
 >     NeedsSecom2Search is 14.
 
 ---
+
+### 7.13 SECOM identity store: Keys & certificates (#845)
+
+> - **Why.** §7.10's identity lived for one run (`--secom-identity` or
+>   `set_secom_identity`). The viewer now keeps MCP identities and the
+>   trusted authorities as settings, on a **Settings → Keys &
+>   certificates** page with three tabs: Identities, Trusted authorities
+>   and System IDs. System IDs is layout only until Part 15.
+> - **Where it lives.** The design handoff put the page in a dialog
+>   opened from the narrow Settings column. Settings is now a full-width
+>   panel with categories (#846), so the page is a category there.
+> - **Keys stay in the platform key store** (`ISecomKeyStore`):
+>   `X509Store(StoreName.My, StoreLocation.CurrentUser)`.
+>   - **macOS:** the login Keychain.
+>   - **Windows:** the user's certificate store. The key is loaded with
+>     `PersistKeySet | UserKeySet`, not exportable.
+>   - **Linux:** .NET's own store. These are PKCS#12 files under
+>     `~/.dotnet/corefx/cryptography/x509stores/my`, protected only by
+>     the account's file permissions, because .NET uses no system keyring
+>     on Linux. The page's note names the store, and on Linux says this.
+>   - **Runs whose settings aren't saved** (`--ephemeral`, read-only
+>     settings) keep keys in memory, so nothing outlives the run.
+>
+>   After import, a key is never shown, copied or exported, and neither
+>   the key nor its password is written to settings, logs or MCP output.
+> - **Settings hold references only.** `ViewerSettings.SecomIdentities`
+>   holds `SecomIdentityReference` entries with these fields:
+>   - id (`sc-ident:` and 8 hex digits of the SHA-1 thumbprint);
+>   - display name, MRN, subject and issuer;
+>   - thumbprint, validity and kind (vessel, organisation, device, service,
+>     person or test);
+>   - key-store handle;
+>   - `RevokedAt` once a check finds the identity revoked.
+>
+>   `SecomIdentityInUse` names the one in use.
+> - **N stored, one in use.** `SecomIdentityStore` imports, uses, replaces
+>   and removes identities. Using one calls `SecomServerTrust.SetIdentity`.
+>   Removing the identity in use clears it and deletes the key-store
+>   entry. Per-source choice is a later round.
+> - **Start-up** (`SecomCredentials`, before any SECOM client exists):
+>   1. The user's anchors are applied.
+>   2. The identity in use is presented: the command-line one if given,
+>      otherwise the stored one loaded from the key store.
+>
+>   A `--secom-identity` identity wins for its run. The page shows it as
+>   a temporary "From command line" row with no actions.
+> - **Revocation.** `SecomServerTrust.CheckIdentityRevocation` checks the
+>   identity in use against its CAs' CRLs (§7.11). It runs at start, when
+>   the page opens, and once a day. A revoked identity is cleared at once
+>   and `IdentityRevoked` is raised. The store records `RevokedAt` and
+>   stops using it. The page shows the banner, and a notification links
+>   to the page.
+> - **Status.** A row reads "Ends in N days" (amber) within 30 days, and
+>   "Ended" or "Revoked" in red. The same goes into the Settings category
+>   list as a status line under "Keys & certificates", and the tab counts
+>   show `!`. "Ends in N days" is recomputed when the date turns.
+> - **Trusted authorities** (`TrustedAuthorityStore`):
+>   - The built-in root (MCP MCC) can be turned off but not removed.
+>     `DisabledBuiltInAuthorities` lists the SHA-256 hashes of roots
+>     turned off.
+>   - Roots added from PEM files are kept as PEM text in
+>     `TrustedAuthorities`. They are public certificates.
+>   - Every change replaces `SecomServerTrust.Anchors`. That forgets past
+>     server decisions and makes handlers reconnect. Downloads judge
+>     signers through `EncCellDownloader.TrustAnchorsSource`, so the
+>     change reaches them too.
+> - **MCP.** `set_secom_identity` also takes a reference id
+>   (`path: "sc-ident:…"`). That makes the stored identity the one in use,
+>   as the page's Use does. A path still loads a file for the session
+>   only. The result includes `reference` for a stored identity.
+> - **Reset all settings** also deletes stored identities' keys.
 
 ## 8. Implementation slices
 

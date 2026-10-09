@@ -28,6 +28,8 @@ internal sealed class SettingsViewModel : ViewModelBase
             if (SetProperty(ref _selectedCategory, value))
             {
                 OnPropertyChanged(nameof(SelectedCategoryIndex));
+                if (value == SettingsCategory.KeysAndCertificates)
+                    KeysAndCertificates?.OnShown();
             }
         }
     }
@@ -43,6 +45,21 @@ internal sealed class SettingsViewModel : ViewModelBase
                 SelectedCategory = (SettingsCategory)value;
             }
         }
+    }
+
+    /// <summary>The Keys &amp; certificates page (#845), or <see langword="null"/> where it is not wired (tests).</summary>
+    public Keys.KeysAndCertificatesViewModel? KeysAndCertificates { get; }
+
+    /// <summary>
+    /// Shows Keys &amp; certificates on <paramref name="tab"/>: the target of
+    /// badges and notifications about identities and authorities.
+    /// </summary>
+    public void ShowKeysAndCertificates(Keys.KeysTab tab = Keys.KeysTab.Identities)
+    {
+        if (KeysAndCertificates is null)
+            return;
+        KeysAndCertificates.SelectedTab = tab;
+        SelectedCategory = SettingsCategory.KeysAndCertificates;
     }
 
     private Color _accentColor;
@@ -937,9 +954,11 @@ internal sealed class SettingsViewModel : ViewModelBase
         ViewerSettings settings,
         IDataMaintenanceService? dataMaintenance = null,
         IApplicationControlService? applicationControl = null,
-        DialogManager? dialogManager = null)
+        DialogManager? dialogManager = null,
+        Keys.KeysAndCertificatesViewModel? keysAndCertificates = null)
     {
         _settings = settings;
+        KeysAndCertificates = keysAndCertificates;
         _dataMaintenance = dataMaintenance;
         _applicationControl = applicationControl;
         _dialogManager = dialogManager;
@@ -1130,6 +1149,8 @@ internal sealed class SettingsViewModel : ViewModelBase
                 Strings.Settings_ResetAll_ConfirmButton,
                 () =>
                 {
+                    // Imported identities' keys live outside the settings file (#845).
+                    KeysAndCertificates?.RemoveAllIdentities();
                     _dataMaintenance.ResetAll();
                     _applicationControl.Restart();
                 },
