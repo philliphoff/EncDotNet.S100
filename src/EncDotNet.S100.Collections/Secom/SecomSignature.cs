@@ -245,7 +245,7 @@ public static class SecomSignatureVerifier
     /// SHA3 falls back to <see cref="Sha3"/> where the platform has none (macOS
     /// as of .NET 10), so every algorithm verifies on every platform (#806).
     /// </summary>
-    private static byte[] Digest(HashAlgorithmName hash, byte[] data, string? reference)
+    internal static byte[] Digest(HashAlgorithmName hash, byte[] data, string? reference)
     {
         if (hash == HashAlgorithmName.SHA256)
             return SHA256.HashData(data);
@@ -276,7 +276,7 @@ public static class SecomSignatureVerifier
     /// (IEC 63173-2; names as SECOMLib uses them). When absent, the signer's
     /// key decides: ECDSA with SHA-384 for P-384, SHA-256 otherwise.
     /// </summary>
-    private static (string Family, HashAlgorithmName Hash) Algorithm(string? reference, X509Certificate2 signer) =>
+    internal static (string Family, HashAlgorithmName Hash) Algorithm(string? reference, X509Certificate2 signer) =>
         reference?.Trim().ToLowerInvariant() switch
         {
             "ecdsa-256-sha2-256" => ("ecdsa", HashAlgorithmName.SHA256),
