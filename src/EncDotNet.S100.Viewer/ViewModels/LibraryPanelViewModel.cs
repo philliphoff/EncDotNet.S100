@@ -1304,7 +1304,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             return;
 
         // A package's cells (and their coverage) appear once its source re-indexes.
-        if (ReindexPackageSources(rows))
+        if (ReindexSources(rows))
         {
             await AnnouncePackagesAsync(rows).ConfigureAwait(true);
             return;
@@ -1328,7 +1328,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         var items = Downloadable().ToArray();
         TrackDownloads(items);
         var result = await _downloader.DownloadAsync(items.Select(i => i.Item).ToArray()).ConfigureAwait(true);
-        if (result.Downloaded > 0 && ReindexPackageSources(items))
+        if (result.Downloaded > 0 && ReindexSources(items))
             await AnnouncePackagesAsync(items).ConfigureAwait(true);
     }
 
@@ -1379,21 +1379,19 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Re-indexes the sources of any package items among <paramref name="items"/>
-    /// (community lists list a downloaded package's cells, not the package).
-    /// Items with a stated layout (S-100 feeds) are already listed as
-    /// themselves and need no re-index. Returns true when there were any.
+    /// Re-indexes the sources of downloaded <paramref name="items"/>, so what an
+    /// index reads from a downloaded copy appears: a package's cells (community
+    /// lists list a downloaded package's cells, not the package), a SECOM
+    /// object's bounds and signature. A source whose index does not read its
+    /// copies is confirmed unchanged by its fingerprint. Returns true when any
+    /// item was a package (items with a stated layout, such as S-100 feeds,
+    /// are listed as themselves already).
     /// </summary>
-    private bool ReindexPackageSources(IEnumerable<LibraryItemViewModel> items)
+    private bool ReindexSources(IReadOnlyCollection<LibraryItemViewModel> items)
     {
-        var sources = items
-            .Where(i => i.Item.Location is RemoteItemLocation { Package: not null, Layout: null })
-            .Select(i => i.Source.Id)
-            .Distinct()
-            .ToArray();
-        foreach (var source in sources)
+        foreach (var source in items.Where(i => i.Item.Location is RemoteItemLocation).Select(i => i.Source.Id).Distinct())
             _library.Refresh(sourceId: source);
-        return sources.Length > 0;
+        return items.Any(i => i.Item.Location is RemoteItemLocation { Package: not null, Layout: null });
     }
 
     /// <summary>

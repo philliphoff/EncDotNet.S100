@@ -71,7 +71,7 @@ public sealed class LibraryOperations
     public static readonly TimeSpan IdlePollInterval = TimeSpan.FromMilliseconds(250);
 
     /// <summary>Creates the operations over a library, its downloads and a loader.</summary>
-    /// <param name="library">The library the items come from (re-indexed after a package download).</param>
+    /// <param name="library">The library the items come from (their sources are re-indexed after a download).</param>
     /// <param name="downloads">Downloads of online items.</param>
     /// <param name="loader">Opens items into the host's session.</param>
     /// <param name="activity">Tracks running operations; a new tracker when <see langword="null"/>.</param>
@@ -127,10 +127,11 @@ public sealed class LibraryOperations
     }
 
     /// <summary>
-    /// Downloads the downloadable items among <paramref name="items"/>, then
-    /// re-indexes the sources of any downloaded packages (whose datasets the
-    /// Library lists only after that) or, with <paramref name="load"/>, opens
-    /// the downloaded items. The operation is tracked from the call (before
+    /// Downloads the downloadable items among <paramref name="items"/> and
+    /// re-indexes their sources (so what an index reads from a downloaded copy
+    /// appears), then waits for that when a package was downloaded (whose
+    /// datasets the Library lists only after it) or, with <paramref name="load"/>,
+    /// opens the downloaded items. The operation is tracked from the call (before
     /// the first await), so a caller may start it without awaiting and an
     /// <see cref="AwaitIdleAsync"/> that follows still waits for all of it.
     /// </summary>
@@ -152,9 +153,15 @@ public sealed class LibraryOperations
         if (download.Downloaded == 0)
             return new LibraryDownloadOutcome(download, [], null);
 
-        // A package's datasets (and their coverage) appear once its source
-        // re-indexes; items with a stated layout (S-100 feeds) are listed as
-        // themselves already.
+        // What an index takes from a downloaded copy (a package's datasets, a
+        // SECOM object's bounds and signature) appears once its source
+        // re-indexes, so every downloaded item's source does; one whose index
+        // does not read its copies is confirmed unchanged by its fingerprint.
+        foreach (var source in downloadable.Select(i => i.Source.Id).Distinct())
+            Library.Refresh(sourceId: source);
+
+        // A package lists its datasets only after that; items with a stated
+        // layout (S-100 feeds) are listed as themselves already.
         var packageSources = items
             .Where(i => i.Item.Location is RemoteItemLocation { Package: not null, Layout: null })
             .Select(i => i.Source.Id)
@@ -162,8 +169,6 @@ public sealed class LibraryOperations
             .ToArray();
         if (packageSources.Length > 0)
         {
-            foreach (var source in packageSources)
-                Library.Refresh(sourceId: source);
             await Library.WhenIdle().WaitAsync(cancellationToken).ConfigureAwait(true);
             return new LibraryDownloadOutcome(download, packageSources, null);
         }

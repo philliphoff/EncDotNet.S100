@@ -545,7 +545,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
-    public async Task Downloading_a_feed_item_loads_it_without_reindexing()
+    public async Task Downloading_a_feed_item_loads_it_and_reindexes_its_source_once()
     {
         using var context = new LibraryTestContext();
         var indexer = new PackageIndexer { Layout = new PackageLayout("x.000", []) };
@@ -562,8 +562,10 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         await library.WhenIdle();
 
         Assert.Equal(1, _downloader.Downloads);
+        // Loaded as listed; the source re-indexes so what the index reads from
+        // the copy (a SECOM object's signature) appears.
         Assert.Single(_loader.Calls);
-        Assert.Equal(indexed, indexer.Calls);
+        Assert.Equal(indexed + 1, indexer.Calls);
     }
 
     [Fact]
