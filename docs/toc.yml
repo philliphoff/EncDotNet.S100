@@ -32,6 +32,8 @@
   href: observability.md
 - name: C# coding style
   href: coding-style.md
+- name: Documentation style
+  href: docs-style.md
 - name: MCP server
   href: mcp-server.md
 - name: What's new

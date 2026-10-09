@@ -97,6 +97,7 @@ flowchart LR
 
 - [Contribution guide](../CONTRIBUTING.md)
 - [C# coding style](coding-style.md)
+- [Documentation style](docs-style.md)
 - Design notes, in [`docs/design/`](design/s98-interoperability.md), record the
   rationale behind shipped subsystems. Start with
   [S-98 interoperability](design/s98-interoperability.md) and
