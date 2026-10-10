@@ -89,6 +89,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 |---|---|
 | [`render`](#render) | Renders a dataset, a composite of datasets, or a whole exchange set to an image, or writes a dataset's display list as JSON. |
 | [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
+| [`tiles serve`](#tiles-serve) | Serves a built tile set on XYZ URLs, as a tile source for web maps on this or another computer. |
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude. |
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
@@ -433,6 +434,71 @@ Pass `--yes` to skip the question, or narrow `--bbox` or the zoom range.
 - **S-101 updates.** As with `render`, the exchange-set form doesn't apply
   S-101 update files.
 
+## tiles serve
+
+```text
+s100 tiles serve <path> [options]
+```
+
+`tiles serve` serves a tile set that [`tiles export`](#tiles-export) has
+written, or that another tool wrote, over HTTP on the standard XYZ URLs, so a
+web map running on this computer can use it as a tile source. The path is a
+`{z}/{x}/{y}` folder, a `.pmtiles` archive or a `.mbtiles` database. It
+doesn't render anything: export the tiles first. It serves PNG, JPEG and WebP
+raster tiles, not vector tiles.
+
+The server has three routes:
+
+- `{z}/{x}/{y}.png` (or `.jpg`, `.webp`), the tiles. Rows are numbered from
+  the north for every container, MBTiles included. Each tile has an `ETag` so
+  browsers can revalidate it. A tile the set doesn't have answers
+  `204 No Content`, which web maps show as empty.
+- `tiles.json`, a [TileJSON](https://github.com/mapbox/tilejson-spec) document
+  with the set's zoom levels, bounds and display settings, and an absolute
+  tile URL.
+- `/`, a preview page that shows the tiles over OpenStreetMap. It loads
+  MapLibre GL JS and the basemap from the internet. Pass `--no-viewer` to turn
+  it off.
+
+Every response allows any origin, so a page served from another port can use
+the tiles. The tile set is read at each request, so if you export it again
+while it's served, the next request sees the new tiles.
+
+By default only this computer can connect. With `--host 0.0.0.0`, other
+computers can, and `tiles serve` adds a random access token to every URL unless
+you pass `--token` or `--no-token`. It prints the tile URL, the TileJSON URL
+and the preview URL for each network address.
+
+| Option | Default | Description |
+|---|---|---|
+| `--host <address>` | `127.0.0.1` | The address to listen on. `0.0.0.0` accepts other computers. |
+| `--port <port>` | `8200` | The port. `0` picks a free one. |
+| `--token <token>` | generated for a non-loopback host | An access token that becomes part of every URL. Letters, digits, `-` and `_`. |
+| `--no-token` | off | Serves without a token, even on a non-loopback address. |
+| `--no-viewer` | off | Doesn't serve the preview page. |
+
+```bash
+s100 tiles serve chart.pmtiles
+s100 tiles serve chart.mbtiles --port 9000
+s100 tiles serve tiles/ --host 0.0.0.0
+```
+
+To use the tiles in MapLibre GL JS, add a raster source from the TileJSON URL:
+
+```js
+map.addSource("chart", {
+  type: "raster",
+  url: "http://127.0.0.1:8200/tiles.json",
+  tileSize: 256,
+});
+map.addLayer({ id: "chart", type: "raster", source: "chart" });
+```
+
+In Leaflet, use the tile URL:
+`L.tileLayer("http://127.0.0.1:8200/{z}/{x}/{y}.png").addTo(map)`.
+
+The server runs until you press Ctrl+C or it receives SIGTERM.
+
 ## info
 
 ```text
@@ -736,7 +802,7 @@ command exits with code `1`.
 |---|---|
 | `0` | Success. |
 | `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. |
-| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. |
+| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read. |
 | `3` | The product specification doesn't support headless rendering or display-list output. |
 | `4` | The dataset is recognised, but its structure or encoding isn't supported, such as an unsupported data coding format. |
 | `5` | The dataset is recognised but doesn't conform: a required attribute, dataset or group is missing or malformed. |
