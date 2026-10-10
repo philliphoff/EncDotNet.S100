@@ -64,6 +64,11 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [Description("Delete the tiles cached in --cache-dir before serving.")]
         public bool ClearCache { get; init; }
 
+        [CommandOption("--refresh <SECONDS>")]
+        [Description("When rendering datasets: how often to check their files for changes, reopening them when they change (default 10; 0 never checks).")]
+        [DefaultValue(10)]
+        public int RefreshSeconds { get; init; } = 10;
+
         /// <summary>Whether the input is a built tile set rather than datasets.</summary>
         public bool ServesTileSet =>
             !IsComposite && !IsExplicitExchangeSet && !string.IsNullOrWhiteSpace(Input) && TileSource.IsTileSet(Input);
@@ -74,6 +79,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 return ValidationResult.Error("--cache-dir applies only when rendering datasets, not when serving a built tile set.");
             if (ClearCache && CacheDirectory is null)
                 return ValidationResult.Error("--clear-cache needs --cache-dir.");
+            if (RefreshSeconds < 0)
+                return ValidationResult.Error("--refresh must be zero or more seconds.");
             if (CacheDirectoryMegabytes < 1)
                 return ValidationResult.Error("--cache-dir-mb must be at least 1.");
             if (CacheDirectory is not null && File.Exists(CacheDirectory))
@@ -107,10 +114,22 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
             }
             else
             {
+                // Fingerprint before opening: a change made meanwhile is then
+                // seen as one, rather than missed.
+                var fingerprint = TileRenderSession.Fingerprint(settings);
                 int exitCode = OpenRendered(settings, out var rendered);
                 if (rendered is null)
                     return exitCode;
-                source = rendered;
+
+                source = settings.RefreshSeconds == 0
+                    ? rendered
+                    : new RefreshingTileSource(
+                        rendered,
+                        fingerprint,
+                        () => TileRenderSession.Fingerprint(settings),
+                        () => OpenRendered(settings, out var reopened) == 0 ? reopened : null,
+                        TimeSpan.FromSeconds(settings.RefreshSeconds),
+                        line => AnsiConsole.MarkupLine($"[grey]{DateTime.Now:HH:mm:ss}[/] {Markup.Escape(line)}"));
             }
         }
         catch (Exception e) when (e is InvalidDataException or NotSupportedException or IOException)
@@ -148,6 +167,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                     AnsiConsole.MarkupLine($"  Preview:  [link]{Markup.Escape(baseUri.AbsoluteUri)}[/]");
             }
 
+            if (source is RefreshingTileSource)
+                AnsiConsole.MarkupLine($"[grey]Checking the datasets for changes every {settings.RefreshSeconds} s.[/]");
             AnsiConsole.MarkupLine("Add the tile URL or TileJSON as a raster source with tileSize 256. Ctrl-C to stop.");
 
             // The web host handles Ctrl-C and SIGTERM and stops itself.
@@ -156,7 +177,10 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         }
         finally
         {
-            (source as IDisposable)?.Dispose();
+            if (source is IAsyncDisposable asyncDisposable)
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            else
+                (source as IDisposable)?.Dispose();
         }
     }
 

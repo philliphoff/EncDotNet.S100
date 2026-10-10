@@ -464,6 +464,16 @@ When it renders datasets, `tiles serve` renders the block of `--metatile` ×
 memory, up to `--cache-mb`, so neighbouring tiles come back at once. At most
 `--parallel` blocks render at a time.
 
+While it serves datasets, `tiles serve` checks their files every `--refresh`
+seconds (default 10) and reopens them when they change: when you copy in a new
+edition, add S-101 update files, or add datasets to a served exchange set. It
+waits until a change has held for two checks in a row, so a file still being
+copied isn't read half-written. The new data is opened and portrayed while the
+old keeps serving, then tiles are rendered from it with an empty cache. If it
+can't be opened, the old data keeps serving until the files change again.
+`--refresh 0` turns the checks off. A built tile set needs none: it's read at
+each request.
+
 With `--cache-dir`, rendered tiles are also kept in that folder, so they come
 back without rendering after a restart. They're stored under a fingerprint of
 the data and settings: each input file's path, size and write time (S-101
@@ -514,6 +524,7 @@ area, the tile format and display settings apply too; the output options
 | `--no-token` | off | Serves without a token, even on a non-loopback address. |
 | `--no-viewer` | off | Doesn't serve the preview page. |
 | `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
+| `--refresh <seconds>` | `10` | When rendering datasets, how often their files are checked for changes. `0` never checks. |
 | `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
 | `--cache-dir-mb <megabytes>` | `1024` | The most disk space the `--cache-dir` tiles take. |
 | `--clear-cache` | off | Deletes the tiles cached in `--cache-dir` before serving. |

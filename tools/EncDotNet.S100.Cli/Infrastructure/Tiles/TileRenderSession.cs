@@ -291,29 +291,37 @@ internal sealed class TileRenderSession : IDisposable
     /// The palette is not included; it is part of each tile's key.
     /// </summary>
     /// <returns>32 lowercase hexadecimal characters.</returns>
-    public string Fingerprint()
+    public string Fingerprint() => Fingerprint(_settings);
+
+    /// <summary>
+    /// The <see cref="Fingerprint()"/> of the datasets <paramref name="settings"/>
+    /// name, without opening them: only their files' paths, sizes and write
+    /// times are read.
+    /// </summary>
+    public static string Fingerprint(TilesRenderSettings settings)
     {
+        TryParseImage(settings, out var format);
         var text = new System.Text.StringBuilder();
         void Line(string name, object? value) =>
             text.Append(name).Append('=').Append(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
 
         Line("generator", CliVersionInfo.FromAssembly(typeof(TileRenderSession).Assembly).InformationalVersion);
-        Line("format", Format);
-        Line("quality", _settings.Quality);
-        Line("tileSize", _settings.TileSize);
-        Line("symbolScale", _settings.SymbolScale);
-        Line("textScale", _settings.TextScale);
-        Line("timeStep", _settings.TimeStep);
-        Line("background", _settings.Background?.Trim().ToLowerInvariant());
-        Line("hidden", HiddenCategories(_settings));
-        Line("basemap", _settings.Basemap.Trim().ToLowerInvariant());
-        Line("displayMode", _settings.DisplayMode?.Trim().ToLowerInvariant());
-        Line("bbox", _settings.BoundingBox);
-        Line("only", _settings.Only);
-        Line("noUpdates", _settings.NoUpdates);
-        Line("metatile", _settings.Metatile);
+        Line("format", format);
+        Line("quality", settings.Quality);
+        Line("tileSize", settings.TileSize);
+        Line("symbolScale", settings.SymbolScale);
+        Line("textScale", settings.TextScale);
+        Line("timeStep", settings.TimeStep);
+        Line("background", settings.Background?.Trim().ToLowerInvariant());
+        Line("hidden", HiddenCategories(settings));
+        Line("basemap", settings.Basemap.Trim().ToLowerInvariant());
+        Line("displayMode", settings.DisplayMode?.Trim().ToLowerInvariant());
+        Line("bbox", settings.BoundingBox);
+        Line("only", settings.Only);
+        Line("noUpdates", settings.NoUpdates);
+        Line("metatile", settings.Metatile);
 
-        foreach (var file in InputFiles(_settings))
+        foreach (var file in InputFiles(settings))
         {
             var info = new FileInfo(file);
             Line("file", $"{info.FullName}|{(info.Exists ? info.Length : -1)}|{(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)}");
