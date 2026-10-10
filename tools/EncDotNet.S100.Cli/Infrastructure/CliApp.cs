@@ -38,14 +38,19 @@ internal static class CliApp
                 .WithExample("render", "exchange-set/", "chart.png")
                 .WithExample("render", "--exchange-set", "exchange-set.zip", "-o", "chart.png", "--only", "S101,S102");
 
-            config.AddCommand<TilesCommand>("tiles")
-                .WithDescription("Render one or more S-100 datasets as an XYZ Web-Mercator raster tile pyramid (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database) for web maps such as MapLibre, Leaflet and OpenLayers.")
-                .WithExample("tiles", "enc.000", "-o", "tiles/")
-                .WithExample("tiles", "enc.000", "-o", "chart.pmtiles", "--min-zoom", "10", "--max-zoom", "15")
-                .WithExample("tiles", "--layer", "enc.000", "--layer", "bathy.h5", "-o", "chart.pmtiles", "--tile-size", "512")
-                .WithExample("tiles", "exchange-set/", "-o", "tiles/", "--format", "webp", "--skip-empty")
-                .WithExample("tiles", "enc.000", "-o", "chart.mbtiles", "--max-zoom", "16")
-                .WithExample("tiles", "--from", "exchange-set.zip", "-o", "chart.pmtiles", "--bbox", "-1.5,50.0,-1.0,50.5", "--palette", "night");
+            config.AddBranch("tiles", tiles =>
+            {
+                tiles.SetDescription("Make XYZ Web-Mercator raster tiles of S-100 datasets for web maps.");
+
+                tiles.AddCommand<TilesExportCommand>("export")
+                    .WithDescription("Render one or more S-100 datasets as an XYZ Web-Mercator raster tile pyramid (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database) for web maps such as MapLibre, Leaflet and OpenLayers.")
+                    .WithExample("tiles", "export", "enc.000", "-o", "tiles/")
+                    .WithExample("tiles", "export", "enc.000", "-o", "chart.pmtiles", "--min-zoom", "10", "--max-zoom", "15")
+                    .WithExample("tiles", "export", "--layer", "enc.000", "--layer", "bathy.h5", "-o", "chart.pmtiles", "--tile-size", "512")
+                    .WithExample("tiles", "export", "exchange-set/", "-o", "tiles/", "--format", "webp", "--skip-empty")
+                    .WithExample("tiles", "export", "enc.000", "-o", "chart.mbtiles", "--max-zoom", "16")
+                    .WithExample("tiles", "export", "--from", "exchange-set.zip", "-o", "chart.pmtiles", "--bbox", "-1.5,50.0,-1.0,50.5", "--palette", "night");
+            });
 
             config.AddCommand<ValidateCommand>("validate")
                 .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack, or verify an exchange set's integrity (S-100 Part 15 signatures, or S-57 / S-63 CATALOG.031 CRCs).")

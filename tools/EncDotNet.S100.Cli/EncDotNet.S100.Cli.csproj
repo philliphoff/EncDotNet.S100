@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- MBTiles output for `s100 tiles`. -->
+    <!-- MBTiles output for `s100 tiles export`. -->
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="Spectre.Console.Cli" />

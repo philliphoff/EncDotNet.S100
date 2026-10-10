@@ -16,7 +16,7 @@ using Spectre.Console.Cli;
 namespace EncDotNet.S100.Cli.Commands;
 
 /// <summary>
-/// <c>s100 tiles</c> renders one or more S-100 datasets as an XYZ Web-Mercator
+/// <c>s100 tiles export</c> renders one or more S-100 datasets as an XYZ Web-Mercator
 /// raster tile pyramid, written as a directory of <c>{z}/{x}/{y}</c> images, a
 /// PMTiles archive or an MBTiles database, for use in web maps such as MapLibre, Leaflet and
 /// OpenLayers.
@@ -30,7 +30,7 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <c>s100 render</c>: one dataset, several <c>--layer</c> datasets, or an
 /// exchange set.
 /// </remarks>
-internal sealed class TilesCommand : Command<TilesCommand.Settings>
+internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
 {
     /// <summary>Tile count above which <c>--yes</c> (or an interactive confirmation) is required.</summary>
     internal const long ConfirmationThreshold = 100_000;
@@ -511,7 +511,7 @@ internal sealed class TilesCommand : Command<TilesCommand.Settings>
         sink.Complete(new TileSetMetadata
         {
             Name = Path.GetFileNameWithoutExtension(Path.TrimEndingDirectorySeparator(Path.GetFullPath(outputPath))),
-            Description = $"S-100 portrayal of {string.Join(", ", specs.Distinct())} rendered by s100 tiles.",
+            Description = $"S-100 portrayal of {string.Join(", ", specs.Distinct())} rendered by s100 tiles export.",
             Format = format,
             MinZoom = minZoom,
             MaxZoom = maxZoom,
@@ -656,7 +656,7 @@ internal sealed class TilesCommand : Command<TilesCommand.Settings>
     {
         var description = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["generator"] = "s100 " + CliVersionInfo.FromAssembly(typeof(TilesCommand).Assembly).InformationalVersion,
+            ["generator"] = "s100 " + CliVersionInfo.FromAssembly(typeof(TilesExportCommand).Assembly).InformationalVersion,
             ["palette"] = settings.Palette.Trim().ToLowerInvariant(),
             ["symbolScale"] = settings.SymbolScale.ToString(CultureInfo.InvariantCulture),
             ["textScale"] = settings.TextScale.ToString(CultureInfo.InvariantCulture),

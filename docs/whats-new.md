@@ -6,11 +6,11 @@ month. For package versions and release assets, see
 
 ## October 2026
 
-- **Raster tiles.** The new `s100 tiles` command renders a dataset, a
+- **Raster tiles.** The new `s100 tiles export` command renders a dataset, a
   composite or an exchange set as XYZ Web Mercator tiles for MapLibre,
   Leaflet and OpenLayers, written as a `{z}/{x}/{y}` folder, a PMTiles
   archive or an MBTiles database. Each zoom level draws only what's visible at its scale. See
-  [`tiles`](cli.md#tiles).
+  [`tiles export`](cli.md#tiles-export).
 - **Signing and permits.** S-100 Part 15 support now covers the data
   server's side. `Part15Signer` produces ECDSA P-384 signatures, and
   `PermitFileWriter` writes a `PERMIT.XML` and its `PERMIT.SIGN`, using cell
