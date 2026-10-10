@@ -12,6 +12,7 @@ internal static class SkillContent
         {
             ["render"] = "Commands.Render.md",
             ["tiles export"] = "Commands.TilesExport.md",
+            ["tiles serve"] = "Commands.TilesServe.md",
             ["validate"] = "Commands.Validate.md",
             ["info"] = "Commands.Info.md",
             ["identify"] = "Commands.Identify.md",

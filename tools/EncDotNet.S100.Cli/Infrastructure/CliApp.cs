@@ -40,7 +40,7 @@ internal static class CliApp
 
             config.AddBranch("tiles", tiles =>
             {
-                tiles.SetDescription("Make XYZ Web-Mercator raster tiles of S-100 datasets for web maps.");
+                tiles.SetDescription("Make and serve XYZ Web-Mercator raster tiles of S-100 datasets for web maps.");
 
                 tiles.AddCommand<TilesExportCommand>("export")
                     .WithDescription("Render one or more S-100 datasets as an XYZ Web-Mercator raster tile pyramid (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database) for web maps such as MapLibre, Leaflet and OpenLayers.")
@@ -50,6 +50,12 @@ internal static class CliApp
                     .WithExample("tiles", "export", "exchange-set/", "-o", "tiles/", "--format", "webp", "--skip-empty")
                     .WithExample("tiles", "export", "enc.000", "-o", "chart.mbtiles", "--max-zoom", "16")
                     .WithExample("tiles", "export", "--from", "exchange-set.zip", "-o", "chart.pmtiles", "--bbox", "-1.5,50.0,-1.0,50.5", "--palette", "night");
+
+                tiles.AddCommand<TilesServeCommand>("serve")
+                    .WithDescription("Serve a built tile set (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database) on XYZ URLs with a TileJSON document, as a tile source for local web maps.")
+                    .WithExample("tiles", "serve", "chart.pmtiles")
+                    .WithExample("tiles", "serve", "chart.mbtiles", "--port", "9000")
+                    .WithExample("tiles", "serve", "tiles/", "--host", "0.0.0.0");
             });
 
             config.AddCommand<ValidateCommand>("validate")

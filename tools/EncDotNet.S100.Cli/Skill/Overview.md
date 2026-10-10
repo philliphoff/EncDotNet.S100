@@ -12,6 +12,7 @@ command offers it, and treat paths as local filesystem paths.
 | Query features or coverage values at a position | `s100 identify` |
 | Render one dataset, multiple layers, or an exchange set | `s100 render` |
 | Write XYZ raster tiles (folder, PMTiles or MBTiles) for a web map | `s100 tiles export` |
+| Serve a built tile set to a local web map on XYZ URLs | `s100 tiles serve` |
 | Convert an S-57 base cell to S-101 (or an inland ENC cell to S-401) | `s100 s57 convert` |
 | Serve the read-only query tools to an MCP client over stdio | `s100 mcp serve` |
 | Publish datasets to other machines' viewers over HTTP | `s100 feed serve` |
