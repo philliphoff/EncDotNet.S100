@@ -71,4 +71,4 @@ safety contour, to each layer's portrayal and to the S-98 rules.
 For more compositing options, including whole exchange sets, see
 [Command-line rendering](../cli.md#compositing-multiple-datasets). To draw the
 layers on an interactive map instead, see
-[Embedding the renderer](../embedding-the-renderer.md).
+[Add S-100 data to a Mapsui app](../mapsui-app.md).

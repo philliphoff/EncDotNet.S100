@@ -6,6 +6,8 @@ paint order, S-98 interoperability, time, presentation and picking. Reference it
 when you show S-100 data on an interactive Mapsui map. The package doesn't
 depend on a UI framework; for Avalonia, add
 [`EncDotNet.S100.Renderers.Mapsui.Avalonia`](../EncDotNet.S100.Renderers.Mapsui.Avalonia/README.md).
+For a step-by-step introduction, see
+[Add S-100 data to a Mapsui app](../../docs/mapsui-app.md).
 
 The package targets `net8.0` and `net10.0`. It draws vector data through the
 scene IR in [`EncDotNet.S100.Rendering.Scene`](../EncDotNet.S100.Rendering.Scene/README.md)

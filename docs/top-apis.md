@@ -105,7 +105,8 @@ See [Custom catalogues and validation](catalogues-and-validation.md).
   `S100MapControl` (`EncDotNet.S100.Renderers.Mapsui.Avalonia`): interactive
   maps.
 
-See [Embedding the renderer](embedding-the-renderer.md).
+See [Render images and map tiles](embedding-the-renderer.md) and
+[Add S-100 data to a Mapsui app](mapsui-app.md).
 
 ## Backends
 
@@ -114,3 +115,14 @@ See [Embedding the renderer](embedding-the-renderer.md).
   S-100 Part 9A portrayal rules.
 - `ProjNetCrsTransformFactory` (`EncDotNet.S100.Crs.ProjNet`): coordinate
   reference system transforms for projected grids.
+
+## Versions and supported surface
+
+The supported surface of each package is the set of types its README
+documents. `internal` and undocumented types can change at any time.
+
+All `EncDotNet.S100.*` packages share one version, taken from the release tag.
+Versions follow [Semantic Versioning](https://semver.org/). Below `1.0.0`, the
+API is still settling: a minor version can include breaking changes, and the
+release notes list them. From `1.0.0`, breaking changes to a documented surface
+come only in a major version.

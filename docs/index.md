@@ -76,8 +76,10 @@ flowchart LR
 
 **Rendering and integration**
 
-- [Embedding the renderer](embedding-the-renderer.md): the scene and rendering
-  API for interactive maps.
+- [Add S-100 data to a Mapsui app](mapsui-app.md): interactive maps in
+  Avalonia and other Mapsui hosts.
+- [Render images and map tiles](embedding-the-renderer.md): tiles and images
+  without a map, and rendering your own display lists.
 - [Observability](observability.md): logs, traces and metrics.
 - [MCP server](mcp-server.md): the tools exposed to AI agents.
 
