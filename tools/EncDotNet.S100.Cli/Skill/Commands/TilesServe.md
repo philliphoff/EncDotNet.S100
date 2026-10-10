@@ -23,6 +23,14 @@ Rendering uses the `tiles export` display, zoom and area options, renders
 `--metatile`-square blocks around each requested tile, keeps up to `--cache-mb`
 of tiles in memory, and runs at most `--parallel` renders at once. The first
 request for a block, and for each palette, is slow; later ones are cached.
+When rendering datasets, their files (paths, sizes, write times, update
+files, the whole of an exchange set) are re-checked every `--refresh` seconds
+(default 10; `0` disables). A change that has held for two consecutive checks
+reopens and re-portrays the datasets in the background; requests switch over
+when that's done, with an empty memory cache and a new disk-cache fingerprint,
+and the output logs the reload. A reopen that fails keeps the previous data
+serving and is retried only after the files change again.
+
 `--cache-dir <folder>` also keeps rendered tiles on disk across runs, under a
 fingerprint of the input files (path, size, write time) and the rendering
 options, so a restart with unchanged data and settings serves them without

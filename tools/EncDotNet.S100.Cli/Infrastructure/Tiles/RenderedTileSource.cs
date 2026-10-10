@@ -135,6 +135,28 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         return json;
     }
 
+    /// <summary>
+    /// Completes when no block is being rendered. Call once nothing reads from
+    /// the source any more, before disposing it: a render that a cancelled
+    /// request started carries on without it.
+    /// </summary>
+    public async Task DrainAsync()
+    {
+        while (!_rendering.IsEmpty)
+        {
+            try
+            {
+                await Task.WhenAll(_rendering.Values.Where(r => r.IsValueCreated).Select(r => r.Value)).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // A failed render has already answered its requests.
+            }
+
+            await Task.Delay(10).ConfigureAwait(false);
+        }
+    }
+
     public void Dispose()
     {
         _renderSlots.Dispose();
