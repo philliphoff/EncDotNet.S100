@@ -243,7 +243,12 @@ public sealed class TilesServeCommandTests : IDisposable
         // Written again in place, as `tiles export` does, with new content.
         SqliteConnection.ClearAllPools();
         Write(container, " v2", path);
-        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1));
+        if (File.Exists(path))
+        {
+            // A file container is re-read when its write time changes; make
+            // sure it does even on file systems with coarse timestamps.
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(1));
+        }
 
         Assert.Equal(Content(2, 3, 2, " v2"), await http.GetByteArrayAsync(tileUri, TestContext.Current.CancellationToken));
     }
