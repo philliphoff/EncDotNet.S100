@@ -437,37 +437,63 @@ Pass `--yes` to skip the question, or narrow `--bbox` or the zoom range.
 ## tiles serve
 
 ```text
-s100 tiles serve <path> [options]
+s100 tiles serve <tile-set> [options]
+s100 tiles serve <dataset> [options]
+s100 tiles serve --layer <dataset> [--layer <dataset> ...] [options]
+s100 tiles serve <exchange-set> [options]
 ```
 
-`tiles serve` serves a tile set that [`tiles export`](#tiles-export) has
-written, or that another tool wrote, over HTTP on the standard XYZ URLs, so a
-web map running on this computer can use it as a tile source. The path is a
-`{z}/{x}/{y}` folder, a `.pmtiles` archive or a `.mbtiles` database. It
-doesn't render anything: export the tiles first. It serves PNG, JPEG and WebP
-raster tiles, not vector tiles.
+`tiles serve` serves raster tiles over HTTP on the standard XYZ URLs, so a web
+map running on this computer can use them as a tile source. It serves either:
 
-The server has three routes:
+- **A built tile set**: a `{z}/{x}/{y}` folder, a `.pmtiles` archive or a
+  `.mbtiles` database that [`tiles export`](#tiles-export) or another tool
+  wrote. The tile set is read at each request, so if you export it again while
+  it's served, the next request sees the new tiles. Only PNG, JPEG and WebP
+  raster tiles are served, not vector tiles.
+- **Datasets**, rendered when each tile is first asked for. It takes the same
+  inputs and display options as `tiles export`: one dataset, repeated
+  `--layer`, or an exchange set. Nothing has to be built in advance, and the
+  tiles are the same as an export of the same datasets would hold.
+
+A folder that isn't an exchange set is read as a tile set, so serve a folder of
+datasets with `--layer` instead.
+
+When it renders datasets, `tiles serve` renders the block of `--metatile` ×
+`--metatile` tiles around a requested tile and keeps every tile of the block in
+memory, up to `--cache-mb`, so neighbouring tiles come back at once. At most
+`--parallel` blocks render at a time. The zoom levels and the area served are
+worked out as for `tiles export`, and `--min-zoom`, `--max-zoom` and `--bbox`
+narrow them. `--palette` sets the palette of the plain tile URLs; the other
+palettes are served too, under their own URLs.
+
+The server has these routes:
 
 - `{z}/{x}/{y}.png` (or `.jpg`, `.webp`), the tiles. Rows are numbered from
   the north for every container, MBTiles included. Each tile has an `ETag` so
-  browsers can revalidate it. A tile the set doesn't have answers
-  `204 No Content`, which web maps show as empty.
+  browsers can revalidate it. A tile with nothing on it, or outside the tile
+  set, answers `204 No Content`, which web maps show as empty.
 - `tiles.json`, a [TileJSON](https://github.com/mapbox/tilejson-spec) document
-  with the set's zoom levels, bounds and display settings, and an absolute
-  tile URL.
-- `/`, a preview page that shows the tiles over OpenStreetMap. It loads
-  MapLibre GL JS and the basemap from the internet. Pass `--no-viewer` to turn
-  it off.
+  with the zoom levels, bounds and display settings, and an absolute tile URL.
+- When rendering datasets, `day/`, `dusk/` and `night/` hold the same two
+  routes in that palette, for example `night/{z}/{x}/{y}.png` and
+  `night/tiles.json`. Each palette is portrayed the first time it's asked for.
+- `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
+  menu when rendering datasets. It loads MapLibre GL JS and the basemap from
+  the internet. Pass `--no-viewer` to turn it off.
 
 Every response allows any origin, so a page served from another port can use
-the tiles. The tile set is read at each request, so if you export it again
-while it's served, the next request sees the new tiles.
+the tiles.
 
 By default only this computer can connect. With `--host 0.0.0.0`, other
 computers can, and `tiles serve` adds a random access token to every URL unless
 you pass `--token` or `--no-token`. It prints the tile URL, the TileJSON URL
 and the preview URL for each network address.
+
+The options below are the server's own. When rendering datasets, the
+[`tiles export` options](#tiles-export-options) for inputs, zoom levels, the
+area, the tile format and display settings apply too; the output options
+(`-o`, `--container`, `--skip-empty`, `--yes`) don't.
 
 | Option | Default | Description |
 |---|---|---|
@@ -476,11 +502,15 @@ and the preview URL for each network address.
 | `--token <token>` | generated for a non-loopback host | An access token that becomes part of every URL. Letters, digits, `-` and `_`. |
 | `--no-token` | off | Serves without a token, even on a non-loopback address. |
 | `--no-viewer` | off | Doesn't serve the preview page. |
+| `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
 
 ```bash
 s100 tiles serve chart.pmtiles
 s100 tiles serve chart.mbtiles --port 9000
 s100 tiles serve tiles/ --host 0.0.0.0
+s100 tiles serve enc.000
+s100 tiles serve --layer enc.000 --layer bathy.h5 --palette night
+s100 tiles serve exchange-set/ --only S101 --max-zoom 16
 ```
 
 To use the tiles in MapLibre GL JS, add a raster source from the TileJSON URL:
@@ -802,7 +832,7 @@ command exits with code `1`.
 |---|---|
 | `0` | Success. |
 | `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. |
-| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read. |
+| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. |
 | `3` | The product specification doesn't support headless rendering or display-list output. |
 | `4` | The dataset is recognised, but its structure or encoding isn't supported, such as an unsupported data coding format. |
 | `5` | The dataset is recognised but doesn't conform: a required attribute, dataset or group is missing or malformed. |

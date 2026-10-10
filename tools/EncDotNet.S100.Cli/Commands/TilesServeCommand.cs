@@ -8,26 +8,24 @@ using Spectre.Console.Cli;
 namespace EncDotNet.S100.Cli.Commands;
 
 /// <summary>
-/// <c>s100 tiles serve</c> serves a built raster tile set — an XYZ directory,
-/// a PMTiles archive or an MBTiles database, such as <c>s100 tiles export</c>
-/// writes — on the standard XYZ URLs, so a local web map (MapLibre, Leaflet,
-/// OpenLayers) can use it as a tile source (issue #865).
+/// <c>s100 tiles serve</c> serves raster tiles on the standard XYZ URLs, so a
+/// local web map (MapLibre, Leaflet, OpenLayers) can use them as a tile source
+/// (issue #865). It serves either a built tile set — an XYZ directory, a
+/// PMTiles archive or an MBTiles database, such as <c>s100 tiles export</c>
+/// writes — or datasets, rendering each tile when it is first asked for.
 /// </summary>
 /// <remarks>
-/// Nothing is written. The tile set is read as it is at each request, so one
-/// exported again while it is served is picked up. By default the server
-/// listens on localhost only; with <c>--host</c> set to another address a
-/// random access token is generated (unless <c>--token</c> or
-/// <c>--no-token</c> is given) and becomes part of every URL.
+/// Nothing is written. A built tile set is read as it is at each request, so
+/// one exported again while it is served is picked up. Datasets are rendered
+/// in any of the day, dusk and night palettes (<see cref="RenderedTileSource"/>).
+/// By default the server listens on localhost only; with <c>--host</c> set to
+/// another address a random access token is generated (unless <c>--token</c>
+/// or <c>--no-token</c> is given) and becomes part of every URL.
 /// </remarks>
 internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Settings>
 {
-    internal sealed class Settings : CommandSettings
+    internal sealed class Settings : TilesRenderSettings
     {
-        [CommandArgument(0, "<path>")]
-        [Description("The tile set to serve: a {z}/{x}/{y} directory, a .pmtiles archive or a .mbtiles database.")]
-        public string Path { get; init; } = string.Empty;
-
         [CommandOption("--host <ADDRESS>")]
         [Description("The address to listen on (default 127.0.0.1). Use 0.0.0.0 to serve other machines.")]
         public string Host { get; init; } = "127.0.0.1";
@@ -48,48 +46,132 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [Description("Don't serve the preview map page at the root URL.")]
         public bool NoViewer { get; init; }
 
+        [CommandOption("--cache-mb <MEGABYTES>")]
+        [Description("When rendering datasets: the most memory rendered tiles are kept in, in megabytes (default 256).")]
+        [DefaultValue(256)]
+        public int CacheMegabytes { get; init; } = 256;
+
+        /// <summary>Whether the input is a built tile set rather than datasets.</summary>
+        public bool ServesTileSet =>
+            !IsComposite && !IsExplicitExchangeSet && !string.IsNullOrWhiteSpace(Input) && TileSource.IsTileSet(Input);
+
         public override ValidationResult Validate()
         {
-            if (!Directory.Exists(Path) && !File.Exists(Path))
-                return ValidationResult.Error($"'{Path}' does not exist.");
+            if (!ServesTileSet)
+            {
+                if (!string.IsNullOrWhiteSpace(Input) && !Directory.Exists(Input) && !File.Exists(Input))
+                    return ValidationResult.Error($"'{Input}' does not exist.");
+
+                var render = ValidateRender();
+                if (!render.Successful)
+                    return render;
+                if (CacheMegabytes < 1)
+                    return ValidationResult.Error("--cache-mb must be at least 1.");
+            }
+
             return ServeHost.Validate(Host, Port, Token, NoToken);
         }
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
+        using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
         ITileSource source;
         try
         {
-            source = TileSource.Open(settings.Path);
+            if (settings.ServesTileSet)
+            {
+                source = TileSource.Open(settings.Input!);
+            }
+            else
+            {
+                int exitCode = OpenRendered(settings, out var rendered);
+                if (rendered is null)
+                    return exitCode;
+                source = rendered;
+            }
         }
         catch (Exception e) when (e is InvalidDataException or NotSupportedException or IOException)
         {
             AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(e.Message)}");
             return 2;
         }
-
-        var address = IPAddress.Parse(settings.Host);
-        var token = ServeHost.ResolveToken(settings.Token, settings.NoToken, address);
-        var tileJson = source.ToTileJson();
-
-        await using var server = await TileServer.StartAsync(source, address, settings.Port, token, viewer: !settings.NoViewer).ConfigureAwait(false);
-
-        AnsiConsole.MarkupLine(
-            $"Serving [bold]{Markup.Escape(source.Path)}[/] ({ContainerName(source.Container)}, {TileSetMetadata.FormatToken(source.Format)}, zoom {tileJson["minzoom"]?.ToString() ?? "?"}–{tileJson["maxzoom"]?.ToString() ?? "?"}):");
-        foreach (var baseUri in ServeHost.DisplayAddresses(address).Select(a => ServeHost.BaseUri(a, server.Port, token)))
+        catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"  Tiles:    [link]{Markup.Escape(TileServer.TileUrlTemplate(baseUri, source.Format))}[/]");
-            AnsiConsole.MarkupLine($"  TileJSON: [link]{Markup.Escape(new Uri(baseUri, XyzDirectoryTileSink.TileJsonFileName).AbsoluteUri)}[/]");
-            if (!settings.NoViewer)
-                AnsiConsole.MarkupLine($"  Preview:  [link]{Markup.Escape(baseUri.AbsoluteUri)}[/]");
+            return RenderCommand.HandleException(ex, settings.Debug);
         }
 
-        AnsiConsole.MarkupLine("Add the tile URL or TileJSON as a raster source with tileSize 256. Ctrl-C to stop.");
+        try
+        {
+            var address = IPAddress.Parse(settings.Host);
+            var token = ServeHost.ResolveToken(settings.Token, settings.NoToken, address);
+            var tileJson = source.ToTileJson(palette: null);
 
-        // The web host handles Ctrl-C and SIGTERM and stops itself.
-        await server.WaitForShutdownAsync(CancellationToken.None).ConfigureAwait(false);
-        return 0;
+            await using var server = await TileServer.StartAsync(source, address, settings.Port, token, viewer: !settings.NoViewer).ConfigureAwait(false);
+
+            var what = source is ITileSetSource set ? $"{ContainerName(set.Container)}, " : "rendered on demand, ";
+            AnsiConsole.MarkupLine(
+                $"Serving [bold]{Markup.Escape(source.Path)}[/] ({what}{TileSetMetadata.FormatToken(source.Format)}, zoom {tileJson["minzoom"]?.ToString() ?? "?"}–{tileJson["maxzoom"]?.ToString() ?? "?"}):");
+            foreach (var baseUri in ServeHost.DisplayAddresses(address).Select(a => ServeHost.BaseUri(a, server.Port, token)))
+            {
+                AnsiConsole.MarkupLine($"  Tiles:    [link]{Markup.Escape(TileServer.TileUrlTemplate(baseUri, source.Format))}[/]");
+                AnsiConsole.MarkupLine($"  TileJSON: [link]{Markup.Escape(new Uri(baseUri, XyzDirectoryTileSink.TileJsonFileName).AbsoluteUri)}[/]");
+                if (source.Palettes.Count > 0)
+                {
+                    AnsiConsole.MarkupLine(
+                        $"  Palettes: [link]{Markup.Escape(baseUri.AbsoluteUri + "{palette}/{z}/{x}/{y}." + TileSetMetadata.FormatToken(source.Format))}[/] ({string.Join(", ", source.Palettes)})");
+                }
+
+                if (!settings.NoViewer)
+                    AnsiConsole.MarkupLine($"  Preview:  [link]{Markup.Escape(baseUri.AbsoluteUri)}[/]");
+            }
+
+            AnsiConsole.MarkupLine("Add the tile URL or TileJSON as a raster source with tileSize 256. Ctrl-C to stop.");
+
+            // The web host handles Ctrl-C and SIGTERM and stops itself.
+            await server.WaitForShutdownAsync(CancellationToken.None).ConfigureAwait(false);
+            return 0;
+        }
+        finally
+        {
+            (source as IDisposable)?.Dispose();
+        }
+    }
+
+    /// <summary>Opens the datasets and prepares them in the default palette, so problems show before serving.</summary>
+    internal static int OpenRendered(Settings settings, out RenderedTileSource? source)
+    {
+        source = null;
+        int opened = TileRenderSession.TryOpen(settings, out var session);
+        if (session is null)
+            return opened;
+
+        try
+        {
+            AnsiConsole.MarkupLine($"[grey]Portraying {session.Specs.Count} dataset(s) ({Markup.Escape(string.Join(", ", session.Specs.Distinct()))})…[/]");
+            var scene = session.Prepare();
+            if (session.ResolveLayout(scene) is not { } layout)
+            {
+                AnsiConsole.MarkupLine("[red]The datasets have no geometry to tile; pass --bbox to serve an explicit area.[/]");
+                session.Dispose();
+                return 2;
+            }
+
+            source = new RenderedTileSource(
+                session,
+                scene,
+                layout,
+                settings.Palette,
+                settings.Metatile,
+                settings.Parallel ?? Environment.ProcessorCount,
+                settings.CacheMegabytes * 1024L * 1024L);
+            return 0;
+        }
+        catch
+        {
+            session.Dispose();
+            throw;
+        }
     }
 
     private static string ContainerName(TileContainer container) => container switch

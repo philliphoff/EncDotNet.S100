@@ -291,7 +291,7 @@ public sealed class TilesServeCommandTests : IDisposable
     [InlineData(".", "127.0.0.1", "bad/token", "--token may contain")]
     public void Settings_are_validated(string path, string host, string? token, string error)
     {
-        var settings = new TilesServeCommand.Settings { Path = path, Host = host, Token = token };
+        var settings = new TilesServeCommand.Settings { Input = path, Host = host, Token = token };
 
         var result = settings.Validate();
 

@@ -52,10 +52,13 @@ internal static class CliApp
                     .WithExample("tiles", "export", "--from", "exchange-set.zip", "-o", "chart.pmtiles", "--bbox", "-1.5,50.0,-1.0,50.5", "--palette", "night");
 
                 tiles.AddCommand<TilesServeCommand>("serve")
-                    .WithDescription("Serve a built tile set (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database) on XYZ URLs with a TileJSON document, as a tile source for local web maps.")
+                    .WithDescription("Serve XYZ raster tiles with a TileJSON document, as a tile source for local web maps: a built tile set (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database), or datasets rendered on demand in the day, dusk and night palettes.")
                     .WithExample("tiles", "serve", "chart.pmtiles")
                     .WithExample("tiles", "serve", "chart.mbtiles", "--port", "9000")
-                    .WithExample("tiles", "serve", "tiles/", "--host", "0.0.0.0");
+                    .WithExample("tiles", "serve", "tiles/", "--host", "0.0.0.0")
+                    .WithExample("tiles", "serve", "enc.000")
+                    .WithExample("tiles", "serve", "--layer", "enc.000", "--layer", "bathy.h5", "--palette", "night")
+                    .WithExample("tiles", "serve", "exchange-set/", "--only", "S101", "--max-zoom", "16");
             });
 
             config.AddCommand<ValidateCommand>("validate")

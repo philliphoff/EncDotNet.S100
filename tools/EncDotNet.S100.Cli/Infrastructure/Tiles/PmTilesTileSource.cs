@@ -17,7 +17,7 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// file's size or write time changes, so an archive written again while it is
 /// served is re-read. The file is opened for each read and never held open.
 /// </remarks>
-internal sealed class PmTilesTileSource : ITileSource
+internal sealed class PmTilesTileSource : ITileSetSource
 {
     private const int MaxDirectoryDepth = 4;
 
