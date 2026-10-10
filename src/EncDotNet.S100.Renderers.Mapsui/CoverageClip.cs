@@ -1,3 +1,4 @@
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Layers;
@@ -5,25 +6,6 @@ using NetTopologySuite.Geometries;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
-
-/// <summary>
-/// One finer, overlapping cell's contribution to a coarser cell's cross-cell
-/// scale-band overlap suppression ("larger-scale-in", issue #438 Phase 2): the
-/// finer cell's EPSG:3857 (Web Mercator) data-coverage footprint and the live
-/// viewport resolution beyond which the finer cell stops drawing its own content
-/// (derived from the finer cell's scale denominator, matching the resolution the
-/// renderer clamps its layers to — see
-/// <see cref="OverlapSuppression.CollectFinerCoverages"/>).
-/// </summary>
-/// <remarks>
-/// The cutoff makes suppression <em>zoom-aware</em>: a finer cell only clips the
-/// coarser cell at resolutions where the finer cell is actually drawing. Once the
-/// viewport zooms out past <see cref="CutoffResolution"/>, the finer cell's
-/// content is hidden (its layers stop drawing out of scale band) and it must stop
-/// suppressing, otherwise the coarser cell would be clipped to a blank hole with
-/// nothing drawn in it.
-/// </remarks>
-internal readonly record struct FinerCoverage(Geometry Coverage, double CutoffResolution);
 
 /// <summary>
 /// Screen-space clip regions for cross-cell scale-band overlap suppression
@@ -135,7 +117,7 @@ internal static class CoverageClip
             // Skip a finer cell that has itself zoomed out of its scale band: its
             // content is hidden (its layers stop drawing past this resolution), so
             // it must not clip the coarser cell (which would leave a blank hole).
-            if (resolution > region.CutoffResolution)
+            if (resolution > region.Cutoff)
                 continue;
             if (region.Coverage.IsEmpty)
                 continue;

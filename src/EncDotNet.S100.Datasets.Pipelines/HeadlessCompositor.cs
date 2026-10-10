@@ -349,6 +349,7 @@ public sealed class HeadlessCompositor
 
         var lowered = new List<CompositeLayer>(ruled.Count);
         var bounds = new SeamAwareBoundsAccumulator();
+        var finerCoverages = CollectFinerCoverages(datasets, options);
 
         foreach (var item in ruled)
         {
@@ -368,6 +369,7 @@ public sealed class HeadlessCompositor
                             MinimumDisplayScale = (options.Mariner?.IgnoreScaleMinimum ?? false)
                                 ? null
                                 : vector.Result.CellMinimumDisplayScale,
+                            FinerCoverages = finerCoverages.GetValueOrDefault(vector.Result),
                         });
                         bounds.AddScene(scene);
                         break;
@@ -386,6 +388,63 @@ public sealed class HeadlessCompositor
         }
 
         return new HeadlessCompositeScene(lowered, bounds, options);
+    }
+
+    /// <summary>
+    /// Ranks the active vector cells against each other, as the viewer does, and
+    /// returns, for each cell that finer cells overlap, the finer cells'
+    /// coverages that hide it (issue #859). Cells are ranked by their
+    /// compilation scale, falling back to their minimum display scale; each
+    /// finer coverage stops hiding once the viewport zooms out past the finer
+    /// cell's minimum display scale, where it stops drawing. Nothing is hidden
+    /// when the mariner ignores scale minima, since every cell then draws
+    /// everywhere, as in the viewer.
+    /// </summary>
+    private static Dictionary<VectorPortrayalResult, IReadOnlyList<FinerCoverage>> CollectFinerCoverages(
+        IReadOnlyList<HeadlessCompositeInput> datasets,
+        HeadlessCompositeOptions options)
+    {
+        var result = new Dictionary<VectorPortrayalResult, IReadOnlyList<FinerCoverage>>(ReferenceEqualityComparer.Instance);
+        if (options.Mariner?.IgnoreScaleMinimum ?? false)
+            return result;
+
+        var cells = new List<CompositeCell>();
+        foreach (var input in datasets)
+        {
+            if (!input.Active || input.Vector is not { } vector || vector.CoverageAreas.Count == 0)
+                continue;
+            if ((vector.CellCompilationScale ?? vector.CellMinimumDisplayScale) is not int rank)
+                continue;
+
+            cells.Add(new CompositeCell(vector)
+            {
+                Coverage = CoverageOverlap.ToWebMercator(vector.CoverageAreas),
+                ScaleDenominator = rank,
+                CutoffScaleDenominator = vector.CellMinimumDisplayScale,
+            });
+        }
+
+        if (cells.Count < 2)
+            return result;
+
+        foreach (var cell in cells)
+        {
+            // A finer cell without a minimum display scale draws at every
+            // scale, so it hides at every scale too.
+            var finer = CoverageOverlap.CollectFinerCoverages(
+                cell,
+                cells,
+                static other => other.CutoffScaleDenominator is int cutoff ? cutoff : double.PositiveInfinity);
+            if (finer is not null)
+                result[cell.Result] = finer;
+        }
+
+        return result;
+    }
+
+    private sealed class CompositeCell(VectorPortrayalResult result) : CoverageOverlapCell
+    {
+        public VectorPortrayalResult Result { get; } = result;
     }
 
     private static (IReadOnlyList<SubLayerStackItem> Items, string Spec, string DatasetId) BuildItems(

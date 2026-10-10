@@ -417,6 +417,12 @@ features, so the same decision drives both renderers:
   or coverage sub-layer into a Skia `CompositeLayer`. It paints all datasets in
   one shared viewport without Mapsui, with the same order and depth suppression
   as SoundCharts, such as drawing S-101 under S-102 (S-98 Annex A §A-6.9.1).
+  Where vector cells of different scales overlap, the finer cell hides the
+  coarser one under its data coverage, ranked as in SoundCharts
+  (`CoverageOverlap`): by `CellCompilationScale`, otherwise by
+  `CellMinimumDisplayScale`. With `HonorScaleVisibility` on, a finer cell hides
+  only at scales where it draws. Nothing is hidden when the mariner ignores
+  scale minima.
   The public entry point is the `EncDotNet.S100` facade's
   `IReadOnlyList<S100Layer>` render overload.
 

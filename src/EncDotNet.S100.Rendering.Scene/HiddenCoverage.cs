@@ -1,14 +1,13 @@
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Geometries.Prepared;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Scene;
 
 /// <summary>
 /// The part of a coarser cell that finer, currently-drawing cells hide, as
-/// erased by its <see cref="CoverageClip"/> difference clip at the live
-/// resolution (issue #691). Answers "is this rectangle wholly hidden?" so the
-/// tile renderer can skip scheduling, rasterising and blitting tiles the clip
-/// would erase anyway.
+/// erased by the renderer's per-coverage difference clip at the live zoom
+/// (issue #691). Answers "is this rectangle wholly hidden?" so a renderer can
+/// skip drawing what the clip would erase anyway.
 /// </summary>
 /// <remarks>
 /// A rectangle counts as hidden only when a <em>single</em> active finer
@@ -19,7 +18,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// such a seam would erase that hairline and change the picture; testing
 /// coverages one at a time keeps the skip pixel-identical.
 /// </remarks>
-internal sealed class HiddenCoverage
+public sealed class HiddenCoverage
 {
     private readonly HiddenCoverageCache.Item[] _items;
     private readonly int _activeCount;
@@ -49,37 +48,44 @@ internal sealed class HiddenCoverage
 
 /// <summary>
 /// Memoises <see cref="HiddenCoverage"/> for one coarser cell's finer-coverage
-/// set (<see cref="CoverageClip.GetHiddenCoverage"/>). A finer coverage is
-/// active while the live resolution is at or below its cutoff, so sorting the
+/// set (see <see cref="CoverageOverlap.CollectFinerCoverages"/>). A finer
+/// coverage is active while the live zoom measure is at or below its
+/// <see cref="FinerCoverage.Cutoff"/>, so sorting the
 /// coverages by descending cutoff makes every active set a prefix; one
 /// <see cref="HiddenCoverage"/> is kept per prefix length, so it stays the same
 /// instance for as long as the active set does.
 /// </summary>
-internal sealed class HiddenCoverageCache
+public sealed class HiddenCoverageCache
 {
     private readonly Item[] _byCutoffDescending;
     private readonly double[] _cutoffs;
     private readonly HiddenCoverage?[] _byActiveCount;
 
-    public HiddenCoverageCache(FinerCoverage[] regions)
+    /// <summary>Creates a cache over one cell's finer coverages.</summary>
+    /// <param name="regions">The finer coverages.</param>
+    public HiddenCoverageCache(IReadOnlyList<FinerCoverage> regions)
     {
+        ArgumentNullException.ThrowIfNull(regions);
         var ordered = regions
             .Where(r => !r.Coverage.IsEmpty)
-            .OrderByDescending(r => r.CutoffResolution)
+            .OrderByDescending(r => r.Cutoff)
             .ToArray();
-        _cutoffs = [.. ordered.Select(r => r.CutoffResolution)];
+        _cutoffs = [.. ordered.Select(r => r.Cutoff)];
         _byCutoffDescending = [.. ordered.Select(r => new Item(r.Coverage))];
         _byActiveCount = new HiddenCoverage?[ordered.Length + 1];
     }
 
     /// <summary>
-    /// Gets the hidden region at <paramref name="resolution"/>, or
+    /// Gets the hidden region at the zoom measure <paramref name="resolution"/>
+    /// (in the units of <see cref="FinerCoverage.Cutoff"/>), or
     /// <see langword="null"/> when no finer coverage is active there.
     /// </summary>
+    /// <param name="resolution">The live zoom measure.</param>
+    /// <returns>The hidden region, or <see langword="null"/>.</returns>
     public HiddenCoverage? Get(double resolution)
     {
-        // Same activity predicate as CoverageClip.BuildActiveDifferencePaths:
-        // a coverage clips while resolution <= its cutoff.
+        // Same activity predicate as the renderers' difference clips: a
+        // coverage clips while the zoom measure is <= its cutoff.
         var active = 0;
         while (active < _cutoffs.Length && !(resolution > _cutoffs[active]))
             active++;

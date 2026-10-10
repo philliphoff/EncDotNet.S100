@@ -108,7 +108,9 @@ These types are in the `EncDotNet.S100.Renderers.Skia.Scene` namespace.
 
 - **`CompositeLayer`**: one layer of a composite, drawn against a shared
   `Viewport` on a transparent background. Use `VectorCompositeLayer` for a
-  `VectorScene` and `CoverageCompositeLayer` for a coverage layer.
+  `VectorScene` and `CoverageCompositeLayer` for a coverage layer. Set
+  `VectorCompositeLayer.FinerCoverages` to the coverages of finer, overlapping
+  cells, and the layer doesn't draw under them while they're shown.
 - **`HeadlessCompositeRenderer`**: clears the background once, then draws an
   ordered list of `CompositeLayer`s against a shared viewport. It doesn't decide
   the order or which layers to suppress. The S-98 interoperability engine

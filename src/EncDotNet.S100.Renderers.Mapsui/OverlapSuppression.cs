@@ -1,3 +1,4 @@
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
 using NetTopologySuite.Geometries;
 
@@ -5,53 +6,19 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
 /// One loaded chart cell's contribution to cross-cell scale-band overlap
-/// suppression (issue #438 Phase 2): its base-chart layers, its EPSG:3857 data
-/// coverage footprint, the scale-band denominator used to decide which cells are
-/// "finer" (smaller denominator = larger scale), and the denominator from which
-/// each finer cell's zoom-out cutoff is derived (the resolution past which it
-/// stops drawing, so it must stop suppressing — computed per finer cell in
-/// <see cref="OverlapSuppression.CollectFinerCoverages"/>).
+/// suppression (issue #438 Phase 2): its base-chart layers plus the
+/// renderer-neutral ranking inputs of <see cref="CoverageOverlapCell"/> (its
+/// coverage from <see cref="MapsuiDatasetResult.CoverageGeometry"/>, its ranking
+/// denominator and its zoom-out cutoff denominator). The Mapsui renderer clamps
+/// the cell's layers to the cutoff denominator
+/// (<c>MapsuiDatasetRenderer.ApplyCellScaleWindow</c> / the per-feature
+/// out-of-scale-band cap), so the suppressor's cutoff tracks the cell's content
+/// visibility (see <see cref="OverlapSuppression.CollectFinerCoverages"/>).
 /// </summary>
-public sealed class OverlapSuppressionCell
+public sealed class OverlapSuppressionCell : CoverageOverlapCell
 {
     /// <summary>The cell's layers whose drawing is clipped when a finer cell overlaps.</summary>
     public required IReadOnlyList<ILayer> Layers { get; init; }
-
-    /// <summary>
-    /// The cell's data-coverage footprint in EPSG:3857 (from
-    /// <see cref="MapsuiDatasetResult.CoverageGeometry"/>), or <see langword="null"/>
-    /// when the cell declares no usable coverage (never suppresses or is
-    /// suppressed).
-    /// </summary>
-    public Geometry? Coverage { get; init; }
-
-    /// <summary>
-    /// The cell's ranking scale denominator (S-101 <c>DataCoverage.minimum
-    /// DisplayScale</c>, FC §3.1.1; S-57 DSPM compilation scale). A cell with a
-    /// strictly smaller denominator is "finer" and suppresses coarser overlaps.
-    /// <see langword="null"/> when unknown (excluded from suppression).
-    /// </summary>
-    /// <remarks>
-    /// Unless <see cref="CutoffScaleDenominator"/> is set, this is also the
-    /// denominator the renderer clamps the cell's layers to
-    /// (<c>MapsuiDatasetRenderer.ApplyCellScaleWindow</c> / the per-feature
-    /// out-of-scale-band cap), so converting it to a resolution yields exactly
-    /// the zoom-out point at which the cell stops drawing its content. The
-    /// suppressor's cutoff is derived from it (see
-    /// <see cref="OverlapSuppression.CollectFinerCoverages"/>) rather than from a
-    /// separately-recorded window that can be absent for standalone-loaded cells.
-    /// </remarks>
-    public int? ScaleDenominator { get; init; }
-
-    /// <summary>
-    /// The whole-cell zoom-out window denominator the cell's layers are clamped
-    /// to, when it differs from <see cref="ScaleDenominator"/> — e.g. an S-57
-    /// cell ranked by its compilation scale but drawn out to its largest
-    /// <c>SCAMIN</c>. A finer cell keeps suppressing coarser overlaps until the
-    /// viewport zooms out past this denominator. <see langword="null"/> falls
-    /// back to <see cref="ScaleDenominator"/>.
-    /// </summary>
-    public int? CutoffScaleDenominator { get; init; }
 }
 
 /// <summary>
@@ -102,46 +69,21 @@ public static class OverlapSuppression
     }
 
     /// <summary>
-    /// Collects the finer, overlapping coverages that clip <paramref name="cell"/>:
-    /// every other cell with a strictly smaller scale denominator whose coverage
-    /// envelope-and-geometry intersects this cell's coverage, paired with that
-    /// finer cell's content zoom-out cutoff (the resolution past which the finer
-    /// cell stops drawing, derived from its cutoff denominator — see
-    /// <see cref="OverlapSuppressionCell.CutoffScaleDenominator"/>). Returns
-    /// <see langword="null"/> when the cell has no coverage/scale or no finer cell
-    /// overlaps it.
+    /// Collects the finer, overlapping coverages that clip <paramref name="cell"/>
+    /// (see <see cref="CoverageOverlap.CollectFinerCoverages"/>), each paired with
+    /// that finer cell's content zoom-out cutoff as a resolution: the resolution
+    /// past which the finer cell stops drawing, derived from its cutoff
+    /// denominator (see <see cref="CoverageOverlapCell.CutoffScaleDenominator"/>).
+    /// Returns <see langword="null"/> when the cell has no coverage/scale or no
+    /// finer cell overlaps it.
     /// </summary>
     internal static IReadOnlyList<FinerCoverage>? CollectFinerCoverages(
         OverlapSuppressionCell cell,
-        IReadOnlyList<OverlapSuppressionCell> cells)
-    {
-        if (cell.Coverage is not { IsEmpty: false } coverage || cell.ScaleDenominator is not int denom)
-            return null;
-
-        List<FinerCoverage>? finer = null;
-        foreach (var other in cells)
-        {
-            if (ReferenceEquals(other, cell))
-                continue;
-            if (other.Coverage is not { IsEmpty: false } otherCoverage)
-                continue;
-            if (other.ScaleDenominator is not int otherDenom)
-                continue;
-            // Strictly finer band only, so equal-band siblings never mutually
-            // clip (which would erase their shared border from both).
-            if (otherDenom >= denom)
-                continue;
-            if (!coverage.EnvelopeInternal.Intersects(otherCoverage.EnvelopeInternal))
-                continue;
-            if (!coverage.Intersects(otherCoverage))
-                continue;
-
-            var cutoffDenom = other.CutoffScaleDenominator ?? otherDenom;
-            (finer ??= []).Add(new FinerCoverage(otherCoverage, ContentCutoffResolution(cutoffDenom, otherCoverage)));
-        }
-
-        return finer;
-    }
+        IReadOnlyList<OverlapSuppressionCell> cells) =>
+        CoverageOverlap.CollectFinerCoverages(
+            cell,
+            cells,
+            static other => ContentCutoffResolution(CoverageOverlap.CutoffScaleDenominator(other)!.Value, other.Coverage!));
 
     /// <summary>
     /// The EPSG:3857 resolution (metres/pixel) past which a finer cell of scale

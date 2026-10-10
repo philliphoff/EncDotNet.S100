@@ -21,5 +21,5 @@ Tiles are transparent by default so they overlay a web basemap; use
 `--tile-size 512` renders high-DPI tiles of the standard 256-pixel grid;
 declare the source with `tileSize: 256` in the web map. One tile set holds one
 palette and one `--time-step`; run the command again for others.
-Overlapping cells all draw at every zoom where they are visible; finer cells
-do not hide coarser ones.
+Where cells of different scales overlap, the finer cell hides the coarser one
+under its data coverage at zooms where the finer cell draws, as in SoundCharts.

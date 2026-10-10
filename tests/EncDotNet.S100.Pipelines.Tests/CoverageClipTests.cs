@@ -1,4 +1,5 @@
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
 using NetTopologySuite.Geometries;
 
@@ -48,7 +49,7 @@ public class CoverageClipTests
     {
         var layer = new MemoryLayer();
         // World square (-50,-50)-(50,50) -> screen (50,50)-(150,150).
-        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: 2.0)]);
+        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), Cutoff: 2.0)]);
 
         var paths = CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1);
 
@@ -66,7 +67,7 @@ public class CoverageClipTests
         var layer = new MemoryLayer();
         // Cutoff 0.5 < live resolution 1 -> the finer cell is hidden, so it must
         // not clip the coarser cell (no blank hole).
-        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: 0.5)]);
+        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), Cutoff: 0.5)]);
 
         Assert.Empty(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
     }
@@ -77,7 +78,7 @@ public class CoverageClipTests
         var layer = new MemoryLayer();
         // A finer cell whose content is still drawing (cutoff >= live resolution)
         // clips the coarser cell where they overlap.
-        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: 1000)]);
+        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), Cutoff: 1000)]);
 
         Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1000));
     }
@@ -88,8 +89,8 @@ public class CoverageClipTests
         var layer = new MemoryLayer();
         CoverageClip.Set(layer,
         [
-            new FinerCoverage(Square(-50, -50, 40), CutoffResolution: 2.0),  // active (>=1)
-            new FinerCoverage(Square(10, 10, 40), CutoffResolution: 0.25),   // dropped (<1)
+            new FinerCoverage(Square(-50, -50, 40), Cutoff: 2.0),  // active (>=1)
+            new FinerCoverage(Square(10, 10, 40), Cutoff: 0.25),   // dropped (<1)
         ]);
 
         Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
@@ -104,9 +105,9 @@ public class CoverageClipTests
         // one straddling the edge still does.
         CoverageClip.Set(layer,
         [
-            new FinerCoverage(Square(500, 500, 100), CutoffResolution: 2.0),   // off-screen
-            new FinerCoverage(Square(90, -20, 40), CutoffResolution: 2.0),     // straddles right edge
-            new FinerCoverage(Square(-300, 0, 100), CutoffResolution: 2.0),    // off-screen (left)
+            new FinerCoverage(Square(500, 500, 100), Cutoff: 2.0),   // off-screen
+            new FinerCoverage(Square(90, -20, 40), Cutoff: 2.0),     // straddles right edge
+            new FinerCoverage(Square(-300, 0, 100), Cutoff: 2.0),    // off-screen (left)
         ]);
 
         var path = Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
@@ -133,7 +134,7 @@ public class CoverageClipTests
             new Coordinate(-10, 10),
             new Coordinate(-10, -10),
         ]);
-        CoverageClip.Set(layer, [new FinerCoverage(Gf.CreatePolygon(shell, [hole]), CutoffResolution: double.MaxValue)]);
+        CoverageClip.Set(layer, [new FinerCoverage(Gf.CreatePolygon(shell, [hole]), Cutoff: double.MaxValue)]);
 
         var path = Assert.Single(CoverageClip.BuildActiveDifferencePaths(layer, MakeViewport(), resolution: 1));
 
@@ -148,7 +149,7 @@ public class CoverageClipTests
     public void Set_NullRegion_ClearsPreviousAttachment()
     {
         var layer = new MemoryLayer();
-        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), CutoffResolution: double.MaxValue)]);
+        CoverageClip.Set(layer, [new FinerCoverage(Square(-50, -50, 100), Cutoff: double.MaxValue)]);
         Assert.NotNull(CoverageClip.Get(layer));
 
         CoverageClip.Set(layer, null);
