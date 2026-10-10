@@ -88,7 +88,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | Command | What it does |
 |---|---|
 | [`render`](#render) | Renders a dataset, a composite of datasets, or a whole exchange set to an image, or writes a dataset's display list as JSON. |
-| [`tiles`](#tiles) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
+| [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude. |
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
@@ -307,16 +307,16 @@ s100 render warnings.gml out.txt --format json
   `--background` are ignored. `--bbox`, `--center` and `--scale` are errors,
   because a display list has no viewport.
 
-## tiles
+## tiles export
 
 ```text
-s100 tiles <dataset> -o <output> [options]
-s100 tiles --layer <dataset> [--layer <dataset> ...] -o <output> [options]
-s100 tiles <exchange-set> -o <output> [options]
+s100 tiles export <dataset> -o <output> [options]
+s100 tiles export --layer <dataset> [--layer <dataset> ...] -o <output> [options]
+s100 tiles export <exchange-set> -o <output> [options]
 ```
 
-`tiles` renders datasets as raster tiles on the XYZ Web Mercator grid that
-MapLibre, Leaflet and OpenLayers use. The tiles carry the S-100 portrayal
+`tiles export` renders datasets as raster tiles on the XYZ Web Mercator grid
+that MapLibre, Leaflet and OpenLayers use. The tiles carry the S-100 portrayal
 itself (symbols, scale minimums and palettes), so a web map shows the chart
 without styling it. It takes the same three input forms as
 [`render`](#render), and `-o` is required.
@@ -339,7 +339,7 @@ The container comes from the output path:
 Set `--container` to choose the container whatever the extension. An existing
 `.pmtiles` or `.mbtiles` file at the output path is replaced.
 
-### Tiles options
+### Tiles export options
 
 | Option | Default | Description |
 |---|---|---|
@@ -370,15 +370,15 @@ Set `--container` to choose the container whatever the extension. An existing
 | `--no-updates` | off | Tiles an S-101 base cell, given on its own or with `--layer`, without its update files. |
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
 
-### Tiles examples
+### Tiles export examples
 
 ```bash
-s100 tiles enc.000 -o tiles/
-s100 tiles enc.000 -o chart.pmtiles --min-zoom 10 --max-zoom 15
-s100 tiles --layer enc.000 --layer bathy.h5 -o chart.pmtiles --tile-size 512
-s100 tiles exchange-set/ -o tiles/ --format webp --skip-empty
-s100 tiles enc.000 -o chart.mbtiles --max-zoom 16
-s100 tiles --from exchange-set.zip -o night.pmtiles --bbox -1.5,50.0,-1.0,50.5 --palette night
+s100 tiles export enc.000 -o tiles/
+s100 tiles export enc.000 -o chart.pmtiles --min-zoom 10 --max-zoom 15
+s100 tiles export --layer enc.000 --layer bathy.h5 -o chart.pmtiles --tile-size 512
+s100 tiles export exchange-set/ -o tiles/ --format webp --skip-empty
+s100 tiles export enc.000 -o chart.mbtiles --max-zoom 16
+s100 tiles export --from exchange-set.zip -o night.pmtiles --bbox -1.5,50.0,-1.0,50.5 --palette night
 ```
 
 To show a PMTiles archive in MapLibre GL JS, register the `pmtiles` protocol
@@ -415,9 +415,9 @@ finest cell's compilation scale. Products without these scales, such as GML
 products and coverages, start at the zoom where their extent fits in about one
 tile and go six levels deeper, up to zoom 18.
 
-`tiles` prints the number of tiles before it renders any. Each zoom level has
+`tiles export` prints the number of tiles before it renders any. Each zoom level has
 four times the tiles of the one before, so a set grows quickly. Above 100,000
-tiles, `tiles` asks before writing, or exits with code `2` when it can't ask.
+tiles, `tiles export` asks before writing, or exits with code `2` when it can't ask.
 Pass `--yes` to skip the question, or narrow `--bbox` or the zoom range.
 
 ### Tile set limits
@@ -427,7 +427,7 @@ Pass `--yes` to skip the question, or narrow `--bbox` or the zoom range.
   SoundCharts. This is tracked in
   [#859](https://github.com/philliphoff/EncDotNet.S100/issues/859).
 - **One palette and time step.** A tile set holds one `--palette` and one
-  `--time-step`. Run `tiles` again for each one you need.
+  `--time-step`. Run `tiles export` again for each one you need.
 - **Coverages.** S-102, S-104 and S-111 are portrayed again for each zoom
   level, so grid sampling and current-arrow spacing suit its resolution.
 - **S-101 updates.** As with `render`, the exchange-set form doesn't apply
@@ -736,7 +736,7 @@ command exits with code `1`.
 |---|---|
 | `0` | Success. |
 | `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. |
-| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. |
+| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. |
 | `3` | The product specification doesn't support headless rendering or display-list output. |
 | `4` | The dataset is recognised, but its structure or encoding isn't supported, such as an unsupported data coding format. |
 | `5` | The dataset is recognised but doesn't conform: a required attribute, dataset or group is missing or malformed. |
@@ -752,4 +752,4 @@ command exits with code `1`.
 - [S-98 interoperability](design/s98-interoperability.md): how composite
   layers are ordered.
 - [PMTiles](https://docs.protomaps.com/pmtiles/): the single-file tile
-  archive format `tiles` writes, and how to serve and view it.
+  archive format `tiles export` writes, and how to serve and view it.

@@ -49,7 +49,7 @@ aren't installed. Earlier releases bundled the regular native library, which
 failed to load without `libfontconfig.so.1` on `linux-x64` and failed with
 `undefined symbol: uuid_parse` on `linux-arm64`.
 
-`s100 tiles` writes MBTiles through `Microsoft.Data.Sqlite`, so each archive
+`s100 tiles export` writes MBTiles through `Microsoft.Data.Sqlite`, so each archive
 also carries SQLite's native library for its runtime (`libe_sqlite3`, about
 1.5 to 2 MB). Only the CLI references SQLite; SoundCharts doesn't, and
 `ViewerSqliteDecouplingTests` keeps it that way.
