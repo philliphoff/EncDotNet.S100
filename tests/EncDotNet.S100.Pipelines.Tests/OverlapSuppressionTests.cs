@@ -62,7 +62,7 @@ public class OverlapSuppressionTests
         // Cutoff is derived from the finer cell's own scale denominator so the
         // renderer drops it once the viewport zooms out past the finer cell's
         // content: 10000 * 0.00028 m/px at the (near-equator) coverage centroid.
-        Assert.Equal(10000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, contribution.CutoffResolution, 6);
+        Assert.Equal(10000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, contribution.Cutoff, 6);
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public class OverlapSuppressionTests
         var finer = OverlapSuppression.CollectFinerCoverages(coarse, [coarse, finerCell]);
 
         var contribution = Assert.Single(finer!);
-        Assert.Equal(40000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, contribution.CutoffResolution, 6);
+        Assert.Equal(40000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, contribution.Cutoff, 6);
     }
 
     [Fact]
@@ -173,7 +173,7 @@ public class OverlapSuppressionTests
         var finer = OverlapSuppression.CollectFinerCoverages(coarse, [coarse, finerA, finerB]);
 
         Assert.NotNull(finer);
-        var cutoffs = finer!.Select(f => f.CutoffResolution).OrderBy(c => c).ToList();
+        var cutoffs = finer!.Select(f => f.Cutoff).OrderBy(c => c).ToList();
         Assert.Equal(10000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, cutoffs[0], 6);
         Assert.Equal(20000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, cutoffs[1], 6);
     }

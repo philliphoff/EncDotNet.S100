@@ -2,6 +2,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Rendering.Scene;
+using NetTopologySuite.Geometries;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Renderers.Skia.Scene;
@@ -90,6 +91,35 @@ public sealed class VectorCompositeLayer : CompositeLayer
     /// </summary>
     public double? MinimumDisplayScale { get; init; }
 
+    /// <summary>
+    /// The coverages of finer, overlapping cells that hide this layer while they
+    /// draw (cross-cell overlap suppression, issue #859; see
+    /// <see cref="CoverageOverlap"/>), or <see langword="null"/> for none. Each
+    /// <see cref="FinerCoverage.Cutoff"/> is the scale denominator past which
+    /// that finer cell stops drawing. With scale-visibility culling on, a
+    /// coverage hides this layer while the viewport's
+    /// <see cref="Viewport.ScaleDenominator"/> is at or below its cutoff; with it
+    /// off, every finer cell draws at every scale, so every coverage hides.
+    /// </summary>
+    /// <remarks>
+    /// Each active coverage is removed from the drawable region with an
+    /// anti-aliased difference clip, in EPSG:3857 world coordinates projected
+    /// through the viewport, so holes in a finer coverage still show this layer.
+    /// A viewport wholly inside one active coverage skips drawing altogether.
+    /// </remarks>
+    public IReadOnlyList<FinerCoverage>? FinerCoverages
+    {
+        get => _finerCoverages;
+        init
+        {
+            _finerCoverages = value is { Count: > 0 } ? [.. value] : null;
+            _hiddenCoverage = _finerCoverages is null ? null : new HiddenCoverageCache(_finerCoverages);
+        }
+    }
+
+    private readonly FinerCoverage[]? _finerCoverages;
+    private readonly HiddenCoverageCache? _hiddenCoverage;
+
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, Viewport viewport)
     {
@@ -99,7 +129,8 @@ public sealed class VectorCompositeLayer : CompositeLayer
         if (IsPastMinimumDisplayScale(viewport))
             return;
 
-        CreateRenderer().RenderOnto(canvas, _scene, viewport);
+        DrawClipped(canvas, viewport, rotationDegrees: 0,
+            () => CreateRenderer().RenderOnto(canvas, _scene, viewport));
     }
 
     private bool IsPastMinimumDisplayScale(Viewport viewport) =>
@@ -112,11 +143,12 @@ public sealed class VectorCompositeLayer : CompositeLayer
         if (IsPastMinimumDisplayScale(viewport))
             return;
 
-        CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
-        {
-            DrawPoints = false,
-            DrawText = false,
-        });
+        DrawClipped(canvas, viewport, rotationDegrees: 0,
+            () => CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
+            {
+                DrawPoints = false,
+                DrawText = false,
+            }));
     }
 
     internal override void DrawScreenPlaced(SKCanvas canvas, Viewport viewport, double rotationDegrees, SKRect cullBounds)
@@ -124,14 +156,146 @@ public sealed class VectorCompositeLayer : CompositeLayer
         if (IsPastMinimumDisplayScale(viewport))
             return;
 
-        CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
+        DrawClipped(canvas, viewport, rotationDegrees,
+            () => CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
+            {
+                PointCullBounds = cullBounds,
+                DrawAreasAndLines = false,
+                AnchorRotationDegrees = rotationDegrees,
+                ScreenCenterX = viewport.WidthPixels / 2f,
+                ScreenCenterY = viewport.HeightPixels / 2f,
+            }));
+    }
+
+    /// <summary>
+    /// Runs <paramref name="draw"/> with the active finer coverages removed from
+    /// the canvas's drawable region. The coverages are projected like the
+    /// layer's own geometry, then turned by <paramref name="rotationDegrees"/>
+    /// about the viewport centre, as screen-placed anchors are.
+    /// </summary>
+    private void DrawClipped(SKCanvas canvas, Viewport viewport, double rotationDegrees, Action draw)
+    {
+        // With scale visibility off every finer cell draws at every scale, so
+        // the measure sits below every cutoff and every coverage is active.
+        double measure = _honorScaleVisibility ? viewport.ScaleDenominator : double.NegativeInfinity;
+        var hidden = _hiddenCoverage?.Get(measure);
+        if (hidden is null)
         {
-            PointCullBounds = cullBounds,
-            DrawAreasAndLines = false,
-            AnchorRotationDegrees = rotationDegrees,
-            ScreenCenterX = viewport.WidthPixels / 2f,
-            ScreenCenterY = viewport.HeightPixels / 2f,
-        });
+            draw();
+            return;
+        }
+
+        var (minX, minY) = WebMercator.FromLonLat(viewport.MinLongitude, viewport.MinLatitude);
+        var (maxX, maxY) = WebMercator.FromLonLat(viewport.MaxLongitude, viewport.MaxLatitude);
+
+        // A one-pixel pad keeps the clip's anti-aliased edge from leaking a
+        // partly covered pixel when the whole viewport is skipped.
+        double pad = viewport.WidthPixels > 0 ? (maxX - minX) / viewport.WidthPixels : 0;
+        if (hidden.Covers(minX - pad, minY - pad, maxX + pad, maxY + pad))
+            return;
+
+        // Project without the seam wrap, which folds each vertex on its own and
+        // would smear a coverage crossing the fold; draw the copies one world
+        // east and west instead when the layer's geometry is wrapped.
+        var transform = WorldToScreen.Create(viewport, allowSeamWrap: false);
+        IReadOnlyList<double> offsets = WrapsSeam(viewport, maxX - minX)
+            ? [0.0, WebMercator.Circumference, -WebMercator.Circumference]
+            : [0.0];
+        float centerX = viewport.WidthPixels / 2f;
+        float centerY = viewport.HeightPixels / 2f;
+
+        var paths = new List<SKPath>();
+        try
+        {
+            foreach (var region in _finerCoverages!)
+            {
+                if (measure > region.Cutoff || region.Coverage.IsEmpty)
+                    continue;
+
+                var envelope = region.Coverage.EnvelopeInternal;
+                foreach (var offset in offsets)
+                {
+                    // A coverage wholly outside the viewport (plus its pad)
+                    // removes nothing that lands on it. A rotated display draws
+                    // through the north-up cover viewport, which holds the output.
+                    if (envelope.MaxX + offset < minX - pad || envelope.MinX + offset > maxX + pad
+                        || envelope.MaxY < minY - pad || envelope.MinY > maxY + pad)
+                    {
+                        continue;
+                    }
+
+                    var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+                    paths.Add(path);
+                    AddGeometry(path, region.Coverage, transform, offset, rotationDegrees, centerX, centerY);
+                }
+            }
+
+            canvas.Save();
+            try
+            {
+                foreach (var path in paths)
+                {
+                    if (path.PointCount > 0)
+                        canvas.ClipPath(path, SKClipOperation.Difference, antialias: true);
+                }
+
+                draw();
+            }
+            finally
+            {
+                canvas.Restore();
+            }
+        }
+        finally
+        {
+            foreach (var path in paths)
+                path.Dispose();
+        }
+    }
+
+    // Matches WorldToScreen.Create's wrap condition for this layer's renderer.
+    private bool WrapsSeam(Viewport viewport, double spanX) =>
+        EnableSeamWrap
+        && spanX < WebMercator.Circumference
+        && (viewport.MaxLongitude > 180.0 || viewport.MinLongitude < -180.0);
+
+    private static void AddGeometry(
+        SKPath path, Geometry geometry, WorldToScreen transform, double offset,
+        double rotationDegrees, float centerX, float centerY)
+    {
+        switch (geometry)
+        {
+            case Polygon polygon:
+                AddRing(path, polygon.ExteriorRing, transform, offset, rotationDegrees, centerX, centerY);
+                foreach (var hole in polygon.InteriorRings)
+                    AddRing(path, hole, transform, offset, rotationDegrees, centerX, centerY);
+                break;
+            case GeometryCollection collection:
+                foreach (var part in collection.Geometries)
+                    AddGeometry(path, part, transform, offset, rotationDegrees, centerX, centerY);
+                break;
+        }
+    }
+
+    private static void AddRing(
+        SKPath path, LineString ring, WorldToScreen transform, double offset,
+        double rotationDegrees, float centerX, float centerY)
+    {
+        var coordinates = ring.Coordinates;
+        if (coordinates.Length < 3)
+            return;
+
+        for (var i = 0; i < coordinates.Length; i++)
+        {
+            var (px, py) = transform.Project((coordinates[i].X + offset, coordinates[i].Y));
+            var (x, y) = SkiaDisplayListRenderer.RotateAbout(px, py, centerX, centerY, rotationDegrees);
+            if (i == 0)
+                path.MoveTo(x, y);
+            else
+                path.LineTo(x, y);
+        }
+
+        path.Close();
     }
 
     /// <summary>

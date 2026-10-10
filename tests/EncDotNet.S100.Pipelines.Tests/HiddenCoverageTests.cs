@@ -1,4 +1,5 @@
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Extensions;
 using Mapsui.Layers;
 using NetTopologySuite.Geometries;
@@ -35,7 +36,7 @@ public class HiddenCoverageTests
     [Fact]
     public void GetHiddenCoverage_AllFinerZoomedOut_ReturnsNull()
     {
-        Assert.Null(Hidden([new FinerCoverage(Rect(0, 0, 100, 100), CutoffResolution: 0.5)], resolution: 1));
+        Assert.Null(Hidden([new FinerCoverage(Rect(0, 0, 100, 100), Cutoff: 0.5)], resolution: 1));
     }
 
     [Fact]
@@ -46,8 +47,8 @@ public class HiddenCoverageTests
         // finer cells. A rectangle across the seam must stay drawn.
         var hidden = Hidden(
         [
-            new FinerCoverage(Rect(0, 0, 100, 100), CutoffResolution: 2),
-            new FinerCoverage(Rect(100, 0, 200, 100), CutoffResolution: 2),
+            new FinerCoverage(Rect(0, 0, 100, 100), Cutoff: 2),
+            new FinerCoverage(Rect(100, 0, 200, 100), Cutoff: 2),
         ], resolution: 1);
 
         Assert.NotNull(hidden);
@@ -62,7 +63,7 @@ public class HiddenCoverageTests
         // The coarser cell still shows through a finer cell's no-coverage hole.
         var shell = Rect(0, 0, 100, 100).Shell;
         var hole = Rect(40, 40, 60, 60).Shell;
-        var hidden = Hidden([new FinerCoverage(Gf.CreatePolygon(shell, [hole]), CutoffResolution: 2)], resolution: 1);
+        var hidden = Hidden([new FinerCoverage(Gf.CreatePolygon(shell, [hole]), Cutoff: 2)], resolution: 1);
 
         Assert.NotNull(hidden);
         Assert.False(hidden.Covers(30, 30, 70, 70));
@@ -74,8 +75,8 @@ public class HiddenCoverageTests
     {
         FinerCoverage[] regions =
         [
-            new FinerCoverage(Rect(0, 0, 100, 100), CutoffResolution: 10),
-            new FinerCoverage(Rect(100, 0, 200, 100), CutoffResolution: 2),
+            new FinerCoverage(Rect(0, 0, 100, 100), Cutoff: 10),
+            new FinerCoverage(Rect(100, 0, 200, 100), Cutoff: 2),
         ];
 
         // At 1 m/px both are drawing; at 5 m/px the second has zoomed out of its
@@ -96,7 +97,7 @@ public class HiddenCoverageTests
             new Coordinate(0, 100), new Coordinate(0, 0),
         ]);
 
-        var hidden = Hidden([new FinerCoverage(bowTie, CutoffResolution: 2)], resolution: 1);
+        var hidden = Hidden([new FinerCoverage(bowTie, Cutoff: 2)], resolution: 1);
         Assert.NotNull(hidden);
         Assert.False(hidden.Covers(10, 1, 20, 2));
     }
@@ -108,8 +109,8 @@ public class HiddenCoverageTests
         var layer = new MemoryLayer();
         CoverageClip.Set(layer,
         [
-            new FinerCoverage(Rect(0, 0, 100, 100), CutoffResolution: 10),
-            new FinerCoverage(Rect(100, 0, 200, 100), CutoffResolution: 2),
+            new FinerCoverage(Rect(0, 0, 100, 100), Cutoff: 10),
+            new FinerCoverage(Rect(100, 0, 200, 100), Cutoff: 2),
         ]);
 
         Assert.Same(CoverageClip.GetHiddenCoverage(layer, 1), CoverageClip.GetHiddenCoverage(layer, 1.5));
@@ -136,7 +137,7 @@ public class HiddenCoverageTests
     [Fact]
     public void IsViewportHidden_RequiresWholeViewportUnderFinerCoverage()
     {
-        var hidden = Hidden([new FinerCoverage(Rect(-1000, -1000, 1000, 1000), CutoffResolution: 10)], resolution: 1)!;
+        var hidden = Hidden([new FinerCoverage(Rect(-1000, -1000, 1000, 1000), Cutoff: 10)], resolution: 1)!;
 
         Assert.True(S100VectorTileRenderer.IsViewportHidden(hidden, new Mapsui.Viewport(0, 0, 1, 0, 400, 300), 1));
         Assert.False(S100VectorTileRenderer.IsViewportHidden(hidden, new Mapsui.Viewport(900, 0, 1, 0, 400, 300), 1));
@@ -199,7 +200,7 @@ public class HiddenCoverageTests
             var x0 = cx + (i - 4) * size;
             return new FinerCoverage(
                 Rect(x0 - d, cy - 2 * size - d, x0 + size + d, cy + 2 * size + d),
-                CutoffResolution: 100);
+                Cutoff: 100);
         })];
 
         AssertHiddenTilesDrawNothing(resolution, rotation, cx, cy, regions);
@@ -217,9 +218,9 @@ public class HiddenCoverageTests
         ]);
         return
         [
-            new FinerCoverage(Rect(cx - 3000, cy - 2500, cx + 300, cy + 100), CutoffResolution: 100),
-            new FinerCoverage(Gf.CreatePolygon(shellWithHole, [hole]), CutoffResolution: 100),
-            new FinerCoverage(diagonal, CutoffResolution: 100),
+            new FinerCoverage(Rect(cx - 3000, cy - 2500, cx + 300, cy + 100), Cutoff: 100),
+            new FinerCoverage(Gf.CreatePolygon(shellWithHole, [hole]), Cutoff: 100),
+            new FinerCoverage(diagonal, Cutoff: 100),
         ];
     }
 

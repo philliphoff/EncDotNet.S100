@@ -65,6 +65,8 @@ resolved to `RgbaColor`. The XML docs on `PaintOp` give the full unit contract.
 | `ColorResolver` | Resolves S-100 colour tokens to `RgbaColor`. |
 | `ScaleVisibility` | S-100 Part 9 §11.1 scale-visibility rules (SCAMIN inclusion). |
 | `WebMercator` | The spherical EPSG:3857 forward projection (latitude and longitude to EPSG:3857). |
+| `CoverageOverlap`, `CoverageOverlapCell`, `FinerCoverage` | Cross-cell overlap suppression: which finer, overlapping cells hide a coarser cell under their data coverage, and the zoom past which each stops hiding. `CoverageOverlap.ToWebMercator` turns a dataset's `CoverageArea`s into one EPSG:3857 footprint. SoundCharts and the headless compositor rank cells this way. |
+| `HiddenCoverageCache`, `HiddenCoverage` | Whether a rectangle lies wholly inside one active finer coverage, so a backend can skip drawing what its coverage clip would erase. |
 
 ## Write a rendering backend
 

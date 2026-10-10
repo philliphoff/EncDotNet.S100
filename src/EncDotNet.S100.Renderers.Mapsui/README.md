@@ -736,7 +736,9 @@ It follows these S-100 Part 9 conventions:
   back to `MapsuiDatasetResult.CellMinimumDisplayScale` for standalone cells.
   For S-57, that's the larger of CSCL and the cell's largest `SCAMIN`.
 - **Overlapping cells.** `OverlapSuppression` and `CoverageClip` stop a coarser
-  cell drawing where a finer, overlapping cell has coverage, so depth areas and
+  cell drawing where a finer, overlapping cell has coverage, using the ranking
+  in `EncDotNet.S100.Rendering.Scene`'s `CoverageOverlap` that the headless
+  compositor shares, so depth areas and
   fills don't bleed under the finer cell. This is a geometry clip in screen
   space, not a scale cap, and it depends on zoom: a finer cell suppresses a
   coarser one only while the finer cell is itself drawn, so zooming out never
