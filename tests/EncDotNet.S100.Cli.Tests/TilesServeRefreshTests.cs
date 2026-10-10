@@ -82,7 +82,7 @@ public sealed class TilesServeRefreshTests : IDisposable
         {
             for (int y = firstRow; y <= lastRow; y++)
             {
-                if (await source.ReadAsync(14, x, y, null, TestContext.Current.CancellationToken) is { } tile)
+                if (await source.ReadAsync(14, x, y, null, null, TestContext.Current.CancellationToken) is { } tile)
                     return (x, y, tile);
             }
         }
@@ -127,7 +127,7 @@ public sealed class TilesServeRefreshTests : IDisposable
         Assert.Contains(_log, l => l.Contains("The datasets changed", StringComparison.Ordinal));
 
         // The tile is rendered again from the reopened datasets.
-        Assert.Equal(tile, await source.ReadAsync(14, x, y, null, TestContext.Current.CancellationToken));
+        Assert.Equal(tile, await source.ReadAsync(14, x, y, null, null, TestContext.Current.CancellationToken));
         Assert.Equal(1, after.BlocksRendered);
 
         // And the change is not acted on twice.

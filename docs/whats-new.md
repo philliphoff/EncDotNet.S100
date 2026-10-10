@@ -15,7 +15,7 @@ month. For package versions and release assets, see
   TileJSON document and a preview page, so a web map on your computer can use
   them as a tile source. It serves a built folder, PMTiles or MBTiles tile set,
   or renders datasets as their tiles are asked for, in the day, dusk and night
-  palettes. It reopens the datasets when their files change, and with
+  palettes and, for S-104 and S-111, at any time step chosen in the URL. It reopens the datasets when their files change, and with
   `--cache-dir`, rendered tiles are kept on disk across restarts, reused only
   while the data and settings are unchanged. See
   [`tiles serve`](cli.md#tiles-serve).

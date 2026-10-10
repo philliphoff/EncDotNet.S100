@@ -118,7 +118,7 @@ public sealed class TilesServeRenderTests : IDisposable
             int zoom = int.Parse(parts[0], CultureInfo.InvariantCulture);
             int x = int.Parse(parts[1], CultureInfo.InvariantCulture);
             int y = int.Parse(Path.GetFileNameWithoutExtension(parts[2]), CultureInfo.InvariantCulture);
-            Assert.Equal(File.ReadAllBytes(file), await source.ReadAsync(zoom, x, y, null, TestContext.Current.CancellationToken));
+            Assert.Equal(File.ReadAllBytes(file), await source.ReadAsync(zoom, x, y, null, null, TestContext.Current.CancellationToken));
         }
 
         // …and nothing else: the rest of the area is empty.
@@ -131,7 +131,7 @@ public sealed class TilesServeRenderTests : IDisposable
             {
                 for (int y = firstRow; y <= lastRow; y++)
                 {
-                    if (await source.ReadAsync(zoom, x, y, null, TestContext.Current.CancellationToken) is not null)
+                    if (await source.ReadAsync(zoom, x, y, null, null, TestContext.Current.CancellationToken) is not null)
                         served++;
                 }
             }
@@ -141,8 +141,8 @@ public sealed class TilesServeRenderTests : IDisposable
 
         // Outside the zoom range there is nothing.
         var (cx, cy) = FirstTile(files, exported);
-        Assert.Null(await source.ReadAsync(15, cx * 2, cy * 2, null, TestContext.Current.CancellationToken));
-        Assert.Null(await source.ReadAsync(12, cx / 4, cy / 4, null, TestContext.Current.CancellationToken));
+        Assert.Null(await source.ReadAsync(15, cx * 2, cy * 2, null, null, TestContext.Current.CancellationToken));
+        Assert.Null(await source.ReadAsync(12, cx / 4, cy / 4, null, null, TestContext.Current.CancellationToken));
     }
 
     private static (int X, int Y) FirstTile(string[] files, string root)
@@ -161,7 +161,7 @@ public sealed class TilesServeRenderTests : IDisposable
         {
             for (int y = firstRow; y <= lastRow; y++)
             {
-                if (await source.ReadAsync(14, x, y, null, TestContext.Current.CancellationToken) is not null)
+                if (await source.ReadAsync(14, x, y, null, null, TestContext.Current.CancellationToken) is not null)
                     return (x, y);
             }
         }
@@ -176,13 +176,13 @@ public sealed class TilesServeRenderTests : IDisposable
         using var source = OpenRendered(14, 14);
         var (x, y) = await DrawnTileAsync(source);
 
-        var day = await source.ReadAsync(14, x, y, "day", TestContext.Current.CancellationToken);
-        var night = await source.ReadAsync(14, x, y, "night", TestContext.Current.CancellationToken);
+        var day = await source.ReadAsync(14, x, y, "day", null, TestContext.Current.CancellationToken);
+        var night = await source.ReadAsync(14, x, y, "night", null, TestContext.Current.CancellationToken);
 
-        Assert.Equal(day, await source.ReadAsync(14, x, y, null, TestContext.Current.CancellationToken));
+        Assert.Equal(day, await source.ReadAsync(14, x, y, null, null, TestContext.Current.CancellationToken));
         Assert.NotNull(night);
         Assert.NotEqual(day, night);
-        Assert.Null(await source.ReadAsync(14, x, y, "sepia", TestContext.Current.CancellationToken));
+        Assert.Null(await source.ReadAsync(14, x, y, "sepia", null, TestContext.Current.CancellationToken));
         Assert.Equal("night", (string?)source.ToTileJson("night")["s100"]!["palette"]);
     }
 
@@ -201,7 +201,7 @@ public sealed class TilesServeRenderTests : IDisposable
             for (int y = block.Y; y < block.Y + block.Rows; y++)
             {
                 var (tx, ty) = (x, y);
-                reads.Add(Task.Run(async () => await source.ReadAsync(14, tx, ty, "dusk", TestContext.Current.CancellationToken)));
+                reads.Add(Task.Run(async () => await source.ReadAsync(14, tx, ty, "dusk", null, TestContext.Current.CancellationToken)));
             }
         }
 
@@ -253,7 +253,7 @@ public sealed class TilesServeRenderTests : IDisposable
         using var night = await http.GetAsync(new Uri(server.BaseUri, $"night/14/{x}/{y}.png"), ct);
         night.EnsureSuccessStatusCode();
         Assert.Equal("image/png", night.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(await source.ReadAsync(14, x, y, "night", ct), await night.Content.ReadAsByteArrayAsync(ct));
+        Assert.Equal(await source.ReadAsync(14, x, y, "night", null, ct), await night.Content.ReadAsByteArrayAsync(ct));
 
         Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(new Uri(server.BaseUri, $"sepia/14/{x}/{y}.png"), ct)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(new Uri(server.BaseUri, "sepia/tiles.json"), ct)).StatusCode);

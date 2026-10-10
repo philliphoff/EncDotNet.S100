@@ -123,14 +123,42 @@ internal sealed class TileServer : IAsyncDisposable
         return false;
     }
 
+    /// <summary>
+    /// Reads the optional <c>t</c> query parameter, an ISO 8601 instant (UTC
+    /// unless it says otherwise); answers 400 when it isn't one.
+    /// </summary>
+    private static bool TryTime(HttpContext context, out DateTime? time)
+    {
+        time = null;
+        if (!context.Request.Query.TryGetValue("t", out var values) || string.IsNullOrWhiteSpace(values.ToString()))
+            return true;
+
+        if (DateTimeOffset.TryParse(
+                values.ToString(), CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed))
+        {
+            time = parsed.UtcDateTime;
+            return true;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        return false;
+    }
+
     private static async Task ServeTileJsonAsync(HttpContext context, ITileSource source, string prefix, string? palette)
     {
+        if (!TryTime(context, out var time))
+            return;
+
         // The tile URL is absolute, built from the request, so it works from
         // whichever address the client reached this server on.
         var request = context.Request;
         var baseUri = new Uri($"{request.Scheme}://{request.Host}{prefix}/{(palette is null ? string.Empty : palette + "/")}");
-        var json = source.ToTileJson(palette);
-        json["tiles"] = new System.Text.Json.Nodes.JsonArray(TileUrlTemplate(baseUri, source.Format));
+        var json = source.ToTileJson(palette, time);
+        var tiles = TileUrlTemplate(baseUri, source.Format);
+        if (json["s100"]?["time"] is System.Text.Json.Nodes.JsonValue step)
+            tiles += "?t=" + Uri.EscapeDataString((string)step!);
+        json["tiles"] = new System.Text.Json.Nodes.JsonArray(tiles);
 
         context.Response.ContentType = "application/json";
         context.Response.Headers.CacheControl = "no-cache";
@@ -153,7 +181,10 @@ internal sealed class TileServer : IAsyncDisposable
             return;
         }
 
-        var data = await source.ReadAsync(zoom, x, y, palette, context.RequestAborted).ConfigureAwait(false);
+        if (!TryTime(context, out var time))
+            return;
+
+        var data = await source.ReadAsync(zoom, x, y, palette, time, context.RequestAborted).ConfigureAwait(false);
         context.Response.Headers.CacheControl = "no-cache";
         if (data is null)
         {
@@ -229,6 +260,7 @@ internal sealed class TileServer : IAsyncDisposable
           }
           status.textContent = (tileJson.name || "Tiles") + " · zoom " + tileJson.minzoom + "–" + tileJson.maxzoom;
           const palettes = (tileJson.s100 && tileJson.s100.palettes) || [];
+          const times = (tileJson.s100 && tileJson.s100.times) || [];
           const map = new maplibregl.Map({
             container: "map",
             style: {
@@ -259,9 +291,25 @@ internal sealed class TileServer : IAsyncDisposable
               const option = new Option(palette, palette, false, palette === tileJson.s100.palette);
               select.add(option);
             }
-            select.addEventListener("change", () =>
-              map.getSource("chart").setUrl(new URL(select.value + "/tiles.json", location.href).href));
+            select.addEventListener("change", update);
             status.append(select);
+          }
+          if (times.length > 0) {
+            // Each time step is a t query parameter on the same URLs.
+            const time = document.createElement("select");
+            time.id = "time";
+            time.setAttribute("aria-label", "Time");
+            for (const t of times)
+              time.add(new Option(t.replace("T", " ").replace(":00Z", "Z"), t));
+            time.addEventListener("change", update);
+            status.append(time);
+          }
+          function update() {
+            const palette = document.querySelector("#status select[aria-label=Palette]");
+            const time = document.getElementById("time");
+            const url = new URL((palette ? palette.value + "/" : "") + "tiles.json", location.href);
+            if (time) url.searchParams.set("t", time.value);
+            map.getSource("chart").setUrl(url.href);
           }
           if (tileJson.bounds) {
             const [w, s, e, n] = tileJson.bounds;

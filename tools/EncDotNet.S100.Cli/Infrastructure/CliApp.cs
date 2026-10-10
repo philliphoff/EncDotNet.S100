@@ -52,14 +52,15 @@ internal static class CliApp
                     .WithExample("tiles", "export", "--from", "exchange-set.zip", "-o", "chart.pmtiles", "--bbox", "-1.5,50.0,-1.0,50.5", "--palette", "night");
 
                 tiles.AddCommand<TilesServeCommand>("serve")
-                    .WithDescription("Serve XYZ raster tiles with a TileJSON document, as a tile source for local web maps: a built tile set (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database), or datasets rendered on demand in the day, dusk and night palettes.")
+                    .WithDescription("Serve XYZ raster tiles with a TileJSON document, as a tile source for local web maps: a built tile set (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database), or datasets rendered on demand in the day, dusk and night palettes and, for S-104/S-111, at the time step a ?t= query parameter names.")
                     .WithExample("tiles", "serve", "chart.pmtiles")
                     .WithExample("tiles", "serve", "chart.mbtiles", "--port", "9000")
                     .WithExample("tiles", "serve", "tiles/", "--host", "0.0.0.0")
                     .WithExample("tiles", "serve", "enc.000")
                     .WithExample("tiles", "serve", "--layer", "enc.000", "--layer", "bathy.h5", "--palette", "night")
                     .WithExample("tiles", "serve", "exchange-set/", "--only", "S101", "--max-zoom", "16")
-                    .WithExample("tiles", "serve", "exchange-set/", "--cache-dir", "tile-cache");
+                    .WithExample("tiles", "serve", "exchange-set/", "--cache-dir", "tile-cache")
+                    .WithExample("tiles", "serve", "--layer", "enc.000", "--layer", "currents.h5");
             });
 
             config.AddCommand<ValidateCommand>("validate")

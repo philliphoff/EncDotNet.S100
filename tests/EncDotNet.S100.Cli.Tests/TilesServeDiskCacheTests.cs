@@ -184,7 +184,7 @@ public sealed class TilesServeDiskCacheTests : IDisposable
             foreach (int x in XyzTileGrid.Columns(14, area.MinX, area.MaxX))
             {
                 for (int y = firstRow; y <= lastRow; y++)
-                    tiles[(x, y)] = await first.ReadAsync(14, x, y, "night", TestContext.Current.CancellationToken);
+                    tiles[(x, y)] = await first.ReadAsync(14, x, y, "night", null, TestContext.Current.CancellationToken);
             }
 
             Assert.True(first.BlocksRendered > 0);
@@ -196,7 +196,7 @@ public sealed class TilesServeDiskCacheTests : IDisposable
         using (second)
         {
             foreach (var ((x, y), tile) in tiles)
-                Assert.Equal(tile, await second!.ReadAsync(14, x, y, "night", TestContext.Current.CancellationToken));
+                Assert.Equal(tile, await second!.ReadAsync(14, x, y, "night", null, TestContext.Current.CancellationToken));
             Assert.Equal(0, second!.BlocksRendered);
         }
 
@@ -213,7 +213,7 @@ public sealed class TilesServeDiskCacheTests : IDisposable
         using (third)
         {
             var (x, y) = tiles.First(t => t.Value is not null).Key;
-            Assert.NotNull(await third!.ReadAsync(14, x, y, "night", TestContext.Current.CancellationToken));
+            Assert.NotNull(await third!.ReadAsync(14, x, y, "night", null, TestContext.Current.CancellationToken));
             Assert.Equal(1, third.BlocksRendered);
         }
 
@@ -232,7 +232,7 @@ public sealed class TilesServeDiskCacheTests : IDisposable
         using (fourth)
         {
             var (x, y) = tiles.First(t => t.Value is not null).Key;
-            await fourth!.ReadAsync(14, x, y, "night", TestContext.Current.CancellationToken);
+            await fourth!.ReadAsync(14, x, y, "night", null, TestContext.Current.CancellationToken);
             Assert.Equal(1, fourth.BlocksRendered);
         }
     }

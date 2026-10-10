@@ -53,6 +53,10 @@ internal sealed class TileRenderSession : IDisposable
     // scene and every zoom level's coverage portrayal.
     private readonly Lock _portrayGate = new();
 
+    // The portrayal of each dataset that doesn't vary with time, per palette:
+    // reused by every time step's scene.
+    private readonly Dictionary<(PaletteType Palette, int Index), VectorPortrayalResult> _timelessPortrayals = [];
+
     private TileRenderSession(
         TilesRenderSettings settings,
         IDisposable catalogueManager,
@@ -67,6 +71,13 @@ internal sealed class TileRenderSession : IDisposable
         Specs = specs;
         TryParseImage(settings, out var format);
         Format = format;
+        Times = processors
+            .OfType<ITimeAwareDatasetProcessor>()
+            .SelectMany(p => p.AvailableTimes)
+            .Select(AsUtc)
+            .Distinct()
+            .Order()
+            .ToArray();
     }
 
     /// <summary>The product specification of each dataset, in input order.</summary>
@@ -170,13 +181,45 @@ internal sealed class TileRenderSession : IDisposable
     /// <c>--palette</c> option) and prepares the composite each zoom level is
     /// rendered from.
     /// </summary>
-    public TileScene Prepare(string? palette = null)
+    /// <param name="palette">The palette; <see langword="null"/> for <c>--palette</c>.</param>
+    /// <param name="time">
+    /// One of <see cref="Times"/>, each time-varying dataset being portrayed at
+    /// its own step nearest it; <see langword="null"/> for <c>--time-step</c>.
+    /// </param>
+    public TileScene Prepare(string? palette = null, DateTime? time = null)
     {
         lock (_portrayGate)
-            return PrepareLocked(palette);
+            return PrepareLocked(palette, time);
     }
 
-    private TileScene PrepareLocked(string? palette)
+    /// <summary>
+    /// Every time step of the time-varying datasets (S-104, S-111, …), in UTC,
+    /// ascending and without duplicates; empty when none of them varies.
+    /// </summary>
+    public IReadOnlyList<DateTime> Times { get; }
+
+    /// <summary>
+    /// The entry of <see cref="Times"/> nearest <paramref name="instant"/>, or
+    /// <see langword="null"/> when no dataset varies with time.
+    /// </summary>
+    public DateTime? SnapTime(DateTime instant) =>
+        Times.Count == 0 ? null : RenderContextBuilder.Nearest(Times, AsUtc(instant));
+
+    /// <summary>
+    /// <paramref name="time"/> as UTC. Dataset time steps are UTC; one read
+    /// without a kind is taken as UTC, not converted from local time.
+    /// </summary>
+    internal static DateTime AsUtc(DateTime time) => time.Kind switch
+    {
+        DateTimeKind.Unspecified => DateTime.SpecifyKind(time, DateTimeKind.Utc),
+        DateTimeKind.Local => time.ToUniversalTime(),
+        _ => time,
+    };
+
+    private static bool VariesWithTime(IDatasetProcessor processor) =>
+        processor is ITimeAwareDatasetProcessor timeAware && timeAware.AvailableTimes.Count > 0;
+
+    private TileScene PrepareLocked(string? palette, DateTime? time)
     {
         RenderCommand.TryParsePalette(palette ?? _settings.Palette, out var parsedPalette);
         RenderCommand.TryParseBasemap(_settings.Basemap, out var basemap);
@@ -186,7 +229,7 @@ internal sealed class TileRenderSession : IDisposable
         RenderContext ContextFor(IDatasetProcessor processor, Viewport? viewport) =>
             RenderContextBuilder.Build(
                 processor, parsedPalette, _settings.SymbolScale, _settings.TextScale, _settings.TimeStep, hidden,
-                displayModeId: displayModeId, viewport: viewport);
+                displayModeId: displayModeId, viewport: viewport, instant: time);
 
         // Vector products portray once, independent of the viewport; coverage
         // products portray here without a viewport (the full grid) to find the
@@ -199,7 +242,17 @@ internal sealed class TileRenderSession : IDisposable
             var processor = _processors[i];
             if (processor is IVectorPortrayalSource vectorSource)
             {
-                var result = vectorSource.BuildVectorPortrayalAsync(ContextFor(processor, null)).GetAwaiter().GetResult();
+                VectorPortrayalResult result;
+                if (VariesWithTime(processor))
+                {
+                    result = vectorSource.BuildVectorPortrayalAsync(ContextFor(processor, null)).GetAwaiter().GetResult();
+                }
+                else if (!_timelessPortrayals.TryGetValue((parsedPalette, i), out result!))
+                {
+                    result = vectorSource.BuildVectorPortrayalAsync(ContextFor(processor, null)).GetAwaiter().GetResult();
+                    _timelessPortrayals[(parsedPalette, i)] = result;
+                }
+
                 vectorResults.Add(result);
                 inputs[i] = HeadlessCompositeInput.ForVector(result);
             }
@@ -262,7 +315,7 @@ internal sealed class TileRenderSession : IDisposable
     }
 
     /// <summary>The display settings baked into the tiles, as tile-set metadata records them.</summary>
-    public Dictionary<string, string> DescribeSettings(double referenceLatitude, string? palette = null)
+    public Dictionary<string, string> DescribeSettings(double referenceLatitude, string? palette = null, DateTime? time = null)
     {
         var description = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -279,8 +332,14 @@ internal sealed class TileRenderSession : IDisposable
             description["hidden"] = hidden.ToString();
         if (!string.IsNullOrWhiteSpace(_settings.DisplayMode))
             description["displayMode"] = _settings.DisplayMode.Trim().ToLowerInvariant();
+        if (time is { } at)
+            description["time"] = FormatTime(at);
         return description;
     }
+
+    /// <summary>A time step as ISO 8601 UTC, e.g. <c>2026-10-10T06:00:00Z</c>.</summary>
+    public static string FormatTime(DateTime time) =>
+        AsUtc(time).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// A fingerprint of everything that decides what the tiles look like: the

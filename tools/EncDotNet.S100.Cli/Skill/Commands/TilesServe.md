@@ -19,6 +19,15 @@ unprefixed routes. A tile with nothing drawn, or outside the set, answers
 the wrong extension answers `404`. Every response sends
 `Access-Control-Allow-Origin: *`.
 
+For time-varying datasets (S-104, S-111), add `?t=<ISO 8601>` to a tile or
+`tiles.json` URL to pick the time step: it snaps to the nearest of the steps
+listed in TileJSON `s100.times`, the chosen one is echoed in `s100.time` and in
+the TileJSON tile URL, and each dataset uses its own nearest step. Without `t`,
+`--time-step` applies; an unparseable `t` answers 400; datasets without time
+steps ignore it. Vector datasets are portrayed once per palette and reused
+across time steps; only the most recent eight palette/time combinations are
+kept prepared.
+
 Rendering uses the `tiles export` display, zoom and area options, renders
 `--metatile`-square blocks around each requested tile, keeps up to `--cache-mb`
 of tiles in memory, and runs at most `--parallel` renders at once. The first

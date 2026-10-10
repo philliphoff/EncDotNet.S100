@@ -22,8 +22,10 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// <para>
 /// With <c>--cache-dir</c>, tiles are also kept on disk across runs
 /// (<see cref="DiskTileCache"/>) and read from there before rendering.
-/// At most <c>--parallel</c> blocks render at once. Each palette is portrayed
-/// the first time it is asked for. Tiles outside the tiled area or its zoom
+/// At most <c>--parallel</c> blocks render at once. Each palette, and each
+/// time step asked for with a <c>t</c> query parameter (snapped to the nearest
+/// of <see cref="Times"/>), is portrayed the first time it is asked for
+/// (<see cref="SceneCache"/>). Tiles outside the tiled area or its zoom
 /// range, and tiles on which nothing was drawn, read as <see langword="null"/>.
 /// </para>
 /// </remarks>
@@ -39,8 +41,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     private readonly SemaphoreSlim _renderSlots;
     private readonly TileCache _cache;
     private readonly DiskTileCache? _diskCache;
-    private readonly ConcurrentDictionary<string, Lazy<TileScene>> _scenes = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<(string Palette, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
+    private readonly SceneCache _scenes;
+    private readonly ConcurrentDictionary<(string Palette, DateTime? Time, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
     private long _blocksRendered;
 
     /// <param name="session">The opened datasets. The source disposes it.</param>
@@ -71,7 +73,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         _renderSlots = new SemaphoreSlim(parallel, parallel);
         _cache = new TileCache(cacheBytes);
         _diskCache = diskCache;
-        _scenes[_defaultPalette] = new Lazy<TileScene>(scene);
+        _scenes = new SceneCache(session);
+        _scenes.Seed(_defaultPalette, null, scene);
     }
 
     public string Path => $"{_session.Specs.Count} dataset(s) ({string.Join(", ", _session.Specs.Distinct())})";
@@ -80,15 +83,21 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
     public IReadOnlyList<string> Palettes => AllPalettes;
 
+    public IReadOnlyList<DateTime> Times => _session.Times;
+
     /// <summary>The area and zoom range served.</summary>
     public TileLayout Layout => _layout;
+
+    /// <summary>The number of prepared scenes (palette and time step) held.</summary>
+    internal int ScenesHeld => _scenes.Count;
 
     /// <summary>The number of blocks rendered so far.</summary>
     public long BlocksRendered => Interlocked.Read(ref _blocksRendered);
 
-    public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, CancellationToken cancellationToken)
+    public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
     {
         palette = palette?.Trim().ToLowerInvariant() ?? _defaultPalette;
+        time = time is { } requested ? _session.SnapTime(requested) : null;
         if (!AllPalettes.Contains(palette)
             || zoom < _layout.MinZoom || zoom > _layout.MaxZoom
             || !TileSource.IsValid(zoom, x, y)
@@ -97,7 +106,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             return null;
         }
 
-        var key = new TileKey(palette, zoom, x, y);
+        var key = new TileKey(palette, zoom, x, y, time);
         if (_cache.TryGet(key, out var data))
             return data.Length == 0 ? null : data;
 
@@ -108,8 +117,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         else
         {
             var render = _rendering.GetOrAdd(
-                (palette, block),
-                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(k.Palette, k.Block)));
+                (palette, time, block),
+                k => new Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>(() => RenderBlockAsync(k.Palette, k.Time, k.Block)));
             var tiles = await render.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
             data = tiles[(x, y)];
         }
@@ -117,9 +126,10 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         return data.Length == 0 ? null : data;
     }
 
-    public JsonObject ToTileJson(string? palette)
+    public JsonObject ToTileJson(string? palette, DateTime? time = null)
     {
         palette = palette?.Trim().ToLowerInvariant() ?? _defaultPalette;
+        time = time is { } requested ? _session.SnapTime(requested) : null;
         var json = new TileSetMetadata
         {
             Name = "s100 tiles",
@@ -129,9 +139,11 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             MaxZoom = _layout.MaxZoom,
             Bounds = _layout.Bounds,
             TilePixelSize = _layout.TileOptions.PixelRatio * XyzTileGrid.TileSize,
-            Settings = _session.DescribeSettings(_layout.ReferenceLatitude, palette),
+            Settings = _session.DescribeSettings(_layout.ReferenceLatitude, palette, time),
         }.ToTileJson(tilesUrl: null);
         json["s100"]!["palettes"] = new JsonArray(AllPalettes.Select(p => (JsonNode?)p).ToArray());
+        if (Times.Count > 0)
+            json["s100"]!["times"] = new JsonArray(Times.Select(t => (JsonNode?)TileRenderSession.FormatTime(t)).ToArray());
         return json;
     }
 
@@ -209,16 +221,16 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         static int Mod(int value, int divisor) => ((value % divisor) + divisor) % divisor;
     }
 
-    private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string palette, TileBlock block)
+    private async Task<IReadOnlyDictionary<(int X, int Y), byte[]>> RenderBlockAsync(string palette, DateTime? time, TileBlock block)
     {
         await _renderSlots.WaitAsync().ConfigureAwait(false);
         try
         {
             // Rendering is CPU-bound; keep it off the request threads.
-            var tiles = await Task.Run(() => Render(palette, block)).ConfigureAwait(false);
+            var tiles = await Task.Run(() => Render(palette, time, block)).ConfigureAwait(false);
             foreach (var ((x, y), data) in tiles)
             {
-                var key = new TileKey(palette, block.Zoom, x, y);
+                var key = new TileKey(palette, block.Zoom, x, y, time);
                 _cache.Add(key, data);
                 _diskCache?.Add(key, data);
             }
@@ -232,13 +244,13 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
 
             // Later requests find the tiles in the cache (or render again if
             // they were evicted).
-            _rendering.TryRemove((palette, block), out _);
+            _rendering.TryRemove((palette, time, block), out _);
         }
     }
 
-    private Dictionary<(int X, int Y), byte[]> Render(string palette, TileBlock block)
+    private Dictionary<(int X, int Y), byte[]> Render(string palette, DateTime? time, TileBlock block)
     {
-        var scene = _scenes.GetOrAdd(palette, p => new Lazy<TileScene>(() => _session.Prepare(p))).Value;
+        var scene = _scenes.Get(palette, time);
         var rendered = scene.RendererFor(block.Zoom, _layout).Render(block);
         try
         {
@@ -252,8 +264,64 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     }
 }
 
-/// <summary>One tile in one palette.</summary>
-internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y);
+/// <summary>
+/// The prepared scenes of a <see cref="RenderedTileSource"/>, one per palette
+/// and time step, created on first use. Only the most recently used few are
+/// kept, so stepping through a long forecast doesn't hold a scene per step;
+/// one evicted is prepared again when next needed. Thread-safe.
+/// </summary>
+internal sealed class SceneCache(TileRenderSession session)
+{
+    /// <summary>How many scenes are kept.</summary>
+    public const int Capacity = 8;
+
+    private readonly Lock _gate = new();
+    private readonly Dictionary<(string Palette, DateTime? Time), LinkedListNode<((string Palette, DateTime? Time) Key, Lazy<TileScene> Scene)>> _entries = [];
+    private readonly LinkedList<((string Palette, DateTime? Time) Key, Lazy<TileScene> Scene)> _recency = new();
+
+    /// <summary>The number of scenes held.</summary>
+    public int Count
+    {
+        get
+        {
+            lock (_gate)
+                return _entries.Count;
+        }
+    }
+
+    /// <summary>Adds a scene already prepared.</summary>
+    public void Seed(string palette, DateTime? time, TileScene scene) => Entry(palette, time, new Lazy<TileScene>(scene));
+
+    /// <summary>The scene for <paramref name="palette"/> at <paramref name="time"/>, prepared on first use.</summary>
+    public TileScene Get(string palette, DateTime? time) =>
+        Entry(palette, time, new Lazy<TileScene>(() => session.Prepare(palette, time))).Value;
+
+    private Lazy<TileScene> Entry(string palette, DateTime? time, Lazy<TileScene> create)
+    {
+        lock (_gate)
+        {
+            var key = (palette, time);
+            if (_entries.TryGetValue(key, out var node))
+            {
+                _recency.Remove(node);
+                _recency.AddFirst(node);
+                return node.Value.Scene;
+            }
+
+            _entries[key] = _recency.AddFirst((key, create));
+            while (_entries.Count > Capacity && _recency.Last is { } oldest)
+            {
+                _recency.RemoveLast();
+                _entries.Remove(oldest.Value.Key);
+            }
+
+            return create;
+        }
+    }
+}
+
+/// <summary>One tile in one palette, at one time step (<see langword="null"/> for <c>--time-step</c>).</summary>
+internal readonly record struct TileKey(string Palette, int Zoom, int X, int Y, DateTime? Time = null);
 
 /// <summary>
 /// Encoded tiles kept in memory up to a byte budget, evicting the least
