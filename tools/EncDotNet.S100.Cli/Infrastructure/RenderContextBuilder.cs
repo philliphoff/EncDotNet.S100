@@ -8,8 +8,8 @@ namespace EncDotNet.S100.Cli.Infrastructure;
 /// Builds the spec-specific <see cref="RenderContext"/> the dataset processors
 /// expect, mapping CLI options (palette, scales, time-step index, hidden
 /// instruction categories) onto the correct context record. Time-series specs
-/// resolve their <c>--time-step</c> index against
-/// <see cref="ITimeAwareDatasetProcessor"/>.
+/// resolve their <c>--time-step</c> index, or the step nearest an explicit
+/// instant, against <see cref="ITimeAwareDatasetProcessor"/>.
 /// </summary>
 internal static class RenderContextBuilder
 {
@@ -22,9 +22,12 @@ internal static class RenderContextBuilder
         DrawingInstructionCategory hiddenCategories = DrawingInstructionCategory.None,
         BasemapKind basemap = BasemapKind.None,
         string? displayModeId = null,
-        Viewport? viewport = null)
+        Viewport? viewport = null,
+        DateTime? instant = null)
     {
-        DateTime? timeStep = ResolveTimeStep(processor, timeStepIndex);
+        DateTime? timeStep = instant is { } at
+            ? NearestTimeStep(processor, at)
+            : ResolveTimeStep(processor, timeStepIndex);
 
         RenderContext context = processor.Spec.Name switch
         {
@@ -46,6 +49,31 @@ internal static class RenderContextBuilder
         };
 
         return context with { Basemap = basemap, DisplayModeId = displayModeId, Viewport = viewport };
+    }
+
+    /// <summary>
+    /// The time step of <paramref name="processor"/> nearest <paramref name="instant"/>
+    /// (UTC), or <see langword="null"/> when it has none.
+    /// </summary>
+    internal static DateTime? NearestTimeStep(IDatasetProcessor processor, DateTime instant)
+    {
+        if (processor is not ITimeAwareDatasetProcessor timeAware || timeAware.AvailableTimes.Count == 0)
+            return null;
+
+        return Nearest(timeAware.AvailableTimes, instant);
+    }
+
+    /// <summary>The entry of <paramref name="times"/> nearest <paramref name="instant"/>; the earlier one on a tie.</summary>
+    internal static DateTime Nearest(IReadOnlyList<DateTime> times, DateTime instant)
+    {
+        var best = times[0];
+        foreach (var time in times)
+        {
+            if (Math.Abs((time - instant).Ticks) < Math.Abs((best - instant).Ticks))
+                best = time;
+        }
+
+        return best;
     }
 
     private static DateTime? ResolveTimeStep(IDatasetProcessor processor, int timeStepIndex)

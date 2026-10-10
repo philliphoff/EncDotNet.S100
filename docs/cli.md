@@ -499,8 +499,16 @@ The server has these routes:
 - When rendering datasets, `day/`, `dusk/` and `night/` hold the same two
   routes in that palette, for example `night/{z}/{x}/{y}.png` and
   `night/tiles.json`. Each palette is portrayed the first time it's asked for.
+- When rendering time-varying datasets (S-104, S-111), a `t` query parameter
+  on either route picks the time step, for example
+  `{z}/{x}/{y}.png?t=2026-03-21T07:00Z`. The time is ISO 8601, UTC unless it
+  says otherwise, and snaps to the nearest step; each dataset then uses its own
+  step nearest to it. The TileJSON lists every step in `s100.times`, and with
+  `t` it names the chosen step in `s100.time` and carries it in its tile URL.
+  Without `t`, `--time-step` applies. A `t` that isn't a time answers
+  `400 Bad Request`; datasets that don't vary with time ignore it.
 - `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
-  menu when rendering datasets. It loads MapLibre GL JS and the basemap from
+  menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
   the internet. Pass `--no-viewer` to turn it off.
 
 Every response allows any origin, so a page served from another port can use

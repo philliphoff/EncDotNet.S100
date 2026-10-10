@@ -81,12 +81,14 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
 
     public IReadOnlyList<string> Palettes => Current.Palettes;
 
-    public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, CancellationToken cancellationToken)
+    public IReadOnlyList<DateTime> Times => Current.Times;
+
+    public async ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken)
     {
         var generation = Acquire();
         try
         {
-            return await generation.Source.ReadAsync(zoom, x, y, palette, cancellationToken).ConfigureAwait(false);
+            return await generation.Source.ReadAsync(zoom, x, y, palette, time, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -94,12 +96,12 @@ internal sealed class RefreshingTileSource : ITileSource, IAsyncDisposable
         }
     }
 
-    public JsonObject ToTileJson(string? palette)
+    public JsonObject ToTileJson(string? palette, DateTime? time = null)
     {
         var generation = Acquire();
         try
         {
-            return generation.Source.ToTileJson(palette);
+            return generation.Source.ToTileJson(palette, time);
         }
         finally
         {

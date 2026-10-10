@@ -23,18 +23,27 @@ internal interface ITileSource
     IReadOnlyList<string> Palettes => [];
 
     /// <summary>
-    /// The encoded tile at XYZ <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>
-    /// (rows numbered from the north) in <paramref name="palette"/> (one of
-    /// <see cref="Palettes"/>, or <see langword="null"/> for the default), or
-    /// <see langword="null"/> when there is none there.
+    /// The time steps the tiles can be served at (UTC, ascending), chosen with
+    /// a <c>t</c> query parameter; empty when the tiles don't vary with time.
     /// </summary>
-    ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, CancellationToken cancellationToken);
+    IReadOnlyList<DateTime> Times => [];
 
     /// <summary>
-    /// A TileJSON 3.0.0 document describing the tiles in <paramref name="palette"/>,
-    /// without its <c>tiles</c> URL template (the server adds it).
+    /// The encoded tile at XYZ <paramref name="zoom"/>/<paramref name="x"/>/<paramref name="y"/>
+    /// (rows numbered from the north) in <paramref name="palette"/> (one of
+    /// <see cref="Palettes"/>, or <see langword="null"/> for the default) at
+    /// the time step nearest <paramref name="time"/> (<see langword="null"/>
+    /// for the default; ignored when <see cref="Times"/> is empty), or
+    /// <see langword="null"/> when there is none there.
     /// </summary>
-    JsonObject ToTileJson(string? palette);
+    ValueTask<byte[]?> ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A TileJSON 3.0.0 document describing the tiles in <paramref name="palette"/>
+    /// at the time step nearest <paramref name="time"/>, without its
+    /// <c>tiles</c> URL template (the server adds it).
+    /// </summary>
+    JsonObject ToTileJson(string? palette, DateTime? time = null);
 }
 
 /// <summary>
@@ -61,10 +70,10 @@ internal interface ITileSetSource : ITileSource
     /// <summary>A TileJSON 3.0.0 document describing the set, without its <c>tiles</c> URL template.</summary>
     JsonObject ToTileJson();
 
-    ValueTask<byte[]?> ITileSource.ReadAsync(int zoom, int x, int y, string? palette, CancellationToken cancellationToken) =>
+    ValueTask<byte[]?> ITileSource.ReadAsync(int zoom, int x, int y, string? palette, DateTime? time, CancellationToken cancellationToken) =>
         ValueTask.FromResult(palette is null ? Read(zoom, x, y) : null);
 
-    JsonObject ITileSource.ToTileJson(string? palette) => ToTileJson();
+    JsonObject ITileSource.ToTileJson(string? palette, DateTime? time) => ToTileJson();
 }
 
 /// <summary>Opens the <see cref="ITileSource"/> for a path.</summary>

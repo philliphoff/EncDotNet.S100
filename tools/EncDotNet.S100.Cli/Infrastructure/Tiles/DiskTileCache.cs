@@ -10,7 +10,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Tiles are stored as <c>&lt;root&gt;/&lt;fingerprint&gt;/&lt;palette&gt;/&lt;z&gt;/&lt;x&gt;/&lt;y&gt;.&lt;ext&gt;</c>,
+/// Tiles are stored as <c>&lt;root&gt;/&lt;fingerprint&gt;/&lt;palette&gt;/&lt;z&gt;/&lt;x&gt;/&lt;y&gt;.&lt;ext&gt;</c>
+/// (<c>&lt;palette&gt;-&lt;yyyyMMddTHHmmssZ&gt;</c> for a time step asked for by URL),
 /// where the fingerprint (<see cref="TileRenderSession.Fingerprint"/>) names
 /// the data and settings they were rendered from, so a tile is only reused for
 /// the same ones. A tile with nothing on it is an empty file.
@@ -157,7 +158,9 @@ internal sealed partial class DiskTileCache
 
     private string PathFor(TileKey key) => Path.Combine(
         _folder,
-        key.Palette,
+        key.Time is { } time
+            ? key.Palette + "-" + TileRenderSession.AsUtc(time).ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture)
+            : key.Palette,
         key.Zoom.ToString(CultureInfo.InvariantCulture),
         key.X.ToString(CultureInfo.InvariantCulture),
         key.Y.ToString(CultureInfo.InvariantCulture) + _extension);
