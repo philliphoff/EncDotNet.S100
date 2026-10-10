@@ -282,6 +282,80 @@ internal sealed class TileRenderSession : IDisposable
         return description;
     }
 
+    /// <summary>
+    /// A fingerprint of everything that decides what the tiles look like: the
+    /// <c>s100</c> version, every input file's path, size and write time
+    /// (including sibling update files and the whole of an exchange set), and
+    /// the options that change pixels. A persisted tile cache is kept per
+    /// fingerprint, so tiles are only reused for the same data and settings.
+    /// The palette is not included; it is part of each tile's key.
+    /// </summary>
+    /// <returns>32 lowercase hexadecimal characters.</returns>
+    public string Fingerprint()
+    {
+        var text = new System.Text.StringBuilder();
+        void Line(string name, object? value) =>
+            text.Append(name).Append('=').Append(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)).Append('\n');
+
+        Line("generator", CliVersionInfo.FromAssembly(typeof(TileRenderSession).Assembly).InformationalVersion);
+        Line("format", Format);
+        Line("quality", _settings.Quality);
+        Line("tileSize", _settings.TileSize);
+        Line("symbolScale", _settings.SymbolScale);
+        Line("textScale", _settings.TextScale);
+        Line("timeStep", _settings.TimeStep);
+        Line("background", _settings.Background?.Trim().ToLowerInvariant());
+        Line("hidden", HiddenCategories(_settings));
+        Line("basemap", _settings.Basemap.Trim().ToLowerInvariant());
+        Line("displayMode", _settings.DisplayMode?.Trim().ToLowerInvariant());
+        Line("bbox", _settings.BoundingBox);
+        Line("only", _settings.Only);
+        Line("noUpdates", _settings.NoUpdates);
+        Line("metatile", _settings.Metatile);
+
+        foreach (var file in InputFiles(_settings))
+        {
+            var info = new FileInfo(file);
+            Line("file", $"{info.FullName}|{(info.Exists ? info.Length : -1)}|{(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)}");
+        }
+
+        var hash = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.ToString()));
+        return Convert.ToHexStringLower(hash, 0, 16);
+    }
+
+    /// <summary>
+    /// The files the tiles are made from, in input order: each dataset with
+    /// its sibling files (S-101 and S-57 update files share its name), or every
+    /// file of an exchange set.
+    /// </summary>
+    private static IEnumerable<string> InputFiles(TilesRenderSettings settings)
+    {
+        if (settings.IsExchangeSet)
+        {
+            var source = Path.GetFullPath(settings.ExchangeSetSource!);
+            var root = Directory.Exists(source) ? source
+                : source.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? null
+                : Path.GetDirectoryName(source);
+            return root is null
+                ? [source]
+                : Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToList();
+        }
+
+        var files = new List<string>();
+        foreach (var path in settings.IsComposite ? settings.Layers : [settings.Input!])
+        {
+            var full = Path.GetFullPath(path);
+            var directory = Path.GetDirectoryName(full)!;
+            var stem = Path.GetFileNameWithoutExtension(full);
+            files.Add(full);
+            files.AddRange(Directory.EnumerateFiles(directory, stem + ".*")
+                .Where(f => !string.Equals(f, full, StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal));
+        }
+
+        return files;
+    }
+
     public void Dispose()
     {
         foreach (var processor in _processors)

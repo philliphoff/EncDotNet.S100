@@ -58,7 +58,8 @@ internal static class CliApp
                     .WithExample("tiles", "serve", "tiles/", "--host", "0.0.0.0")
                     .WithExample("tiles", "serve", "enc.000")
                     .WithExample("tiles", "serve", "--layer", "enc.000", "--layer", "bathy.h5", "--palette", "night")
-                    .WithExample("tiles", "serve", "exchange-set/", "--only", "S101", "--max-zoom", "16");
+                    .WithExample("tiles", "serve", "exchange-set/", "--only", "S101", "--max-zoom", "16")
+                    .WithExample("tiles", "serve", "exchange-set/", "--cache-dir", "tile-cache");
             });
 
             config.AddCommand<ValidateCommand>("validate")

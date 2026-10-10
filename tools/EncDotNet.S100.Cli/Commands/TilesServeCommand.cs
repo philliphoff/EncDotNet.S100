@@ -51,12 +51,34 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         [DefaultValue(256)]
         public int CacheMegabytes { get; init; } = 256;
 
+        [CommandOption("--cache-dir <FOLDER>")]
+        [Description("When rendering datasets: also keep rendered tiles in this folder, across runs. Tiles are reused only for the same data and settings.")]
+        public string? CacheDirectory { get; init; }
+
+        [CommandOption("--cache-dir-mb <MEGABYTES>")]
+        [Description("The most disk space the --cache-dir tiles take, in megabytes (default 1024). The least recently used are deleted first.")]
+        [DefaultValue(1024)]
+        public int CacheDirectoryMegabytes { get; init; } = 1024;
+
+        [CommandOption("--clear-cache")]
+        [Description("Delete the tiles cached in --cache-dir before serving.")]
+        public bool ClearCache { get; init; }
+
         /// <summary>Whether the input is a built tile set rather than datasets.</summary>
         public bool ServesTileSet =>
             !IsComposite && !IsExplicitExchangeSet && !string.IsNullOrWhiteSpace(Input) && TileSource.IsTileSet(Input);
 
         public override ValidationResult Validate()
         {
+            if (ServesTileSet && CacheDirectory is not null)
+                return ValidationResult.Error("--cache-dir applies only when rendering datasets, not when serving a built tile set.");
+            if (ClearCache && CacheDirectory is null)
+                return ValidationResult.Error("--clear-cache needs --cache-dir.");
+            if (CacheDirectoryMegabytes < 1)
+                return ValidationResult.Error("--cache-dir-mb must be at least 1.");
+            if (CacheDirectory is not null && File.Exists(CacheDirectory))
+                return ValidationResult.Error($"--cache-dir '{CacheDirectory}' is a file, not a folder.");
+
             if (!ServesTileSet)
             {
                 if (!string.IsNullOrWhiteSpace(Input) && !Directory.Exists(Input) && !File.Exists(Input))
@@ -157,6 +179,17 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 return 2;
             }
 
+            DiskTileCache? diskCache = null;
+            if (settings.CacheDirectory is { } cacheDirectory)
+            {
+                if (settings.ClearCache)
+                    DiskTileCache.Clear(cacheDirectory);
+                diskCache = new DiskTileCache(
+                    cacheDirectory, session.Fingerprint(), session.Format, settings.CacheDirectoryMegabytes * 1024L * 1024L);
+                AnsiConsole.MarkupLine(string.Create(System.Globalization.CultureInfo.CurrentCulture,
+                    $"[grey]Caching tiles in {Markup.Escape(diskCache.Folder)} ({diskCache.Size / (1024.0 * 1024.0):N1} of {settings.CacheDirectoryMegabytes:N0} MB used).[/]"));
+            }
+
             source = new RenderedTileSource(
                 session,
                 scene,
@@ -164,7 +197,8 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
                 settings.Palette,
                 settings.Metatile,
                 settings.Parallel ?? Environment.ProcessorCount,
-                settings.CacheMegabytes * 1024L * 1024L);
+                settings.CacheMegabytes * 1024L * 1024L,
+                diskCache);
             return 0;
         }
         catch

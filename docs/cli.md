@@ -462,7 +462,18 @@ datasets with `--layer` instead.
 When it renders datasets, `tiles serve` renders the block of `--metatile` ×
 `--metatile` tiles around a requested tile and keeps every tile of the block in
 memory, up to `--cache-mb`, so neighbouring tiles come back at once. At most
-`--parallel` blocks render at a time. The zoom levels and the area served are
+`--parallel` blocks render at a time.
+
+With `--cache-dir`, rendered tiles are also kept in that folder, so they come
+back without rendering after a restart. They're stored under a fingerprint of
+the data and settings: each input file's path, size and write time (S-101
+update files and the whole of an exchange set included), the display and
+format options, and the `s100` version. Change any of them and new tiles are
+rendered, so a kept tile is never stale. The folder holds up to
+`--cache-dir-mb`, least recently used tiles going first, including those of
+data or settings you no longer serve. `--clear-cache` empties it before
+serving. Only the cache's own fingerprint folders are read or deleted, so other
+files in the folder are left alone, and several servers can share one folder. The zoom levels and the area served are
 worked out as for `tiles export`, and `--min-zoom`, `--max-zoom` and `--bbox`
 narrow them. `--palette` sets the palette of the plain tile URLs; the other
 palettes are served too, under their own URLs.
@@ -503,6 +514,9 @@ area, the tile format and display settings apply too; the output options
 | `--no-token` | off | Serves without a token, even on a non-loopback address. |
 | `--no-viewer` | off | Doesn't serve the preview page. |
 | `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
+| `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
+| `--cache-dir-mb <megabytes>` | `1024` | The most disk space the `--cache-dir` tiles take. |
+| `--clear-cache` | off | Deletes the tiles cached in `--cache-dir` before serving. |
 
 ```bash
 s100 tiles serve chart.pmtiles
@@ -511,6 +525,7 @@ s100 tiles serve tiles/ --host 0.0.0.0
 s100 tiles serve enc.000
 s100 tiles serve --layer enc.000 --layer bathy.h5 --palette night
 s100 tiles serve exchange-set/ --only S101 --max-zoom 16
+s100 tiles serve exchange-set/ --cache-dir ~/.cache/s100-tiles
 ```
 
 To use the tiles in MapLibre GL JS, add a raster source from the TileJSON URL:
