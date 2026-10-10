@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// description come from its <c>tiles.json</c> when it has one; otherwise from
 /// the files themselves.
 /// </summary>
-internal sealed class XyzDirectoryTileSource : ITileSource
+internal sealed class XyzDirectoryTileSource : ITileSetSource
 {
     private static readonly string[] Extensions = ["png", "jpg", "jpeg", "webp"];
 

@@ -78,8 +78,16 @@ internal sealed class TileServer : IAsyncDisposable
         if (viewer)
             app.MapGet(prefix + "/", ServeViewerAsync);
 
-        app.MapGet(prefix + "/" + XyzDirectoryTileSink.TileJsonFileName, context => ServeTileJsonAsync(context, source, prefix));
-        app.MapGet(prefix + "/{z}/{x}/{tile}", context => ServeTileAsync(context, source));
+        app.MapGet(prefix + "/" + XyzDirectoryTileSink.TileJsonFileName, context => ServeTileJsonAsync(context, source, prefix, palette: null));
+        app.MapGet(prefix + "/{z}/{x}/{tile}", context => ServeTileAsync(context, source, palette: null));
+        if (source.Palettes.Count > 0)
+        {
+            // The same tiles in each palette, under /{palette}/.
+            app.MapGet(prefix + "/{palette}/" + XyzDirectoryTileSink.TileJsonFileName, context =>
+                TryPalette(context, source, out var palette) ? ServeTileJsonAsync(context, source, prefix, palette) : Task.CompletedTask);
+            app.MapGet(prefix + "/{palette}/{z}/{x}/{tile}", context =>
+                TryPalette(context, source, out var palette) ? ServeTileAsync(context, source, palette) : Task.CompletedTask);
+        }
 
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
 
@@ -104,13 +112,24 @@ internal sealed class TileServer : IAsyncDisposable
         await _app.DisposeAsync().ConfigureAwait(false);
     }
 
-    private static async Task ServeTileJsonAsync(HttpContext context, ITileSource source, string prefix)
+    /// <summary>Reads the <c>{palette}</c> route value; answers 404 when the source has no such palette.</summary>
+    private static bool TryPalette(HttpContext context, ITileSource source, out string palette)
+    {
+        palette = ((string)context.Request.RouteValues["palette"]!).ToLowerInvariant();
+        if (source.Palettes.Contains(palette))
+            return true;
+
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return false;
+    }
+
+    private static async Task ServeTileJsonAsync(HttpContext context, ITileSource source, string prefix, string? palette)
     {
         // The tile URL is absolute, built from the request, so it works from
         // whichever address the client reached this server on.
         var request = context.Request;
-        var baseUri = new Uri($"{request.Scheme}://{request.Host}{prefix}/");
-        var json = source.ToTileJson();
+        var baseUri = new Uri($"{request.Scheme}://{request.Host}{prefix}/{(palette is null ? string.Empty : palette + "/")}");
+        var json = source.ToTileJson(palette);
         json["tiles"] = new System.Text.Json.Nodes.JsonArray(TileUrlTemplate(baseUri, source.Format));
 
         context.Response.ContentType = "application/json";
@@ -118,7 +137,7 @@ internal sealed class TileServer : IAsyncDisposable
         await context.Response.WriteAsync(json.ToJsonString(TileSetMetadata.JsonOptions), context.RequestAborted).ConfigureAwait(false);
     }
 
-    private static async Task ServeTileAsync(HttpContext context, ITileSource source)
+    private static async Task ServeTileAsync(HttpContext context, ITileSource source, string? palette)
     {
         var values = context.Request.RouteValues;
         var tile = (string)values["tile"]!;
@@ -134,7 +153,7 @@ internal sealed class TileServer : IAsyncDisposable
             return;
         }
 
-        var data = source.Read(zoom, x, y);
+        var data = await source.ReadAsync(zoom, x, y, palette, context.RequestAborted).ConfigureAwait(false);
         context.Response.Headers.CacheControl = "no-cache";
         if (data is null)
         {
@@ -192,7 +211,7 @@ internal sealed class TileServer : IAsyncDisposable
         <title>s100 tiles</title>
         <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
         <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-        <style>html, body, #map { margin: 0; height: 100%; } #status { position: absolute; top: 8px; left: 8px; padding: 4px 8px; background: #fffc; font: 13px system-ui, sans-serif; border-radius: 4px; }</style>
+        <style>html, body, #map { margin: 0; height: 100%; } #status { position: absolute; top: 8px; left: 8px; padding: 4px 8px; background: #fffc; font: 13px system-ui, sans-serif; border-radius: 4px; } #status select { margin-left: 6px; font: inherit; }</style>
         </head>
         <body>
         <div id="map"></div>
@@ -209,6 +228,7 @@ internal sealed class TileServer : IAsyncDisposable
             return;
           }
           status.textContent = (tileJson.name || "Tiles") + " · zoom " + tileJson.minzoom + "–" + tileJson.maxzoom;
+          const palettes = (tileJson.s100 && tileJson.s100.palettes) || [];
           const map = new maplibregl.Map({
             container: "map",
             style: {
@@ -231,6 +251,18 @@ internal sealed class TileServer : IAsyncDisposable
             zoom: tileJson.center ? tileJson.center[2] : 1,
           });
           map.addControl(new maplibregl.NavigationControl());
+          if (palettes.length > 0) {
+            // Each palette has its own TileJSON under /{palette}/.
+            const select = document.createElement("select");
+            select.setAttribute("aria-label", "Palette");
+            for (const palette of palettes) {
+              const option = new Option(palette, palette, false, palette === tileJson.s100.palette);
+              select.add(option);
+            }
+            select.addEventListener("change", () =>
+              map.getSource("chart").setUrl(new URL(select.value + "/tiles.json", location.href).href));
+            status.append(select);
+          }
           if (tileJson.bounds) {
             const [w, s, e, n] = tileJson.bounds;
             map.fitBounds([[w, s], [e, n]], { padding: 20, animate: false });

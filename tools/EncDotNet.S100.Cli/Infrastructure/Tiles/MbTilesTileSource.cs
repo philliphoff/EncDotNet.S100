@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// it open between requests. MBTiles numbers rows from the south (TMS), so
 /// each XYZ row is flipped.
 /// </remarks>
-internal sealed class MbTilesTileSource : ITileSource
+internal sealed class MbTilesTileSource : ITileSetSource
 {
     private readonly string _connectionString;
 

@@ -11,10 +11,11 @@ month. For package versions and release assets, see
   Leaflet and OpenLayers, written as a `{z}/{x}/{y}` folder, a PMTiles
   archive or an MBTiles database. Each zoom level draws only what's visible at its scale. See
   [`tiles export`](cli.md#tiles-export).
-- **Serving tiles.** `s100 tiles serve` serves a tile set on XYZ URLs with a
+- **Serving tiles.** `s100 tiles serve` serves tiles on XYZ URLs with a
   TileJSON document and a preview page, so a web map on your computer can use
-  it as a tile source. It reads folders, PMTiles and MBTiles. See
-  [`tiles serve`](cli.md#tiles-serve).
+  them as a tile source. It serves a built folder, PMTiles or MBTiles tile set,
+  or renders datasets as their tiles are asked for, in the day, dusk and night
+  palettes. See [`tiles serve`](cli.md#tiles-serve).
 - **Signing and permits.** S-100 Part 15 support now covers the data
   server's side. `Part15Signer` produces ECDSA P-384 signatures, and
   `PermitFileWriter` writes a `PERMIT.XML` and its `PERMIT.SIGN`, using cell
