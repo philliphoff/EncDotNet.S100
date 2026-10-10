@@ -23,6 +23,13 @@ Rendering uses the `tiles export` display, zoom and area options, renders
 `--metatile`-square blocks around each requested tile, keeps up to `--cache-mb`
 of tiles in memory, and runs at most `--parallel` renders at once. The first
 request for a block, and for each palette, is slow; later ones are cached.
+`--cache-dir <folder>` also keeps rendered tiles on disk across runs, under a
+fingerprint of the input files (path, size, write time) and the rendering
+options, so a restart with unchanged data and settings serves them without
+rendering, and changed ones never reuse stale tiles. `--cache-dir-mb` caps the
+folder (default 1024, least recently used evicted first, across fingerprints);
+`--clear-cache` empties it first. Only 32-hex-character fingerprint folders
+are touched. `--cache-dir` is rejected when serving a built tile set.
 
 The server listens on `127.0.0.1:8200` by default. With a non-loopback
 `--host`, a random token is added to every URL unless `--token` or

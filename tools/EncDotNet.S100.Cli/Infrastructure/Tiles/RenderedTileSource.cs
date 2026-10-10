@@ -20,6 +20,8 @@ namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 /// that render rather than starting another.
 /// </para>
 /// <para>
+/// With <c>--cache-dir</c>, tiles are also kept on disk across runs
+/// (<see cref="DiskTileCache"/>) and read from there before rendering.
 /// At most <c>--parallel</c> blocks render at once. Each palette is portrayed
 /// the first time it is asked for. Tiles outside the tiled area or its zoom
 /// range, and tiles on which nothing was drawn, read as <see langword="null"/>.
@@ -36,6 +38,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     private readonly int _blockSize;
     private readonly SemaphoreSlim _renderSlots;
     private readonly TileCache _cache;
+    private readonly DiskTileCache? _diskCache;
     private readonly ConcurrentDictionary<string, Lazy<TileScene>> _scenes = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<(string Palette, TileBlock Block), Lazy<Task<IReadOnlyDictionary<(int X, int Y), byte[]>>>> _rendering = new();
     private long _blocksRendered;
@@ -47,6 +50,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     /// <param name="blockSize">The edge length of a rendered block, in tiles.</param>
     /// <param name="parallel">The most blocks rendered at once.</param>
     /// <param name="cacheBytes">The most encoded tile bytes kept in memory.</param>
+    /// <param name="diskCache">Tiles kept on disk across runs, behind the memory cache; <see langword="null"/> for none.</param>
     public RenderedTileSource(
         TileRenderSession session,
         TileScene scene,
@@ -54,7 +58,8 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         string defaultPalette,
         int blockSize,
         int parallel,
-        long cacheBytes)
+        long cacheBytes,
+        DiskTileCache? diskCache = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(blockSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(parallel);
@@ -65,6 +70,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         _blockSize = blockSize;
         _renderSlots = new SemaphoreSlim(parallel, parallel);
         _cache = new TileCache(cacheBytes);
+        _diskCache = diskCache;
         _scenes[_defaultPalette] = new Lazy<TileScene>(scene);
     }
 
@@ -92,7 +98,14 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         }
 
         var key = new TileKey(palette, zoom, x, y);
-        if (!_cache.TryGet(key, out var data))
+        if (_cache.TryGet(key, out var data))
+            return data.Length == 0 ? null : data;
+
+        if (_diskCache?.TryGet(key, out data) == true)
+        {
+            _cache.Add(key, data);
+        }
+        else
         {
             var render = _rendering.GetOrAdd(
                 (palette, block),
@@ -182,7 +195,12 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
             // Rendering is CPU-bound; keep it off the request threads.
             var tiles = await Task.Run(() => Render(palette, block)).ConfigureAwait(false);
             foreach (var ((x, y), data) in tiles)
-                _cache.Add(new TileKey(palette, block.Zoom, x, y), data);
+            {
+                var key = new TileKey(palette, block.Zoom, x, y);
+                _cache.Add(key, data);
+                _diskCache?.Add(key, data);
+            }
+
             Interlocked.Increment(ref _blocksRendered);
             return tiles;
         }
