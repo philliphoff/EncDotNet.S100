@@ -62,7 +62,10 @@ public static class SecomDiagnosticCodes
         // The server's certificate was accepted and it asked for a client
         // certificate, yet the connection failed: the handshake was refused
         // for want of an (acceptable) client certificate.
-        if (failure is HttpRequestException { StatusCode: null } && serverTrust is { Allowed: true } && handshake is { CertificateRequested: true })
+        // Where the request isn't seen (Windows: no handshake recorded), a failed
+        // connection that presented an identity to a trusted server reads as its refusal.
+        if (failure is HttpRequestException { StatusCode: null } && serverTrust is { Allowed: true }
+            && (handshake?.CertificateRequested ?? identity is not null))
             return identity is not null ? CertificateRefused : NeedsCertificate;
 
         for (var inner = failure; inner is not null; inner = inner.InnerException)
