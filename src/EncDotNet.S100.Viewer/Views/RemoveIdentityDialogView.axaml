@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:keys="using:EncDotNet.S100.Viewer.ViewModels.Keys"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.RemoveIdentityDialogView"
+             x:DataType="keys:RemoveIdentityDialogViewModel"
+             Width="440">
+
+    <!-- Remove identity (#883 F): what happens to each source, and a new default when removing the default. -->
+    <UserControl.Styles>
+        <Style Selector="Button.defaultChip">
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="Chip" CornerRadius="999" BorderThickness="1" Padding="{TemplateBinding Padding}"
+                            BorderBrush="{DynamicResource BorderColor}" Background="Transparent">
+                        <ContentPresenter Content="{TemplateBinding Content}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.defaultChip.selected /template/ Border#Chip">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="18,14,18,14" RowSpacing="12">
+        <StackPanel Spacing="4">
+            <TextBlock Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Body}" FontSize="12.5" Opacity="0.65" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Spacing="12">
+            <!-- F2: the new default. -->
+            <StackPanel Spacing="6" IsVisible="{Binding IsDefault}">
+                <TextBlock Text="{x:Static loc:Strings.Keys_RemoveIdentity_NewDefault}" FontSize="12" FontWeight="SemiBold" />
+                <ItemsControl ItemsSource="{Binding NewDefaults}"
+                              AutomationProperties.AutomationId="RemoveIdentity.NewDefault"
+                              AutomationProperties.Name="{x:Static loc:Strings.Keys_RemoveIdentity_NewDefault}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel ItemSpacing="6" LineSpacing="6" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="keys:NewDefaultChoice">
+                            <Button Classes="defaultChip" Classes.selected="{Binding IsSelected}" Command="{Binding SelectCommand}"
+                                    AutomationProperties.AutomationId="RemoveIdentity.NewDefault.Choice"
+                                    AutomationProperties.Name="{Binding Label}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Panel Width="12" Height="12" VerticalAlignment="Center">
+                                        <Ellipse Stroke="{DynamicResource MutedColor}" StrokeThickness="1.5" />
+                                        <Ellipse Width="6" Height="6" Fill="{DynamicResource AccentBrush}" IsVisible="{Binding IsSelected}" />
+                                    </Panel>
+                                    <TextBlock Text="{Binding Label}" FontSize="12" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- F3: what happens to each source. -->
+            <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6" Padding="10,8"
+                    IsVisible="{Binding HasEffects}" AutomationProperties.AutomationId="RemoveIdentity.Affected">
+                <ItemsControl ItemsSource="{Binding Effects}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="6" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="keys:RemoveIdentityEffect">
+                            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="8">
+                                <ic:FluentIcon Icon="Server" FontSize="13" Opacity="0.65" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{Binding Source}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{Binding Outcome}" FontSize="12" Opacity="0.65" TextWrapping="Wrap" VerticalAlignment="Center" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
+            <TextBlock Text="{Binding Footnote}" FontSize="11.5" Opacity="0.65" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}"
+                    AutomationProperties.AutomationId="RemoveIdentity.Cancel" />
+            <Button Classes="Destructive" Content="{x:Static loc:Strings.Keys_RemoveIdentity_Confirm}" Command="{Binding RemoveCommand}"
+                    AutomationProperties.AutomationId="RemoveIdentity.Remove" />
+        </StackPanel>
+    </Grid>
+</UserControl>
