@@ -49,7 +49,15 @@ public sealed record SourceIndexGroup(string Id, string Name, int MissingPathCou
 /// <param name="Severity">How serious the problem is.</param>
 /// <param name="Message">A human-readable description.</param>
 /// <param name="Path">The file or entry concerned, if any.</param>
-public sealed record IndexDiagnostic(IndexDiagnosticSeverity Severity, string Message, string? Path = null);
+public sealed record IndexDiagnostic(IndexDiagnosticSeverity Severity, string Message, string? Path = null)
+{
+    /// <summary>
+    /// What kind of problem it is, for hosts that explain or act on it without
+    /// parsing <see cref="Message"/>, e.g. a <see cref="Secom.SecomDiagnosticCodes"/>
+    /// value; <see langword="null"/> when there is none.
+    /// </summary>
+    public string? Code { get; init; }
+}
 
 /// <summary>The severity of an <see cref="IndexDiagnostic"/>.</summary>
 public enum IndexDiagnosticSeverity

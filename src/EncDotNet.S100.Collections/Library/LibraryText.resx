@@ -220,6 +220,22 @@
   <data name="Library_StatusLine_ProblemsFormat" xml:space="preserve">
     <value>{0:N0} problems</value>
   </data>
+  <data name="Library_StatusLine_SecomNeedsCertificate" xml:space="preserve">
+    <value>Needs a certificate</value>
+  </data>
+  <data name="Library_StatusLine_SecomNeedsSignedRequest" xml:space="preserve">
+    <value>Needs a signed request</value>
+  </data>
+  <data name="Library_StatusLine_SecomCertificateRefused" xml:space="preserve">
+    <value>Your certificate was refused</value>
+  </data>
+  <data name="Library_StatusLine_SecomServerUntrusted" xml:space="preserve">
+    <value>Server certificate not trusted</value>
+  </data>
+  <data name="Library_StatusLine_SecomStaleFormat" xml:space="preserve">
+    <value>{0} · showing the last list</value>
+    <comment>{0}: why the SECOM service could not be read, e.g. "Needs a certificate"</comment>
+  </data>
   <data name="Library_StatusLine_Session" xml:space="preserve">
     <value>Temporary · Pin to keep</value>
   </data>

@@ -241,6 +241,12 @@ and `Get`, using `SecomClient`:
   - The indexer marks those items `RemoteEnvelope.SecomPost`, and
     `EncCellDownloader.SecomSigner` posts a signed Get for them.
   - Without an identity they fail with `SecomIdentityRequiredException`.
+- **Certificate problems in the Library.** A SECOM source that can't be listed
+  for want of an identity, a refused identity or an untrusted server carries a
+  `SecomDiagnosticCodes` code on its `IndexDiagnostic`, and its status reads
+  "Needs a certificate", "Needs a signed request", "Your certificate was
+  refused" or "Server certificate not trusted". `SecomTrustRefresh` re-reads
+  just those sources when the identity or the trusted authorities change.
 - **Registry.** `SecomRegistry` lists SECOM services from the MCP Maritime
   Service Registry's anonymous search.
   - It cleans the listing: it drops unusable endpoints and deleted and
