@@ -309,6 +309,11 @@ public static partial class LibraryNodeText
         if (sources.FirstOrDefault(x => x.State == LibrarySourceState.Failed && x.Index is null) is { } failed)
             return (string.Format(c, LibraryText.Get("Library_StatusLine_FailedFormat"), failed.Error ?? string.Empty), LibraryNodeStatusKind.Error);
 
+        // A SECOM service that could not be read for want of an identity, or
+        // because of a certificate, says so in the directory's words (#880).
+        if (sources is [{ Definition: SecomSource, Index: { } secomIndex }] && SecomCode(secomIndex) is { } secomCode)
+            return SecomStatus(secomCode, hasItems: secomIndex.Items.Count > 0, c);
+
         // A shared feed says whether its server is reachable (for a source, or a one-source collection).
         if (sources is [{ Definition: S100FeedSource feed }] && input.Health?.Invoke(feed) is { } health)
             return FeedStatus(feed, health, c);
@@ -330,6 +335,38 @@ public static partial class LibraryNodeText
         if (input.Collection.IsSession)
             return (LibraryText.Get("Library_StatusLine_Session"), LibraryNodeStatusKind.Info);
         return (null, LibraryNodeStatusKind.None);
+    }
+
+    /// <summary>
+    /// The <see cref="Secom.SecomDiagnosticCodes"/> code of a SECOM source's
+    /// last read, when it could not read the service for a certificate reason
+    /// (#880); otherwise <see langword="null"/>.
+    /// </summary>
+    public static string? SecomCode(SourceIndex index)
+    {
+        ArgumentNullException.ThrowIfNull(index);
+        return index.Diagnostics
+            .Where(d => d.Severity >= IndexDiagnosticSeverity.Warning)
+            .Select(d => d.Code)
+            .FirstOrDefault(code => code is Secom.SecomDiagnosticCodes.NeedsCertificate
+                or Secom.SecomDiagnosticCodes.NeedsSignedRequest
+                or Secom.SecomDiagnosticCodes.CertificateRefused
+                or Secom.SecomDiagnosticCodes.ServerUntrusted);
+    }
+
+    /// <summary>"Needs a certificate", or with a cached list "Needs a certificate · showing the last list".</summary>
+    private static (string, LibraryNodeStatusKind) SecomStatus(string code, bool hasItems, CultureInfo c)
+    {
+        var why = LibraryText.Get(code switch
+        {
+            Secom.SecomDiagnosticCodes.NeedsCertificate => "Library_StatusLine_SecomNeedsCertificate",
+            Secom.SecomDiagnosticCodes.NeedsSignedRequest => "Library_StatusLine_SecomNeedsSignedRequest",
+            Secom.SecomDiagnosticCodes.CertificateRefused => "Library_StatusLine_SecomCertificateRefused",
+            _ => "Library_StatusLine_SecomServerUntrusted",
+        });
+        return hasItems
+            ? (string.Format(c, LibraryText.Get("Library_StatusLine_SecomStaleFormat"), why), LibraryNodeStatusKind.Warning)
+            : (why, LibraryNodeStatusKind.Error);
     }
 
     /// <summary>"Synced 1,732 of 1,732 · 14:05", or why a synced source is not fully local.</summary>

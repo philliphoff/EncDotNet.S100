@@ -1504,6 +1504,38 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   only. The result includes `reference` for a stored identity.
 > - **Reset all settings** also deletes stored identities' keys.
 
+### 7.14 From a certificate problem to its fix (#880)
+
+> - **Coded diagnostics.** `IndexDiagnostic.Code` says what kind of
+>   problem a diagnostic is, so hosts don't parse messages. A SECOM source
+>   that can't be listed carries a `SecomDiagnosticCodes` value:
+>   - `NeedsCertificate`: 401 or 403 with no identity set;
+>   - `NeedsSignedRequest`: SECOM 2.0's signed requests with no identity;
+>   - `CertificateRefused`: 401 or 403 with an identity set;
+>   - `ServerUntrusted`: a TLS `AuthenticationException`.
+>
+>   The code is on the Error diagnostic, or on the Warning when a cached
+>   list is shown instead.
+> - **Library status.** `LibraryNodeText.Status` gives such a source the
+>   directory's words: "Needs a certificate", "Needs a signed request",
+>   "Your certificate was refused" or "Server certificate not trusted". It
+>   reads "… · showing the last list" when a cached list is shown.
+> - **The way to the fix.** The Library row and the directory row offer a
+>   link, and the revocation notification uses the same route:
+>   - "Set up an identity…" for no identity;
+>   - "Manage identities…" for a refused or not-accepted one;
+>   - "Trusted authorities…" for a server under no trusted authority.
+>
+>   The link opens Settings → Keys & certificates on the right tab
+>   (`KeysNavigator`). The wizard closes first. Expired, wrong-host and
+>   revoked server certificates get no link: the user can't fix those.
+> - **Re-read on change.** `SecomTrustRefresh` re-reads only the affected
+>   SECOM sources:
+>   - on `IdentityChanged`, those with an identity code;
+>   - on `AnchorsChanged`, those with `ServerUntrusted`.
+>
+>   Sources that read fine are left alone.
+
 ## 8. Implementation slices
 
 Each slice is a PR. Slices 1–2 are library-only and testable without

@@ -3166,6 +3166,18 @@
   <data name="Library_Reachability_UntrustedServerExplanation" xml:space="preserve">
     <value>This service's TLS certificate is not issued under a root this computer or SoundCharts trusts.</value>
   </data>
+  <data name="Keys_Fix_SetUpIdentity" xml:space="preserve">
+    <value>Set up an identity…</value>
+  </data>
+  <data name="Keys_Fix_ManageIdentities" xml:space="preserve">
+    <value>Manage identities…</value>
+  </data>
+  <data name="Keys_Fix_TrustedAuthorities" xml:space="preserve">
+    <value>Trusted authorities…</value>
+  </data>
+  <data name="Keys_Fix_Help" xml:space="preserve">
+    <value>Opens Settings, Keys and certificates, where MCP identities and trusted authorities are managed.</value>
+  </data>
   <data name="Library_Reachability_NeedsSecom2Search" xml:space="preserve">
     <value>Needs a signed request</value>
   </data>

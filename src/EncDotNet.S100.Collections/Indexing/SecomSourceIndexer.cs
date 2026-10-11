@@ -120,8 +120,12 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         var listing = await TryListAsync(secom, cancellationToken).ConfigureAwait(false);
         if (listing is null)
         {
+            var failure = LastError(serviceUri);
             diagnostics.Add(new IndexDiagnostic(
-                IndexDiagnosticSeverity.Error, LastError(serviceUri) ?? "The SECOM service could not be read.", serviceUri.AbsoluteUri));
+                IndexDiagnosticSeverity.Error, failure?.Message ?? "The SECOM service could not be read.", serviceUri.AbsoluteUri)
+            {
+                Code = failure?.Code,
+            });
             return new SourceIndex(source.Id, _time.GetUtcNow(), null, [], diagnostics);
         }
 
@@ -131,7 +135,10 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
                 IndexDiagnosticSeverity.Warning,
                 string.Create(CultureInfo.InvariantCulture,
                     $"The service could not be reached ({reason}); listing what it offered at {listing.ReadAt:u}."),
-                serviceUri.AbsoluteUri));
+                serviceUri.AbsoluteUri)
+            {
+                Code = LastError(serviceUri)?.Code,
+            });
         }
 
         if (listing.Truncated)
@@ -203,7 +210,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         ArgumentNullException.ThrowIfNull(serviceUri);
         var source = new SecomSource(Guid.Empty, null, serviceUri, new SecomFilter { GeometryWkt = geometryWkt });
         var listing = await TryListAsync(source, cancellationToken).ConfigureAwait(false)
-            ?? throw new HttpRequestException(LastError(SecomClient.NormalizeServiceUri(serviceUri)) ?? "The SECOM service could not be read.");
+            ?? throw new HttpRequestException(LastError(SecomClient.NormalizeServiceUri(serviceUri))?.Message ?? "The SECOM service could not be read.");
         var products = listing.Items
             .GroupBy(s => s.ProductSpec ?? "Unknown", StringComparer.OrdinalIgnoreCase)
             .Select(g => new CatalogFacetValue(g.Key, g.Count(), g.Sum(s => s.Size ?? 0)))
@@ -382,8 +389,9 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         }
         catch (Exception ex) when (IsServiceFailure(ex, cancellationToken))
         {
+            var failure = new Failure(ex.Message, SecomDiagnosticCodes.Classify(ex, IdentitySet()));
             lock (_gate)
-                _errors[serviceUri.AbsoluteUri] = ex.Message;
+                _errors[serviceUri.AbsoluteUri] = failure;
             if (Load(key) is not { } saved)
                 return null;
             listing = saved with { Stale = ex.Message };
@@ -394,9 +402,25 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         return listing;
     }
 
-    private readonly Dictionary<string, string> _errors = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Failure> _errors = new(StringComparer.Ordinal);
 
-    private string? LastError(Uri serviceUri)
+    /// <summary>Why a service could not be read, and its <see cref="SecomDiagnosticCodes"/> code, if any.</summary>
+    private sealed record Failure(string Message, string? Code);
+
+    /// <summary>Whether an identity is set to present or sign with, as far as <see cref="Signer"/> tells.</summary>
+    private bool IdentitySet()
+    {
+        try
+        {
+            return Signer?.Invoke() is not null;
+        }
+        catch (InvalidDataException)
+        {
+            return true;  // set, but it cannot sign with the chosen algorithm
+        }
+    }
+
+    private Failure? LastError(Uri serviceUri)
     {
         lock (_gate)
             return _errors.TryGetValue(serviceUri.AbsoluteUri, out var error) ? error : null;

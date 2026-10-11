@@ -119,6 +119,14 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     /// <summary>Lists SECOM services from the MCP service registry (#822); the registry is only asked when this runs.</summary>
     public ICommand ShowRegistryCommand { get; }
 
+    /// <summary>
+    /// Raised when the user follows a registry service's fix link
+    /// ("Set up an identity…"), with the Keys &amp; certificates tab to open (#880).
+    /// </summary>
+    public event EventHandler<Keys.KeysTab>? KeysRequested;
+
+    private void OnFixRequested(Keys.KeysTab tab) => KeysRequested?.Invoke(this, tab);
+
     /// <summary>True when the registry can be listed and is not listed yet.</summary>
     public bool CanShowRegistry => _loadRegistry is not null && !_registryLoaded && !_isLoadingRegistry;
 
@@ -416,7 +424,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
                 .ThenBy(s => s.Product, StringComparer.Ordinal)
                 .ThenBy(s => s.Name, StringComparer.CurrentCulture)
                 // Keep what was already found out about a service.
-                .Select(s => previous.TryGetValue(s.Id, out var kept) ? kept : new CatalogueEntryViewModel(s, _openUrl, isRegistry: true)))
+                .Select(s => previous.TryGetValue(s.Id, out var kept) ? kept : new CatalogueEntryViewModel(s, _openUrl, isRegistry: true, openFix: OnFixRequested)))
             .Concat(_user.Select(s => new CatalogueEntryViewModel(s, _openUrl, Remove)))
             .ToArray();
 
@@ -483,12 +491,23 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     private bool _isProbing;
 
     public CatalogueEntryViewModel(
-        KnownCatalogueSource source, Action<Uri>? openUrl, Action<KnownCatalogueSource>? remove = null, bool isRegistry = false)
+        KnownCatalogueSource source,
+        Action<Uri>? openUrl,
+        Action<KnownCatalogueSource>? remove = null,
+        bool isRegistry = false,
+        Action<Keys.KeysTab>? openFix = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         Source = source;
         IsRegistry = isRegistry;
         IsUser = remove is not null;
+        OpenFixCommand = new RelayCommand(
+            () =>
+            {
+                if (Services.Secom.KeysNavigator.TabFor(FixCode) is { } tab)
+                    openFix?.Invoke(tab);
+            },
+            () => openFix is not null);
         RemoveCommand = new RelayCommand(() => remove?.Invoke(source), () => remove is not null);
         OpenHomepageCommand = new RelayCommand(
             () => openUrl?.Invoke(source.Homepage!),
@@ -591,6 +610,30 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     /// <summary>True when <see cref="ReachabilityExplanation"/> is set.</summary>
     public bool HasReachabilityExplanation => ReachabilityExplanation is not null;
 
+    /// <summary>
+    /// The certificate problem a Keys &amp; certificates tab can fix, as a
+    /// <see cref="SecomDiagnosticCodes"/> value (#880): none set, refused or
+    /// not accepted, or a server under no trusted authority.
+    /// </summary>
+    internal string? FixCode => _reachability switch
+    {
+        { Reachability: SecomReachability.NeedsCertificate } => SecomDiagnosticCodes.NeedsCertificate,
+        { Reachability: SecomReachability.NeedsSecom2Search, Identity: null } => SecomDiagnosticCodes.NeedsSignedRequest,
+        { Reachability: SecomReachability.NeedsSecom2Search or SecomReachability.CertificateRefused } => SecomDiagnosticCodes.CertificateRefused,
+        { Reachability: SecomReachability.UntrustedServer, ServerTrust: null or { Outcome: SecomServerTrustOutcome.NotTrusted } } =>
+            SecomDiagnosticCodes.ServerUntrusted,
+        _ => null,
+    };
+
+    /// <summary>The fix link, e.g. "Set up an identity…", or <see langword="null"/>.</summary>
+    public string? FixText => Services.Secom.KeysNavigator.ActionText(FixCode);
+
+    /// <summary>True when the row offers <see cref="FixText"/>.</summary>
+    public bool HasFix => FixText is not null && OpenFixCommand.CanExecute(null);
+
+    /// <summary>Opens Settings → Keys &amp; certificates on the tab that fixes this service's problem.</summary>
+    public RelayCommand OpenFixCommand { get; }
+
     /// <summary>Records what the probe found.</summary>
     internal void SetReachability(SecomProbeResult result)
     {
@@ -601,6 +644,8 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsReachabilityLimited));
         OnPropertyChanged(nameof(ReachabilityExplanation));
         OnPropertyChanged(nameof(HasReachabilityExplanation));
+        OnPropertyChanged(nameof(FixText));
+        OnPropertyChanged(nameof(HasFix));
     }
 
     /// <summary>True for a region header (not selectable).</summary>

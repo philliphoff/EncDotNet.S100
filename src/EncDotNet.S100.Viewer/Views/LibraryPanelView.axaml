@@ -127,6 +127,26 @@
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <!-- "Set up an identity…" after a SECOM source's status line (#880). -->
+        <Style Selector="Button.libraryFix">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="2,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="{DynamicResource LibrarySecondaryFontSize}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
+                                      Background="Transparent" Foreground="{TemplateBinding Foreground}" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.libraryFix:pointerover">
+            <Setter Property="Opacity" Value="0.8" />
+        </Style>
         <Style Selector="Ellipse.libraryStatusDot">
             <Setter Property="Fill" Value="{DynamicResource MutedColor}" />
         </Style>
@@ -462,7 +482,7 @@
                 <TreeView.ItemTemplate>
                     <TreeDataTemplate x:DataType="vm:LibraryNodeViewModel" ItemsSource="{Binding Children}">
                         <!-- Kind tag, name, count; a second line only when something is off-normal. -->
-                        <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8"
+                        <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="8"
                               MinHeight="20" Background="Transparent"
                               ToolTip.Tip="{Binding Tooltip}">
                             <!-- Centred on the first line (row 0), also when a status line follows. -->
@@ -507,6 +527,17 @@
                                            Foreground="{DynamicResource ForegroundColor}" Opacity="0.7"
                                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                             </StackPanel>
+                            <!-- On its own line, so a long status line never pushes it out of view. -->
+                            <Button Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Classes="libraryFix"
+                                    HorizontalAlignment="Left" Margin="11,1,0,0"
+                                    IsVisible="{Binding HasSecomFix}"
+                                    Content="{Binding SecomFixText}"
+                                    AutomationProperties.AutomationId="Library.Tree.SecomFix"
+                                    AutomationProperties.Name="{Binding SecomFixText}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Keys_Fix_Help}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Keys_Fix_Help}"
+                                    Command="{Binding $parent[TreeView].((vm:LibraryPanelViewModel)DataContext).OpenSecomFixCommand}"
+                                    CommandParameter="{Binding}" />
                         </Grid>
                     </TreeDataTemplate>
                 </TreeView.ItemTemplate>
