@@ -19,12 +19,12 @@ public sealed record S57TranslationTarget
 {
     /// <summary>
     /// Translation into S-101, validated against the bundled S-101 Feature
-    /// Catalogue.
+    /// Catalogue (edition 2.0.0).
     /// </summary>
     public static S57TranslationTarget S101 { get; } = new()
     {
         Spec = "S-101",
-        Edition = "1.0.0",
+        Edition = "2.0.0",
     };
 
     /// <summary>

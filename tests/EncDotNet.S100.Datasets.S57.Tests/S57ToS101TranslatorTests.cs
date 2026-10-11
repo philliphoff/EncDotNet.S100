@@ -550,7 +550,7 @@ public class S57ToS101TranslatorTests
 
         Assert.Same(S57TranslationTarget.S101, translator.Target);
         Assert.Equal("S-101", s101.Identification.ProductSpecification);
-        Assert.Equal("1.0.0", s101.Identification.ProductSpecificationEdition);
+        Assert.Equal("2.0.0", s101.Identification.ProductSpecificationEdition);
     }
 
     [Fact]
