@@ -5,29 +5,39 @@ namespace EncDotNet.S100.Collections.Library;
 
 /// <summary>
 /// A scope of a SECOM service (issue #804): the service's objects counted per
-/// product, read anonymously through <c>GetSummary</c>, with the products as
-/// the one group. A source can be kept in sync (#807; <see cref="Sync"/>) and
-/// narrowed to the current map view (<see cref="InMapView"/>).
+/// product, read through <c>GetSummary</c> with the source's
+/// <see cref="Identity"/> (#883), with the products as the one group. A source
+/// can be kept in sync (#807; <see cref="Sync"/>) and narrowed to the current
+/// map view (<see cref="InMapView"/>).
 /// </summary>
+/// <remarks>
+/// A service that can't be read yet (it needs a certificate or a signed
+/// request, refused the identity, has an untrusted server or can't be
+/// reached) can still be added with <see cref="Wait"/>: the source starts
+/// with no datasets, scoped to the products the service is known for, and
+/// lists once it can be read (#883 "Add and wait").
+/// </remarks>
 public sealed class SecomScope : LibraryCatalogueScope
 {
     /// <summary>The most a new source is synced by default (the sync's own cap).</summary>
     private static readonly long SyncDefaultBytes = new LibrarySyncOptions().MaxBytes;
 
-    private readonly Func<Uri, string?, CancellationToken, Task<SecomServiceDescription>> _describe;
+    private readonly Func<Uri, string?, string?, CancellationToken, Task<SecomServiceDescription>> _describe;
     private readonly Func<GeoBounds?>? _currentMapView;
     private SecomServiceDescription? _service;
     private IReadOnlyList<LibraryChoiceGroup> _groups = [];
     private string? _area;
     private bool? _sync;
+    private bool _waiting;
+    private string _identity = Secom.SecomIdentitySetting.Default;
 
     /// <summary>Creates a scope of the service at <paramref name="serviceUri"/>.</summary>
     /// <param name="serviceUri">The service's endpoint.</param>
-    /// <param name="describe">Reads what the service offers, optionally within an area (WKT).</param>
+    /// <param name="describe">Reads what the service offers, optionally within an area (WKT), with an identity setting.</param>
     /// <param name="currentMapView">The map view the service can be narrowed to, or null when there is none.</param>
     public SecomScope(
         Uri serviceUri,
-        Func<Uri, string?, CancellationToken, Task<SecomServiceDescription>> describe,
+        Func<Uri, string?, string?, CancellationToken, Task<SecomServiceDescription>> describe,
         Func<GeoBounds?>? currentMapView = null)
         : base(serviceUri)
     {
@@ -37,7 +47,49 @@ public sealed class SecomScope : LibraryCatalogueScope
     }
 
     /// <inheritdoc />
-    public override bool IsLoaded => _service is not null;
+    public override bool IsLoaded => _service is not null || _waiting;
+
+    /// <summary>
+    /// True when the source is added before the service can be read
+    /// (<see cref="Wait"/>): it starts with no datasets.
+    /// </summary>
+    public bool IsWaiting => _waiting;
+
+    /// <summary>Why the service couldn't be read when it was added to wait, if known.</summary>
+    public string? WaitingReason { get; private set; }
+
+    /// <summary>
+    /// The identity the service is read with, and the source presents (#883):
+    /// <c>default</c> (the default), <c>none</c> or an <c>sc-ident:</c> reference.
+    /// Changing it takes effect on the next <see cref="LoadAsync"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException">The value is none of the three.</exception>
+    public string Identity
+    {
+        get => _identity;
+        set => _identity = Secom.SecomIdentitySetting.TryParse(value, out var setting)
+            ? setting
+            : throw new ArgumentException($"'{value}' is not an identity setting.", nameof(value));
+    }
+
+    /// <summary>
+    /// Adds the service without reading it ("Add and wait", #883): the products
+    /// it is known for (from its directory entry; none for every product)
+    /// become the choices, all ticked. The source starts with no datasets and
+    /// lists once the service can be read. <see cref="LoadAsync"/> leaves this.
+    /// </summary>
+    /// <param name="products">The products the service is known for, e.g. <c>S-124</c>.</param>
+    /// <param name="reason">Why the service can't be read yet, as the last read said.</param>
+    public void Wait(IEnumerable<string>? products, string? reason = null)
+    {
+        WaitingReason = reason;
+        var known = products?.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray() ?? [];
+        _service = null;
+        _waiting = true;
+        _groups = known.Length == 0
+            ? []
+            : [new(LibraryText.Get("Library_FeedProducts"), [.. known.Select(p => new LibraryChoice(p, p, LibraryText.Get("Library_SecomWaitingDetail")) { IsSelected = true })])];
+    }
 
     /// <summary>One group: the products.</summary>
     public override IReadOnlyList<LibraryChoiceGroup> Groups => _groups;
@@ -68,13 +120,14 @@ public sealed class SecomScope : LibraryCatalogueScope
     /// </summary>
     public bool Sync
     {
-        get => _sync ?? (_service is { Truncated: false } && SelectedBytes <= SyncDefaultBytes);
+        get => _sync ?? (!_waiting && _service is { Truncated: false } && SelectedBytes <= SyncDefaultBytes);
         set => _sync = value;
     }
 
     /// <summary>"Downloads 9.8 MB now", or why syncing is not advised; null until the service is read.</summary>
     public string? SyncHint =>
-        _service is null ? null
+        _waiting ? LibraryText.Get("Library_SecomWaitingSyncHint")
+        : _service is null ? null
         : _service.Truncated ? LibraryText.Get("Library_SecomSyncTruncated")
         : string.Format(CultureInfo.CurrentCulture,
             LibraryText.Get(SelectedBytes > SyncDefaultBytes ? "Library_SecomSyncTooLargeFormat" : "Library_SecomSyncSizeFormat"),
@@ -106,7 +159,9 @@ public sealed class SecomScope : LibraryCatalogueScope
     /// <inheritdoc />
     public override Task<string?> LoadAsync(CancellationToken cancellationToken = default) => TryLoadAsync(async () =>
     {
-        var service = await _describe(CatalogUri, _area, cancellationToken).ConfigureAwait(false);
+        var service = await _describe(CatalogUri, _area, _identity, cancellationToken).ConfigureAwait(false);
+        _waiting = false;
+        WaitingReason = null;
         _groups =
         [
             new(LibraryText.Get("Library_FeedProducts"),
@@ -122,6 +177,8 @@ public sealed class SecomScope : LibraryCatalogueScope
     {
         get
         {
+            if (_waiting)
+                return LibraryText.Get("Library_SecomWaitingSummary");
             if (_service is null)
                 return string.Empty;
             var filter = CurrentFilter;
@@ -131,7 +188,8 @@ public sealed class SecomScope : LibraryCatalogueScope
     }
 
     /// <summary>"All 1,735 objects · 8.6 MB" (or "First 5,000 of 67,640 objects …") for the whole service.</summary>
-    public override string EverythingSummary => _service is null
+    public override string EverythingSummary => _waiting ? LibraryText.Get("Library_SecomWaitingSummary")
+        : _service is null
         ? string.Empty
         : CountSummary(_service.ListedItems, _service.Products.Sum(p => p.TotalBytes), all: true);
 
@@ -156,7 +214,7 @@ public sealed class SecomScope : LibraryCatalogueScope
         if (_area is not null)
             name = string.Format(CultureInfo.CurrentCulture, LibraryText.Get("Library_SecomAreaNameFormat"), name ?? CatalogUri.Host);
         var sync = Sync;
-        return new SecomSource(id, name, CatalogUri, filter) { Sync = sync, ShowOnMap = sync };
+        return new SecomSource(id, name, CatalogUri, filter) { Sync = sync, ShowOnMap = sync, Identity = _identity };
     }
 
     private string CountSummary(int count, long bytes, bool all)

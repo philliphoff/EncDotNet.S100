@@ -47,12 +47,12 @@ public sealed class AddOnlineCatalogueWizardViewTests
         Layout(window);
 
         wizard.NextCommand.Execute(null);
-        Assert.Equal(2, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);
         wizard.Scope!.Choices("States")[0].IsSelected = true;
         Layout(window);
 
         wizard.NextCommand.Execute(null);
-        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(4, wizard.CurrentStep);
         Layout(window);
 
         Assert.Equal(640, view.Bounds.Width);
@@ -86,7 +86,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         Layout(window);
 
         wizard.NextCommand.Execute(null);
-        Assert.Equal(2, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);
         Assert.True(wizard.Scope!.IsRegionPicker);
         wizard.Scope.SelectedFacetGroup = wizard.Scope.FacetGroups[1];
         wizard.Scope.FacetGroups[1].Options[0].IsSelected = true;
@@ -94,7 +94,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         Layout(window);
 
         wizard.NextCommand.Execute(null);
-        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(4, wizard.CurrentStep);
         Layout(window);
 
         Assert.Equal(640, view.Bounds.Width);
@@ -164,7 +164,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         host.Type("NOAA ENC");
         host.Click(CatalogueRow(host, "noaa-enc"));
         host.Click(host.Find<Button>("Wizard.Next"));
-        Assert.Equal(2, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);
 
         // Step 2: only one state.
         var state = wizard.Scope!.Choices("States")[0];
@@ -172,7 +172,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         host.Click(host.FindAll<CheckBox>("CatalogueScope.Option").Single(c => ReferenceEquals(c.DataContext, state)));
         Assert.True(state.IsSelected);
         host.Click(host.Find<Button>("Wizard.Next"));
-        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(4, wizard.CurrentStep);
 
         // Step 3: a new collection, named by the user.
         host.Click(host.Find<RadioButton>("CatalogueTarget.CreateNew"));

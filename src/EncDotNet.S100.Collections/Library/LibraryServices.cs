@@ -77,7 +77,7 @@ public sealed class LibraryServices : IDisposable
             S100Catalogue = (uri, ct) => s100Catalogues.GetCatalogueAsync(uri, cancellationToken: ct),
             ListS100Folders = (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct),
             ForecastModels = (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct),
-            Secom = (uri, area, ct) => secom.DescribeAsync(uri, area, cancellationToken: ct),
+            Secom = (uri, area, identity, ct) => secom.DescribeAsync(uri, area, identity, ct),
         };
 
         var probeHttp = Client(TimeSpan.FromSeconds(30));

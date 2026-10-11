@@ -53,4 +53,44 @@ internal sealed partial class AddToLibraryDialogViewModel
 
     /// <summary>"Downloads 9.8 MB now", or why syncing is not advised.</summary>
     public string? SecomSyncHint => Secom?.SyncHint;
+
+    /// <summary>The identity the service is read with and the source presents (#883), as chosen in the Connection step.</summary>
+    public string? SecomIdentity => Secom?.Identity;
+
+    /// <summary>True when the service is added before it can be read ("Add and wait", #883).</summary>
+    public bool IsSecomWaiting => Secom?.IsWaiting == true;
+
+    /// <summary>
+    /// Reads the service with <paramref name="identity"/> (the Connection step's
+    /// choice, when it reads), unless it was already read with it.
+    /// </summary>
+    internal Task ReadSecomWithAsync(string identity, CancellationToken cancellationToken = default)
+    {
+        if (Secom is not { } secom)
+            return Task.CompletedTask;
+        if (secom.IsLoaded && !secom.IsWaiting && string.Equals(secom.Identity, identity, StringComparison.Ordinal))
+            return Task.CompletedTask;
+        secom.Identity = identity;
+        return LoadCatalogAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the service without reading it ("Add and wait", #883): it is read
+    /// with <paramref name="identity"/> once it can be, and starts scoped to
+    /// <paramref name="products"/> from its directory entry.
+    /// </summary>
+    internal void WaitForSecom(string identity, IReadOnlyList<string> products)
+    {
+        if (Secom is not { } secom)
+            return;
+        secom.Identity = identity;
+        secom.Wait(products);
+        LoadError = null;
+        ShowGroups(secom);
+        UpdateSelection();
+        OnPropertyChanged(nameof(IsSecomWaiting));
+        OnPropertyChanged(nameof(SecomSyncHint));
+        OnPropertyChanged(nameof(SecomSync));
+        OnPropertyChanged(nameof(Title));
+    }
 }

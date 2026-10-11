@@ -314,7 +314,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         Uri? described = null;
         var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
         {
-            Secom = (uri, _, _) =>
+            Secom = (uri, _, _, _) =>
             {
                 described = uri;
                 return Task.FromResult(description);
@@ -352,7 +352,7 @@ public sealed class AddToLibraryDialogViewModelTests : IDisposable
         var areas = new List<string?>();
         var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
         {
-            Secom = (_, area, _) =>
+            Secom = (_, area, _, _) =>
             {
                 areas.Add(area);
                 var bytes = area is null ? 500L * 1024 * 1024 : 5120;  // the whole service is too big to sync

@@ -59,7 +59,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
         await NextAsync(wizard);
 
-        Assert.Equal(2, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);  // a catalogue that isn't SECOM skips Connection
         Assert.Single(_loads);
         Assert.Equal("B", wizard.Steps[0].Value);
         Assert.True(wizard.Steps[0].IsDone);
@@ -72,7 +72,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
         await NextAsync(wizard);
 
-        Assert.Equal(2, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);  // a catalogue that isn't SECOM skips Connection
         Assert.Single(_loads);
     }
 
@@ -91,7 +91,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
         Assert.NotSame(first, wizard.Scope);
         Assert.True(wizard.Scope!.IncludeAll);
-        Assert.Equal("Everything", wizard.Steps[1].Value);
+        Assert.Equal("Everything", wizard.Steps[2].Value);
 
         wizard.ChangeCatalogueCommand.Execute(null);
         wizard.Directory.SelectedEntry = Entry(wizard, "a");
@@ -99,7 +99,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
         Assert.Same(first, wizard.Scope);
         Assert.True(first.Choices("States").Single(s => s.Value == "AK").IsSelected);
-        Assert.Equal("Alaska", wizard.Steps[1].Value);
+        Assert.Equal("Alaska", wizard.Steps[2].Value);
         Assert.Equal(2, _loads.Count);
     }
 
@@ -127,25 +127,29 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
     {
         var wizard = CreateWizard(Source("a"));
         wizard.Start(null);
-        Assert.Equal("Choose a catalogue first", wizard.Steps[1].Value);
-        Assert.Equal("Collection", wizard.Steps[2].Value);
+        Assert.Equal("SECOM services", wizard.Steps[1].Value);
+        Assert.Equal("Choose a catalogue first", wizard.Steps[2].Value);
+        Assert.Equal("Collection", wizard.Steps[3].Value);
         Assert.All(wizard.Steps, s => Assert.False(s.GoToCommand.CanExecute(null)));
 
         await NextAsync(wizard);
         await NextAsync(wizard);
 
-        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(4, wizard.CurrentStep);
         Assert.True(wizard.IsLastStep);
-        Assert.Equal("New collection", wizard.Steps[2].Value);
+        Assert.Equal("Not needed", wizard.Steps[1].Value);
+        Assert.Equal("New collection", wizard.Steps[3].Value);
         Assert.True(wizard.Steps[0].GoToCommand.CanExecute(null));
-        Assert.True(wizard.Steps[1].GoToCommand.CanExecute(null));
+        Assert.False(wizard.Steps[1].GoToCommand.CanExecute(null));  // skipped: not a SECOM service
+        Assert.True(wizard.Steps[2].GoToCommand.CanExecute(null));
+        Assert.False(wizard.Steps[3].GoToCommand.CanExecute(null));
+
+        wizard.BackCommand.Execute(null);
+        Assert.Equal(3, wizard.CurrentStep);
+        wizard.BackCommand.Execute(null);
+        Assert.Equal(1, wizard.CurrentStep);  // Back skips Connection too
+        Assert.True(wizard.Steps[2].IsUpcoming);
         Assert.False(wizard.Steps[2].GoToCommand.CanExecute(null));
-
-        wizard.Steps[0].GoToCommand.Execute(null);
-
-        Assert.Equal(1, wizard.CurrentStep);
-        Assert.True(wizard.Steps[1].IsUpcoming);
-        Assert.False(wizard.Steps[1].GoToCommand.CanExecute(null));
     }
 
     [Fact]
@@ -180,7 +184,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
         await wizard.StartAtIncludeAsync(feed, null);
 
-        Assert.Equal(2, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);
         Assert.True(wizard.Steps[0].IsDone);
         Assert.Equal("Shared", wizard.Steps[0].Value);
         Assert.Equal(feed.CatalogUri, Assert.Single(_loads));

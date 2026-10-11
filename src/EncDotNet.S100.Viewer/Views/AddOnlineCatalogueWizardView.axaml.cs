@@ -22,6 +22,7 @@ public partial class AddOnlineCatalogueWizardView : UserControl
     {
         base.OnAttachedToVisualTree(e);
         WizardTints.Apply(this);
+        Secom.SecomTints.Apply(this);
     }
 }
 

@@ -469,6 +469,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         {
             Code = code,
             ServerAnchor = serverTrust?.Anchor,
+            ServerTrust = serverTrust?.Outcome,
         };
         return new Attempt(presentation, failure?.Message);
     }

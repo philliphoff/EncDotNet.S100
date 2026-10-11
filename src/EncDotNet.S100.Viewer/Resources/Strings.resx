@@ -4263,4 +4263,261 @@
   <data name="Keys_Revoked_NotificationAction" xml:space="preserve">
     <value>Keys &amp; certificates</value>
   </data>
+  <data name="Wizard_StepConnection" xml:space="preserve">
+    <value>Connection</value>
+  </data>
+  <data name="Wizard_ConnectionNotNeeded" xml:space="preserve">
+    <value>Not needed</value>
+  </data>
+  <data name="Wizard_ConnectionForSecom" xml:space="preserve">
+    <value>SECOM services</value>
+  </data>
+  <data name="Secom_Identity_None" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="Secom_Identity_RowDefaultFormat" xml:space="preserve">
+    <value>Default ({0})</value>
+    <comment>{0}: the default identity's name</comment>
+  </data>
+  <data name="Secom_Identity_RowDefaultNotSet" xml:space="preserve">
+    <value>Default (not set)</value>
+  </data>
+  <data name="Secom_Identity_MissingFormat" xml:space="preserve">
+    <value>{0} (not found)</value>
+    <comment>{0}: an identity reference, e.g. sc-ident:91d0b3c5</comment>
+  </data>
+  <data name="Secom_Picker_Label" xml:space="preserve">
+    <value>Identity</value>
+  </data>
+  <data name="Secom_Picker_Help" xml:space="preserve">
+    <value>Presented only when the service asks for a certificate. It also signs SECOM 2.0 requests to this source.</value>
+  </data>
+  <data name="Secom_Picker_None" xml:space="preserve">
+    <value>None · anonymous</value>
+  </data>
+  <data name="Secom_Picker_NoneSub" xml:space="preserve">
+    <value>Never presents a certificate</value>
+  </data>
+  <data name="Secom_Picker_NoIdentitiesSub" xml:space="preserve">
+    <value>No identities yet</value>
+  </data>
+  <data name="Secom_Picker_DefaultFormat" xml:space="preserve">
+    <value>Default · {0}</value>
+    <comment>{0}: the default identity's name, or 'not set'</comment>
+  </data>
+  <data name="Secom_Picker_DefaultNotSet" xml:space="preserve">
+    <value>not set</value>
+  </data>
+  <data name="Secom_Picker_DefaultSub" xml:space="preserve">
+    <value>Follows the default in Keys &amp; certificates</value>
+  </data>
+  <data name="Secom_Picker_ClosedSubFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>{0}: kind, instance and end; {1}: the reference id</comment>
+  </data>
+  <data name="Secom_Picker_NoDefault" xml:space="preserve">
+    <value>No default identity set</value>
+  </data>
+  <data name="Secom_Picker_NoCertificate" xml:space="preserve">
+    <value>No certificate is presented</value>
+  </data>
+  <data name="Secom_Kind_Vessel" xml:space="preserve">
+    <value>Vessel</value>
+  </data>
+  <data name="Secom_Kind_Organisation" xml:space="preserve">
+    <value>Organisation</value>
+  </data>
+  <data name="Secom_Kind_Device" xml:space="preserve">
+    <value>Device</value>
+  </data>
+  <data name="Secom_Kind_Service" xml:space="preserve">
+    <value>Service</value>
+  </data>
+  <data name="Secom_Kind_Person" xml:space="preserve">
+    <value>Person</value>
+  </data>
+  <data name="Secom_Kind_Test" xml:space="preserve">
+    <value>Test</value>
+  </data>
+  <data name="Secom_Instance_Mcc" xml:space="preserve">
+    <value>MCC</value>
+  </data>
+  <data name="Secom_Instance_MccTest" xml:space="preserve">
+    <value>MCC Test</value>
+  </data>
+  <data name="Secom_Hint_IssuerAccepted" xml:space="preserve">
+    <value>Issuer accepted</value>
+  </data>
+  <data name="Secom_Hint_RefusedHere" xml:space="preserve">
+    <value>Refused here</value>
+  </data>
+  <data name="Secom_Hint_IssuerNotAccepted" xml:space="preserve">
+    <value>Issuer not accepted</value>
+  </data>
+  <data name="Secom_State_Readable" xml:space="preserve">
+    <value>Readable</value>
+  </data>
+  <data name="Secom_State_SignedRequestRefused" xml:space="preserve">
+    <value>Signed request not accepted</value>
+  </data>
+  <data name="Secom_Reason_NotTrusted" xml:space="preserve">
+    <value>Its certificate isn't issued under one of your trusted authorities.</value>
+  </data>
+  <data name="Secom_Connection_Protocol" xml:space="preserve">
+    <value>SECOM v2 · </value>
+  </data>
+  <data name="Secom_Connection_Continue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="Secom_Connection_AddAndWait" xml:space="preserve">
+    <value>Add and wait</value>
+  </data>
+  <data name="Secom_Block_ReadableBody" xml:space="preserve">
+    <value>This service doesn't ask for a certificate, so SoundCharts connects anonymously whatever the Identity setting is.</value>
+  </data>
+  <data name="Secom_Block_ReadableWithCertificateBodyFormat" xml:space="preserve">
+    <value>{0} accepted {1}. Its {2} data is available.</value>
+    <comment>{0}: provider; {1}: identity name; {2}: product, e.g. S-124</comment>
+  </data>
+  <data name="Secom_Block_Presented" xml:space="preserve">
+    <value>Presented:</value>
+  </data>
+  <data name="Secom_Block_SignedBy" xml:space="preserve">
+    <value>Signed by:</value>
+  </data>
+  <data name="Secom_Block_Reason" xml:space="preserve">
+    <value>Reason:</value>
+  </data>
+  <data name="Secom_Block_NeedsCertificateBodyFormat" xml:space="preserve">
+    <value>{0} only shares data with a client certificate. {1} of your identities have an issuer {2} accepts. Choose one; SoundCharts won't try them for you.</value>
+    <comment>{0}: service; {1}: count; {2}: provider</comment>
+  </data>
+  <data name="Secom_Block_NeedsCertificateNoIdentitiesBodyFormat" xml:space="preserve">
+    <value>{0} only shares data with a client certificate, and you haven't imported one. You can add it now and choose an identity later.</value>
+    <comment>{0}: service</comment>
+  </data>
+  <data name="Secom_Block_NeedsSignedRequestBodyFormat" xml:space="preserve">
+    <value>{0} only answers SECOM 2.0 requests signed with an MCP identity. The identity you choose signs every request to this source.</value>
+    <comment>{0}: service</comment>
+  </data>
+  <data name="Secom_Block_NeedsSignedRequestNoIdentitiesBodyFormat" xml:space="preserve">
+    <value>{0} only answers signed requests, and you haven't imported an identity to sign with.</value>
+    <comment>{0}: service</comment>
+  </data>
+  <data name="Secom_Block_CertificateRefusedBodyFormat" xml:space="preserve">
+    <value>{0} refused {1}. Providers often accept one kind of identity, such as your organisation's but not your vessel's.</value>
+    <comment>{0}: provider; {1}: identity name</comment>
+  </data>
+  <data name="Secom_Block_SignedRequestRefusedBodyFormat" xml:space="preserve">
+    <value>{0} rejected the request signed by {1}.</value>
+    <comment>{0}: provider; {1}: identity name</comment>
+  </data>
+  <data name="Secom_Block_ServerUntrustedBody" xml:space="preserve">
+    <value>SoundCharts stopped before presenting any identity, because it can't verify the server.</value>
+  </data>
+  <data name="Secom_Block_NotReachableBodyFormat" xml:space="preserve">
+    <value>SoundCharts couldn't connect to {0}. Check the network, or add it and SoundCharts will try again later.</value>
+    <comment>{0}: host</comment>
+  </data>
+  <data name="Secom_Wait_NoteFormat" xml:space="preserve">
+    <value>Add and wait adds {0} with no datasets. It lists automatically {1}.</value>
+    <comment>{0}: service; {1}: what it waits for</comment>
+  </data>
+  <data name="Secom_Wait_ChooseIdentity" xml:space="preserve">
+    <value>once you choose an identity for it</value>
+  </data>
+  <data name="Secom_Wait_ImportIdentity" xml:space="preserve">
+    <value>once you import an identity and choose it</value>
+  </data>
+  <data name="Secom_Wait_AcceptedIdentityFormat" xml:space="preserve">
+    <value>once you choose an identity {0} accepts</value>
+    <comment>{0}: provider</comment>
+  </data>
+  <data name="Secom_Wait_TrustServer" xml:space="preserve">
+    <value>once you trust its server's authority</value>
+  </data>
+  <data name="Secom_Wait_Reachable" xml:space="preserve">
+    <value>when it can be reached</value>
+  </data>
+  <data name="Secom_Action_ChooseIdentity" xml:space="preserve">
+    <value>Choose identity…</value>
+  </data>
+  <data name="Secom_Action_ChooseAnotherIdentity" xml:space="preserve">
+    <value>Choose another identity…</value>
+  </data>
+  <data name="Secom_Action_UseFormat" xml:space="preserve">
+    <value>Use {0}</value>
+    <comment>{0}: identity name</comment>
+  </data>
+  <data name="Secom_Action_ImportIdentity" xml:space="preserve">
+    <value>Import identity…</value>
+  </data>
+  <data name="Secom_Row_SubFormat" xml:space="preserve">
+    <value>SECOM · {0} · {1}</value>
+    <comment>{0}: identity label; {1}: dataset count</comment>
+  </data>
+  <data name="Secom_Row_DatasetsFormat" xml:space="preserve">
+    <value>{0:N0} datasets</value>
+  </data>
+  <data name="Secom_Row_OneDataset" xml:space="preserve">
+    <value>1 dataset</value>
+  </data>
+  <data name="Secom_Row_NoDatasetsYet" xml:space="preserve">
+    <value>no datasets yet</value>
+  </data>
+  <data name="Secom_Status_EndsInDaysFormat" xml:space="preserve">
+    <value>Certificate ends in {0} days</value>
+  </data>
+  <data name="Secom_Status_EndsInOneDay" xml:space="preserve">
+    <value>Certificate ends in 1 day</value>
+  </data>
+  <data name="Secom_Status_EndsToday" xml:space="preserve">
+    <value>Certificate ends today</value>
+  </data>
+  <data name="Secom_Details_Connection" xml:space="preserve">
+    <value>Connection</value>
+  </data>
+  <data name="Secom_Details_ReadsAs" xml:space="preserve">
+    <value>Reads as</value>
+  </data>
+  <data name="Secom_Details_Datasets" xml:space="preserve">
+    <value>Datasets</value>
+  </data>
+  <data name="Secom_Details_Setting" xml:space="preserve">
+    <value>Setting</value>
+  </data>
+  <data name="Secom_Details_Reason" xml:space="preserve">
+    <value>Reason</value>
+  </data>
+  <data name="Secom_Details_SettingFormat" xml:space="preserve">
+    <value>identity: {0}</value>
+    <comment>{0}: default, none or an sc-ident reference, as stored</comment>
+  </data>
+  <data name="Secom_Presented_RefusedFormat" xml:space="preserve">
+    <value>Presented {0} · refused {1}</value>
+    <comment>{0}: identity name; {1}: when, e.g. 11 Oct, 09:12</comment>
+  </data>
+  <data name="Secom_Presented_AcceptedFormat" xml:space="preserve">
+    <value>Presented {0} · accepted</value>
+    <comment>{0}: identity name</comment>
+  </data>
+  <data name="Secom_Presented_NonePresented" xml:space="preserve">
+    <value>Service asked for a certificate · none presented</value>
+  </data>
+  <data name="Secom_Presented_Stopped" xml:space="preserve">
+    <value>Stopped before presenting an identity</value>
+  </data>
+  <data name="Secom_Presented_NotAsked" xml:space="preserve">
+    <value>Service doesn't ask for a certificate</value>
+  </data>
+  <data name="Secom_Details_RereadFormat" xml:space="preserve">
+    <value>Re-read with {0} · {1}</value>
+    <comment>{0}: identity name; {1}: dataset count</comment>
+  </data>
+  <data name="Secom_Details_NoCertificate" xml:space="preserve">
+    <value>no certificate</value>
+  </data>
+  <data name="Secom_Details_Help" xml:space="preserve">
+    <value>How this SECOM source connects: the identity it presents, and what the service last said.</value>
+  </data>
 </root>

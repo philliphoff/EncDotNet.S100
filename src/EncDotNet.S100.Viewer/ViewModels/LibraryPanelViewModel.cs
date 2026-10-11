@@ -131,11 +131,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         AddCollectionManifestCommand = new AsyncRelayCommand(() => _importer.AddCollectionManifestAsync(TargetCollectionId));
         ChooseGroupsCommand = new AsyncRelayCommand(ChooseGroupsAsync, () => _selectedNode?.CanChooseGroups == true);
         AddCurrentsForAreaCommand = new AsyncRelayCommand(AddCurrentsForAreaAsync, () => CanAddCurrentsForArea);
-        OpenSecomFixCommand = new RelayCommand<LibraryNodeViewModel>(node =>
-        {
-            if (Services.Secom.KeysNavigator.TabFor(node?.SecomCode) is { } tab)
-                OpenKeys?.Invoke(tab);
-        });
+        OpenSecomFixCommand = new RelayCommand<LibraryNodeViewModel>(OpenSecomFix);
         RefreshCommand = new RelayCommand(Refresh);
         RefreshAllCommand = new RelayCommand(() => _library.Refresh());
         RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
@@ -218,6 +214,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((AsyncRelayCommand)ChooseGroupsCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)AddCurrentsForAreaCommand).NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(CanAddCurrentsForArea));
+                ShowSecomDetails();
                 EndTap();
                 if (_location is not null)
                     SetLocation(null);
@@ -250,6 +247,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                     EndTap();
 
                 OnPropertyChanged(nameof(HasSelectedItem));
+                OnPropertyChanged(nameof(ShowsSecomDetails));
+                OnPropertyChanged(nameof(ShowsItemPlaceholder));
                 OnPropertyChanged(nameof(LocationHitIndex));
                 OnPropertyChanged(nameof(LocationPositionText));
                 OnPropertyChanged(nameof(TapPositionText));
@@ -273,13 +272,97 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     public ICommand AddCurrentsForAreaCommand { get; }
 
     /// <summary>
-    /// Opens Settings → Keys &amp; certificates on the tab that fixes a SECOM
-    /// source's certificate problem (#880); the parameter is the node.
+    /// Follows a SECOM source's link (#880, #883 D2); the parameter is the node.
+    /// "Choose identity…" and "Choose another identity…" select the source and
+    /// open its picker (a row action never changes the setting by itself);
+    /// the others open Settings → Keys &amp; certificates on the right tab.
     /// </summary>
     public ICommand OpenSecomFixCommand { get; }
 
     /// <summary>Opens Settings → Keys &amp; certificates on a tab; set by the host.</summary>
     internal Action<Keys.KeysTab>? OpenKeys { get; set; }
+
+    /// <summary>
+    /// The identities SECOM sources choose from (#883); set by the host. With
+    /// it, SECOM rows show their identity and the details pane shows a selected
+    /// source's Connection.
+    /// </summary>
+    internal Services.Secom.SecomIdentityDirectory? Identities
+    {
+        get => _identities;
+        set
+        {
+            _identities = value;
+            if (value is null)
+                return;
+            value.Changed += (_, _) => _dispatch(UpdateSecomIdentities);
+            SecomDetails = new Secom.SecomSourceDetailsViewModel(
+                value, (collectionId, source) => _library.UpdateSource(collectionId, source), tab => OpenKeys?.Invoke(tab), _time);
+            OnPropertyChanged(nameof(SecomDetails));
+            UpdateSecomIdentities();
+        }
+    }
+
+    private Services.Secom.SecomIdentityDirectory? _identities;
+
+    /// <summary>A selected SECOM source's Connection details (#883 D3); null without <see cref="Identities"/>.</summary>
+    public Secom.SecomSourceDetailsViewModel? SecomDetails { get; private set; }
+
+    /// <summary>True when the details pane shows a SECOM source's Connection: one is selected and no dataset is.</summary>
+    public bool ShowsSecomDetails => SecomDetails?.SourceId is not null && _selectedItem is null;
+
+    /// <summary>True when the details pane shows its "select a dataset" placeholder.</summary>
+    public bool ShowsItemPlaceholder => _selectedItem is null && !ShowsSecomDetails;
+
+    private void OpenSecomFix(LibraryNodeViewModel? node)
+    {
+        switch (node?.SecomFixKind)
+        {
+            case SecomFix.ChooseIdentity or SecomFix.ChooseAnotherIdentity when SecomDetails is not null:
+                SelectedNode = node;
+                SelectedItem = null;
+                SecomDetails.OpenPicker();
+                break;
+            case SecomFix.TrustedAuthorities:
+                OpenKeys?.Invoke(Keys.KeysTab.Authorities);
+                break;
+            case not null:
+                OpenKeys?.Invoke(Keys.KeysTab.Identities);
+                break;
+        }
+    }
+
+    /// <summary>Gives SECOM source nodes their identity line, and refreshes the details pane.</summary>
+    private void UpdateSecomIdentities()
+    {
+        if (_identities is not { } identities)
+            return;
+        var hasIdentities = identities.HasIdentities;
+        foreach (var node in Nodes.SelectMany(n => n.SelfAndDescendants()))
+        {
+            var only = node.IsGroup ? null : node.Source ?? (node.Collection.Sources is [var single] ? single : null);
+            node.SecomIdentity = only?.Definition is SecomSource secom
+                ? new SecomNodeIdentity(
+                    identities.RowLabel(secom.Identity),
+                    hasIdentities,
+                    identities.Resolve(secom.Identity) is { } entry ? identities.EndsInDays(entry) : null)
+                : null;
+        }
+
+        ShowSecomDetails();
+    }
+
+    /// <summary>Shows the selected node's SECOM source (if it is one) in the details pane.</summary>
+    private void ShowSecomDetails()
+    {
+        if (SecomDetails is null)
+            return;
+        var node = _selectedNode;
+        var source = node is null || node.IsGroup ? null : node.Source ?? (node.Collection.Sources is [var single] ? single : null);
+        SecomDetails.Show(node?.Collection, source);
+        OnPropertyChanged(nameof(ShowsSecomDetails));
+        OnPropertyChanged(nameof(ShowsItemPlaceholder));
+    }
 
     /// <summary>True when the selected node is an area of a remote S-100 catalogue (S-102).</summary>
     public bool CanAddCurrentsForArea => _selectedNode is { IsGroup: true, Source.Definition: S100CatalogueFeedSource };
@@ -1494,6 +1577,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
         SelectedNode ??= Nodes.FirstOrDefault();
         UpdateCatalogueCounts();
+        UpdateSecomIdentities();
         OnPropertyChanged(nameof(IsEmpty));
         ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
         ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();

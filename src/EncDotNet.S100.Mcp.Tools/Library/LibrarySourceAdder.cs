@@ -155,12 +155,31 @@ public sealed class LibrarySourceAdder
         if (draft is null)
             return Fail(new LibraryChangeRejected($"this host cannot read {kind} catalogues"));
 
+        if (request.Identity is not null || request.Wait)
+        {
+            if (draft.Scope is not SecomScope identified)
+                return Fail(new InvalidArgument(request.Wait ? "wait" : "identity", "only a SECOM service has an identity or can wait to be read"));
+            if (request.Identity is not null)
+            {
+                if (!EncDotNet.S100.Collections.Secom.SecomIdentitySetting.TryParse(request.Identity, out var identity))
+                    return Fail(new InvalidArgument("identity", "expected default, none or an sc-ident: reference"));
+                identified.Identity = identity;
+            }
+        }
+
         // Online catalogues and collection manifests are read for their choices.
         if (draft.Scope is not null && await draft.LoadAsync(ct).ConfigureAwait(false) is { } error)
-            return Fail(new LibraryChangeRejected($"the catalogue could not be loaded: {error}"));
+        {
+            // A SECOM service that can't be read yet can still be added, to list later (#883).
+            if (!request.Wait || draft.Scope is not SecomScope waiting)
+                return Fail(new LibraryChangeRejected($"the catalogue could not be loaded: {error}"));
+            waiting.Wait(request.Choices is { Count: > 0 } wanted ? wanted : draft.Known?.Product is { } product ? [product] : null, error);
+        }
 
         if (request.InMapView)
         {
+            if (draft.Scope is SecomScope { IsWaiting: true })
+                return Fail(new InvalidArgument("inMapView", "a service added before it can be read cannot be narrowed to the map view yet"));
             if (draft.Scope is not SecomScope secom)
                 return Fail(new InvalidArgument("inMapView", "only a SECOM service can be narrowed to the map view"));
             if (!secom.CanScopeToMapView)
@@ -240,7 +259,11 @@ public sealed class LibrarySourceAdder
         collectionId,
         sourceId,
         draft.CanKeepDownloaded ? draft.KeepDownloaded : null,
-        draft.KeepDownloadedHint);
+        draft.KeepDownloadedHint)
+        {
+            Identity = (draft.Scope as SecomScope)?.Identity,
+            WaitingBecause = draft.Scope is SecomScope { IsWaiting: true } waiting ? waiting.WaitingReason : null,
+        };
 
     private static bool Matches(string? value, string label, string wanted)
     {

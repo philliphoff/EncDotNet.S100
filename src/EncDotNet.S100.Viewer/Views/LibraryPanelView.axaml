@@ -6,11 +6,14 @@
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:secom="using:EncDotNet.S100.Viewer.Views.Secom"
+             xmlns:svm="using:EncDotNet.S100.Viewer.ViewModels.Secom"
              xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
              x:Class="EncDotNet.S100.Viewer.Views.LibraryPanelView"
              x:DataType="vm:LibraryPanelViewModel">
 
     <UserControl.Styles>
+        <StyleInclude Source="avares://SoundCharts/Views/Secom/SecomStyles.axaml" />
         <!-- Mirror of the main window's `GridSplitter.PaneSplitter` style;
              UserControls don't inherit window-scoped styles. -->
         <Style Selector="GridSplitter.PaneSplitter">
@@ -827,7 +830,7 @@
             <DockPanel Grid.Row="5" ClipToBounds="True">
                 <Border DockPanel.Dock="Top" Padding="8,8,8,4">
                     <Panel>
-                        <TextBlock IsVisible="{Binding !HasSelectedItem}"
+                        <TextBlock IsVisible="{Binding ShowsItemPlaceholder}"
                                    Text="{x:Static loc:Strings.Library_SelectItemPlaceholder}"
                                    Opacity="0.6" TextWrapping="Wrap"
                                    HorizontalAlignment="Center" TextAlignment="Center" />
@@ -891,6 +894,72 @@
                         </StackPanel>
                     </Panel>
                 </Border>
+
+                <Panel>
+                <!-- A selected SECOM source with no dataset selected: its Connection (#883 D3). -->
+                <ScrollViewer IsVisible="{Binding ShowsSecomDetails}"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="10" Margin="8,0,8,8" DataContext="{Binding SecomDetails}"
+                                x:DataType="svm:SecomSourceDetailsViewModel"
+                                AutomationProperties.AutomationId="Library.SourceDetails"
+                                AutomationProperties.Name="{x:Static loc:Strings.Secom_Details_Connection}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Secom_Details_Help}">
+                        <StackPanel Spacing="1">
+                            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <SelectableTextBlock Text="{Binding Host}" FontFamily="{StaticResource LibraryMonoFont}"
+                                                 FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65" />
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="{x:Static loc:Strings.Secom_Details_Connection}" Classes="libraryGroupHeader" />
+                            <TextBlock Text="{x:Static loc:Strings.Secom_Picker_Label}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" />
+                            <secom:IdentityPicker DataContext="{Binding Picker}" />
+                            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasPresentationLine}"
+                                        AutomationProperties.AutomationId="Library.SourceDetails.Presentation"
+                                        AutomationProperties.Name="{Binding PresentationLine}">
+                                <TextBlock Text="{Binding PresentationLine}" FontSize="11.5" FontWeight="Medium" TextWrapping="Wrap"
+                                           Classes="secomToned"
+                                           Classes.success="{Binding PresentationIsSuccess}"
+                                           Classes.warning="{Binding PresentationIsWarning}"
+                                           Classes.destructive="{Binding PresentationIsDestructive}"
+                                           Classes.neutral="{Binding !HasPresentationLine}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <!-- D4: the change of identity read fine. -->
+                        <Border Classes="secomBlock success" Padding="10,9" IsVisible="{Binding HasRereadNote}"
+                                AutomationProperties.AutomationId="Library.SourceDetails.Reread"
+                                AutomationProperties.Name="{Binding RereadNote}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                <ic:FluentIcon Icon="Checkmark" FontSize="13" Foreground="{DynamicResource SuccessColor}" VerticalAlignment="Top" />
+                                <TextBlock Grid.Column="1" Text="{Binding RereadNote}" FontSize="12" TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding Fields}" Grid.IsSharedSizeScope="True">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="svm:SecomDetailField">
+                                    <Grid ColumnSpacing="12" Margin="0,1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" SharedSizeGroup="SecomDetailKey" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding Label}" Opacity="0.6" FontSize="{StaticResource LibrarySecondaryFontSize}" />
+                                        <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap"
+                                                             FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                                             Classes.mono="{Binding IsMono}"
+                                                             Classes="secomToned"
+                                                             Classes.success="{Binding IsSuccess}"
+                                                             Classes.warning="{Binding IsWarning}"
+                                                             Classes.destructive="{Binding IsDestructive}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Classes="Primary libraryCompact" HorizontalAlignment="Left" IsVisible="{Binding HasAction}"
+                                Content="{Binding ActionText}" Command="{Binding ActionCommand}"
+                                AutomationProperties.AutomationId="Library.SourceDetails.Action"
+                                AutomationProperties.Name="{Binding ActionText}" />
+                    </StackPanel>
+                </ScrollViewer>
 
                 <ScrollViewer IsVisible="{Binding HasSelectedItem}"
                               HorizontalScrollBarVisibility="Disabled"
@@ -974,6 +1043,7 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
+                </Panel>
             </DockPanel>
         </Grid>
     </Panel>

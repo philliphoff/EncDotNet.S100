@@ -37,6 +37,13 @@ public partial class LibraryPanelView : UserControl
 
     private LibraryPanelViewModel? _viewModel;
 
+    /// <summary>Derives the SECOM tone tints (#883) from the live theme.</summary>
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        Secom.SecomTints.Apply(this);
+    }
+
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);

@@ -320,7 +320,7 @@ public sealed class LibrarySourceDraftTests
         var areas = new List<string?>();
         var readers = new LibraryCatalogueReaders
         {
-            Secom = (_, area, _) =>
+            Secom = (_, area, _, _) =>
             {
                 areas.Add(area);
                 var bytes = area is null ? 500L * 1024 * 1024 : 5120;  // the whole service is too big to sync

@@ -80,6 +80,9 @@ public sealed record SecomPresentation(
     /// <summary>The trust anchor the server's TLS certificate chains to (e.g. "MCP MCC"), when it chains to one.</summary>
     public string? ServerAnchor { get; init; }
 
+    /// <summary>What was decided about the server's TLS certificate, when a connection got that far: why a server isn't trusted.</summary>
+    public SecomServerTrustOutcome? ServerTrust { get; init; }
+
     /// <summary>The identities this source presented and the service refused, oldest first.</summary>
     public IReadOnlyList<SecomRefusal> Refusals
     {
