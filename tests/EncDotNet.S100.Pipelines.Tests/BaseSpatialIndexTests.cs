@@ -1,4 +1,3 @@
-using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Rendering.Scene;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -37,6 +36,25 @@ public class BaseSpatialIndexTests
     private static List<string> Query(BaseSpatialIndex idx,
         double minX, double minY, double maxX, double maxY) =>
         idx.Query(minX, minY, maxX, maxY).Select(o => o.FeatureReference!).ToList();
+
+    [Fact]
+    public void Query_KeepsPointsAndTextAsCandidates_UnlessAnchorsAreIndexed()
+    {
+        var ops = new List<PaintOp>
+        {
+            Area("near-area", 0, 0, 20, 20),
+            new PointPaintOp { FeatureReference = "far-point", World = (900, 900) },
+            new TextPaintOp { FeatureReference = "near-text", World = (10, 10), Text = "5" },
+            new TextPaintOp { FeatureReference = "far-text", World = (950, 50), Text = "7" },
+        };
+
+        var byDefault = new BaseSpatialIndex(new VectorScene(ops));
+        var anchored = new BaseSpatialIndex(new VectorScene(ops), indexAnchors: true);
+
+        Assert.Equal(new[] { "near-area", "far-point", "near-text", "far-text" }, Query(byDefault, -10, -10, 70, 70));
+        Assert.Equal(new[] { "near-area", "near-text" }, Query(anchored, -10, -10, 70, 70));
+        Assert.Equal(ops.Select(o => o.FeatureReference).ToList(), Query(anchored, -1e6, -1e6, 1e6, 1e6));
+    }
 
     [Fact]
     public void Query_CoveringWholeExtent_ReturnsAllOpsInOriginalOrder()

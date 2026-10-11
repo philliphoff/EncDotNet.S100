@@ -60,9 +60,13 @@ public abstract class CompositeLayer
 /// </summary>
 public sealed class VectorCompositeLayer : CompositeLayer
 {
+    /// <summary>Scenes smaller than this are drawn whole; indexing them gains nothing.</summary>
+    private const int MinimumIndexedOps = 64;
+
     private readonly VectorScene _scene;
     private readonly RgbaColor _background;
     private readonly bool _honorScaleVisibility;
+    private readonly Lazy<BaseSpatialIndex?> _index;
 
     /// <summary>
     /// Creates a vector composite layer from a resolved scene.
@@ -80,6 +84,9 @@ public sealed class VectorCompositeLayer : CompositeLayer
         // vector layer paints transparently over what is already there.
         _background = RgbaColor.Transparent;
         _honorScaleVisibility = honorScaleVisibility;
+        _index = new Lazy<BaseSpatialIndex?>(
+            () => scene.Ops.Count >= MinimumIndexedOps ? new BaseSpatialIndex(scene, indexAnchors: true) : null,
+            LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>
@@ -90,6 +97,13 @@ public sealed class VectorCompositeLayer : CompositeLayer
     /// </summary>
     public double? MinimumDisplayScale { get; init; }
 
+    /// <summary>
+    /// The coverages of finer cells that hide this layer where they overlap it
+    /// and are themselves drawing (see <see cref="FinerCoverage"/>). Empty by
+    /// default, so the layer paints in full.
+    /// </summary>
+    public IReadOnlyList<FinerCoverage> FinerCoverages { get; init; } = [];
+
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, Viewport viewport)
     {
@@ -99,7 +113,41 @@ public sealed class VectorCompositeLayer : CompositeLayer
         if (IsPastMinimumDisplayScale(viewport))
             return;
 
-        CreateRenderer().RenderOnto(canvas, _scene, viewport);
+        int save = ClipOutFinerCoverages(canvas, viewport, rotationDegrees: 0);
+        try
+        {
+            CreateRenderer().RenderOnto(canvas, ScopeTo(viewport), viewport);
+        }
+        finally
+        {
+            canvas.RestoreToCount(save);
+        }
+    }
+
+    /// <summary>
+    /// The part of the scene that can draw in <paramref name="viewport"/>: the
+    /// ops whose bounds (an anchor, for points and text) lie within
+    /// <see cref="SkiaDisplayListRenderer.PointCullMarginPx"/> pixels of it, in
+    /// draw order. The renderer culls anchors at that same margin. Drawing a small part of a large composite, as each tile does, then
+    /// walks only the ops near it. The renderer still culls and clips exactly,
+    /// so the picture is unchanged.
+    /// </summary>
+    private VectorScene ScopeTo(Viewport viewport)
+    {
+        // A wrapping viewport folds geometry from beyond the seam into view, so
+        // a bounds query in raw world coordinates would miss it.
+        bool wraps = EnableSeamWrap && (viewport.MaxLongitude > 180.0 || viewport.MinLongitude < -180.0);
+        if (wraps || _index.Value is not { } index)
+            return _scene;
+
+        var (minX, minY) = WebMercator.FromLonLat(viewport.MinLongitude, viewport.MinLatitude);
+        var (maxX, maxY) = WebMercator.FromLonLat(viewport.MaxLongitude, viewport.MaxLatitude);
+        double marginX = (maxX - minX) / viewport.WidthPixels * SkiaDisplayListRenderer.PointCullMarginPx;
+        double marginY = (maxY - minY) / viewport.HeightPixels * SkiaDisplayListRenderer.PointCullMarginPx;
+        var ops = index.Query(minX - marginX, minY - marginY, maxX + marginX, maxY + marginY);
+        return ops.Count == _scene.Ops.Count
+            ? _scene
+            : new VectorScene(ops) { ScaleMinimumCap = _scene.ScaleMinimumCap };
     }
 
     private bool IsPastMinimumDisplayScale(Viewport viewport) =>
@@ -107,16 +155,56 @@ public sealed class VectorCompositeLayer : CompositeLayer
         && MinimumDisplayScale is double limit
         && viewport.ScaleDenominator > limit;
 
+    /// <summary>
+    /// Saves the canvas and removes the active finer coverages from its clip,
+    /// turned by <paramref name="rotationDegrees"/> about the viewport centre for
+    /// symbols and text placed on a rotated display. Returns the save count to
+    /// restore to.
+    /// </summary>
+    private int ClipOutFinerCoverages(SKCanvas canvas, Viewport viewport, double rotationDegrees)
+    {
+        int save = canvas.Save();
+        if (FinerCoverages.Count == 0)
+            return save;
+
+        float centerX = viewport.WidthPixels / 2f;
+        float centerY = viewport.HeightPixels / 2f;
+        if (rotationDegrees != 0)
+            canvas.RotateDegrees((float)rotationDegrees, centerX, centerY);
+
+        // The clip is recorded in device space, so undoing the rotation leaves
+        // it turned while the layer draws in its own (unrotated) space.
+        FinerCoverage.ClipOut(
+            canvas,
+            FinerCoverages,
+            WorldToScreen.Create(viewport, EnableSeamWrap),
+            canvas.LocalClipBounds,
+            viewport.ScaleDenominator,
+            _honorScaleVisibility);
+
+        if (rotationDegrees != 0)
+            canvas.RotateDegrees((float)-rotationDegrees, centerX, centerY);
+        return save;
+    }
+
     internal override void DrawRotating(SKCanvas canvas, Viewport viewport)
     {
         if (IsPastMinimumDisplayScale(viewport))
             return;
 
-        CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
+        int save = ClipOutFinerCoverages(canvas, viewport, rotationDegrees: 0);
+        try
         {
-            DrawPoints = false,
-            DrawText = false,
-        });
+            CreateRenderer().RenderOnto(canvas, ScopeTo(viewport), viewport, new OverlayDrawOptions
+            {
+                DrawPoints = false,
+                DrawText = false,
+            });
+        }
+        finally
+        {
+            canvas.RestoreToCount(save);
+        }
     }
 
     internal override void DrawScreenPlaced(SKCanvas canvas, Viewport viewport, double rotationDegrees, SKRect cullBounds)
@@ -124,14 +212,22 @@ public sealed class VectorCompositeLayer : CompositeLayer
         if (IsPastMinimumDisplayScale(viewport))
             return;
 
-        CreateRenderer().RenderOnto(canvas, _scene, viewport, new OverlayDrawOptions
+        int save = ClipOutFinerCoverages(canvas, viewport, rotationDegrees);
+        try
         {
-            PointCullBounds = cullBounds,
-            DrawAreasAndLines = false,
-            AnchorRotationDegrees = rotationDegrees,
-            ScreenCenterX = viewport.WidthPixels / 2f,
-            ScreenCenterY = viewport.HeightPixels / 2f,
-        });
+            CreateRenderer().RenderOnto(canvas, ScopeTo(viewport), viewport, new OverlayDrawOptions
+            {
+                PointCullBounds = cullBounds,
+                DrawAreasAndLines = false,
+                AnchorRotationDegrees = rotationDegrees,
+                ScreenCenterX = viewport.WidthPixels / 2f,
+                ScreenCenterY = viewport.HeightPixels / 2f,
+            });
+        }
+        finally
+        {
+            canvas.RestoreToCount(save);
+        }
     }
 
     /// <summary>

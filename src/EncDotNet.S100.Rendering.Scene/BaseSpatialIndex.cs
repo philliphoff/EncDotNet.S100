@@ -1,16 +1,15 @@
-using EncDotNet.S100.Rendering.Scene;
-
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Scene;
 
 /// <summary>
 /// A uniform-grid spatial index over a bound base scene's area/line/pattern ops
 /// (EPSG:3857 metres), built <b>once</b> when a scene is bound so the off-thread
-/// <see cref="S100VectorTileRenderer.RasterizeTile"/> walk can be scoped to the
-/// ops intersecting a tile (+ gutter) instead of the whole cell. This implements
+/// tile walk (the viewer's <c>S100VectorTileRenderer.RasterizeTile</c>, and the
+/// headless <c>VectorCompositeLayer</c>) can be scoped to the ops intersecting a
+/// tile (+ gutter) instead of the whole cell. This implements
 /// the long-specified but never-built base-plane index from the render-subsystem
 /// design §3.3 ("query VectorScene ops intersecting tile+gutter — spatial index
 /// over the scene") — the overlay plane already got its own index in #351
-/// (<see cref="OverlaySpatialIndex"/>); this is the base-plane counterpart
+/// (<c>OverlaySpatialIndex</c>); this is the base-plane counterpart
 /// (#332 cold tile-gen perf line under #347).
 /// </summary>
 /// <remarks>
@@ -71,7 +70,16 @@ internal sealed class BaseSpatialIndex
     public (double MinX, double MaxX)? XSpan => _maxX >= _minX ? (_minX, _maxX) : null;
 
     /// <summary>Builds the index over <paramref name="baseScene"/>'s area/line ops.</summary>
-    public BaseSpatialIndex(VectorScene baseScene)
+    /// <param name="baseScene">The scene to index.</param>
+    /// <param name="indexAnchors">
+    /// Whether point and text ops are indexed by their anchor too. By default
+    /// they are always candidates, which suits a tile walk with a fixed gutter
+    /// (a symbol anchored past it can still reach into the tile). A caller whose
+    /// query reaches as far as the renderer's anchor cull margin
+    /// (<c>SkiaDisplayListRenderer.PointCullMarginPx</c>) can index them, since
+    /// any anchor beyond the query is culled anyway.
+    /// </param>
+    public BaseSpatialIndex(VectorScene baseScene, bool indexAnchors = false)
     {
         ArgumentNullException.ThrowIfNull(baseScene);
         _ops = baseScene.Ops;
@@ -89,7 +97,7 @@ internal sealed class BaseSpatialIndex
         int bounded = 0;
         for (int i = 0; i < count; i++)
         {
-            if (TryBounds(_ops[i], out var x0, out var y0, out var x1, out var y1))
+            if (TryBounds(_ops[i], indexAnchors, out var x0, out var y0, out var x1, out var y1))
             {
                 _minXs[i] = x0; _minYs[i] = y0; _maxXs[i] = x1; _maxYs[i] = y1;
                 if (x0 < minX) minX = x0;
@@ -253,14 +261,24 @@ internal sealed class BaseSpatialIndex
 
     /// <summary>
     /// Computes the world AABB of a base op's geometry. Area/pattern ops use the
-    /// exterior ring (holes are inside the shell); lines use the polyline.
+    /// exterior ring (holes are inside the shell); lines use the polyline; with
+    /// <paramref name="indexAnchors"/>, points and text use their anchor.
     /// Returns <see langword="false"/> for op types this index does not model
     /// (those become always-candidates so they are never dropped).
     /// </summary>
-    private static bool TryBounds(PaintOp op, out double minX, out double minY, out double maxX, out double maxY)
+    private static bool TryBounds(
+        PaintOp op, bool indexAnchors, out double minX, out double minY, out double maxX, out double maxY)
     {
         switch (op)
         {
+            case PointPaintOp point when indexAnchors:
+                (minX, minY) = point.World;
+                (maxX, maxY) = point.World;
+                return true;
+            case TextPaintOp text when indexAnchors:
+                (minX, minY) = text.World;
+                (maxX, maxY) = text.World;
+                return true;
             case AreaPaintOp a:
                 return TryRingBounds(a.WorldShell, out minX, out minY, out maxX, out maxY);
             case PatternAreaPaintOp p:

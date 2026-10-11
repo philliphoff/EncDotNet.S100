@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
@@ -349,6 +350,9 @@ public sealed class HeadlessCompositor
 
         var lowered = new List<CompositeLayer>(ruled.Count);
         var bounds = new SeamAwareBoundsAccumulator();
+        var finerByDataset = (options.Mariner?.IgnoreScaleMinimum ?? false)
+            ? new Dictionary<string, IReadOnlyList<FinerCoverage>>(StringComparer.Ordinal)
+            : CollectFinerCoverages(datasets, activeIds);
 
         foreach (var item in ruled)
         {
@@ -368,6 +372,7 @@ public sealed class HeadlessCompositor
                             MinimumDisplayScale = (options.Mariner?.IgnoreScaleMinimum ?? false)
                                 ? null
                                 : vector.Result.CellMinimumDisplayScale,
+                            FinerCoverages = finerByDataset.GetValueOrDefault(item.SourceDatasetId) ?? [],
                         });
                         bounds.AddScene(scene);
                         break;
@@ -386,6 +391,69 @@ public sealed class HeadlessCompositor
         }
 
         return new HeadlessCompositeScene(lowered, bounds, options);
+    }
+
+    /// <summary>
+    /// For each active chart cell, the data coverages of the strictly finer
+    /// active cells that overlap it (cross-cell scale-band overlap suppression,
+    /// as the viewer applies it). Cells are ranked by compilation scale, falling
+    /// back to the minimum display scale; a finer coverage hides the coarser
+    /// cell only while the finer cell draws, up to its minimum display scale.
+    /// Cells without a ranking scale or a data coverage take no part.
+    /// </summary>
+    private static Dictionary<string, IReadOnlyList<FinerCoverage>> CollectFinerCoverages(
+        IReadOnlyList<HeadlessCompositeInput> datasets, IReadOnlySet<string> activeIds)
+    {
+        var cells = new List<(string Id, int Rank, FinerCoverage Coverage)>();
+        foreach (var input in datasets)
+        {
+            if (input.Vector is not { } vector
+                || !activeIds.Contains(vector.SourceDatasetId)
+                || (vector.CellCompilationScale ?? vector.CellMinimumDisplayScale) is not int rank
+                || vector.CoverageAreas.Count == 0)
+            {
+                continue;
+            }
+
+            var rings = new List<IReadOnlyList<(double X, double Y)>>();
+            foreach (var area in vector.CoverageAreas)
+            {
+                rings.Add(ToWorld(area.ExteriorRing));
+                foreach (var hole in area.InteriorRings)
+                    rings.Add(ToWorld(hole));
+            }
+
+            var coverage = new FinerCoverage(rings, vector.CellMinimumDisplayScale ?? rank);
+            if (!coverage.IsEmpty)
+                cells.Add((vector.SourceDatasetId, rank, coverage));
+        }
+
+        var result = new Dictionary<string, IReadOnlyList<FinerCoverage>>(StringComparer.Ordinal);
+        foreach (var cell in cells)
+        {
+            List<FinerCoverage>? finer = null;
+            foreach (var other in cells)
+            {
+                // Strictly finer only, so cells of the same band never clip
+                // each other's shared border away.
+                if (other.Rank >= cell.Rank || !Overlaps(cell.Coverage.Bounds, other.Coverage.Bounds))
+                    continue;
+                (finer ??= []).Add(other.Coverage);
+            }
+
+            if (finer is not null)
+                result[cell.Id] = finer;
+        }
+
+        return result;
+
+        static IReadOnlyList<(double X, double Y)> ToWorld(IReadOnlyList<GeoPosition> ring) =>
+            ring.Select(p => WebMercator.FromLonLat(p.Longitude, p.Latitude)).ToArray();
+
+        static bool Overlaps(
+            (double MinX, double MinY, double MaxX, double MaxY) a,
+            (double MinX, double MinY, double MaxX, double MaxY) b) =>
+            a.MinX <= b.MaxX && b.MinX <= a.MaxX && a.MinY <= b.MaxY && b.MinY <= a.MaxY;
     }
 
     private static (IReadOnlyList<SubLayerStackItem> Items, string Spec, string DatasetId) BuildItems(
