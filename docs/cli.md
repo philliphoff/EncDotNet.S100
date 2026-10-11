@@ -247,8 +247,8 @@ With an explicit viewport:
 
 When the single-dataset form renders an S-101 base cell (`.000`), it finds the
 update files (`.001`, `.002`, and so on) in the same folder and applies them in
-order first (S-100 Part 10a). `info` does the same. A missing, out-of-order or
-unreadable update is reported but doesn't stop the command. Pass
+order first (S-100 Part 10a). `info` and `validate` do the same. A missing,
+out-of-order or unreadable update is reported but doesn't stop the command. Pass
 `--no-updates` to use the base cell as it is.
 
 ### Sea-ice display modes
@@ -664,6 +664,7 @@ packs; validate them one at a time.
 | `--format <format>` | `text` | `text` prints a table. `json` prints a report for scripts and CI. |
 | `--suppress <patterns>` | none | Drops findings whose rule id matches, comma-separated, for example `--suppress S101-R-1.2,S101-R-3.2` or `--suppress "S101-*"`. |
 | `--strict` | off | Fails on warnings as well as errors. For an exchange set, also fails unsigned files and files without a checksum. |
+| `--no-updates` | off | Validates an S-101 base cell without its update files. See [S-101 updates](#s-101-updates). |
 | `--debug` | off | Prints full stack traces on error. |
 
 ```bash

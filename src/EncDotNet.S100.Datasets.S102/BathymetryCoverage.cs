@@ -5,16 +5,28 @@ namespace EncDotNet.S100.Datasets.S102;
 /// </summary>
 public sealed class BathymetryCoverage
 {
-    /// <summary>Latitude of the grid origin in decimal degrees.</summary>
+    /// <summary>
+    /// Grid origin y coordinate in the dataset's horizontal CRS: latitude in decimal
+    /// degrees when geographic, northing in metres when projected (e.g. UTM).
+    /// </summary>
     public required double OriginLatitude { get; init; }
 
-    /// <summary>Longitude of the grid origin in decimal degrees.</summary>
+    /// <summary>
+    /// Grid origin x coordinate in the dataset's horizontal CRS: longitude in decimal
+    /// degrees when geographic, easting in metres when projected (e.g. UTM).
+    /// </summary>
     public required double OriginLongitude { get; init; }
 
-    /// <summary>Grid spacing in the latitudinal direction in decimal degrees.</summary>
+    /// <summary>
+    /// Grid spacing along y in the dataset's horizontal CRS units (decimal degrees
+    /// when geographic, metres when projected).
+    /// </summary>
     public required double SpacingLatitudinal { get; init; }
 
-    /// <summary>Grid spacing in the longitudinal direction in decimal degrees.</summary>
+    /// <summary>
+    /// Grid spacing along x in the dataset's horizontal CRS units (decimal degrees
+    /// when geographic, metres when projected).
+    /// </summary>
     public required double SpacingLongitudinal { get; init; }
 
     /// <summary>Number of grid points in the latitudinal direction (rows).</summary>

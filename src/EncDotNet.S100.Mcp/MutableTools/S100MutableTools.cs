@@ -200,8 +200,9 @@ public static class S100MutableTools
         + "('centerLongitude'/'centerLatitude'/'scaleDenominator', decimal degrees WGS-84 and a positive "
         + "scale denominator) OR a WGS-84 bounding box "
         + "('minLongitude'/'minLatitude'/'maxLongitude'/'maxLatitude'), not both. The viewport is stored "
-        + "geographically and re-fit to each render's pixel size. Rotation is north-up only "
-        + "('rotationDegrees' must be 0 or omitted). Latitudes must be within the Web Mercator limit "
+        + "geographically and re-fit to each render's pixel size. 'rotationDegrees' rotates the "
+        + "centre+scale form clockwise about the image centre (labels stay upright); the bounding-box form "
+        + "is framed north-up and rejects a non-zero rotation. Latitudes must be within the Web Mercator limit "
         + "(±85.05112878°). Returns the applied viewport and the previous one. MUTATING.";
 
     private static McpServerTool CreateSetViewport(SetViewportTool inner) =>
@@ -209,7 +210,7 @@ public static class S100MutableTools
             ([Description("Centre longitude in decimal degrees, WGS-84. Pair with centerLatitude and scaleDenominator; mutually exclusive with the bounding-box form.")] double? centerLongitude = null,
              [Description("Centre latitude in decimal degrees, WGS-84. Pair with centerLongitude and scaleDenominator; mutually exclusive with the bounding-box form.")] double? centerLatitude = null,
              [Description("Map scale denominator (e.g. 50000 for 1:50000); positive. Pair with centerLongitude/centerLatitude; mutually exclusive with the bounding-box form.")] double? scaleDenominator = null,
-             [Description("Clockwise rotation in degrees; north-up only, so must be 0 or omitted. Applies to the centre+scale form.")] double? rotationDegrees = null,
+             [Description("Optional clockwise rotation in degrees (0 = north-up, 90 = north to the right); any finite value, normalised to [0, 360). Applies to the centre+scale form only.")] double? rotationDegrees = null,
              [Description("Bounding-box west edge (min longitude), decimal degrees WGS-84. Pair with the other three edges; mutually exclusive with the centre+scale form.")] double? minLongitude = null,
              [Description("Bounding-box south edge (min latitude), decimal degrees WGS-84. Pair with the other three edges; mutually exclusive with the centre+scale form.")] double? minLatitude = null,
              [Description("Bounding-box east edge (max longitude), decimal degrees WGS-84. Pair with the other three edges; mutually exclusive with the centre+scale form.")] double? maxLongitude = null,

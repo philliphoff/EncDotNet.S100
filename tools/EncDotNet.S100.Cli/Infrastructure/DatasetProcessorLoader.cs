@@ -22,13 +22,15 @@ internal static class DatasetProcessorLoader
     /// <param name="factory">The configured pipeline factory.</param>
     /// <param name="spec">The detected product specification (e.g. <c>"S-101"</c>).</param>
     /// <param name="settings">The dataset command settings.</param>
+    /// <param name="console">Where the update outcome is reported; defaults to <see cref="AnsiConsole.Console"/>.</param>
     public static IDatasetProcessor Create(
         DatasetPipelineFactory factory,
         string spec,
-        DatasetCommandSettings settings)
+        DatasetCommandSettings settings,
+        IAnsiConsole? console = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        return Create(factory, spec, settings.DatasetPath, settings.NoUpdates);
+        return Create(factory, spec, settings.DatasetPath, settings.NoUpdates, console);
     }
 
     /// <summary>
@@ -39,11 +41,13 @@ internal static class DatasetProcessorLoader
     /// <param name="spec">The detected product specification (e.g. <c>"S-101"</c>).</param>
     /// <param name="datasetPath">Path to the dataset file.</param>
     /// <param name="noUpdates">When <see langword="true"/>, sibling S-101 updates are not applied.</param>
+    /// <param name="console">Where the update outcome is reported; defaults to <see cref="AnsiConsole.Console"/>.</param>
     public static IDatasetProcessor Create(
         DatasetPipelineFactory factory,
         string spec,
         string datasetPath,
-        bool noUpdates)
+        bool noUpdates,
+        IAnsiConsole? console = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentException.ThrowIfNullOrEmpty(datasetPath);
@@ -55,7 +59,7 @@ internal static class DatasetProcessorLoader
             {
                 var processor = factory.CreateS101ProcessorWithUpdates(datasetPath, updates);
                 if (processor is S101DatasetProcessor { UpdateReport: { } report })
-                    ReportUpdateOutcome(report);
+                    ReportUpdateOutcome(report, console ?? AnsiConsole.Console);
                 return processor;
             }
         }
@@ -63,12 +67,12 @@ internal static class DatasetProcessorLoader
         return factory.CreateProcessor(datasetPath);
     }
 
-    private static void ReportUpdateOutcome(S101UpdateReport report)
+    private static void ReportUpdateOutcome(S101UpdateReport report, IAnsiConsole console)
     {
         var applied = report.AppliedThroughUpdateNumber - report.BaseUpdateNumber;
         if (applied > 0)
         {
-            AnsiConsole.MarkupLineInterpolated(
+            console.MarkupLineInterpolated(
                 $"[grey]Applied {applied} S-101 update(s) through update {report.AppliedThroughUpdateNumber} (+{report.Inserted}/~{report.Modified}/-{report.Deleted} records).[/]");
         }
 
@@ -80,7 +84,7 @@ internal static class DatasetProcessorLoader
                 S101UpdateSeverity.Warning => "yellow",
                 _ => "grey",
             };
-            AnsiConsole.MarkupLine($"[{colour}]{Markup.Escape(message.Text)}[/]");
+            console.MarkupLine($"[{colour}]{Markup.Escape(message.Text)}[/]");
         }
     }
 }

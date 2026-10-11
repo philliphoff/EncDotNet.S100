@@ -73,6 +73,34 @@ public sealed class ValidateCommandTests
     }
 
     [Fact]
+    public void Validate_json_stays_well_formed_when_s101_updates_are_applied()
+    {
+        // #854: validate now applies sibling updates like render and info; the
+        // update summary must not land in the JSON on stdout.
+        var basePath = RenderCommandTests.FindS101BaseCellWithUpdate();
+        Assert.SkipWhen(basePath is null,
+            "No S-101 base cell (.000) with a sibling .001 update found under IC-ENC sample data.");
+
+        var (_, stdout) = RunCapturingStdout(["validate", basePath!, "--format", "json"]);
+
+        using var doc = JsonDocument.Parse(stdout);
+        Assert.Equal("S-101", doc.RootElement.GetProperty("specification").GetString());
+    }
+
+    [Fact]
+    public void Validate_with_no_updates_flag_validates_s101_base_cell()
+    {
+        var basePath = RenderCommandTests.FindS101BaseCellWithUpdate();
+        Assert.SkipWhen(basePath is null,
+            "No S-101 base cell (.000) with a sibling .001 update found under IC-ENC sample data.");
+
+        var (_, stdout) = RunCapturingStdout(["validate", basePath!, "--format", "json", "--no-updates"]);
+
+        using var doc = JsonDocument.Parse(stdout);
+        Assert.Equal("S-101", doc.RootElement.GetProperty("specification").GetString());
+    }
+
+    [Fact]
     public void Validate_with_missing_dataset_returns_nonzero()
     {
         int exit = CliApp.Build().Run(["validate", "does-not-exist.gml"]);

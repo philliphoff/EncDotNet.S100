@@ -30,9 +30,9 @@ public sealed class S57ConvertTargetTests : IDisposable
 
     [Theory]
     [InlineData(InlandEnc, new string[0], "S-401", "1.3.0")]
-    [InlineData(MaritimeEnc, new string[0], "S-101", "1.0.0")]
+    [InlineData(MaritimeEnc, new string[0], "S-101", "2.0.0")]
     [InlineData(InlandEnc, new[] { "--target", "auto" }, "S-401", "1.3.0")]
-    [InlineData(InlandEnc, new[] { "--target", "s101" }, "S-101", "1.0.0")]
+    [InlineData(InlandEnc, new[] { "--target", "s101" }, "S-101", "2.0.0")]
     [InlineData(MaritimeEnc, new[] { "--target", "S-401" }, "S-401", "1.3.0")]
     public void Convert_writes_the_chosen_product(
         byte productSpecification, string[] targetArgs, string expectedSpec, string expectedEdition)
@@ -96,7 +96,7 @@ public sealed class S57ConvertTargetTests : IDisposable
         var (exit, stdout) = Run(["s57", "convert", "-o", output, source]);
 
         Assert.Equal(0, exit);
-        Assert.Contains("as S-101 1.0.0", Flatten(stdout));
+        Assert.Contains("as S-101 2.0.0", Flatten(stdout));
         Assert.DoesNotContain("Warning", stdout);
     }
 

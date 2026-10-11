@@ -1953,7 +1953,7 @@
     <value>AIS overlay is off</value>
   </data>
   <data name="Vessels_Empty_DisabledDescription" xml:space="preserve">
-    <value>Enable it under Settings → AIS to list nearby vessels.</value>
+    <value>Enable it under Settings → Vessels → AIS Overlay to list nearby vessels.</value>
   </data>
   <data name="Vessels_Empty_NoDataTitle" xml:space="preserve">
     <value>No vessels yet</value>
