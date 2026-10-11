@@ -26,6 +26,12 @@ The reference examples are
 [`docs/index.md`](../../../docs/index.md) (docs home). When unsure, match
 them.
 
+The pages under `docs/s57/` on the site, and the EncDotNet package READMEs,
+come from the [EncDotNet](https://github.com/philliphoff/EncDotNet) repository
+(checked out into `external/` by `docs/fetch-encdotnet.sh`). Edit them there,
+following its own docs style guide; link to them here by their source path,
+for example `../external/EncDotNet/docs/reading-s57-charts.md`.
+
 ## Procedure
 
 1. **Pick the page type** (quickstart, how-to guide, guide, reference, design
@@ -73,4 +79,5 @@ them.
 - [ ] Alerts are only used for must-not-miss information, next to the step
       they affect.
 - [ ] Renamed headings or removed pages have no remaining inbound links.
-- [ ] `docfx docfx.json --warningsAsErrors` succeeds.
+- [ ] `docs/fetch-encdotnet.sh` then `docfx docfx.json --warningsAsErrors`
+      succeeds.

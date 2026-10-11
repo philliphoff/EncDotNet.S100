@@ -17,6 +17,7 @@ export const docs = {
   gettingStarted: 'docs/getting-started.html',
   cli: 'docs/cli.html',
   mcp: 'docs/mcp-server.html',
+  s57: 'docs/s57/',
   api: 'api/',
 };
 

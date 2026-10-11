@@ -42,6 +42,24 @@
   href: cli.md
 - name: Bringing S-57 into the pipeline
   href: s57-to-s101.md
+- name: S-57 and ISO 8211 (EncDotNet)
+  items:
+    - name: Overview
+      href: ../external/EncDotNet/docs/index.md
+    - name: Getting started
+      href: ../external/EncDotNet/docs/getting-started.md
+    - name: Reading S-57 charts
+      href: ../external/EncDotNet/docs/reading-s57-charts.md
+    - name: Reading and writing ISO 8211
+      href: ../external/EncDotNet/docs/reading-iso8211.md
+    - name: Download NOAA ENC cells
+      href: ../external/EncDotNet/docs/download-noaa-charts.md
+    - name: Architecture
+      href: ../external/EncDotNet/docs/architecture.md
+    - name: S-57 glossary
+      href: ../external/EncDotNet/docs/glossary.md
+    - name: Versioning and compatibility
+      href: ../external/EncDotNet/docs/versioning.md
 - name: Add S-100 data to a Mapsui app
   href: mapsui-app.md
 - name: Render images and map tiles

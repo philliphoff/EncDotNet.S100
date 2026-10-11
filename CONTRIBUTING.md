@@ -152,6 +152,13 @@ dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn 
   so a broken link or `#anchor` fails the check. Link to repository files that
   aren't pages (source files, `LICENSE`, folders) with an absolute GitHub URL.
   When adding a library, add its README to `src/toc.yml`.
+- The site also includes [EncDotNet](https://github.com/philliphoff/EncDotNet)'s
+  user-facing pages (under `docs/s57/`), package READMEs and API reference.
+  `docs/fetch-encdotnet.sh` checks out the EncDotNet release matching the
+  `EncDotNet.S57` version in `Directory.Packages.props` into `external/`; run it
+  before building the docs locally. Those pages are edited in the EncDotNet
+  repository, and a new or renamed page there needs a matching entry in
+  `docfx.json`, `docs/toc.yml` or `src/toc.yml` here.
 - When editing the viewer (`src/EncDotNet.S100.Viewer/**`), follow the
   localization and UI rules in `.github/instructions/viewer.instructions.md`
   (every user-facing string lives in `Resources/Strings.resx`).

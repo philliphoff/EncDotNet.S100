@@ -62,3 +62,6 @@ perf-runs/
 /_site/
 /api/*
 !/api/index.md
+
+# EncDotNet checkout for the docs build (docs/fetch-encdotnet.sh)
+/external/

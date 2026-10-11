@@ -18,5 +18,5 @@ substantial rewrite, load the `docs-writing` skill. In particular:
 - Every command and code example must work in the order shown, against the
   current API. Copy UI labels exactly from
   `src/EncDotNet.S100.Viewer/Resources/Strings.resx`.
-- Build with `docfx docfx.json --warningsAsErrors` before opening a pull
-  request.
+- Run `docs/fetch-encdotnet.sh`, then build with
+  `docfx docfx.json --warningsAsErrors` before opening a pull request.
