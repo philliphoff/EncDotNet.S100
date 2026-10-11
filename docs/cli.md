@@ -227,6 +227,10 @@ With an explicit viewport:
   plane. The order of your `--layer` options only breaks ties within a plane,
   so it usually has no visible effect. For example, an S-102 surface already
   draws above an S-101 chart.
+- **Overlapping cells.** Where a finer chart cell's data coverage overlaps a
+  coarser cell, the coarser cell is hidden there, as in SoundCharts. Cells are
+  ranked by compilation scale, or by minimum display scale when a cell has
+  none. Cells of the same scale don't hide each other.
 - **No S-101 updates.** The composite and exchange-set forms don't apply S-101
   update files. To render a cell with its updates, render it on its own.
 - **Skipped datasets.** In an exchange set, datasets with an unsupported
@@ -409,6 +413,10 @@ left out. A zoom level's scale is measured at the centre latitude of the tiled
 area, so it's the same in every tile and no feature is cut off at a tile edge.
 The metadata records that latitude as `scaleLatitude`.
 
+Where chart cells of different scales overlap, the finer cell hides the
+coarser one at each zoom level where the finer cell draws. Zoomed out past
+the finer cell's minimum display scale, the coarser cell shows in full again.
+
 Without `--min-zoom`, the lowest zoom is the one nearest the coarsest cell's
 minimum display scale. Without `--max-zoom`, the highest is one level past the
 finest cell's compilation scale. Products without these scales, such as GML
@@ -422,10 +430,6 @@ Pass `--yes` to skip the question, or narrow `--bbox` or the zoom range.
 
 ### Tile set limits
 
-- **Overlapping cells.** Every cell draws at each zoom level where it's
-  visible. A finer cell doesn't hide a coarser cell under it, as it does in
-  SoundCharts. This is tracked in
-  [#859](https://github.com/philliphoff/EncDotNet.S100/issues/859).
 - **One palette and time step.** A tile set holds one `--palette` and one
   `--time-step`. Run `tiles` again for each one you need.
 - **Coverages.** S-102, S-104 and S-111 are portrayed again for each zoom

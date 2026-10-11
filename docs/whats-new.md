@@ -11,6 +11,10 @@ month. For package versions and release assets, see
   Leaflet and OpenLayers, written as a `{z}/{x}/{y}` folder, a PMTiles
   archive or an MBTiles database. Each zoom level draws only what's visible at its scale. See
   [`tiles`](cli.md#tiles).
+- **Overlapping chart cells.** In `s100 tiles`, composite `s100 render` and
+  the library's headless compositor, a finer chart cell now hides the coarser
+  cell it overlaps, as SoundCharts does, so overlapping cells of different
+  scales no longer draw on top of each other.
 - **Signing and permits.** S-100 Part 15 support now covers the data
   server's side. `Part15Signer` produces ECDSA P-384 signatures, and
   `PermitFileWriter` writes a `PERMIT.XML` and its `PERMIT.SIGN`, using cell

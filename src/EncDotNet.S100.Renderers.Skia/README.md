@@ -108,7 +108,11 @@ These types are in the `EncDotNet.S100.Renderers.Skia.Scene` namespace.
 
 - **`CompositeLayer`**: one layer of a composite, drawn against a shared
   `Viewport` on a transparent background. Use `VectorCompositeLayer` for a
-  `VectorScene` and `CoverageCompositeLayer` for a coverage layer.
+  `VectorScene` and `CoverageCompositeLayer` for a coverage layer. A
+  `VectorCompositeLayer` can carry `FinerCoverages`, the data coverages of
+  finer chart cells that hide it where they overlap and draw, and it draws
+  only the part of its scene near the viewport, so drawing one tile of a large
+  composite doesn't walk every op.
 - **`HeadlessCompositeRenderer`**: clears the background once, then draws an
   ordered list of `CompositeLayer`s against a shared viewport. It doesn't decide
   the order or which layers to suppress. The S-98 interoperability engine
