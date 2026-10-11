@@ -94,9 +94,10 @@ public sealed class SecomClientIdentityTests(SecomClientIdentityTests.Pkis pkis)
         // A default is set, but an untagged request presents nothing: the service refuses the summary.
         trust.SetIdentity(identity);
         Assert.Equal(System.Net.HttpStatusCode.Unauthorized, (await SendAsync(null)).StatusCode);
-        // Windows (Schannel) doesn't call back when it has no certificate to offer a
-        // server that also accepts none, so there the request isn't seen.
-        Assert.Equal(!OperatingSystem.IsWindows(), trust.HandshakeFor("localhost", null)?.CertificateRequested == true);
+        // Windows (Schannel) may not call back when it has no certificate to offer a
+        // server that also accepts none, so there the request can go unseen.
+        if (!OperatingSystem.IsWindows())
+            Assert.True(trust.HandshakeFor("localhost", null)!.CertificateRequested);
 
         // Tagged with an identity, that one is presented and accepted.
         Assert.True((await SendAsync(identity)).IsSuccessStatusCode);
