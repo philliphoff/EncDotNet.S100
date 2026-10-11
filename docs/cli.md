@@ -88,7 +88,8 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | Command | What it does |
 |---|---|
 | [`render`](#render) | Renders a dataset, a composite of datasets, or a whole exchange set to an image, or writes a dataset's display list as JSON. |
-| [`tiles`](#tiles) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
+| [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
+| [`tiles serve`](#tiles-serve) | Serves a built tile set on XYZ URLs, as a tile source for web maps on this or another computer. |
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude. |
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
@@ -311,16 +312,16 @@ s100 render warnings.gml out.txt --format json
   `--background` are ignored. `--bbox`, `--center` and `--scale` are errors,
   because a display list has no viewport.
 
-## tiles
+## tiles export
 
 ```text
-s100 tiles <dataset> -o <output> [options]
-s100 tiles --layer <dataset> [--layer <dataset> ...] -o <output> [options]
-s100 tiles <exchange-set> -o <output> [options]
+s100 tiles export <dataset> -o <output> [options]
+s100 tiles export --layer <dataset> [--layer <dataset> ...] -o <output> [options]
+s100 tiles export <exchange-set> -o <output> [options]
 ```
 
-`tiles` renders datasets as raster tiles on the XYZ Web Mercator grid that
-MapLibre, Leaflet and OpenLayers use. The tiles carry the S-100 portrayal
+`tiles export` renders datasets as raster tiles on the XYZ Web Mercator grid
+that MapLibre, Leaflet and OpenLayers use. The tiles carry the S-100 portrayal
 itself (symbols, scale minimums and palettes), so a web map shows the chart
 without styling it. It takes the same three input forms as
 [`render`](#render), and `-o` is required.
@@ -343,7 +344,7 @@ The container comes from the output path:
 Set `--container` to choose the container whatever the extension. An existing
 `.pmtiles` or `.mbtiles` file at the output path is replaced.
 
-### Tiles options
+### Tiles export options
 
 | Option | Default | Description |
 |---|---|---|
@@ -374,15 +375,15 @@ Set `--container` to choose the container whatever the extension. An existing
 | `--no-updates` | off | Tiles an S-101 base cell, given on its own or with `--layer`, without its update files. |
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
 
-### Tiles examples
+### Tiles export examples
 
 ```bash
-s100 tiles enc.000 -o tiles/
-s100 tiles enc.000 -o chart.pmtiles --min-zoom 10 --max-zoom 15
-s100 tiles --layer enc.000 --layer bathy.h5 -o chart.pmtiles --tile-size 512
-s100 tiles exchange-set/ -o tiles/ --format webp --skip-empty
-s100 tiles enc.000 -o chart.mbtiles --max-zoom 16
-s100 tiles --from exchange-set.zip -o night.pmtiles --bbox -1.5,50.0,-1.0,50.5 --palette night
+s100 tiles export enc.000 -o tiles/
+s100 tiles export enc.000 -o chart.pmtiles --min-zoom 10 --max-zoom 15
+s100 tiles export --layer enc.000 --layer bathy.h5 -o chart.pmtiles --tile-size 512
+s100 tiles export exchange-set/ -o tiles/ --format webp --skip-empty
+s100 tiles export enc.000 -o chart.mbtiles --max-zoom 16
+s100 tiles export --from exchange-set.zip -o night.pmtiles --bbox -1.5,50.0,-1.0,50.5 --palette night
 ```
 
 To show a PMTiles archive in MapLibre GL JS, register the `pmtiles` protocol
@@ -423,19 +424,148 @@ finest cell's compilation scale. Products without these scales, such as GML
 products and coverages, start at the zoom where their extent fits in about one
 tile and go six levels deeper, up to zoom 18.
 
-`tiles` prints the number of tiles before it renders any. Each zoom level has
+`tiles export` prints the number of tiles before it renders any. Each zoom level has
 four times the tiles of the one before, so a set grows quickly. Above 100,000
-tiles, `tiles` asks before writing, or exits with code `2` when it can't ask.
+tiles, `tiles export` asks before writing, or exits with code `2` when it can't ask.
 Pass `--yes` to skip the question, or narrow `--bbox` or the zoom range.
 
 ### Tile set limits
 
 - **One palette and time step.** A tile set holds one `--palette` and one
-  `--time-step`. Run `tiles` again for each one you need.
+  `--time-step`. Run `tiles export` again for each one you need.
 - **Coverages.** S-102, S-104 and S-111 are portrayed again for each zoom
   level, so grid sampling and current-arrow spacing suit its resolution.
 - **S-101 updates.** As with `render`, the exchange-set form doesn't apply
   S-101 update files.
+
+## tiles serve
+
+```text
+s100 tiles serve <tile-set> [options]
+s100 tiles serve <dataset> [options]
+s100 tiles serve --layer <dataset> [--layer <dataset> ...] [options]
+s100 tiles serve <exchange-set> [options]
+```
+
+`tiles serve` serves raster tiles over HTTP on the standard XYZ URLs, so a web
+map running on this computer can use them as a tile source. It serves either:
+
+- **A built tile set**: a `{z}/{x}/{y}` folder, a `.pmtiles` archive or a
+  `.mbtiles` database that [`tiles export`](#tiles-export) or another tool
+  wrote. The tile set is read at each request, so if you export it again while
+  it's served, the next request sees the new tiles. Only PNG, JPEG and WebP
+  raster tiles are served, not vector tiles.
+- **Datasets**, rendered when each tile is first asked for. It takes the same
+  inputs and display options as `tiles export`: one dataset, repeated
+  `--layer`, or an exchange set. Nothing has to be built in advance, and the
+  tiles are the same as an export of the same datasets would hold.
+
+A folder that isn't an exchange set is read as a tile set, so serve a folder of
+datasets with `--layer` instead.
+
+When it renders datasets, `tiles serve` renders the block of `--metatile` ×
+`--metatile` tiles around a requested tile and keeps every tile of the block in
+memory, up to `--cache-mb`, so neighbouring tiles come back at once. At most
+`--parallel` blocks render at a time.
+
+While it serves datasets, `tiles serve` checks their files every `--refresh`
+seconds (default 10) and reopens them when they change: when you copy in a new
+edition, add S-101 update files, or add datasets to a served exchange set. It
+waits until a change has held for two checks in a row, so a file still being
+copied isn't read half-written. The new data is opened and portrayed while the
+old keeps serving, then tiles are rendered from it with an empty cache. If it
+can't be opened, the old data keeps serving until the files change again.
+`--refresh 0` turns the checks off. A built tile set needs none: it's read at
+each request.
+
+With `--cache-dir`, rendered tiles are also kept in that folder, so they come
+back without rendering after a restart. They're stored under a fingerprint of
+the data and settings: each input file's path, size and write time (S-101
+update files and the whole of an exchange set included), the display and
+format options, and the `s100` version. Change any of them and new tiles are
+rendered, so a kept tile is never stale. The folder holds up to
+`--cache-dir-mb`, least recently used tiles going first, including those of
+data or settings you no longer serve. `--clear-cache` empties it before
+serving. Only the cache's own fingerprint folders are read or deleted, so other
+files in the folder are left alone, and several servers can share one folder. The zoom levels and the area served are
+worked out as for `tiles export`, and `--min-zoom`, `--max-zoom` and `--bbox`
+narrow them. `--palette` sets the palette of the plain tile URLs; the other
+palettes are served too, under their own URLs.
+
+The server has these routes:
+
+- `{z}/{x}/{y}.png` (or `.jpg`, `.webp`), the tiles. Rows are numbered from
+  the north for every container, MBTiles included. Each tile has an `ETag` so
+  browsers can revalidate it. A tile with nothing on it, or outside the tile
+  set, answers `204 No Content`, which web maps show as empty.
+- `tiles.json`, a [TileJSON](https://github.com/mapbox/tilejson-spec) document
+  with the zoom levels, bounds and display settings, and an absolute tile URL.
+- When rendering datasets, `day/`, `dusk/` and `night/` hold the same two
+  routes in that palette, for example `night/{z}/{x}/{y}.png` and
+  `night/tiles.json`. Each palette is portrayed the first time it's asked for.
+- When rendering time-varying datasets (S-104, S-111), a `t` query parameter
+  on either route picks the time step, for example
+  `{z}/{x}/{y}.png?t=2026-03-21T07:00Z`. The time is ISO 8601, UTC unless it
+  says otherwise, and snaps to the nearest step; each dataset then uses its own
+  step nearest to it. The TileJSON lists every step in `s100.times`, and with
+  `t` it names the chosen step in `s100.time` and carries it in its tile URL.
+  Without `t`, `--time-step` applies. A `t` that isn't a time answers
+  `400 Bad Request`; datasets that don't vary with time ignore it.
+- `/`, a preview page that shows the tiles over OpenStreetMap, with a palette
+  menu when rendering datasets and a time menu when they vary with time. It loads MapLibre GL JS and the basemap from
+  the internet. Pass `--no-viewer` to turn it off.
+
+Every response allows any origin, so a page served from another port can use
+the tiles.
+
+By default only this computer can connect. With `--host 0.0.0.0`, other
+computers can, and `tiles serve` adds a random access token to every URL unless
+you pass `--token` or `--no-token`. It prints the tile URL, the TileJSON URL
+and the preview URL for each network address.
+
+The options below are the server's own. When rendering datasets, the
+[`tiles export` options](#tiles-export-options) for inputs, zoom levels, the
+area, the tile format and display settings apply too; the output options
+(`-o`, `--container`, `--skip-empty`, `--yes`) don't.
+
+| Option | Default | Description |
+|---|---|---|
+| `--host <address>` | `127.0.0.1` | The address to listen on. `0.0.0.0` accepts other computers. |
+| `--port <port>` | `8200` | The port. `0` picks a free one. |
+| `--token <token>` | generated for a non-loopback host | An access token that becomes part of every URL. Letters, digits, `-` and `_`. |
+| `--no-token` | off | Serves without a token, even on a non-loopback address. |
+| `--no-viewer` | off | Doesn't serve the preview page. |
+| `--cache-mb <megabytes>` | `256` | When rendering datasets, the most memory rendered tiles are kept in. |
+| `--refresh <seconds>` | `10` | When rendering datasets, how often their files are checked for changes. `0` never checks. |
+| `--cache-dir <folder>` | none | When rendering datasets, also keeps rendered tiles in this folder, across runs. |
+| `--cache-dir-mb <megabytes>` | `1024` | The most disk space the `--cache-dir` tiles take. |
+| `--clear-cache` | off | Deletes the tiles cached in `--cache-dir` before serving. |
+
+```bash
+s100 tiles serve chart.pmtiles
+s100 tiles serve chart.mbtiles --port 9000
+s100 tiles serve tiles/ --host 0.0.0.0
+s100 tiles serve enc.000
+s100 tiles serve --layer enc.000 --layer bathy.h5 --palette night
+s100 tiles serve exchange-set/ --only S101 --max-zoom 16
+s100 tiles serve exchange-set/ --cache-dir ~/.cache/s100-tiles
+```
+
+To use the tiles in MapLibre GL JS, add a raster source from the TileJSON URL:
+
+```js
+map.addSource("chart", {
+  type: "raster",
+  url: "http://127.0.0.1:8200/tiles.json",
+  tileSize: 256,
+});
+map.addLayer({ id: "chart", type: "raster", source: "chart" });
+```
+
+In Leaflet, use the tile URL:
+`L.tileLayer("http://127.0.0.1:8200/{z}/{x}/{y}.png").addTo(map)`.
+
+The server runs until you press Ctrl+C or it receives SIGTERM.
 
 ## info
 
@@ -740,7 +870,7 @@ command exits with code `1`.
 |---|---|
 | `0` | Success. |
 | `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. |
-| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. |
+| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. |
 | `3` | The product specification doesn't support headless rendering or display-list output. |
 | `4` | The dataset is recognised, but its structure or encoding isn't supported, such as an unsupported data coding format. |
 | `5` | The dataset is recognised but doesn't conform: a required attribute, dataset or group is missing or malformed. |
@@ -756,4 +886,4 @@ command exits with code `1`.
 - [S-98 interoperability](design/s98-interoperability.md): how composite
   layers are ordered.
 - [PMTiles](https://docs.protomaps.com/pmtiles/): the single-file tile
-  archive format `tiles` writes, and how to serve and view it.
+  archive format `tiles export` writes, and how to serve and view it.

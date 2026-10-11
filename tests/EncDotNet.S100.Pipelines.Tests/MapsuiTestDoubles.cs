@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
@@ -12,6 +13,29 @@ internal sealed class IdentityCrsTransformFactory : ICrsTransformFactory
 {
     public ICrsTransform Create(string sourceCrs, string targetCrs) =>
         IdentityCrsTransform.Instance;
+}
+
+/// <summary>
+/// Awaitable that stays pending until <c>cancellationToken</c> is cancelled,
+/// then resumes its awaiter synchronously on the cancelling thread. It
+/// completes <c>parked</c> only once the awaiter is attached, so a test knows
+/// that a later cancellation runs the awaiting code inline.
+/// </summary>
+internal readonly struct ParkUntilCancelled(
+    CancellationToken cancellationToken,
+    TaskCompletionSource parked) : INotifyCompletion
+{
+    public ParkUntilCancelled GetAwaiter() => this;
+
+    public bool IsCompleted => false;
+
+    public void OnCompleted(Action continuation)
+    {
+        cancellationToken.Register(continuation);
+        parked.TrySetResult();
+    }
+
+    public void GetResult() => cancellationToken.ThrowIfCancellationRequested();
 }
 
 /// <summary>
@@ -67,6 +91,12 @@ internal sealed class StubProcessor :
 
     public TaskCompletionSource ReleaseDelayedRender { get; } =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// When set, awaited at the start of every render with the render's
+    /// cancellation token, so a test can control how the render blocks.
+    /// </summary>
+    public Func<CancellationToken, Task>? RenderHook { get; set; }
 
     public string ProductSpec { get; set; } = "S-101";
 
@@ -138,6 +168,8 @@ internal sealed class StubProcessor :
         var version = Version;
         var delay = Delay;
         RenderStarted?.TrySetResult();
+        if (RenderHook is { } hook)
+            await hook(cancellationToken);
         if (delay > TimeSpan.Zero)
         {
             await Task.WhenAny(

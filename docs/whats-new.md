@@ -6,12 +6,21 @@ month. For package versions and release assets, see
 
 ## October 2026
 
-- **Raster tiles.** The new `s100 tiles` command renders a dataset, a
+- **Raster tiles.** The new `s100 tiles export` command renders a dataset, a
   composite or an exchange set as XYZ Web Mercator tiles for MapLibre,
   Leaflet and OpenLayers, written as a `{z}/{x}/{y}` folder, a PMTiles
   archive or an MBTiles database. Each zoom level draws only what's visible at its scale. See
-  [`tiles`](cli.md#tiles).
-- **Overlapping chart cells.** In `s100 tiles`, composite `s100 render` and
+  [`tiles export`](cli.md#tiles-export).
+- **Serving tiles.** `s100 tiles serve` serves tiles on XYZ URLs with a
+  TileJSON document and a preview page, so a web map on your computer can use
+  them as a tile source. It serves a built folder, PMTiles or MBTiles tile set,
+  or renders datasets as their tiles are asked for, in the day, dusk and night
+  palettes and, for S-104 and S-111, at any time step chosen in the URL. It reopens the datasets when their files change, and with
+  `--cache-dir`, rendered tiles are kept on disk across restarts, reused only
+  while the data and settings are unchanged. See
+  [`tiles serve`](cli.md#tiles-serve).
+- **Overlapping chart cells.** In `s100 tiles export`, `s100 tiles serve`,
+  composite `s100 render` and
   the library's headless compositor, a finer chart cell now hides the coarser
   cell it overlaps, as SoundCharts does, so overlapping cells of different
   scales no longer draw on top of each other.

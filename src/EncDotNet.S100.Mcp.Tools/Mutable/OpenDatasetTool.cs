@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Mcp.Tools.Mutable;
 
 /// <summary>Request payload for <see cref="OpenDatasetTool"/>.</summary>
 public sealed record OpenDatasetRequest(
-    [property: Description("Local filesystem path to a dataset file or an exchange set (folder containing a catalogue, or a .zip of one).")] string Path,
+    [property: Description("Local filesystem path to a dataset file or an exchange set (folder containing a catalogue, or a .zip of one); hosts that support it also take a plain folder of datasets, searched recursively.")] string Path,
     [property: Description("Optional explicit product-spec hint (e.g. \"S-102\") for single-file loads; ignored for exchange sets.")] string? Spec = null);
 
 /// <summary>Metadata for a single dataset added by an open operation.</summary>
@@ -22,7 +22,7 @@ public sealed record OpenedDataset(
 /// <summary>Result payload for <see cref="OpenDatasetTool"/>.</summary>
 public sealed record OpenDatasetResult(
     [property: Description("The path that was opened.")] string Path,
-    [property: Description("How the path was loaded: \"file\" or \"exchangeSet\".")] string Kind,
+    [property: Description("How the path was loaded: \"file\", \"exchangeSet\" or \"folder\".")] string Kind,
     [property: Description("Number of datasets newly added to the catalog.")] int Count,
     [property: Description("Wall-clock duration of the catalog load hot path, in milliseconds.")] double LoadDurationMs,
     [property: Description("Whether an exchange-set load did not settle before the host's ceiling.")] bool TimedOut,
@@ -87,9 +87,12 @@ public sealed class OpenDatasetTool
         var problems = outcome.Problems ?? [];
         if (outcome.Added.Count == 0)
         {
-            var reason = outcome.Kind == DatasetSourceKind.File
-                ? "the file loaded but produced no portrayable dataset"
-                : "the exchange set contained no datasets the host can portray";
+            var reason = outcome.Kind switch
+            {
+                DatasetSourceKind.File => "the file loaded but produced no portrayable dataset",
+                DatasetSourceKind.Folder => "the folder contained no datasets the host can portray",
+                _ => "the exchange set contained no datasets the host can portray",
+            };
             return ToolResult<OpenDatasetResult>.Err(new DatasetLoadFailed(
                 reason + DescribeProblems(problems)));
         }
@@ -111,7 +114,12 @@ public sealed class OpenDatasetTool
 
         return ToolResult<OpenDatasetResult>.Ok(new OpenDatasetResult(
             Path: path,
-            Kind: outcome.Kind == DatasetSourceKind.File ? "file" : "exchangeSet",
+            Kind: outcome.Kind switch
+            {
+                DatasetSourceKind.File => "file",
+                DatasetSourceKind.Folder => "folder",
+                _ => "exchangeSet",
+            },
             Count: added,
             LoadDurationMs: loadDurationMs,
             TimedOut: outcome.TimedOut,

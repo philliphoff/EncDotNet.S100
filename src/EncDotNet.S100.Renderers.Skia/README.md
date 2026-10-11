@@ -9,7 +9,7 @@ own compositor. It draws the vector scene IR from
 which it brings in as a dependency.
 
 For the end-to-end path, from display list to PNG, see
-[Embedding the renderer](../../docs/embedding-the-renderer.md).
+[Render images and map tiles](../../docs/embedding-the-renderer.md).
 
 ## Install
 

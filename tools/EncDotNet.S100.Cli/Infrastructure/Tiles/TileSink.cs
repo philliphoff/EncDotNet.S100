@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 
 namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
 
-/// <summary>The tile container <c>s100 tiles</c> writes.</summary>
+/// <summary>The tile container <c>s100 tiles export</c> writes.</summary>
 internal enum TileContainer
 {
     /// <summary>A directory of <c>{z}/{x}/{y}.{ext}</c> files.</summary>

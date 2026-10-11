@@ -1,7 +1,5 @@
 using System.Globalization;
-using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
-using EncDotNet.S100.Collections.RemoteCatalogues;
 using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -15,10 +13,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 internal sealed partial class AddToLibraryDialogViewModel
 {
-    private readonly Func<Uri, CancellationToken, Task<RemoteS100Catalogue>>? _loadS100Catalogue;
-    private readonly Func<RemoteS100Catalogue, IReadOnlyList<string>, CancellationToken, Task<IReadOnlyDictionary<Uri, S3Object>?>>? _listS100Folders;
-
-    private S100CatalogueScope? S100Scope => _scope as S100CatalogueScope;
+    private S100CatalogueScope? S100Scope => Scope as S100CatalogueScope;
 
     /// <summary>True when adding a remote S-100 catalogue.</summary>
     public bool IsS100Catalogue => _kind == LibrarySourceKind.S100Catalogue;
@@ -58,34 +53,19 @@ internal sealed partial class AddToLibraryDialogViewModel
             .ToUpper(CultureInfo.CurrentCulture)
         : string.Empty;
 
-    /// <summary>The filter for the current region, area and resolution choices.</summary>
-    public S100CatalogueFilter CurrentS100CatalogueFilter => S100Scope?.CurrentFilter ?? new S100CatalogueFilter();
-
-    /// <summary>Shows a remote S-100 catalogue's regions once its scope has read it, and starts sizing the first.</summary>
-    private void ShowS100Regions(S100CatalogueScope scope)
+    /// <summary>Raises what follows a remote S-100 catalogue's regions, and starts sizing the region shown.</summary>
+    private void RaiseRegionsChanged()
     {
-        foreach (var option in AllOptions)
-            option.PropertyChanged -= OnFacetChanged;
-        _facetGroups = scope.Groups.Select(r =>
-        {
-            var group = new FacetGroupViewModel(r.Title, [.. r.Options]) { Key = r.Key, Source = r };
-            foreach (var option in group.Options)
-                option.PropertyChanged += OnFacetChanged;
-            return group;
-        }).ToArray();
-        _selectedFacetGroup = _facetGroups.FirstOrDefault();
+        if (!IsS100Catalogue)
+            return;
 
-        OnPropertyChanged(nameof(FacetGroups));
-        OnPropertyChanged(nameof(HasFacetTabs));
-        OnPropertyChanged(nameof(ShowsGroupTitle));
         OnPropertyChanged(nameof(IsRegionPicker));
         OnPropertyChanged(nameof(Resolutions));
         OnPropertyChanged(nameof(HasResolutions));
         OnPropertyChanged(nameof(SelectedResolution));
-        OnPropertyChanged(nameof(SelectedFacetGroup));
         OnPropertyChanged(nameof(RegionsHeader));
         OnPropertyChanged(nameof(AreasHeader));
-        _ = scope.SizeGroupAsync(_selectedFacetGroup?.Source);
+        _ = S100Scope?.SizeGroupAsync(_selectedFacetGroup?.Source);
     }
 
     /// <summary>Called when another region is opened.</summary>

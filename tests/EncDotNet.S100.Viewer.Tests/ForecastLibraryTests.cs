@@ -195,8 +195,10 @@ public sealed class ForecastLibraryTests : IDisposable
             },
             _ => new ForecastModelSummary(m, Run, 5, 2_000_000, 1_000_000, new GeoBounds(-60, 100, -59, 101)),
         }).ToArray();
-        var vm = new AddToLibraryDialogViewModel(_library, null,
-            loadForecastModels: (uri, models, _) => Task.FromResult(Summaries(models)));
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
+        {
+            ForecastModels = (uri, models, _) => Task.FromResult(Summaries(models)),
+        });
 
         vm.Initialize(known, targetCollectionId: null);
         Assert.Equal(LibrarySourceKind.S100Forecast, vm.Kind);
@@ -206,17 +208,17 @@ public sealed class ForecastLibraryTests : IDisposable
 
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(14, vm.ForecastModels.Count);
-        var cbofs = vm.ForecastModels.Single(o => o.Value == "cbofs");
+        Assert.Equal(14, vm.Choices().Count);
+        var cbofs = vm.Choices().Single(o => o.Value == "cbofs");
         Assert.Equal("Chesapeake Bay", cbofs.Label);
         Assert.Equal("cbofs · every 6 h · 58 tiles · " + LibraryItemViewModel.FormatBytes(25_000_000), cbofs.Detail);
         // rtofs_east's tiles cover cbofs's, not tbofs's (outside them); nothing covers rtofs_east.
-        Assert.Equal("Overlaps cbofs", vm.ForecastModels.Single(o => o.Value == "rtofs_east").Note);
+        Assert.Equal("Overlaps cbofs", vm.Choices().Single(o => o.Value == "rtofs_east").Note);
         Assert.Null(cbofs.Note);
-        Assert.Null(vm.ForecastModels.Single(o => o.Value == "tbofs").Note);
+        Assert.Null(vm.Choices().Single(o => o.Value == "tbofs").Note);
         Assert.Equal("rtofs_east · daily · 21 tiles · " + LibraryItemViewModel.FormatBytes(6_000_000),
-            vm.ForecastModels.Single(o => o.Value == "rtofs_east").Detail);
-        Assert.Equal("dbofs · catalogue unavailable", vm.ForecastModels.Single(o => o.Value == "dbofs").Detail);
+            vm.Choices().Single(o => o.Value == "rtofs_east").Detail);
+        Assert.Equal("dbofs · catalogue unavailable", vm.Choices().Single(o => o.Value == "dbofs").Detail);
 
         vm.SelectedForecastShape = vm.ForecastShapes[1];
         Assert.Equal("cbofs · every 6 h · one file · " + LibraryItemViewModel.FormatBytes(12_000_000), cbofs.Detail);

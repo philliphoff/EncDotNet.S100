@@ -1,9 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Net;
-using System.Net.NetworkInformation;
-using System.Net.Sockets;
-using System.Security.Cryptography;
+using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Feeds;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -62,14 +60,9 @@ internal sealed class FeedServeCommand : AsyncCommand<FeedServeCommand.Settings>
         {
             if (!Directory.Exists(Path) && !File.Exists(Path))
                 return ValidationResult.Error($"'{Path}' does not exist.");
-            if (!IPAddress.TryParse(Host, out _))
-                return ValidationResult.Error($"'{Host}' is not an IP address.");
-            if (Port is < 0 or > 65535)
-                return ValidationResult.Error("--port must be between 0 and 65535.");
-            if (Token is not null && NoToken)
-                return ValidationResult.Error("--token and --no-token are mutually exclusive.");
-            if (Token is { } token && (token.Length == 0 || token.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not '-' and not '_')))
-                return ValidationResult.Error("--token may contain only letters, digits, '-' and '_'.");
+            var serve = ServeHost.Validate(Host, Port, Token, NoToken);
+            if (!serve.Successful)
+                return serve;
             if (RefreshSeconds < 1)
                 return ValidationResult.Error("--refresh must be at least 1 second.");
             return ValidationResult.Success();
@@ -107,30 +100,10 @@ internal sealed class FeedServeCommand : AsyncCommand<FeedServeCommand.Settings>
     }
 
     /// <summary>The given token; otherwise a random one when serving beyond this machine (unless --no-token).</summary>
-    internal static string? ResolveToken(Settings settings, IPAddress address)
-    {
-        if (settings.Token is { } token)
-            return token;
-        if (settings.NoToken || IPAddress.IsLoopback(address))
-            return null;
-
-        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(12)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-    }
+    internal static string? ResolveToken(Settings settings, IPAddress address) =>
+        ServeHost.ResolveToken(settings.Token, settings.NoToken, address);
 
     /// <summary>The URLs to print: the address itself, or each of this machine's addresses when listening on all.</summary>
-    private static IEnumerable<Uri> Urls(IPAddress address, int port, string? token)
-    {
-        if (!address.Equals(IPAddress.Any) && !address.Equals(IPAddress.IPv6Any))
-            return [FeedServer.FeedUriFor(address, port, token)];
-
-        var local = NetworkInterface.GetAllNetworkInterfaces()
-            .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-            .SelectMany(n => n.GetIPProperties().UnicastAddresses)
-            .Select(a => a.Address)
-            .Where(a => a.AddressFamily == AddressFamily.InterNetwork)
-            .Distinct()
-            .Select(a => FeedServer.FeedUriFor(a, port, token))
-            .ToArray();
-        return local.Length > 0 ? local : [FeedServer.FeedUriFor(IPAddress.Loopback, port, token)];
-    }
+    private static IEnumerable<Uri> Urls(IPAddress address, int port, string? token) =>
+        ServeHost.DisplayAddresses(address).Select(a => FeedServer.FeedUriFor(a, port, token));
 }

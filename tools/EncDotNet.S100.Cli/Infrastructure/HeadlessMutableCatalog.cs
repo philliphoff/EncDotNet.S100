@@ -208,8 +208,8 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             Console.Error.WriteLine(warning);
         }
 
-        var kind = ExchangeSetInput.LooksLikeExchangeSet(path)
-            ? DatasetSourceKind.ExchangeSet
+        var kind = ExchangeSetInput.LooksLikeExchangeSet(path) ? DatasetSourceKind.ExchangeSet
+            : Directory.Exists(path) ? DatasetSourceKind.Folder
             : DatasetSourceKind.File;
 
         List<DatasetId> added;

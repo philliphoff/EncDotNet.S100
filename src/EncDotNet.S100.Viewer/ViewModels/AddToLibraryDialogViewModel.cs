@@ -4,49 +4,39 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
-using EncDotNet.S100.Collections.ChartCatalogs;
-using EncDotNet.S100.Collections.Feeds;
-using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
-using EncDotNet.S100.Collections.Noaa;
-using EncDotNet.S100.Collections.RemoteCatalogues;
-using EncDotNet.S100.Collections.Usace;
 using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-/// <summary>A titled group of selectable facet values (one tab in the dialog).</summary>
+/// <summary>A titled group of choices (one tab in the dialog), as a core scope made it.</summary>
 internal sealed class FacetGroupViewModel : ViewModelBase
 {
-    private readonly Func<IEnumerable<LibraryChoice>> _all;
     private int _selectedCount;
 
-    /// <param name="title">The group title (e.g. "States", "Rivers").</param>
-    /// <param name="options">The group's values as shown (a community list's are filtered).</param>
-    /// <param name="all">Every value, shown or not; defaults to <paramref name="options"/>.</param>
-    public FacetGroupViewModel(
-        string title, ObservableCollection<LibraryChoice> options, Func<IEnumerable<LibraryChoice>>? all = null)
+    /// <param name="source">The core group (e.g. "States", "Rivers", or a remote catalogue's region).</param>
+    public FacetGroupViewModel(LibraryChoiceGroup source)
     {
-        Title = title;
-        Options = options;
-        _all = all ?? (() => options);
+        ArgumentNullException.ThrowIfNull(source);
+        Source = source;
+        Options = new ObservableCollection<LibraryChoice>(source.Options);
     }
 
+    /// <summary>The core group shown.</summary>
+    public LibraryChoiceGroup Source { get; }
+
     /// <summary>The group title (e.g. "States", "Rivers").</summary>
-    public string Title { get; }
+    public string Title => Source.Title;
 
     /// <summary>What the group stands for, when it is a value itself (a remote catalogue's region folder).</summary>
-    public string? Key { get; init; }
+    public string? Key => Source.Key;
 
-    /// <summary>The core group it shows, when a scope made it (a remote catalogue's region).</summary>
-    public LibraryChoiceGroup? Source { get; init; }
-
-    /// <summary>The group's values as shown.</summary>
+    /// <summary>The group's values as shown (those matching the filter text).</summary>
     public ObservableCollection<LibraryChoice> Options { get; }
 
-    /// <summary>Every value of the group, including any hidden by a filter.</summary>
-    public IEnumerable<LibraryChoice> AllOptions => _all();
+    /// <summary>Every value of the group, including any hidden by the filter.</summary>
+    public IReadOnlyList<LibraryChoice> AllOptions => Source.Options;
 
     /// <summary>How many of the group's values are ticked (shown or not).</summary>
     public int SelectedCount
@@ -62,27 +52,38 @@ internal sealed class FacetGroupViewModel : ViewModelBase
     /// <summary>True when any value is ticked (the tab shows a count badge).</summary>
     public bool HasSelection => _selectedCount > 0;
 
-    internal void Refresh() => SelectedCount = _all().Count(o => o.IsSelected);
+    internal void Refresh() => SelectedCount = AllOptions.Count(o => o.IsSelected);
+
+    /// <summary>Shows the values whose label or value contains <paramref name="text"/>; ticks outside it are kept.</summary>
+    internal void Filter(string text)
+    {
+        Options.Clear();
+        foreach (var option in AllOptions)
+        {
+            if (text.Length == 0
+                || option.Label.Contains(text, StringComparison.CurrentCultureIgnoreCase)
+                || option.Value.Contains(text, StringComparison.OrdinalIgnoreCase))
+            {
+                Options.Add(option);
+            }
+        }
+    }
 }
 
 /// <summary>
 /// View model for the "Add to Library" dialog: confirms which collection a
 /// new source goes into (a new one, named, or an existing one) and, for an
-/// online feed, which part to include: NOAA ENC by state, Coast Guard district
-/// or region; USACE Inland ENC by river; a community chart list by entry
-/// (searchable, as lists run to over a thousand). Nothing is loaded or downloaded
-/// except the feed's catalogue itself.
+/// online catalogue or a collection manifest, which part to include. The
+/// catalogue is read, its choices offered and the source built by the core's
+/// <see cref="LibrarySourceDraft"/> (#792), as headless hosts do; nothing is
+/// loaded or downloaded except the catalogue itself.
 /// </summary>
 internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
 {
     private readonly CollectionLibrary _library;
-    private readonly Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? _loadCatalog;
-    private readonly Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? _loadUsaceCatalog;
-    private readonly Func<Uri, CancellationToken, Task<ChartCatalogsProductCatalog>>? _loadCommunityCatalog;
-    private readonly Func<Uri, CancellationToken, Task<S100FeedDocument>>? _loadS100Feed;
+    private readonly LibraryCatalogueReaders _readers;
     private readonly TimeProvider _time;
-    private readonly List<LibraryChoice> _allCharts = [];
-    private string _chartSearchText = string.Empty;
+    private string _searchText = string.Empty;
     private KnownCatalogueSource? _known;
     private DateOnly? _catalogueDate;
     private IReadOnlyList<FacetGroupViewModel> _facetGroups = [];
@@ -97,34 +98,18 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     private LibraryCollection? _selectedCollection;
     private bool _isLoading;
     private string? _loadError;
-    // The core's scope of the online catalogue or manifest being added (#792).
-    private LibraryCatalogueScope? _scope;
+    // The source being added; null for an online catalogue this host cannot read.
+    private LibrarySourceDraft? _draft;
     private string _selectionSummary = string.Empty;
 
-    public AddToLibraryDialogViewModel(
-        CollectionLibrary library,
-        Func<Uri, CancellationToken, Task<NoaaEncProductCatalog>>? loadNoaaCatalog,
-        Func<Uri, CancellationToken, Task<UsaceIencProductCatalog>>? loadUsaceCatalog = null,
-        TimeProvider? timeProvider = null,
-        Func<Uri, CancellationToken, Task<ChartCatalogsProductCatalog>>? loadCommunityCatalog = null,
-        Func<Uri, CancellationToken, Task<S100FeedDocument>>? loadS100Feed = null,
-        Func<Uri, CancellationToken, Task<RemoteS100Catalogue>>? loadS100Catalogue = null,
-        Func<RemoteS100Catalogue, IReadOnlyList<string>, CancellationToken, Task<IReadOnlyDictionary<Uri, S3Object>?>>? listS100Folders = null,
-        Func<Uri, IReadOnlyList<ForecastModel>, CancellationToken, Task<IReadOnlyList<ForecastModelSummary>>>? loadForecastModels = null,
-        Func<Uri, string?, CancellationToken, Task<SecomServiceDescription>>? describeSecom = null,
-        Func<GeoBounds?>? currentMapView = null)
+    /// <param name="library">The Library the source is added to.</param>
+    /// <param name="readers">Reads online catalogues; a catalogue without a reader cannot be added.</param>
+    /// <param name="timeProvider">The clock (catalogue age, forecast end); the system clock when null.</param>
+    public AddToLibraryDialogViewModel(CollectionLibrary library, LibraryCatalogueReaders? readers = null, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(library);
         _library = library;
-        _loadCatalog = loadNoaaCatalog;
-        _loadUsaceCatalog = loadUsaceCatalog;
-        _loadCommunityCatalog = loadCommunityCatalog;
-        _loadS100Feed = loadS100Feed;
-        _loadS100Catalogue = loadS100Catalogue;
-        _listS100Folders = listS100Folders;
-        _loadForecastModels = loadForecastModels;
-        _describeSecom = describeSecom;
-        _currentMapView = currentMapView;
+        _readers = readers ?? new LibraryCatalogueReaders();
         _time = timeProvider ?? TimeProvider.System;
 
         ConfirmCommand = new RelayCommand(Confirm, () => CanConfirm);
@@ -142,30 +127,28 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>What is being added.</summary>
     public LibrarySourceKind Kind => _kind;
 
-    /// <summary>True when adding a NOAA feed scope.</summary>
-    public bool IsNoaaFeed => _kind == LibrarySourceKind.NoaaFeed;
+    /// <summary>The core's scope of the catalogue or manifest being added, once there is one.</summary>
+    private LibraryCatalogueScope? Scope => _draft?.Scope;
 
-    /// <summary>True when adding a scope of an online feed (NOAA, USACE or a community list).</summary>
-    public bool IsOnlineFeed => _kind is LibrarySourceKind.NoaaFeed or LibrarySourceKind.UsaceFeed
-        or LibrarySourceKind.CommunityFeed or LibrarySourceKind.S100Feed or LibrarySourceKind.S100Catalogue
-        or LibrarySourceKind.S100Forecast or LibrarySourceKind.Secom;
+    /// <summary>True when adding a scope of an online catalogue.</summary>
+    public bool IsOnlineFeed => LibrarySourceKinds.IsOnline(_kind);
 
-    /// <summary>True when the feed's values can be filtered by text (community lists).</summary>
+    /// <summary>True when the choices can be filtered by text (community lists, manifests).</summary>
     public bool IsSearchable => _kind is LibrarySourceKind.CommunityFeed or LibrarySourceKind.LocalManifest;
 
     /// <summary>The placeholder of the filter box.</summary>
     public string SearchPlaceholder => IsManifest ? Strings.Manifest_FilterPlaceholder : Strings.Wizard_FilterDownloads;
 
-    /// <summary>The facet tabs for the current feed.</summary>
+    /// <summary>The choice tabs, once the catalogue has been read.</summary>
     public IReadOnlyList<FacetGroupViewModel> FacetGroups => _facetGroups;
 
-    /// <summary>True when the feed has more than one facet group, shown as tabs (a remote catalogue's regions are a list instead).</summary>
+    /// <summary>True when the catalogue has more than one choice group, shown as tabs (a remote catalogue's regions are a list instead).</summary>
     public bool HasFacetTabs => _facetGroups.Count > 1 && !IsS100Catalogue;
 
-    /// <summary>True when the one facet group's title stands in for tabs (a community list shows its filter instead).</summary>
+    /// <summary>True when the one group's title stands in for tabs (a community list shows its filter instead).</summary>
     public bool ShowsGroupTitle => _facetGroups.Count == 1 && (!IsSearchable || IsManifest);
 
-    /// <summary>The facet tab being shown.</summary>
+    /// <summary>The tab being shown.</summary>
     public FacetGroupViewModel? SelectedFacetGroup
     {
         get => _selectedFacetGroup;
@@ -179,35 +162,13 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         }
     }
 
-    private IReadOnlyList<FacetGroupViewModel> CreateFacetGroups() => _kind switch
-    {
-        LibrarySourceKind.NoaaFeed =>
-        [
-            new(Strings.Library_NoaaStates, States),
-            new(Strings.Library_NoaaDistricts, CoastGuardDistricts),
-            new(Strings.Library_NoaaRegions, Regions),
-        ],
-        LibrarySourceKind.UsaceFeed => [new(Strings.Library_UsaceRivers, Rivers)],
-        LibrarySourceKind.CommunityFeed => [new(Strings.Library_CommunityCharts, Charts, () => _allCharts)],
-        LibrarySourceKind.S100Feed or LibrarySourceKind.Secom => [new(Strings.Library_FeedProducts, Products)],
-        LibrarySourceKind.LocalManifest => [new(Strings.Manifest_GroupsTitle, Groups, () => _allGroups)],
-        LibrarySourceKind.S100Forecast => [new(Strings.Wizard_ForecastModelsTitle, ForecastModels)],
-        _ => [],
-    };
-
     /// <summary>The dialog title.</summary>
     public string Title => LibrarySourceText.Title(_kind, _known, IsEditing);
 
-    /// <summary>The path being added, or the feed URL.</summary>
-    public string SourceDescription => _kind switch
-    {
-        LibrarySourceKind.NoaaFeed or LibrarySourceKind.UsaceFeed or LibrarySourceKind.CommunityFeed or LibrarySourceKind.S100Feed
-            or LibrarySourceKind.S100Catalogue or LibrarySourceKind.S100Forecast or LibrarySourceKind.Secom
-            => CatalogUri.AbsoluteUri,
-        _ => _path ?? string.Empty,
-    };
+    /// <summary>The path being added, or the catalogue's URL.</summary>
+    public string SourceDescription => IsOnlineFeed ? CatalogUri.AbsoluteUri : _path ?? string.Empty;
 
-    /// <summary>The online catalogue being read: the known source's, else the feed's default.</summary>
+    /// <summary>The online catalogue being read.</summary>
     public Uri CatalogUri => LibrarySourceText.CatalogUri(_kind, _known);
 
     /// <summary>"Catalogue dated 2026-09-17", once the catalogue is loaded and declares a date.</summary>
@@ -292,7 +253,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         ? Strings.Library_NewCollection
         : _selectedCollection?.Definition.Name ?? Strings.Library_ExistingCollection;
 
-    /// <summary>True while the NOAA catalogue is being fetched.</summary>
+    /// <summary>True while the catalogue is being read.</summary>
     public bool IsLoading
     {
         get => _isLoading;
@@ -306,7 +267,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Why the NOAA catalogue could not be fetched, if it failed.</summary>
+    /// <summary>Why the catalogue could not be read, if it failed.</summary>
     public string? LoadError
     {
         get => _loadError;
@@ -320,36 +281,18 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>True when <see cref="LoadError"/> is set.</summary>
     public bool HasLoadError => _loadError is not null;
 
-    /// <summary>States present in the NOAA catalogue.</summary>
-    public ObservableCollection<LibraryChoice> States { get; } = [];
-
-    /// <summary>Coast Guard districts present in the NOAA catalogue.</summary>
-    public ObservableCollection<LibraryChoice> CoastGuardDistricts { get; } = [];
-
-    /// <summary>Regions present in the NOAA catalogue.</summary>
-    public ObservableCollection<LibraryChoice> Regions { get; } = [];
-
-    /// <summary>Rivers present in the USACE catalogue.</summary>
-    public ObservableCollection<LibraryChoice> Rivers { get; } = [];
-
-    /// <summary>Products present in an S-100 feed.</summary>
-    public ObservableCollection<LibraryChoice> Products { get; } = [];
-
-    /// <summary>The community list's entries matching <see cref="ChartSearchText"/>.</summary>
-    public ObservableCollection<LibraryChoice> Charts { get; } = [];
-
-    /// <summary>Filters <see cref="Charts"/> by label or number; selections outside the filter are kept.</summary>
-    public string ChartSearchText
+    /// <summary>Filters the shown choices by label or value; ticks outside the filter are kept.</summary>
+    public string SearchText
     {
-        get => _chartSearchText;
+        get => _searchText;
         set
         {
-            if (SetProperty(ref _chartSearchText, value ?? string.Empty))
-                ShowMatchingCharts();
+            if (SetProperty(ref _searchText, value ?? string.Empty))
+                ShowMatchingChoices();
         }
     }
 
-    /// <summary>"N cells · X MB" for the current NOAA selection.</summary>
+    /// <summary>"N cells · X MB" for the current selection.</summary>
     public string SelectionSummary
     {
         get => _selectionSummary;
@@ -369,20 +312,20 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
             if (!SetProperty(ref _includeAll, value))
                 return;
 
-            if (_scope is not null)
-                _scope.IncludeAll = value;
+            if (_draft is not null)
+                _draft.IncludeAll = value;
             OnPropertyChanged(nameof(OnlySelected));
             UpdateSelection();
             OnScopeChanged();
         }
     }
 
-    /// <summary>Sets <see cref="IncludeAll"/> (and the scope's) without the notifications, while initializing.</summary>
+    /// <summary>Sets <see cref="IncludeAll"/> (and the draft's) without the notifications, while initializing.</summary>
     private void SetIncludeAll(bool value)
     {
         _includeAll = value;
-        if (_scope is not null)
-            _scope.IncludeAll = value;
+        if (_draft is not null)
+            _draft.IncludeAll = value;
     }
 
     /// <summary>The inverse of <see cref="IncludeAll"/>, for radio-button binding.</summary>
@@ -393,18 +336,18 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     }
 
     /// <summary>True once the catalogue has been read.</summary>
-    public bool IsLoaded => _scope?.IsLoaded == true;
+    public bool IsLoaded => _draft?.IsLoaded == true;
 
     /// <summary>True when the catalogue has been read and it lists more than one choice.</summary>
     public bool ShowsChoices => IsLoaded && !_isLoading && !IsSingleEntry;
 
-    /// <summary>Every facet value, shown or not, across all groups.</summary>
+    /// <summary>Every choice, shown or not, across all groups.</summary>
     private IEnumerable<LibraryChoice> AllOptions => _facetGroups.SelectMany(g => g.AllOptions);
 
-    /// <summary>How many facet values are ticked, across all groups.</summary>
+    /// <summary>How many choices are ticked, across all groups.</summary>
     public int SelectedCount => AllOptions.Count(o => o.IsSelected);
 
-    /// <summary>True when any facet value is ticked.</summary>
+    /// <summary>True when any choice is ticked.</summary>
     public bool HasSelection => AllOptions.Any(o => o.IsSelected);
 
     /// <summary>
@@ -414,17 +357,16 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     public bool IsSingleEntry => SingleEntry is not null;
 
     /// <summary>The catalogue's only download, when it lists just one; otherwise <see langword="null"/>.</summary>
-    public LibraryChoice? SingleEntry => _scope?.SingleEntry;
+    public LibraryChoice? SingleEntry => Scope?.SingleEntry;
 
     /// <summary>"12,345 cells · 1.2 GB" (or "N downloads · sizes unknown") for the whole catalogue.</summary>
-    public string EverythingSummary => _scope is { IsLoaded: true } scope ? scope.EverythingSummary : string.Empty;
+    public string EverythingSummary => Scope is { IsLoaded: true } scope ? scope.EverythingSummary : string.Empty;
 
     /// <summary>The "Only what I select" sub-line: the selection summary, or "Nothing selected yet".</summary>
     public string OnlySelectedSummary => HasSelection ? _selectionSummary : Strings.Wizard_NothingSelected;
 
-    /// <summary>The summary under the facet list.</summary>
-    public string ScopeSummary =>
-        _scope?.ScopeSummary ?? LibrarySourceText.ScopeSummary(_includeAll, SelectedCount, _selectionSummary);
+    /// <summary>The summary under the choices.</summary>
+    public string ScopeSummary => _draft?.ScopeSummary ?? string.Empty;
 
     /// <summary>True when <see cref="ScopeSummary"/> asks the user to tick something.</summary>
     public bool IsScopeSummaryWarning => IsManifest ? IsManifestSummaryWarning : !_includeAll && !HasSelection;
@@ -453,12 +395,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
             ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_Review_EverythingFormat, EverythingSummary)
             : string.Format(CultureInfo.CurrentCulture, Strings.Wizard_Review_SelectionFormat, DescribeSelection(), _selectionSummary);
 
-    private KnownCatalogueCoverage Coverage => _known?.Coverage ?? _kind switch
-    {
-        LibrarySourceKind.UsaceFeed => KnownCatalogueCoverage.BoundingBoxes,
-        LibrarySourceKind.CommunityFeed => KnownCatalogueCoverage.None,
-        _ => KnownCatalogueCoverage.Polygons,
-    };
+    private KnownCatalogueCoverage Coverage => _known?.Coverage ?? KnownCatalogueCoverage.Polygons;
 
     /// <summary>The review's "Shown on the map" line.</summary>
     public string ReviewCoverage => Coverage switch
@@ -471,7 +408,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     /// <summary>True when nothing is shown on the map until an entry is downloaded.</summary>
     public bool IsReviewCoverageWarning => Coverage == KnownCatalogueCoverage.None;
 
-    private bool HasEditions => _known?.Editions ?? _kind != LibrarySourceKind.CommunityFeed;
+    private bool HasEditions => _known?.Editions ?? true;
 
     /// <summary>The review's "Updates" line.</summary>
     public string ReviewUpdates => IsS100Forecast ? Strings.Wizard_Review_UpdatesForecast
@@ -487,7 +424,7 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     public string ToggleShownText =>
         _selectedFacetGroup is { Options.Count: > 0 } group && group.Options.All(o => o.IsSelected)
             ? Strings.Wizard_DeselectShown
-            : IsSearchable && _chartSearchText.Trim().Length > 0 ? Strings.Wizard_SelectShown : Strings.Wizard_SelectAll;
+            : IsSearchable && _searchText.Trim().Length > 0 ? Strings.Wizard_SelectShown : Strings.Wizard_SelectAll;
 
     /// <summary>Ticks every shown value of the shown tab, or unticks them when all are ticked.</summary>
     public ICommand ToggleShownCommand { get; }
@@ -496,16 +433,16 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
 
     public ICommand CancelCommand { get; }
 
-    /// <summary>Clears every NOAA facet selection (meaning "all cells").</summary>
+    /// <summary>Clears every tick (meaning "everything").</summary>
     public ICommand SelectNoneCommand { get; }
 
     /// <summary>
-    /// Prepares the dialog for adding <paramref name="path"/> (or, for
-    /// <see cref="LibrarySourceKind.NoaaFeed"/>, the feed), preselecting
-    /// <paramref name="targetCollectionId"/> when it names a collection.
+    /// Prepares the dialog for adding the local <paramref name="path"/>,
+    /// preselecting <paramref name="targetCollectionId"/> when it names a collection.
     /// </summary>
-    public void Initialize(LibrarySourceKind kind, string? path, Guid? targetCollectionId)
-        => Initialize(kind, path, targetCollectionId, known: null);
+    /// <exception cref="ArgumentException"><paramref name="kind"/> is an online kind (use the known-catalogue overload).</exception>
+    public void Initialize(LibrarySourceKind kind, string path, Guid? targetCollectionId)
+        => Initialize(kind, path, targetCollectionId, known: null, LibrarySourceDraft.ForPath(kind, path));
 
     /// <summary>
     /// Prepares the dialog for adding a scope of the known online catalogue
@@ -514,47 +451,28 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
     public void Initialize(KnownCatalogueSource known, Guid? targetCollectionId)
     {
         ArgumentNullException.ThrowIfNull(known);
-        var kind = known.Format switch
-        {
-            KnownCatalogueFormat.UsaceIenc => LibrarySourceKind.UsaceFeed,
-            KnownCatalogueFormat.ChartCatalogs => LibrarySourceKind.CommunityFeed,
-            KnownCatalogueFormat.S100Feed => LibrarySourceKind.S100Feed,
-            KnownCatalogueFormat.S100ExchangeCatalogue => LibrarySourceKind.S100Catalogue,
-            KnownCatalogueFormat.S100ForecastModels => LibrarySourceKind.S100Forecast,
-            KnownCatalogueFormat.Secom => LibrarySourceKind.Secom,
-            _ => LibrarySourceKind.NoaaFeed,
-        };
-        Initialize(kind, null, targetCollectionId, known);
+        Initialize(LibrarySourceKinds.Of(known.Format), null, targetCollectionId, known, LibrarySourceDraft.ForCatalogue(known, _readers, _time));
     }
 
-    private void Initialize(LibrarySourceKind kind, string? path, Guid? targetCollectionId, KnownCatalogueSource? known)
+    private void Initialize(LibrarySourceKind kind, string? path, Guid? targetCollectionId, KnownCatalogueSource? known, LibrarySourceDraft? draft)
     {
+        if (Scope is { } previous)
+            previous.Changed -= OnScopeSizesChanged;
         _kind = kind;
         _path = path;
         _known = known;
-        _scope = kind switch
-        {
-            LibrarySourceKind.NoaaFeed when _loadCatalog is not null => new NoaaEncScope(CatalogUri, _loadCatalog),
-            LibrarySourceKind.UsaceFeed when _loadUsaceCatalog is not null => new UsaceIencScope(CatalogUri, _loadUsaceCatalog),
-            LibrarySourceKind.S100Feed when _loadS100Feed is not null => new S100FeedScope(CatalogUri, _loadS100Feed),
-            LibrarySourceKind.CommunityFeed when _loadCommunityCatalog is not null => new CommunityListScope(CatalogUri, _loadCommunityCatalog),
-            LibrarySourceKind.S100Catalogue when _loadS100Catalogue is not null => new S100CatalogueScope(CatalogUri, _loadS100Catalogue, _listS100Folders),
-            LibrarySourceKind.S100Forecast when _loadForecastModels is not null && known is { Models.Count: > 0 }
-                => new S100ForecastScope(CatalogUri, known.Models, _loadForecastModels, _time),
-            LibrarySourceKind.Secom when _describeSecom is not null => new SecomScope(CatalogUri, _describeSecom, _currentMapView),
-            LibrarySourceKind.LocalManifest when path is not null => new CollectionManifestScope(path),
-            _ => null,
-        };
-        if (_scope is not null)
-            _scope.Changed += OnScopeSizesChanged;
-        ResetManifest();
-        _keepDownloaded = false;
-        ForecastModels.Clear();
+        _draft = draft;
+        if (Scope is { } scope)
+            scope.Changed += OnScopeSizesChanged;
+        _editing = null;
+        _searchText = string.Empty;
         _catalogueDate = null;
         _includeAll = true;
         _nameEdited = false;
-        _facetGroups = CreateFacetGroups();
-        _selectedFacetGroup = _facetGroups.FirstOrDefault();
+        _facetGroups = [];
+        _selectedFacetGroup = null;
+        _selectionSummary = string.Empty;
+        LoadError = null;
         ExistingCollections = _library.Collections.Where(c => !c.IsSession).ToArray();
         _selectedCollection = targetCollectionId is { } id
             ? ExistingCollections.FirstOrDefault(c => c.Id == id)
@@ -566,90 +484,67 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         RefreshCanConfirm();
     }
 
-    /// <summary>Fetches the feed's catalogue and populates the facet lists.</summary>
+    /// <summary>Reads the catalogue (or manifest) and shows its choices; nothing to read for a folder, exchange set or S-128 catalogue.</summary>
     public async Task LoadCatalogAsync(CancellationToken cancellationToken = default)
     {
-        if (_kind == LibrarySourceKind.LocalManifest)
-            await LoadManifestAsync(cancellationToken).ConfigureAwait(true);
-        else
-            await LoadScopeAsync(cancellationToken).ConfigureAwait(true);
-    }
-
-    /// <summary>Re-reads what a scope changed on its own (a remote catalogue's sizes arriving).</summary>
-    private void OnScopeSizesChanged(object? sender, EventArgs e)
-    {
-        if (!ReferenceEquals(sender, _scope))
-            return;
-        UpdateSelection();
-        OnScopeChanged();
-    }
-
-    /// <summary>Reads an online catalogue through its core scope and shows its choices.</summary>
-    private async Task LoadScopeAsync(CancellationToken cancellationToken)
-    {
-        if (_scope is null)
+        if (Scope is not { } scope)
             return;
 
         IsLoading = true;
         LoadError = null;
         try
         {
-            LoadError = await _scope.LoadAsync(cancellationToken).ConfigureAwait(true);
-            if (LoadError is not null)
-                return;
-            SetCatalogueDate(_scope.CatalogueDate);
-            switch (_scope)
-            {
-                case S100CatalogueScope catalogue:
-                    ShowS100Regions(catalogue);
-                    break;
-                case CommunityListScope list:
-                    foreach (var option in _allCharts)
-                        option.PropertyChanged -= OnFacetChanged;
-                    _allCharts.Clear();
-                    foreach (var option in list.Charts)
-                    {
-                        option.PropertyChanged += OnFacetChanged;
-                        _allCharts.Add(option);
-                    }
-                    ShowMatchingCharts();
-                    break;
-                default:
-                    IReadOnlyList<ObservableCollection<LibraryChoice>> targets = _kind switch
-                    {
-                        LibrarySourceKind.NoaaFeed => [States, CoastGuardDistricts, Regions],
-                        LibrarySourceKind.UsaceFeed => [Rivers],
-                        LibrarySourceKind.S100Forecast => [ForecastModels],
-                        _ => [Products],
-                    };
-                    foreach (var (target, group) in targets.Zip(_scope.Groups))
-                        Populate(target, group.Options);
-                    break;
-            }
+            var error = await scope.LoadAsync(cancellationToken).ConfigureAwait(true);
 
+            // A manifest shows every problem in it rather than a single error, and no groups.
+            if (IsManifest || error is null)
+                ShowGroups(scope);
+            if (!IsManifest)
+                LoadError = error;
+            SetCatalogueDate(scope.CatalogueDate);
             UpdateSelection();
         }
         finally
         {
             IsLoading = false;
+            OnPropertyChanged(nameof(Title));
         }
     }
 
-    private void ShowMatchingCharts()
+    /// <summary>Re-reads what a scope changed on its own (a remote catalogue's sizes arriving).</summary>
+    private void OnScopeSizesChanged(object? sender, EventArgs e)
     {
-        var text = _chartSearchText.Trim();
-        var (shown, all) = IsManifest ? (Groups, _allGroups) : (Charts, _allCharts);
-        shown.Clear();
-        foreach (var option in all)
-        {
-            if (text.Length == 0
-                || option.Label.Contains(text, StringComparison.CurrentCultureIgnoreCase)
-                || option.Value.Contains(text, StringComparison.OrdinalIgnoreCase))
-            {
-                shown.Add(option);
-            }
-        }
+        if (!ReferenceEquals(sender, Scope))
+            return;
+        UpdateSelection();
+        OnScopeChanged();
+    }
 
+    /// <summary>Shows the scope's choice groups, following their ticks, and keeps the shown tab where it still exists.</summary>
+    private void ShowGroups(LibraryCatalogueScope scope)
+    {
+        foreach (var option in AllOptions)
+            option.PropertyChanged -= OnFacetChanged;
+
+        var shown = _selectedFacetGroup?.Title;
+        _facetGroups = [.. scope.Groups.Select(g => new FacetGroupViewModel(g))];
+        foreach (var option in AllOptions)
+            option.PropertyChanged += OnFacetChanged;
+        _selectedFacetGroup = _facetGroups.FirstOrDefault(g => g.Title == shown) ?? _facetGroups.FirstOrDefault();
+        ShowMatchingChoices();
+
+        OnPropertyChanged(nameof(FacetGroups));
+        OnPropertyChanged(nameof(HasFacetTabs));
+        OnPropertyChanged(nameof(ShowsGroupTitle));
+        OnPropertyChanged(nameof(SelectedFacetGroup));
+        RaiseRegionsChanged();
+    }
+
+    private void ShowMatchingChoices()
+    {
+        var text = IsSearchable ? _searchText.Trim() : string.Empty;
+        foreach (var group in _facetGroups)
+            group.Filter(text);
         OnPropertyChanged(nameof(ToggleShownText));
     }
 
@@ -662,30 +557,13 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         OnPropertyChanged(nameof(CatalogueStaleSuffix));
     }
 
-    /// <summary>The USACE filter for the current river selection.</summary>
-    public UsaceIencFilter CurrentUsaceFilter => (_scope as UsaceIencScope)?.CurrentFilter ?? new UsaceIencFilter();
-
-    /// <summary>The S-100 feed filter for the current product selection.</summary>
-    public S100FeedFilter CurrentS100FeedFilter => (_scope as S100FeedScope)?.CurrentFilter ?? new S100FeedFilter();
-
-    /// <summary>The community-list filter for the current entry selection.</summary>
-    public ChartCatalogsFilter CurrentCommunityFilter => (_scope as CommunityListScope)?.CurrentFilter ?? new ChartCatalogsFilter();
-
-    /// <summary>The default collection name for an online feed, or <see langword="null"/> for local sources.</summary>
+    /// <summary>The default collection name: the online catalogue's, the manifest's title, or null for other local sources.</summary>
     private string? FeedName =>
-        LibrarySourceText.FeedName(_kind, _known) ?? (_kind == LibrarySourceKind.LocalManifest ? ManifestBaseName : null);
-
-    /// <summary>The NOAA filter for the current facet selection.</summary>
-    public NoaaEncFilter CurrentFilter => (_scope as NoaaEncScope)?.CurrentFilter ?? new NoaaEncFilter();
+        LibrarySourceText.FeedName(_kind, _known) ?? (IsManifest ? ManifestBaseName : null);
 
     private bool CanConfirm =>
-        IsManifest ? CanConfirmManifest
-        : (_createNew ? !string.IsNullOrWhiteSpace(_newCollectionName) : _selectedCollection is not null)
-        && _kind switch
-        {
-            LibrarySourceKind.Folder or LibrarySourceKind.ExchangeSet or LibrarySourceKind.S128Catalogue => !string.IsNullOrEmpty(_path),
-            _ => _scope?.IsLoaded == true && !_isLoading,
-        };
+        !_isLoading && _draft?.CanBuild == true
+        && (IsEditing || (_createNew ? !string.IsNullOrWhiteSpace(_newCollectionName) : _selectedCollection is not null));
 
     private void RefreshCanConfirm() => ((RelayCommand)ConfirmCommand).NotifyCanExecuteChanged();
 
@@ -710,63 +588,57 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         Closed?.Invoke(this, true);
     }
 
-    private bool _keepDownloaded;
-
     /// <summary>True when the source being added is online and not SECOM (which has its own sync option), so it can be kept downloaded (#809).</summary>
     public bool CanKeepDownloaded => IsOnlineFeed && !IsSecom;
 
     /// <summary>True to keep the new source's items downloaded and current on each refresh (#809).</summary>
     public bool KeepDownloaded
     {
-        get => _keepDownloaded;
-        set => SetProperty(ref _keepDownloaded, value);
+        get => CanKeepDownloaded && _draft?.KeepDownloaded == true;
+        set
+        {
+            if (!CanKeepDownloaded || _draft is null || _draft.KeepDownloaded == value)
+                return;
+            _draft.KeepDownloaded = value;
+            OnPropertyChanged();
+        }
     }
 
     /// <summary>
     /// Whether the new source is shown on the map (#809): <see langword="null"/>
     /// for the kind's default (on for a synced SECOM service, otherwise off).
     /// </summary>
-    internal bool? ShowOnMap { get; set; }
-
-    /// <summary>Builds the source the dialog describes.</summary>
-    internal CollectionSource BuildSource()
+    internal bool? ShowOnMap
     {
-        var source = BuildSourceCore();
-        if (CanKeepDownloaded && _keepDownloaded)
-            source = source with { Sync = true };
-        return ShowOnMap is { } show ? source with { ShowOnMap = show } : source;
+        get => _draft?.ShowOnMap;
+        set
+        {
+            if (_draft is not null)
+                _draft.ShowOnMap = value;
+        }
     }
 
-    private CollectionSource BuildSourceCore()
+    /// <summary>Builds the source the dialog describes.</summary>
+    /// <exception cref="InvalidOperationException">The source cannot be built yet.</exception>
+    internal CollectionSource BuildSource()
     {
-        var id = Guid.NewGuid();
-        return _kind switch
+        if (_draft is null)
+            throw new InvalidOperationException($"Cannot build a {_kind} source.");
+
+        // Choosing a manifest source's groups again keeps the source, with the new path and groups.
+        if (_editing is { Source: var existing } && ManifestScope is { } manifest)
         {
-            LibrarySourceKind.Folder => new LocalFolderSource(id, null, _path!),
-            LibrarySourceKind.ExchangeSet => new ExchangeSetSource(id, null, _path!),
-            LibrarySourceKind.S128Catalogue => new S128CatalogueSource(id, null, _path!),
-            LibrarySourceKind.LocalManifest => BuildManifestSource(id),
-            _ when _scope is not null => _scope.Build(id, FeedName),
-            _ => throw new InvalidOperationException($"Cannot build a {_kind} source."),
-        };
+            var edited = existing with { Path = manifest.ManifestPath, Filter = manifest.CurrentFilter };
+            return ShowOnMap is { } show ? edited with { ShowOnMap = show } : edited;
+        }
+
+        // A manifest source is named like the collection would be, so an added-to-existing
+        // source reads "IC-ENC — Belgium"; a new collection's source takes its name.
+        return _draft.Build(_createNew ? _newCollectionName : null);
     }
 
     /// <summary>Describes the ticked values ("Alaska, Hawaii"), or <see langword="null"/> when nothing is ticked.</summary>
-    private string? DescribeSelection() => _scope?.DescribeSelection();
-
-    /// <summary>Shows a core scope's choices, following their ticks.</summary>
-    private void Populate(ObservableCollection<LibraryChoice> target, IReadOnlyList<LibraryChoice> options)
-    {
-        foreach (var option in target)
-            option.PropertyChanged -= OnFacetChanged;
-        target.Clear();
-
-        foreach (var option in options)
-        {
-            option.PropertyChanged += OnFacetChanged;
-            target.Add(option);
-        }
-    }
+    private string? DescribeSelection() => Scope?.DescribeSelection();
 
     private void OnFacetChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -782,11 +654,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
 
     private void ClearFacetSelection()
     {
-        foreach (var option in States.Concat(CoastGuardDistricts).Concat(Regions).Concat(Rivers).Concat(_allCharts).Concat(Products)
-            .Concat(_allGroups).Concat(ForecastModels).Concat(IsS100Catalogue ? AllOptions.ToArray() : []))
-        {
+        foreach (var option in AllOptions.ToArray())
             option.IsSelected = false;
-        }
     }
 
     private void ToggleShown()
@@ -834,36 +703,18 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Sums the selection and, until the user names the collection, follows it in the suggested name.</summary>
     private void UpdateSelection()
     {
-        if (_kind == LibrarySourceKind.LocalManifest)
-        {
-            UpdateManifestSelection();
-            return;
-        }
-
-        // The online catalogues: the core scope sums the selection.
-        if (_scope is not { IsLoaded: true } scope)
+        if (Scope is not { IsLoaded: true } scope)
             return;
 
         SelectionSummary = scope.SelectionSummary;
 
-        // Follow the selection in the suggested name until the user edits it.
-        FollowSelectionInName(scope.IsEverything, () => scope.DescribeSelection()!);
-    }
-
-    /// <summary>
-    /// Keeps the suggested collection name in step with the selection
-    /// ("NOAA ENC — Alaska") until the user types their own name.
-    /// </summary>
-    private void FollowSelectionInName(bool unscoped, Func<string> describe)
-    {
-        var baseName = FeedName;
-        if (baseName is null || !_createNew || _nameEdited)
+        // In "Choose groups…" mode the collection keeps its name.
+        if (FeedName is null || IsEditing || !_createNew || _nameEdited)
             return;
-
-        var name = LibrarySourceText.SuggestedName(baseName, unscoped, describe);
-        if (SetProperty(ref _newCollectionName, name, nameof(NewCollectionName)))
+        if (SetProperty(ref _newCollectionName, _draft!.SuggestedName, nameof(NewCollectionName)))
             RefreshCanConfirm();
     }
 

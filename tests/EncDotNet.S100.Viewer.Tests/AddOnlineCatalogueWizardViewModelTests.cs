@@ -35,10 +35,13 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
     private AddOnlineCatalogueWizardViewModel CreateWizard(params KnownCatalogueSource[] sources) =>
         new(
             new CatalogueDirectoryDialogViewModel(sources),
-            () => new AddToLibraryDialogViewModel(_library, (uri, _) =>
+            () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
             {
-                _loads.Add(uri);
-                return Task.FromResult(_read(uri));
+                NoaaEnc = (uri, _) =>
+                {
+                    _loads.Add(uri);
+                    return Task.FromResult(_read(uri));
+                },
             }));
 
     private static Task NextAsync(AddOnlineCatalogueWizardViewModel wizard) =>
@@ -80,7 +83,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
         wizard.Start(null);
         await NextAsync(wizard);
         var first = wizard.Scope!;
-        first.States.Single(s => s.Value == "AK").IsSelected = true;
+        first.Choices("States").Single(s => s.Value == "AK").IsSelected = true;
 
         wizard.BackCommand.Execute(null);
         wizard.Directory.SelectedEntry = Entry(wizard, "b");
@@ -95,7 +98,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
         await NextAsync(wizard);
 
         Assert.Same(first, wizard.Scope);
-        Assert.True(first.States.Single(s => s.Value == "AK").IsSelected);
+        Assert.True(first.Choices("States").Single(s => s.Value == "AK").IsSelected);
         Assert.Equal("Alaska", wizard.Steps[1].Value);
         Assert.Equal(2, _loads.Count);
     }
@@ -113,7 +116,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
         Assert.False(wizard.NextCommand.CanExecute(null));
         Assert.Equal("Select at least one", wizard.FooterHint);
 
-        wizard.Scope.States[0].IsSelected = true;
+        wizard.Scope.Choices("States")[0].IsSelected = true;
 
         Assert.True(wizard.NextCommand.CanExecute(null));
         Assert.Null(wizard.FooterHint);

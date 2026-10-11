@@ -11,7 +11,7 @@ without depending on SkiaSharp, Mapsui or a UI framework. It depends only on
 To rasterise a scene, pair it with
 [`EncDotNet.S100.Renderers.Skia`](../EncDotNet.S100.Renderers.Skia/README.md).
 For the end-to-end path without the `EncDotNet.S100` facade, see
-[Embedding the renderer](../../docs/embedding-the-renderer.md).
+[Render images and map tiles](../../docs/embedding-the-renderer.md).
 
 ## Install
 

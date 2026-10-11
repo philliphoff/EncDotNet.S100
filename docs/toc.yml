@@ -42,7 +42,9 @@
   href: cli.md
 - name: Bringing S-57 into the pipeline
   href: s57-to-s101.md
-- name: Embedding the renderer
+- name: Add S-100 data to a Mapsui app
+  href: mapsui-app.md
+- name: Render images and map tiles
   href: embedding-the-renderer.md
 - name: Design notes
   items:

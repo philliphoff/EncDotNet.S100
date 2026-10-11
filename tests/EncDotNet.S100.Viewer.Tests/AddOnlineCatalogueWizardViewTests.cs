@@ -30,8 +30,11 @@ public sealed class AddOnlineCatalogueWizardViewTests
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
                 Task.FromResult(new CatalogueProbe(null, null, null))),
-            () => new AddToLibraryDialogViewModel(library, (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
-                LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml")))));
+            () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
+            {
+                NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
+                    LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
+            }));
         wizard.Start(null);
 
         var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
@@ -45,7 +48,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
 
         wizard.NextCommand.Execute(null);
         Assert.Equal(2, wizard.CurrentStep);
-        wizard.Scope!.States[0].IsSelected = true;
+        wizard.Scope!.Choices("States")[0].IsSelected = true;
         Layout(window);
 
         wizard.NextCommand.Execute(null);
@@ -65,13 +68,15 @@ public sealed class AddOnlineCatalogueWizardViewTests
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
                 Task.FromResult(new CatalogueProbe(null, null, null))),
-            () => new AddToLibraryDialogViewModel(library, null,
-                loadS100Catalogue: (uri, _) =>
+            () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
+            {
+                S100Catalogue = (uri, _) =>
                 {
                     using var stream = File.OpenRead(LibraryTestContext.RepoFile(
                         "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-s102-catalog.xml"));
                     return Task.FromResult(RemoteS100CatalogueReader.Read(stream, uri));
-                }));
+                },
+            }));
         wizard.Start(null);
 
         var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
@@ -108,8 +113,11 @@ public sealed class AddOnlineCatalogueWizardViewTests
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
                 Task.FromResult(new CatalogueProbe(null, null, null))),
-            () => new AddToLibraryDialogViewModel(library, (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
-                LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml")))));
+            () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
+            {
+                NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
+                    LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
+            }));
         wizard.Start(null);
 
         var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
@@ -130,7 +138,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
             cancelBottom = bottom;
 
             if (step == 2)
-                wizard.Scope!.States[0].IsSelected = true;
+                wizard.Scope!.Choices("States")[0].IsSelected = true;
             wizard.NextCommand.Execute(null);
         }
 
@@ -159,7 +167,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         Assert.Equal(2, wizard.CurrentStep);
 
         // Step 2: only one state.
-        var state = wizard.Scope!.States[0];
+        var state = wizard.Scope!.Choices("States")[0];
         host.Click(host.Find<RadioButton>("CatalogueScope.OnlySelected"));
         host.Click(host.FindAll<CheckBox>("CatalogueScope.Option").Single(c => ReferenceEquals(c.DataContext, state)));
         Assert.True(state.IsSelected);
@@ -239,8 +247,11 @@ public sealed class AddOnlineCatalogueWizardViewTests
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
                 Task.FromResult(new CatalogueProbe(null, null, null))),
-            () => new AddToLibraryDialogViewModel(library, (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
-                LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml")))));
+            () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
+            {
+                NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
+                    LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
+            }));
         wizard.Start(null);
         return wizard;
     }

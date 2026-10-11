@@ -1,6 +1,6 @@
 #### Agent guidance
 
-`tiles` takes the same input forms as `render`: one dataset, repeated
+`tiles export` takes the same input forms as `render`: one dataset, repeated
 `--layer`, or an exchange set (positional, `--from` or `--exchange-set`).
 `-o|--output` is required. An output ending in `.pmtiles` writes one PMTiles
 v3 archive and `.mbtiles` one MBTiles 1.3 SQLite database (TMS rows, as the

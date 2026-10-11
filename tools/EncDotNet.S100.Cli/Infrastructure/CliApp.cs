@@ -38,14 +38,30 @@ internal static class CliApp
                 .WithExample("render", "exchange-set/", "chart.png")
                 .WithExample("render", "--exchange-set", "exchange-set.zip", "-o", "chart.png", "--only", "S101,S102");
 
-            config.AddCommand<TilesCommand>("tiles")
-                .WithDescription("Render one or more S-100 datasets as an XYZ Web-Mercator raster tile pyramid (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database) for web maps such as MapLibre, Leaflet and OpenLayers.")
-                .WithExample("tiles", "enc.000", "-o", "tiles/")
-                .WithExample("tiles", "enc.000", "-o", "chart.pmtiles", "--min-zoom", "10", "--max-zoom", "15")
-                .WithExample("tiles", "--layer", "enc.000", "--layer", "bathy.h5", "-o", "chart.pmtiles", "--tile-size", "512")
-                .WithExample("tiles", "exchange-set/", "-o", "tiles/", "--format", "webp", "--skip-empty")
-                .WithExample("tiles", "enc.000", "-o", "chart.mbtiles", "--max-zoom", "16")
-                .WithExample("tiles", "--from", "exchange-set.zip", "-o", "chart.pmtiles", "--bbox", "-1.5,50.0,-1.0,50.5", "--palette", "night");
+            config.AddBranch("tiles", tiles =>
+            {
+                tiles.SetDescription("Make and serve XYZ Web-Mercator raster tiles of S-100 datasets for web maps.");
+
+                tiles.AddCommand<TilesExportCommand>("export")
+                    .WithDescription("Render one or more S-100 datasets as an XYZ Web-Mercator raster tile pyramid (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database) for web maps such as MapLibre, Leaflet and OpenLayers.")
+                    .WithExample("tiles", "export", "enc.000", "-o", "tiles/")
+                    .WithExample("tiles", "export", "enc.000", "-o", "chart.pmtiles", "--min-zoom", "10", "--max-zoom", "15")
+                    .WithExample("tiles", "export", "--layer", "enc.000", "--layer", "bathy.h5", "-o", "chart.pmtiles", "--tile-size", "512")
+                    .WithExample("tiles", "export", "exchange-set/", "-o", "tiles/", "--format", "webp", "--skip-empty")
+                    .WithExample("tiles", "export", "enc.000", "-o", "chart.mbtiles", "--max-zoom", "16")
+                    .WithExample("tiles", "export", "--from", "exchange-set.zip", "-o", "chart.pmtiles", "--bbox", "-1.5,50.0,-1.0,50.5", "--palette", "night");
+
+                tiles.AddCommand<TilesServeCommand>("serve")
+                    .WithDescription("Serve XYZ raster tiles with a TileJSON document, as a tile source for local web maps: a built tile set (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database), or datasets rendered on demand in the day, dusk and night palettes and, for S-104/S-111, at the time step a ?t= query parameter names.")
+                    .WithExample("tiles", "serve", "chart.pmtiles")
+                    .WithExample("tiles", "serve", "chart.mbtiles", "--port", "9000")
+                    .WithExample("tiles", "serve", "tiles/", "--host", "0.0.0.0")
+                    .WithExample("tiles", "serve", "enc.000")
+                    .WithExample("tiles", "serve", "--layer", "enc.000", "--layer", "bathy.h5", "--palette", "night")
+                    .WithExample("tiles", "serve", "exchange-set/", "--only", "S101", "--max-zoom", "16")
+                    .WithExample("tiles", "serve", "exchange-set/", "--cache-dir", "tile-cache")
+                    .WithExample("tiles", "serve", "--layer", "enc.000", "--layer", "currents.h5");
+            });
 
             config.AddCommand<ValidateCommand>("validate")
                 .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack, or verify an exchange set's integrity (S-100 Part 15 signatures, or S-57 / S-63 CATALOG.031 CRCs).")
@@ -103,10 +119,13 @@ internal static class CliApp
                 mcp.SetDescription("Model Context Protocol (MCP) server operations.");
 
                 mcp.AddCommand<McpServeCommand>("serve")
-                    .WithDescription("Serve the read-only S-100 MCP tools over stdio for a fixed set of datasets, so an agent that spawns this process can query features and coverages without a GUI.")
+                    .WithDescription("Serve the S-100 MCP tools over stdio, with a headless session and a dataset-collection Library, so an agent that spawns this process can query, sample, render and fetch data without a GUI.")
                     .WithExample("mcp", "serve", "dataset.h5")
                     .WithExample("mcp", "serve", "--layer", "enc.000", "--layer", "bathy.h5")
-                    .WithExample("mcp", "serve", "--from", "exchange-set.zip", "--only", "S101,S102");
+                    .WithExample("mcp", "serve", "--from", "exchange-set.zip", "--only", "S101,S102")
+                    .WithExample("mcp", "serve", "charts/")
+                    .WithExample("mcp", "serve", "--collection", "noaa-s111#sfbofs", "--data-dir", "s100-data")
+                    .WithExample("mcp", "serve", "--collection", "charts.s100collection.json");
             });
         });
         return app;

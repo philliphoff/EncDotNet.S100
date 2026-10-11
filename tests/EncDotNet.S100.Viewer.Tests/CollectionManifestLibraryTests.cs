@@ -71,9 +71,9 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         Assert.False(vm.HasManifestProblems);
         Assert.Equal("Test", vm.ManifestTitle);
         Assert.Equal("Test", vm.NewCollectionName);
-        Assert.Equal(["Australia", "Belgium", "Peru"], vm.Groups.Select(g => g.Label));
-        Assert.Equal(["AU", "BE", "PE"], vm.Groups.Select(g => g.PathText));
-        Assert.Equal([false, false, true], vm.Groups.Select(g => g.IsMissing));
+        Assert.Equal(["Australia", "Belgium", "Peru"], vm.Choices().Select(g => g.Label));
+        Assert.Equal(["AU", "BE", "PE"], vm.Choices().Select(g => g.PathText));
+        Assert.Equal([false, false, true], vm.Choices().Select(g => g.IsMissing));
         Assert.Equal("3 groups · follows the file", vm.EverythingSummary);
 
         // Everything includes the missing Peru, so the summary warns about it.
@@ -88,7 +88,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
     {
         var vm = await OpenDialogAsync(CreateManifest());
 
-        vm.Groups[0].IsSelected = true;
+        vm.Choices()[0].IsSelected = true;
 
         Assert.True(vm.OnlySelected);
         Assert.Equal("Test — Australia", vm.NewCollectionName);
@@ -96,7 +96,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         Assert.Equal("1 group · Australia", vm.ScopeSummary);
         Assert.False(vm.IsScopeSummaryWarning);
 
-        vm.Groups[1].IsSelected = true;
+        vm.Choices()[1].IsSelected = true;
         Assert.Equal("Test — Australia and Belgium", vm.NewCollectionName);
 
         vm.ConfirmCommand.Execute(null);
@@ -126,7 +126,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         var vm = await OpenDialogAsync(CreateManifest());
 
         vm.NewCollectionName = "Mine";
-        vm.Groups[1].IsSelected = true;
+        vm.Choices()[1].IsSelected = true;
 
         Assert.Equal("Mine", vm.NewCollectionName);
         Assert.Equal("Added as a source named “Test — Belgium”.", vm.ExistingHint);
@@ -149,7 +149,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         await ((IAsyncRelayCommand)vm.ReloadManifestCommand).ExecuteAsync(null);
 
         Assert.False(vm.HasManifestProblems);
-        Assert.Equal(3, vm.Groups.Count);
+        Assert.Equal(3, vm.Choices().Count);
         Assert.True(vm.ConfirmCommand.CanExecute(null));
     }
 
@@ -169,9 +169,9 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         Assert.Equal("Save", vm.PrimaryButtonText);
         Assert.Equal("Choose groups", vm.Title);
         Assert.True(vm.OnlySelected);
-        Assert.Equal(["BE"], vm.Groups.Where(g => g.IsSelected).Select(g => g.Value));
+        Assert.Equal(["BE"], vm.Choices().Where(g => g.IsSelected).Select(g => g.Value));
 
-        vm.Groups[0].IsSelected = true;
+        vm.Choices()[0].IsSelected = true;
         vm.ConfirmCommand.Execute(null);
 
         var updated = Assert.Single(Assert.Single(_library.Collections).Sources).Definition;

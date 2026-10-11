@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
@@ -21,14 +20,10 @@ internal sealed record EditedManifestSource(Guid CollectionId, LocalManifestSour
 /// </summary>
 internal sealed partial class AddToLibraryDialogViewModel
 {
-    private readonly List<LibraryChoice> _allGroups = [];
     private EditedManifestSource? _editing;
     private ICommand? _changeManifestCommand;
     private ICommand? _reloadManifestCommand;
     private ICommand? _openManifestCommand;
-
-    /// <summary>A collection manifest's groups matching the filter text.</summary>
-    public ObservableCollection<LibraryChoice> Groups { get; } = [];
 
     /// <summary>True when adding (or editing) a collection manifest.</summary>
     public bool IsManifest => _kind == LibrarySourceKind.LocalManifest;
@@ -52,7 +47,7 @@ internal sealed partial class AddToLibraryDialogViewModel
     public ICommand ChangeManifestCommand => _changeManifestCommand ??= new AsyncRelayCommand(ChangeManifestAsync);
 
     /// <summary>Reads the manifest again, keeping picks whose ids still exist.</summary>
-    public ICommand ReloadManifestCommand => _reloadManifestCommand ??= new AsyncRelayCommand(() => LoadManifestAsync());
+    public ICommand ReloadManifestCommand => _reloadManifestCommand ??= new AsyncRelayCommand(() => LoadCatalogAsync());
 
     /// <summary>Opens the manifest in the system's editor.</summary>
     public ICommand OpenManifestCommand => _openManifestCommand ??= new RelayCommand(
@@ -61,7 +56,7 @@ internal sealed partial class AddToLibraryDialogViewModel
     /// <summary>The manifest's title, or its file name without the suffix.</summary>
     public string ManifestTitle => ManifestScope?.Title ?? DefaultName(_path);
 
-    private CollectionManifestScope? ManifestScope => _scope as CollectionManifestScope;
+    private CollectionManifestScope? ManifestScope => Scope as CollectionManifestScope;
 
     /// <summary>The manifest's full path.</summary>
     public string ManifestPath => _path ?? string.Empty;
@@ -88,7 +83,7 @@ internal sealed partial class AddToLibraryDialogViewModel
         {
             var lists = _includeAll
                 ? string.Format(CultureInfo.CurrentCulture, Strings.Manifest_DoneEveryGroupFormat, ManifestBaseName)
-                : DescribeManifestSelection() ?? string.Empty;
+                : DescribeSelection() ?? string.Empty;
             var target = _createNew ? _newCollectionName : _selectedCollection?.Definition.Name ?? string.Empty;
             return string.Format(CultureInfo.CurrentCulture, Strings.Manifest_DoneFormat, target, lists);
         }
@@ -110,23 +105,10 @@ internal sealed partial class AddToLibraryDialogViewModel
 
     private string ManifestBaseName => ManifestTitle;
 
-    private bool CanConfirmManifest =>
-        ManifestScope?.CanBuild == true && !_isLoading
-        && (IsEditing || (_createNew ? !string.IsNullOrWhiteSpace(_newCollectionName) : _selectedCollection is not null));
-
     private bool IsManifestSummaryWarning => ManifestScope?.IsSummaryWarning == true;
 
     /// <summary>"IC-ENC", or "IC-ENC — Belgium and Germany" for a selection.</summary>
     private string AutoManifestName => ManifestScope?.AutoName ?? ManifestBaseName;
-
-    private void ResetManifest()
-    {
-        foreach (var option in _allGroups)
-            option.PropertyChanged -= OnFacetChanged;
-        _allGroups.Clear();
-        Groups.Clear();
-        _editing = null;
-    }
 
     private async Task ChangeManifestAsync()
     {
@@ -138,65 +120,8 @@ internal sealed partial class AddToLibraryDialogViewModel
             scope.ManifestPath = path;
         OnPropertyChanged(nameof(ManifestPath));
         OnPropertyChanged(nameof(SourceDescription));
-        await LoadManifestAsync().ConfigureAwait(true);
+        await LoadCatalogAsync().ConfigureAwait(true);
     }
-
-    private async Task LoadManifestAsync(CancellationToken cancellationToken = default)
-    {
-        if (ManifestScope is not { } scope)
-            return;
-
-        IsLoading = true;
-        try
-        {
-            // The scope keeps the picks across a reload (or a different file) where the ids still exist.
-            await scope.LoadAsync(cancellationToken).ConfigureAwait(true);
-
-            foreach (var option in _allGroups)
-                option.PropertyChanged -= OnFacetChanged;
-            _allGroups.Clear();
-            foreach (var option in scope.ManifestGroups)
-            {
-                option.PropertyChanged += OnFacetChanged;
-                _allGroups.Add(option);
-            }
-
-            ShowMatchingCharts();
-            UpdateSelection();
-        }
-        finally
-        {
-            IsLoading = false;
-            RaiseManifestChanged();
-            OnPropertyChanged(nameof(Title));
-        }
-    }
-
-    private void UpdateManifestSelection()
-    {
-        if (ManifestScope is not { IsLoaded: true } scope)
-            return;
-
-        SelectionSummary = scope.SelectionSummary;
-
-        // In edit mode the collection keeps its name; otherwise the name follows the selection.
-        if (!IsEditing)
-            FollowSelectionInName(scope.IsEverything, () => scope.DescribeSelection()!);
-    }
-
-    private LocalManifestSource BuildManifestSource(Guid id)
-    {
-        var scope = ManifestScope!;
-        if (_editing is { Source: var existing })
-            return existing with { Path = _path!, Filter = scope.CurrentFilter };
-
-        // The source is named like the collection would be, so an added-to-existing
-        // source reads "IC-ENC — Belgium"; a new collection's source takes its name.
-        return (LocalManifestSource)scope.Build(id, _createNew ? _newCollectionName : null);
-    }
-
-    /// <summary>"Belgium", "Belgium and Germany", "Belgium, Germany and 2 more"; null when nothing is ticked.</summary>
-    private string? DescribeManifestSelection() => ManifestScope?.DescribeSelection();
 
     private void RaiseManifestChanged()
     {

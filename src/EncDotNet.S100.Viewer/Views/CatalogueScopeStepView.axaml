@@ -280,7 +280,7 @@
                                 <TextBlock DockPanel.Dock="Left" IsVisible="{Binding ShowsGroupTitle}" Margin="4,0,12,0"
                                            Text="{Binding SelectedFacetGroup.Title, FallbackValue=''}"
                                            FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                <TextBox IsVisible="{Binding IsSearchable}" Text="{Binding ChartSearchText}"
+                                <TextBox IsVisible="{Binding IsSearchable}" Text="{Binding SearchText}"
                                          AutomationProperties.Name="{Binding SearchPlaceholder}"
                                          AutomationProperties.AutomationId="CatalogueScope.ChartSearch"
                                          Height="30" MinHeight="30" FontSize="13" Padding="8,0"

@@ -11,11 +11,11 @@ using SkiaSharp;
 namespace EncDotNet.S100.Cli.Tests;
 
 /// <summary>
-/// End-to-end and format tests for <c>s100 tiles</c> (issue #847): the XYZ
+/// End-to-end and format tests for <c>s100 tiles export</c> (issue #847): the XYZ
 /// directory and PMTiles v3 containers, option validation and the tile-count
 /// guard.
 /// </summary>
-public sealed class TilesCommandTests
+public sealed class TilesExportCommandTests
 {
     private static string S57 => Path.Combine(AppContext.BaseDirectory, "TestData", "US5MA1BO.000");
 
@@ -28,7 +28,7 @@ public sealed class TilesCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["tiles", S57, "-o", output, "--min-zoom", "12", "--max-zoom", "13", "--parallel", "2"]);
+                ["tiles", "export", S57, "-o", output, "--min-zoom", "12", "--max-zoom", "13", "--parallel", "2"]);
 
             Assert.Equal(0, exit);
             var json = JsonNode.Parse(File.ReadAllText(Path.Combine(output, XyzDirectoryTileSink.TileJsonFileName)))!;
@@ -73,8 +73,8 @@ public sealed class TilesCommandTests
         try
         {
             string[] common = ["--min-zoom", "12", "--max-zoom", "14", "--tile-size", "512", "--format", "webp"];
-            Assert.Equal(0, CliApp.Build().Run(["tiles", S57, "-o", xyz, .. common]));
-            Assert.Equal(0, CliApp.Build().Run(["tiles", S57, "-o", pmtiles, .. common]));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", xyz, .. common]));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", pmtiles, .. common]));
 
             var archive = PmTilesArchive.Read(pmtiles);
             Assert.Equal(12, archive.MinZoom);
@@ -120,8 +120,8 @@ public sealed class TilesCommandTests
         try
         {
             string[] common = ["--min-zoom", "12", "--max-zoom", "14"];
-            Assert.Equal(0, CliApp.Build().Run(["tiles", S57, "-o", xyz, .. common]));
-            Assert.Equal(0, CliApp.Build().Run(["tiles", S57, "-o", mbtiles, .. common]));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", xyz, .. common]));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", mbtiles, .. common]));
 
             using var connection = new SqliteConnection(
                 new SqliteConnectionStringBuilder { DataSource = mbtiles, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
@@ -210,7 +210,7 @@ public sealed class TilesCommandTests
     [InlineData("out.pmtiles", "xyz", "Xyz")]
     public void Container_comes_from_the_option_or_the_extension(string output, string? option, string expected)
     {
-        Assert.True(Commands.TilesCommand.TryResolveContainer(option, output, out var container));
+        Assert.True(Commands.TilesExportCommand.TryResolveContainer(option, output, out var container));
         Assert.Equal(expected, container.ToString());
     }
 
@@ -225,8 +225,8 @@ public sealed class TilesCommandTests
         {
             // The bbox reaches well past the cell, so some tiles are empty.
             string[] common = ["--min-zoom", "13", "--max-zoom", "13", "--bbox", "-70.45,41.2,-70.2,41.4"];
-            Assert.Equal(0, CliApp.Build().Run(["tiles", S57, "-o", all, .. common]));
-            Assert.Equal(0, CliApp.Build().Run(["tiles", S57, "-o", some, "--skip-empty", .. common]));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", all, .. common]));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", some, "--skip-empty", .. common]));
 
             int allCount = Directory.GetFiles(all, "*.png", SearchOption.AllDirectories).Length;
             int someCount = Directory.GetFiles(some, "*.png", SearchOption.AllDirectories).Length;
@@ -250,7 +250,7 @@ public sealed class TilesCommandTests
         var output = TempPath("big") + ".pmtiles";
         try
         {
-            int exit = CliApp.Build().Run(["tiles", S57, "-o", output, "--min-zoom", "0", "--max-zoom", "22"]);
+            int exit = CliApp.Build().Run(["tiles", "export", S57, "-o", output, "--min-zoom", "0", "--max-zoom", "22"]);
 
             Assert.Equal(2, exit);
             Assert.False(File.Exists(output));
@@ -273,7 +273,7 @@ public sealed class TilesCommandTests
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
 
         var output = TempPath("invalid");
-        int exit = CliApp.Build().Run(["tiles", S57, "-o", output, option, value]);
+        int exit = CliApp.Build().Run(["tiles", "export", S57, "-o", output, option, value]);
 
         Assert.NotEqual(0, exit);
         Assert.False(Directory.Exists(output));
@@ -284,7 +284,7 @@ public sealed class TilesCommandTests
     {
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
 
-        Assert.NotEqual(0, CliApp.Build().Run(["tiles", S57]));
+        Assert.NotEqual(0, CliApp.Build().Run(["tiles", "export", S57]));
     }
 
     [Theory]

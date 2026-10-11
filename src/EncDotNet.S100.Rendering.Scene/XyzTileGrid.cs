@@ -9,7 +9,7 @@ namespace EncDotNet.S100.Rendering.Scene;
 /// </summary>
 /// <remarks>
 /// The grid is the same one the viewer's tile renderer uses, but has no Mapsui
-/// dependency, so headless tools (the <c>s100 tiles</c> command) can share it.
+/// dependency, so headless tools (the <c>s100 tiles export</c> command) can share it.
 /// </remarks>
 public static class XyzTileGrid
 {

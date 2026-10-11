@@ -11,7 +11,8 @@ internal static class SkillContent
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["render"] = "Commands.Render.md",
-            ["tiles"] = "Commands.Tiles.md",
+            ["tiles export"] = "Commands.TilesExport.md",
+            ["tiles serve"] = "Commands.TilesServe.md",
             ["validate"] = "Commands.Validate.md",
             ["info"] = "Commands.Info.md",
             ["identify"] = "Commands.Identify.md",

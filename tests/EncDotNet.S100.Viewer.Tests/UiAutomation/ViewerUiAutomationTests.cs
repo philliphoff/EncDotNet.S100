@@ -1,5 +1,6 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Noaa;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.Headless;
@@ -77,8 +78,11 @@ public sealed class ViewerUiAutomationTests
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
                 Task.FromResult(new CatalogueProbe(null, null, null))),
-            () => new AddToLibraryDialogViewModel(library, (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
-                LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml")))));
+            () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
+            {
+                NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
+                    LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
+            }));
         wizard.Start(null);
         using var host = ViewHost.Show(new AddOnlineCatalogueWizardView { DataContext = wizard }, width: 640, height: 760);
         var automation = Automation(host);
@@ -96,7 +100,7 @@ public sealed class ViewerUiAutomationTests
         await automation.ActAsync(new UiTarget("Wizard.Next", null), UiAction.Invoke, null);
         Assert.Equal(2, wizard.CurrentStep);
 
-        var state = wizard.Scope!.States[0];
+        var state = wizard.Scope!.Choices("States")[0];
         var options = await Assert.ThrowsAsync<UiAutomationException>(
             () => automation.ActAsync(new UiTarget("CatalogueScope.Option", null), UiAction.Toggle, "on"));
         var first = options.Candidates.First(c => c.Context?.Contains(state.Label) == true);

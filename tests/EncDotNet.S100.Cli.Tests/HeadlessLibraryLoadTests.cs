@@ -18,6 +18,7 @@ public sealed class HeadlessLibraryLoadTests : IDisposable
     private readonly HeadlessMutableCatalog _catalog = new();
     private readonly CollectionLibrary _library;
     private readonly LibraryOperations _operations;
+    private readonly CatalogLibraryOpener _opener;
 
     public HeadlessLibraryLoadTests()
     {
@@ -30,7 +31,7 @@ public sealed class HeadlessLibraryLoadTests : IDisposable
         _operations = new LibraryOperations(
             _library,
             new LibraryDownloads(LibraryDownloads.ManagedFolders(http, Path.Combine(_root, "downloads"))),
-            new LibraryLoader(new CatalogLibraryOpener(_catalog)));
+            new LibraryLoader(_opener = new CatalogLibraryOpener(_catalog)));
     }
 
     public void Dispose()
@@ -86,11 +87,17 @@ public sealed class HeadlessLibraryLoadTests : IDisposable
         Assert.Equal(LibraryLoadState.Loaded, _operations.Loader.StateOf(item));
         Assert.Equal(LibraryAvailability.Loaded, _operations.StateOf(item, source).Availability);
 
+        // An open copy is in use, so a sync does not prune it, nor the folder holding it.
+        Assert.True(_opener.IsInUse(Path.Combine(folder, "US5MA1BO.000")));
+        Assert.True(_opener.IsInUse(folder));
+        Assert.False(_opener.IsInUse(Path.Combine(_root, "elsewhere")));
+
         // Opening it again does not load it twice; closing it shows it as not loaded.
         Assert.Equal(new LibraryLoadResult(1, 0), await _operations.LoadAsync(items, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Single(_catalog.Datasets);
         _catalog.RemoveAll();
         Assert.Equal(LibraryLoadState.None, _operations.Loader.StateOf(item));
+        Assert.False(_opener.IsInUse(folder));
         Assert.True(_operations.GetActivity().IsIdle);
     }
 

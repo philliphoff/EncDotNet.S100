@@ -1005,64 +1005,77 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         DatasetProcessorLease? processorLease = null;
         var rangeChanged = false;
         DateTime? changedCurrent = null;
-        lock (_sync)
+        try
         {
-            ThrowIfDisposed();
-            if (!_entries.TryGetValue(datasetId, out var entry))
-                return false;
+            lock (_sync)
+            {
+                ThrowIfDisposed();
+                if (!_entries.TryGetValue(datasetId, out var entry))
+                    return false;
 
-            entry.RenderCts?.Cancel();
-            var previous = entry.CaptureRendering();
-            var previousGeneration = entry.Generation;
-            var previousTimePolicy = entry.TimePolicy;
-            var previousRenderedTime = entry.RenderedTime;
-            var orderIndex = _order.IndexOf(datasetId);
-            entry.Generation++;
-            entry.ClearRendering();
-            if (!preserveState)
-            {
-                _entries.Remove(datasetId);
-                _order.Remove(datasetId);
-            }
-            else
-            {
-                entry.TimePolicy = null;
-                entry.RenderedTime = null;
-                entry.Dataset = CopyDataset(
-                    entry.Dataset,
-                    entry.Dataset.SubLayers,
-                    availableTimes: [],
-                    currentTime: null);
-            }
-
-            try
-            {
-                (rangeChanged, changedCurrent) = RecomputeTimeState();
-                ComposeLayers();
-            }
-            catch
-            {
-                entry.RestoreRendering(previous);
-                entry.Generation = previousGeneration;
-                entry.TimePolicy = previousTimePolicy;
-                entry.RenderedTime = previousRenderedTime;
+                var previous = entry.CaptureRendering();
+                var previousGeneration = entry.Generation;
+                var previousTimePolicy = entry.TimePolicy;
+                var previousRenderedTime = entry.RenderedTime;
+                var orderIndex = _order.IndexOf(datasetId);
+                entry.Generation++;
+                entry.ClearRendering();
                 if (!preserveState)
                 {
-                    _entries.Add(datasetId, entry);
-                    _order.Insert(orderIndex, datasetId);
+                    _entries.Remove(datasetId);
+                    _order.Remove(datasetId);
                 }
-                RecomputeTimeState();
-                throw;
+                else
+                {
+                    entry.TimePolicy = null;
+                    entry.RenderedTime = null;
+                    entry.Dataset = CopyDataset(
+                        entry.Dataset,
+                        entry.Dataset.SubLayers,
+                        availableTimes: [],
+                        currentTime: null);
+                }
+
+                try
+                {
+                    (rangeChanged, changedCurrent) = RecomputeTimeState();
+                    ComposeLayers();
+                }
+                catch
+                {
+                    entry.RestoreRendering(previous);
+                    entry.Generation = previousGeneration;
+                    entry.TimePolicy = previousTimePolicy;
+                    entry.RenderedTime = previousRenderedTime;
+                    if (!preserveState)
+                    {
+                        _entries.Add(datasetId, entry);
+                        _order.Insert(orderIndex, datasetId);
+                    }
+                    RecomputeTimeState();
+                    throw;
+                }
+
+                // Retire the processor before cancelling the in-flight render.
+                // Cancellation can complete the render, and a caller awaiting it,
+                // synchronously; that caller must already see the processor as no
+                // longer owned, or it reports success for a dataset this call just
+                // removed (#873). The lease defers the processor's disposal until
+                // it is released below.
+                if (removeProcessor
+                    && _processorOwner.TryAcquire(datasetId, out processorLease))
+                {
+                    _processorOwner.Remove(datasetId, processorLease.Processor);
+                }
+
+                entry.RenderCts?.Cancel();
             }
-
-            if (removeProcessor)
-                _processorOwner.TryAcquire(datasetId, out processorLease);
         }
-
-        if (processorLease is not null)
+        finally
         {
-            using (processorLease)
-                _processorOwner.Remove(datasetId, processorLease.Processor);
+            // Disposes the processor, when this was its last lease, outside
+            // the lock.
+            processorLease?.Dispose();
         }
 
         LayersChanged?.Invoke(this, EventArgs.Empty);
