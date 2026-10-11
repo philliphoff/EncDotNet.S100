@@ -236,6 +236,11 @@ internal sealed class TlsServer : IAsyncDisposable
     /// <summary>The client certificates presented to this server, in order (null for none).</summary>
     public List<X509Certificate2?> ClientCertificates { get; } = [];
 
+    /// <summary>How many connections were accepted.</summary>
+    public int Connections => Volatile.Read(ref _connections);
+
+    private int _connections;
+
     public static Task<TlsServer> StartAsync(
         X509Certificate2 certificate,
         X509Certificate2? intermediate = null,
@@ -260,6 +265,7 @@ internal sealed class TlsServer : IAsyncDisposable
                 return;
             }
 
+            Interlocked.Increment(ref _connections);
             _ = Task.Run(() => ServeAsync(client));
         }
     }

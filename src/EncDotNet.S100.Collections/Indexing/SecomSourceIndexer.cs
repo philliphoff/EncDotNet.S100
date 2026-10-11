@@ -9,9 +9,9 @@ namespace EncDotNet.S100.Collections.Indexing;
 
 /// <summary>
 /// Indexes a <see cref="SecomSource"/> (issue #804): reads the service's
-/// <c>GetSummary</c> list anonymously and lists each data object as an
-/// online item that downloads, through SECOM <c>Get</c>, into
-/// <see cref="DownloadFolderFor"/>.
+/// <c>GetSummary</c> list, presenting the source's own identity when the
+/// service asks for one (#883), and lists each data object as an online item
+/// that downloads, through SECOM <c>Get</c>, into <see cref="DownloadFolderFor"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -27,6 +27,13 @@ namespace EncDotNet.S100.Collections.Indexing;
 /// warning). Large services are capped at <c>maxItems</c> objects; narrow the
 /// source to an area to see the rest. Exchange-set objects are listed but not
 /// downloadable yet.
+/// </para>
+/// <para>
+/// Each read resolves the source's <see cref="SecomSource.Identity"/> through
+/// <see cref="Trust"/> and presents that identity only; a refused identity is
+/// never followed by another (#883). What was presented, and the outcome, is
+/// recorded on the index (<see cref="SourceIndex.Presentation"/>), with the
+/// identities the source has seen refused, which are remembered per source.
 /// </para>
 /// </remarks>
 public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
@@ -48,13 +55,16 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     private readonly TimeProvider _time;
     private readonly object _gate = new();
     private readonly Dictionary<string, Listing> _recent = new(StringComparer.Ordinal);
+    private Dictionary<Guid, List<SecomRefusal>>? _refusals;
 
     /// <summary>
-    /// The signer for services that list only through SECOM 2.0's signed POST
-    /// forms (#838): this client's MCP identity when one is set. Without one,
-    /// such a service fails to list with <see cref="SecomIdentityRequiredException"/>.
+    /// Resolves each source's <see cref="SecomSource.Identity"/> to the MCP
+    /// identity its requests present (the <see cref="HttpClient"/> should use a
+    /// handler from the same instance) and sign SECOM 2.0 requests with (#838,
+    /// #883). Without it, every source reads anonymously, and a service that
+    /// lists only through signed requests fails with <see cref="SecomIdentityRequiredException"/>.
     /// </summary>
-    public Func<SecomEnvelopeSigner?>? Signer { get; init; }
+    public SecomServerTrust? Trust { get; init; }
 
     /// <summary>Creates an indexer.</summary>
     /// <param name="httpClient">The client used to call services.</param>
@@ -102,8 +112,8 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     public async ValueTask<string?> GetFingerprintAsync(CollectionSource source, CancellationToken cancellationToken)
     {
         var secom = AsSecom(source);
-        var listing = await TryListAsync(secom, cancellationToken).ConfigureAwait(false);
-        return listing is { Stale: null } ? Fingerprint(secom, listing) : null;
+        var (listing, attempt) = await TryListAsync(secom, cancellationToken).ConfigureAwait(false);
+        return listing is { Stale: null } ? Fingerprint(secom, listing, attempt) : null;
     }
 
     /// <inheritdoc/>
@@ -117,16 +127,16 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         var diagnostics = new List<IndexDiagnostic>();
         progress?.Report(new IndexProgress(0, serviceUri.AbsoluteUri));
 
-        var listing = await TryListAsync(secom, cancellationToken).ConfigureAwait(false);
+        var (listing, attempt) = await TryListAsync(secom, cancellationToken).ConfigureAwait(false);
+        var presentation = Remember(secom, attempt);
         if (listing is null)
         {
-            var failure = LastError(serviceUri);
             diagnostics.Add(new IndexDiagnostic(
-                IndexDiagnosticSeverity.Error, failure?.Message ?? "The SECOM service could not be read.", serviceUri.AbsoluteUri)
+                IndexDiagnosticSeverity.Error, attempt.Failure ?? "The SECOM service could not be read.", serviceUri.AbsoluteUri)
             {
-                Code = failure?.Code,
+                Code = attempt.Presentation.Code,
             });
-            return new SourceIndex(source.Id, _time.GetUtcNow(), null, [], diagnostics);
+            return new SourceIndex(source.Id, _time.GetUtcNow(), null, [], diagnostics) { Presentation = presentation };
         }
 
         if (listing.Stale is { } reason)
@@ -137,7 +147,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
                     $"The service could not be reached ({reason}); listing what it offered at {listing.ReadAt:u}."),
                 serviceUri.AbsoluteUri)
             {
-                Code = LastError(serviceUri)?.Code,
+                Code = attempt.Presentation.Code,
             });
         }
 
@@ -156,10 +166,10 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         // Fingerprinted before the downloads are read: a download that lands
         // while this runs (a sync of an earlier index) then changes the next
         // fingerprint, so the re-index after it is not skipped as unchanged.
-        var fingerprint = listing.Stale is null ? Fingerprint(secom, listing) : null;
+        var fingerprint = listing.Stale is null ? Fingerprint(secom, listing, attempt) : null;
         var folder = DownloadFolderFor(serviceUri);
         var downloader = _downloadsRoot is null ? null : new EncCellDownloader(_httpClient, Path.Combine(_downloadsRoot, folder)) { Revocation = Revocation };
-        var client = new SecomClient(_httpClient, serviceUri, listing.Version) { Signer = Signer, UsesPostInterfaces = listing.Post };
+        var client = new SecomClient(_httpClient, serviceUri, listing.Version) { UsesPostInterfaces = listing.Post };
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var items = new List<CollectionItem>();
         var exchangeSets = 0;
@@ -167,7 +177,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         foreach (var summary in listing.Items.OrderBy(s => s.DataReference, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var item = ToItem(summary, client, listing.Version, folder, names);
+            var item = ToItem(summary, client, listing.Version, folder, names, secom.Identity);
             if (!secom.Filter.Matches(item))
                 continue;
             if (summary.ContainerType == SecomContainerType.ExchangeSet)
@@ -192,7 +202,10 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
             _time.GetUtcNow(),
             fingerprint,
             items,
-            diagnostics);
+            diagnostics)
+        {
+            Presentation = presentation,
+        };
     }
 
     /// <summary>
@@ -202,15 +215,20 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     /// </summary>
     /// <param name="serviceUri">The service's endpoint URI.</param>
     /// <param name="geometryWkt">An area to narrow the read to, or <see langword="null"/>.</param>
+    /// <param name="identity">The <see cref="SecomSource.Identity"/> setting to read with; the default when <see langword="null"/>.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
     /// <exception cref="HttpRequestException">The service could not be read and nothing is cached.</exception>
     public async Task<SecomServiceDescription> DescribeAsync(
-        Uri serviceUri, string? geometryWkt = null, CancellationToken cancellationToken = default)
+        Uri serviceUri, string? geometryWkt = null, string? identity = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(serviceUri);
-        var source = new SecomSource(Guid.Empty, null, serviceUri, new SecomFilter { GeometryWkt = geometryWkt });
-        var listing = await TryListAsync(source, cancellationToken).ConfigureAwait(false)
-            ?? throw new HttpRequestException(LastError(SecomClient.NormalizeServiceUri(serviceUri))?.Message ?? "The SECOM service could not be read.");
+        var source = new SecomSource(Guid.Empty, null, serviceUri, new SecomFilter { GeometryWkt = geometryWkt })
+        {
+            Identity = identity ?? SecomIdentitySetting.Default,
+        };
+        var (listing, attempt) = await TryListAsync(source, cancellationToken).ConfigureAwait(false);
+        if (listing is null)
+            throw new HttpRequestException(attempt.Failure ?? "The SECOM service could not be read.");
         var products = listing.Items
             .GroupBy(s => s.ProductSpec ?? "Unknown", StringComparer.OrdinalIgnoreCase)
             .Select(g => new CatalogFacetValue(g.Key, g.Count(), g.Sum(s => s.Size ?? 0)))
@@ -235,7 +253,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
 
     /// <summary>Turns one summary entry into an item, giving it a file-system-safe name unique within the source.</summary>
     internal static CollectionItem ToItem(
-        SecomSummary summary, SecomClient client, SecomApiVersion version, string folder, ISet<string> names)
+        SecomSummary summary, SecomClient client, SecomApiVersion version, string folder, ISet<string> names, string? identity = null)
     {
         var product = summary.ProductSpec ?? "Unknown";
         var name = UniqueName(
@@ -265,7 +283,10 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
                 summary.LastModified,
                 folder,
                 Layout: new PackageLayout(name + FileExtension(product, summary.Name), []),
-                Envelope: client.UsesPostInterfaces ? RemoteEnvelope.SecomPost : RemoteEnvelope.Secom);
+                Envelope: client.UsesPostInterfaces ? RemoteEnvelope.SecomPost : RemoteEnvelope.Secom)
+            {
+                Identity = identity,
+            };
 
         return new CollectionItem
         {
@@ -359,71 +380,167 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     }
 
     /// <summary>
-    /// Reads the service's list (reusing a recent read), falling back to the
-    /// copy on disk; <see langword="null"/> when neither is available.
+    /// Reads the service's list with the source's identity (reusing a recent
+    /// read with the same identity), falling back to the copy on disk;
+    /// <see langword="null"/> when neither is available. The attempt says what
+    /// was presented and how the read went.
     /// </summary>
-    private async Task<Listing?> TryListAsync(SecomSource source, CancellationToken cancellationToken)
+    private async Task<(Listing? Listing, Attempt Attempt)> TryListAsync(SecomSource source, CancellationToken cancellationToken)
     {
         var serviceUri = SecomClient.NormalizeServiceUri(source.ServiceUri);
-        var key = serviceUri.AbsoluteUri + "|" + (source.Filter.GeometryWkt?.Trim() ?? string.Empty);
+        var resolved = Trust?.Resolve(source.Identity) ?? SecomResolvedIdentity.None;
+        var identity = resolved.Identity;
+        // Anonymous reads keep the key they had before identities were per source.
+        var identityKey = identity is null ? string.Empty : "|" + identity.Certificate.Thumbprint;
+        var key = serviceUri.AbsoluteUri + "|" + (source.Filter.GeometryWkt?.Trim() ?? string.Empty) + identityKey;
         var now = _time.GetUtcNow();
         lock (_gate)
         {
-            if (_recent.TryGetValue(key, out var recent) && recent.Stale is null && now - recent.ReadAt < ReuseInterval)
-                return recent;
+            if (_recent.TryGetValue(key, out var recent) && recent.Stale is null && now - recent.ReadAt < ReuseInterval && _attempts.TryGetValue(key, out var reused))
+                return (recent, reused with { Presentation = reused.Presentation with { Setting = resolved.Setting } });
         }
 
+        var trust = Trust;
+        var client = new SecomClient(_httpClient, serviceUri)
+        {
+            Identity = identity,
+            Signer = identity is null || trust is null ? null : () => trust.CreateSigner(identity),
+        };
         Listing listing;
+        Attempt attempt;
         try
         {
-            var client = new SecomClient(_httpClient, serviceUri) { Signer = Signer };
             var query = new SecomQuery(GeometryWkt: source.Filter.GeometryWkt, PageSize: 250);
             var list = await client.GetSummariesAsync(query, _maxItems, cancellationToken).ConfigureAwait(false);
             listing = new Listing(list.Items, list.TotalItems, list.Truncated, client.ApiVersion ?? SecomApiVersion.V2, now)
             {
                 Post = client.UsesPostInterfaces,
             };
+            attempt = Attempted(serviceUri, resolved, client, failure: null, now);
             Save(key, listing);
-            lock (_gate)
-                _errors.Remove(serviceUri.AbsoluteUri);
         }
         catch (Exception ex) when (IsServiceFailure(ex, cancellationToken))
         {
-            var failure = new Failure(ex.Message, SecomDiagnosticCodes.Classify(ex, IdentitySet()));
+            attempt = Attempted(serviceUri, resolved, client, ex, now);
             lock (_gate)
-                _errors[serviceUri.AbsoluteUri] = failure;
+                _attempts[key] = attempt;
             if (Load(key) is not { } saved)
-                return null;
+                return (null, attempt);
             listing = saved with { Stale = ex.Message };
         }
 
         lock (_gate)
+        {
             _recent[key] = listing;
-        return listing;
+            _attempts[key] = attempt;
+        }
+
+        return (listing, attempt);
     }
 
-    private readonly Dictionary<string, Failure> _errors = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Attempt> _attempts = new(StringComparer.Ordinal);
 
-    /// <summary>Why a service could not be read, and its <see cref="SecomDiagnosticCodes"/> code, if any.</summary>
-    private sealed record Failure(string Message, string? Code);
+    /// <summary>One read of a service: what was presented, the outcome, and why it failed (if it did).</summary>
+    private sealed record Attempt(SecomPresentation Presentation, string? Failure);
 
-    /// <summary>Whether an identity is set to present or sign with, as far as <see cref="Signer"/> tells.</summary>
-    private bool IdentitySet()
+    /// <summary>What a read presented and how it went, from the client and the handshake the trust saw.</summary>
+    private Attempt Attempted(Uri serviceUri, SecomResolvedIdentity resolved, SecomClient client, Exception? failure, DateTimeOffset at)
+    {
+        var host = serviceUri.IdnHost;
+        var identity = resolved.Identity;
+        var handshake = Trust?.HandshakeFor(host, identity);
+        var serverTrust = Trust?.ResultFor(host);
+        var signed = client.SentSigned;
+        var presented = signed || (identity is not null && (handshake?.CertificateRequested ?? true));
+        var code = failure is null ? null : SecomDiagnosticCodes.Classify(failure, identity, signed, serverTrust, handshake);
+        var outcome = failure is null
+            ? presented ? SecomPresentationOutcome.Accepted
+                : handshake?.CertificateRequested == true ? SecomPresentationOutcome.NotPresented : SecomPresentationOutcome.NotAsked
+            : code switch
+            {
+                SecomDiagnosticCodes.ServerUntrusted => SecomPresentationOutcome.Stopped,
+                SecomDiagnosticCodes.CertificateRefused or SecomDiagnosticCodes.SignedRequestRefused => SecomPresentationOutcome.Refused,
+                SecomDiagnosticCodes.NeedsCertificate or SecomDiagnosticCodes.NeedsSignedRequest => SecomPresentationOutcome.NotPresented,
+                _ => SecomPresentationOutcome.NotReached,
+            };
+        var shown = outcome is SecomPresentationOutcome.Accepted or SecomPresentationOutcome.Refused ? identity?.DisplayName : null;
+        var presentation = new SecomPresentation(
+            resolved.Setting, resolved.Id, shown, handshake?.CertificateRequested, handshake?.AcceptableIssuers ?? [], signed && identity is not null, outcome, at)
+        {
+            Code = code,
+            ServerAnchor = serverTrust?.Anchor,
+        };
+        return new Attempt(presentation, failure?.Message);
+    }
+
+    /// <summary>
+    /// Remembers a refusal of the source's identity (and forgets one it has
+    /// since been accepted with), and returns the attempt's presentation with
+    /// every identity the source has seen refused.
+    /// </summary>
+    private SecomPresentation Remember(SecomSource source, Attempt attempt)
+    {
+        var presentation = attempt.Presentation;
+        if (source.Id == Guid.Empty)
+            return presentation;
+
+        lock (_gate)
+        {
+            var all = _refusals ??= LoadRefusals();
+            all.TryGetValue(source.Id, out var refusals);
+            var changed = false;
+            if (presentation.IdentityId is { } id)
+            {
+                if (presentation.Outcome == SecomPresentationOutcome.Refused)
+                {
+                    refusals ??= all[source.Id] = [];
+                    refusals.RemoveAll(r => string.Equals(r.IdentityId, id, StringComparison.OrdinalIgnoreCase));
+                    refusals.Add(new SecomRefusal(id, presentation.At, presentation.Signed));
+                    changed = true;
+                }
+                else if (presentation.Outcome == SecomPresentationOutcome.Accepted && refusals is not null)
+                {
+                    changed = refusals.RemoveAll(r => string.Equals(r.IdentityId, id, StringComparison.OrdinalIgnoreCase)) > 0;
+                }
+            }
+
+            if (changed)
+                SaveRefusals(all);
+            return refusals is { Count: > 0 } ? presentation with { Refusals = [.. refusals] } : presentation;
+        }
+    }
+
+    private string? RefusalsPath => _cacheDirectory is null ? null : Path.Combine(_cacheDirectory, "secom-refusals.json");
+
+    private Dictionary<Guid, List<SecomRefusal>> LoadRefusals()
     {
         try
         {
-            return Signer?.Invoke() is not null;
+            if (RefusalsPath is { } path && File.Exists(path))
+                return JsonSerializer.Deserialize(File.ReadAllText(path), CacheJson.DictionaryGuidListSecomRefusal) ?? [];
         }
-        catch (InvalidDataException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            return true;  // set, but it cannot sign with the chosen algorithm
+            // Forget them: refusals are hints, and the next read records them again.
         }
+
+        return [];
     }
 
-    private Failure? LastError(Uri serviceUri)
+    private void SaveRefusals(Dictionary<Guid, List<SecomRefusal>> refusals)
     {
-        lock (_gate)
-            return _errors.TryGetValue(serviceUri.AbsoluteUri, out var error) ? error : null;
+        if (RefusalsPath is not { } path)
+            return;
+        try
+        {
+            Directory.CreateDirectory(_cacheDirectory!);
+            var partial = path + ".partial";
+            File.WriteAllText(partial, JsonSerializer.Serialize(refusals, CacheJson.DictionaryGuidListSecomRefusal));
+            File.Move(partial, path, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private static bool IsServiceFailure(Exception ex, CancellationToken cancellationToken) =>
@@ -466,8 +583,11 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     private string CachePath(string key) =>
         Path.Combine(_cacheDirectory!, "secom-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..16].ToLowerInvariant() + ".json");
 
-    /// <summary>The listed objects, the filter, and when each object of the service was last downloaded.</summary>
-    private string Fingerprint(SecomSource source, Listing listing)
+    /// <summary>
+    /// The listed objects, the filter, the identity read with (#883), and when
+    /// each object of the service was last downloaded.
+    /// </summary>
+    private string Fingerprint(SecomSource source, Listing listing, Attempt attempt)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var summary in listing.Items.OrderBy(s => s.DataReference, StringComparer.Ordinal))
@@ -498,7 +618,11 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
 
         var listed = Convert.ToHexString(hash.GetHashAndReset())[..16];
         var post = listing.Post ? "+post" : string.Empty;
-        return $"{FingerprintVersion}:{listing.Version}{post}:{listed}:{source.Filter.ToCanonicalString()}:{downloads}";
+        // The identity and its outcome, so a change of identity indexes again
+        // even when the list is the same; anonymous reads keep their old fingerprint.
+        var presentation = attempt.Presentation;
+        var identity = presentation.IdentityId is { } id ? $"@{id}/{presentation.Outcome}" : string.Empty;
+        return $"{FingerprintVersion}:{listing.Version}{post}{identity}:{listed}:{source.Filter.ToCanonicalString()}:{downloads}";
     }
 
     private static CollectionItemStatus Status(string? status) => status?.Trim().ToUpperInvariant() switch
@@ -567,6 +691,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     }
 
     [System.Text.Json.Serialization.JsonSerializable(typeof(Listing))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<Guid, List<SecomRefusal>>))]
     private sealed partial class CacheJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
 }
 

@@ -411,7 +411,7 @@ public sealed class ListSecomServicesTool(EncDotNet.S100.Collections.Secom.Secom
                 await gate.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
-                    return (s.InstanceId, Result: await _registry.ProbeAsync(s.EndpointUri, ct).ConfigureAwait(false));
+                    return (s.InstanceId, Result: await _registry.ProbeAsync(s.EndpointUri, cancellationToken: ct).ConfigureAwait(false));
                 }
                 finally
                 {

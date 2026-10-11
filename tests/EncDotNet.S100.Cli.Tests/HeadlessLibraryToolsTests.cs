@@ -3,6 +3,7 @@ using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp.Tools.Library;
 
 namespace EncDotNet.S100.Cli.Tests;
@@ -137,16 +138,48 @@ public sealed class HeadlessLibraryToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task A_secom_sources_identity_is_set_and_reads_back_unchanged()
+    {
+        var secom = new SecomSource(Guid.NewGuid(), null, new Uri("https://secom.invalid/api/secom/"), SecomFilter.All);
+        _library.AddCollection("SECOM", [secom]);
+        var tool = new SetLibrarySourceOptionsTool(_host);
+
+        var set = Assert.Single(Value(await tool.InvokeAsync(secom.Id.ToString(), null, null, identity: "sc-ident:91d0b3c5", ct: Ct)).Sources);
+        Assert.True(set.Changed);
+        Assert.Equal("sc-ident:91d0b3c5", set.Identity);
+        Assert.Equal("sc-ident:91d0b3c5", ((SecomSource)_library.Collections.Single(c => c.Definition.Name == "SECOM").Sources[0].Definition).Identity);
+
+        var listed = Value(await new ListLibrarySourcesTool(_host).InvokeAsync(counts: false, Ct));
+        Assert.Equal("sc-ident:91d0b3c5", listed.Collections.Single(c => c.Name == "SECOM").Sources.Single().Identity);
+
+        // Saved with the source.
+        using (var reread = new CollectionLibrary(
+            CollectionIndexer.CreateDefault(), new CollectionLibraryOptions(Path.Combine(_root, "collections.json"), Path.Combine(_root, "reread-cache"))))
+        {
+            reread.Initialize();
+            Assert.Equal("sc-ident:91d0b3c5", ((SecomSource)reread.Collections.Single(c => c.Definition.Name == "SECOM").Sources[0].Definition).Identity);
+        }
+
+        // Back to the default; anything else is refused, as is an identity for a source that is not SECOM.
+        Assert.Equal("default", Assert.Single(Value(await tool.InvokeAsync(secom.Id.ToString(), null, null, identity: " Default ", ct: Ct)).Sources).Identity);
+        Assert.True((await tool.InvokeAsync(secom.Id.ToString(), null, null, identity: "Bridge PC", ct: Ct)).TryGetError(out var invalid));
+        Assert.Equal("identity", Assert.IsType<InvalidArgument>(invalid).Parameter);
+        var chart = await AddChartFolderAsync();
+        Assert.True((await tool.InvokeAsync(chart.Id.ToString(), null, null, identity: "none", ct: Ct)).TryGetError(out var notSecom));
+        Assert.Equal("identity", Assert.IsType<InvalidArgument>(notSecom).Parameter);
+    }
+
+    [Fact]
     public async Task Options_are_set_and_sources_removed()
     {
         var source = await AddChartFolderAsync();
 
-        var options = Value(await new SetLibrarySourceOptionsTool(_host).InvokeAsync(source.Id.ToString(), sync: null, showOnMap: true, Ct));
+        var options = Value(await new SetLibrarySourceOptionsTool(_host).InvokeAsync(source.Id.ToString(), sync: null, showOnMap: true, ct: Ct));
         var set = Assert.Single(options.Sources);
         Assert.True(set.ShowOnMap);
         Assert.False(set.CanSync);
         Assert.True(set.Changed);
-        Assert.False((await new SetLibrarySourceOptionsTool(_host).InvokeAsync(source.Id.ToString(), sync: true, showOnMap: null, Ct)).TryGetValue(out _));
+        Assert.False((await new SetLibrarySourceOptionsTool(_host).InvokeAsync(source.Id.ToString(), sync: true, showOnMap: null, ct: Ct)).TryGetValue(out _));
 
         var collectionId = _library.Collections.Single().Id;
         var removed = Value(await new RemoveLibrarySourceTool(_host).InvokeAsync(collectionId.ToString(), confirm: true, Ct));

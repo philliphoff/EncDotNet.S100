@@ -126,6 +126,18 @@ public sealed record SecomProbeResult(SecomReachability Reachability, string? De
     /// </summary>
     public string? Identity { get; init; }
 
+    /// <summary>
+    /// The reference id of the identity the probe presented or signed with
+    /// (#883): the one the probe's identity setting resolved to.
+    /// </summary>
+    public string? IdentityId { get; init; }
+
+    /// <summary>
+    /// What the TLS handshake showed, when one was seen (#883): whether the
+    /// service asked for a client certificate, and the issuers it accepts.
+    /// </summary>
+    public SecomHandshake? Handshake { get; init; }
+
     /// <summary>True when the service actively refused (401, 403, or a TLS-level refusal), not merely failed.</summary>
     internal bool Refusal { get; init; }
 }
@@ -172,7 +184,6 @@ public sealed class SecomRegistry
     private readonly string? _cacheDirectory;
     private readonly TimeProvider _time;
     private readonly SecomServerTrust? _serverTrust;
-    private HttpClient? _anonymousClient;
 
     /// <summary>Creates a registry reader.</summary>
     /// <param name="httpClient">
@@ -232,35 +243,49 @@ public sealed class SecomRegistry
 
     /// <summary>
     /// Finds out whether the service at <paramref name="serviceUri"/> can be
-    /// read without a certificate: <c>Capability</c>, then one
-    /// <c>GetSummary</c> page.
+    /// read: <c>Capability</c>, then one <c>GetSummary</c> page, anonymously;
+    /// then, only when that is refused for want of a certificate or a signed
+    /// request, once more with the identity <paramref name="identity"/>
+    /// resolves to (#883). No other identity is ever tried.
     /// </summary>
-    public async Task<SecomProbeResult> ProbeAsync(Uri serviceUri, CancellationToken cancellationToken = default)
+    /// <param name="serviceUri">The service's endpoint.</param>
+    /// <param name="identity">
+    /// The <see cref="SecomSource.Identity"/> setting to probe with:
+    /// <c>default</c> (when <see langword="null"/>), <c>none</c> or a reference id.
+    /// It is resolved through the registry's <see cref="SecomServerTrust"/>.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the probe.</param>
+    public async Task<SecomProbeResult> ProbeAsync(Uri serviceUri, string? identity = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(serviceUri);
         var host = serviceUri.IdnHost;
         _serverTrust?.Forget(host);
+        var resolved = _serverTrust?.Resolve(identity) ?? SecomResolvedIdentity.None;
 
         // Anonymously first: a service that answers without the identity is Open.
-        var result = await ProbeServiceAsync(AnonymousClient, serviceUri, cancellationToken).ConfigureAwait(false);
-        if (result.Reachability == SecomReachability.NeedsSecom2Search && _serverTrust?.Identity is { } signing)
-            result = await ProbeSignedSearchAsync(serviceUri, signing, cancellationToken).ConfigureAwait(false);
-        else if (result.Reachability == SecomReachability.NeedsCertificate && _serverTrust?.Identity is { } identity)
+        var result = await ProbeServiceAsync(_httpClient, serviceUri, null, cancellationToken).ConfigureAwait(false);
+        var handshake = _serverTrust?.HandshakeFor(host, null);
+        if (result.Reachability == SecomReachability.NeedsSecom2Search && resolved.Identity is { } signing)
+            result = await ProbeSignedSearchAsync(serviceUri, signing, cancellationToken).ConfigureAwait(false) with { IdentityId = resolved.Id };
+        else if (result.Reachability == SecomReachability.NeedsCertificate && resolved.Identity is { } presented)
         {
-            var identified = await ProbeServiceAsync(_httpClient, serviceUri, cancellationToken).ConfigureAwait(false);
-            result = identified switch
+            var identified = await ProbeServiceAsync(_httpClient, serviceUri, presented, cancellationToken).ConfigureAwait(false);
+            handshake = _serverTrust?.HandshakeFor(host, presented) ?? handshake;
+            var judged = identified switch
             {
-                { Reachability: SecomReachability.Open } => new SecomProbeResult(SecomReachability.OpenWithCertificate, identity.DisplayName)
+                { Reachability: SecomReachability.Open } => new SecomProbeResult(SecomReachability.OpenWithCertificate, presented.DisplayName)
                 {
-                    Identity = identity.DisplayName,
+                    Identity = presented.DisplayName,
                 },
                 // Only an active refusal is the identity's: other failures say nothing about it.
                 { Reachability: SecomReachability.NeedsCertificate, Refusal: true } =>
-                    new SecomProbeResult(SecomReachability.CertificateRefused, identified.Detail) { Identity = identity.DisplayName },
+                    new SecomProbeResult(SecomReachability.CertificateRefused, identified.Detail) { Identity = presented.DisplayName },
                 _ => identified,
             };
+            result = judged with { IdentityId = resolved.Id };
         }
 
+        result = result with { Handshake = handshake };
         if (result.Reachability == SecomReachability.Unreachable || _serverTrust?.ResultFor(host) is not { } trust)
             return result;
 
@@ -277,7 +302,12 @@ public sealed class SecomRegistry
     /// </summary>
     private async Task<SecomProbeResult> ProbeSignedSearchAsync(Uri serviceUri, SecomClientIdentity identity, CancellationToken cancellationToken)
     {
-        var client = new SecomClient(_httpClient, serviceUri) { Signer = _serverTrust!.CreateSigner, UsesPostInterfaces = true };
+        var client = new SecomClient(_httpClient, serviceUri)
+        {
+            Identity = identity,
+            Signer = () => _serverTrust!.CreateSigner(identity),
+            UsesPostInterfaces = true,
+        };
         try
         {
             await client.GetSummaryPageAsync(new SecomQuery(PageSize: 1), 1, cancellationToken).ConfigureAwait(false);
@@ -302,20 +332,11 @@ public sealed class SecomRegistry
         _ => null,
     };
 
-    /// <summary>
-    /// The client anonymous probes use: one from <see cref="SecomServerTrust"/>
-    /// that never presents the identity, when the registry was given the
-    /// validator; otherwise the registry's client.
-    /// </summary>
-    private HttpClient AnonymousClient => _serverTrust is null
-        ? _httpClient
-        : LazyInitializer.EnsureInitialized(ref _anonymousClient, () =>
-            new HttpClient(_serverTrust.CreateHandler(presentIdentity: false)) { Timeout = _httpClient.Timeout });
-
-    private async Task<SecomProbeResult> ProbeServiceAsync(HttpClient httpClient, Uri serviceUri, CancellationToken cancellationToken)
+    private async Task<SecomProbeResult> ProbeServiceAsync(
+        HttpClient httpClient, Uri serviceUri, SecomClientIdentity? identity, CancellationToken cancellationToken)
     {
         var host = serviceUri.IdnHost;
-        var client = new SecomClient(httpClient, serviceUri);
+        var client = new SecomClient(httpClient, serviceUri) { Identity = identity };
         SecomCapability? capability = null;
         try
         {

@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Formats.Asn1;
 using System.Net;
 using System.Net.Security;
+using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -51,9 +53,11 @@ public sealed record SecomServerTrustResult(SecomServerTrustOutcome Outcome, str
 
 /// <summary>
 /// Trusts TLS server certificates issued under <see cref="SecomTrustAnchors"/>
-/// for SECOM requests (issue #829). Many SECOM services present Maritime
-/// Connectivity Platform (MCP) server certificates, whose roots are not in
-/// operating-system trust stores, so the handshake fails before SECOM is asked.
+/// for SECOM requests (issue #829), and presents each request's own MCP
+/// identity to services that ask for a client certificate (#832, #883).
+/// Many SECOM services present Maritime Connectivity Platform (MCP) server
+/// certificates, whose roots are not in operating-system trust stores, so the
+/// handshake fails before SECOM is asked.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -80,19 +84,31 @@ public sealed record SecomServerTrustResult(SecomServerTrustOutcome Outcome, str
 /// operating system trusts are left to its own revocation policy.
 /// </para>
 /// <para>
-/// The handlers also present this client's MCP identity, when one is set with
-/// <see cref="SetIdentity"/>, to SECOM services that ask for a client
-/// certificate (mutual TLS, #832). The identity can change at any time: the
-/// next request through each handler connects with the new one.
+/// Identities (#883): the host registers the identities it holds with
+/// <see cref="SetIdentity(string, SecomClientIdentity?)"/>, and names one
+/// <see cref="DefaultIdentityId"/>. Each SECOM source's
+/// <see cref="SecomSource.Identity"/> setting is resolved with
+/// <see cref="Resolve"/> when the source is read, and every request is tagged
+/// with the identity it presents (<see cref="PresentIdentity"/>). The handlers
+/// keep one connection pool per identity, and present the request's identity
+/// only, and only when the service asks for a client certificate. An untagged
+/// request presents none. Nothing here ever tries another identity when one
+/// is refused: each attempt would disclose an MRN to the provider.
 /// </para>
 /// </remarks>
 public sealed class SecomServerTrust
 {
+    /// <summary>The request option <see cref="PresentIdentity"/> sets: the identity a request presents.</summary>
+    public static readonly HttpRequestOptionsKey<SecomClientIdentity?> IdentityOption = new("EncDotNet.S100.Secom.Identity");
+
     private readonly ConcurrentDictionary<string, SecomServerTrustResult> _results = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<(string Key, string Host), SecomHandshake> _handshakes = new(HandshakeKeyComparer.Instance);
+    private readonly ConditionalWeakTable<SslStream, HandshakeFacts> _streams = new();
+    private readonly object _identitiesGate = new();
     private readonly TimeProvider _time;
-    private SecomClientIdentity? _identity;
+    private Dictionary<string, SecomClientIdentity> _identities = new(StringComparer.OrdinalIgnoreCase);
+    private string? _defaultIdentityId;
     private SecomTrustAnchors _anchors;
-    private int _identityVersion;
     private int _anchorsVersion;
 
     /// <summary>Creates a validator trusting <paramref name="anchors"/>.</summary>
@@ -120,6 +136,7 @@ public sealed class SecomServerTrust
             ArgumentNullException.ThrowIfNull(value);
             Volatile.Write(ref _anchors, value);
             _results.Clear();
+            _handshakes.Clear();
             Interlocked.Increment(ref _anchorsVersion);
             AnchorsChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -131,8 +148,44 @@ public sealed class SecomServerTrust
     /// <summary>Checks anchor-trusted chains for revocation, when set.</summary>
     public SecomRevocation? Revocation { get; }
 
-    /// <summary>The MCP identity presented to SECOM services that ask for a client certificate, if one is set.</summary>
-    public SecomClientIdentity? Identity => Volatile.Read(ref _identity);
+    /// <summary>The identities registered with <see cref="SetIdentity(string, SecomClientIdentity?)"/>, by reference id.</summary>
+    public IReadOnlyDictionary<string, SecomClientIdentity> Identities
+    {
+        get
+        {
+            lock (_identitiesGate)
+                return _identities;
+        }
+    }
+
+    /// <summary>
+    /// The reference id of the default identity, which sources set to
+    /// <see cref="SecomIdentitySetting.Default"/> present; <see langword="null"/>
+    /// when there is none. It may name an identity that is not registered
+    /// (yet): such sources then present none. Setting it raises
+    /// <see cref="IdentitiesChanged"/> when it changes.
+    /// </summary>
+    public string? DefaultIdentityId
+    {
+        get => Volatile.Read(ref _defaultIdentityId);
+        set
+        {
+            var normalized = string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToLowerInvariant();
+            string? previous;
+            lock (_identitiesGate)
+            {
+                previous = _defaultIdentityId;
+                if (string.Equals(previous, normalized, StringComparison.Ordinal))
+                    return;
+                Volatile.Write(ref _defaultIdentityId, normalized);
+            }
+
+            IdentitiesChanged?.Invoke(this, new SecomIdentitiesChangedEventArgs(SecomIdentityChange.DefaultChanged, normalized, previous));
+        }
+    }
+
+    /// <summary>The default identity, when one is set and registered.</summary>
+    public SecomClientIdentity? Identity => Resolve(SecomIdentitySetting.Default).Identity;
 
     /// <summary>
     /// The SECOM <c>digitalSignatureReference</c> SECOM 2.0 request envelopes
@@ -143,76 +196,168 @@ public sealed class SecomServerTrust
     /// </summary>
     public string? EnvelopeSignatureReference { get; set; }
 
+    /// <summary>Raised when an identity is registered, replaced or removed, or the default changes.</summary>
+    public event EventHandler<SecomIdentitiesChangedEventArgs>? IdentitiesChanged;
+
     /// <summary>
-    /// A signer for SECOM 2.0 request envelopes with the current
-    /// <see cref="Identity"/>, or <see langword="null"/> when none is set.
+    /// Registers <paramref name="identity"/> under <paramref name="id"/>,
+    /// replacing any identity registered there, or (with <see langword="null"/>)
+    /// removes it. Requests tagged with a replaced or removed identity still
+    /// connect with it; sources resolve to the new one from their next read.
+    /// An identity removed or replaced is not disposed: its owner may still hold it.
     /// </summary>
-    /// <exception cref="InvalidDataException">The identity cannot sign with <see cref="EnvelopeSignatureReference"/>.</exception>
-    public SecomEnvelopeSigner? CreateSigner() =>
-        Identity is { } identity ? new SecomEnvelopeSigner(identity, Anchors, EnvelopeSignatureReference) : null;
+    /// <param name="id">The reference id, e.g. <c>sc-ident:4f9c2a7e</c>.</param>
+    /// <param name="identity">The identity, or <see langword="null"/> to remove it.</param>
+    public void SetIdentity(string id, SecomClientIdentity? identity)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        id = id.Trim().ToLowerInvariant();
+        SecomIdentityChange change;
+        lock (_identitiesGate)
+        {
+            var had = _identities.TryGetValue(id, out var previous);
+            if (identity is null && !had)
+                return;
+            if (identity is not null && ReferenceEquals(previous, identity))
+                return;
 
-    /// <summary>Raised after <see cref="SetIdentity"/> changes the identity.</summary>
-    public event EventHandler? IdentityChanged;
+            var copy = new Dictionary<string, SecomClientIdentity>(_identities, StringComparer.OrdinalIgnoreCase);
+            if (identity is null)
+            {
+                copy.Remove(id);
+                change = SecomIdentityChange.Removed;
+            }
+            else
+            {
+                copy[id] = identity;
+                change = had ? SecomIdentityChange.Replaced : SecomIdentityChange.Added;
+            }
+
+            _identities = copy;
+        }
+
+        IdentitiesChanged?.Invoke(this, new SecomIdentitiesChangedEventArgs(change, id, DefaultIdentityId));
+    }
 
     /// <summary>
-    /// Sets (or, with <see langword="null"/>, clears) the identity presented
-    /// to SECOM services. Handlers connect with it from their next request;
-    /// connections made with the previous identity are no longer used. The
-    /// previous identity is not disposed: its owner may still hold it.
+    /// Makes <paramref name="identity"/> the default, registered under its
+    /// <see cref="SecomIdentitySetting.ReferenceIdOf">reference id</see>, or
+    /// (with <see langword="null"/>) leaves no default: for a host that holds
+    /// one identity at a time (<c>s100 mcp serve</c>, <c>--secom-identity</c>).
     /// </summary>
     public void SetIdentity(SecomClientIdentity? identity)
     {
-        Volatile.Write(ref _identity, identity);
-        Interlocked.Increment(ref _identityVersion);
-        IdentityChanged?.Invoke(this, EventArgs.Empty);
+        if (identity is null)
+        {
+            DefaultIdentityId = null;
+            return;
+        }
+
+        var id = SecomIdentitySetting.ReferenceIdOf(identity.Certificate.Thumbprint);
+        SetIdentity(id, identity);
+        DefaultIdentityId = id;
     }
 
-    /// <summary>Raised when <see cref="CheckIdentityRevocation"/> finds the identity in use revoked and stops using it.</summary>
+    /// <summary>
+    /// Resolves a source's <see cref="SecomSource.Identity"/> setting to the
+    /// identity it presents now: <see cref="SecomIdentitySetting.Default"/> (or
+    /// <see langword="null"/>) to the default identity, none when no default is
+    /// set; <see cref="SecomIdentitySetting.None"/> to none; a reference id to
+    /// that identity, or none when it is not registered. Anything else is none.
+    /// </summary>
+    public SecomResolvedIdentity Resolve(string? setting)
+    {
+        if (setting is null || string.Equals(setting, SecomIdentitySetting.Default, StringComparison.OrdinalIgnoreCase))
+        {
+            var id = DefaultIdentityId;
+            return new SecomResolvedIdentity(SecomIdentitySetting.Default, id, id is null ? null : Identities.GetValueOrDefault(id));
+        }
+
+        if (SecomIdentitySetting.IsReference(setting))
+        {
+            var id = setting.ToLowerInvariant();
+            return new SecomResolvedIdentity(id, id, Identities.GetValueOrDefault(id));
+        }
+
+        return SecomResolvedIdentity.None;
+    }
+
+    /// <summary>
+    /// A signer for SECOM 2.0 request envelopes with <paramref name="identity"/>,
+    /// or <see langword="null"/> for none.
+    /// </summary>
+    /// <exception cref="InvalidDataException">The identity cannot sign with <see cref="EnvelopeSignatureReference"/>.</exception>
+    public SecomEnvelopeSigner? CreateSigner(SecomClientIdentity? identity) =>
+        identity is null ? null : new SecomEnvelopeSigner(identity, Anchors, EnvelopeSignatureReference);
+
+    /// <summary>A signer with the default identity (<see cref="Identity"/>), or <see langword="null"/> when there is none.</summary>
+    /// <exception cref="InvalidDataException">The identity cannot sign with <see cref="EnvelopeSignatureReference"/>.</exception>
+    public SecomEnvelopeSigner? CreateSigner() => CreateSigner(Identity);
+
+    /// <summary>
+    /// Tags <paramref name="request"/> with the identity it presents through a
+    /// handler from <see cref="CreateHandler"/>: <see langword="null"/> for none.
+    /// </summary>
+    public static void PresentIdentity(HttpRequestMessage request, SecomClientIdentity? identity)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        request.Options.Set(IdentityOption, identity);
+    }
+
+    /// <summary>Raised when <see cref="CheckIdentityRevocation"/> finds a registered identity revoked and removes it.</summary>
     public event EventHandler<SecomIdentityRevokedEventArgs>? IdentityRevoked;
 
     /// <summary>
-    /// Checks the identity in use against its CAs' CRLs (#845). A revoked
-    /// identity is cleared at once (<see cref="SetIdentity"/> with
-    /// <see langword="null"/>), so SECOM requests connect anonymously, and
-    /// <see cref="IdentityRevoked"/> is raised.
+    /// Checks every registered identity against its CAs' CRLs (#845). A revoked
+    /// identity is removed at once (sources that resolved to it present none)
+    /// and <see cref="IdentityRevoked"/> is raised.
     /// </summary>
     /// <param name="fetch">
     /// True to fetch CRLs that are missing or due; false to judge only from
     /// CRLs already held (<see cref="SecomRevocation.CacheOnly"/>).
     /// </param>
     /// <returns>
-    /// The result for the identity checked; <see cref="SecomRevocationStatus.NotChecked"/>
-    /// when there is no identity, no <see cref="Revocation"/>, or the identity
-    /// chains to none of <see cref="Anchors"/>.
+    /// The result for each identity checked, by reference id;
+    /// <see cref="SecomRevocationStatus.NotChecked"/> for every identity when
+    /// there is no <see cref="Revocation"/>, and for one that chains to none
+    /// of <see cref="Anchors"/>.
     /// </returns>
-    public SecomRevocationResult CheckIdentityRevocation(bool fetch = true)
+    public IReadOnlyDictionary<string, SecomRevocationResult> CheckIdentityRevocation(bool fetch = true)
     {
-        var identity = Identity;
-        if (identity is null || Revocation is null)
-            return new SecomRevocationResult(SecomRevocationStatus.NotChecked);
-        if (Anchors.FindAnchor(identity.Certificate, [], statedThumbprint: null, out var chain) is null || chain is null)
-            return new SecomRevocationResult(SecomRevocationStatus.NotChecked, "The identity chains to no trusted authority.");
-
-        var result = (fetch ? Revocation : Revocation.CacheOnly).Check(chain);
-        if (result.Status == SecomRevocationStatus.Revoked
-            && ReferenceEquals(Interlocked.CompareExchange(ref _identity, null, identity), identity))
+        var results = new Dictionary<string, SecomRevocationResult>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (id, identity) in Identities)
         {
-            Interlocked.Increment(ref _identityVersion);
-            IdentityChanged?.Invoke(this, EventArgs.Empty);
-            IdentityRevoked?.Invoke(this, new SecomIdentityRevokedEventArgs(identity, result));
+            if (Revocation is null)
+            {
+                results[id] = new SecomRevocationResult(SecomRevocationStatus.NotChecked);
+                continue;
+            }
+
+            if (Anchors.FindAnchor(identity.Certificate, [], statedThumbprint: null, out var chain) is null || chain is null)
+            {
+                results[id] = new SecomRevocationResult(SecomRevocationStatus.NotChecked, "The identity chains to no trusted authority.");
+                continue;
+            }
+
+            var result = (fetch ? Revocation : Revocation.CacheOnly).Check(chain);
+            results[id] = result;
+            if (result.Status == SecomRevocationStatus.Revoked && ReferenceEquals(Identities.GetValueOrDefault(id), identity))
+            {
+                SetIdentity(id, null);
+                IdentityRevoked?.Invoke(this, new SecomIdentityRevokedEventArgs(identity, result) { Id = id });
+            }
         }
 
-        return result;
+        return results;
     }
 
     /// <summary>
     /// A handler for an <see cref="HttpClient"/> used only for SECOM requests:
-    /// it validates server certificates with <see cref="Validate"/> and, unless
-    /// <paramref name="presentIdentity"/> is false, presents <see cref="Identity"/>
-    /// to a service that asks for a client certificate.
+    /// it validates server certificates with <see cref="Validate"/> and
+    /// presents each request's identity (<see cref="PresentIdentity"/>) to a
+    /// service that asks for a client certificate.
     /// </summary>
-    /// <param name="presentIdentity">False for a handler that never presents an identity (anonymous probes).</param>
-    public HttpMessageHandler CreateHandler(bool presentIdentity = true) => new IdentityHandler(this, presentIdentity);
+    public HttpMessageHandler CreateHandler() => new IdentityHandler(this);
 
     /// <summary>
     /// The last decision about <paramref name="host"/>'s certificate, if a
@@ -224,8 +369,26 @@ public sealed class SecomServerTrust
         return _results.TryGetValue(host, out var result) ? result : null;
     }
 
-    /// <summary>Forgets the last decision about <paramref name="host"/>, so a probe sees only its own.</summary>
-    internal void Forget(string host) => _results.TryRemove(host, out _);
+    /// <summary>
+    /// What the last TLS handshake with <paramref name="host"/> that presented
+    /// <paramref name="identity"/> (or, with <see langword="null"/>, none)
+    /// showed: whether the server asked for a client certificate, and which
+    /// issuers it said it accepts. <see langword="null"/> when no connection
+    /// has been made that way through a handler from this instance.
+    /// </summary>
+    public SecomHandshake? HandshakeFor(string host, SecomClientIdentity? identity)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        return _handshakes.TryGetValue((KeyOf(identity), host), out var handshake) ? handshake : null;
+    }
+
+    /// <summary>Forgets the last decision and handshakes for <paramref name="host"/>, so a probe sees only its own.</summary>
+    internal void Forget(string host)
+    {
+        _results.TryRemove(host, out _);
+        foreach (var key in _handshakes.Keys.Where(k => string.Equals(k.Host, host, StringComparison.OrdinalIgnoreCase)))
+            _handshakes.TryRemove(key, out _);
+    }
 
     /// <summary>Decides whether to allow a TLS connection to <paramref name="host"/>, and records the decision.</summary>
     /// <param name="host">The host the request was made to.</param>
@@ -240,53 +403,145 @@ public sealed class SecomServerTrust
         return result;
     }
 
+    private static string KeyOf(SecomClientIdentity? identity) => identity?.Certificate.Thumbprint ?? string.Empty;
+
     /// <summary>
-    /// Sends through an <see cref="HttpClientHandler"/> made for the current
-    /// identity, replacing it when the identity changes. Replaced handlers are
-    /// kept until this one is disposed, so requests still running on them
-    /// finish; their idle connections close on their own.
+    /// Records what one TLS connection showed, merging what its two callbacks
+    /// see (the server's certificate; the request for a client certificate),
+    /// in whichever order the platform calls them.
     /// </summary>
-    private sealed class IdentityHandler(SecomServerTrust trust, bool presentIdentity) : HttpMessageHandler
+    private void Observe(SslStream stream, string key, string host, string[]? acceptableIssuers)
+    {
+        var facts = _streams.GetValue(stream, static _ => new HandshakeFacts());
+        lock (facts)
+        {
+            if (acceptableIssuers is not null)
+            {
+                facts.Requested = true;
+                facts.Issuers = acceptableIssuers;
+            }
+
+            _handshakes[(key, host)] = new SecomHandshake(host, facts.Requested, facts.Issuers, _time.GetUtcNow());
+        }
+    }
+
+    private sealed class HandshakeFacts
+    {
+        public bool Requested { get; set; }
+
+        public IReadOnlyList<string> Issuers { get; set; } = [];
+    }
+
+    private sealed class HandshakeKeyComparer : IEqualityComparer<(string Key, string Host)>
+    {
+        public static readonly HandshakeKeyComparer Instance = new();
+
+        public bool Equals((string Key, string Host) x, (string Key, string Host) y) =>
+            string.Equals(x.Key, y.Key, StringComparison.Ordinal) && string.Equals(x.Host, y.Host, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string Key, string Host) obj) =>
+            HashCode.Combine(StringComparer.Ordinal.GetHashCode(obj.Key), StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Host));
+    }
+
+    /// <summary>
+    /// Sends each request through a <see cref="SocketsHttpHandler"/> made for
+    /// the identity it is tagged with (none when untagged), so connections
+    /// made with one identity are never reused with another. Handlers are
+    /// replaced when the anchors change; replaced ones are kept until this one
+    /// is disposed, so requests still running on them finish.
+    /// </summary>
+    private sealed class IdentityHandler(SecomServerTrust trust) : HttpMessageHandler
     {
         private readonly object _gate = new();
         private readonly List<HttpMessageInvoker> _retired = [];
-        private HttpMessageInvoker? _current;
-        private int _version = -1;
+        private readonly Dictionary<string, HttpMessageInvoker> _current = new(StringComparer.Ordinal);
         private int _anchorsVersion = -1;
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Current().SendAsync(request, cancellationToken);
-
-        private HttpMessageInvoker Current()
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var version = Volatile.Read(ref trust._identityVersion);
+            request.Options.TryGetValue(IdentityOption, out var identity);
+            return InvokerFor(identity).SendAsync(request, cancellationToken);
+        }
+
+        private HttpMessageInvoker InvokerFor(SecomClientIdentity? identity)
+        {
             var anchorsVersion = Volatile.Read(ref trust._anchorsVersion);
+            var key = KeyOf(identity);
             lock (_gate)
             {
-                if (_current is not null && (!presentIdentity || _version == version) && _anchorsVersion == anchorsVersion)
-                    return _current;
+                if (_anchorsVersion != anchorsVersion)
+                {
+                    _retired.AddRange(_current.Values);
+                    _current.Clear();
+                    _anchorsVersion = anchorsVersion;
+                }
 
-                if (_current is not null)
-                    _retired.Add(_current);
-                _version = version;
-                _anchorsVersion = anchorsVersion;
-                return _current = new HttpMessageInvoker(Create(presentIdentity ? trust.Identity : null), disposeHandler: true);
+                if (!_current.TryGetValue(key, out var invoker))
+                    _current[key] = invoker = new HttpMessageInvoker(Create(identity, key), disposeHandler: true);
+                return invoker;
             }
         }
 
-        private HttpClientHandler Create(SecomClientIdentity? identity)
+        private static readonly HttpRequestOptionsKey<HashSet<string>> ConnectedKey = new("EncDotNet.S100.Secom.Connected");
+
+        private SocketsHttpHandler Create(SecomClientIdentity? identity, string key)
         {
-            var handler = new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (request, certificate, chain, errors) =>
-                    request.RequestUri is { } uri && trust.Validate(uri.IdnHost, certificate, chain, errors).Allowed,
-            };
+            var handler = new SocketsHttpHandler();
             if (identity is not null)
             {
-                handler.ClientCertificateOptions = ClientCertificateOption.Manual;
-                handler.ClientCertificates.Add(identity.Certificate);
+                // SocketsHttpHandler retries a request on a new connection when one
+                // closes before answering, as a server that refuses a client
+                // certificate does: each retry would present the identity again.
+                // One new connection per request and host; a stale pooled
+                // connection still gets its one.
+                handler.ConnectCallback = async (context, cancellationToken) =>
+                {
+                    var request = context.InitialRequestMessage;
+                    if (!request.Options.TryGetValue(ConnectedKey, out var connected))
+                        request.Options.Set(ConnectedKey, connected = new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                    lock (connected)
+                    {
+                        if (!connected.Add(context.DnsEndPoint.Host))
+                        {
+                            throw new HttpRequestException(
+                                $"The connection to {context.DnsEndPoint.Host} closed before it answered; it is not made again, so as not to present the identity again.");
+                        }
+                    }
+
+                    var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                    try
+                    {
+                        await socket.ConnectAsync(context.DnsEndPoint, cancellationToken).ConfigureAwait(false);
+                        return new NetworkStream(socket, ownsSocket: true);
+                    }
+                    catch
+                    {
+                        socket.Dispose();
+                        throw;
+                    }
+                };
             }
 
+            handler.SslOptions.RemoteCertificateValidationCallback = (sender, certificate, chain, errors) =>
+            {
+                if (sender is not SslStream stream)
+                    return false;
+                var host = stream.TargetHostName;
+                trust.Observe(stream, key, host, acceptableIssuers: null);
+                return trust.Validate(host, certificate as X509Certificate2, chain, errors).Allowed;
+            };
+
+            // Called once before the handshake on some platforms (no server
+            // certificate yet), and when the server asks for a client
+            // certificate: only then is the identity presented.
+            handler.SslOptions.LocalCertificateSelectionCallback = (sender, host, _, remote, issuers) =>
+            {
+                if (remote is null)
+                    return null!;
+                if (sender is SslStream stream)
+                    trust.Observe(stream, key, host, issuers ?? []);
+                return identity?.Certificate!;
+            };
             return handler;
         }
 
@@ -296,7 +551,9 @@ public sealed class SecomServerTrust
             {
                 lock (_gate)
                 {
-                    _current?.Dispose();
+                    foreach (var invoker in _current.Values)
+                        invoker.Dispose();
+                    _current.Clear();
                     _retired.ForEach(r => r.Dispose());
                     _retired.Clear();
                 }
@@ -385,7 +642,7 @@ public sealed class SecomServerTrust
     }
 }
 
-/// <summary>The identity <see cref="SecomServerTrust.CheckIdentityRevocation"/> found revoked and stopped using.</summary>
+/// <summary>The identity <see cref="SecomServerTrust.CheckIdentityRevocation"/> found revoked and removed.</summary>
 /// <param name="identity">The revoked identity; the caller still owns it.</param>
 /// <param name="result">The revocation result, whose detail names the date.</param>
 public sealed class SecomIdentityRevokedEventArgs(SecomClientIdentity identity, SecomRevocationResult result) : EventArgs
@@ -395,4 +652,7 @@ public sealed class SecomIdentityRevokedEventArgs(SecomClientIdentity identity, 
 
     /// <summary>The revocation result.</summary>
     public SecomRevocationResult Result { get; } = result;
+
+    /// <summary>The reference id it was registered under, when known.</summary>
+    public string? Id { get; init; }
 }

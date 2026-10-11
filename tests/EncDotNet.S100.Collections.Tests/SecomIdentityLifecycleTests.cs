@@ -62,7 +62,7 @@ public sealed class SecomIdentityLifecycleTests(SecomClientIdentityTests.Pkis pk
     }
 
     [Fact]
-    public void A_revoked_identity_in_use_is_cleared_at_once()
+    public void A_revoked_identity_is_removed_at_once()
     {
         using var issued = _pki.ClientLeaf(Mrn, withCrl: true);
         var crls = new SecomRevocationTests.CrlServer();
@@ -74,15 +74,22 @@ public sealed class SecomIdentityLifecycleTests(SecomClientIdentityTests.Pkis pk
         SecomIdentityRevokedEventArgs? revoked = null;
         var changes = 0;
         trust.IdentityRevoked += (_, e) => revoked = e;
-        trust.IdentityChanged += (_, _) => changes++;
+        trust.IdentitiesChanged += (_, e) => changes += e.Change == SecomIdentityChange.Removed ? 1 : 0;
+        var id = SecomIdentitySetting.ReferenceIdOf(identity.Certificate.Thumbprint);
 
-        var result = trust.CheckIdentityRevocation();
+        var result = Assert.Single(trust.CheckIdentityRevocation()).Value;
 
         Assert.Equal(SecomRevocationStatus.Revoked, result.Status);
         Assert.NotNull(result.RevokedAt);
         Assert.Null(trust.Identity);
+        Assert.Empty(trust.Identities);
         Assert.Same(identity, revoked?.Identity);
+        Assert.Equal(id, revoked?.Id);
         Assert.Equal(1, changes);
+
+        // Sources set to it, or following the default it was, now present none.
+        Assert.Null(trust.Resolve(id).Identity);
+        Assert.True(trust.Resolve(SecomIdentitySetting.Default).IsMissing);
     }
 
     [Fact]
@@ -96,7 +103,7 @@ public sealed class SecomIdentityLifecycleTests(SecomClientIdentityTests.Pkis pk
         using var identity = SecomClientIdentity.FromCertificate(issued, _pki.Anchors);
         trust.SetIdentity(identity);
 
-        Assert.Equal(SecomRevocationStatus.NotRevoked, trust.CheckIdentityRevocation().Status);
+        Assert.Equal(SecomRevocationStatus.NotRevoked, Assert.Single(trust.CheckIdentityRevocation()).Value.Status);
         Assert.Same(identity, trust.Identity);
     }
 

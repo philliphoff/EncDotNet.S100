@@ -96,10 +96,11 @@ public sealed class SecomEnvelopeTests : IDisposable
     public async Task A_post_only_source_indexes_and_downloads_with_signed_requests()
     {
         using var identity = Identity(ECCurve.NamedCurves.nistP384);
-        Func<SecomEnvelopeSigner?> signer = () => new SecomEnvelopeSigner(identity);
+        var trust = new SecomServerTrust();
+        trust.SetIdentity(identity);
         var service = new Service(objects: 2);
         var downloads = Path.Combine(_temp.Path, "downloads");
-        var indexer = new SecomSourceIndexer(new HttpClient(service), downloadsRoot: downloads) { Signer = signer };
+        var indexer = new SecomSourceIndexer(new HttpClient(service), downloadsRoot: downloads) { Trust = trust };
         var source = new SecomSource(Guid.NewGuid(), null, ServiceUri, SecomFilter.All);
 
         var index = await indexer.IndexAsync(source, null, Ct);
@@ -107,14 +108,26 @@ public sealed class SecomEnvelopeTests : IDisposable
         var item = index.Items.Single(i => i.Key == "ref-0001");
         var remote = Assert.IsType<RemoteItemLocation>(item.Location);
         Assert.Equal(RemoteEnvelope.SecomPost, remote.Envelope);
+        Assert.Equal(SecomIdentitySetting.Default, remote.Identity);
+        Assert.Equal(SecomPresentationOutcome.Accepted, index.Presentation?.Outcome);
+        Assert.True(index.Presentation?.Signed);
 
-        var downloader = new EncCellDownloader(new HttpClient(service), Path.Combine(downloads, remote.DownloadFolder!)) { SecomSigner = signer };
+        var downloader = new EncCellDownloader(new HttpClient(service), Path.Combine(downloads, remote.DownloadFolder!)) { SecomTrust = trust };
         var downloaded = await downloader.DownloadAsync(item, cancellationToken: Ct);
         Assert.Equal("<S124:Dataset>ref-0001</S124:Dataset>", File.ReadAllText(Path.Combine(downloaded.Location.RootPath, downloaded.Location.RelativePath)));
 
-        // Without an identity the download says what it needs.
-        var unsigned = new EncCellDownloader(new HttpClient(service), Path.Combine(_temp.Path, "other")) { SecomSigner = () => null };
+        // Without an identity the download says what it needs: an item of a source set to none…
+        var none = item with { Location = remote with { Identity = SecomIdentitySetting.None } };
+        await Assert.ThrowsAsync<SecomIdentityRequiredException>(() => downloader.DownloadAsync(none, cancellationToken: Ct));
+
+        // …or a host with no default.
+        var unsigned = new EncCellDownloader(new HttpClient(service), Path.Combine(_temp.Path, "other")) { SecomTrust = new SecomServerTrust() };
         await Assert.ThrowsAsync<SecomIdentityRequiredException>(() => unsigned.DownloadAsync(item, cancellationToken: Ct));
+
+        // A source set to none never signs: it needs a signed request.
+        var anonymous = await indexer.IndexAsync(source with { Id = Guid.NewGuid(), Identity = SecomIdentitySetting.None }, null, Ct);
+        Assert.Equal(SecomDiagnosticCodes.NeedsSignedRequest, Assert.Single(anonymous.Diagnostics).Code);
+        Assert.Equal(SecomPresentationOutcome.NotPresented, anonymous.Presentation?.Outcome);
     }
 
     private static readonly string[] SummaryFields =

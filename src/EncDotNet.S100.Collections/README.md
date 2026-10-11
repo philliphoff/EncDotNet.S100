@@ -227,26 +227,57 @@ and `Get`, using `SecomClient`:
 - **Client identity.** `SecomClientIdentity` is an MCP client certificate with
   its private key, from PKCS#12 or PEM. It reports the subject, MRN, trust
   anchor and validity. It's held in memory only; saving it is the host's job.
-  - `SecomServerTrust.SetIdentity` makes SECOM handlers present it to services
-    that ask for it (mutual TLS). You can change it at runtime.
-  - Probes report `OpenWithCertificate`, or `CertificateRefused` (only for an
-    active 401, 403 or TLS refusal). They report `NeedsSecom2Search` for a
-    service that lists only through SECOM 2.0's signed
-    `POST …/v2/object/search`.
+- **An identity per source.** Each `SecomSource` has an `Identity` setting:
+  `default`, `none` or a reference such as `sc-ident:91d0b3c5`
+  (`SecomIdentitySetting`). It's a reference only.
+  - The host registers the identities it holds with
+    `SecomServerTrust.SetIdentity(id, identity)` and names a
+    `DefaultIdentityId`. `SetIdentity(identity)` does both, for a host with
+    one identity.
+  - `Resolve(setting)` gives the identity a source presents now: `default` is
+    the default (none when unset), `none` is none, and a reference that names
+    no registered identity is none.
+  - Every request is tagged with its identity (`SecomServerTrust.PresentIdentity`,
+    or `SecomClient.Identity`). The handlers keep one connection pool per
+    identity, and present the request's identity only when the service asks
+    for a client certificate. An untagged request presents none.
+  - No identity is ever tried in place of a refused one. A 401 or 403 isn't
+    retried on the other interface version, and a connection that closes
+    before answering isn't made again, so one read presents its identity once.
+  - `HandshakeFor(host, identity)` says whether the server asked for a client
+    certificate, and which issuers it accepts.
+  - `IdentitiesChanged` says what changed: an identity added, replaced or
+    removed, or the default.
+  - Probes (`SecomRegistry.ProbeAsync(uri, identity)`) go anonymously first,
+    then only with the setting's identity. They report `OpenWithCertificate`,
+    or `CertificateRefused` (only for an active 401, 403 or TLS refusal). They
+    report `NeedsSecom2Search` for a service that lists only through SECOM
+    2.0's signed `POST …/v2/object/search`.
 - **Signed requests.** `SecomEnvelopeSigner` signs SECOM 2.0 request envelopes
   with the identity, for `POST …/v2/object/search/summary` and
   `POST …/v2/object/search`.
   - `SecomClient` switches to these POST forms when a service has no GET
     summary (`UsesPostInterfaces`).
-  - The indexer marks those items `RemoteEnvelope.SecomPost`, and
-    `EncCellDownloader.SecomSigner` posts a signed Get for them.
+  - The indexer marks those items `RemoteEnvelope.SecomPost`, with the
+    source's setting in `RemoteItemLocation.Identity`.
+    `EncCellDownloader.SecomTrust` resolves it and posts a signed Get.
   - Without an identity they fail with `SecomIdentityRequiredException`.
 - **Certificate problems in the Library.** A SECOM source that can't be listed
   for want of an identity, a refused identity or an untrusted server carries a
   `SecomDiagnosticCodes` code on its `IndexDiagnostic`, and its status reads
   "Needs a certificate", "Needs a signed request", "Your certificate was
-  refused" or "Server certificate not trusted". `SecomTrustRefresh` re-reads
-  just those sources when the identity or the trusted authorities change.
+  refused" or "Server certificate not trusted".
+  - `SourceIndex.Presentation` records what the source presented, whether the
+    service asked, the outcome and when, with the identities the source has
+    seen refused. `HintFor` gives the picker's hint for an identity:
+    `IssuerAccepted`, `RefusedHere` or `IssuerNotAccepted`
+    (`SecomIdentityHints`).
+  - `SecomTrustRefresh` re-reads only the affected sources: those on
+    `default` when the default changes, those that resolve to an identity
+    added, replaced or removed, and those with an untrusted server when the
+    trusted authorities change.
+  - `SecomIdentityUsage` lists the sources that use an identity, and
+    `Reassign` moves the ones that name it to another setting.
 - **Registry.** `SecomRegistry` lists SECOM services from the MCP Maritime
   Service Registry's anonymous search.
   - It cleans the listing: it drops unusable endpoints and deleted and

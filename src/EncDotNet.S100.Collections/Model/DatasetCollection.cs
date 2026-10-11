@@ -221,4 +221,23 @@ public sealed record S100ForecastFeedSource(
 /// each index, and copies the service no longer lists are deleted.
 /// </remarks>
 public sealed record SecomSource(Guid Id, string? DisplayName, Uri ServiceUri, SecomFilter Filter)
-    : CollectionSource(Id, DisplayName);
+    : CollectionSource(Id, DisplayName)
+{
+    /// <summary>
+    /// The MCP identity this source presents to the service when it asks for a
+    /// client certificate, and signs SECOM 2.0 requests with (#883):
+    /// <see cref="Secom.SecomIdentitySetting.Default"/> (the default, and what
+    /// sources saved before this setting existed read as),
+    /// <see cref="Secom.SecomIdentitySetting.None"/>, or an identity's reference
+    /// id (<c>sc-ident:…</c>). A reference only: hosts resolve it each time the
+    /// source is read (<see cref="Secom.SecomServerTrust.Resolve"/>).
+    /// </summary>
+    public string Identity
+    {
+        get => _identity;
+        // Null (absent from JSON, which the source-generated reader passes) reads as the default.
+        init => _identity = value ?? Secom.SecomIdentitySetting.Default;
+    }
+
+    private readonly string _identity = Secom.SecomIdentitySetting.Default;
+}

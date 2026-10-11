@@ -120,7 +120,7 @@ public sealed class SecomRegistryTests : IDisposable
     {
         var registry = new SecomRegistry(new HttpClient(new ServiceServer(behaviour)));
 
-        var result = await registry.ProbeAsync(new Uri("https://service.test/api/secom"), Ct);
+        var result = await registry.ProbeAsync(new Uri("https://service.test/api/secom"), cancellationToken: Ct);
 
         Assert.Equal(expected, result.Reachability);
     }

@@ -351,6 +351,7 @@ public static partial class LibraryNodeText
             .FirstOrDefault(code => code is Secom.SecomDiagnosticCodes.NeedsCertificate
                 or Secom.SecomDiagnosticCodes.NeedsSignedRequest
                 or Secom.SecomDiagnosticCodes.CertificateRefused
+                or Secom.SecomDiagnosticCodes.SignedRequestRefused
                 or Secom.SecomDiagnosticCodes.ServerUntrusted);
     }
 
@@ -361,7 +362,8 @@ public static partial class LibraryNodeText
         {
             Secom.SecomDiagnosticCodes.NeedsCertificate => "Library_StatusLine_SecomNeedsCertificate",
             Secom.SecomDiagnosticCodes.NeedsSignedRequest => "Library_StatusLine_SecomNeedsSignedRequest",
-            Secom.SecomDiagnosticCodes.CertificateRefused => "Library_StatusLine_SecomCertificateRefused",
+            // The Library's words for both: the signer's certificate was refused (#883).
+            Secom.SecomDiagnosticCodes.CertificateRefused or Secom.SecomDiagnosticCodes.SignedRequestRefused => "Library_StatusLine_SecomCertificateRefused",
             _ => "Library_StatusLine_SecomServerUntrusted",
         });
         return hasItems

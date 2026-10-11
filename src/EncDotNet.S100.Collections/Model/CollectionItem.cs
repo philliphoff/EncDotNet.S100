@@ -172,7 +172,16 @@ public sealed record RemoteItemLocation(
     string? Package = null,
     PackageLayout? Layout = null,
     RemoteEnvelope? Envelope = null)
-    : ItemLocation;
+    : ItemLocation
+{
+    /// <summary>
+    /// For a SECOM object (<see cref="RemoteEnvelope.Secom"/> or
+    /// <see cref="RemoteEnvelope.SecomPost"/>): its source's
+    /// <see cref="SecomSource.Identity"/> setting, which the download presents
+    /// and signs with (#883); <see langword="null"/> reads as the default.
+    /// </summary>
+    public string? Identity { get; init; }
+}
 
 /// <summary>How a <see cref="RemoteItemLocation"/>'s download wraps its data.</summary>
 public enum RemoteEnvelope
