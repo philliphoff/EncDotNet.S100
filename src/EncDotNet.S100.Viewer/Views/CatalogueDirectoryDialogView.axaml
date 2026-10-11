@@ -182,6 +182,12 @@
                                                        FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
                                                        TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CatalogUrl}" />
                                             <StackPanel Orientation="Horizontal" Spacing="14">
+                                                <Button Classes="link" Content="{Binding FixText}"
+                                                        AutomationProperties.AutomationId="Catalogues.Row.Fix"
+                                                        AutomationProperties.Name="{Binding FixText}"
+                                                        AutomationProperties.HelpText="{x:Static loc:Strings.Keys_Fix_Help}"
+                                                        ToolTip.Tip="{x:Static loc:Strings.Keys_Fix_Help}"
+                                                        IsVisible="{Binding HasFix}" Command="{Binding OpenFixCommand}" />
                                                 <Button Classes="link" Content="{x:Static loc:Strings.Library_DirectoryTerms}"
                                                         AutomationProperties.AutomationId="Catalogues.Row.Terms"
                                                         IsVisible="{Binding HasHomepage}" Command="{Binding OpenHomepageCommand}" />

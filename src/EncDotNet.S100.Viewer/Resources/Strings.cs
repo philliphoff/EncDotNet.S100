@@ -1335,6 +1335,10 @@ internal static class Strings
     public static string Library_Reachability_UnreachableExplanationFormat => Get(nameof(Library_Reachability_UnreachableExplanationFormat));
     public static string Library_Reachability_ExpiredServerExplanationFormat => Get(nameof(Library_Reachability_ExpiredServerExplanationFormat));
     public static string Library_Reachability_WrongHostExplanation => Get(nameof(Library_Reachability_WrongHostExplanation));
+    public static string Keys_Fix_SetUpIdentity => Get(nameof(Keys_Fix_SetUpIdentity));
+    public static string Keys_Fix_ManageIdentities => Get(nameof(Keys_Fix_ManageIdentities));
+    public static string Keys_Fix_TrustedAuthorities => Get(nameof(Keys_Fix_TrustedAuthorities));
+    public static string Keys_Fix_Help => Get(nameof(Keys_Fix_Help));
     public static string Library_Reachability_NeedsSecom2Search => Get(nameof(Library_Reachability_NeedsSecom2Search));
     public static string Library_Reachability_NeedsSecom2SearchExplanation => Get(nameof(Library_Reachability_NeedsSecom2SearchExplanation));
     public static string Library_Reachability_Secom2SearchRejectedFormat => Get(nameof(Library_Reachability_Secom2SearchRejectedFormat));

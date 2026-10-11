@@ -259,6 +259,19 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
 
     private IReadOnlyList<LibrarySource> Sources => _source is { } s ? [s] : _collection.Sources;
 
+    /// <summary>
+    /// For a node of one SECOM source that could not be read for a certificate
+    /// reason, its <see cref="Collections.Secom.SecomDiagnosticCodes"/> code (#880).
+    /// </summary>
+    internal string? SecomCode => IsGroup ? null
+        : Sources is [{ Definition: SecomSource, Index: { } index }] ? LibraryNodeText.SecomCode(index) : null;
+
+    /// <summary>The link that leads to the fix, e.g. "Set up an identity…", or <see langword="null"/>.</summary>
+    public string? SecomFixText => Services.Secom.KeysNavigator.ActionText(SecomCode);
+
+    /// <summary>True when the status line offers <see cref="SecomFixText"/>.</summary>
+    public bool HasSecomFix => SecomFixText is not null;
+
     private (string? Line, LibraryNodeStatusKind Kind) ComputeStatus() =>
         LibraryNodeText.Status(new LibraryNodeStatusInput(_collection, Sources)
         {
@@ -281,6 +294,8 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsStatusError));
         OnPropertyChanged(nameof(IsStatusOk));
         OnPropertyChanged(nameof(IsStatusInfo));
+        OnPropertyChanged(nameof(SecomFixText));
+        OnPropertyChanged(nameof(HasSecomFix));
     }
 
     /// <summary>

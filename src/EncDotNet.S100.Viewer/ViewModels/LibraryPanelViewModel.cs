@@ -131,6 +131,11 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         AddCollectionManifestCommand = new AsyncRelayCommand(() => _importer.AddCollectionManifestAsync(TargetCollectionId));
         ChooseGroupsCommand = new AsyncRelayCommand(ChooseGroupsAsync, () => _selectedNode?.CanChooseGroups == true);
         AddCurrentsForAreaCommand = new AsyncRelayCommand(AddCurrentsForAreaAsync, () => CanAddCurrentsForArea);
+        OpenSecomFixCommand = new RelayCommand<LibraryNodeViewModel>(node =>
+        {
+            if (Services.Secom.KeysNavigator.TabFor(node?.SecomCode) is { } tab)
+                OpenKeys?.Invoke(tab);
+        });
         RefreshCommand = new RelayCommand(Refresh);
         RefreshAllCommand = new RelayCommand(() => _library.Refresh());
         RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
@@ -266,6 +271,15 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// step with the models covering the area ticked (#685, handoff B8).
     /// </summary>
     public ICommand AddCurrentsForAreaCommand { get; }
+
+    /// <summary>
+    /// Opens Settings → Keys &amp; certificates on the tab that fixes a SECOM
+    /// source's certificate problem (#880); the parameter is the node.
+    /// </summary>
+    public ICommand OpenSecomFixCommand { get; }
+
+    /// <summary>Opens Settings → Keys &amp; certificates on a tab; set by the host.</summary>
+    internal Action<Keys.KeysTab>? OpenKeys { get; set; }
 
     /// <summary>True when the selected node is an area of a remote S-100 catalogue (S-102).</summary>
     public bool CanAddCurrentsForArea => _selectedNode is { IsGroup: true, Source.Definition: S100CatalogueFeedSource };

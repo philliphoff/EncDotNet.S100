@@ -29,10 +29,11 @@ public partial class App : Application
 
     /// <summary>
     /// Checks the MCP identity in use for revocation now (the Keys &amp;
-    /// certificates page repeats it daily), and tells the user when one is
-    /// revoked, with a way to the page (#845 C5, H4).
+    /// certificates page repeats it daily), tells the user when one is
+    /// revoked, with a way to the page (#845 C5, H4), and starts reading
+    /// SECOM sources again when the identity or trusted authorities change (#880).
     /// </summary>
-    private void WatchSecomIdentity(SettingsViewModel settingsVm)
+    private void WatchSecomIdentity()
     {
         var keys = _services!.GetRequiredService<ViewModels.Keys.KeysAndCertificatesViewModel>();
         var trust = _services!.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>();
@@ -44,14 +45,12 @@ public partial class App : Application
                         ?? e.Identity.Subject))
                 .WithSeverity(EncDotNet.S100.Viewer.Services.Notifications.NotificationSeverity.Error)
                 .WithContent(Strings.Keys_Revoked_Notification)
-                .WithAction(Strings.Keys_Revoked_NotificationAction, () =>
-                {
-                    settingsVm.ShowKeysAndCertificates();
-                    _services!.GetRequiredService<MainViewModel>().SelectTab("Settings");
-                })
+                .WithAction(Strings.Keys_Revoked_NotificationAction,
+                    () => _services!.GetRequiredService<Services.Secom.KeysNavigator>().Open(ViewModels.Keys.KeysTab.Identities))
                 .Persistent()
                 .Show());
         _ = keys.CheckRevocationAsync();
+        _ = _services!.GetRequiredService<EncDotNet.S100.Collections.Library.SecomTrustRefresh>();
     }
 
     private static IServiceProvider? _services;
@@ -248,7 +247,7 @@ public partial class App : Application
         // Failures are logged but never block app startup.
         var mcpHost = _services.GetRequiredService<McpServerHost>();
         var settingsVm = _services.GetRequiredService<SettingsViewModel>();
-        WatchSecomIdentity(settingsVm);
+        WatchSecomIdentity();
         settingsVm.McpSettingsChanged += () =>
         {
             _ = mcpHost.Apply().ContinueWith(t =>
@@ -678,7 +677,16 @@ public partial class App : Application
         });
         services.AddTransient(sp => new AddOnlineCatalogueWizardViewModel(
             sp.GetRequiredService<CatalogueDirectoryDialogViewModel>(),
-            sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>()));
+            sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
+            sp.GetRequiredService<Services.Secom.KeysNavigator>().Open));
+        // The way from a SECOM certificate problem to Settings → Keys & certificates (#880).
+        services.AddSingleton(sp => new Services.Secom.KeysNavigator(
+            () => sp.GetRequiredService<SettingsViewModel>(),
+            () => sp.GetRequiredService<MainViewModel>()));
+        // Reads SECOM sources again when the identity or trusted authorities change (#880).
+        services.AddSingleton(sp => new EncDotNet.S100.Collections.Library.SecomTrustRefresh(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>()));
         services.AddSingleton<Func<AddOnlineCatalogueWizardViewModel>>(sp => sp.GetRequiredService<AddOnlineCatalogueWizardViewModel>);
         services.AddTransient(sp => new SharedFeedDialogViewModel(
             sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>()));
@@ -1130,7 +1138,7 @@ public partial class App : Application
             var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>();
             var catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
             var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
-            return new LibraryPanelViewModel(
+            var panel = new LibraryPanelViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 sp.GetRequiredService<ILibraryImporter>(),
                 sp.GetRequiredService<Library.ILibraryLoader>(),
@@ -1146,6 +1154,8 @@ public partial class App : Application
                 viewTime: sp.GetRequiredService<GlobalTimeService>(),
                 timeFormat: sp.GetService<ITimeFormatProvider>(),
                 sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>());
+            panel.OpenKeys = sp.GetRequiredService<Services.Secom.KeysNavigator>().Open;
+            return panel;
         });
         services.AddSingleton<LibraryTimeSource>(sp => new LibraryTimeSource(
             sp.GetRequiredService<LibraryPanelViewModel>(),

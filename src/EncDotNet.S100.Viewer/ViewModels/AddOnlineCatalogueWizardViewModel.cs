@@ -89,11 +89,19 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
     private AddToLibraryDialogViewModel? _scope;
 
     public AddOnlineCatalogueWizardViewModel(
-        CatalogueDirectoryDialogViewModel directory, Func<AddToLibraryDialogViewModel> scopeFactory)
+        CatalogueDirectoryDialogViewModel directory,
+        Func<AddToLibraryDialogViewModel> scopeFactory,
+        Action<Keys.KeysTab>? openKeys = null)
     {
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(scopeFactory);
         Directory = directory;
+        // A registry service's "Set up an identity…" closes the wizard, then opens the page (#880).
+        Directory.KeysRequested += (_, tab) =>
+        {
+            Closed?.Invoke(this, false);
+            openKeys?.Invoke(tab);
+        };
         _scopeFactory = scopeFactory;
 
         Steps =

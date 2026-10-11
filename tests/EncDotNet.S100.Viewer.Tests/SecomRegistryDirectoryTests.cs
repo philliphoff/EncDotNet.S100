@@ -5,6 +5,7 @@ using EncDotNet.S100.Collections.Secom;
 using EncDotNet.S100.Mcp.Library;
 using EncDotNet.S100.Mcp.Tools.Library;
 using EncDotNet.S100.Viewer.ViewModels;
+using EncDotNet.S100.Viewer.ViewModels.Keys;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -244,6 +245,54 @@ public sealed class SecomRegistryDirectoryTests
             subject.Build(), key, System.Security.Cryptography.HashAlgorithmName.SHA256);
         using var certificate = request.CreateSelfSigned(notAfter.AddDays(-60), notAfter);
         return certificate.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pkcs12, "pw");
+    }
+
+    [Theory]
+    [InlineData("needs-certificate", "Set up an identity…", "Identities")]
+    [InlineData("needs-signed-request", "Set up an identity…", "Identities")]
+    [InlineData("signed-request-rejected", "Manage identities…", "Identities")]
+    [InlineData("refused", "Manage identities…", "Identities")]
+    [InlineData("untrusted", "Trusted authorities…", "Authorities")]
+    [InlineData("expired-server", null, null)]
+    [InlineData("open", null, null)]
+    public async Task A_certificate_problem_leads_to_the_keys_tab_that_fixes_it(string state, string? link, string? tab)
+    {
+        // #880: the wizard closes, then Settings → Keys & certificates opens on the tab.
+        var result = state switch
+        {
+            "needs-certificate" => new SecomProbeResult(SecomReachability.NeedsCertificate, "403"),
+            "needs-signed-request" => new SecomProbeResult(SecomReachability.NeedsSecom2Search, "signed"),
+            "signed-request-rejected" => new SecomProbeResult(SecomReachability.NeedsSecom2Search, "500") { Identity = "urn:mrn:test" },
+            "refused" => new SecomProbeResult(SecomReachability.CertificateRefused, "403") { Identity = "urn:mrn:test" },
+            "untrusted" => new SecomProbeResult(SecomReachability.UntrustedServer, "TLS")
+            {
+                ServerTrust = new SecomServerTrustResult(SecomServerTrustOutcome.NotTrusted),
+            },
+            "expired-server" => new SecomProbeResult(SecomReachability.UntrustedServer, "TLS")
+            {
+                ServerTrust = new SecomServerTrustResult(SecomServerTrustOutcome.Expired, "MCP MCC"),
+            },
+            _ => new SecomProbeResult(SecomReachability.Open),
+        };
+        var directory = Directory(_ => result);
+        KeysTab? opened = null;
+        bool? closed = null;
+        var wizard = new AddOnlineCatalogueWizardViewModel(directory, () => throw new InvalidOperationException(), t => opened = t);
+        wizard.Closed += (_, added) => closed = added;
+        directory.ShowRegistryCommand.Execute(null);
+        await SettleAsync(() => directory.IsRegistryLoaded);
+        var khra = directory.Entries.Single(e => e.IsRegistry && e.Name.StartsWith("KHRA", StringComparison.Ordinal));
+
+        directory.SelectedEntry = khra;
+        await SettleAsync(() => khra.Reachability is not null);
+        Assert.Equal(link, khra.FixText);
+        Assert.Equal(link is not null, khra.HasFix);
+        if (link is null)
+            return;
+
+        khra.OpenFixCommand.Execute(null);
+        Assert.Equal(tab, opened?.ToString());
+        Assert.False(closed);
     }
 
     [Fact]
