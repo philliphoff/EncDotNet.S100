@@ -48,8 +48,8 @@ internal sealed partial class AddToLibraryDialogViewModel
         await LoadCatalogAsync(cancellationToken).ConfigureAwait(true);
     }
 
-    /// <summary>True when there is a map view to narrow the service to.</summary>
-    public bool CanScopeSecomToMapView => Secom?.CanScopeToMapView == true;
+    /// <summary>True when there is a map view to narrow the service to, and the service can be read (not added to wait).</summary>
+    public bool CanScopeSecomToMapView => Secom is { CanScopeToMapView: true, IsWaiting: false };
 
     /// <summary>"Downloads 9.8 MB now", or why syncing is not advised.</summary>
     public string? SecomSyncHint => Secom?.SyncHint;
@@ -88,7 +88,11 @@ internal sealed partial class AddToLibraryDialogViewModel
         LoadError = null;
         ShowGroups(secom);
         UpdateSelection();
+        // As a finished load does (IsLoading): the include step and the footer follow.
+        RefreshCanConfirm();
+        OnScopeChanged();
         OnPropertyChanged(nameof(IsSecomWaiting));
+        OnPropertyChanged(nameof(CanScopeSecomToMapView));
         OnPropertyChanged(nameof(SecomSyncHint));
         OnPropertyChanged(nameof(SecomSync));
         OnPropertyChanged(nameof(Title));

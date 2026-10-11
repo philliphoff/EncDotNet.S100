@@ -36,7 +36,10 @@ public sealed class SecomIdentityViewTests
         var directory = new SecomIdentityDirectory(keys.Identities, keys.Time);
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel([Khra]),
-            () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders()),
+            () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
+            {
+                Secom = (_, _, _, _) => throw new HttpRequestException("403"),
+            }),
             _ => { },
             (source, openKeys) => new SecomConnectionStepViewModel(source, directory, (_, _, _) => Task.FromResult(
                 new SecomProbeResult(SecomReachability.CertificateRefused, "403") { Identity = bridge.Mrn, IdentityId = bridge.Id }), openKeys));
@@ -57,6 +60,15 @@ public sealed class SecomIdentityViewTests
         wizard.Connection!.Picker.IsOpen = true;
         host.Settle();
         Save(host, "connection-picker");
+        wizard.Connection.Picker.IsOpen = false;
+
+        // Add and wait: step 3 shows the waiting scope (it isn't read), not a blank step.
+        await ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand)wizard.NextCommand).ExecuteAsync(null);
+        host.Settle();
+        Assert.Equal(3, wizard.CurrentStep);
+        Assert.True(wizard.Scope!.IsSecomWaiting);
+        Assert.True(host.IsShown("CatalogueScope.Everything"));
+        Save(host, "include-waiting");
     }
 
     [AvaloniaFact]

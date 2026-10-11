@@ -619,9 +619,9 @@
     <value>Listed once the service can be read</value>
   </data>
   <data name="Library_SecomWaitingSummary" xml:space="preserve">
-    <value>No datasets yet · it lists once the service can be read</value>
+    <value>No datasets yet · lists once readable</value>
   </data>
   <data name="Library_SecomWaitingSyncHint" xml:space="preserve">
-    <value>Its size is known once the service can be read</value>
+    <value>Size unknown until readable</value>
   </data>
 </root>
