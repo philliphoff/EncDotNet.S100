@@ -67,6 +67,8 @@ flowchart LR
   catalogues, and validate datasets.
 - [Bringing S-57 into the pipeline](s57-to-s101.md): read S-57 cells through the
   S-101 portrayal.
+- [S-57 and ISO 8211 libraries](../external/EncDotNet/docs/index.md): read S-57
+  cells, update cells and exchange sets, and ISO 8211 files, with EncDotNet.
 
 **Tasks**
 

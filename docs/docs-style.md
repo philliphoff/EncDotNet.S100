@@ -132,6 +132,7 @@ Describes one package in `src/<project>/README.md`.
 | SoundCharts (the desktop app) | the viewer app, S-100 Viewer |
 | `s100` (the command-line tool) | the CLI app, S100 |
 | EncDotNet.S100 (the project and libraries) | EncDotNet, the engine |
+| EncDotNet (the S-57 and ISO 8211 libraries this project builds on) | EncDotNet.S100, the S-57 package |
 | `EncDotNet.S100` (the facade package, in code style) | the main package |
 | S-101, S-102, S-100 Part 10b | S101, S 101, part 10B |
 | exchange set, dataset, feature catalogue, portrayal catalogue | exchangeset, data set, FC/PC (spell out on first use per page) |
@@ -195,9 +196,11 @@ Describes one package in `src/<project>/README.md`.
 
 Before you open a pull request:
 
-1. Build the site the way CI does, which fails on broken links and anchors:
+1. Build the site the way CI does, which fails on broken links and anchors.
+   The first command checks out the EncDotNet docs the site includes:
 
    ```bash
+   docs/fetch-encdotnet.sh
    docfx docfx.json --warningsAsErrors
    ```
 

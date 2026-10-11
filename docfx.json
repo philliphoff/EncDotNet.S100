@@ -16,6 +16,14 @@
             "src/EncDotNet.S100.Mcp.Tools/**",
             "src/EncDotNet.S100.Viewer/**"
           ]
+        },
+        {
+          "src": "external/EncDotNet",
+          "files": [
+            "src/EncDotNet.Iso8211/EncDotNet.Iso8211.csproj",
+            "src/EncDotNet.S57/EncDotNet.S57.csproj",
+            "src/EncDotNet.Noaa/EncDotNet.Noaa.csproj"
+          ]
         }
       ],
       "dest": "api",
@@ -50,6 +58,26 @@
         "exclude": [
           "**/bin/**",
           "**/obj/**"
+        ]
+      },
+      {
+        "src": "external/EncDotNet/docs",
+        "dest": "docs/s57",
+        "files": [
+          "*.md"
+        ],
+        "exclude": [
+          "coding-style.md",
+          "docs-style.md"
+        ]
+      },
+      {
+        "src": "external/EncDotNet/src",
+        "dest": "src",
+        "files": [
+          "EncDotNet.Iso8211/README.md",
+          "EncDotNet.S57/README.md",
+          "EncDotNet.Noaa/README.md"
         ]
       }
     ],
