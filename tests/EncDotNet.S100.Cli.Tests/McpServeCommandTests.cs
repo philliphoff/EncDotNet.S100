@@ -264,6 +264,80 @@ public sealed class McpServeCommandTests
         }
     }
 
+    [Fact]
+    public async Task Serve_adds_a_manifest_then_queries_loads_and_samples_a_library_item()
+    {
+        // #792 chunk 5: the whole headless Library workflow over stdio, with no network.
+        var host = HostPath();
+        var cell = FixturePath("US5MA1BO.000");
+        Assert.SkipUnless(File.Exists(host), $"CLI host not found: {host}");
+        Assert.SkipUnless(File.Exists(cell), $"Fixture not found: {cell}");
+
+        var root = Path.Combine(Path.GetTempPath(), $"s100-serve-manifest-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(root, "boston"));
+        File.Copy(cell, Path.Combine(root, "boston", "US5MA1BO.000"));
+        var manifest = Path.Combine(root, "charts.s100collection.json");
+        File.WriteAllText(manifest, """
+            { "format": "encdotnet-s100-collection", "version": 1, "title": "Charts",
+              "groups": [ { "id": "boston", "name": "Boston", "paths": ["boston"] } ] }
+            """);
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+            var transport = new StdioClientTransport(new StdioClientTransportOptions
+            {
+                Name = "s100-mcp-serve",
+                Command = host,
+                Arguments = ["mcp", "serve", "--data-dir", Path.Combine(root, "data")],
+            });
+            await using var client = await McpClient.CreateAsync(transport, cancellationToken: cts.Token);
+
+            async Task<System.Text.Json.JsonElement> CallAsync(string tool, Dictionary<string, object?> args)
+            {
+                var result = await client.CallToolAsync(tool, args, cancellationToken: cts.Token);
+                var text = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? string.Empty;
+                Assert.False(result.IsError ?? false, $"{tool} returned an error: {text}");
+                using var doc = System.Text.Json.JsonDocument.Parse(text);
+                return doc.RootElement.Clone();
+            }
+
+            var idle = new Dictionary<string, object?> { ["timeoutMs"] = 60_000 };
+
+            await CallAsync("add_library_source", new() { ["path"] = manifest, ["includeAll"] = true, ["preview"] = false });
+            Assert.True((await CallAsync("await_library_idle", idle)).GetProperty("idle").GetBoolean());
+
+            var page = await CallAsync("query_library_items", new() { ["spec"] = "S-57" });
+            var item = Assert.Single(page.GetProperty("items").EnumerateArray());
+            Assert.NotEqual("loaded", item.GetProperty("state").GetString());
+            var bounds = item.GetProperty("bounds");
+            var lat = (bounds.GetProperty("south").GetDouble() + bounds.GetProperty("north").GetDouble()) / 2;
+            var lon = (bounds.GetProperty("west").GetDouble() + bounds.GetProperty("east").GetDouble()) / 2;
+
+            await CallAsync("library_action", new() { ["action"] = "load", ["itemIds"] = new[] { item.GetProperty("id").GetString() } });
+            Assert.True((await CallAsync("await_library_idle", idle)).GetProperty("idle").GetBoolean());
+
+            var loaded = await CallAsync("query_library_items", new() { ["spec"] = "S-57" });
+            Assert.Equal("loaded", Assert.Single(loaded.GetProperty("items").EnumerateArray()).GetProperty("state").GetString());
+            var datasets = await CallAsync("list_datasets", new() { ["page"] = 0, ["pageSize"] = 50 });
+            Assert.Contains("US5MA1BO", datasets.GetRawText());
+
+            // Sample the loaded chart at a point inside the cell.
+            var at = await CallAsync("find_at", new() { ["latitude"] = lat, ["longitude"] = lon, ["page"] = 0, ["pageSize"] = 50 });
+            var hit = Assert.Single(at.GetProperty("datasets").EnumerateArray());
+            Assert.Equal("US5MA1BO.000", hit.GetProperty("id").GetString());
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
     [Theory]
     [InlineData("https://example.test/catalog.xml", null, null, "https://example.test/catalog.xml", null)]
     [InlineData("noaa-s111#sfbofs, cbofs", "noaa-s111", null, null, "sfbofs|cbofs")]

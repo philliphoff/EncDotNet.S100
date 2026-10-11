@@ -95,7 +95,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
-| [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools over standard input and output for a set of datasets. |
+| [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools over standard input and output, for datasets and a dataset Library. |
 | [`feed serve`](#feed-serve) | Serves a folder, exchange set or dataset as an S-100 feed over HTTP. |
 | [`feed export`](#feed-export) | Writes a folder, exchange set or dataset as a static S-100 feed. |
 
@@ -733,38 +733,65 @@ report, inland cells and the translation's known gaps.
 ## mcp serve
 
 ```text
-s100 mcp serve <dataset-or-exchange-set> [options]
+s100 mcp serve [<dataset-exchange-set-or-folder>] [options]
 s100 mcp serve --layer <dataset> [--layer <dataset> ...] [options]
+s100 mcp serve --collection <source> [--collection <source> ...] [options]
 ```
 
 `mcp serve` runs an [MCP server](mcp-server.md) over standard input and
-output, so an AI agent that starts the process can query and render datasets
-without SoundCharts. It takes the same input forms as `render`. Datasets that
-fail to load are skipped with a warning.
+output, so an AI agent that starts the process can query, sample and render
+datasets, and work with a dataset Library, without SoundCharts.
 
 To use it, configure your MCP client to run the command `s100` with the
 arguments `["mcp", "serve", "<dataset-or-exchange-set>"]`.
 
-The server provides the read-only query tools and these session tools:
-`open_dataset`, `close_dataset`, `close_all_datasets`, `set_palette`,
+**Datasets to open at startup.** Pass a dataset, an exchange set or a folder
+of datasets (searched recursively), repeated `--layer` options, `--from`, or
+any combination. You can also start with none and open datasets later.
+Datasets that fail to load are skipped with a warning.
+
+**The Library.** The server keeps a dataset Library, like SoundCharts'
+Library panel, in a data directory: the Library's `collections.json`, the
+index cache, the catalogue cache and downloads. Pass `--data-dir` to keep it
+between runs; otherwise it's a temporary directory removed on exit.
+`--collection` adds a source at startup, and is skipped when the Library
+already has it. A source is:
+
+- a local path: a folder, an exchange set, a collection manifest
+  (`*.s100collection.json`) or an S-128 catalogue;
+- a known-source id, as `list_known_sources` lists them;
+- a catalogue URL.
+
+Append `#` and comma-separated choices to include only some of a source, for
+example `noaa-s111#sfbofs`. Among the loose files in a local folder or
+manifest, only S-57 and S-101 datasets are recognised.
+
+The server provides the read-only query tools, the session tools
+(`open_dataset`, `close_dataset`, `close_all_datasets`, `set_palette`,
 `set_display_category`, `set_display_mode`, `set_time_step`, `set_viewport`
-and `render_to_image`. The session tools change only the server's in-memory
-state: they never edit the source datasets or write files. `open_dataset`
-adds more datasets while the server runs. Each process is one session, so
-start another process for a separate session. [MCP tools](mcp-server.md#mcp-tools)
-lists them all.
+and `render_to_image`), and the Library and SECOM tools. The session tools
+change only the server's in-memory state. The Library tools change the Library
+in the data directory, and downloads are written there; neither edits the
+source datasets. Each process is one session, so start another process for a
+separate session. [MCP tools](mcp-server.md#mcp-tools) lists them all.
 
 | Option | Default | Description |
 |---|---|---|
-| `--layer <path>` | none | Adds a dataset. Repeat it for each dataset. Can't be combined with `--from`. |
-| `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
-| `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
+| `--layer <path>` | none | Adds a dataset. Repeat it for each dataset. |
+| `--from`, `--exchange-set <path>` | none | Opens every dataset in an exchange set. |
+| `--only <specs>` | all | Exchange sets and folders only. Opens only these product specifications, comma-separated. |
+| `--collection <source>` | none | Adds a source to the Library at startup. Repeat it for each source. |
+| `--collections <file>` | `collections.json` in the data directory | Uses this `collections.json` as the Library, for example SoundCharts' own. Changes are saved to it. |
+| `--data-dir <dir>` | a temporary directory | Keeps the Library's caches and downloads here between runs. |
 | `--debug` | off | Prints a full stack trace on error. |
 
 ```bash
 s100 mcp serve dataset.h5
 s100 mcp serve --layer enc.000 --layer bathy.h5
 s100 mcp serve --from exchange-set.zip --only S101,S102
+s100 mcp serve charts/
+s100 mcp serve --collection noaa-s111#sfbofs --data-dir s100-data
+s100 mcp serve --collection charts.s100collection.json
 ```
 
 Standard output carries the MCP protocol. Startup messages, load warnings and

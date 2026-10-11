@@ -10,7 +10,7 @@ Two hosts run the server:
 | Host | Transport | Datasets | Tools |
 |---|---|---|---|
 | SoundCharts | Streamable HTTP on the loopback address | The datasets loaded in the app | All the tools on this page, except where marked |
-| `s100 mcp serve` | Standard input and output | The datasets you name when you start it, plus any `open_dataset` adds | The [query tools](#query-tools) and [session tools](#session-tools) |
+| `s100 mcp serve` | Standard input and output | The datasets you name when you start it, plus any that `open_dataset` or `library_action` opens | The [query tools](#query-tools), [session tools](#session-tools), [Library tools](#library-tools) and [SECOM tools](#secom-tools) |
 
 To host the tools in your own application, see the
 [EncDotNet.S100.Mcp README](../src/EncDotNet.S100.Mcp/README.md).
@@ -69,8 +69,8 @@ logging, and walks through an agent session.
 
 ## Run the headless server
 
-`s100 mcp serve` serves a fixed set of datasets over standard input and output,
-with no app running. Configure your MCP client to start it, for example:
+`s100 mcp serve` serves datasets and a dataset Library over standard input and
+output, with no app running. Configure your MCP client to start it, for example:
 
 ```json
 {
@@ -212,7 +212,15 @@ SoundCharts only.
 
 ### Library tools
 
-SoundCharts only.
+Both hosts. SoundCharts works on the Library in its Library panel.
+`s100 mcp serve` keeps its own Library in a data directory; see
+[`mcp serve`](cli.md#mcp-serve). There, with no map or Timeline:
+
+- `validAt: view_time` matches nothing. Pass an ISO 8601 time instead.
+- `load_as_you_pan` opens the items at once.
+- `showOnMap` is saved with the source but has no effect.
+- `inMapView` has no map view to narrow to, so the whole SECOM service is
+  added.
 
 | Tool | Changes state | What it does |
 |---|---|---|
@@ -229,7 +237,7 @@ SoundCharts only.
 
 ### SECOM tools
 
-SoundCharts only. These tools work with SECOM (IEC 63173-2) data services.
+Both hosts. These tools work with SECOM (IEC 63173-2) data services.
 
 | Tool | Changes state | What it does |
 |---|---|---|
@@ -398,8 +406,8 @@ previous one.
 ### Tools only SoundCharts has
 
 `pick_features`, `capture_app_screenshot`, `set_own_ship`, the panel, Timeline,
-dataset-state, notification, Library, SECOM and route tools, and the render
-statistics tools need the app's UI, so `s100 mcp serve` doesn't provide them.
+dataset-state, notification and route tools, and the render statistics tools
+need the app's UI, so `s100 mcp serve` doesn't provide them.
 
 ## Example prompts
 

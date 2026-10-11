@@ -1580,6 +1580,40 @@ antimeridian and a large item count.
     covers download, re-index, then open (#790), and `AwaitIdleAsync` waits on
     it.
   - The viewer keeps thin adapters that add its notifications.
+
+  *As built (#792 chunk 3):* the Library MCP tools are shared.
+  - The tools live in `EncDotNet.S100.Mcp.Tools.Library` behind two host
+    seams, `ILibraryReader` and `ILibraryEditor`. `LibraryMcpTools.Create`
+    registers them, with the SECOM tools, for any host.
+  - The viewer implements the seams with `ViewerLibraryController` and
+    `ViewerLibraryEditor`, over its view models. `HeadlessLibrary` implements
+    them over `LibraryOperations`, describing items and sources with
+    `LibraryItemText` and `LibraryNodeText`, so both hosts return the same
+    shapes and words.
+  - `LibrarySourceAdder` is the one add path, for the Add-to-Library dialog
+    and both MCP hosts: local paths, known sources, catalogue and feed URLs,
+    and SECOM services.
+  - `await_library_idle` also waits for the datasets a load or download
+    opens (#790).
+
+  *As built (#792 chunk 4):* `s100 mcp serve` hosts the Library.
+  - `LibraryServices` builds the indexers, downloads and sync over a
+    `LibraryDataPaths` root, `--data-dir` or a temporary directory.
+    `--collections` points it at an existing `collections.json`.
+  - `--collection` adds sources at startup through `LibrarySourceAdder`,
+    skipping any the Library already has.
+  - Items open into the server's `HeadlessMutableCatalog` through
+    `CatalogLibraryOpener`, alongside the datasets given on the command line.
+  - With no map or Timeline, `validAt: view_time` matches nothing and
+    `load_as_you_pan` opens the items at once.
+
+  *As built (#792 chunk 5):* `docs/mcp-server.md` and `docs/cli.md` describe
+  the shared tools and the `mcp serve` Library options. A stdio test drives
+  the whole workflow against the built `s100`: add a local manifest, query
+  it, load an item and find it at a point. The CLI reads metadata for loose
+  S-57 and S-101 files only, so a folder or manifest of loose HDF5 or GML
+  datasets indexes nothing there; the viewer reads GML too, but neither
+  reads loose HDF5.
   - Later: `s100 collections list|index|find --at lat,lon`.
 
 ---
