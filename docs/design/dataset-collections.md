@@ -1586,10 +1586,12 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   committed early. Server trust moves to
 >   `SslOptions.RemoteCertificateValidationCallback`; its sender is the
 >   `SslStream`, whose `TargetHostName` gives the host. Both callbacks merge
->   into one `SecomHandshake` per identity and host (`HandshakeFor`). On
->   Windows, Schannel doesn't call back on an anonymous handshake when the
->   server also accepts no certificate, so there that request isn't seen;
->   401/403 answers still classify the read.
+>   into one `SecomHandshake` per identity and host (`HandshakeFor`).
+>   Windows differs: Schannel resumes a host's anonymous session unless the
+>   identity is offered before the handshake, so there it is offered up front
+>   (TLS still sends it only on request), and whether it was asked comes from
+>   `SslStream.LocalCertificate` (set only when it was sent). An anonymous
+>   handshake's request isn't seen on Windows.
 > - **The presentation record.** Each read of a SECOM source records a
 >   `SecomPresentation` on `SourceIndex.Presentation`:
 >   - the setting, the identity it resolved to and what was presented (the

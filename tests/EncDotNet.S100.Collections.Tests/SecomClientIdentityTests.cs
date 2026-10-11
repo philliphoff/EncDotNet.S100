@@ -96,7 +96,7 @@ public sealed class SecomClientIdentityTests(SecomClientIdentityTests.Pkis pkis)
         Assert.Equal(System.Net.HttpStatusCode.Unauthorized, (await SendAsync(null)).StatusCode);
         // Windows (Schannel) doesn't call back when it has no certificate to offer a
         // server that also accepts none, so there the request isn't seen.
-        Assert.Equal(!OperatingSystem.IsWindows(), trust.HandshakeFor("localhost", null)!.CertificateRequested);
+        Assert.Equal(!OperatingSystem.IsWindows(), trust.HandshakeFor("localhost", null)?.CertificateRequested == true);
 
         // Tagged with an identity, that one is presented and accepted.
         Assert.True((await SendAsync(identity)).IsSuccessStatusCode);
