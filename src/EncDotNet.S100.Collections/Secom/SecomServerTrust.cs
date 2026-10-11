@@ -527,17 +527,25 @@ public sealed class SecomServerTrust
                 if (sender is not SslStream stream)
                     return false;
                 var host = stream.TargetHostName;
-                trust.Observe(stream, key, host, acceptableIssuers: null);
+                // Schannel doesn't call back for a request it answers with the
+                // identity offered up front; it does report whether that was sent.
+                // With no identity, whether the server asked stays unknown there.
+                if (!OperatingSystem.IsWindows())
+                    trust.Observe(stream, key, host, acceptableIssuers: null);
+                else if (identity is not null)
+                    trust.Observe(stream, key, host, stream.LocalCertificate is null ? null : []);
                 return trust.Validate(host, certificate as X509Certificate2, chain, errors).Allowed;
             };
 
             // Called once before the handshake on some platforms (no server
             // certificate yet), and when the server asks for a client
-            // certificate: only then is the identity presented.
+            // certificate: only then is the identity presented. Windows offers
+            // it up front: without, Schannel resumes the host's anonymous
+            // session rather than asking again. TLS sends it only on request.
             handler.SslOptions.LocalCertificateSelectionCallback = (sender, host, _, remote, issuers) =>
             {
                 if (remote is null)
-                    return null!;
+                    return OperatingSystem.IsWindows() ? identity?.Certificate! : null!;
                 if (sender is SslStream stream)
                     trust.Observe(stream, key, host, issuers ?? []);
                 return identity?.Certificate!;
