@@ -98,7 +98,7 @@ public sealed class ViewerUiAutomationTests
         var row = Flatten(list).First(e => e.Role == "listItem" && e.Name?.Contains("all U.S. waters") == true);
         await automation.ActAsync(new UiTarget(null, row.Ref), UiAction.Select, null);
         await automation.ActAsync(new UiTarget("Wizard.Next", null), UiAction.Invoke, null);
-        Assert.Equal(2, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);  // NOAA ENC skips Connection (#883)
 
         var state = wizard.Scope!.Choices("States")[0];
         var options = await Assert.ThrowsAsync<UiAutomationException>(

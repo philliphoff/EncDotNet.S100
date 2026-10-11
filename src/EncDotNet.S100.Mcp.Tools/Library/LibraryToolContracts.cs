@@ -242,6 +242,8 @@ public readonly record struct LibraryEditOutcome<T>(T? Value, ToolError? Error)
 /// <param name="Sync">For an online source: keep its items downloaded and current (#807, #809); the dialog's default when null (on for a small SECOM service, otherwise off).</param>
 /// <param name="InMapView">For a SECOM service: read only the objects in the current map view.</param>
 /// <param name="ShowOnMap">Keep the source's local datasets on the map, loading as you pan (#809); the kind's default when null.</param>
+/// <param name="Identity">For a SECOM service: the identity it is read with and presents (#883): default, none or an sc-ident: reference; default when null.</param>
+/// <param name="Wait">For a SECOM service that can't be read yet: true adds it anyway with no datasets ("Add and wait", #883).</param>
 public sealed record AddSourceRequest(
     [property: Description("A list_known_sources id.")] string? KnownSourceId,
     [property: Description("A local folder, exchange set, collection manifest or S-128 catalogue.")] string? Path,
@@ -256,7 +258,9 @@ public sealed record AddSourceRequest(
     [property: Description("True to only load the catalogue and report its choices.")] bool Preview,
     [property: Description("For an online source: keep its items downloaded and current.")] bool? Sync = null,
     [property: Description("For a SECOM service: read only the objects in the current map view.")] bool InMapView = false,
-    [property: Description("Keep the source's local datasets on the map, loading as you pan.")] bool? ShowOnMap = null);
+    [property: Description("Keep the source's local datasets on the map, loading as you pan.")] bool? ShowOnMap = null,
+    [property: Description("For a SECOM service: the MCP identity it presents (default, none or an sc-ident: reference).")] string? Identity = null,
+    [property: Description("For a SECOM service that can't be read yet: true adds it anyway with no datasets.")] bool Wait = false);
 
 /// <summary>What add_library_source found or added.</summary>
 [Description("What add_library_source found (preview) or added.")]
@@ -275,7 +279,16 @@ public sealed record AddSourceResult(
     [property: Description("The collection the source was added to, or null for a preview.")] Guid? CollectionId,
     [property: Description("The new source's id, or null for a preview.")] Guid? SourceId,
     [property: Description("For an online source: whether its items are kept downloaded and current on each refresh; null for local sources.")] bool? Sync = null,
-    [property: Description("For a SECOM service: why syncing is or is not advised (its size), or null.")] string? SyncNote = null);
+    [property: Description("For a SECOM service: why syncing is or is not advised (its size), or null.")] string? SyncNote = null)
+{
+    /// <summary>For a SECOM service, its identity setting (#883); otherwise null.</summary>
+    [Description("For a SECOM service: the identity it presents ('default', 'none' or an 'sc-ident:…' reference); null for other sources.")]
+    public string? Identity { get; init; }
+
+    /// <summary>For a SECOM service added before it could be read, why it couldn't be (#883); otherwise null.</summary>
+    [Description("For a SECOM service added with wait before it could be read: why it couldn't be read. It starts with no datasets and lists once it can be read (an identity chosen or imported, its server trusted, or reachable again). Null otherwise.")]
+    public string? WaitingBecause { get; init; }
+}
 
 /// <summary>A group of add choices.</summary>
 [Description("A group of choices in the Add-to-Library dialog, e.g. States or Forecast models.")]

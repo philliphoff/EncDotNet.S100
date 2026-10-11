@@ -648,7 +648,7 @@ public partial class App : Application
                 S100Catalogue = (uri, ct) => s100Catalogues.GetCatalogueAsync(uri, cancellationToken: ct),
                 ListS100Folders = (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct),
                 ForecastModels = (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct),
-                Secom = (uri, area, ct) => secom.DescribeAsync(uri, area, cancellationToken: ct),
+                Secom = (uri, area, identity, ct) => secom.DescribeAsync(uri, area, identity, ct),
                 CurrentMapView = () => MapViewOf(sp.GetService<IMapViewportNotifier>()?.Current),
             };
         });
@@ -678,10 +678,19 @@ public partial class App : Application
                 sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory,
                 serverTrust: trust);
         });
+        // The identities SECOM sources choose from (#883).
+        services.AddSingleton(sp => new Services.Secom.SecomIdentityDirectory(
+            sp.GetRequiredService<Services.Secom.SecomIdentityStore>(), sp.GetRequiredService<TimeProvider>()));
         services.AddTransient(sp => new AddOnlineCatalogueWizardViewModel(
             sp.GetRequiredService<CatalogueDirectoryDialogViewModel>(),
             sp.GetRequiredService<Func<AddToLibraryDialogViewModel>>(),
-            sp.GetRequiredService<Services.Secom.KeysNavigator>().Open));
+            sp.GetRequiredService<Services.Secom.KeysNavigator>().Open,
+            // A SECOM service's Connection step: its identity, probed with each choice (#883).
+            (source, openKeys) => new ViewModels.Secom.SecomConnectionStepViewModel(
+                source,
+                sp.GetRequiredService<Services.Secom.SecomIdentityDirectory>(),
+                (uri, identity, ct) => sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>().ProbeAsync(uri, identity, ct),
+                openKeys)));
         // The way from a SECOM certificate problem to Settings → Keys & certificates (#880).
         services.AddSingleton(sp => new Services.Secom.KeysNavigator(
             () => sp.GetRequiredService<SettingsViewModel>(),
@@ -1158,6 +1167,8 @@ public partial class App : Application
                 timeFormat: sp.GetService<ITimeFormatProvider>(),
                 sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>());
             panel.OpenKeys = sp.GetRequiredService<Services.Secom.KeysNavigator>().Open;
+            // SECOM rows name their identity; a selected source's details choose it (#883).
+            panel.Identities = sp.GetRequiredService<Services.Secom.SecomIdentityDirectory>();
             return panel;
         });
         services.AddSingleton<LibraryTimeSource>(sp => new LibraryTimeSource(

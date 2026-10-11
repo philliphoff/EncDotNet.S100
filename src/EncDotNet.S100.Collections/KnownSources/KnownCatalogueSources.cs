@@ -89,6 +89,14 @@ public sealed record KnownCatalogueSource(
 {
     /// <summary>For a forecast feed, its models; otherwise empty.</summary>
     public IReadOnlyList<ForecastModel> Models { get; init; } = Models ?? [];
+
+    /// <summary>
+    /// For a SECOM service from a service registry, its MRN (e.g.
+    /// <c>urn:mrn:mcp:service:mcc:khra:s-124</c>), which says which MCP
+    /// instance it accepts identities from (#883); otherwise <see langword="null"/>.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? ServiceMrn { get; init; }
 }
 
 /// <summary>
@@ -239,7 +247,10 @@ public static partial class KnownCatalogueSources
             Sizes: true,
             Note: service.Description,
             Product: service.IsS100Product ? service.ProductSpec : null,
-            Pilot: service.Status != Secom.SecomRegistryStatus.Released);
+            Pilot: service.Status != Secom.SecomRegistryStatus.Released)
+        {
+            ServiceMrn = service.InstanceId,
+        };
     }
 
     private static readonly DocumentJsonContext WriteJson = new(new JsonSerializerOptions(CreateOptions()) { WriteIndented = true });

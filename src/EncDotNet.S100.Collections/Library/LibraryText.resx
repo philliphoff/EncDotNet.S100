@@ -615,4 +615,13 @@
     <value>Forecast ended {0}; no newer run published. Once downloaded, it shows as Expired until NOAA publishes a new run, which Refresh will find.</value>
     <comment>{0}: the date the latest run's forecast window ended</comment>
   </data>
+  <data name="Library_SecomWaitingDetail" xml:space="preserve">
+    <value>Listed once the service can be read</value>
+  </data>
+  <data name="Library_SecomWaitingSummary" xml:space="preserve">
+    <value>No datasets yet · lists once readable</value>
+  </data>
+  <data name="Library_SecomWaitingSyncHint" xml:space="preserve">
+    <value>Size unknown until readable</value>
+  </data>
 </root>

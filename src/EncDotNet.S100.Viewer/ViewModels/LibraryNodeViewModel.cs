@@ -27,6 +27,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     private LibraryCatalogueCounts? _catalogueCounts;
     private LibrarySyncStatus? _syncStatus;
     private LibraryForecastCounts? _forecastCounts;
+    private SecomNodeIdentity? _secomIdentity;
     private bool _isExpanded;
     private bool _isRenaming;
     private string _renameText = string.Empty;
@@ -123,10 +124,51 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     /// A muted second name: a manifest source named like its collection shows
     /// its file name, so the two rows don't read as duplicates.
     /// </summary>
+    /// <remarks>
+    /// A SECOM source's row says which identity it uses and what it lists
+    /// (#883 D1): "SECOM · Default (Bridge PC) · 36 datasets", or "· no datasets yet".
+    /// </remarks>
     public string? SecondaryName =>
         !IsGroup && _source?.Definition is LocalManifestSource manifest && Name == _collection.Definition.Name
             ? Path.GetFileName(manifest.Path)
-            : null;
+            : SecomSubLine;
+
+    /// <summary>For a node of one SECOM source, what <see cref="SecondaryName"/> shows; otherwise null.</summary>
+    private string? SecomSubLine
+    {
+        get
+        {
+            if (IsGroup || _secomIdentity is not { } identity || Sources is not [{ Definition: SecomSource } secom])
+                return null;
+            var count = secom.Index?.Items.Count ?? 0;
+            var datasets = count switch
+            {
+                0 => Strings.Secom_Row_NoDatasetsYet,
+                1 => Strings.Secom_Row_OneDataset,
+                _ => string.Format(CultureInfo.CurrentCulture, Strings.Secom_Row_DatasetsFormat, count),
+            };
+            return string.Format(CultureInfo.CurrentCulture, Strings.Secom_Row_SubFormat, identity.Label, datasets);
+        }
+    }
+
+    /// <summary>
+    /// For a node of one SECOM source, the identity it uses as the panel
+    /// resolved it (#883): its label, whether any identity exists, and how
+    /// soon it ends. Set by the panel; null for other nodes.
+    /// </summary>
+    public SecomNodeIdentity? SecomIdentity
+    {
+        get => _secomIdentity;
+        set
+        {
+            if (Equals(_secomIdentity, value))
+                return;
+            _secomIdentity = value;
+            OnPropertyChanged(nameof(SecondaryName));
+            OnPropertyChanged(nameof(HasSecondaryName));
+            RaiseStatus();
+        }
+    }
 
     /// <summary>True when <see cref="SecondaryName"/> is set.</summary>
     public bool HasSecondaryName => SecondaryName is not null;
@@ -266,13 +308,57 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     internal string? SecomCode => IsGroup ? null
         : Sources is [{ Definition: SecomSource, Index: { } index }] ? LibraryNodeText.SecomCode(index) : null;
 
-    /// <summary>The link that leads to the fix, e.g. "Set up an identity…", or <see langword="null"/>.</summary>
-    public string? SecomFixText => Services.Secom.KeysNavigator.ActionText(SecomCode);
+    /// <summary>
+    /// The link after a SECOM source's status line (#883 D2): choose an
+    /// identity (or another), set one up, trusted authorities, or manage
+    /// identities for one that ends soon; <see langword="null"/> for none.
+    /// </summary>
+    internal SecomFix? SecomFixKind => SecomCode switch
+    {
+        Collections.Secom.SecomDiagnosticCodes.NeedsCertificate or Collections.Secom.SecomDiagnosticCodes.NeedsSignedRequest =>
+            _secomIdentity is { HasIdentities: false } ? SecomFix.SetUpIdentity : SecomFix.ChooseIdentity,
+        Collections.Secom.SecomDiagnosticCodes.CertificateRefused or Collections.Secom.SecomDiagnosticCodes.SignedRequestRefused => SecomFix.ChooseAnotherIdentity,
+        Collections.Secom.SecomDiagnosticCodes.ServerUntrusted => SecomFix.TrustedAuthorities,
+        null when IsEnding => SecomFix.ManageIdentities,
+        _ => null,
+    };
+
+    /// <summary>The link that leads to the fix, e.g. "Choose identity…", or <see langword="null"/>.</summary>
+    public string? SecomFixText => SecomFixKind switch
+    {
+        SecomFix.ChooseIdentity => Strings.Secom_Action_ChooseIdentity,
+        SecomFix.ChooseAnotherIdentity => Strings.Secom_Action_ChooseAnotherIdentity,
+        SecomFix.SetUpIdentity => Strings.Keys_Fix_SetUpIdentity,
+        SecomFix.TrustedAuthorities => Strings.Keys_Fix_TrustedAuthorities,
+        SecomFix.ManageIdentities => Strings.Keys_Fix_ManageIdentities,
+        _ => null,
+    };
+
+    /// <summary>True when a readable SECOM source's identity ends within 30 days (round 1's warning, #845).</summary>
+    private bool IsEnding => _secomIdentity is { EndsInDays: not null } && Sources is [{ Definition: SecomSource, Index.Items.Count: > 0 }];
 
     /// <summary>True when the status line offers <see cref="SecomFixText"/>.</summary>
     public bool HasSecomFix => SecomFixText is not null;
 
-    private (string? Line, LibraryNodeStatusKind Kind) ComputeStatus() =>
+    private (string? Line, LibraryNodeStatusKind Kind) ComputeStatus()
+    {
+        var status = BaseStatus();
+        // A source using an identity that ends soon says so when nothing else is off (#883 D2).
+        if (status.Line is null && SecomCode is null && IsEnding && _secomIdentity!.EndsInDays is { } days)
+        {
+            var line = days switch
+            {
+                <= 0 => Strings.Secom_Status_EndsToday,
+                1 => Strings.Secom_Status_EndsInOneDay,
+                _ => string.Format(CultureInfo.CurrentCulture, Strings.Secom_Status_EndsInDaysFormat, days),
+            };
+            return (line, LibraryNodeStatusKind.Warning);
+        }
+
+        return status;
+    }
+
+    private (string? Line, LibraryNodeStatusKind Kind) BaseStatus() =>
         LibraryNodeText.Status(new LibraryNodeStatusInput(_collection, Sources)
         {
             Group = _group,
@@ -459,4 +545,29 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
 
     /// <summary>A shared feed's URL with its access token masked (see <see cref="LibraryTextFormat.MaskToken"/>).</summary>
     internal static string MaskToken(Uri feedUri) => LibraryTextFormat.MaskToken(feedUri);
+}
+
+/// <summary>What a SECOM source node shows of its identity (#883).</summary>
+/// <param name="Label">"Default (Bridge PC)", "Default (not set)", "None" or the identity's name.</param>
+/// <param name="HasIdentities">True when any identity exists to choose.</param>
+/// <param name="EndsInDays">Days until the identity it resolves to ends, when within 30; otherwise null.</param>
+internal sealed record SecomNodeIdentity(string Label, bool HasIdentities, int? EndsInDays);
+
+/// <summary>The link after a SECOM source's status line (#883 D2).</summary>
+internal enum SecomFix
+{
+    /// <summary>"Choose identity…": selects the source and opens its picker.</summary>
+    ChooseIdentity,
+
+    /// <summary>"Choose another identity…": selects the source and opens its picker.</summary>
+    ChooseAnotherIdentity,
+
+    /// <summary>"Set up an identity…": no identities yet; opens the Identities tab.</summary>
+    SetUpIdentity,
+
+    /// <summary>"Trusted authorities…".</summary>
+    TrustedAuthorities,
+
+    /// <summary>"Manage identities…": the identity ends soon.</summary>
+    ManageIdentities,
 }

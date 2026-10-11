@@ -1,0 +1,109 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels.Secom"
+             xmlns:secom="using:EncDotNet.S100.Viewer.Views.Secom"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.Secom.SecomConnectionStepView"
+             x:DataType="vm:SecomConnectionStepViewModel">
+
+    <!-- Add online catalogue, step 2 (#883 C): service card, Identity picker, status block, wait note. -->
+    <UserControl.Styles>
+        <StyleInclude Source="avares://SoundCharts/Views/Secom/SecomStyles.axaml" />
+    </UserControl.Styles>
+
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="14">
+            <!-- C1: the service card. -->
+            <Border Classes="wizardPanel" Padding="12,10">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                    <Border Width="32" Height="32" CornerRadius="7" VerticalAlignment="Top"
+                            Background="{DynamicResource MutedBackgroundColor}">
+                        <ic:FluentIcon Icon="Server" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Text="{Binding ServiceName}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
+                            <Run Text="{Binding ProtocolText}" Foreground="{DynamicResource MutedColor}" /><Run
+                                 Text="{Binding Host}" FontFamily="{DynamicResource LibraryMonoFont}" />
+                        </TextBlock>
+                        <SelectableTextBlock Text="{Binding Mrn}" IsVisible="{Binding HasMrn}" FontSize="11"
+                                             FontFamily="{DynamicResource LibraryMonoFont}"
+                                             Foreground="{DynamicResource MutedColor}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Border Grid.Column="2" Classes="secomTag" VerticalAlignment="Top"
+                            Classes.success="{Binding IsSuccess}" Classes.warning="{Binding IsWarning}"
+                            Classes.destructive="{Binding IsDestructive}"
+                            IsVisible="{Binding TagText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            AutomationProperties.AutomationId="Wizard.Connection.Tag"
+                            AutomationProperties.Name="{Binding TagText}">
+                        <TextBlock Text="{Binding TagText}" MaxWidth="170" TextTrimming="CharacterEllipsis" />
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- C2: the Identity picker, with its help text (B5). -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Secom_Picker_Label}" FontSize="12.5" FontWeight="SemiBold" />
+                <secom:IdentityPicker DataContext="{Binding Picker}" />
+                <TextBlock Text="{x:Static loc:Strings.Secom_Picker_Help}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- C3: the status block. -->
+            <Border Classes="secomBlock" IsVisible="{Binding HasState}"
+                    Classes.success="{Binding IsSuccess}" Classes.warning="{Binding IsWarning}"
+                    Classes.destructive="{Binding IsDestructive}"
+                    AutomationProperties.AutomationId="Wizard.Connection.Status"
+                    AutomationProperties.Name="{Binding Title}"
+                    AutomationProperties.HelpText="{Binding Body}">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11">
+                    <Panel Grid.Column="0" Margin="0,1,0,0" VerticalAlignment="Top">
+                        <ic:FluentIcon Icon="Checkmark" FontSize="16" Foreground="{DynamicResource SuccessColor}" IsVisible="{Binding IsSuccess}" />
+                        <ic:FluentIcon Icon="LockClosed" FontSize="16" Foreground="{DynamicResource WarningColor}" IsVisible="{Binding IsWarning}" />
+                        <ic:FluentIcon Icon="Prohibited" FontSize="16" Foreground="{DynamicResource DestructiveColor}" IsVisible="{Binding IsDestructive}" />
+                        <ic:FluentIcon Icon="Prohibited" FontSize="16" Foreground="{DynamicResource MutedColor}" IsVisible="{Binding IsNeutral}" />
+                    </Panel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Body}" Classes="muted" FontSize="12.5" TextWrapping="Wrap" Margin="0,3,0,0" />
+                        <Border Classes="secomQuote" IsVisible="{Binding HasNote}">
+                            <SelectableTextBlock FontSize="12" TextWrapping="Wrap">
+                                <Run Text="{Binding NoteLabel}" Foreground="{DynamicResource MutedColor}" />
+                                <Run Text="{Binding Note}" />
+                            </SelectableTextBlock>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding Actions}" IsVisible="{Binding HasActions}" Margin="0,10,0,0"
+                                      HorizontalAlignment="Right">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SecomBlockAction">
+                                    <Button Classes="Outline" Height="28" MinHeight="28" Padding="12,0" FontSize="12"
+                                            Content="{Binding Label}" Command="{Binding Command}"
+                                            AutomationProperties.AutomationId="{Binding AutomationId}"
+                                            AutomationProperties.Name="{Binding Label}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- While probing. -->
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsProbing}">
+                <ProgressBar IsIndeterminate="True" Width="80" VerticalAlignment="Center" />
+                <TextBlock Text="{x:Static loc:Strings.Library_Reachability_Checking}" Classes="muted" FontSize="12.5" />
+            </StackPanel>
+
+            <!-- C5: what Add and wait waits for. -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" IsVisible="{Binding HasWaitNote}"
+                  AutomationProperties.AutomationId="Wizard.Connection.WaitNote">
+                <ic:FluentIcon Icon="Clock" FontSize="13" Margin="0,1,0,0" VerticalAlignment="Top" Foreground="{DynamicResource MutedColor}" />
+                <TextBlock Grid.Column="1" Text="{Binding WaitNote}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

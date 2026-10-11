@@ -109,12 +109,11 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// True when the chosen catalogue can be added: any curated or own
-    /// catalogue, or a registry service that answers without a certificate or
-    /// with this client's MCP identity (#832).
+    /// True when a catalogue is chosen. A registry service that can't be read
+    /// yet continues too: the Connection step chooses its identity, and it can
+    /// be added to wait (#883).
     /// </summary>
-    public bool CanContinueWithSelection =>
-        _selected is { } entry && (!entry.IsRegistry || entry.Reachability is SecomReachability.Open or SecomReachability.OpenWithCertificate);
+    public bool CanContinueWithSelection => _selected is not null;
 
     /// <summary>Lists SECOM services from the MCP service registry (#822); the registry is only asked when this runs.</summary>
     public ICommand ShowRegistryCommand { get; }

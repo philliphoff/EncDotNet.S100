@@ -2,13 +2,14 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:secom="using:EncDotNet.S100.Viewer.Views.Secom"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:ic="using:FluentIcons.Avalonia"
              x:Class="EncDotNet.S100.Viewer.Views.AddOnlineCatalogueWizardView"
              x:DataType="vm:AddOnlineCatalogueWizardViewModel"
              Width="640" Height="600">
 
-    <!-- Styles shared by the three steps (the step views are nested below, so these reach them). -->
+    <!-- Styles shared by the four steps (the step views are nested below, so these reach them). -->
     <UserControl.Styles>
         <!-- Step header: a completed step is a button back to it; the current and later steps are inert. -->
         <Style Selector="Button.wizardStep">
@@ -103,6 +104,12 @@
                 <views:CatalogueDirectoryDialogView DataContext="{Binding Directory}" />
             </Panel>
 
+            <!-- Step 2, SECOM services only (#883): the identity, and how the service reads with it. -->
+            <Panel IsVisible="{Binding IsConnectionStep}">
+                <secom:SecomConnectionStepView DataContext="{Binding Connection}"
+                                               IsVisible="{Binding $parent[UserControl].((vm:AddOnlineCatalogueWizardViewModel)DataContext).Connection, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
+            </Panel>
+
             <Grid IsVisible="{Binding IsIncludeStep}" RowDefinitions="Auto,*">
                 <!-- The chosen catalogue, with a way back to the directory. -->
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
@@ -168,7 +175,7 @@
                         AutomationProperties.AutomationId="Wizard.Cancel"
                         Command="{Binding CancelCommand}" />
                 <Panel Grid.Column="3">
-                    <Button Classes="Primary" Content="{x:Static loc:Strings.Button_Next}"
+                    <Button Classes="Primary" Content="{Binding NextLabel}"
                             AutomationProperties.AutomationId="Wizard.Next"
                             Command="{Binding NextCommand}" IsVisible="{Binding !IsLastStep}" IsDefault="True" />
                     <Button Classes="Primary" Content="{x:Static loc:Strings.Button_AddToLibrary}"

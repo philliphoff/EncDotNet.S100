@@ -1646,6 +1646,54 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   `s100 mcp serve` (#864). The CLI has no SECOM identity store yet
 >   (deferred), so there a reference names no identity and presents none,
 >   unless `set_secom_identity` loaded that identity for the session.
+> - **The picker** (viewer, `IdentityPickerViewModel` and `Views/Secom/IdentityPicker`)
+>   is shared by the add flow and source details. Its closed value is the
+>   setting's name and sub-line. Its menu lists `Default · {name}`, `None ·
+>   anonymous` and each identity (kind, MCP instance, "ends in N days"),
+>   then "Manage identities…". When the service asks, items carry the hints;
+>   an identity whose issuer isn't accepted can't be chosen, and Default takes
+>   its identity's hint. With no identities it offers only None and the way
+>   to import. It never picks: only the user's choice changes the setting.
+> - **Add online catalogue, four steps.** A SECOM service gets a
+>   **Connection** step between the catalogue and what to include; other
+>   catalogues skip it (the step reads "Not needed" and can't be clicked).
+>   - The step shows the service card (name, host, MRN from the registry and
+>     the vocabulary tag), the picker (new sources start on Default) and a
+>     toned status block with the handoff's copy for each of the eight
+>     states and its action: "Choose identity…" (or "Use {name}" when exactly
+>     one identity is acceptable, which still only proposes), "Import
+>     identity…", "Choose another identity…", "Trusted authorities…" or
+>     "Try again".
+>   - Each change of identity probes again with that identity only
+>     (`SecomRegistry.ProbeAsync(uri, identity)`).
+>   - The primary button reads **Continue** when the service reads, and
+>     **Add and wait** otherwise, with a note on what it waits for. Add and
+>     wait doesn't read the service: `SecomScope.Wait` scopes it to the
+>     directory entry's product, and the source is added with no datasets.
+>     It lists through the re-reads above once an identity is chosen or
+>     imported, or its server's authority trusted, or when it can be reached.
+>   - The shared add path (#863) takes `identity` and `wait` too, so
+>     `add_library_source` (viewer and `s100 mcp serve`) can add a service
+>     before it can be read; without `wait` it still refuses.
+>   - The directory no longer blocks Next on a registry service that can't
+>     be read.
+> - **The Library.** A SECOM row's second line reads
+>   `SECOM · {Default (name) | Default (not set) | None | name} · {N datasets |
+>   no datasets yet}`. Its status line keeps the as-built words, with links:
+>   "Choose identity…" (or "Set up an identity…" with none), "Choose another
+>   identity…", "Trusted authorities…", and, for a readable source whose
+>   identity ends within 30 days, "Certificate ends in N days" with "Manage
+>   identities…". An identity link selects the source and opens its picker;
+>   a row action never changes the setting by itself.
+> - **Source details.** With a SECOM source selected and no dataset, the
+>   details pane shows its Connection: the picker; the presentation line
+>   ("Presented {name} · refused {d MMM, HH:mm}", "· accepted", "Service asked
+>   for a certificate · none presented", "Stopped before presenting an
+>   identity", "Service doesn't ask for a certificate"); *Reads as*,
+>   *Datasets*, *Setting* (`identity: …`, in mono, as stored) and, for an
+>   untrusted server, *Reason*; and the row's action as a button. Choosing an
+>   identity saves the setting (that source is re-read), and once it reads,
+>   "Re-read with {name} · {N datasets}".
 > - **Breaking changes** (preview packages): `SecomServerTrust.SetIdentity`
 >   now also takes an id, `IdentityChanged` is `IdentitiesChanged`,
 >   `CreateHandler(presentIdentity)` is `CreateHandler()`,
@@ -1654,8 +1702,9 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   is `SecomTrust`, `LibraryDownloads.ManagedFolders` takes the trust,
 >   `SecomRegistry.ProbeAsync` and `SecomSourceIndexer.DescribeAsync` take an
 >   identity setting, `SecomDiagnosticCodes.Classify` takes the identity and
->   what the handshake showed, and `ILibraryEditor.SetOptionsAsync` takes a
->   `SourceOptionsChange`.
+>   what the handshake showed, `ILibraryEditor.SetOptionsAsync` takes a
+>   `SourceOptionsChange`, and `LibraryCatalogueReaders.Secom` takes an
+>   identity setting.
 
 ## 8. Implementation slices
 

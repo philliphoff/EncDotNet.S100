@@ -35,8 +35,12 @@ public sealed record LibraryCatalogueReaders
     /// <summary>Reads each forecast model's latest run.</summary>
     public Func<Uri, IReadOnlyList<ForecastModel>, CancellationToken, Task<IReadOnlyList<ForecastModelSummary>>>? ForecastModels { get; init; }
 
-    /// <summary>Reads what a SECOM service offers, optionally within an area (WKT).</summary>
-    public Func<Uri, string?, CancellationToken, Task<SecomServiceDescription>>? Secom { get; init; }
+    /// <summary>
+    /// Reads what a SECOM service offers, optionally within an area (WKT), with
+    /// an identity setting (<c>default</c>, <c>none</c> or an <c>sc-ident:</c>
+    /// reference, #883).
+    /// </summary>
+    public Func<Uri, string?, string?, CancellationToken, Task<SecomServiceDescription>>? Secom { get; init; }
 
     /// <summary>The map view a SECOM service can be narrowed to; it cannot be without.</summary>
     public Func<GeoBounds?>? CurrentMapView { get; init; }

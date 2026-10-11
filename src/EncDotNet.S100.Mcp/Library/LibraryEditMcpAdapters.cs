@@ -31,6 +31,8 @@ public static class LibraryEditMcpAdapters
             [Description("For an online source: true to keep its items downloaded and current on each refresh (a SECOM service also prunes objects it no longer lists), false not to (default: on for a small SECOM service, otherwise off).")] bool? sync = null,
             [Description("For a SECOM service: true to read only the objects in the current map view.")] bool? inMapView = null,
             [Description("True to keep the source's local datasets on the map (loading as you pan, one Datasets row), false not to (default: on for a synced SECOM service).")] bool? showOnMap = null,
+            [Description("For a SECOM service: the MCP identity it presents when the service asks for a client certificate, and signs SECOM 2.0 requests with: 'default' (the default identity; the default), 'none', or an 'sc-ident:…' reference. No other identity is ever tried.")] string? identity = null,
+            [Description("For a SECOM service that can't be read yet (it needs a certificate or a signed request, refused the identity, has an untrusted server or can't be reached): true adds it anyway with no datasets; it lists by itself once it can be read. 'choices' then names its products (default: the product the catalogue is known for).")] bool? wait = null,
             CancellationToken ct = default) =>
         {
             Guid? target = null;
@@ -46,7 +48,7 @@ public static class LibraryEditMcpAdapters
             }
             return McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(new AddSourceRequest(
                 knownSourceId, path, url, kind, choices, includeAll, target, collectionName, shape, resolution, preview == true,
-                sync, inMapView == true, showOnMap), ct));
+                sync, inMapView == true, showOnMap, identity, wait == true), ct));
         };
         return Tool(del, AddLibrarySourceTool.Name,
             "Adds a source to the Library, as the viewer's Add to Library dialog does: a known online "

@@ -138,6 +138,9 @@ public sealed record SecomProbeResult(SecomReachability Reachability, string? De
     /// </summary>
     public SecomHandshake? Handshake { get; init; }
 
+    /// <summary>True when the identity was tried as the signer of SECOM 2.0 requests, not as a client certificate (#883).</summary>
+    public bool Signed { get; init; }
+
     /// <summary>True when the service actively refused (401, 403, or a TLS-level refusal), not merely failed.</summary>
     internal bool Refusal { get; init; }
 }
@@ -266,7 +269,7 @@ public sealed class SecomRegistry
         var result = await ProbeServiceAsync(_httpClient, serviceUri, null, cancellationToken).ConfigureAwait(false);
         var handshake = _serverTrust?.HandshakeFor(host, null);
         if (result.Reachability == SecomReachability.NeedsSecom2Search && resolved.Identity is { } signing)
-            result = await ProbeSignedSearchAsync(serviceUri, signing, cancellationToken).ConfigureAwait(false) with { IdentityId = resolved.Id };
+            result = await ProbeSignedSearchAsync(serviceUri, signing, cancellationToken).ConfigureAwait(false) with { IdentityId = resolved.Id, Signed = true };
         else if (result.Reachability == SecomReachability.NeedsCertificate && resolved.Identity is { } presented)
         {
             var identified = await ProbeServiceAsync(_httpClient, serviceUri, presented, cancellationToken).ConfigureAwait(false);

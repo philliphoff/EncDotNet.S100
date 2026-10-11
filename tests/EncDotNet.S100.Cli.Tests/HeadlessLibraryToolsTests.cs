@@ -236,7 +236,7 @@ public sealed class HeadlessLibraryToolsTests : IDisposable
         {
             ForecastModels = (_, models, _) => Task.FromResult<IReadOnlyList<ForecastModelSummary>>(
                 [.. models.Select(m => new ForecastModelSummary(m, run, 4, 4_000, 9_000, null))]),
-            Secom = (_, _, _) => Task.FromResult(new SecomServiceDescription(
+            Secom = (_, _, _, _) => Task.FromResult(new SecomServiceDescription(
                 [new CatalogFacetValue("S-124", 5, 5_120)], 5, 5, Truncated: false, Collections.Secom.SecomApiVersion.V2)),
         };
         var host = new HeadlessLibrary(_operations, readers: readers);
@@ -261,6 +261,44 @@ public sealed class HeadlessLibraryToolsTests : IDisposable
         Assert.StartsWith("Downloads ", secom.SyncNote, StringComparison.Ordinal);
         var service = Assert.IsType<SecomSource>(_library.Collections.SelectMany(c => c.Sources).Single(s => s.Id == secom.SourceId).Definition);
         Assert.True(service.Sync);
+    }
+
+    [Fact]
+    public async Task A_secom_service_that_cannot_be_read_yet_is_added_to_wait_with_its_identity()
+    {
+        var reads = new List<string?>();
+        var readers = new LibraryCatalogueReaders
+        {
+            Secom = (_, _, identity, _) =>
+            {
+                reads.Add(identity);
+                throw new HttpRequestException("SECOM /api/secom/v2/object/summary answered 401 Unauthorized.");
+            },
+        };
+        var tool = new AddLibrarySourceTool(new HeadlessLibrary(_operations, readers: readers));
+
+        // Without wait, a service that can't be read is refused, as before.
+        Assert.True((await tool.InvokeAsync(
+            new AddSourceRequest("ccg-s124-secom", null, null, null, null, null, null, null, null, null, Preview: false, Identity: "none"), Ct))
+            .TryGetError(out var refused));
+        Assert.Equal("library_change_rejected", refused!.Code);
+        Assert.Equal("none", Assert.Single(reads));
+
+        // With wait, it is added with no datasets, scoped to the product it is known for.
+        var waiting = Value(await tool.InvokeAsync(
+            new AddSourceRequest("ccg-s124-secom", null, null, null, null, null, null, null, null, null, Preview: false, Identity: "sc-ident:91d0b3c5", Wait: true), Ct));
+        Assert.True(waiting.Added);
+        Assert.Equal("sc-ident:91d0b3c5", waiting.Identity);
+        Assert.Contains("401", waiting.WaitingBecause, StringComparison.Ordinal);
+        Assert.False(waiting.Sync);
+        var service = Assert.IsType<SecomSource>(_library.Collections.SelectMany(c => c.Sources).Single(s => s.Id == waiting.SourceId).Definition);
+        Assert.Equal("sc-ident:91d0b3c5", service.Identity);
+
+        // Identity and wait are for SECOM services only.
+        Assert.True((await tool.InvokeAsync(
+            new AddSourceRequest(null, _root, null, "folder", null, null, null, null, null, null, Preview: true, Identity: "none"), Ct))
+            .TryGetError(out var notSecom));
+        Assert.Equal("identity", Assert.IsType<InvalidArgument>(notSecom).Parameter);
     }
 
     [Fact]

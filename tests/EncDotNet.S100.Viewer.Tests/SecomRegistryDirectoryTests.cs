@@ -71,7 +71,7 @@ public sealed class SecomRegistryDirectoryTests
         Assert.Equal(SecomReachability.NeedsCertificate, khra.Reachability);
         Assert.Equal("Needs a certificate", khra.ReachabilityText);
         Assert.True(khra.IsReachabilityLimited && khra.HasReachabilityExplanation);
-        Assert.False(directory.CanContinueWithSelection);
+        Assert.True(directory.CanContinueWithSelection);  // it can still be added to wait (#883)
 
         directory.SelectedEntry = ccg;
         await SettleAsync(() => ccg.Reachability is not null);
@@ -161,7 +161,7 @@ public sealed class SecomRegistryDirectoryTests
         Assert.Equal("Certificate refused", khra.ReachabilityText);
         Assert.Equal($"Your MCP identity ({mrn}) was presented, but this service does not accept it.", khra.ReachabilityExplanation);
         Assert.True(khra.IsReachabilityLimited);
-        Assert.False(directory.CanContinueWithSelection);
+        Assert.True(directory.CanContinueWithSelection);  // it can still be added to wait (#883)
 
         directory.SelectedEntry = ccg;
         await SettleAsync(() => ccg.Reachability is not null);
@@ -184,7 +184,7 @@ public sealed class SecomRegistryDirectoryTests
         Assert.Equal("Needs a signed request", khra.ReachabilityText);
         Assert.Contains("need your MCP identity, and none is set", khra.ReachabilityExplanation, StringComparison.Ordinal);
         Assert.True(khra.IsReachabilityLimited);
-        Assert.False(directory.CanContinueWithSelection);
+        Assert.True(directory.CanContinueWithSelection);  // it can still be added to wait (#883)
     }
 
     [Fact]
