@@ -107,7 +107,11 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
                 return 2;
             }
 
-            var processor = factory.CreateProcessor(settings.DatasetPath);
+            // JSON goes to stdout, so the S-101 update summary goes to stderr there.
+            var updateConsole = format == OutputFormat.Json
+                ? AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(Console.Error) })
+                : null;
+            var processor = DatasetProcessorLoader.Create(factory, spec, settings, updateConsole);
             var report = processor.Validate();
 
             string[] patterns = Array.Empty<string>();

@@ -523,7 +523,7 @@ public sealed class RenderCommandTests
     /// none is present. Resolves the root from the <c>ICENC_ROOT</c> environment
     /// variable, falling back to <c>~/Downloads/IC-ENC</c>.
     /// </summary>
-    private static string? FindS101BaseCellWithUpdate()
+    internal static string? FindS101BaseCellWithUpdate()
     {
         var root = Environment.GetEnvironmentVariable("ICENC_ROOT");
         if (string.IsNullOrEmpty(root))
