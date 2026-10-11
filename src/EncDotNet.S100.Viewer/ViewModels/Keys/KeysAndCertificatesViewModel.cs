@@ -66,7 +66,7 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
         });
 
         _identities.Changed += OnStoreChanged;
-        _identities.Trust.IdentityChanged += OnStoreChanged;
+        _identities.Trust.IdentitiesChanged += OnStoreChanged;
         _authorities.Changed += OnStoreChanged;
 
         // Recompute "ends in N days" when the date turns (H4).
@@ -145,9 +145,9 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
         _ = CheckRevocationAsync();
     }
 
-    /// <summary>Checks the identity in use for revocation off the UI thread (nothing to do without one, or without a CRL checker).</summary>
+    /// <summary>Checks the identities for revocation off the UI thread (nothing to do without one, or without a CRL checker).</summary>
     public Task CheckRevocationAsync() =>
-        _identities.Trust is { Identity: not null, Revocation: not null }
+        _identities.Trust is { Identities.Count: > 0, Revocation: not null }
             ? Task.Run(() => _identities.CheckRevocation()).ContinueWith(_ => _post(Refresh), TaskScheduler.Default)
             : Task.CompletedTask;
 
@@ -169,7 +169,7 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
     {
         _daily.Dispose();
         _identities.Changed -= OnStoreChanged;
-        _identities.Trust.IdentityChanged -= OnStoreChanged;
+        _identities.Trust.IdentitiesChanged -= OnStoreChanged;
         _authorities.Changed -= OnStoreChanged;
     }
 
@@ -201,7 +201,7 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
         foreach (var reference in _identities.Identities)
         {
             var isInUse = inUse is not null && string.Equals(reference.Thumbprint, inUse.Certificate.Thumbprint, StringComparison.OrdinalIgnoreCase);
-            var chosen = string.Equals(_identities.InUseId, reference.Id, StringComparison.OrdinalIgnoreCase);
+            var chosen = string.Equals(_identities.DefaultId, reference.Id, StringComparison.OrdinalIgnoreCase);
             IdentityRows.Add(StoredRow(reference, isInUse, chosen, now));
             if (reference.RevokedAt is not null && (revoked is null || reference.RevokedAt > revoked.RevokedAt))
                 revoked = reference;
@@ -391,7 +391,7 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
     {
         try
         {
-            _identities.Use(id);
+            _identities.MakeDefault(id);
         }
         catch (InvalidOperationException)
         {

@@ -117,15 +117,21 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
     /// <see langword="null"/> uses <paramref name="http"/>.
     /// </param>
     /// <param name="revocation">Checks SECOM signers for revocation (see <see cref="EncCellDownloader.Revocation"/>); <see langword="null"/> skips it.</param>
-    /// <param name="secomSigner">The signer for SECOM 2.0 POST downloads (see <see cref="EncCellDownloader.SecomSigner"/>).</param>
-    /// <param name="trustAnchors">Where SECOM signers' trust anchors come from (see <see cref="EncCellDownloader.TrustAnchorsSource"/>); by default <see cref="SecomTrustAnchors.BuiltIn"/>.</param>
+    /// <param name="secomTrust">
+    /// Resolves each SECOM object's identity, presented and signed with (see
+    /// <see cref="EncCellDownloader.SecomTrust"/>); <see langword="null"/> downloads anonymously.
+    /// </param>
+    /// <param name="trustAnchors">
+    /// Where SECOM signers' trust anchors come from (see <see cref="EncCellDownloader.TrustAnchorsSource"/>);
+    /// by default <paramref name="secomTrust"/>'s anchors, else <see cref="SecomTrustAnchors.BuiltIn"/>.
+    /// </param>
     /// <returns>A downloader selector for <see cref="LibraryDownloads(Func{RemoteItemLocation, EncCellDownloader})"/>.</returns>
     public static Func<RemoteItemLocation, EncCellDownloader?> ManagedFolders(
         HttpClient http,
         string downloadsRoot,
         HttpClient? secomHttp = null,
         SecomRevocation? revocation = null,
-        Func<SecomEnvelopeSigner?>? secomSigner = null,
+        SecomServerTrust? secomTrust = null,
         Func<SecomTrustAnchors>? trustAnchors = null)
     {
         ArgumentNullException.ThrowIfNull(http);
@@ -138,8 +144,8 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
             {
                 SecomHttpClient = secomHttp,
                 Revocation = revocation,
-                SecomSigner = secomSigner,
-                TrustAnchorsSource = trustAnchors ?? (static () => SecomTrustAnchors.BuiltIn),
+                SecomTrust = secomTrust,
+                TrustAnchorsSource = trustAnchors ?? (secomTrust is null ? static () => SecomTrustAnchors.BuiltIn : () => secomTrust.Anchors),
             })
             : remote.Uri.Host.EndsWith("ienccloud.us", StringComparison.OrdinalIgnoreCase) ? usace : noaa;
     }

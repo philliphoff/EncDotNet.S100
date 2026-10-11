@@ -141,7 +141,10 @@ internal sealed class ViewerLibraryController : ILibraryReader
             url,
             tally,
             node.SyncStatus,
-            source.Definition.ShowOnMap);
+            source.Definition.ShowOnMap)
+        {
+            Identity = (source.Definition as EncDotNet.S100.Collections.SecomSource)?.Identity,
+        };
     }
 
     internal static LibraryItemInfo Info(LibraryItemViewModel row) =>

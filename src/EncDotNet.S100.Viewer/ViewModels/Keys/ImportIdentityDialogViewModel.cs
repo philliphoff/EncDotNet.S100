@@ -38,8 +38,8 @@ internal sealed class ImportIdentityDialogViewModel : ViewModelBase
         _pickFile = pickFile;
         _replacing = replacing;
         _time = time ?? TimeProvider.System;
-        _useForSecom = store.InUseId is null
-            || (replacing is not null && string.Equals(store.InUseId, replacing, StringComparison.OrdinalIgnoreCase));
+        _useForSecom = store.DefaultId is null
+            || (replacing is not null && string.Equals(store.DefaultId, replacing, StringComparison.OrdinalIgnoreCase));
 
         PrimaryCommand = new RelayCommand(Primary, () => CanPrimary);
         BackCommand = new RelayCommand(Back);
@@ -196,8 +196,8 @@ internal sealed class ImportIdentityDialogViewModel : ViewModelBase
             return;
         try
         {
-            // Not used yet: the Use step decides.
-            _imported = _store.Import(_loaded, _name, use: false, _replacing);
+            // Not the default yet (unless it is the first, or replaces the default): the last step decides.
+            _imported = _store.Import(_loaded, _name, makeDefault: false, _replacing);
         }
         catch (CryptographicException)
         {
@@ -215,11 +215,9 @@ internal sealed class ImportIdentityDialogViewModel : ViewModelBase
     {
         if (_imported is not null)
         {
-            var inUse = string.Equals(_store.InUseId, _imported.Id, StringComparison.OrdinalIgnoreCase);
-            if (_useForSecom && !inUse)
-                _store.Use(_imported.Id);
-            else if (!_useForSecom && inUse)
-                _store.Use(null);
+            var isDefault = string.Equals(_store.DefaultId, _imported.Id, StringComparison.OrdinalIgnoreCase);
+            if (_useForSecom && !isDefault)
+                _store.MakeDefault(_imported.Id);
         }
 
         Close();

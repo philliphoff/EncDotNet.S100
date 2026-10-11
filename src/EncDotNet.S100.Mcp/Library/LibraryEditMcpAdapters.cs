@@ -135,13 +135,15 @@ public static class LibraryEditMcpAdapters
             [Description("A source id, or a collection id to set every source of the collection (sync then applies to its online sources only).")] string id,
             [Description("True to keep the source's items downloaded and current on each refresh (online sources; a SECOM service also prunes), false to stop. Omit to leave as is.")] bool? sync = null,
             [Description("True to keep the source's local datasets on the map, loading as you pan under one Datasets row, false to close them. Omit to leave as is.")] bool? showOnMap = null,
+            [Description("For a SECOM source (or every SECOM source of a collection): the MCP identity it presents when the service asks for a client certificate, and signs SECOM 2.0 requests with. 'default' follows the default identity; 'none' never presents one; 'sc-ident:…' names one (a reference that names no identity presents none). Omit to leave as is.")] string? identity = null,
             CancellationToken ct = default) =>
-            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(id, sync, showOnMap, ct));
+            McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(id, sync, showOnMap, identity, ct));
         return Tool(del, SetLibrarySourceOptionsTool.Name,
             "Turns Keep downloaded (sync) and Show on map on or off for an existing Library source, or every source of a "
-            + "collection, as the viewer's Library menu does. Supply sync, showOnMap or both; options not given are left as "
-            + "they are. A changed source re-indexes; syncing downloads in the background (await_library_idle waits for "
-            + "it). Returns each source's options now. Mutating.");
+            + "collection, as the viewer's Library menu does, and sets a SECOM source's identity. Supply sync, showOnMap, "
+            + "identity or a mix; options not given are left as they are. A changed source re-indexes (a SECOM source with "
+            + "its new identity only; no other identity is tried); syncing downloads in the background (await_library_idle "
+            + "waits for it). Returns each source's options now, including a SECOM source's identity. Mutating.");
     }
 
     /// <summary>Creates <c>await_library_idle</c>.</summary>

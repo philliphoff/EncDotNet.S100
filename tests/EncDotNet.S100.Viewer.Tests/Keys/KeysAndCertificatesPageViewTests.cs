@@ -18,7 +18,7 @@ public sealed class KeysAndCertificatesPageViewTests : IDisposable
         using var host = ViewHost.Show(new KeysAndCertificatesSettingsPage { DataContext = page });
         Assert.True(host.IsShown("Keys.Identities.EmptyImport"));
 
-        _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile(daysLeft: 12), "secret"), "Bridge PC", use: true);
+        _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile(daysLeft: 12), "secret"), "Bridge PC", makeDefault: true);
         host.Settle();
 
         Assert.False(host.IsShown("Keys.Identities.EmptyImport"));

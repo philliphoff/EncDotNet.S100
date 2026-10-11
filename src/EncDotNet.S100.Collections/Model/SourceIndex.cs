@@ -37,6 +37,13 @@ public sealed record SourceIndex(
     /// <see langword="null"/>.
     /// </summary>
     public DateTimeOffset? PublishedAt { get; init; }
+
+    /// <summary>
+    /// For a <see cref="SecomSource"/>: which identity it presented when read,
+    /// whether the service asked for one, and the outcome (#883);
+    /// <see langword="null"/> for other sources.
+    /// </summary>
+    public Secom.SecomPresentation? Presentation { get; init; }
 }
 
 /// <summary>A group of a <see cref="SourceIndex"/>, such as one group of a collection manifest.</summary>

@@ -81,32 +81,57 @@ public sealed class SecomClientIdentityTests(SecomClientIdentityTests.Pkis pkis)
     }
 
     [Fact]
-    public async Task The_identity_is_presented_to_a_service_that_asks_and_can_change_at_runtime()
+    public async Task Each_request_presents_its_own_identity_and_only_that_one()
     {
         await using var server = await TlsServer.StartAsync(
             pkis.Server, _pki.Intermediate, ClientCertificateMode.ForSummary, _pki.Issued);
         var trust = new SecomServerTrust(_pki.Anchors);
         using var secom = new HttpClient(trust.CreateHandler());
         var summary = server.Uri("/api/secom/v2/object/summary");
-
-        // No identity: the service refuses the summary.
-        var anonymous = await secom.GetAsync(summary, Ct);
-        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, anonymous.StatusCode);
-
-        // With one, it is presented and accepted.
         using var identity = Identity(_pki.ClientLeaf(Mrn));
-        trust.SetIdentity(identity);
-        Assert.True((await secom.GetAsync(summary, Ct)).IsSuccessStatusCode);
-        Assert.Contains(server.ClientCertificates, c => c?.Thumbprint == identity.Certificate.Thumbprint);
+        using var other = Identity(_pki.ClientLeaf("urn:mrn:mcp:device:mcc:soundcharts:bridge-pc", "Bridge PC"));
 
-        // Cleared: no longer presented.
-        trust.SetIdentity(null);
-        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, (await secom.GetAsync(summary, Ct)).StatusCode);
-
-        // A handler that never presents it, and a non-SECOM client, never do.
+        // A default is set, but an untagged request presents nothing: the service refuses the summary.
         trust.SetIdentity(identity);
-        using var anonymousOnly = new HttpClient(trust.CreateHandler(presentIdentity: false));
-        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, (await anonymousOnly.GetAsync(summary, Ct)).StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, (await SendAsync(null)).StatusCode);
+        // Windows (Schannel) may not call back when it has no certificate to offer a
+        // server that also accepts none, so there the request can go unseen.
+        if (!OperatingSystem.IsWindows())
+            Assert.True(trust.HandshakeFor("localhost", null)!.CertificateRequested);
+
+        // Tagged with an identity, that one is presented and accepted.
+        Assert.True((await SendAsync(identity)).IsSuccessStatusCode);
+        Assert.Equal(identity.Certificate.Thumbprint, server.ClientCertificates[^1]?.Thumbprint);
+        Assert.True(trust.HandshakeFor("localhost", identity)!.CertificateRequested);
+
+        // Requests with different identities never share a connection.
+        Assert.True((await SendAsync(other)).IsSuccessStatusCode);
+        Assert.Equal(other.Certificate.Thumbprint, server.ClientCertificates[^1]?.Thumbprint);
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, (await SendAsync(null)).StatusCode);
+        Assert.Null(server.ClientCertificates[^1]);
+
+        async Task<HttpResponseMessage> SendAsync(SecomClientIdentity? presented)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, summary);
+            SecomServerTrust.PresentIdentity(request, presented);
+            return await secom.SendAsync(request, Ct);
+        }
+    }
+
+    [Fact]
+    public async Task A_service_that_does_not_ask_sees_no_certificate_and_no_request_is_recorded()
+    {
+        await using var server = await TlsServer.StartAsync(pkis.Server, _pki.Intermediate);
+        var trust = new SecomServerTrust(_pki.Anchors);
+        using var secom = new HttpClient(trust.CreateHandler());
+        using var identity = Identity(_pki.ClientLeaf(Mrn));
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, server.Uri("/api/secom/v2/object/summary"));
+        SecomServerTrust.PresentIdentity(request, identity);
+        Assert.True((await secom.SendAsync(request, Ct)).IsSuccessStatusCode);
+
+        Assert.False(trust.HandshakeFor("localhost", identity)!.CertificateRequested);
+        Assert.All(server.ClientCertificates, Assert.Null);
     }
 
     [Theory]
@@ -120,19 +145,29 @@ public sealed class SecomClientIdentityTests(SecomClientIdentityTests.Pkis pkis)
         var service = server.Uri("/api/secom");
 
         // No identity set.
-        Assert.Equal(SecomReachability.NeedsCertificate, (await registry.ProbeAsync(service, Ct)).Reachability);
+        var anonymous = await registry.ProbeAsync(service, cancellationToken: Ct);
+        Assert.Equal(SecomReachability.NeedsCertificate, anonymous.Reachability);
+        Assert.True(anonymous.Handshake?.CertificateRequested);
 
-        // An identity the service accepts.
+        // An identity the service accepts, as the default.
         using var accepted = Identity(_pki.ClientLeaf(Mrn));
         trust.SetIdentity(accepted);
-        var readable = await registry.ProbeAsync(service, Ct);
+        var readable = await registry.ProbeAsync(service, cancellationToken: Ct);
         Assert.Equal(SecomReachability.OpenWithCertificate, readable.Reachability);
         Assert.Equal(Mrn, readable.Detail);
+        Assert.Equal(SecomIdentitySetting.ReferenceIdOf(accepted.Certificate.Thumbprint), readable.IdentityId);
 
-        // An identity from another registry: refused.
+        // An identity from another registry, chosen by reference: refused, and no other identity is tried.
         using var foreign = Identity(pkis.Other.ClientLeaf("urn:mrn:mcp:device:other:vessel"));
-        trust.SetIdentity(foreign);
-        Assert.Equal(SecomReachability.CertificateRefused, (await registry.ProbeAsync(service, Ct)).Reachability);
+        var foreignId = SecomIdentitySetting.ReferenceIdOf(foreign.Certificate.Thumbprint);
+        trust.SetIdentity(foreignId, foreign);
+        var before = server.ClientCertificates.Count;
+        Assert.Equal(SecomReachability.CertificateRefused, (await registry.ProbeAsync(service, foreignId, Ct)).Reachability);
+        Assert.Contains(server.ClientCertificates.Skip(before), c => c?.Thumbprint == foreign.Certificate.Thumbprint);
+        Assert.All(server.ClientCertificates.Skip(before), c => Assert.True(c is null || c.Thumbprint == foreign.Certificate.Thumbprint));
+
+        // None: never presented, even with a default set.
+        Assert.Equal(SecomReachability.NeedsCertificate, (await registry.ProbeAsync(service, SecomIdentitySetting.None, Ct)).Reachability);
     }
 
     [Fact]
@@ -144,7 +179,7 @@ public sealed class SecomClientIdentityTests(SecomClientIdentityTests.Pkis pkis)
         trust.SetIdentity(identity);
         var registry = new SecomRegistry(new HttpClient(trust.CreateHandler()), serverTrust: trust);
 
-        Assert.Equal(SecomReachability.Open, (await registry.ProbeAsync(server.Uri("/api/secom"), Ct)).Reachability);
+        Assert.Equal(SecomReachability.Open, (await registry.ProbeAsync(server.Uri("/api/secom"), cancellationToken: Ct)).Reachability);
     }
 
     /// <summary>An identity from a freshly issued certificate, through a PKCS#12 file as a host would load it.</summary>

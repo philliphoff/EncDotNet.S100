@@ -90,7 +90,12 @@ public sealed record LibrarySourceInfo(
     [property: Description("Online catalogue or feed URL (a shared feed's access token is masked), or null for local sources.")] string? Url,
     [property: Description("Item counts by state (see query_library_items), when requested.")] IReadOnlyDictionary<string, int>? Counts,
     [property: Description("For a synced (kept downloaded) source: its last sync (when, objects local and listed, downloaded, pruned, failed, and the bytes needed when too large to sync), or null.")] EncDotNet.S100.Collections.Library.LibrarySyncStatus? Sync = null,
-    [property: Description("True when the source's local datasets are kept on the map (loading as you pan).")] bool ShowOnMap = false);
+    [property: Description("True when the source's local datasets are kept on the map (loading as you pan).")] bool ShowOnMap = false)
+{
+    /// <summary>For a SECOM source, its identity setting (#883); otherwise null.</summary>
+    [Description("For a SECOM source: the MCP identity it presents, as set: 'default' (follows the default identity), 'none', or an 'sc-ident:…' reference. Null for other sources.")]
+    public string? Identity { get; init; }
+}
 
 /// <summary>A page of Library items.</summary>
 [Description("A page of Library items.")]
@@ -199,9 +204,10 @@ public interface ILibraryEditor
 
     /// <summary>
     /// Turns "Keep downloaded" (sync) and "Show on map" on or off for a source,
-    /// or every source of a collection, as the Library tree's menu does (#809).
+    /// or every source of a collection, as the Library tree's menu does (#809),
+    /// and sets a SECOM source's identity (#883).
     /// </summary>
-    Task<LibraryEditOutcome<SetSourceOptionsResult>> SetOptionsAsync(Guid id, bool? sync, bool? showOnMap, CancellationToken ct = default);
+    Task<LibraryEditOutcome<SetSourceOptionsResult>> SetOptionsAsync(Guid id, SourceOptionsChange change, CancellationToken ct = default);
 
     /// <summary>
     /// Waits until no source is indexing, no download is running, and every
@@ -336,14 +342,87 @@ public sealed record SetSourceOptionsResult(
     [property: Description("The sources set: the one asked for, or every source of the collection asked for.")] IReadOnlyList<SourceOptionsInfo> Sources);
 
 /// <summary>One source's options after set_library_source_options.</summary>
-[Description("A source's Keep downloaded and Show on map options.")]
+[Description("A source's Keep downloaded, Show on map and (SECOM) identity options.")]
 public sealed record SourceOptionsInfo(
     [property: Description("Source id.")] Guid Id,
     [property: Description("Source name as shown.")] string Name,
     [property: Description("True when its items are kept downloaded and current (online sources only).")] bool Sync,
     [property: Description("True when its local datasets are kept on the map, loading as you pan.")] bool ShowOnMap,
     [property: Description("True when its kind can be kept downloaded (online sources); a collection's other sources are left as they are.")] bool CanSync,
-    [property: Description("True when this call changed it (it then re-indexes, and syncs or shows accordingly).")] bool Changed);
+    [property: Description("True when this call changed it (it then re-indexes, and syncs or shows accordingly).")] bool Changed)
+{
+    /// <summary>For a SECOM source, its identity setting now (#883); otherwise null.</summary>
+    [Description("For a SECOM source: its identity setting now ('default', 'none' or an 'sc-ident:…' reference). Null for other sources.")]
+    public string? Identity { get; init; }
+}
+
+/// <summary>What <see cref="ILibraryEditor.SetOptionsAsync"/> changes; options left null stay as they are.</summary>
+/// <param name="Sync">Keep downloaded, for online sources.</param>
+/// <param name="ShowOnMap">Show on map.</param>
+/// <param name="Identity">For SECOM sources: <c>default</c>, <c>none</c> or an <c>sc-ident:</c> reference (#883).</param>
+public sealed record SourceOptionsChange(bool? Sync = null, bool? ShowOnMap = null, string? Identity = null)
+{
+    /// <summary>True when nothing would change.</summary>
+    public bool IsEmpty => Sync is null && ShowOnMap is null && Identity is null;
+
+    /// <summary>
+    /// Applies the change to the sources of <paramref name="collection"/> that
+    /// <paramref name="id"/> names (the collection's own id names them all),
+    /// through <paramref name="update"/>, as both hosts do.
+    /// </summary>
+    /// <param name="collection">The collection holding the source(s).</param>
+    /// <param name="id">A source id, or the collection's id.</param>
+    /// <param name="update">Replaces a source's definition; false when it couldn't.</param>
+    /// <param name="nameOf">The source's name as shown.</param>
+    public LibraryEditOutcome<SetSourceOptionsResult> Apply(
+        EncDotNet.S100.Collections.Library.LibraryCollection collection,
+        Guid id,
+        Func<EncDotNet.S100.Collections.CollectionSource, bool> update,
+        Func<EncDotNet.S100.Collections.Library.LibrarySource, string> nameOf)
+    {
+        ArgumentNullException.ThrowIfNull(collection);
+        ArgumentNullException.ThrowIfNull(update);
+        ArgumentNullException.ThrowIfNull(nameOf);
+        if (IsEmpty)
+            return LibraryEditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("sync", "supply sync, showOnMap, identity or a mix"));
+        if (collection.IsSession)
+            return LibraryEditOutcome<SetSourceOptionsResult>.Fail(new LibraryChangeRejected("a session catalogue has no options; keep it in the Library first"));
+
+        string? identity = null;
+        if (Identity is not null && !EncDotNet.S100.Collections.Secom.SecomIdentitySetting.TryParse(Identity, out identity))
+            return LibraryEditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("identity", "expected default, none or an sc-ident: reference"));
+
+        var targets = collection.Id == id ? collection.Sources : [.. collection.Sources.Where(s => s.Id == id)];
+        if (targets is [var only] && collection.Id != id)
+        {
+            if (Sync is not null && !EncDotNet.S100.Collections.Library.LibrarySync.CanSyncByDefault(only.Definition))
+                return LibraryEditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("sync", "only an online source can be kept downloaded"));
+            if (identity is not null && only.Definition is not EncDotNet.S100.Collections.SecomSource)
+                return LibraryEditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("identity", "only a SECOM source presents an identity"));
+        }
+
+        var results = new List<SourceOptionsInfo>();
+        foreach (var source in targets)
+        {
+            var definition = source.Definition;
+            var canSync = EncDotNet.S100.Collections.Library.LibrarySync.CanSyncByDefault(definition);
+            var updated = definition with
+            {
+                Sync = canSync && Sync is { } s ? s : definition.Sync,
+                ShowOnMap = ShowOnMap ?? definition.ShowOnMap,
+            };
+            if (identity is not null && updated is EncDotNet.S100.Collections.SecomSource secom)
+                updated = secom with { Identity = identity };
+            var changed = updated != definition && update(updated);
+            results.Add(new SourceOptionsInfo(source.Id, nameOf(source), updated.Sync, updated.ShowOnMap, canSync, changed)
+            {
+                Identity = (changed ? updated : definition) is EncDotNet.S100.Collections.SecomSource now ? now.Identity : null,
+            });
+        }
+
+        return LibraryEditOutcome<SetSourceOptionsResult>.Ok(new SetSourceOptionsResult(results));
+    }
+}
 
 /// <summary>The Library's background work.</summary>
 [Description("Whether the Library is busy indexing, downloading or opening datasets.")]

@@ -1470,7 +1470,7 @@ TLS trust for the same roots followed in #829 (§7.9).
 > - **N stored, one in use.** `SecomIdentityStore` imports, uses, replaces
 >   and removes identities. Using one calls `SecomServerTrust.SetIdentity`.
 >   Removing the identity in use clears it and deletes the key-store
->   entry. Per-source choice is a later round.
+>   entry. §7.15 makes the choice per source.
 > - **Start-up** (`SecomCredentials`, before any SECOM client exists):
 >   1. The user's anchors are applied.
 >   2. The identity in use is presented: the command-line one if given,
@@ -1535,6 +1535,127 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   - on `AnchorsChanged`, those with `ServerUntrusted`.
 >
 >   Sources that read fine are left alone.
+
+### 7.15 Choosing an identity per source (#883)
+
+> - **Why.** §7.13 stored any number of identities but presented one to
+>   every service. Providers accept one kind of identity (an
+>   organisation's but not a vessel's, say), and every identity presented
+>   discloses an MRN to the provider. So each SECOM source now chooses its
+>   own, and nothing is ever tried on its behalf.
+> - **The setting.** `SecomSource.Identity` is `default`, `none` or an
+>   `sc-ident:` reference (`SecomIdentitySetting`), saved in
+>   `collections.json`. It's a reference only: no key, password or
+>   thumbprint copy. New sources start on `default`. Sources saved before
+>   the setting existed read as `default`, which keeps round 1's behaviour.
+> - **The default.** Exactly one identity can be the default
+>   (`ViewerSettings.SecomDefaultIdentity`). The first import sets it.
+>   On load, round 1's `SecomIdentityInUse` becomes it. The host tells the
+>   trust with `SecomServerTrust.DefaultIdentityId`; `s100 mcp serve`'s
+>   `set_secom_identity` and `--secom-identity` make their identity the
+>   default (`SetIdentity(identity)`).
+> - **Resolution, per read.** The host registers every identity it holds
+>   (`SetIdentity(id, identity)`); the viewer loads each from the key store
+>   at start. `Resolve(setting)` runs each time a source is read:
+>   - `default`: the current default, or none when no default is set;
+>   - `none`: no client certificate and no signing;
+>   - a reference: that identity, or none when it isn't registered (removed,
+>     revoked, or never imported here).
+> - **Per request.** Requests carry their identity in
+>   `HttpRequestMessage.Options` (`SecomServerTrust.PresentIdentity`;
+>   `SecomClient.Identity` tags its own). `CreateHandler()` keeps one inner
+>   `SocketsHttpHandler` per identity, so connections made with one identity
+>   are never reused with another. An untagged request presents none. The
+>   indexer, the downloader (the source's setting rides on
+>   `RemoteItemLocation.Identity`) and the registry probe tag their requests.
+> - **Never another identity.** Only the setting's identity is presented,
+>   only when the server asks, and only once per read:
+>   - a 401 or 403 is final: the v2 → v1 fallback doesn't run for it;
+>   - a connection with an identity that closes before answering (a TLS
+>     refusal) isn't made again. `SocketsHttpHandler` retries such a
+>     request up to three times on new connections; a `ConnectCallback`
+>     allows one new connection per request and host.
+>
+>   Tests over a local TLS server assert a single handshake for a refused
+>   identity, in both the 401 and the handshake-refusal forms.
+> - **What the server asked.** `HttpClientHandler` can't tell, so the inner
+>   handlers set `SslOptions.LocalCertificateSelectionCallback`. It's called
+>   with a server certificate only when the server asks for a client
+>   certificate, with the issuers the server accepts; before the handshake
+>   (no server certificate yet) it returns nothing, so the identity isn't
+>   committed early. Server trust moves to
+>   `SslOptions.RemoteCertificateValidationCallback`; its sender is the
+>   `SslStream`, whose `TargetHostName` gives the host. Both callbacks merge
+>   into one `SecomHandshake` per identity and host (`HandshakeFor`).
+>   TLS session resumption is off on these handlers: a resumed session keeps
+>   the client certificate (or none) it was made with, and Windows' Schannel
+>   resumed a host's anonymous session for a request with an identity. On
+>   Windows, an anonymous handshake's request isn't seen when the server also
+>   accepts no certificate; 401/403 answers still classify the read.
+> - **The presentation record.** Each read of a SECOM source records a
+>   `SecomPresentation` on `SourceIndex.Presentation`:
+>   - the setting, the identity it resolved to and what was presented (the
+>     MRN, or none);
+>   - whether the server asked for a certificate, and its acceptable issuers;
+>   - whether requests were signed (SECOM 2.0);
+>   - the outcome: not asked, accepted, not presented, refused, stopped
+>     (untrusted server) or not reached; with the code and the time;
+>   - the identities this source has seen refused. Refusals are remembered
+>     per source (`secom-refusals.json` in the feed cache) until the same
+>     identity is accepted there.
+>
+>   The source's fingerprint includes the identity and its outcome, so a
+>   change of identity indexes again even when the list is the same.
+>   Listings are cached per identity.
+> - **Codes.** `SecomDiagnosticCodes.Classify` now uses what the handshake
+>   showed. A failed connection after the server certificate was accepted
+>   and a client certificate asked for is `CertificateRefused` (an identity
+>   was presented) or `NeedsCertificate`. A rejected signed request is the
+>   new `SignedRequestRefused` ("Signed request not accepted"); the Library
+>   says "Your certificate was refused" for it too.
+> - **Hints.** `SecomIdentityHints.Judge` gives the picker's hint, and
+>   `SecomPresentation.HintFor` applies it when the service asks:
+>   - **Refused here** when the source refused that identity;
+>   - **Issuer accepted** when the identity's chain (through the trust
+>     anchors) holds an issuer the server named;
+>   - **Issuer not accepted** otherwise.
+>
+>   SECOM 2.0 signed-request services (KHRA, KRISO) name no issuers, nor do
+>   some TLS servers. The fallback is the MCP instance: with the service's
+>   MRN (from the registry), the MRNs' instance parts
+>   (`urn:mrn:mcp:<type>:<instance>:…`) must match; without it, the
+>   identity's trust anchor must be the server certificate's. A server under
+>   a public CA gets no hint. Nothing is chosen from a hint.
+> - **Re-read scope** (`SecomTrustRefresh`, extending §7.14):
+>   - a source's own setting changed: that source only, as any
+>     `UpdateSource`;
+>   - the default changed: the sources on `default`;
+>   - an identity added, replaced or removed: the sources that resolve to
+>     it (set to it, or on `default` while it's the default);
+>   - trusted authorities changed: the sources with an untrusted server,
+>     as before.
+> - **Replace and remove.** `SecomIdentityUsage` lists the sources that
+>   use an identity, directly or via the default. The viewer's store moves
+>   sources set to a replaced identity to the new one, and sources set to a
+>   removed one to `none`; removing the default takes a new default (or
+>   none). Revocation (§7.13) now checks every registered identity and
+>   removes a revoked one.
+> - **MCP.** `set_library_source_options {identity}` sets a SECOM source's
+>   setting (or every SECOM source of a collection), and returns it;
+>   `list_library_sources` shows it. The tools are shared with
+>   `s100 mcp serve` (#864). The CLI has no SECOM identity store yet
+>   (deferred), so there a reference names no identity and presents none,
+>   unless `set_secom_identity` loaded that identity for the session.
+> - **Breaking changes** (preview packages): `SecomServerTrust.SetIdentity`
+>   now also takes an id, `IdentityChanged` is `IdentitiesChanged`,
+>   `CreateHandler(presentIdentity)` is `CreateHandler()`,
+>   `CheckIdentityRevocation` returns a result per identity,
+>   `SecomSourceIndexer.Signer` is `Trust`, `EncCellDownloader.SecomSigner`
+>   is `SecomTrust`, `LibraryDownloads.ManagedFolders` takes the trust,
+>   `SecomRegistry.ProbeAsync` and `SecomSourceIndexer.DescribeAsync` take an
+>   identity setting, `SecomDiagnosticCodes.Classify` takes the identity and
+>   what the handshake showed, and `ILibraryEditor.SetOptionsAsync` takes a
+>   `SourceOptionsChange`.
 
 ## 8. Implementation slices
 

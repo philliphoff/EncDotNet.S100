@@ -99,7 +99,10 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
         LibraryToolResults.SourceUrl(source.Definition),
         counts ? LibraryToolResults.Counts((source.Index?.Items ?? []).Select(item => StateOf(item, source).Availability)) : null,
         SyncOf(source),
-        source.Definition.ShowOnMap);
+        source.Definition.ShowOnMap)
+    {
+        Identity = (source.Definition as SecomSource)?.Identity,
+    };
 
     private LibrarySyncStatus? SyncOf(LibrarySource source) =>
         _sync is not null && _sync.IsSynced(source.Definition) ? _sync.StatusOf(source.Id) : null;
@@ -418,39 +421,17 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
     // ── options ─────────────────────────────────────────────────────────
 
     /// <inheritdoc />
-    public Task<LibraryEditOutcome<SetSourceOptionsResult>> SetOptionsAsync(Guid id, bool? sync, bool? showOnMap, CancellationToken ct = default)
+    public Task<LibraryEditOutcome<SetSourceOptionsResult>> SetOptionsAsync(Guid id, SourceOptionsChange change, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(change);
         ct.ThrowIfCancellationRequested();
-        if (sync is null && showOnMap is null)
-            return Task.FromResult(LibraryEditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("sync", "supply sync, showOnMap or both")));
-
         var collection = Library.Collections.FirstOrDefault(c => c.Id == id)
             ?? Library.Collections.FirstOrDefault(c => c.Sources.Any(s => s.Id == id));
         if (collection is null)
             return Task.FromResult(LibraryEditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("id", "no such collection or source; call list_library_sources")));
-        if (collection.IsSession)
-            return Task.FromResult(LibraryEditOutcome<SetSourceOptionsResult>.Fail(new LibraryChangeRejected("a session catalogue has no options; keep it in the Library first")));
 
-        var targets = collection.Id == id ? collection.Sources : [.. collection.Sources.Where(s => s.Id == id)];
-        if (sync is not null && targets is [var only] && collection.Id != id && !LibrarySync.CanSyncByDefault(only.Definition))
-            return Task.FromResult(LibraryEditOutcome<SetSourceOptionsResult>.Fail(new InvalidArgument("sync", "only an online source can be kept downloaded")));
-
-        var results = new List<SourceOptionsInfo>();
-        foreach (var source in targets)
-        {
-            var definition = source.Definition;
-            var canSync = LibrarySync.CanSyncByDefault(definition);
-            var updated = definition with
-            {
-                Sync = canSync && sync is { } s ? s : definition.Sync,
-                ShowOnMap = showOnMap ?? definition.ShowOnMap,
-            };
-            var changed = updated != definition && Library.UpdateSource(collection.Id, updated);
-            results.Add(new SourceOptionsInfo(
-                source.Id, LibraryNodeText.SourceName(source, collection), updated.Sync, updated.ShowOnMap, canSync, changed));
-        }
-
-        return Task.FromResult(LibraryEditOutcome<SetSourceOptionsResult>.Ok(new SetSourceOptionsResult(results)));
+        return Task.FromResult(change.Apply(
+            collection, id, updated => Library.UpdateSource(collection.Id, updated), source => LibraryNodeText.SourceName(source, collection)));
     }
 
     // ── idle ────────────────────────────────────────────────────────────

@@ -55,7 +55,7 @@ public sealed class LibraryServices : IDisposable
         var secom = new SecomSourceIndexer(SecomClient(TimeSpan.FromMinutes(2)), feedCache, paths.DownloadsDirectory, probe, timeProvider: time)
         {
             Revocation = Revocation,
-            Signer = SecomTrust.CreateSigner,
+            Trust = SecomTrust,
         };
 
         Indexer = CollectionIndexer.CreateDefault(probe, [noaa, usace, community, s100Feeds, s100Catalogues, forecasts, secom]);
@@ -65,7 +65,7 @@ public sealed class LibraryServices : IDisposable
             options.LoggerFactory?.CreateLogger<CollectionLibrary>());
         Downloads = new LibraryDownloads(LibraryDownloads.ManagedFolders(
             Client(TimeSpan.FromMinutes(10)), paths.DownloadsDirectory, SecomClient(TimeSpan.FromMinutes(10)),
-            Revocation, SecomTrust.CreateSigner, () => SecomTrust.Anchors));
+            Revocation, SecomTrust));
         Sync = new LibrarySync(Library, Downloads, new LibrarySyncOptions { IsInUse = options.IsInUse }, logger: options.LoggerFactory?.CreateLogger<LibrarySync>(), timeProvider: time);
 
         Readers = new LibraryCatalogueReaders
@@ -77,7 +77,7 @@ public sealed class LibraryServices : IDisposable
             S100Catalogue = (uri, ct) => s100Catalogues.GetCatalogueAsync(uri, cancellationToken: ct),
             ListS100Folders = (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct),
             ForecastModels = (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct),
-            Secom = (uri, area, ct) => secom.DescribeAsync(uri, area, ct),
+            Secom = (uri, area, ct) => secom.DescribeAsync(uri, area, cancellationToken: ct),
         };
 
         var probeHttp = Client(TimeSpan.FromSeconds(30));

@@ -128,7 +128,10 @@ public sealed class RemoveLibrarySourceTool(ILibraryEditor editor)
     }
 }
 
-/// <summary>Sets a Library source's Keep downloaded and Show on map options (MCP <c>set_library_source_options</c>, #809).</summary>
+/// <summary>
+/// Sets a Library source's Keep downloaded and Show on map options (MCP
+/// <c>set_library_source_options</c>, #809), and a SECOM source's identity (#883).
+/// </summary>
 public sealed class SetLibrarySourceOptionsTool(ILibraryEditor editor)
 {
     /// <summary>The MCP tool name.</summary>
@@ -137,11 +140,12 @@ public sealed class SetLibrarySourceOptionsTool(ILibraryEditor editor)
     private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
     /// <summary>Sets the options given; options not given are left as they are.</summary>
-    public async Task<ToolResult<SetSourceOptionsResult>> InvokeAsync(string id, bool? sync, bool? showOnMap, CancellationToken ct = default)
+    public async Task<ToolResult<SetSourceOptionsResult>> InvokeAsync(
+        string id, bool? sync, bool? showOnMap, string? identity = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(id) || !Guid.TryParse(id.Trim(), out var target))
             return ToolResult<SetSourceOptionsResult>.Err(new InvalidArgument("id", "expected a collection or source id from list_library_sources"));
-        return AddLibrarySourceTool.Result(await _editor.SetOptionsAsync(target, sync, showOnMap, ct).ConfigureAwait(false));
+        return AddLibrarySourceTool.Result(await _editor.SetOptionsAsync(target, new SourceOptionsChange(sync, showOnMap, identity), ct).ConfigureAwait(false));
     }
 }
 

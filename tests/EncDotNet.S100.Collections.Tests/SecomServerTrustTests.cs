@@ -140,12 +140,12 @@ public sealed class SecomServerTrustTests(SecomServerTrustTests.Pkis pkis) : ICl
         var trust = new SecomServerTrust(pki.Anchors);
         var registry = new SecomRegistry(new HttpClient(trust.CreateHandler()), serverTrust: trust);
 
-        var readable = await registry.ProbeAsync(open.Uri("/api/secom"), Ct);
+        var readable = await registry.ProbeAsync(open.Uri("/api/secom"), cancellationToken: Ct);
         Assert.Equal(SecomReachability.Open, readable.Reachability);
         Assert.Equal("Test MCP", readable.ServerTrust?.Anchor);
 
         // The trust decision is per host, so probe the misnamed server under another name for localhost.
-        var refused = await registry.ProbeAsync(misnamed.Uri("/api/secom", host: "127.0.0.1"), Ct);
+        var refused = await registry.ProbeAsync(misnamed.Uri("/api/secom", host: "127.0.0.1"), cancellationToken: Ct);
         Assert.Equal(SecomReachability.UntrustedServer, refused.Reachability);
         Assert.Equal(SecomServerTrustOutcome.WrongHost, refused.ServerTrust?.Outcome);
         Assert.Equal("Its certificate does not name this host.", refused.Detail);
@@ -185,7 +185,7 @@ public sealed class SecomServerTrustTests(SecomServerTrustTests.Pkis pkis) : ICl
         Assert.Equal(new SecomServerTrustResult(SecomServerTrustOutcome.Revoked, "Test MCP") { Revocation = SecomRevocationStatus.Revoked }, trust.ResultFor("localhost"));
 
         var registry = new SecomRegistry(new HttpClient(trust.CreateHandler()), serverTrust: trust);
-        var probe = await registry.ProbeAsync(server.Uri("/api/secom"), Ct);
+        var probe = await registry.ProbeAsync(server.Uri("/api/secom"), cancellationToken: Ct);
         Assert.Equal(SecomReachability.UntrustedServer, probe.Reachability);
         Assert.Equal("Its certificate from Test MCP has been revoked.", probe.Detail);
     }

@@ -7,8 +7,9 @@ namespace EncDotNet.S100.Collections.Secom;
 
 /// <summary>
 /// A read-only client for one SECOM (IEC 63173-2) service: <c>Capability</c>,
-/// <c>GetSummary</c> and <c>Get</c>, over plain HTTPS without a client
-/// certificate (issue #804).
+/// <c>GetSummary</c> and <c>Get</c> (issue #804), presenting its
+/// <see cref="Identity"/>, if any, when the service asks for a client
+/// certificate (#883).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -65,6 +66,16 @@ public sealed class SecomClient
     /// <see langword="null"/> when there is none.
     /// </summary>
     public Func<SecomEnvelopeSigner?>? Signer { get; init; }
+
+    /// <summary>
+    /// The MCP identity every request is tagged with (#883): a handler from
+    /// <see cref="SecomServerTrust.CreateHandler"/> presents it when the
+    /// service asks for a client certificate. <see langword="null"/> presents none.
+    /// </summary>
+    public SecomClientIdentity? Identity { get; init; }
+
+    /// <summary>True once a SECOM 2.0 request signed by <see cref="Signer"/> has been sent.</summary>
+    public bool SentSigned { get; private set; }
 
     /// <summary>
     /// True when this client lists and reads through the SECOM 2.0 POST forms:
@@ -326,7 +337,9 @@ public sealed class SecomClient
             catch (Exception ex) when (ex is HttpRequestException or InvalidDataException && !cancellationToken.IsCancellationRequested)
             {
                 // Unreachable hosts fail the same way on both versions; don't wait twice.
-                if (ex is HttpRequestException { StatusCode: null })
+                // A refusal is an answer about the identity, not the version: asking
+                // again would present it again (#883).
+                if (ex is HttpRequestException { StatusCode: null or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden })
                     throw;
                 first ??= ex;
             }
@@ -340,6 +353,7 @@ public sealed class SecomClient
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
         request.Headers.Accept.ParseAdd("application/json");
+        SecomServerTrust.PresentIdentity(request, Identity);
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
@@ -373,6 +387,8 @@ public sealed class SecomClient
         var signer = Signer?.Invoke() ?? throw new SecomIdentityRequiredException(
             $"SECOM {uri.AbsolutePath} lists and serves objects only through SECOM 2.0's signed requests, which need an MCP identity.");
         using var request = PostRequest(uri, body(signer));
+        SecomServerTrust.PresentIdentity(request, Identity);
+        SentSigned = true;
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
@@ -433,10 +449,12 @@ public sealed class SecomClient
     {
         try
         {
-            using var content = new StringContent("{}", Encoding.UTF8, "application/json");
-            using var response = await _httpClient
-                .PostAsync(Resolve(SecomApiVersion.V2, "object/search/summary", []), content, cancellationToken)
-                .ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Post, Resolve(SecomApiVersion.V2, "object/search/summary", []))
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            };
+            SecomServerTrust.PresentIdentity(request, Identity);
+            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             return response.StatusCode;
         }
         catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))

@@ -29,7 +29,7 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
     [Fact]
     public void An_identity_ending_in_12_days_is_amber_on_its_row_and_in_settings()
     {
-        _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile(daysLeft: 12), "secret"), "Bridge PC", use: true);
+        _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile(daysLeft: 12), "secret"), "Bridge PC", makeDefault: true);
         using var page = _keys.Page();
 
         var row = Assert.Single(page.IdentityRows);
@@ -45,7 +45,7 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
     [Fact]
     public void An_identity_that_ended_is_red()
     {
-        _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile(daysLeft: 12), "secret"), "Bridge PC", use: true);
+        _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile(daysLeft: 12), "secret"), "Bridge PC", makeDefault: true);
         using var page = _keys.Page();
 
         _keys.Time.Advance(TimeSpan.FromDays(13));
@@ -60,10 +60,10 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
     [Fact]
     public void A_revoked_identity_shows_the_banner_and_offers_another()
     {
-        var bridge = _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile("bridge"), "secret"), "Bridge PC", use: false);
-        var dev = _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile("dev"), "secret"), "Dev laptop", use: true);
+        var bridge = _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile("bridge"), "secret"), "Bridge PC", makeDefault: false);
+        var dev = _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile("dev"), "secret"), "Dev laptop", makeDefault: true);
         dev.RevokedAt = new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.Zero);
-        _keys.Identities.Use(null);
+        _keys.Identities.MakeDefault(null);
         using var page = _keys.Page();
 
         Assert.True(page.HasRevokedBanner);
@@ -91,7 +91,7 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
     [Fact]
     public void Remove_asks_first_then_deletes_the_key_and_stops_using_it()
     {
-        _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile(), "secret"), "Bridge PC", use: true);
+        _keys.Identities.Import(_keys.Identities.Load(_keys.IdentityFile(), "secret"), "Bridge PC", makeDefault: true);
         using var page = _keys.Page();
 
         page.IdentityRows[0].Actions.Single(a => a.Id == "Remove").Command.Execute(null);
@@ -133,8 +133,8 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
         dialog.Name = "Bridge PC";
         dialog.Primary();
         Assert.True(dialog.IsUseStep);
-        Assert.True(dialog.UseForSecom);  // nothing was in use
-        Assert.Null(_keys.Trust.Identity);
+        Assert.True(dialog.UseForSecom);  // nothing was the default
+        Assert.NotNull(_keys.Trust.Identity);  // the first identity imported becomes the default (#883)
 
         dialog.Primary();
         Assert.Equal("Bridge PC", Assert.Single(page.IdentityRows).Title);

@@ -6,7 +6,8 @@ namespace EncDotNet.S100.Viewer.Services.Secom;
 
 /// <summary>
 /// The stored identities as <c>set_secom_identity</c> sees them (#845 H3): a
-/// reference id chooses one as the Keys &amp; certificates page's Use does.
+/// reference id makes one the default, as the Keys &amp; certificates page's
+/// Make default does (#883).
 /// Calls run on the UI thread, where the store and the page live.
 /// </summary>
 internal sealed class SecomIdentityReferences(SecomIdentityStore store) : ISecomIdentityReferences
@@ -17,7 +18,7 @@ internal sealed class SecomIdentityReferences(SecomIdentityStore store) : ISecom
         {
             if (store.CommandLineIdentity is not null)
                 throw new InvalidOperationException("--secom-identity sets the identity for this run; choose a stored one in a run without it.");
-            return store.Use(referenceId) ?? throw new InvalidOperationException($"No stored identity has the reference {referenceId}.");
+            return store.MakeDefault(referenceId) ?? throw new InvalidOperationException($"No stored identity has the reference {referenceId}.");
         });
 
     /// <inheritdoc />

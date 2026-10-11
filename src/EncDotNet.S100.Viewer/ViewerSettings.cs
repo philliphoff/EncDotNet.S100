@@ -522,9 +522,18 @@ internal sealed partial class ViewerSettings
     public List<SecomIdentityReference> SecomIdentities { get; set; } = new();
 
     /// <summary>
-    /// The <see cref="SecomIdentityReference.Id"/> of the identity SECOM requests
-    /// present to services that ask for a certificate, or <c>null</c> for none.
+    /// The <see cref="SecomIdentityReference.Id"/> of the default identity (#883):
+    /// the one SECOM sources set to <c>default</c> present to services that ask
+    /// for a certificate, or <c>null</c> for none. The first identity imported
+    /// becomes it.
     /// </summary>
+    public string? SecomDefaultIdentity { get; set; }
+
+    /// <summary>
+    /// Round 1's single identity in use (#845), read only to migrate it: on
+    /// load it becomes <see cref="SecomDefaultIdentity"/> (#883).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? SecomIdentityInUse { get; set; }
 
     /// <summary>Trust anchors the user added from PEM files (#845): public certificates, no secrets.</summary>
@@ -627,6 +636,13 @@ internal sealed partial class ViewerSettings
                 if (!settings.DynamicSourceVisibility.ContainsKey(OwnShipVisibilityKey))
                 {
                     settings.DynamicSourceVisibility[OwnShipVisibilityKey] = settings.OwnShipVisible;
+                }
+
+                // #883: round 1's identity in use becomes the default.
+                if (settings.SecomIdentityInUse is { } inUse)
+                {
+                    settings.SecomDefaultIdentity ??= inUse;
+                    settings.SecomIdentityInUse = null;
                 }
 
                 return settings;

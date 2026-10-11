@@ -157,11 +157,14 @@ public sealed partial class EncCellDownloader
     public HttpClient? SecomHttpClient { get; init; }
 
     /// <summary>
-    /// The signer for <see cref="RemoteEnvelope.SecomPost"/> downloads: this
-    /// client's MCP identity when one is set (#838). Without one, such a
-    /// download fails with <see cref="SecomIdentityRequiredException"/>.
+    /// Resolves a SECOM object's <see cref="RemoteItemLocation.Identity"/> to
+    /// the MCP identity its download presents (<see cref="SecomHttpClient"/>
+    /// should use a handler from the same instance) and signs
+    /// <see cref="RemoteEnvelope.SecomPost"/> requests with (#838, #883).
+    /// Without it, or when the setting resolves to none, SECOM objects download
+    /// anonymously and a signed download fails with <see cref="SecomIdentityRequiredException"/>.
     /// </summary>
-    public Func<SecomEnvelopeSigner?>? SecomSigner { get; init; }
+    public SecomServerTrust? SecomTrust { get; init; }
 
     /// <summary>
     /// Returns the downloaded copy of <paramref name="cellName"/> (a cell or
@@ -260,13 +263,16 @@ public sealed partial class EncCellDownloader
         {
             var isSecom = remote.Envelope is RemoteEnvelope.Secom or RemoteEnvelope.SecomPost;
             var http = isSecom ? SecomHttpClient ?? _httpClient : _httpClient;
+            var identity = isSecom ? SecomTrust?.Resolve(remote.Identity).Identity : null;
             using var request = remote.Envelope == RemoteEnvelope.SecomPost
                 ? SecomClient.CreatePostGetRequest(
                     remote.Uri,
-                    SecomSigner?.Invoke() ?? throw new SecomIdentityRequiredException(
+                    SecomTrust?.CreateSigner(identity) ?? throw new SecomIdentityRequiredException(
                         $"{item.Name} can only be fetched with a signed SECOM 2.0 request, which needs an MCP identity."),
                     _time.GetUtcNow())
                 : new HttpRequestMessage(HttpMethod.Get, remote.Uri);
+            if (isSecom)
+                SecomServerTrust.PresentIdentity(request, identity);
             using (var response = await http
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .ConfigureAwait(false))

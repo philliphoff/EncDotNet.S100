@@ -28,10 +28,10 @@ public partial class App : Application
     internal const string SecomIdentityPasswordVariable = "SOUNDCHARTS_SECOM_IDENTITY_PASSWORD";
 
     /// <summary>
-    /// Checks the MCP identity in use for revocation now (the Keys &amp;
+    /// Checks the MCP identities for revocation now (the Keys &amp;
     /// certificates page repeats it daily), tells the user when one is
     /// revoked, with a way to the page (#845 C5, H4), and starts reading
-    /// SECOM sources again when the identity or trusted authorities change (#880).
+    /// SECOM sources again when identities or trusted authorities change (#880, #883).
     /// </summary>
     private void WatchSecomIdentity()
     {
@@ -51,6 +51,9 @@ public partial class App : Application
                 .Show());
         _ = keys.CheckRevocationAsync();
         _ = _services!.GetRequiredService<EncDotNet.S100.Collections.Library.SecomTrustRefresh>();
+        // Replacing or removing an identity moves the sources that name it (#883).
+        _services!.GetRequiredService<EncDotNet.S100.Viewer.Services.Secom.SecomIdentityStore>().Library =
+            _services!.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>();
     }
 
     private static IServiceProvider? _services;
@@ -535,8 +538,8 @@ public partial class App : Application
                 (path, _) => metadata.TryRead(path))
             {
                 Revocation = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(),
-                // SECOM 2.0 services that list only through signed requests (#838).
-                Signer = trust.CreateSigner,
+                // Each source presents, and signs SECOM 2.0 requests with, its own identity (#838, #883).
+                Trust = trust,
             };
         });
         services.AddSingleton(sp =>
@@ -591,9 +594,9 @@ public partial class App : Application
             };
             return new Library.LibraryDownloadService(
                 EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(
-                    http, downloads, secom, sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(), trust.CreateSigner,
-                    // Signers are judged against the anchors the user chose (#845).
-                    () => trust.Anchors),
+                    // Signers are judged against the anchors the user chose (#845); each object
+                    // presents its source's identity (#883).
+                    http, downloads, secom, sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(), trust),
                 sp.GetService<Services.Notifications.INotificationService>());
         });
         services.AddSingleton(sp =>
@@ -645,7 +648,7 @@ public partial class App : Application
                 S100Catalogue = (uri, ct) => s100Catalogues.GetCatalogueAsync(uri, cancellationToken: ct),
                 ListS100Folders = (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct),
                 ForecastModels = (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct),
-                Secom = (uri, area, ct) => secom.DescribeAsync(uri, area, ct),
+                Secom = (uri, area, ct) => secom.DescribeAsync(uri, area, cancellationToken: ct),
                 CurrentMapView = () => MapViewOf(sp.GetService<IMapViewportNotifier>()?.Current),
             };
         });
@@ -664,7 +667,7 @@ public partial class App : Application
                 sp.GetRequiredService<Library.UserCatalogueStore>(),
                 sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
                 loadSecomRegistry: ct => registry.GetServicesAsync(cancellationToken: ct),
-                probeSecom: (uri, ct) => registry.ProbeAsync(uri, ct));
+                probeSecom: (uri, ct) => registry.ProbeAsync(uri, cancellationToken: ct));
         });
         // SECOM services from the MCP service registry (#822), cached with the feeds.
         services.AddSingleton(sp =>
