@@ -69,8 +69,11 @@ jobs:
             --no-self-contained
 
       # --- Build the PR branch's PerfRunner into a separate dir ---
+      # --force discards the overlay, including the base package versions
+      # written into Directory.Packages.props, which a plain checkout would
+      # carry over to the PR tree as a local change.
       - name: Checkout PR branch
-        run: git checkout ${{ github.event.pull_request.head.sha }}
+        run: git checkout --force ${{ github.event.pull_request.head.sha }}
 
       - name: Build candidate PerfRunner
         run: |
