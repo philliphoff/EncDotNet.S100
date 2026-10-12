@@ -41,4 +41,7 @@ public sealed class RouteWaypoint
     /// (S-421 <c>routeWaypointTurnRadius</c>).
     /// </summary>
     public double? TurnRadiusNm { get; set; }
+
+    /// <summary>Returns a copy of this waypoint.</summary>
+    internal RouteWaypoint Clone() => (RouteWaypoint)MemberwiseClone();
 }

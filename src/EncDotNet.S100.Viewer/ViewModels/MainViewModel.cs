@@ -820,18 +820,20 @@ internal sealed class MainViewModel : ViewModelBase
     public ICommand ToggleRouteEditModeCommand { get; }
 
     /// <summary>
+    /// Tooltip on the map's Route tool button, naming its shortcut
+    /// (Ctrl+E, or ⌘E on macOS).
+    /// </summary>
+    public string RouteEditModeTooltip => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture,
+        Strings.Tooltip_RouteEditMode,
+        ShortcutText.Command("E"));
+
+    /// <summary>
     /// Activates the interactive route editor tool. Unlike
     /// <see cref="ToggleRouteEditModeCommand"/> this never turns the tool
     /// off, so it is safe to bind to an explicit "edit" affordance.
     /// </summary>
     public ICommand EnterRouteEditModeCommand { get; }
-
-    /// <summary>
-    /// Deactivates the interactive route editor tool when it is active.
-    /// Bound to the Routes panel's "Done" action so finishing an edit
-    /// returns the map to its default (no-tool) state.
-    /// </summary>
-    public ICommand ExitRouteEditModeCommand { get; }
 
     /// <summary>
     /// Promotes the current Measure Mode path into a new editable route and
@@ -1318,9 +1320,6 @@ internal sealed class MainViewModel : ViewModelBase
         ToggleMeasureModeCommand = new RelayCommand(() => Tools.Toggle(MeasureTool.ToolId));
         ToggleRouteEditModeCommand = new RelayCommand(() => Tools.Toggle(RouteEditTool.ToolId));
         EnterRouteEditModeCommand = new RelayCommand(() => Tools.Activate(RouteEditTool.ToolId));
-        ExitRouteEditModeCommand = new RelayCommand(
-            () => Tools.Activate(null),
-            () => Tools.IsActive(RouteEditTool.ToolId));
         PromoteMeasurementToRouteCommand = new RelayCommand(
             PromoteMeasurementToRoute,
             () => _measureTool.State.Waypoints.Count >= 2);
@@ -1352,7 +1351,16 @@ internal sealed class MainViewModel : ViewModelBase
             ((RelayCommand)ToolCommitCommand).NotifyCanExecuteChanged();
             ((RelayCommand)ToolBackstepCommand).NotifyCanExecuteChanged();
             ((RelayCommand)PromoteMeasurementToRouteCommand).NotifyCanExecuteChanged();
-            ((RelayCommand)ExitRouteEditModeCommand).NotifyCanExecuteChanged();
+            _routes.IsEditModeActive = IsRouteEditModeActive;
+        };
+
+        // Route edit mode is shared state on RoutesService: the Routes panel's
+        // Edit toggle, Ctrl+E (⌘E) and the MCP set_route_edit_mode tool set it
+        // there, and the route edit tool follows.
+        _routes.EditModeChanged += (_, _) =>
+        {
+            if (_routes.IsEditModeActive != IsRouteEditModeActive)
+                Tools.Activate(_routes.IsEditModeActive ? RouteEditTool.ToolId : null);
         };
 
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());

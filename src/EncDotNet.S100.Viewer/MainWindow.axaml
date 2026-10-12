@@ -661,16 +661,17 @@
                       Route Edit Mode toggle button. Mirrors the Measure
                       button's accent-fill pattern; the route icon
                       distinguishes it. Clicking enters the interactive
-                      route editor (click to add waypoints, drag to move).
+                      route editor (click to add waypoints, drag to move);
+                      Ctrl+E (⌘E) toggles it too (Tools/RouteEditorKeys).
                     -->
                     <Button x:Name="RouteEditModeButton"
                             AutomationProperties.AutomationId="Map.RouteEditMode"
                             AutomationProperties.Name="{x:Static loc:Strings.Label_RouteEditMode}"
-                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_RouteEditMode}"
+                            AutomationProperties.HelpText="{Binding RouteEditModeTooltip}"
                             Classes="Icon MapOverlay"
                             Classes.routeActive="{Binding IsRouteEditModeActive}"
                             Command="{Binding ToggleRouteEditModeCommand}"
-                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_RouteEditMode}">
+                            ToolTip.Tip="{Binding RouteEditModeTooltip}">
                         <Button.Styles>
                             <Style Selector="Button#RouteEditModeButton.routeActive">
                                 <Setter Property="Background" Value="{DynamicResource AccentBrush}" />

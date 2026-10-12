@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -179,22 +180,6 @@ public class RoutesPanelViewModelTests
     }
 
     [Fact]
-    public void InsertAfterSelectedCommand_InsertsMidpoint()
-    {
-        var (svc, vm) = Create();
-        var route = svc.Routes.CreateRoute("R1");
-        route.AppendWaypoint(new GeoPosition(0, 0));
-        route.AppendWaypoint(new GeoPosition(0, 2));
-
-        svc.SelectedWaypointIndex = 0;
-        vm.InsertAfterSelectedCommand.Execute(null);
-
-        Assert.Equal(3, route.Waypoints.Count);
-        Assert.Equal(1.0, route.Waypoints[1].Position.Longitude, 6);
-        Assert.Equal(1, svc.SelectedWaypointIndex);
-    }
-
-    [Fact]
     public void ReverseActiveRouteCommand_ReversesWaypointOrder()
     {
         var (svc, vm) = Create();
@@ -236,5 +221,233 @@ public class RoutesPanelViewModelTests
 
         Assert.False(vm.IsRenamingActiveRoute);
         Assert.Equal("Original", route.Name);
+    }
+
+    private static RouteWaypointRowViewModel WaypointRow(RoutesPanelViewModel vm, int index)
+        => vm.Timeline.OfType<RouteWaypointRowViewModel>().Single(r => r.Index == index);
+
+    private static Route TwoPointRoute(RoutesService svc)
+    {
+        var route = svc.Routes.CreateRoute("R1");
+        route.AppendWaypoint(new GeoPosition(50.0, -1.0));
+        route.AppendWaypoint(new GeoPosition(50.0, -1.5));
+        return route;
+    }
+
+    [Fact]
+    public void Panel_edits_are_undoable_one_step_at_a_time()
+    {
+        var (svc, vm) = Create();
+        var route = TwoPointRoute(svc);
+        Assert.False(vm.CanUndo);
+
+        vm.InsertWaypointAfterCommand.Execute(WaypointRow(vm, 0));
+        vm.ToggleLegGeometryAtCommand.Execute(FirstLegRow(vm));
+        vm.ReverseActiveRouteCommand.Execute(null);
+
+        Assert.True(vm.CanUndo);
+        Assert.Equal(3, route.History.UndoCount);
+
+        vm.UndoCommand.Execute(null);
+        Assert.Equal(-1.0, route.Waypoints[0].Position.Longitude, 6);
+        vm.UndoCommand.Execute(null);
+        Assert.Equal(RouteLegGeometryType.Loxodrome, route.Legs[0].GeometryType);
+        vm.UndoCommand.Execute(null);
+        Assert.Equal(2, route.Waypoints.Count);
+        Assert.False(vm.CanUndo);
+        Assert.True(vm.CanRedo);
+
+        vm.RedoCommand.Execute(null);
+        Assert.Equal(3, route.Waypoints.Count);
+    }
+
+    [Fact]
+    public void Rename_is_undoable()
+    {
+        var (svc, vm) = Create();
+        var route = TwoPointRoute(svc);
+
+        vm.BeginRenameCommand.Execute(null);
+        vm.RenameText = "Approach";
+        vm.CommitRenameCommand.Execute(null);
+        vm.UndoCommand.Execute(null);
+
+        Assert.Equal("R1", route.Name);
+    }
+
+    [Fact]
+    public void Undo_follows_the_active_route()
+    {
+        var (svc, vm) = Create();
+        var first = TwoPointRoute(svc);
+        first.History.Execute(RouteEditLabels.Reverse, first.Reverse);
+        var second = svc.Routes.CreateRoute("R2");
+
+        Assert.Same(second, svc.Routes.ActiveRoute);
+        Assert.False(vm.CanUndo);
+
+        vm.SelectedRoute = vm.Routes[0];
+        Assert.True(vm.CanUndo);
+    }
+
+    [Fact]
+    public void Waypoint_name_commits_and_blank_clears_it()
+    {
+        var (svc, vm) = Create();
+        var route = TwoPointRoute(svc);
+
+        var row = WaypointRow(vm, 1);
+        row.NameText = "Nab Tower";
+        row.CommitNameCommand.Execute(null);
+        Assert.Equal("Nab Tower", route.Waypoints[1].Name);
+        Assert.Equal("Nab Tower", WaypointRow(vm, 1).Label);
+
+        row = WaypointRow(vm, 1);
+        row.NameText = "  ";
+        row.CommitNameCommand.Execute(null);
+        Assert.Null(route.Waypoints[1].Name);
+
+        vm.UndoCommand.Execute(null);
+        Assert.Equal("Nab Tower", route.Waypoints[1].Name);
+    }
+
+    [Fact]
+    public void Waypoint_position_shows_the_app_format()
+    {
+        var (svc, vm) = Create();
+        TwoPointRoute(svc);
+
+        Assert.Equal(LatLonFormatter.Format(50.0, -1.0), WaypointRow(vm, 0).CoordsText);
+    }
+
+    [Fact]
+    public void Typed_position_moves_the_waypoint_and_is_undoable()
+    {
+        var (svc, vm) = Create();
+        var route = TwoPointRoute(svc);
+
+        var row = WaypointRow(vm, 0);
+        row.CoordsText = "50°46.024'N 001°15.558'W";
+        row.CommitCoordsCommand.Execute(null);
+
+        Assert.Equal(50.76707, route.Waypoints[0].Position.Latitude, 4);
+        Assert.Equal(-1.2593, route.Waypoints[0].Position.Longitude, 4);
+        vm.UndoCommand.Execute(null);
+        Assert.Equal(50.0, route.Waypoints[0].Position.Latitude, 6);
+    }
+
+    [Fact]
+    public void Bad_position_shows_an_error_and_does_not_move_the_waypoint()
+    {
+        var (svc, vm) = Create();
+        var route = TwoPointRoute(svc);
+
+        var row = WaypointRow(vm, 0);
+        row.CoordsText = "somewhere nice";
+        row.CommitCoordsCommand.Execute(null);
+
+        Assert.True(row.HasCoordsError);
+        Assert.Equal(Strings.Routes_CoordinateError, row.CoordsError);
+        Assert.Equal(50.0, route.Waypoints[0].Position.Latitude, 6);
+        Assert.False(route.History.CanUndo);
+
+        row.RevertCoordsCommand.Execute(null);
+        Assert.False(row.HasCoordsError);
+        Assert.Equal(LatLonFormatter.Format(50.0, -1.0), row.CoordsText);
+    }
+
+    [Fact]
+    public void Selection_moves_the_highlight_without_rebuilding_rows()
+    {
+        var (svc, vm) = Create();
+        TwoPointRoute(svc);
+        var row = WaypointRow(vm, 1);
+        row.NameText = "typing…";
+
+        svc.SelectedWaypointIndex = 1;
+
+        Assert.Same(row, WaypointRow(vm, 1));
+        Assert.True(row.IsSelected);
+        Assert.Equal("typing…", row.NameText);
+    }
+
+    [Fact]
+    public void Edit_toggle_follows_and_sets_edit_mode()
+    {
+        var (svc, vm) = Create();
+        TwoPointRoute(svc);
+        var changes = new List<string?>();
+        vm.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        vm.IsEditing = true;
+        Assert.True(svc.IsEditModeActive);
+
+        svc.IsEditModeActive = false;
+        Assert.False(vm.IsEditing);
+        Assert.Contains(nameof(RoutesPanelViewModel.IsEditing), changes);
+    }
+
+    [Fact]
+    public void Turning_edit_off_commits_an_open_rename_and_leaves_edit_mode()
+    {
+        var (svc, vm) = Create();
+        var route = TwoPointRoute(svc);
+        vm.IsEditing = true;
+        vm.BeginRenameCommand.Execute(null);
+        vm.RenameText = "Committed";
+
+        vm.IsEditing = false;
+
+        Assert.False(svc.IsEditModeActive);
+        Assert.False(vm.IsRenamingActiveRoute);
+        Assert.Equal("Committed", route.Name);
+    }
+
+    [Fact]
+    public void Check_passage_is_disabled_until_a_draft_exists()
+    {
+        var (svc, vm) = Create();
+        TwoPointRoute(svc);
+
+        Assert.False(vm.CanCheckPassage);
+        Assert.False(vm.IsCheckingPassage);
+        Assert.Equal("Add a draft to check clearance", vm.CheckPassageTooltip);
+    }
+
+    [Fact]
+    public void Edit_hint_names_the_shortcut()
+    {
+        var (_, vm) = Create();
+
+        Assert.Equal($"{ShortcutText.Command("E")} edit · Esc done", vm.EditHint);
+    }
+
+    [Fact]
+    public void Zoom_to_route_covers_every_waypoint()
+    {
+        var route = new Route();
+        route.AppendWaypoint(new GeoPosition(50.0, -1.0));
+        route.AppendWaypoint(new GeoPosition(50.5, -1.5));
+
+        var extent = RoutesPanelViewModel.ResolveZoomExtent(route)!;
+        var (west, south) = Mapsui.Projections.SphericalMercator.FromLonLat(-1.5, 50.0);
+        var (east, north) = Mapsui.Projections.SphericalMercator.FromLonLat(-1.0, 50.5);
+
+        Assert.Equal(west, extent.MinX, 3);
+        Assert.Equal(south, extent.MinY, 3);
+        Assert.Equal(east, extent.MaxX, 3);
+        Assert.Equal(north, extent.MaxY, 3);
+    }
+
+    [Fact]
+    public void Zoom_to_a_one_waypoint_route_uses_a_small_box()
+    {
+        var route = new Route();
+        route.AppendWaypoint(new GeoPosition(50.0, -1.0));
+
+        var extent = RoutesPanelViewModel.ResolveZoomExtent(route)!;
+
+        Assert.True(extent.Width > 0);
+        Assert.True(extent.Height > 0);
     }
 }

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Input;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Resources;
@@ -12,8 +13,9 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// Interactive editor for the active <see cref="Route"/> in the shared
 /// <see cref="RoutesService"/>. Click on empty water appends a waypoint (or
 /// inserts one when the click lands on an existing leg); drag a waypoint to
-/// move it; click a waypoint to select it; right-click or Delete removes a
-/// waypoint; Backspace removes the last.
+/// move it; click a waypoint to select it; right-click removes the waypoint
+/// under the pointer; Backspace removes the last. The Delete key (bound by the
+/// host, see <c>RouteEditorKeys</c>) removes the selected waypoint.
 /// </summary>
 /// <remarks>
 /// Unlike <see cref="MeasureTool"/>, this tool owns no overlay layer: the
@@ -23,6 +25,10 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// status summary. Drag detection mirrors the measure tool — a press/move
 /// beyond <see cref="DragThresholdPx"/> off a waypoint falls through to
 /// Mapsui as a pan.
+/// <para>
+/// Every edit runs through the route's <see cref="Route.History"/>, so it can
+/// be undone; a drag is one step however many moves it makes.
+/// </para>
 /// </remarks>
 internal sealed class RouteEditTool : IMapTool
 {
@@ -43,6 +49,7 @@ internal sealed class RouteEditTool : IMapTool
     private bool _pressIsLeftButton;
     private int? _dragWaypointIndex;
     private bool _dragActive;
+    private IDisposable? _dragGesture;
 
     public RouteEditTool(RoutesService routes)
     {
@@ -67,6 +74,7 @@ internal sealed class RouteEditTool : IMapTool
 
     public void OnDeactivated()
     {
+        EndDragGesture();
         _context?.SetStatusSummary(null);
         _context = null;
         _pressPosition = null;
@@ -87,7 +95,7 @@ internal sealed class RouteEditTool : IMapTool
             var hit = HitTestWaypoint(pos);
             if (hit is { } index && _routes.Routes.ActiveRoute is { } route)
             {
-                route.RemoveWaypoint(index);
+                route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(index));
                 _routes.SelectedWaypointIndex = null;
                 PushSummary();
             }
@@ -96,6 +104,11 @@ internal sealed class RouteEditTool : IMapTool
 
         if (props.IsLeftButtonPressed)
         {
+            // Clicking the map ends any typing in the Routes panel (committing
+            // it), so the route shortcuts apply to the map again.
+            if (!_context.MapControl.Focus())
+                TopLevel.GetTopLevel(_context.MapControl)?.Focus();
+
             _pressPosition = pos;
             _pressIsLeftButton = true;
             _dragActive = false;
@@ -128,6 +141,7 @@ internal sealed class RouteEditTool : IMapTool
         var world = _context.ScreenToLatLon(pos);
         if (world is { } w && _routes.Routes.ActiveRoute is { } route && index < route.Waypoints.Count)
         {
+            _dragGesture ??= route.History.BeginGesture(RouteEditLabels.MoveWaypoint);
             route.MoveWaypoint(index, new GeoPosition(w.Latitude, w.Longitude));
             _routes.SelectedWaypointIndex = index;
             PushSummary();
@@ -141,6 +155,7 @@ internal sealed class RouteEditTool : IMapTool
             return false;
 
         _pressIsLeftButton = false;
+        EndDragGesture();
         var release = e.GetPosition(_context.MapControl);
         var draggedIndex = _dragWaypointIndex;
         var wasDragActive = _dragActive;
@@ -177,13 +192,12 @@ internal sealed class RouteEditTool : IMapTool
         var legIndex = HitTestLeg(release);
         if (legIndex is { } li)
         {
-            var inserted = active.InsertWaypoint(li + 1, position);
+            active.History.Execute(RouteEditLabels.InsertWaypoint, () => active.InsertWaypoint(li + 1, position));
             _routes.SelectedWaypointIndex = li + 1;
-            _ = inserted;
         }
         else
         {
-            active.AppendWaypoint(position);
+            active.History.Execute(RouteEditLabels.AppendWaypoint, () => active.AppendWaypoint(position));
             _routes.SelectedWaypointIndex = active.Waypoints.Count - 1;
         }
 
@@ -201,7 +215,7 @@ internal sealed class RouteEditTool : IMapTool
         switch (action)
         {
             case MapToolAction.Backstep:
-                route.RemoveWaypoint(route.Waypoints.Count - 1);
+                route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(route.Waypoints.Count - 1));
                 _routes.SelectedWaypointIndex = null;
                 PushSummary();
                 return true;
@@ -210,7 +224,7 @@ internal sealed class RouteEditTool : IMapTool
                 var target = _routes.SelectedWaypointIndex ?? route.Waypoints.Count - 1;
                 if (target >= 0 && target < route.Waypoints.Count)
                 {
-                    route.RemoveWaypoint(target);
+                    route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(target));
                     _routes.SelectedWaypointIndex = null;
                     PushSummary();
                     return true;
@@ -226,6 +240,12 @@ internal sealed class RouteEditTool : IMapTool
             default:
                 return false;
         }
+    }
+
+    private void EndDragGesture()
+    {
+        _dragGesture?.Dispose();
+        _dragGesture = null;
     }
 
     private Route CreateRoute()

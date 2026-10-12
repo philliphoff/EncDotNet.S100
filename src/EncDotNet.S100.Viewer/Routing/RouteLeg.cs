@@ -74,4 +74,7 @@ public sealed class RouteLeg
 
     /// <summary>Free-text note for this leg (S-421 <c>routeWaypointLegNote</c>).</summary>
     public string? Note { get; set; }
+
+    /// <summary>Returns a copy of this leg.</summary>
+    internal RouteLeg Clone() => (RouteLeg)MemberwiseClone();
 }
