@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using EncDotNet.Iso8211;
 
 namespace EncDotNet.S100.TestSupport;
@@ -22,8 +23,8 @@ internal static class SyntheticS57Cell
     {
         var document = Iso8211DocumentReader.ReadFromFile(FixturePath());
         // The DDR defines a DSID field too; the value lives in the first data record.
-        var dsid = document.DataRecords.SelectMany(r => r.Fields).First(f => f.Tag == "DSID");
-        dsid.Data[ProductSpecificationOffset(dsid.Data)] = productSpecification;
+        var dsid = Writable(document.DataRecords.SelectMany(r => r.Fields).First(f => f.Tag == "DSID"));
+        dsid[ProductSpecificationOffset(dsid)] = productSpecification;
 
         var path = Path.Combine(directory, fileName);
         Iso8211DocumentWriter.WriteToFile(path, document);
@@ -46,18 +47,18 @@ internal static class SyntheticS57Cell
         // FRID (binary): RCNM b11, RCID b14, PRIM b11, GRUP b11, OBJL b12, …
         var depthAreas = document.DataRecords
             .Where(r => r.Fields.FirstOrDefault(f => f.Tag == "FRID") is { } frid
-                && BitConverter.ToUInt16(frid.Data, 7) == depareObjl)
+                && BitConverter.ToUInt16(frid.Data.Span[7..]) == depareObjl)
             .Take(2)
             .Select(r => r.Fields.First(f => f.Tag == "FOID"))
             .ToList();
         // FOID (binary): AGEN b12, FIDN b14, FIDS b12.
-        Array.Copy(depthAreas[0].Data, depthAreas[1].Data, 8);
+        depthAreas[0].Data.Span[..8].CopyTo(Writable(depthAreas[1]));
 
         if (zeroCompilationScale)
         {
             // DSPM (binary): RCNM b11, RCID b14, HDAT b11, VDAT b11, SDAT b11, CSCL b14, …
-            var dspm = document.DataRecords.SelectMany(r => r.Fields).First(f => f.Tag == "DSPM");
-            Array.Clear(dspm.Data, 8, 4);
+            var dspm = Writable(document.DataRecords.SelectMany(r => r.Fields).First(f => f.Tag == "DSPM"));
+            dspm.Slice(8, 4).Clear();
         }
 
         var path = Path.Combine(directory, fileName);
@@ -71,13 +72,17 @@ internal static class SyntheticS57Cell
     /// variable-length DSNM, EDTN and UPDN, each closed by a unit terminator;
     /// UADT (A(8)), ISDT (A(8)) and STED (R(4)); then PRSP (b11).
     /// </summary>
-    private static int ProductSpecificationOffset(byte[] dsid)
+    private static int ProductSpecificationOffset(Span<byte> dsid)
     {
         var offset = 1 + 4 + 1 + 1;
         for (var i = 0; i < 3; i++)
-            offset = Array.IndexOf(dsid, UnitTerminator, offset) + 1;
+            offset += dsid[offset..].IndexOf(UnitTerminator) + 1;
         return offset + 8 + 8 + 4;
     }
+
+    // A field's data is a read-only slice of the copy of the file the reader made, so
+    // editing it in place changes only this document.
+    private static Span<byte> Writable(Iso8211Field field) => MemoryMarshal.AsMemory(field.Data).Span;
 
     private static string FixturePath()
     {

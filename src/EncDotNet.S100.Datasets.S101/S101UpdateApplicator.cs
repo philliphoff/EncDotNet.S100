@@ -280,9 +280,14 @@ public static class S101UpdateApplicator
         ApplyCounts counts,
         ICollection<S101UpdateMessage>? messages)
     {
-        // Preserve dataset order while allowing keyed insert/delete/modify by RCID.
+        // Preserve dataset order while allowing keyed insert/delete/modify by RCID. A delete
+        // leaves its RCID in the order rather than searching the list for it, and the result
+        // skips RCIDs that no longer have a record. A feature inserted again after a delete
+        // goes to the end, and only that position outputs it.
         var order = new List<uint>(baseFeatures.Count);
         var byId = new Dictionary<uint, S101FeatureRecord>(baseFeatures.Count);
+        HashSet<uint>? deleted = null;
+        Dictionary<uint, int>? reinsertedAt = null;
         foreach (var f in baseFeatures)
         {
             if (!byId.ContainsKey(f.RecordId)) order.Add(f.RecordId);
@@ -296,7 +301,7 @@ public static class S101UpdateApplicator
                 case S101UpdateInstruction.Delete:
                     if (byId.Remove(update.RecordId))
                     {
-                        order.Remove(update.RecordId);
+                        (deleted ??= []).Add(update.RecordId);
                         counts.Deleted++;
                     }
                     break;
@@ -314,6 +319,8 @@ public static class S101UpdateApplicator
                     }
                     else
                     {
+                        if (deleted is not null && deleted.Contains(update.RecordId))
+                            (reinsertedAt ??= [])[update.RecordId] = order.Count;
                         order.Add(update.RecordId);
                         byId[update.RecordId] = update;
                         counts.Inserted++;
@@ -322,9 +329,17 @@ public static class S101UpdateApplicator
             }
         }
 
-        var result = new List<S101FeatureRecord>(order.Count);
-        foreach (var id in order)
-            result.Add(byId[id]);
+        var result = new List<S101FeatureRecord>(byId.Count);
+        for (var position = 0; position < order.Count; position++)
+        {
+            var id = order[position];
+            if (byId.TryGetValue(id, out var feature) &&
+                (reinsertedAt is null || !reinsertedAt.TryGetValue(id, out var current) || current == position))
+            {
+                result.Add(feature);
+            }
+        }
+
         return result;
     }
 

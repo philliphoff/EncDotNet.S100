@@ -233,7 +233,7 @@ public class S101DocumentWriterTests
             fb.Attributes.Select(a => (a.NumericCode, a.Value)));
     }
 
-    private static S101Document BuildSampleDocument()
+    internal static S101Document BuildSampleDocument()
     {
         return new S101Document
         {

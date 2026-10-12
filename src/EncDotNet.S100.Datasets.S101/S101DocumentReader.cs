@@ -12,21 +12,21 @@ internal static class S101DocumentReader
     {
         using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
         __activity?.SetTag("s100.product", "S-101");
-        var iso = Iso8211DocumentReader.ReadFromFile(path);
-        return Parse(iso);
+        return Parse(File.ReadAllBytes(path));
     }
 
     public static S101Document ReadFromStream(Stream stream)
     {
-        var iso = Iso8211DocumentReader.Read(stream);
-        return Parse(iso);
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        return Parse(buffer.TryGetBuffer(out var written) ? written.AsMemory() : buffer.ToArray());
     }
 
-    private static S101Document Parse(Iso8211Document iso)
+    // Reads the records one at a time rather than building the whole ISO 8211 document first:
+    // each record's fields are decoded into the S-101 model and the record is then let go.
+    private static S101Document Parse(ReadOnlyMemory<byte> data)
     {
-        var ddr = iso.DataDescriptiveRecord is not null
-            ? Iso8211DataDescriptiveRecordReader.Read(iso.DataDescriptiveRecord)
-            : throw new InvalidOperationException("ISO 8211 document has no Data Descriptive Record.");
+        Iso8211DataDescriptiveRecord? ddr = null;
 
         S101DatasetIdentification? dsid = null;
         S101DatasetStructureInfo? dssi = null;
@@ -44,8 +44,19 @@ internal static class S101DocumentReader
         var features = new List<S101FeatureRecord>();
         var informationTypes = new Dictionary<uint, S101InformationRecord>();
 
-        foreach (var record in iso.DataRecords)
+        foreach (var record in Iso8211DocumentReader.EnumerateRecords(data))
         {
+            if (ddr is null)
+            {
+                ddr = record.IsDataDescriptiveRecord
+                    ? Iso8211DataDescriptiveRecordReader.Read(record)
+                    : throw NoDataDescriptiveRecord();
+                continue;
+            }
+
+            if (record.IsDataDescriptiveRecord)
+                continue;
+
             var firstTag = record.Fields.Count > 0 ? record.Fields[0].Tag : "";
 
             switch (firstTag)
@@ -114,6 +125,9 @@ internal static class S101DocumentReader
             }
         }
 
+        if (ddr is null)
+            throw NoDataDescriptiveRecord();
+
         return new S101Document
         {
             Identification = dsid ?? new S101DatasetIdentification(),
@@ -149,10 +163,12 @@ internal static class S101DocumentReader
         if (fieldDef is null) return;
 
         var reader = new Iso8211FieldReader(fieldDef, field.Data);
-        foreach (var group in reader.GetSubfieldGroups())
+        var nameOrdinal = Ordinal(reader, nameSubfield);
+        var codeOrdinal = Ordinal(reader, codeSubfield);
+        for (int g = 0, count = Repetitions(reader); g < count; g++)
         {
-            var name = group.GetSubfield<string>(nameSubfield);
-            var codeStr = group.GetSubfield<string>(codeSubfield);
+            var name = Required<string>(reader, g, nameOrdinal, nameSubfield);
+            var codeStr = Required<string>(reader, g, codeOrdinal, codeSubfield);
             if (ushort.TryParse(codeStr, out var code))
             {
                 builder[code] = name;
@@ -240,20 +256,62 @@ internal static class S101DocumentReader
         return S101UpdateInstruction.None;
     }
 
-    private static S101UpdateInstruction ReadUpdateInstruction(Iso8211SubfieldGroup group, string subfield)
+    private static S101UpdateInstruction ReadUpdateInstruction(Iso8211FieldReader reader, int group, int ordinal)
     {
-        try
-        {
-            var value = group.GetSubfield<byte>(subfield);
-            return Enum.IsDefined(typeof(S101UpdateInstruction), (S101UpdateInstruction)value)
+        return reader.TryGetSubfield<byte>(group, ordinal, out var value) &&
+            Enum.IsDefined(typeof(S101UpdateInstruction), (S101UpdateInstruction)value)
                 ? (S101UpdateInstruction)value
                 : S101UpdateInstruction.None;
-        }
-        catch (KeyNotFoundException)
-        {
-            return S101UpdateInstruction.None;
-        }
     }
+
+    private static InvalidOperationException NoDataDescriptiveRecord() =>
+        new("ISO 8211 document has no Data Descriptive Record.");
+
+    /// <summary>
+    /// Counts the repetitions of a field's subfield group as
+    /// <see cref="Iso8211FieldReader.GetSubfieldGroups"/> does, including a final repetition
+    /// cut short by the end of the field data, so the ordinal-based loops below read exactly
+    /// the groups the group-object loops did.
+    /// </summary>
+    private static int Repetitions(Iso8211FieldReader reader)
+    {
+        var definition = reader.FieldDefinition;
+        if (!definition.HasRepeatingGroup)
+            return 1;
+
+        var start = definition.RepeatingSubfieldStartIndex;
+        var size = definition.SubfieldDefinitions.Count - start;
+        var remaining = reader.SubfieldCount - start;
+        return size <= 0 || remaining <= 0 ? 0 : (remaining + size - 1) / size;
+    }
+
+    /// <summary>
+    /// Finds a subfield's ordinal in the field definition, or <c>-1</c> when the definition
+    /// has none, in which case every read of it finds nothing.
+    /// </summary>
+    private static int Ordinal(Iso8211FieldReader reader, string name)
+    {
+        var subfields = reader.FieldDefinition.SubfieldDefinitions;
+        for (var i = 0; i < subfields.Count; i++)
+        {
+            if (string.Equals(subfields[i].Name, name, StringComparison.Ordinal))
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Reads a subfield every repetition must have, throwing the
+    /// <see cref="KeyNotFoundException"/> a group lookup throws when it is missing.
+    /// </summary>
+    private static T Required<T>(Iso8211FieldReader reader, int group, int ordinal, string name) =>
+        reader.TryGetSubfield<T>(group, ordinal, out var value)
+            ? value
+            : throw new KeyNotFoundException($"Subfield '{name}' not found in group {group}.");
+
+    private static T Optional<T>(Iso8211FieldReader reader, int group, int ordinal, T fallback) =>
+        reader.TryGetSubfield<T>(group, ordinal, out var value) ? value : fallback;
 
     private static S101DatasetStructureInfo ParseDssi(Iso8211Record record, Iso8211DataDescriptiveRecord ddr)
     {
@@ -319,20 +377,26 @@ internal static class S101DocumentReader
         mridReader.TryGetSubfield<ushort>("RVER", out var rver);
         var ruin = ReadUpdateInstruction(mridReader, "RUIN");
 
-        var coords = new List<(int Y, int X, int Z)>();
+        List<(int Y, int X, int Z)> coords;
         var c3ilField = record.GetFieldByTag("C3IL");
         if (c3ilField is not null)
         {
             var c3ilDef = ddr.GetFieldDefinition("C3IL")!;
             var c3ilReader = new Iso8211FieldReader(c3ilDef, c3ilField.Data);
-
-            foreach (var group in c3ilReader.GetSubfieldGroups())
+            var count = Repetitions(c3ilReader);
+            var (y, x, z) = (Ordinal(c3ilReader, "YCOO"), Ordinal(c3ilReader, "XCOO"), Ordinal(c3ilReader, "ZCOO"));
+            coords = new List<(int Y, int X, int Z)>(count);
+            for (var g = 0; g < count; g++)
             {
-                var cy = group.GetSubfield<int>("YCOO");
-                var cx = group.GetSubfield<int>("XCOO");
-                var cz = group.GetSubfield<int>("ZCOO");
+                var cy = Required<int>(c3ilReader, g, y, "YCOO");
+                var cx = Required<int>(c3ilReader, g, x, "XCOO");
+                var cz = Required<int>(c3ilReader, g, z, "ZCOO");
                 coords.Add((cy, cx, cz));
             }
+        }
+        else
+        {
+            coords = [];
         }
 
         return new S101MultiPointRecord
@@ -361,11 +425,12 @@ internal static class S101DocumentReader
         {
             var ptasDef = ddr.GetFieldDefinition("PTAS")!;
             var ptasReader = new Iso8211FieldReader(ptasDef, ptasField.Data);
-            foreach (var group in ptasReader.GetSubfieldGroups())
+            var (rrnmAt, rridAt, topiAt) = (Ordinal(ptasReader, "RRNM"), Ordinal(ptasReader, "RRID"), Ordinal(ptasReader, "TOPI"));
+            for (int g = 0, count = Repetitions(ptasReader); g < count; g++)
             {
-                var rrnm = group.GetSubfield<byte>("RRNM");
-                var rrid = group.GetSubfield<uint>("RRID");
-                var topi = group.GetSubfield<byte>("TOPI");
+                var rrnm = Required<byte>(ptasReader, g, rrnmAt, "RRNM");
+                var rrid = Required<uint>(ptasReader, g, rridAt, "RRID");
+                var topi = Required<byte>(ptasReader, g, topiAt, "TOPI");
                 ptas.Add(new S101PointAssociation(rrnm, rrid, topi));
             }
         }
@@ -376,10 +441,13 @@ internal static class S101DocumentReader
         {
             var c2ilDef = ddr.GetFieldDefinition("C2IL")!;
             var c2ilReader = new Iso8211FieldReader(c2ilDef, c2ilField.Data);
-            foreach (var group in c2ilReader.GetSubfieldGroups())
+            var count = Repetitions(c2ilReader);
+            var (y, x) = (Ordinal(c2ilReader, "YCOO"), Ordinal(c2ilReader, "XCOO"));
+            coords.EnsureCapacity(coords.Count + count);
+            for (var g = 0; g < count; g++)
             {
-                var cy = group.GetSubfield<int>("YCOO");
-                var cx = group.GetSubfield<int>("XCOO");
+                var cy = Required<int>(c2ilReader, g, y, "YCOO");
+                var cx = Required<int>(c2ilReader, g, x, "XCOO");
                 coords.Add((cy, cx));
             }
         }
@@ -410,11 +478,12 @@ internal static class S101DocumentReader
         {
             var cucoDef = ddr.GetFieldDefinition("CUCO")!;
             var cucoReader = new Iso8211FieldReader(cucoDef, cucoField.Data);
-            foreach (var group in cucoReader.GetSubfieldGroups())
+            var (rrnmAt, rridAt, orntAt) = (Ordinal(cucoReader, "RRNM"), Ordinal(cucoReader, "RRID"), Ordinal(cucoReader, "ORNT"));
+            for (int g = 0, count = Repetitions(cucoReader); g < count; g++)
             {
-                var rrnm = group.GetSubfield<byte>("RRNM");
-                var rrid = group.GetSubfield<uint>("RRID");
-                var ornt = group.GetSubfield<byte>("ORNT");
+                var rrnm = Required<byte>(cucoReader, g, rrnmAt, "RRNM");
+                var rrid = Required<uint>(cucoReader, g, rridAt, "RRID");
+                var ornt = Required<byte>(cucoReader, g, orntAt, "ORNT");
                 components.Add(new S101CurveUsage(rrnm, rrid, ornt));
             }
         }
@@ -444,12 +513,14 @@ internal static class S101DocumentReader
         {
             var riasDef = ddr.GetFieldDefinition("RIAS")!;
             var riasReader = new Iso8211FieldReader(riasDef, riasField.Data);
-            foreach (var group in riasReader.GetSubfieldGroups())
+            var (rrnmAt, rridAt, orntAt, usagAt) =
+                (Ordinal(riasReader, "RRNM"), Ordinal(riasReader, "RRID"), Ordinal(riasReader, "ORNT"), Ordinal(riasReader, "USAG"));
+            for (int g = 0, count = Repetitions(riasReader); g < count; g++)
             {
-                var rrnm = group.GetSubfield<byte>("RRNM");
-                var rrid = group.GetSubfield<uint>("RRID");
-                var ornt = group.GetSubfield<byte>("ORNT");
-                var usag = group.GetSubfield<byte>("USAG");
+                var rrnm = Required<byte>(riasReader, g, rrnmAt, "RRNM");
+                var rrid = Required<uint>(riasReader, g, rridAt, "RRID");
+                var ornt = Required<byte>(riasReader, g, orntAt, "ORNT");
+                var usag = Required<byte>(riasReader, g, usagAt, "USAG");
                 rings.Add(new S101RingAssociation(rrnm, rrid, ornt, usag));
             }
         }
@@ -494,19 +565,7 @@ internal static class S101DocumentReader
         foreach (var attrField in record.GetFieldsByTag("ATTR"))
         {
             var attrDef = ddr.GetFieldDefinition("ATTR")!;
-            var attrReader = new Iso8211FieldReader(attrDef, attrField.Data);
-            foreach (var group in attrReader.GetSubfieldGroups())
-            {
-                var natc = group.GetSubfield<ushort>("NATC");
-                var atix = group.GetSubfield<ushort>("ATIX");
-                ushort paix = 0;
-                try { paix = group.GetSubfield<ushort>("PAIX"); } catch (KeyNotFoundException) { }
-                var atin = ReadUpdateInstruction(group, "ATIN");
-                string atvl;
-                try { atvl = group.GetSubfield<string>("ATVL"); }
-                catch (KeyNotFoundException) { atvl = ""; }
-                attributes.Add(new S101Attribute(natc, atix, atvl, paix, atin));
-            }
+            ReadAttributes(new Iso8211FieldReader(attrDef, attrField.Data), attributes);
         }
 
         // SPAS
@@ -515,12 +574,14 @@ internal static class S101DocumentReader
         {
             var spasDef = ddr.GetFieldDefinition("SPAS")!;
             var spasReader = new Iso8211FieldReader(spasDef, spasField.Data);
-            foreach (var group in spasReader.GetSubfieldGroups())
+            var (rrnmAt, rridAt, orntAt, sauiAt) =
+                (Ordinal(spasReader, "RRNM"), Ordinal(spasReader, "RRID"), Ordinal(spasReader, "ORNT"), Ordinal(spasReader, "SAUI"));
+            for (int g = 0, count = Repetitions(spasReader); g < count; g++)
             {
-                var rrnm = group.GetSubfield<byte>("RRNM");
-                var rrid = group.GetSubfield<uint>("RRID");
-                var ornt = group.GetSubfield<byte>("ORNT");
-                var saui = ReadUpdateInstruction(group, "SAUI");
+                var rrnm = Required<byte>(spasReader, g, rrnmAt, "RRNM");
+                var rrid = Required<uint>(spasReader, g, rridAt, "RRID");
+                var ornt = Required<byte>(spasReader, g, orntAt, "ORNT");
+                var saui = ReadUpdateInstruction(spasReader, g, sauiAt);
                 spatials.Add(new S101SpatialAssociation(rrnm, rrid, ornt, saui));
             }
         }
@@ -532,13 +593,14 @@ internal static class S101DocumentReader
             var facsDef = ddr.GetFieldDefinition("FASC");
             if (facsDef is null) break;
             var facsReader = new Iso8211FieldReader(facsDef, facsField.Data);
-            foreach (var group in facsReader.GetSubfieldGroups())
+            var (nfacAt, rridAt, narcAt, fauiAt) =
+                (Ordinal(facsReader, "NFAC"), Ordinal(facsReader, "RRID"), Ordinal(facsReader, "NARC"), Ordinal(facsReader, "FAUI"));
+            for (int g = 0, count = Repetitions(facsReader); g < count; g++)
             {
-                var nfac = group.GetSubfield<ushort>("NFAC");
-                var rrid = group.GetSubfield<uint>("RRID");
-                ushort narc = 0;
-                try { narc = group.GetSubfield<ushort>("NARC"); } catch (KeyNotFoundException) { }
-                var faui = ReadUpdateInstruction(group, "FAUI");
+                var nfac = Required<ushort>(facsReader, g, nfacAt, "NFAC");
+                var rrid = Required<uint>(facsReader, g, rridAt, "RRID");
+                var narc = Optional<ushort>(facsReader, g, narcAt, 0);
+                var faui = ReadUpdateInstruction(facsReader, g, fauiAt);
                 featureAssociations.Add(new S101FeatureAssociation(nfac, rrid, narc, faui));
             }
         }
@@ -550,13 +612,14 @@ internal static class S101DocumentReader
             var inasDef = ddr.GetFieldDefinition("INAS");
             if (inasDef is null) break;
             var inasReader = new Iso8211FieldReader(inasDef, inasField.Data);
-            foreach (var group in inasReader.GetSubfieldGroups())
+            var (niacAt, rridAt, narcAt, iuinAt) =
+                (Ordinal(inasReader, "NIAC"), Ordinal(inasReader, "RRID"), Ordinal(inasReader, "NARC"), Ordinal(inasReader, "IUIN"));
+            for (int g = 0, count = Repetitions(inasReader); g < count; g++)
             {
-                var niac = group.GetSubfield<ushort>("NIAC");
-                var rrid = group.GetSubfield<uint>("RRID");
-                ushort narc = 0;
-                try { narc = group.GetSubfield<ushort>("NARC"); } catch (KeyNotFoundException) { }
-                var iuin = ReadUpdateInstruction(group, "IUIN");
+                var niac = Required<ushort>(inasReader, g, niacAt, "NIAC");
+                var rrid = Required<uint>(inasReader, g, rridAt, "RRID");
+                var narc = Optional<ushort>(inasReader, g, narcAt, 0);
+                var iuin = ReadUpdateInstruction(inasReader, g, iuinAt);
                 informationAssociations.Add(new S101InformationAssociation(niac, rrid, narc, iuin));
             }
         }
@@ -593,19 +656,7 @@ internal static class S101DocumentReader
         foreach (var attrField in record.GetFieldsByTag("ATTR"))
         {
             var attrDef = ddr.GetFieldDefinition("ATTR")!;
-            var attrReader = new Iso8211FieldReader(attrDef, attrField.Data);
-            foreach (var group in attrReader.GetSubfieldGroups())
-            {
-                var natc = group.GetSubfield<ushort>("NATC");
-                var atix = group.GetSubfield<ushort>("ATIX");
-                ushort paix = 0;
-                try { paix = group.GetSubfield<ushort>("PAIX"); } catch (KeyNotFoundException) { }
-                var atin = ReadUpdateInstruction(group, "ATIN");
-                string atvl;
-                try { atvl = group.GetSubfield<string>("ATVL"); }
-                catch (KeyNotFoundException) { atvl = ""; }
-                attributes.Add(new S101Attribute(natc, atix, atvl, paix, atin));
-            }
+            ReadAttributes(new Iso8211FieldReader(attrDef, attrField.Data), attributes);
         }
 
         return new S101InformationRecord
@@ -616,5 +667,25 @@ internal static class S101DocumentReader
             RecordVersion = rver,
             UpdateInstruction = ruin,
         };
+    }
+
+    /// <summary>
+    /// Reads an ATTR field's repetitions: NATC and ATIX are required; PAIX, ATIN and ATVL
+    /// default to 0, <see cref="S101UpdateInstruction.None"/> and an empty string.
+    /// </summary>
+    private static void ReadAttributes(Iso8211FieldReader reader, List<S101Attribute> attributes)
+    {
+        var (natcAt, atixAt, paixAt, atinAt, atvlAt) = (
+            Ordinal(reader, "NATC"), Ordinal(reader, "ATIX"), Ordinal(reader, "PAIX"),
+            Ordinal(reader, "ATIN"), Ordinal(reader, "ATVL"));
+        for (int g = 0, count = Repetitions(reader); g < count; g++)
+        {
+            var natc = Required<ushort>(reader, g, natcAt, "NATC");
+            var atix = Required<ushort>(reader, g, atixAt, "ATIX");
+            var paix = Optional<ushort>(reader, g, paixAt, 0);
+            var atin = ReadUpdateInstruction(reader, g, atinAt);
+            var atvl = Optional(reader, g, atvlAt, "");
+            attributes.Add(new S101Attribute(natc, atix, atvl, paix, atin));
+        }
     }
 }
