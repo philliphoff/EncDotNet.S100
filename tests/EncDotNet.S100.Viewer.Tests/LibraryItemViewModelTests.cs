@@ -186,6 +186,22 @@ public sealed class LibraryItemViewModelTests
         Assert.Equal("Failed: 404", row.Details.SelectMany(g => g.Fields).Single(f => f.Label == "Last download").Value);
     }
 
+    [Fact]
+    public void A_download_refreshes_the_copy_that_opens_even_for_a_row_never_shown()
+    {
+        // The bulk bar reads EffectiveItem for every listed row, including rows
+        // the list has not shown yet; once downloaded, such a row must open its
+        // local copy, not stay online until restart.
+        var downloader = new StubDownloader(false);
+        var row = new LibraryItemViewModel(Online(), Source, _ => LibraryLoadState.None, downloader);
+        Assert.IsType<RemoteItemLocation>(row.EffectiveItem.Location);
+
+        downloader.LocalCopy = Online() with { Location = new LocalItemLocation("/downloads/US4OH1MK", "US4OH1MK.000", []) };
+        row.RefreshAvailability();
+
+        Assert.IsType<LocalItemLocation>(row.EffectiveItem.Location);
+    }
+
     private sealed class StubDownloader(bool outdated) : ILibraryDownloader
     {
         public LibraryDownloadItemStatus? Status { get; set; }
@@ -194,7 +210,9 @@ public sealed class LibraryItemViewModelTests
 
         public event EventHandler? Changed { add { } remove { } }
 
-        public CollectionItem Localize(CollectionItem item) => item;
+        public CollectionItem? LocalCopy { get; set; }
+
+        public CollectionItem Localize(CollectionItem item) => LocalCopy ?? item;
 
         public bool IsOutdated(CollectionItem item) => outdated;
 

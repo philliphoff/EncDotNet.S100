@@ -348,10 +348,10 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     {
         if (!IsForecast)
             return;
+        _state = null;  // as in RefreshAvailability: it may be resolved though never shown
         if (_availability is not null)
         {
             _availability = null;
-            _state = null;
             OnPropertyChanged(nameof(Availability));
             OnPropertyChanged(nameof(PrimaryAvailability));
             OnPropertyChanged(nameof(Tags));
@@ -514,10 +514,13 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>Re-resolves <see cref="Availability"/> after the item was opened or closed.</summary>
     public void RefreshAvailability()
     {
+        // Always drop the state: a row never shown can still have resolved it
+        // (the bulk bar reads EffectiveItem for every listed row), and keeping
+        // it would open the online item after a download, until restart.
+        _state = null;
         if (_availability is null)
             return;  // never shown; resolved lazily on first display
         _availability = null;
-        _state = null;
         OnPropertyChanged(nameof(Availability));
         OnPropertyChanged(nameof(AvailabilityText));
         OnPropertyChanged(nameof(PrimaryAvailability));
