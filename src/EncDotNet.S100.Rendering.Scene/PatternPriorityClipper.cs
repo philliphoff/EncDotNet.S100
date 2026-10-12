@@ -96,13 +96,18 @@ public static class PatternPriorityClipper
     /// area is fully occluded yields an empty geometry.
     /// </returns>
     /// <remarks>
-    /// The overlay favours robustness: when an individual <c>Difference</c> or
-    /// <c>Union</c> throws (<see cref="TopologyException"/> on degenerate input,
-    /// or <see cref="ArgumentException"/> when an accumulated union degenerates to
-    /// a <see cref="GeometryCollection"/> that NTS overlay rejects), the algorithm
+    /// <para>The overlay favours robustness: when an individual <c>Difference</c>
+    /// or <c>Union</c> fails (a <see cref="TopologyException"/> or
+    /// <see cref="ArgumentException"/> on degenerate input, or the
+    /// <see cref="AggregateException"/> that <see cref="OverlayNGRobust"/> throws
+    /// when all of its fallback strategies fail), the algorithm
     /// falls back to the unclipped geometry for that step rather than failing the
     /// whole clip. This keeps a pattern visible (un-clipped) in preference to
-    /// dropping it, matching the historical Mapsui behaviour.
+    /// dropping it, matching the historical Mapsui behaviour.</para>
+    /// <para>Every overlay result is reduced to its polygonal components before
+    /// it is used again or returned. OverlayNG's snapping fallback can collapse a
+    /// sliver of an areal result to a line, yielding a mixed-dimension
+    /// <see cref="GeometryCollection"/> that a following overlay rejects.</para>
     /// </remarks>
     public static IReadOnlyList<ClippedPattern> Clip(
         IReadOnlyList<PatternGroup> entries,
@@ -128,13 +133,9 @@ public static class PatternPriorityClipper
                 // overlay clip (see ExtractPolygonal): OverlayNG rejects such inputs.
                 excludeAreas = ExtractPolygonal(SimplifyForClip(OverlayNGRobust.Union(nonPatterned)));
             }
-            catch (TopologyException)
+            catch (Exception ex) when (IsOverlayFailure(ex))
             {
                 // If union fails, skip land clipping
-            }
-            catch (ArgumentException)
-            {
-                // Mixed-dimension union input rejected by OverlayNG; skip land clipping.
             }
         }
 
@@ -167,69 +168,70 @@ public static class PatternPriorityClipper
             if (higherPriorityAreas is not null &&
                 higherPriorityAreas.EnvelopeInternal.Intersects(geometry.EnvelopeInternal))
             {
-                try
-                {
-                    clipped = OverlayNGRobust.Overlay(
-                        clipped, higherPriorityAreas, SpatialFunction.Difference);
-                }
-                catch (TopologyException)
-                {
-                    // Fall back to unclipped geometry
-                }
-                catch (ArgumentException)
-                {
-                    // NTS Difference rejects GeometryCollection arguments;
-                    // accumulated unions can degenerate to that shape.
-                    // Fall back to unclipped geometry.
-                }
+                // On failure, fall back to the unclipped geometry.
+                clipped = TryOverlay(clipped, higherPriorityAreas, SpatialFunction.Difference) ?? clipped;
             }
 
             // Subtract non-patterned color fill areas (e.g. land)
             if (excludeAreas is not null &&
                 excludeAreas.EnvelopeInternal.Intersects(clipped.EnvelopeInternal))
             {
-                try
-                {
-                    clipped = OverlayNGRobust.Overlay(
-                        clipped, excludeAreas, SpatialFunction.Difference);
-                }
-                catch (TopologyException)
-                {
-                    // Fall back to current clipped geometry
-                }
-                catch (ArgumentException)
-                {
-                    // GeometryCollection rejected by NTS Difference; keep current geometry.
-                }
+                // On failure, keep the current clipped geometry.
+                clipped = TryOverlay(clipped, excludeAreas, SpatialFunction.Difference) ?? clipped;
             }
 
             result[i] = new ClippedPattern(patternRef, priority, clipped);
 
             // Add this entry's (generalized) area to the higher-priority union
-            // for use by the next, lower-priority entries. The union is reduced
-            // to polygonal-only so it can never become a mixed-dimension
-            // GeometryCollection that the next iteration's Difference overlay
-            // (and OverlayNG) would reject.
-            try
-            {
-                Geometry accumulated = higherPriorityAreas is null
-                    ? geometry
-                    : OverlayNGRobust.Overlay(higherPriorityAreas, geometry, SpatialFunction.Union);
-                higherPriorityAreas = ExtractPolygonal(accumulated) ?? higherPriorityAreas;
-            }
-            catch (TopologyException)
-            {
-                // If union fails, keep the existing accumulated area
-            }
-            catch (ArgumentException)
-            {
-                // NTS Union rejects GeometryCollection LHS;
-                // keep existing accumulated area.
-            }
+            // for use by the next, lower-priority entries. If the union fails,
+            // keep the existing accumulated area.
+            higherPriorityAreas = higherPriorityAreas is null
+                ? geometry
+                : TryOverlay(higherPriorityAreas, geometry, SpatialFunction.Union) ?? higherPriorityAreas;
         }
 
         return result;
     }
+
+    /// <summary>
+    /// Runs one robust overlay on the polygonal components of both inputs and
+    /// reduces the result to polygonal components too. Returns
+    /// <see langword="null"/> when the overlay fails, so the caller can fall back
+    /// to its current geometry for that step.
+    /// </summary>
+    internal static Geometry? TryOverlay(Geometry geom0, Geometry geom1, SpatialFunction opCode)
+    {
+        Geometry result;
+        try
+        {
+            result = OverlayNGRobust.Overlay(PolygonalOrEmpty(geom0), PolygonalOrEmpty(geom1), opCode);
+        }
+        catch (Exception ex) when (IsOverlayFailure(ex))
+        {
+            return null;
+        }
+
+        // A result with no polygonal component (an area collapsed to lines or
+        // points) has no visible pattern area left.
+        return PolygonalOrEmpty(result);
+    }
+
+    private static Geometry PolygonalOrEmpty(Geometry geometry) =>
+        ExtractPolygonal(geometry) ?? geometry.Factory.CreatePolygon();
+
+    /// <summary>
+    /// Whether <paramref name="ex"/> is a NetTopologySuite overlay failure on
+    /// degenerate input: a <see cref="TopologyException"/>, an
+    /// <see cref="ArgumentException"/> (for example "Overlay input is
+    /// mixed-dimension"), or the <see cref="AggregateException"/> that
+    /// <see cref="OverlayNGRobust"/> throws when every fallback strategy fails.
+    /// </summary>
+    internal static bool IsOverlayFailure(Exception ex) => ex switch
+    {
+        TopologyException or ArgumentException => true,
+        AggregateException aggregate => aggregate.InnerExceptions.All(IsOverlayFailure),
+        _ => false,
+    };
 
     /// <summary>
     /// Generalizes a polygonal geometry for use as a clip subject/mask, preserving

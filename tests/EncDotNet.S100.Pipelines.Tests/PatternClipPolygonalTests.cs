@@ -112,4 +112,61 @@ public class PatternClipPolygonalTests
         Assert.NotNull(difference);
         Assert.False(difference.IsEmpty);
     }
+
+    [Fact]
+    public void OverlayNGRobust_MixedDimensionInput_ThrowsWrappedOverlayFailure()
+    {
+        // Documents the failure the clipper must tolerate: once its fallback
+        // strategies fail too, OverlayNGRobust wraps the "mixed-dimension"
+        // ArgumentExceptions in an AggregateException, which a plain
+        // catch (ArgumentException) misses.
+        var mixed = Factory.CreateGeometryCollection([Square(0, 0, 10), Line(2, 2, 8, 2)]);
+
+        var ex = Assert.Throws<AggregateException>(() =>
+            OverlayNGRobust.Overlay(mixed, Square(5, 0, 10), SpatialFunction.Difference));
+
+        Assert.True(PatternPriorityClipper.IsOverlayFailure(ex));
+    }
+
+    [Fact]
+    public void TryOverlay_MixedDimensionSubject_ClipsPolygonalPart()
+    {
+        // The shape OverlayNG's snapping fallback produced for UKHO trial cell
+        // 101GB0050242S: a Difference result of a polygon plus a collapsed line,
+        // which the following land Difference rejected and failed the load.
+        var mixed = Factory.CreateGeometryCollection([Square(0, 0, 10), Line(2, 2, 8, 2)]);
+
+        var result = PatternPriorityClipper.TryOverlay(mixed, Square(5, 0, 10), SpatialFunction.Difference);
+
+        Assert.NotNull(result);
+        Assert.Equal(Dimension.Surface, result!.Dimension);
+        Assert.Equal(50, result.Area, 6);
+    }
+
+    [Fact]
+    public void TryOverlay_ResultWithoutPolygons_IsEmptyPolygon()
+    {
+        var lineOnly = Factory.CreateGeometryCollection([Line(0, 0, 10, 0)]);
+
+        var result = PatternPriorityClipper.TryOverlay(lineOnly, Square(5, 5, 10), SpatialFunction.Difference);
+
+        Assert.NotNull(result);
+        Assert.True(result!.IsEmpty);
+        Assert.IsAssignableFrom<IPolygonal>(result);
+    }
+
+    [Fact]
+    public void IsOverlayFailure_RecognisesWrappedOverlayFailuresOnly()
+    {
+        Assert.True(PatternPriorityClipper.IsOverlayFailure(new ArgumentException("x")));
+        Assert.True(PatternPriorityClipper.IsOverlayFailure(new TopologyException("x")));
+        Assert.True(PatternPriorityClipper.IsOverlayFailure(
+            new AggregateException(new ArgumentException("a"), new TopologyException("b"))));
+        Assert.False(PatternPriorityClipper.IsOverlayFailure(
+            new AggregateException(new ArgumentException("a"), new InvalidOperationException("b"))));
+        Assert.False(PatternPriorityClipper.IsOverlayFailure(new InvalidOperationException("x")));
+    }
+
+    private static LineString Line(double x0, double y0, double x1, double y1) =>
+        Factory.CreateLineString([new Coordinate(x0, y0), new Coordinate(x1, y1)]);
 }
