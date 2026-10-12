@@ -21,6 +21,14 @@ namespace EncDotNet.S100.Viewer.Routing;
 /// route exports to S-421 GML with a direct mapping. All are nullable: a
 /// freshly created leg carries only its geometry type.
 /// </para>
+/// <para>
+/// The fields named by <see cref="RoutePassageField"/> (draft, planned speed,
+/// static UKC and the cross-track limits) are <b>overrides</b> of the owning
+/// route's <see cref="RoutePassage"/>: <c>null</c> means "inherit". Read the
+/// value that applies with <see cref="Route.GetEffectiveLegValue"/> and edit
+/// it with <see cref="Route.SetLegOverride"/>. See <see cref="RoutePassage"/>
+/// for the S-421 and RTZ mapping.
+/// </para>
 /// </remarks>
 public sealed class RouteLeg
 {
@@ -60,6 +68,13 @@ public sealed class RouteLeg
     /// <summary>Maximum speed through water, in knots (S-421 <c>routeWaypointLegSTWMax</c>).</summary>
     public double? SpeedThroughWaterMaxKnots { get; set; }
 
+    /// <summary>
+    /// Planned speed over ground for this leg, in knots: an override of
+    /// <see cref="RoutePassage.SpeedKnots"/> (S-421
+    /// <c>routeScheduleElementPlanSOG</c> of the leg's start waypoint).
+    /// </summary>
+    public double? PlannedSpeedKnots { get; set; }
+
     /// <summary>Planned draft for this leg, in metres (S-421 <c>routeWaypointLegDraft</c>).</summary>
     public double? DraftMeters { get; set; }
 
@@ -74,4 +89,31 @@ public sealed class RouteLeg
 
     /// <summary>Free-text note for this leg (S-421 <c>routeWaypointLegNote</c>).</summary>
     public string? Note { get; set; }
+
+    /// <summary>Returns this leg's override of <paramref name="field"/>.</summary>
+    /// <param name="field">A leg-overridable passage field.</param>
+    /// <returns>The override, or <c>null</c> when the leg inherits.</returns>
+    /// <exception cref="ArgumentException"><paramref name="field"/> can't be overridden per leg.</exception>
+    public double? GetOverride(RoutePassageField field) => field switch
+    {
+        RoutePassageField.Draft => DraftMeters,
+        RoutePassageField.Speed => PlannedSpeedKnots,
+        RoutePassageField.RequiredUkc => StaticUnderKeelClearanceMeters,
+        RoutePassageField.PortCrossTrack => PortCrossTrackDistanceLimitMeters,
+        RoutePassageField.StarboardCrossTrack => StarboardCrossTrackDistanceLimitMeters,
+        _ => throw new ArgumentException($"{field} can't be overridden per leg.", nameof(field)),
+    };
+
+    internal void SetOverride(RoutePassageField field, double? value)
+    {
+        switch (field)
+        {
+            case RoutePassageField.Draft: DraftMeters = value; break;
+            case RoutePassageField.Speed: PlannedSpeedKnots = value; break;
+            case RoutePassageField.RequiredUkc: StaticUnderKeelClearanceMeters = value; break;
+            case RoutePassageField.PortCrossTrack: PortCrossTrackDistanceLimitMeters = value; break;
+            case RoutePassageField.StarboardCrossTrack: StarboardCrossTrackDistanceLimitMeters = value; break;
+            default: throw new ArgumentException($"{field} can't be overridden per leg.", nameof(field));
+        }
+    }
 }

@@ -29,6 +29,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(RouteDetail))]
 [JsonSerializable(typeof(ListRoutesResult))]
 [JsonSerializable(typeof(DeleteRouteResult))]
+[JsonSerializable(typeof(GetPassageResult))]
 // Errors, written by their concrete type.
 [JsonSerializable(typeof(MapNotReady))]
 [JsonSerializable(typeof(WindowNotReady))]

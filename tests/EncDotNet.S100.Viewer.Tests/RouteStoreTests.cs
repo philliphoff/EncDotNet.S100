@@ -168,4 +168,160 @@ public class RouteStoreTests : IDisposable
         var route = Assert.Single(loaded.Routes);
         Assert.Equal("route-2", route.Id);
     }
+
+    // ----- passage and leg overrides (#897) --------------------------------
+
+    private static readonly string[] PassageOverrideKeys =
+    [
+        "PlannedSpeedKnots", "DraftMeters", "StaticUnderKeelClearanceMeters",
+        "PortCrossTrackDistanceLimitMeters", "StarboardCrossTrackDistanceLimitMeters",
+    ];
+
+    [Fact]
+    public void WaypointsOnlyRoute_WritesNoPassageKeys()
+    {
+        var source = new RouteCollection();
+        var route = source.CreateRoute("Casual", "casual");
+        route.AppendWaypoint(new GeoPosition(50.0, -1.0));
+        route.AppendWaypoint(new GeoPosition(50.1, -1.1));
+        route.AppendWaypoint(new GeoPosition(50.2, -1.2));
+
+        RouteStore.Save(source, _path);
+
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(_path));
+        var routeElement = doc.RootElement.GetProperty("Routes")[0];
+        Assert.False(routeElement.TryGetProperty("Passage", out _));
+        foreach (var leg in routeElement.GetProperty("Legs").EnumerateArray())
+        {
+            foreach (var key in PassageOverrideKeys)
+                Assert.False(leg.TryGetProperty(key, out _), $"unexpected leg key {key}");
+        }
+
+        var loaded = new RouteCollection();
+        RouteStore.Load(loaded, _path);
+        var loadedRoute = loaded.FindById("casual")!;
+        Assert.True(loadedRoute.Passage.IsEmpty);
+        Assert.Equal(2, loadedRoute.Legs.Count);
+    }
+
+    [Fact]
+    public void Passage_WritesOnlySetFields_AndRoundTrips()
+    {
+        var source = new RouteCollection();
+        var route = source.CreateRoute("Passage", "p");
+        route.AppendWaypoint(new GeoPosition(50.0, -1.0));
+        route.AppendWaypoint(new GeoPosition(50.1, -1.1));
+        var departure = new DateTimeOffset(2026, 10, 12, 6, 40, 0, TimeSpan.Zero);
+        route.SetPassageValue(RoutePassageField.Draft, 4.8);
+        route.SetPassageValue(RoutePassageField.Speed, 8.0);
+        route.SetDeparture(departure);
+
+        RouteStore.Save(source, _path);
+
+        using (var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(_path)))
+        {
+            var passage = doc.RootElement.GetProperty("Routes")[0].GetProperty("Passage");
+            Assert.Equal(
+                ["DraftMeters", "SpeedKnots", "Departure"],
+                passage.EnumerateObject().Select(p => p.Name).ToArray());
+        }
+
+        var loaded = new RouteCollection();
+        RouteStore.Load(loaded, _path);
+        var p = loaded.FindById("p")!.Passage;
+        Assert.Equal(4.8, p.DraftMeters);
+        Assert.Equal(8.0, p.SpeedKnots);
+        Assert.Equal(departure, p.Departure);
+        Assert.Null(p.SquatMeters);
+        Assert.Null(p.RequiredUkcMeters);
+    }
+
+    [Fact]
+    public void LegOverride_Persists_AndResetRemovesTheKey()
+    {
+        var source = new RouteCollection();
+        var route = source.CreateRoute("Overrides", "o");
+        route.AppendWaypoint(new GeoPosition(50.0, -1.0));
+        route.AppendWaypoint(new GeoPosition(50.1, -1.1));
+        route.AppendWaypoint(new GeoPosition(50.2, -1.2));
+        route.SetPassageValue(RoutePassageField.Speed, 10.0);
+        route.SetLegOverride(1, RoutePassageField.Speed, 6.0);
+
+        RouteStore.Save(source, _path);
+
+        var loaded = new RouteCollection();
+        RouteStore.Load(loaded, _path);
+        var loadedRoute = loaded.FindById("o")!;
+        Assert.False(loadedRoute.IsLegOverridden(0, RoutePassageField.Speed));
+        Assert.True(loadedRoute.IsLegOverridden(1, RoutePassageField.Speed));
+        Assert.Equal(6.0, loadedRoute.GetEffectiveLegValue(1, RoutePassageField.Speed));
+        Assert.Equal(10.0, loadedRoute.GetEffectiveLegValue(0, RoutePassageField.Speed));
+        Assert.Contains("\"PlannedSpeedKnots\": 6", File.ReadAllText(_path));
+
+        loadedRoute.ResetLegOverride(1, RoutePassageField.Speed);
+        RouteStore.Save(loaded, _path);
+
+        Assert.DoesNotContain("PlannedSpeedKnots", File.ReadAllText(_path));
+        var reloaded = new RouteCollection();
+        RouteStore.Load(reloaded, _path);
+        Assert.Equal(10.0, reloaded.FindById("o")!.GetEffectiveLegValue(1, RoutePassageField.Speed));
+    }
+
+    [Fact]
+    public void OldFile_PerLegValues_LoadAsOverrides()
+    {
+        // A routes.json written before passages existed: no Passage key, and
+        // per-leg draft, UKC and cross-track values.
+        const string json = """
+            {
+              "SchemaVersion": 1,
+              "ActiveRouteId": "old",
+              "Routes": [
+                {
+                  "Id": "old",
+                  "Info": { "Name": "Legacy" },
+                  "Waypoints": [
+                    { "Latitude": 50.0, "Longitude": -1.0 },
+                    { "Latitude": 50.1, "Longitude": -1.1 },
+                    { "Latitude": 50.2, "Longitude": -1.2 }
+                  ],
+                  "Legs": [
+                    {
+                      "GeometryType": "Loxodrome",
+                      "DraftMeters": 5.2,
+                      "StaticUnderKeelClearanceMeters": 0.8,
+                      "PortCrossTrackDistanceLimitMeters": 100,
+                      "StarboardCrossTrackDistanceLimitMeters": 150,
+                      "SpeedOverGroundMaxKnots": 12,
+                      "SafetyContourMeters": 10
+                    },
+                    { "GeometryType": "Geodesic" }
+                  ]
+                }
+              ]
+            }
+            """;
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(_path, json);
+
+        var loaded = new RouteCollection();
+        Assert.True(RouteStore.Load(loaded, _path));
+
+        var route = loaded.FindById("old")!;
+        Assert.True(route.Passage.IsEmpty);
+        Assert.True(route.IsLegOverridden(0, RoutePassageField.Draft));
+        Assert.Equal(5.2, route.GetEffectiveLegValue(0, RoutePassageField.Draft));
+        Assert.Equal(0.8, route.GetEffectiveLegValue(0, RoutePassageField.RequiredUkc));
+        Assert.Equal(100, route.GetEffectiveLegValue(0, RoutePassageField.PortCrossTrack));
+        Assert.Equal(150, route.GetEffectiveLegValue(0, RoutePassageField.StarboardCrossTrack));
+        Assert.Equal(12, route.Legs[0].SpeedOverGroundMaxKnots);
+        Assert.Equal(10, route.Legs[0].SafetyContourMeters);
+        Assert.Equal(RouteLegGeometryType.Geodesic, route.Legs[1].GeometryType);
+        Assert.False(route.IsLegOverridden(1, RoutePassageField.Draft));
+
+        // Setting a passage draft now changes only the leg that inherits it.
+        route.SetPassageValue(RoutePassageField.Draft, 4.0);
+        Assert.Equal(5.2, route.GetEffectiveLegValue(0, RoutePassageField.Draft));
+        Assert.Equal(4.0, route.GetEffectiveLegValue(1, RoutePassageField.Draft));
+    }
 }

@@ -45,6 +45,12 @@ internal sealed class RouteDocument
     /// <summary>Route-level metadata.</summary>
     public RouteInfoDocument? Info { get; set; }
 
+    /// <summary>
+    /// Passage values the legs inherit; <c>null</c> (and so not written)
+    /// when no passage value is set.
+    /// </summary>
+    public RoutePassageDocument? Passage { get; set; }
+
     /// <summary>Waypoints in route order.</summary>
     public List<RouteWaypointDocument> Waypoints { get; set; } = new();
 
@@ -82,6 +88,34 @@ internal sealed class RouteInfoDocument
 
     /// <inheritdoc cref="RouteInfo.Vessel"/>
     public RouteVesselInfoDocument? Vessel { get; set; }
+}
+
+/// <summary>
+/// Persisted form of a <see cref="RoutePassage"/>. Only set values are
+/// written.
+/// </summary>
+internal sealed class RoutePassageDocument
+{
+    /// <inheritdoc cref="RoutePassage.DraftMeters"/>
+    public double? DraftMeters { get; set; }
+
+    /// <inheritdoc cref="RoutePassage.SquatMeters"/>
+    public double? SquatMeters { get; set; }
+
+    /// <inheritdoc cref="RoutePassage.SpeedKnots"/>
+    public double? SpeedKnots { get; set; }
+
+    /// <inheritdoc cref="RoutePassage.Departure"/>
+    public DateTimeOffset? Departure { get; set; }
+
+    /// <inheritdoc cref="RoutePassage.RequiredUkcMeters"/>
+    public double? RequiredUkcMeters { get; set; }
+
+    /// <inheritdoc cref="RoutePassage.PortCrossTrackMeters"/>
+    public double? PortCrossTrackMeters { get; set; }
+
+    /// <inheritdoc cref="RoutePassage.StarboardCrossTrackMeters"/>
+    public double? StarboardCrossTrackMeters { get; set; }
 }
 
 /// <summary>Persisted form of a <see cref="RouteVesselInfo"/>.</summary>
@@ -128,7 +162,10 @@ internal sealed class RouteWaypointDocument
     public double? TurnRadiusNm { get; set; }
 }
 
-/// <summary>Persisted form of a <see cref="RouteLeg"/>.</summary>
+/// <summary>
+/// Persisted form of a <see cref="RouteLeg"/>. The passage-overridable
+/// fields hold only overrides; an inheriting leg leaves them out.
+/// </summary>
 internal sealed class RouteLegDocument
 {
     /// <summary>
@@ -167,6 +204,9 @@ internal sealed class RouteLegDocument
 
     /// <inheritdoc cref="RouteLeg.SpeedThroughWaterMaxKnots"/>
     public double? SpeedThroughWaterMaxKnots { get; set; }
+
+    /// <inheritdoc cref="RouteLeg.PlannedSpeedKnots"/>
+    public double? PlannedSpeedKnots { get; set; }
 
     /// <inheritdoc cref="RouteLeg.DraftMeters"/>
     public double? DraftMeters { get; set; }

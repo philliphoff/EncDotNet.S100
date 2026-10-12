@@ -27,7 +27,7 @@ namespace EncDotNet.S100.Viewer.Routing;
 /// the underlying geographic segment is preserved.
 /// </para>
 /// </remarks>
-public sealed class Route
+public sealed partial class Route
 {
     private readonly List<RouteWaypoint> _waypoints = new();
     private readonly List<RouteLeg> _legs = new();

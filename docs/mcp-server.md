@@ -245,18 +245,25 @@ the active route when you omit `routeId`. Waypoints are addressed by zero-based
 waypoint `i+1`. The fields follow the S-421 model, so a route maps onto S-421
 GML directly.
 
+A route needs only waypoints. Its **passage** holds optional route-level
+values: draft, squat allowance, speed, departure, required UKC and cross-track
+limits. Each leg inherits these unless it overrides them, so changing a passage
+value changes only the legs that inherit it.
+
 | Tool | Changes state | What it does |
 |---|---|---|
 | `create_route` | Yes | Creates an empty route and makes it the active route. Optional `name` and `id` (a GUID is generated when you omit `id`; ids must be unique). Returns the route's full state, as `get_route` does. |
 | `list_routes` | No | Lists every route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm` and `isActive`, and the collection's `activeRouteId`. |
-| `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs` (`index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, and the S-421 navigational envelope) and `totalDistanceNm`. |
+| `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `passage` (as `get_passage` returns it), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs` and `totalDistanceNm`. Each leg has its `index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, its passage values twice (`effective`, the values that apply, and `overrides`, only the leg's own values), and the rest of its S-421 navigational envelope. |
 | `delete_route` | Yes | Removes a route. Returns `routeId`, `deleted` and the new `activeRouteId`. |
 | `append_waypoint` | Yes | Adds a waypoint (`lat`, `lon`) at the end of a route, with optional `number`, `name`, `fixed` and `turnRadiusNm`. Returns the updated route. |
 | `insert_waypoint` | Yes | Inserts a waypoint at `index` (`0` to `waypointCount`; `0` prepends and `waypointCount` appends), splitting the leg there. Takes the same optional fields as `append_waypoint`. Returns the updated route. |
 | `move_waypoint` | Yes | Moves the waypoint at `index` (`0` to `waypointCount - 1`) to a new `lat` and `lon`. Returns the updated route. |
 | `delete_waypoint` | Yes | Removes the waypoint at `index`, merging the legs either side. Returns the updated route. |
-| `set_leg_attributes` | Yes | Updates one leg (`legIndex`): its `geometryType` (`loxodrome` or `geodesic`) and its navigational envelope (cross-track and channel limits, safety contour and depth, minimum and maximum SOG and STW, draft, static and dynamic UKC, safety margin, note; metres and knots as in S-421). Values you pass overwrite; values you omit are unchanged. Returns the updated route. |
+| `set_leg_attributes` | Yes | Updates one leg (`legIndex`): its `geometryType` (`loxodrome` or `geodesic`), its passage overrides (`speedKnots`, `draftMeters`, `portCrossTrackDistanceLimitMeters`, `starboardCrossTrackDistanceLimitMeters`, `staticUnderKeelClearanceMeters`) and the rest of its navigational envelope (channel limits, safety contour and depth, minimum and maximum SOG and STW, dynamic UKC, safety margin, note; metres and knots as in S-421). Values you pass overwrite, and values you omit are unchanged. An override equal to the route's passage value isn't stored, so the leg keeps inheriting. `clear` lists parameter names to unset; clearing an override resets the leg to inherit. Returns the updated route. |
 | `set_route_info` | Yes | Updates route metadata (`name`, `author`, `description`, `departurePortId`, `arrivalPortId`, `validityStart`, `validityEnd`) and vessel particulars (`vesselName`, `vesselMmsi`, `vesselImo`, `vesselCallsign`, `vesselLengthMeters`, `vesselBeamMeters`; passing any vessel field creates the vessel block). Values you pass overwrite. Returns the updated route. |
+| `get_passage` | No | Returns a route's passage values: `draftMeters`, `squatMeters`, `speedKnots` (SOG), `departure`, `requiredUkcMeters`, `portCrossTrackMeters`, `starboardCrossTrackMeters` and `vessel`. Unset values are left out. With no `departure`, ETAs use the view time. |
+| `set_passage` | Yes | Updates a route's passage values: `draftMeters`, `squatMeters`, `speedKnots`, `departure`, `requiredUkcMeters`, and the cross-track limits (`crossTrackMeters` for both sides, or `portCrossTrackMeters` and `starboardCrossTrackMeters`). Values you pass overwrite, values you omit are unchanged, and names in `clear` are unset. Set the vessel with `set_route_info`. Returns the updated route. |
 
 A typical sequence:
 
@@ -265,8 +272,10 @@ A typical sequence:
    tools, such as `sample_coverage`, `nearest_features` and `find_at`, to check
    each leg.
 3. `move_waypoint` and `delete_waypoint` refine it.
-4. `set_leg_attributes` sets each leg's geometry type and navigational
-   envelope, and `set_route_info` sets the metadata and vessel particulars.
+4. `set_passage` sets the draft, speed and other values every leg inherits,
+   and `set_leg_attributes` overrides them on a leg and sets its geometry type
+   and navigational envelope. `set_route_info` sets the metadata and vessel
+   particulars.
 5. `get_route` or `list_routes` reads back the result.
 
 ### Test tools

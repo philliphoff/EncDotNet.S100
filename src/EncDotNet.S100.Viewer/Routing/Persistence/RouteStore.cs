@@ -115,6 +115,7 @@ internal static partial class RouteStore
             {
                 Id = route.Id,
                 Info = ToDocument(route.Info),
+                Passage = ToDocument(route.Passage),
             };
 
             foreach (var waypoint in route.Waypoints)
@@ -161,6 +162,19 @@ internal static partial class RouteStore
             : null,
     };
 
+    private static RoutePassageDocument? ToDocument(RoutePassage passage) => passage.IsEmpty
+        ? null
+        : new RoutePassageDocument
+        {
+            DraftMeters = passage.DraftMeters,
+            SquatMeters = passage.SquatMeters,
+            SpeedKnots = passage.SpeedKnots,
+            Departure = passage.Departure,
+            RequiredUkcMeters = passage.RequiredUkcMeters,
+            PortCrossTrackMeters = passage.PortCrossTrackMeters,
+            StarboardCrossTrackMeters = passage.StarboardCrossTrackMeters,
+        };
+
     private static RouteLegDocument ToDocument(RouteLeg leg) => new()
     {
         GeometryType = leg.GeometryType.ToString(),
@@ -174,6 +188,7 @@ internal static partial class RouteStore
         SpeedOverGroundMaxKnots = leg.SpeedOverGroundMaxKnots,
         SpeedThroughWaterMinKnots = leg.SpeedThroughWaterMinKnots,
         SpeedThroughWaterMaxKnots = leg.SpeedThroughWaterMaxKnots,
+        PlannedSpeedKnots = leg.PlannedSpeedKnots,
         DraftMeters = leg.DraftMeters,
         StaticUnderKeelClearanceMeters = leg.StaticUnderKeelClearanceMeters,
         DynamicUnderKeelClearanceMeters = leg.DynamicUnderKeelClearanceMeters,
@@ -200,6 +215,7 @@ internal static partial class RouteStore
             }
 
             ApplyInfo(route.Info, routeDocument.Info);
+            ApplyPassage(route.Passage, routeDocument.Passage);
 
             foreach (var waypointDocument in routeDocument.Waypoints)
             {
@@ -214,6 +230,10 @@ internal static partial class RouteStore
             // The route rebuilt its own legs as waypoints were appended; copy
             // the persisted leg attributes onto the matching segments, tolerant
             // of a document whose leg count disagrees with the waypoint count.
+            // Leg values are applied verbatim as overrides: a file written
+            // before passages existed has no passage, so each per-leg value it
+            // holds differs from the (unset) passage value and stays an
+            // override.
             var legCount = Math.Min(route.Legs.Count, routeDocument.Legs.Count);
             for (var i = 0; i < legCount; i++)
                 ApplyLeg(route.Legs[i], routeDocument.Legs[i]);
@@ -255,6 +275,20 @@ internal static partial class RouteStore
             : null;
     }
 
+    private static void ApplyPassage(RoutePassage passage, RoutePassageDocument? document)
+    {
+        if (document is null)
+            return;
+
+        passage.DraftMeters = document.DraftMeters;
+        passage.SquatMeters = document.SquatMeters;
+        passage.SpeedKnots = document.SpeedKnots;
+        passage.Departure = document.Departure;
+        passage.RequiredUkcMeters = document.RequiredUkcMeters;
+        passage.PortCrossTrackMeters = document.PortCrossTrackMeters;
+        passage.StarboardCrossTrackMeters = document.StarboardCrossTrackMeters;
+    }
+
     private static void ApplyLeg(RouteLeg leg, RouteLegDocument document)
     {
         leg.GeometryType = Enum.TryParse<RouteLegGeometryType>(document.GeometryType, ignoreCase: true, out var geometry)
@@ -270,6 +304,7 @@ internal static partial class RouteStore
         leg.SpeedOverGroundMaxKnots = document.SpeedOverGroundMaxKnots;
         leg.SpeedThroughWaterMinKnots = document.SpeedThroughWaterMinKnots;
         leg.SpeedThroughWaterMaxKnots = document.SpeedThroughWaterMaxKnots;
+        leg.PlannedSpeedKnots = document.PlannedSpeedKnots;
         leg.DraftMeters = document.DraftMeters;
         leg.StaticUnderKeelClearanceMeters = document.StaticUnderKeelClearanceMeters;
         leg.DynamicUnderKeelClearanceMeters = document.DynamicUnderKeelClearanceMeters;
