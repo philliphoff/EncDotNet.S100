@@ -23,6 +23,9 @@ internal enum KeysTone
 
     /// <summary>Destructive (red).</summary>
     Destructive,
+
+    /// <summary>Inverted: foreground on background, as the DEFAULT pill (#883 E2).</summary>
+    Inverted,
 }
 
 /// <summary>A small-caps badge on a row, e.g. VESSEL or BUILT IN.</summary>
@@ -33,9 +36,13 @@ internal sealed record KeysBadge(string Text, KeysTone Tone)
     public bool IsSuccess => Tone == KeysTone.Success;
     public bool IsWarning => Tone == KeysTone.Warning;
     public bool IsDestructive => Tone == KeysTone.Destructive;
+    public bool IsInverted => Tone == KeysTone.Inverted;
 }
 
-/// <summary>An action chip under a row: Details, Replace…, Remove, Use…</summary>
+/// <summary>A source that uses an identity, as a chip on its row (#883 E3): its name and how ("via default" or "chosen").</summary>
+internal sealed record KeysUsedBy(string Source, string How);
+
+/// <summary>An action chip under a row: Details, Make default, Replace…, Remove.</summary>
 internal sealed record KeysRowAction(string Id, string Label, ICommand Command, bool IsDestructive = false);
 
 /// <summary>
@@ -55,6 +62,15 @@ internal sealed class KeysRow
     public string Sub { get; init; } = "";
     public string? Reference { get; init; }
     public IReadOnlyList<KeysRowAction> Actions { get; init; } = [];
+
+    /// <summary>For a stored identity: "Used by N sources", or "Not used by any source" (#883 E3); otherwise null.</summary>
+    public string? UsedByLabel { get; init; }
+
+    /// <summary>The sources that use the identity, as chips.</summary>
+    public IReadOnlyList<KeysUsedBy> UsedBy { get; init; } = [];
+
+    public bool HasUsedByLabel => UsedByLabel is not null;
+    public bool IsUsed => UsedBy.Count > 0;
 
     /// <summary>True for a trusted authority (shield icon); false for an identity (id card).</summary>
     public bool IsAuthority { get; init; }

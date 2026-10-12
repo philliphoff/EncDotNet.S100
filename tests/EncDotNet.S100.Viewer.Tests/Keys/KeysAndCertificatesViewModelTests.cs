@@ -35,7 +35,11 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
         var row = Assert.Single(page.IdentityRows);
         Assert.Equal("Ends in 12 days", row.Status);
         Assert.Equal(KeysTone.Warning, row.StatusTone);
-        Assert.Contains(row.Badges, b => b.Text == "IN USE");
+        Assert.Equal(["DEVICE", "DEFAULT"], row.Badges.Select(b => b.Text));
+        Assert.True(row.Badges[1].IsInverted);
+        Assert.StartsWith("Issued by Example MCP Root Certificate · ends ", row.Sub, StringComparison.Ordinal);
+        Assert.Equal("Not used by any source", row.UsedByLabel);
+        Assert.Equal(["Details", "Replace", "Remove"], row.Actions.Select(a => a.Id));  // no Make default: it is the default
         Assert.StartsWith("sc-ident:", row.Reference, StringComparison.Ordinal);
         Assert.Equal("Bridge PC's certificate ends in 12 days", page.StatusText);
         Assert.True(page.StatusIsWarning);
@@ -95,16 +99,18 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
         using var page = _keys.Page();
 
         page.IdentityRows[0].Actions.Single(a => a.Id == "Remove").Command.Execute(null);
-        var (title, message, confirmed) = Assert.Single(_keys.Dialogs.Confirms);
-        Assert.Equal("Remove Bridge PC?", title);
-        Assert.Contains("in use", message, StringComparison.Ordinal);
+        var dialog = Assert.IsType<RemoveIdentityDialogViewModel>(Assert.Single(_keys.Dialogs.Shown));
+        Assert.Equal("Remove Bridge PC?", dialog.Title);
+        Assert.Equal("No sources use this identity. It's your default, so choose a new default first.", dialog.Body);
+        Assert.Equal(["None"], dialog.NewDefaults.Select(c => c.Label));
         Assert.Equal(1, _keys.Keys.Count);
 
-        confirmed();
+        dialog.RemoveCommand.Execute(null);
 
         Assert.Null(_keys.Trust.Identity);
         Assert.Equal(0, _keys.Keys.Count);
         Assert.True(page.IsIdentitiesEmpty);
+        Assert.Empty(_keys.Dialogs.Shown);
     }
 
     [Fact]
@@ -133,7 +139,7 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
         dialog.Name = "Bridge PC";
         dialog.Primary();
         Assert.True(dialog.IsUseStep);
-        Assert.True(dialog.UseForSecom);  // nothing was the default
+        Assert.Equal("No source is waiting for a certificate.", dialog.WaitingSourcesText);
         Assert.NotNull(_keys.Trust.Identity);  // the first identity imported becomes the default (#883)
 
         dialog.Primary();

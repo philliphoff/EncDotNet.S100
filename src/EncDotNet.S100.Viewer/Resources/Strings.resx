@@ -3822,7 +3822,7 @@
     <value>Keys and certificates tabs</value>
   </data>
   <data name="Keys_Identities_Intro" xml:space="preserve">
-    <value>SECOM identities: a certificate and its private key, issued to you, your vessel or your organisation on the MCP portal. SoundCharts presents the one in use to SECOM services that ask for a certificate.</value>
+    <value>SECOM identities: a certificate and its private key, issued to you, your vessel or your organisation on the MCP portal. Sources use the default identity unless their Identity setting names another one, or None.</value>
   </data>
   <data name="Keys_ImportIdentity" xml:space="preserve">
     <value>Import identity…</value>
@@ -3834,10 +3834,10 @@
     <value>No identities</value>
   </data>
   <data name="Keys_Identities_EmptyBody" xml:space="preserve">
-    <value>Open SECOM services work without one. Some services need a certificate from your organisation. Get it from the MCP management portal, then import the .p12 or PEM files.</value>
+    <value>Open SECOM services work without one. Some services need a certificate from your organisation. Get it from the MCP management portal, then import the .p12 or PEM files. The first one you import becomes the default.</value>
   </data>
   <data name="Keys_Identities_NoteFormat" xml:space="preserve">
-    <value>Private keys stay in {0}. After import they're never shown, copied or exported. The settings file stores only references: thumbprint, MRN, name and end date.</value>
+    <value>Private keys stay in {0}. After import they're never shown, copied or exported. Settings store only references: thumbprint, MRN, name, end date. Sources store default, none or an sc-ident reference.</value>
     <comment>{0}: where keys are kept, e.g. "the Keychain" (Keys_Store_*).</comment>
   </data>
   <data name="Keys_Store_MacOS" xml:space="preserve">
@@ -3916,9 +3916,6 @@
   <data name="Keys_Kind_Test" xml:space="preserve">
     <value>TEST</value>
   </data>
-  <data name="Keys_Badge_InUse" xml:space="preserve">
-    <value>IN USE</value>
-  </data>
   <data name="Keys_Badge_ThisRun" xml:space="preserve">
     <value>THIS RUN ONLY</value>
   </data>
@@ -3927,19 +3924,6 @@
   </data>
   <data name="Keys_Badge_Secom" xml:space="preserve">
     <value>SECOM</value>
-  </data>
-  <data name="Keys_Identity_SubFormat" xml:space="preserve">
-    <value>Issued by {0} · ends {1} · {2}</value>
-    <comment>{0}: the issuing CA; {1}: the end date; {2}: Keys_Usage_*.</comment>
-  </data>
-  <data name="Keys_Usage_InUse" xml:space="preserve">
-    <value>used for SECOM services that ask for a certificate</value>
-  </data>
-  <data name="Keys_Usage_NotInUse" xml:space="preserve">
-    <value>not in use</value>
-  </data>
-  <data name="Keys_Usage_Overridden" xml:space="preserve">
-    <value>chosen for use; the command line overrides it this run</value>
   </data>
   <data name="Keys_Identity_FromCommandLine" xml:space="preserve">
     <value>From command line</value>
@@ -3965,12 +3949,6 @@
   </data>
   <data name="Keys_Action_Remove" xml:space="preserve">
     <value>Remove</value>
-  </data>
-  <data name="Keys_Action_Use" xml:space="preserve">
-    <value>Use</value>
-  </data>
-  <data name="Keys_Action_StopUsing" xml:space="preserve">
-    <value>Stop using</value>
   </data>
   <data name="Keys_Action_View" xml:space="preserve">
     <value>View</value>
@@ -4125,12 +4103,6 @@
     <value>{0} imported</value>
     <comment>{0}: the identity's name.</comment>
   </data>
-  <data name="Keys_Import_UseForSecom" xml:space="preserve">
-    <value>Use for SECOM services that ask for a certificate</value>
-  </data>
-  <data name="Keys_Import_UseHelp" xml:space="preserve">
-    <value>One identity is in use at a time. You can change it later in Keys &amp; certificates.</value>
-  </data>
   <data name="Keys_Field_Name" xml:space="preserve">
     <value>Name</value>
   </data>
@@ -4197,22 +4169,9 @@
     <value>RSA {0}-bit</value>
     <comment>{0}: the key size in bits.</comment>
   </data>
-  <data name="Keys_Remove_TitleFormat" xml:space="preserve">
-    <value>Remove {0}?</value>
-    <comment>{0}: the identity's name.</comment>
-  </data>
-  <data name="Keys_Remove_InUseBody" xml:space="preserve">
-    <value>This identity is in use. SECOM services will connect anonymously and lose access to anything that needs a certificate.</value>
-  </data>
-  <data name="Keys_Remove_NotInUseBody" xml:space="preserve">
-    <value>No sources use this identity.</value>
-  </data>
   <data name="Keys_Remove_FootnoteFormat" xml:space="preserve">
     <value>The private key is deleted from {0}. To use this identity again, you'll need the original .p12 or PEM files.</value>
     <comment>{0}: where keys are kept (Keys_Store_*).</comment>
-  </data>
-  <data name="Keys_Remove_Confirm" xml:space="preserve">
-    <value>Remove identity</value>
   </data>
   <data name="Keys_RemoveAuthority_TitleFormat" xml:space="preserve">
     <value>Remove {0}?</value>
@@ -4519,5 +4478,70 @@
   </data>
   <data name="Secom_Details_Help" xml:space="preserve">
     <value>How this SECOM source connects: the identity it presents, and what the service last said.</value>
+  </data>
+  <data name="Keys_Badge_Default" xml:space="preserve">
+    <value>DEFAULT</value>
+  </data>
+  <data name="Keys_Identity_IssuedByFormat" xml:space="preserve">
+    <value>Issued by {0} · ends {1}</value>
+    <comment>{0}: issuer; {1}: end date</comment>
+  </data>
+  <data name="Keys_UsedBy_Format" xml:space="preserve">
+    <value>Used by {0} sources</value>
+  </data>
+  <data name="Keys_UsedBy_One" xml:space="preserve">
+    <value>Used by 1 source</value>
+  </data>
+  <data name="Keys_UsedBy_None" xml:space="preserve">
+    <value>Not used by any source</value>
+  </data>
+  <data name="Keys_UsedBy_ViaDefault" xml:space="preserve">
+    <value>via default</value>
+  </data>
+  <data name="Keys_UsedBy_Chosen" xml:space="preserve">
+    <value>chosen</value>
+  </data>
+  <data name="Keys_Action_MakeDefault" xml:space="preserve">
+    <value>Make default</value>
+  </data>
+  <data name="Keys_RemoveIdentity_TitleFormat" xml:space="preserve">
+    <value>Remove {0}?</value>
+    <comment>{0}: identity name</comment>
+  </data>
+  <data name="Keys_RemoveIdentity_SourcesFormat" xml:space="preserve">
+    <value>{0} sources use this identity, directly or as the default. Each switches as listed.</value>
+  </data>
+  <data name="Keys_RemoveIdentity_OneSource" xml:space="preserve">
+    <value>1 source uses this identity, directly or as the default. It switches as listed.</value>
+  </data>
+  <data name="Keys_RemoveIdentity_NoSources" xml:space="preserve">
+    <value>No sources use this identity.</value>
+  </data>
+  <data name="Keys_RemoveIdentity_DefaultSuffix" xml:space="preserve">
+    <value>It's your default, so choose a new default first.</value>
+  </data>
+  <data name="Keys_RemoveIdentity_NewDefault" xml:space="preserve">
+    <value>New default identity</value>
+  </data>
+  <data name="Keys_RemoveIdentity_SwitchesToNone" xml:space="preserve">
+    <value>switches to None</value>
+  </data>
+  <data name="Keys_RemoveIdentity_ViaDefaultFormat" xml:space="preserve">
+    <value>Default · switches to {0}</value>
+    <comment>{0}: the new default's name, or None</comment>
+  </data>
+  <data name="Keys_RemoveIdentity_Confirm" xml:space="preserve">
+    <value>Remove identity</value>
+  </data>
+  <data name="Keys_Import_SourcesFormat" xml:space="preserve">
+    <value>{0} sources need a certificate from an issuer {1} chains to. Set them to {1}? Other sources keep their setting.</value>
+    <comment>{0}: count; {1}: the identity's name</comment>
+  </data>
+  <data name="Keys_Import_OneSourceFormat" xml:space="preserve">
+    <value>1 source needs a certificate from an issuer {0} chains to. Set it to {0}? Other sources keep their setting.</value>
+    <comment>{0}: the identity's name</comment>
+  </data>
+  <data name="Keys_Import_NoSources" xml:space="preserve">
+    <value>No source is waiting for a certificate.</value>
   </data>
 </root>

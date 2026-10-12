@@ -95,6 +95,37 @@ public sealed class SecomIdentityViewTests
         Save(host, "library-details-refused");
     }
 
+    [AvaloniaFact]
+    public async Task The_identities_tab_shows_the_default_who_uses_each_and_the_remove_confirm()
+    {
+        using var context = new LibraryTestContext();
+        using var keys = new KeysTestSupport();
+        using var library = context.CreateService(new CollectionIndexer([new RefusingIndexer("sc-ident:00000000", "urn:mrn:none")]));
+        library.Initialize();
+        keys.Identities.Library = library;
+        var bridge = keys.Identities.Import(keys.Identities.Load(keys.IdentityFile("bridge", "urn:mrn:mcp:vessel:mcc:soundcharts:bridge", 12), "secret"), "Bridge PC", makeDefault: false);
+        var org = keys.Identities.Import(keys.Identities.Load(keys.IdentityFile("org", "urn:mrn:mcp:org:mcc:soundcharts"), "secret"), "SoundCharts organisation", makeDefault: false);
+        library.AddCollection("SECOM",
+        [
+            new SecomSource(Guid.NewGuid(), "KHOA S-101", new Uri("https://khoa.example/api/secom/"), SecomFilter.All),
+            new SecomSource(Guid.NewGuid(), "KHOA S-102", new Uri("https://khoa2.example/api/secom/"), SecomFilter.All),
+            new SecomSource(Guid.NewGuid(), "KHRA S-124", new Uri("https://khra.example/api/secom/"), SecomFilter.All) { Identity = org.Id },
+        ]);
+        await library.WhenIdle();
+        using var page = keys.Page();
+        using var host = ViewHost.Show(new EncDotNet.S100.Viewer.Views.Settings.KeysAndCertificatesSettingsPage { DataContext = page }, width: 760, height: 820);
+
+        Assert.True(host.IsShown("Keys.Row.UsedBy"));
+        Assert.True(host.IsShown("Keys.Row.MakeDefault"));
+        Save(host, "identities-tab");
+
+        var dialog = new EncDotNet.S100.Viewer.ViewModels.Keys.RemoveIdentityDialogViewModel(keys.Identities, bridge, keys.Time);
+        using var confirm = ViewHost.Show(new RemoveIdentityDialogView { DataContext = dialog }, width: 440, height: 420);
+        Assert.True(confirm.IsShown("RemoveIdentity.NewDefault"));
+        Assert.True(confirm.IsShown("RemoveIdentity.Affected"));
+        Save(confirm, "remove-identity");
+    }
+
     private static void Save(ViewHost host, string name)
     {
         var frame = host.CaptureFrame();

@@ -44,7 +44,8 @@
                                                    Classes.accent="{Binding IsAccent}"
                                                    Classes.warning="{Binding IsWarning}"
                                                    Classes.success="{Binding IsSuccess}"
-                                                   Classes.destructive="{Binding IsDestructive}">
+                                                   Classes.destructive="{Binding IsDestructive}"
+                                                   Classes.inverted="{Binding IsInverted}">
                                                 <Border Classes="tint" CornerRadius="3" />
                                                 <TextBlock Text="{Binding Text}" />
                                             </Panel>
@@ -74,6 +75,29 @@
                                 <SelectableTextBlock Text="{Binding Reference}"
                                                      FontFamily="{StaticResource KeysMonoFont}" FontSize="11" />
                             </Border>
+                        </StackPanel>
+                        <!-- E3: which sources use it, and how. -->
+                        <StackPanel Spacing="5" Margin="0,3,0,0" IsVisible="{Binding HasUsedByLabel}">
+                            <TextBlock Text="{Binding UsedByLabel}" FontSize="11.5" FontWeight="SemiBold"
+                                       Classes.keysSub="{Binding !IsUsed}" />
+                            <ItemsControl ItemsSource="{Binding UsedBy}" IsVisible="{Binding IsUsed}"
+                                          AutomationProperties.AutomationId="Keys.Row.UsedBy">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel ItemSpacing="5" LineSpacing="5" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="keys:KeysUsedBy">
+                                        <Border Classes="keysUsedBy">
+                                            <TextBlock FontSize="11">
+                                                <Run Text="{Binding Source}" /><Run Text=" " /><Run
+                                                     Text="{Binding How}" Foreground="{DynamicResource MutedColor}" />
+                                            </TextBlock>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                         </StackPanel>
                         <ItemsControl ItemsSource="{Binding Actions}" IsVisible="{Binding HasActions}" Margin="0,4,0,0">
                             <ItemsControl.ItemsPanel>
@@ -267,6 +291,22 @@
         </Style>
         <Style Selector="Panel.keysBadge.destructive > Border.tint">
             <Setter Property="Background" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+
+        <!-- E2: the DEFAULT pill, foreground on background. -->
+        <Style Selector="Panel.keysBadge.inverted > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
+        </Style>
+        <Style Selector="Panel.keysBadge.inverted > Border.tint">
+            <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <!-- E3: a source using the identity. -->
+        <Style Selector="Border.keysUsedBy">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="999" />
+            <Setter Property="Padding" Value="8,2" />
         </Style>
 
         <!-- B5 error banner: destructive border and tint, a red "!" disc. -->

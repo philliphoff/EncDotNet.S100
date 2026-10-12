@@ -204,7 +204,8 @@ public partial class App : Application
             .Register<Views.AddCollectionManifestDialogView, ViewModels.AddCollectionManifestDialogViewModel>()
             .Register<Views.ImportIdentityDialogView, ViewModels.Keys.ImportIdentityDialogViewModel>()
             .Register<Views.AddAuthorityDialogView, ViewModels.Keys.AddAuthorityDialogViewModel>()
-            .Register<Views.CertificateDetailsDialogView, ViewModels.Keys.CertificateDetailsDialogViewModel>();
+            .Register<Views.CertificateDetailsDialogView, ViewModels.Keys.CertificateDetailsDialogViewModel>()
+            .Register<Views.RemoveIdentityDialogView, ViewModels.Keys.RemoveIdentityDialogViewModel>();
 
         // Register every S-100 style and layer renderer before instrumentation
         // wraps Mapsui's style registry. The renderer package owns the required

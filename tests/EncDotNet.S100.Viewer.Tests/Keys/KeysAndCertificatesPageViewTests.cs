@@ -23,7 +23,7 @@ public sealed class KeysAndCertificatesPageViewTests : IDisposable
 
         Assert.False(host.IsShown("Keys.Identities.EmptyImport"));
         host.Click(host.Find<Button>("Keys.Row.Remove"));
-        Assert.Equal("Remove Bridge PC?", Assert.Single(_keys.Dialogs.Confirms).Title);
+        Assert.Equal("Remove Bridge PC?", Assert.IsType<EncDotNet.S100.Viewer.ViewModels.Keys.RemoveIdentityDialogViewModel>(Assert.Single(_keys.Dialogs.Shown)).Title);
     }
 
     [AvaloniaFact]

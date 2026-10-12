@@ -1694,6 +1694,35 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   untrusted server, *Reason*; and the row's action as a button. Choosing an
 >   identity saves the setting (that source is re-read), and once it reads,
 >   "Re-read with {name} · {N datasets}".
+> - **The Identities tab** (Settings → Keys & certificates):
+>   - The intro says sources use the default unless their setting names
+>     another identity, or None. The empty state adds that the first import
+>     becomes the default, and the note that sources store `default`, `none`
+>     or a reference.
+>   - A row shows its kind badge, then an inverted **DEFAULT** pill for the
+>     default; its sub-line is "Issued by {issuer} · ends {date}".
+>   - "Used by N sources" lists one chip per source, `via default` or
+>     `chosen` (`SecomIdentityUsage`), or "Not used by any source". The tab
+>     follows the Library, rebuilding when a source's setting changes.
+>   - Actions: Details · **Make default** (other usable identities; the
+>     sources on Default are re-read) · Replace… · Remove. Round 1's
+>     Use / Stop using and the IN USE badge are gone.
+> - **Remove identity** (`RemoveIdentityDialogViewModel`, 440 px): "{N}
+>   sources use this identity, directly or as the default. Each switches as
+>   listed." For the default it asks for a **new default** first (the other
+>   usable identities, then None; the first preselected). The affected list
+>   says what happens to each source: "switches to None" for those set to
+>   it, "Default · switches to {new default | None}" for those on Default.
+>   Confirming updates those settings, sets the new default, deletes the
+>   key-store entry and re-reads the affected sources.
+> - **Import, step 3**: "{N} sources need a certificate from an issuer
+>   {name} chains to. Set them to {name}? Other sources keep their
+>   setting." One checkbox per waiting source (a last read that wanted a
+>   certificate or a signed request, or was refused), ticked by default;
+>   sources whose service named issuers the identity doesn't chain to, or
+>   that refused it before, aren't offered. Round 1's "use for SECOM"
+>   checkbox is gone: the first import becomes the default, and Make
+>   default changes it.
 > - **Breaking changes** (preview packages): `SecomServerTrust.SetIdentity`
 >   now also takes an id, `IdentityChanged` is `IdentitiesChanged`,
 >   `CreateHandler(presentIdentity)` is `CreateHandler()`,

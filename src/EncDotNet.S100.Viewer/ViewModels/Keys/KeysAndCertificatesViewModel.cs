@@ -40,6 +40,8 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
     private readonly ITimer _daily;
     private KeysTab _selectedTab;
     private DateOnly _lastRefreshDay;
+    private EncDotNet.S100.Collections.Library.CollectionLibrary? _watchedLibrary;
+    private string _usageSignature = string.Empty;
 
     public KeysAndCertificatesViewModel(
         SecomIdentityStore identities,
@@ -171,6 +173,33 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
         _identities.Changed -= OnStoreChanged;
         _identities.Trust.IdentitiesChanged -= OnStoreChanged;
         _authorities.Changed -= OnStoreChanged;
+        if (_watchedLibrary is not null)
+            _watchedLibrary.Changed -= OnLibraryChanged;
+    }
+
+    /// <summary>Rebuilds when the sources' identity settings change ("Used by", #883 E3); indexing alone doesn't.</summary>
+    private void OnLibraryChanged(object? sender, EventArgs e)
+    {
+        if (UsageSignature() != _usageSignature)
+            _post(Refresh);
+    }
+
+    private string UsageSignature() => _identities.Library is { } library
+        ? string.Join('|', library.Collections.SelectMany(c => c.Sources)
+            .Select(s => s.Definition is EncDotNet.S100.Collections.SecomSource secom ? $"{secom.Id}:{secom.Identity}:{secom.DisplayName}" : null)
+            .OfType<string>())
+        : string.Empty;
+
+    /// <summary>Listens to the Library once the host has given the store one.</summary>
+    private void WatchLibrary()
+    {
+        if (ReferenceEquals(_identities.Library, _watchedLibrary))
+            return;
+        if (_watchedLibrary is not null)
+            _watchedLibrary.Changed -= OnLibraryChanged;
+        _watchedLibrary = _identities.Library;
+        if (_watchedLibrary is not null)
+            _watchedLibrary.Changed += OnLibraryChanged;
     }
 
     private void OnStoreChanged(object? sender, EventArgs e) => _post(Refresh);
@@ -186,6 +215,8 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
 
     private void BuildIdentities(DateTimeOffset now)
     {
+        WatchLibrary();
+        _usageSignature = UsageSignature();
         IdentityRows.Clear();
         AlternativeIdentities.Clear();
         var trust = _identities.Trust;
@@ -201,8 +232,8 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
         foreach (var reference in _identities.Identities)
         {
             var isInUse = inUse is not null && string.Equals(reference.Thumbprint, inUse.Certificate.Thumbprint, StringComparison.OrdinalIgnoreCase);
-            var chosen = string.Equals(_identities.DefaultId, reference.Id, StringComparison.OrdinalIgnoreCase);
-            IdentityRows.Add(StoredRow(reference, isInUse, chosen, now));
+            var isDefault = string.Equals(_identities.DefaultId, reference.Id, StringComparison.OrdinalIgnoreCase);
+            IdentityRows.Add(StoredRow(reference, isDefault, now));
             if (reference.RevokedAt is not null && (revoked is null || reference.RevokedAt > revoked.RevokedAt))
                 revoked = reference;
             if (!isInUse && reference.RevokedAt is null && reference.NotAfter > now)
@@ -249,32 +280,41 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private KeysRow StoredRow(SecomIdentityReference reference, bool isInUse, bool chosen, DateTimeOffset now)
+    private KeysRow StoredRow(SecomIdentityReference reference, bool isDefault, DateTimeOffset now)
     {
         var (status, tone) = reference.RevokedAt is not null
             ? (Strings.Keys_Status_Revoked, KeysTone.Destructive)
             : ValidityStatus(reference.NotBefore, reference.NotAfter, now);
 
+        // E2: the kind, then DEFAULT; the sub-line is the issuer and the end.
         var badges = new List<KeysBadge> { KindBadge(reference.Kind) };
-        if (isInUse)
-            badges.Add(new KeysBadge(Strings.Keys_Badge_InUse, KeysTone.Success));
+        if (isDefault)
+            badges.Add(new KeysBadge(Strings.Keys_Badge_Default, KeysTone.Inverted));
+        var sub = string.Format(CultureInfo.CurrentCulture, Strings.Keys_Identity_IssuedByFormat,
+            reference.Issuer ?? Strings.Keys_UnknownIssuer, CertificateText.Date(reference.NotAfter));
 
-        var usage = isInUse ? Strings.Keys_Usage_InUse
-            : chosen && _identities.CommandLineIdentity is not null ? Strings.Keys_Usage_Overridden
-            : Strings.Keys_Usage_NotInUse;
-        var sub = string.Format(CultureInfo.CurrentCulture, Strings.Keys_Identity_SubFormat,
-            reference.Issuer ?? Strings.Keys_UnknownIssuer, CertificateText.Date(reference.NotAfter), usage);
-
-        var actions = new List<KeysRowAction>
+        // E3: the sources that use it, directly or via the default.
+        var users = _identities.Library is { } library
+            ? EncDotNet.S100.Collections.Library.SecomIdentityUsage.UsersOf(library.Collections, reference.Id, _identities.DefaultId)
+            : [];
+        var usedBy = users
+            .Select(u => new KeysUsedBy(
+                u.Definition.DisplayName ?? u.Definition.ServiceUri.Host,
+                u.ViaDefault ? Strings.Keys_UsedBy_ViaDefault : Strings.Keys_UsedBy_Chosen))
+            .ToArray();
+        var usedByLabel = usedBy.Length switch
         {
-            new("Details", Strings.Keys_Action_Details, new RelayCommand(() => ShowDetails(reference))),
-            new("Replace", Strings.Keys_Action_Replace, new RelayCommand(() => _ = ImportAsync(reference.Id))),
+            0 => Strings.Keys_UsedBy_None,
+            1 => Strings.Keys_UsedBy_One,
+            var n => string.Format(CultureInfo.CurrentCulture, Strings.Keys_UsedBy_Format, n),
         };
-        if (isInUse || chosen)
-            actions.Add(new("StopUsing", Strings.Keys_Action_StopUsing, new RelayCommand(() => Use(null))));
-        else if (reference.RevokedAt is null && reference.NotAfter > now)
-            actions.Add(new("Use", Strings.Keys_Action_Use, new RelayCommand(() => Use(reference.Id))));
-        actions.Add(new("Remove", Strings.Keys_Action_Remove, new RelayCommand(() => ConfirmRemove(reference, isInUse)), IsDestructive: true));
+
+        // E4: Details · Make default (another, usable identity) · Replace… · Remove.
+        var actions = new List<KeysRowAction> { new("Details", Strings.Keys_Action_Details, new RelayCommand(() => ShowDetails(reference))) };
+        if (!isDefault && reference.RevokedAt is null && reference.NotAfter > now)
+            actions.Add(new("MakeDefault", Strings.Keys_Action_MakeDefault, new RelayCommand(() => Use(reference.Id))));
+        actions.Add(new("Replace", Strings.Keys_Action_Replace, new RelayCommand(() => _ = ImportAsync(reference.Id))));
+        actions.Add(new("Remove", Strings.Keys_Action_Remove, new RelayCommand(() => ConfirmRemove(reference)), IsDestructive: true));
 
         return new KeysRow
         {
@@ -288,6 +328,8 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
             Sub = sub,
             Reference = reference.Id,
             Actions = actions,
+            UsedByLabel = usedByLabel,
+            UsedBy = usedBy,
         };
     }
 
@@ -420,15 +462,14 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
         _dialogs.Show(dialog, 480);
     }
 
-    private void ConfirmRemove(SecomIdentityReference reference, bool isInUse)
+    /// <summary>F: what removing it does to each source, and a new default when it is the default.</summary>
+    private void ConfirmRemove(SecomIdentityReference reference)
     {
-        var body = isInUse ? Strings.Keys_Remove_InUseBody : Strings.Keys_Remove_NotInUseBody;
-        var footnote = string.Format(CultureInfo.CurrentCulture, Strings.Keys_Remove_FootnoteFormat, _identities.Keys.DisplayName);
-        _dialogs?.Confirm(
-            string.Format(CultureInfo.CurrentCulture, Strings.Keys_Remove_TitleFormat, reference.DisplayName),
-            body + "\n\n" + footnote,
-            Strings.Keys_Remove_Confirm,
-            () => _identities.Remove(reference.Id));
+        if (_dialogs is null)
+            return;
+        var dialog = new RemoveIdentityDialogViewModel(_identities, reference, _time);
+        dialog.Closed += (_, _) => _dialogs.Close(dialog);
+        _dialogs.Show(dialog, 440);
     }
 
     private void ConfirmRemove(TrustedAuthority authority) =>

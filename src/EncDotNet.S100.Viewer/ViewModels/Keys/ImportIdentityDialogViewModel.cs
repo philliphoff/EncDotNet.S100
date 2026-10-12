@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Secom;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Secom;
@@ -28,7 +29,6 @@ internal sealed class ImportIdentityDialogViewModel : ViewModelBase
     private string _password = "";
     private string? _error;
     private string _name = "";
-    private bool _useForSecom;
 
     public ImportIdentityDialogViewModel(SecomIdentityStore store, Func<Task<string?>> pickFile, string? replacing = null, TimeProvider? time = null)
     {
@@ -38,8 +38,6 @@ internal sealed class ImportIdentityDialogViewModel : ViewModelBase
         _pickFile = pickFile;
         _replacing = replacing;
         _time = time ?? TimeProvider.System;
-        _useForSecom = store.DefaultId is null
-            || (replacing is not null && string.Equals(store.DefaultId, replacing, StringComparison.OrdinalIgnoreCase));
 
         PrimaryCommand = new RelayCommand(Primary, () => CanPrimary);
         BackCommand = new RelayCommand(Back);
@@ -123,12 +121,22 @@ internal sealed class ImportIdentityDialogViewModel : ViewModelBase
     public string ImportedTitle => _imported is null ? "" : string.Format(CultureInfo.CurrentCulture, Strings.Keys_Import_ImportedFormat, _imported.DisplayName);
     public string Reference => _imported?.Id ?? "";
 
-    /// <summary>The Use step's choice: use it for SECOM services that ask for a certificate.</summary>
-    public bool UseForSecom
-    {
-        get => _useForSecom;
-        set => SetProperty(ref _useForSecom, value);
-    }
+    /// <summary>
+    /// The last step's sources (#883 E7): those waiting for a certificate that
+    /// the imported identity's issuer may satisfy, each ticked to be set to it.
+    /// </summary>
+    public IReadOnlyList<ImportSourceChoice> WaitingSources { get; private set; } = [];
+
+    public bool HasWaitingSources => WaitingSources.Count > 0;
+
+    /// <summary>"2 sources need a certificate from an issuer Bridge PC chains to. Set them to Bridge PC? …", or that none waits.</summary>
+    public string WaitingSourcesText => _imported is null ? ""
+        : WaitingSources.Count switch
+        {
+            0 => Strings.Keys_Import_NoSources,
+            1 => string.Format(CultureInfo.CurrentCulture, Strings.Keys_Import_OneSourceFormat, _imported.DisplayName),
+            var n => string.Format(CultureInfo.CurrentCulture, Strings.Keys_Import_SourcesFormat, n, _imported.DisplayName),
+        };
 
     public bool CanPrimary => _step switch
     {
@@ -208,16 +216,52 @@ internal sealed class ImportIdentityDialogViewModel : ViewModelBase
         }
 
         _loaded = null;
+        WaitingSources = FindWaitingSources(_imported);
+        OnPropertyChanged(nameof(WaitingSources));
+        OnPropertyChanged(nameof(HasWaitingSources));
+        OnPropertyChanged(nameof(WaitingSourcesText));
         Step = 2;
+    }
+
+    /// <summary>
+    /// SECOM sources whose last read wanted a certificate or a signed request,
+    /// or had one refused, and that don't use this identity already. A source
+    /// whose service named issuers this identity doesn't chain to, or that
+    /// refused it before, is left out.
+    /// </summary>
+    private IReadOnlyList<ImportSourceChoice> FindWaitingSources(SecomIdentityReference imported)
+    {
+        if (_store.Library is not { } library || _store.Trust.Identities.GetValueOrDefault(imported.Id) is not { } identity)
+            return [];
+        var choices = new List<ImportSourceChoice>();
+        foreach (var collection in library.Collections.Where(c => !c.IsSession))
+        {
+            foreach (var source in collection.Sources)
+            {
+                if (source.Definition is not EncDotNet.S100.Collections.SecomSource secom || source.Index is not { } index
+                    || LibraryNodeText.SecomCode(index) is not { } code || !SecomDiagnosticCodes.IsIdentityMatter(code)
+                    || string.Equals(_store.Trust.Resolve(secom.Identity).Id, imported.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (index.Presentation?.HintFor(imported.Id, identity, _store.Trust.Anchors) is SecomIdentityHint.IssuerNotAccepted or SecomIdentityHint.RefusedHere)
+                    continue;
+                var why = LibraryNodeText.Status(new LibraryNodeStatusInput(collection, [source])).Line ?? string.Empty;
+                choices.Add(new ImportSourceChoice(collection.Id, secom, LibraryNodeText.SourceName(source, collection), why));
+            }
+        }
+
+        return choices;
     }
 
     private void Finish()
     {
-        if (_imported is not null)
+        // E7: the ticked sources are set to the new identity; each is read again.
+        if (_imported is not null && _store.Library is { } library)
         {
-            var isDefault = string.Equals(_store.DefaultId, _imported.Id, StringComparison.OrdinalIgnoreCase);
-            if (_useForSecom && !isDefault)
-                _store.MakeDefault(_imported.Id);
+            foreach (var choice in WaitingSources.Where(c => c.IsChecked))
+                library.UpdateSource(choice.CollectionId, choice.Source with { Identity = _imported.Id });
         }
 
         Close();
@@ -278,5 +322,27 @@ internal sealed class ImportIdentityDialogViewModel : ViewModelBase
                 : new(Strings.Keys_Field_Valid, range));
         fields.Add(new(Strings.Keys_Field_Key, CertificateText.KeyDescription(identity.Certificate)));
         return fields;
+    }
+}
+
+/// <summary>A source waiting for a certificate, offered on the import's last step (#883 E7).</summary>
+internal sealed class ImportSourceChoice(Guid collectionId, EncDotNet.S100.Collections.SecomSource source, string name, string why) : ViewModelBase
+{
+    private bool _isChecked = true;
+
+    public Guid CollectionId { get; } = collectionId;
+
+    public EncDotNet.S100.Collections.SecomSource Source { get; } = source;
+
+    public string Name { get; } = name;
+
+    /// <summary>Why it waits, in the Library's words ("Needs a certificate").</summary>
+    public string Why { get; } = why;
+
+    /// <summary>True to set it to the new identity (the default).</summary>
+    public bool IsChecked
+    {
+        get => _isChecked;
+        set => SetProperty(ref _isChecked, value);
     }
 }
