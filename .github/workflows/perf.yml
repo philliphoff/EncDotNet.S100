@@ -38,9 +38,13 @@ jobs:
       # package management requires every PackageReference in the
       # overlaid PerfRunner csproj to have a matching PackageVersion;
       # if the PR adds a new package (e.g. profiler dependencies) the
-      # base CPM file will not contain it and restore will fail.
+      # base CPM file will not contain it and restore will fail. Packages
+      # the base already declares keep the base's versions, so the base
+      # library code builds and is measured against its own dependencies
+      # even when the PR upgrades one (with breaking changes or not).
       - name: Overlay PR perf tooling onto base tree
         run: |
+          cp Directory.Packages.props /tmp/base-packages.props
           git checkout ${{ github.event.pull_request.head.sha }} -- \
             tools/EncDotNet.S100.PerfRunner \
             tools/EncDotNet.S100.PerfReport \
@@ -48,6 +52,14 @@ jobs:
             src/EncDotNet.S100.Crs.ProjNet \
             src/EncDotNet.S100.Diagnostics.Export \
             Directory.Packages.props
+          python3 - /tmp/base-packages.props Directory.Packages.props <<'PY'
+          import re, sys
+          entry = re.compile(r'(<PackageVersion\s+Include="([^"]+)"\s+Version=")([^"]+)(")')
+          base = {m.group(2): m.group(3) for m in entry.finditer(open(sys.argv[1]).read())}
+          path = sys.argv[2]
+          merged = entry.sub(lambda m: m.group(1) + base.get(m.group(2), m.group(3)) + m.group(4), open(path).read())
+          open(path, 'w').write(merged)
+          PY
 
       - name: Build base PerfRunner
         run: |
@@ -57,8 +69,11 @@ jobs:
             --no-self-contained
 
       # --- Build the PR branch's PerfRunner into a separate dir ---
+      # --force discards the overlay, including the base package versions
+      # written into Directory.Packages.props, which a plain checkout would
+      # carry over to the PR tree as a local change.
       - name: Checkout PR branch
-        run: git checkout ${{ github.event.pull_request.head.sha }}
+        run: git checkout --force ${{ github.event.pull_request.head.sha }}
 
       - name: Build candidate PerfRunner
         run: |

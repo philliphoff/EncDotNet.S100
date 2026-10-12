@@ -904,7 +904,7 @@ public sealed class S57ToS101Translator
         // feature id, subdivision) to its allocated S-101 record id, so that
         // C_AGGR feature-to-feature pointers (which reference members by LNAM,
         // not RCNM/RCID) can be resolved to the S-101 features in a second pass.
-        private readonly Dictionary<(int agency, long fid, int sub), uint> _recordIdByLnam = new();
+        private readonly Dictionary<S57LongName, uint> _recordIdByLnam = new();
 
         // Record ids of features already linked as `theEquipment` of a
         // structure. S-101 binds a light to at most one structure, so a light
@@ -1288,7 +1288,7 @@ public sealed class S57ToS101Translator
             var byMember = new Dictionary<int, BridgeAggregationGroup>();
             var unjoined = new List<UnjoinedBridgeCollection>();
 
-            Dictionary<(int, long, int), int>? indexByLnam = null;
+            Dictionary<S57LongName, int>? indexByLnam = null;
             for (int ai = 0; ai < featureRecords.Count; ai++)
             {
                 var aggr = featureRecords[ai];
@@ -1297,7 +1297,7 @@ public sealed class S57ToS101Translator
 
                 if (indexByLnam is null)
                 {
-                    indexByLnam = new Dictionary<(int, long, int), int>();
+                    indexByLnam = new Dictionary<S57LongName, int>();
                     for (int i = 0; i < featureRecords.Count; i++)
                         indexByLnam[Lnam(featureRecords[i].RecordName)] = i;
                 }
@@ -1309,7 +1309,7 @@ public sealed class S57ToS101Translator
                 bool qualifies = true;
                 foreach (var fp in aggr.FeaturePointers)
                 {
-                    if (!indexByLnam.TryGetValue(Lnam(fp.Name), out var mi))
+                    if (!indexByLnam.TryGetValue(fp.Name, out var mi))
                     {
                         qualifies = false;
                         break;
@@ -1675,7 +1675,7 @@ public sealed class S57ToS101Translator
             if (schedules.Count == 0)
                 return plan;
 
-            var indexByLnam = new Dictionary<(int, long, int), int>();
+            var indexByLnam = new Dictionary<S57LongName, int>();
             for (int i = 0; i < featureRecords.Count; i++)
                 indexByLnam[Lnam(featureRecords[i].RecordName)] = i;
 
@@ -1684,7 +1684,7 @@ public sealed class S57ToS101Translator
                 var members = new List<int>();
                 foreach (var fp in featureRecords[i].FeaturePointers)
                 {
-                    if (indexByLnam.TryGetValue(Lnam(fp.Name), out var mi) && mi != i)
+                    if (indexByLnam.TryGetValue(fp.Name, out var mi) && mi != i)
                         members.Add(mi);
                 }
 
@@ -1832,7 +1832,7 @@ public sealed class S57ToS101Translator
         {
             var byCollection = new Dictionary<int, List<int>>();
             var members = new HashSet<int>();
-            Dictionary<(int, long, int), int>? indexByLnam = null;
+            Dictionary<S57LongName, int>? indexByLnam = null;
             for (int ci = 0; ci < featureRecords.Count; ci++)
             {
                 var collection = featureRecords[ci];
@@ -1841,7 +1841,7 @@ public sealed class S57ToS101Translator
 
                 if (indexByLnam is null)
                 {
-                    indexByLnam = new Dictionary<(int, long, int), int>();
+                    indexByLnam = new Dictionary<S57LongName, int>();
                     for (int i = 0; i < featureRecords.Count; i++)
                         indexByLnam[Lnam(featureRecords[i].RecordName)] = i;
                 }
@@ -1849,7 +1849,7 @@ public sealed class S57ToS101Translator
                 var group = new List<int>();
                 foreach (var fp in collection.FeaturePointers)
                 {
-                    if (indexByLnam.TryGetValue(Lnam(fp.Name), out var mi)
+                    if (indexByLnam.TryGetValue(fp.Name, out var mi)
                         && IsBridgeObjl((ushort)(int)featureRecords[mi].ObjectCode)
                         && members.Add(mi))
                     {
@@ -2328,8 +2328,11 @@ public sealed class S57ToS101Translator
             return edges;
         }
 
-        private static (int agency, long fid, int sub) Lnam(EncDotNet.S57.S57RecordName n)
-            => ((int)n.AgencyCode, (long)n.FeatureId, (int)n.FeatureSubdivision);
+        // Feature pointers name their targets by long name (S57FeaturePointer.Name), so
+        // features are indexed by theirs. A record without a FOID field keys as the
+        // all-zero long name.
+        private static S57LongName Lnam(EncDotNet.S57.S57RecordName n)
+            => n.LongName ?? default;
 
         // Second pass over deferred S-57 C_AGGR collection objects. S-101 has no
         // generic aggregation; a C_AGGR whose members are navigational tracks
@@ -2361,20 +2364,20 @@ public sealed class S57ToS101Translator
 
             // Index every S-57 feature by LNAM so C_AGGR members (referenced by
             // long name, not RCNM/RCID) can be resolved to their object class.
-            var featureByLnam = new Dictionary<(int, long, int), EncDotNet.S57.S57FeatureRecord>();
+            var featureByLnam = new Dictionary<S57LongName, EncDotNet.S57.S57FeatureRecord>();
             foreach (var r in _s57.FeatureRecords)
                 featureByLnam[Lnam(r.RecordName)] = r;
 
-            var pendingByLnam = new Dictionary<(int, long, int), EncDotNet.S57.S57FeatureRecord>();
+            var pendingByLnam = new Dictionary<S57LongName, EncDotNet.S57.S57FeatureRecord>();
             foreach (var a in aggregations)
                 pendingByLnam[Lnam(a.RecordName)] = a;
 
-            var qualifyCache = new Dictionary<(int, long, int), bool>();
+            var qualifyCache = new Dictionary<S57LongName, bool>();
 
             // Resolves a member's S-101 class: a nested C_AGGR contributes
             // "RangeSystem" when it qualifies; any other feature contributes the
             // class it maps to (or null when unmapped/dropped).
-            string? MemberClass((int, long, int) key, HashSet<(int, long, int)> visiting)
+            string? MemberClass(S57LongName key, HashSet<S57LongName> visiting)
             {
                 if (pendingByLnam.ContainsKey(key))
                     return Qualifies(key, visiting) ? S101ClassRangeSystem : null;
@@ -2385,7 +2388,7 @@ public sealed class S57ToS101Translator
                     (ushort)(int)mf.ObjectCode, view, MapPrimitive(mf.Primitive))?.S101Code;
             }
 
-            bool Qualifies((int, long, int) key, HashSet<(int, long, int)> visiting)
+            bool Qualifies(S57LongName key, HashSet<S57LongName> visiting)
             {
                 if (qualifyCache.TryGetValue(key, out var cached)) return cached;
                 if (!pendingByLnam.TryGetValue(key, out var aggr)) return false;
@@ -2395,7 +2398,7 @@ public sealed class S57ToS101Translator
                 bool allPermitted = aggr.FeaturePointers.Count > 0;
                 foreach (var fp in aggr.FeaturePointers)
                 {
-                    var cls = MemberClass(Lnam(fp.Name), visiting);
+                    var cls = MemberClass(fp.Name, visiting);
                     if (cls is null || !RangeSystemComponentClasses.Contains(cls))
                     {
                         allPermitted = false;
@@ -2416,7 +2419,7 @@ public sealed class S57ToS101Translator
             foreach (var a in aggregations)
             {
                 var key = Lnam(a.RecordName);
-                if (!Qualifies(key, new HashSet<(int, long, int)>()))
+                if (!Qualifies(key, new HashSet<S57LongName>()))
                 {
                     // Not a range system (e.g. a TSS aggregation or land grouping)
                     // — no S-101 home this round.
@@ -2444,7 +2447,7 @@ public sealed class S57ToS101Translator
                 var assocs = new List<S101FeatureAssociation>();
                 foreach (var fp in aggr.FeaturePointers)
                 {
-                    if (_recordIdByLnam.TryGetValue(Lnam(fp.Name), out var memberId))
+                    if (_recordIdByLnam.TryGetValue(fp.Name, out var memberId))
                         assocs.Add(new S101FeatureAssociation(assocCode, memberId, componentRole));
                 }
 
@@ -2581,7 +2584,7 @@ public sealed class S57ToS101Translator
 
             // Index every feature by LNAM so a master's FFPT (which references its
             // slave by long name) can be resolved to the pointed-to record + index.
-            var indexByLnam = new Dictionary<(int, long, int), int>();
+            var indexByLnam = new Dictionary<S57LongName, int>();
             for (int i = 0; i < featureRecords.Count; i++)
                 indexByLnam[Lnam(featureRecords[i].RecordName)] = i;
 
@@ -2595,7 +2598,7 @@ public sealed class S57ToS101Translator
                 {
                     if (fp.Relationship != EncDotNet.S57.S57RelationshipIndicator.Slave)
                         continue;
-                    if (!indexByLnam.TryGetValue(Lnam(fp.Name), out var slaveIndex))
+                    if (!indexByLnam.TryGetValue(fp.Name, out var slaveIndex))
                         continue;
                     var slave = featureRecords[slaveIndex];
                     if ((int)slave.ObjectCode != TopmarObjl)

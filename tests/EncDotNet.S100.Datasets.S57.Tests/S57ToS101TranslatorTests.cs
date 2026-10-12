@@ -132,8 +132,8 @@ public class S57ToS101TranslatorTests
         };
 
     // Builds an FFPT feature-to-feature pointer referencing a target feature by
-    // its S-57 long name (LNAM: agency, feature id, subdivision). Mirrors real
-    // S-57 where FFPT names carry rcnm=0/rcid=0 and identify the target by LNAM.
+    // its S-57 long name (LNAM: agency, feature id, subdivision), as real FFPT
+    // fields do.
     private static EncDotNet.S57.S57FeaturePointer Ffpt(
         ushort producingAgency, uint featureIdentificationNumber,
         ushort featureIdentificationSubdivision = 0,
@@ -141,14 +141,7 @@ public class S57ToS101TranslatorTests
             = EncDotNet.S57.S57RelationshipIndicator.Peer)
         => new()
         {
-            Name = new EncDotNet.S57.S57RecordName
-            {
-                RecordNameCode = 0,
-                RecordId = 0,
-                AgencyCode = (int)producingAgency,
-                FeatureId = (int)featureIdentificationNumber,
-                FeatureSubdivision = (int)featureIdentificationSubdivision,
-            },
+            Name = new EncDotNet.S57.S57LongName(producingAgency, featureIdentificationNumber, featureIdentificationSubdivision),
             Relationship = relationship,
         };
 
