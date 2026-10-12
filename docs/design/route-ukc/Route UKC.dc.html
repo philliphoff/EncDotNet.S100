@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { background: #E7E7EA; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; color: #09090B; }
+    a { color: #2563EB; text-decoration: none; } a:hover { text-decoration: underline; }
+    .app { --background:#FFFFFF; --foreground:#09090B; --card:#FFFFFF; --primary:#18181B; --primary-foreground:#FAFAFA; --secondary:#F4F4F5; --muted:#F4F4F5; --muted-foreground:#71717A; --accent:#F4F4F5; --border:#E4E4E7; --input:#E4E4E7; --destructive:#DC2626; --success:#16A34A; --warning:#D97706; --selected:#2563EB; --selected-foreground:#FFFFFF; }
+    .app.dark { --background:#09090B; --foreground:#FAFAFA; --card:#18181B; --primary:#FAFAFA; --primary-foreground:#18181B; --secondary:#27272A; --muted:#18181B; --muted-foreground:#A1A1AA; --accent:#27272A; --border:#27272A; --input:#3F3F46; --destructive:#EF4444; --success:#22C55E; --warning:#F59E0B; --selected:#3B82F6; --selected-foreground:#FFFFFF; }
+  </style>
+</helmet>
+
+<section style="padding:56px 64px 80px; display:flex; flex-direction:column; gap:36px;">
+
+  <div style="display:flex; gap:48px; flex-wrap:wrap; align-items:flex-start; max-width:2300px;">
+    <div style="max-width:560px; display:flex; flex-direction:column; gap:10px;">
+      <div style="font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#71717A;">Turn 1 · Routes &amp; under-keel clearance · #887 / #888</div>
+      <div style="font-size:32px; font-weight:600; letter-spacing:-.02em; line-height:1.15;">Plan a route, set vessel and departure, see where it's tight and when it meets your settings.</div>
+      <div style="font-size:14px; line-height:1.6; color:#52525B;">First pass at the 1100×700 default window. Narrow windows are deferred to a whole-app form-factor review. The model is live: drag the departure in <a href="#1b">1b</a> and every screen recomputes (UKC = charted depth + water level − draft − squat). Hover the profile to move the marker on the map.</div>
+    </div>
+    <div style="flex:1; min-width:520px; max-width:760px; display:grid; grid-template-columns:1fr 1fr; gap:10px 28px; font-size:13px; line-height:1.55; color:#3F3F46;">
+      <div style="grid-column:1 / -1; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#71717A;">Recommendations</div>
+      <div><strong style="color:#09090B;">Profile lives in the bottom dock</strong> as a Clearance tab beside Timeline; they share the time axis and departure. Alternative: a sheet docked to the map's lower edge when the bottom dock is closed.</div>
+      <div><strong style="color:#09090B;">Headline = verdict card + window band.</strong> The card answers "this departure?", the band under the profile answers "which departures?".</div>
+      <div><strong style="color:#09090B;">Checking is a mode.</strong> Edit and Check passage are toggles that stay in the same places in the panel footer, so you turn a mode off where you turned it on. They can both be on at once. Colouring only while checking; Object information folds to an edge tab; other layers get a wash. Edits recompute live; while computing, the route goes grey-dashed.</div>
+      <div><strong style="color:#09090B;">Departure is a route value.</strong> "Follow passage" pins view time to the ETA under the cursor, so S-104/S-111 show what the ship meets (<a href="#1c">1c</a>).</div>
+      <div><strong style="color:#09090B;">Casual first, S-421 capable.</strong> A route needs only waypoints; Passage fields are optional and unlock features (draft → Check passage, speed → ETAs). Squat is an optional fixed allowance. SOG is the entered speed; S-111 is shown, not applied to ETAs.</div>
+      <div><strong style="color:#09090B;">Words.</strong> Meets your settings · Tight (within 0,5 m) · Below your UKC setting · Low confidence (S-101 depth) · No data. Never "Safe". "Not for navigation" sits in the verdict footer only.</div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:40px; flex-wrap:wrap; align-items:flex-start;">
+
+    <!-- ================= 1a PLAN ================= -->
+    <div id="1a" style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:center; gap:10px;"><span style="display:inline-flex; align-items:center; height:22px; padding:0 8px; border-radius:6px; background:#18181B; color:#FAFAFA; font-size:12px; font-weight:600; font-family:'JetBrains Mono',monospace;">1a</span><span style="font-size:15px; font-weight:600;">Plan · editing with passage settings</span><span style="font-size:13px; color:#71717A;">Light · Day</span></div>
+      <div class="app" style="width:1100px; height:700px; display:flex; flex-direction:column; background:var(--background); color:var(--foreground); border-radius:10px; overflow:hidden; box-shadow:0 20px 50px -20px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.08);">
+        <div style="height:34px; flex:none; display:flex; align-items:center; justify-content:center; position:relative; border-bottom:1px solid var(--border);"><div style="display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600;">{{ ic.map }}SoundCharts</div><div style="position:absolute; right:14px; top:0; bottom:0; display:flex; align-items:center; gap:14px; color:var(--muted-foreground);">{{ ic.users }}{{ ic.moon }}</div></div>
+        <div style="flex:1; min-height:0; display:flex;">
+          <div style="width:48px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:center; padding:6px 0;">
+            <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8"><div style="position:relative; width:48px; height:42px; display:flex; align-items:center; justify-content:center; color:{{ r.color }};"><span style="position:absolute; left:0; top:9px; bottom:9px; width:3px; border-radius:0 2px 2px 0; background:{{ r.bar }};"></span>{{ r.ic }}</div></sc-for>
+            <div style="flex:1;"></div><div style="height:42px; display:flex; align-items:center; color:var(--muted-foreground);">{{ ic.settings }}</div>
+          </div>
+
+          <!-- Routes dock -->
+          <div style="width:320px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0;">
+            <div style="display:flex; align-items:center; gap:4px; padding:10px 10px 6px 16px;"><span style="font-size:11px; font-weight:600; letter-spacing:.06em; color:var(--muted-foreground);">ROUTES</span><span style="flex:1;"></span><span title="Route from measurement" style="width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:6px; color:var(--muted-foreground);">{{ ics.ruler }}</span><span title="New route" style="width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:6px; color:var(--muted-foreground);">{{ ics.plus }}</span></div>
+            <div style="padding:0 8px 8px; display:flex; flex-direction:column; gap:2px; border-bottom:1px solid var(--border);">
+              <div style="position:relative; display:flex; align-items:center; gap:10px; height:40px; padding:0 8px 0 12px; border-radius:6px; background:color-mix(in srgb, var(--selected) 9%, transparent);"><span style="position:absolute; left:0; top:7px; bottom:7px; width:3px; border-radius:2px; background:var(--selected);"></span><span style="color:var(--selected);">{{ ics.route }}</span><div style="flex:1; min-width:0; display:flex; flex-direction:column;"><span style="font-size:12.5px; font-weight:600; color:var(--selected);">Nab Tower to Southampton</span><span style="font-size:10.5px; color:var(--muted-foreground);">9 WP · 24,1 NM</span></div><span style="color:var(--muted-foreground);">{{ ics.more }}</span></div>
+              <div style="display:flex; align-items:center; gap:10px; height:36px; padding:0 8px 0 12px; border-radius:6px;"><span style="color:var(--muted-foreground);">{{ ics.route }}</span><div style="flex:1; min-width:0; display:flex; flex-direction:column;"><span style="font-size:12.5px; font-weight:500;">Cowes to Lymington</span><span style="font-size:10.5px; color:var(--muted-foreground);">4 WP · 9,8 NM</span></div><span style="color:var(--muted-foreground);">{{ ics.more }}</span></div>
+            </div>
+            <div style="padding:10px 10px 8px 16px; display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; align-items:center; gap:6px;"><span style="font-size:14px; font-weight:600;">Nab Tower to Southampton</span><span style="color:var(--muted-foreground);">{{ icx.pencil }}</span><span style="flex:1;"></span><span style="display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:999px; background:var(--selected); color:var(--selected-foreground); font-size:10.5px; font-weight:600;">Editing</span></div>
+              <div style="font-size:11.5px; color:var(--muted-foreground);">9 WP · 24,1 NM · {{ durLabel }} · arrives {{ arrHM }}</div>
+              <div style="display:flex; align-items:center; gap:2px; margin-top:2px;">
+                <span title="Undo (Ctrl+Z)" style="width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:6px; border:1px solid var(--border);">{{ ics.undo }}</span>
+                <span title="Redo (Ctrl+Shift+Z)" style="width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:6px; color:var(--muted-foreground);">{{ ics.redo }}</span>
+                <span style="width:1px; height:16px; background:var(--border); margin:0 4px;"></span>
+                <span title="Zoom to route" style="width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:6px;">{{ ics.focus }}</span>
+                <span title="Reverse" style="width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:6px;">{{ ics.swap }}</span>
+                <span style="flex:1;"></span>
+                <span style="font-size:10.5px; color:var(--muted-foreground); font-family:'JetBrains Mono',monospace;">Ctrl+E edit · Esc done</span>
+              </div>
+            </div>
+            <div style="margin:0 10px 8px; border:1px solid var(--border); border-radius:8px; background:var(--card);">
+              <div style="display:flex; align-items:center; gap:6px; padding:7px 10px 2px;"><span style="font-size:12px; font-weight:600;">Passage</span><span style="font-size:10px; font-weight:500; padding:1px 6px; border-radius:999px; background:var(--secondary); color:var(--muted-foreground);">Optional</span><span style="flex:1;"></span><span style="color:var(--muted-foreground);">{{ icx.chevU }}</span></div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 8px; padding:6px 10px 6px;">
+                <div style="display:flex; flex-direction:column; gap:3px;"><span style="font-size:10.5px; color:var(--muted-foreground);">Draft · squat</span><span style="height:26px; display:flex; align-items:center; gap:6px; padding:0 8px; border:1px solid var(--input); border-radius:6px; font-size:12px; font-family:'JetBrains Mono',monospace;">11,5 m · 0,4 m</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px;"><span style="font-size:10.5px; color:var(--muted-foreground);">Speed</span><span style="height:26px; display:flex; align-items:center; gap:6px; padding:0 8px; border:1px solid var(--input); border-radius:6px; font-size:12px; font-family:'JetBrains Mono',monospace;">12,0 kn</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px;"><span style="font-size:10.5px; color:var(--muted-foreground);">Departure</span><span style="height:26px; display:flex; align-items:center; gap:5px; padding:0 8px; border:1px dashed var(--input); border-radius:6px; font-size:11.5px; color:var(--muted-foreground);">{{ icx.clock }}View time</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px;"><span style="font-size:10.5px; color:var(--muted-foreground);">Required UKC</span><span style="height:26px; display:flex; align-items:center; gap:5px; padding:0 8px; border:1px dashed var(--input); border-radius:6px; font-size:11.5px; color:var(--muted-foreground);">+ Add</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px;"><span style="font-size:10.5px; color:var(--muted-foreground);">Vessel</span><span style="height:26px; display:flex; align-items:center; gap:5px; padding:0 8px; border:1px dashed var(--input); border-radius:6px; font-size:11.5px; color:var(--muted-foreground);">+ Add</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px;"><span style="font-size:10.5px; color:var(--muted-foreground);">Cross-track</span><span style="height:26px; display:flex; align-items:center; gap:5px; padding:0 8px; border:1px dashed var(--input); border-radius:6px; font-size:11.5px; color:var(--muted-foreground);">+ Add</span></div>
+              </div>
+              <div style="padding:0 10px 9px; font-size:10.5px; line-height:1.4; color:var(--muted-foreground);">Draft enables Check passage. Speed gives ETAs. Everything else is optional.</div>
+            </div>
+            <div ref="{{ legsRef }}" style="flex:1; min-height:0; overflow:auto; padding:2px 8px 8px; border-top:1px solid var(--border);">
+              <sc-for list="{{ planItems }}" as="i" hint-placeholder-count="8">
+                <sc-if value="{{ i.isWp }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; align-items:center; gap:10px; height:38px; padding:0 6px 0 8px; border-radius:6px;">
+                    <span style="flex:none; width:22px; height:22px; border-radius:50%; border:1.5px solid var(--foreground); display:flex; align-items:center; justify-content:center; font-size:10.5px; font-weight:600; font-family:'JetBrains Mono',monospace;">{{ i.n }}</span>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column;"><span style="font-size:12.5px; font-weight:600;">{{ i.name }}</span><span style="font-size:10.5px; color:var(--muted-foreground); font-family:'JetBrains Mono',monospace;">{{ i.coords }}</span></div>
+                    <span style="font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--muted-foreground);">{{ i.eta }}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ i.isLeg }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:10px; height:24px; padding:0 6px 0 18px;">
+                    <span style="width:2px; align-self:stretch; background:var(--border);"></span>
+                    <span style="font-size:11px; font-family:'JetBrains Mono',monospace;">{{ i.txt }}</span>
+                    <sc-if value="{{ i.hasOvr }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex; align-items:center; gap:4px; font-size:10.5px; color:var(--selected); font-weight:600;"><span style="width:5px; height:5px; border-radius:50%; background:var(--selected);"></span>{{ i.ovr }}</span></sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ i.isOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:relative; margin:2px 0 2px 10px; padding:9px 10px 10px 14px; border-radius:8px; background:color-mix(in srgb, var(--selected) 7%, var(--card)); border:1px solid color-mix(in srgb, var(--selected) 25%, var(--border)); display:flex; flex-direction:column; gap:8px;">
+                    <span style="position:absolute; left:0; top:8px; bottom:8px; width:3px; border-radius:2px; background:var(--selected);"></span>
+                    <div style="display:flex; align-items:center; gap:8px;"><span style="font-size:12px; font-weight:600; color:var(--selected);">Leg 6 → 7</span><span style="font-size:11px; font-family:'JetBrains Mono',monospace; color:var(--muted-foreground);">{{ i.txt }}</span><span style="flex:1;"></span><span style="color:var(--muted-foreground);">{{ icx.chevU }}</span></div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px 8px;">
+                      <div style="display:flex; flex-direction:column; gap:3px;"><span style="display:flex; align-items:center; gap:4px; font-size:10.5px; color:var(--selected); font-weight:600;"><span style="width:5px; height:5px; border-radius:50%; background:var(--selected);"></span>Speed · override</span><span style="height:26px; display:flex; align-items:center; justify-content:space-between; padding:0 8px; border:1px solid var(--selected); border-radius:6px; font-size:12px; background:var(--background);"><span style="font-family:'JetBrains Mono',monospace;">8,0 kn</span><span style="font-size:10.5px; color:var(--muted-foreground);">Reset</span></span></div>
+                      <div style="display:flex; flex-direction:column; gap:3px;"><span style="font-size:10.5px; color:var(--muted-foreground);">Draft</span><span style="height:26px; display:flex; align-items:center; padding:0 8px; border:1px dashed var(--input); border-radius:6px; font-size:12px; color:var(--muted-foreground); font-family:'JetBrains Mono',monospace;">11,5 m</span></div>
+                      <div style="display:flex; flex-direction:column; gap:3px;"><span style="font-size:10.5px; color:var(--muted-foreground);">Cross-track port / stbd</span><span style="height:26px; display:flex; align-items:center; padding:0 8px; border:1px dashed var(--input); border-radius:6px; font-size:12px; color:var(--muted-foreground); font-family:'JetBrains Mono',monospace;">150 / 150 m</span></div>
+                      <div style="display:flex; flex-direction:column; gap:3px;"><span style="font-size:10.5px; color:var(--muted-foreground);">Required UKC</span><span style="height:26px; display:flex; align-items:center; padding:0 8px; border:1px dashed var(--input); border-radius:6px; font-size:12px; color:var(--muted-foreground); font-family:'JetBrains Mono',monospace;">1,0 m</span></div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;"><span style="display:inline-flex; padding:2px; border-radius:6px; background:var(--secondary); font-size:11px; font-weight:500;"><span style="padding:3px 8px; border-radius:4px; background:var(--background); box-shadow:0 1px 2px rgba(0,0,0,.08);">Rhumb</span><span style="padding:3px 8px; color:var(--muted-foreground);">Great circle</span></span><span style="flex:1;"></span><span style="font-size:11px; color:var(--muted-foreground);">+ Note</span></div>
+                    <div style="font-size:10.5px; color:var(--muted-foreground);">Dashed = inherited from Passage. Safety contour and depth come from Mariner settings.</div>
+                  </div>
+                </sc-if>
+              </sc-for>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-top:1px solid var(--border);">
+              <span title="Edit" style="height:32px; display:inline-flex; align-items:center; gap:7px; padding:0 13px; border-radius:6px; font-size:12.5px; font-weight:500; background:var(--selected); color:var(--selected-foreground); border:1px solid var(--selected);">{{ icx.pencil }}Edit</span>
+              <span style="flex:1;"></span>
+              <span title="Check passage" style="height:32px; display:inline-flex; align-items:center; gap:7px; padding:0 13px; border-radius:6px; font-size:12.5px; font-weight:500; border:1px solid var(--border); color:var(--foreground);">{{ ics.radar }}Check passage</span>
+            </div>
+          </div>
+
+          <!-- Map -->
+          <div style="flex:1; min-width:0; position:relative; overflow:hidden;">
+            <div style="position:absolute; inset:0;">{{ mapPlan }}</div>
+            <div style="position:absolute; left:12px; top:12px; display:flex; align-items:center; gap:10px; height:30px; padding:0 12px; border-radius:8px; background:color-mix(in srgb, var(--background) 92%, transparent); border:1px solid var(--border); font-size:11.5px; box-shadow:0 1px 3px rgba(0,0,0,.1);"><span style="width:7px; height:7px; border-radius:50%; background:var(--selected);"></span><span style="font-weight:600;">Editing route</span><span style="color:var(--muted-foreground);">Click water to add · drag to move · Del removes · Esc done</span></div>
+            <div style="position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:6px;">
+              <sc-for list="{{ toolsEdit }}" as="t" hint-placeholder-count="4"><span style="width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:{{ t.bg }}; color:{{ t.fg }}; box-shadow:0 1px 3px rgba(0,0,0,.12);">{{ t.ic }}</span></sc-for>
+            </div>
+            <div style="position:absolute; left:50%; bottom:12px; transform:translateX(-50%); display:flex; align-items:center; gap:10px; height:36px; padding:0 6px 0 12px; border-radius:10px; background:color-mix(in srgb, var(--background) 94%, transparent); border:1px solid var(--border); box-shadow:0 2px 8px rgba(0,0,0,.12); white-space:nowrap;"><span style="font-size:10px; font-weight:700; letter-spacing:.06em; padding:2px 7px; border:1px solid var(--border); border-radius:5px;">PINNED</span><span style="font-size:12.5px; font-family:'JetBrains Mono',monospace; font-weight:500;">01.04.2021 {{ depHM }}</span><span style="font-size:11.5px; color:var(--muted-foreground);">departure</span><span style="height:26px; display:inline-flex; align-items:center; padding:0 12px; border-radius:6px; background:var(--primary); color:var(--primary-foreground); font-size:12px; font-weight:600;">Live</span></div>
+          </div>
+        </div>
+        <div style="height:26px; flex:none; border-top:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 12px; font-size:11px; color:var(--muted-foreground);"><span style="font-family:'JetBrains Mono',monospace; color:var(--foreground);">Leg 6 → 7: 1,4 NM @ 326°T</span><span>Total 24,1 NM</span><span style="flex:1;"></span><span>Scale</span><span style="font-family:'JetBrains Mono',monospace; color:var(--foreground);">1:211 000</span><span style="width:1px; height:12px; background:var(--border);"></span><span>MCP :51653 · 1 clients</span></div>
+      </div>
+      <div style="max-width:1100px; display:flex; gap:28px; font-size:12.5px; line-height:1.55; color:#52525B;">
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px;"><div><strong style="color:#09090B;">Nothing beyond geometry is required.</strong> A new route shows Passage as one collapsed line. Set fields are solid; unset are dashed "+ Add" and are omitted from routes.json and RTZ. Departure falls back to view time. Required UKC falls back to 0 m and shows as "no margin". Legs inherit; a blue dot marks an override.</div>
+          <div style="width:300px; border:1px solid #E4E4E7; border-radius:8px; background:#fff; padding:8px 10px; display:flex; align-items:center; gap:8px; font-size:12px;"><span style="font-weight:600; color:#09090B;">Passage</span><span style="color:#71717A; flex:1;">Add draft and speed to check clearance</span><span style="color:#71717A;">{{ icx.chevD }}</span></div></div>
+        <div style="flex:1;"><strong style="color:#09090B;">Editing looks different from active:</strong> white casing, insert handles at leg midpoints, the other route dimmed. Leg labels run along the line and drop out when the leg is shorter than the label.</div>
+        <div style="flex:1;"><strong style="color:#09090B;">Basics:</strong> undo/redo, zoom to route, Del wired up, <span style="font-family:'JetBrains Mono',monospace;">Ctrl+E</span> (⌘E) toggles edit, shown in the Route tool's tooltip. No bare-letter shortcut, so it can't fire while typing a name or coordinate. Coordinates show in the app's degrees-minutes format and accept paste.</div>
+      </div>
+    </div>
+
+    <!-- ================= 1b CHECK ================= -->
+    <div id="1b" style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:center; gap:10px;"><span style="display:inline-flex; align-items:center; height:22px; padding:0 8px; border-radius:6px; background:#18181B; color:#FAFAFA; font-size:12px; font-weight:600; font-family:'JetBrains Mono',monospace;">1b</span><span style="font-size:15px; font-weight:600;">Check passage · verdict, coloured route, clearance profile</span><span style="font-size:13px; color:#71717A;">Light · Day · interactive</span></div>
+      <div class="app" style="width:1100px; height:700px; display:flex; flex-direction:column; background:var(--background); color:var(--foreground); border-radius:10px; overflow:hidden; box-shadow:0 20px 50px -20px rgba(0,0,0,.35), 0 0 0 1px rgba(0,0,0,.08);">
+        <div style="height:34px; flex:none; display:flex; align-items:center; justify-content:center; position:relative; border-bottom:1px solid var(--border);"><div style="display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600;">{{ ic.map }}SoundCharts</div><div style="position:absolute; right:14px; top:0; bottom:0; display:flex; align-items:center; gap:14px; color:var(--muted-foreground);">{{ ic.users }}{{ ic.moon }}</div></div>
+        <div style="flex:1; min-height:0; display:flex;">
+          <div style="width:48px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:center; padding:6px 0;">
+            <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8"><div style="position:relative; width:48px; height:42px; display:flex; align-items:center; justify-content:center; color:{{ r.color }};"><span style="position:absolute; left:0; top:9px; bottom:9px; width:3px; border-radius:0 2px 2px 0; background:{{ r.bar }};"></span>{{ r.ic }}</div></sc-for>
+            <div style="flex:1;"></div><div style="height:42px; display:flex; align-items:center; color:var(--muted-foreground);">{{ ic.settings }}</div>
+          </div>
+
+          <div style="width:320px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0;">
+            <div style="display:flex; align-items:center; gap:4px; padding:10px 10px 6px 16px;"><span style="font-size:11px; font-weight:600; letter-spacing:.06em; color:var(--muted-foreground);">ROUTES</span><span style="flex:1;"></span><span style="width:28px; height:28px; display:flex; align-items:center; justify-content:center; color:var(--muted-foreground);">{{ ics.ruler }}</span><span style="width:28px; height:28px; display:flex; align-items:center; justify-content:center; color:var(--muted-foreground);">{{ ics.plus }}</span></div>
+            <div style="padding:2px 10px 10px 16px; display:flex; align-items:center; gap:8px;">
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;"><span style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Nab Tower to Southampton</span><span style="font-size:11.5px; color:var(--muted-foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Solent Trader · 11,5 m · dep {{ depHM }} · arr {{ arrHM }}</span></div>
+              
+            </div>
+            <div style="margin:0 10px 10px; padding:12px; border-radius:10px; border:1px solid {{ v.border }}; background:{{ v.bg }}; display:flex; flex-direction:column; gap:7px;">
+              <div style="display:flex; align-items:center; gap:7px; color:{{ v.fg }};">{{ v.icon }}<span style="font-size:12.5px; font-weight:600;">{{ v.title }}</span></div>
+              <div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:26px; font-weight:600; letter-spacing:-.02em; font-family:'JetBrains Mono',monospace; color:{{ v.fg }};">{{ v.minVal }}</span><span style="font-size:12px; color:var(--muted-foreground);">min UKC · required 1,0 m</span></div>
+              <div style="font-size:12px;">{{ v.where }}</div>
+              <div style="height:1px; background:{{ v.border }}; margin:2px 0;"></div>
+              <div style="display:flex; align-items:center; gap:8px;"><span style="flex:1; font-size:12px; line-height:1.4;">{{ windowText }}</span><sc-if value="{{ showUse }}" hint-placeholder-val="{{ true }}"><span onClick="{{ useWindow }}" style="flex:none; height:26px; display:inline-flex; align-items:center; padding:0 10px; border-radius:6px; background:var(--primary); color:var(--primary-foreground); font-size:11.5px; font-weight:500; cursor:pointer; gap:4px;"><span>Depart</span><span>{{ useHM }}</span></span></sc-if></div>
+              <div style="font-size:10.5px; color:var(--muted-foreground);">Not for navigation · computed from S-102, S-104 for your settings</div>
+            </div>
+            <div style="display:flex; gap:2px; margin:0 10px; padding:2px; border-radius:7px; background:var(--secondary); font-size:12px; font-weight:500;"><span style="flex:1; text-align:center; padding:5px 0; border-radius:5px; background:var(--background); box-shadow:0 1px 2px rgba(0,0,0,.08);">Legs</span><span style="flex:1; text-align:center; padding:5px 0; color:var(--muted-foreground);">Findings {{ findCount }}</span></div>
+            <div style="flex:1; min-height:0; overflow:auto; padding:6px 8px;">
+              <sc-for list="{{ legRows }}" as="l" hint-placeholder-count="8">
+                <div onMouseEnter="{{ l.hover }}" style="position:relative; display:flex; align-items:center; gap:8px; height:34px; padding:0 8px 0 12px; border-radius:6px; background:{{ l.rowBg }}; cursor:default;" style-hover="background:var(--accent);">
+                  <span style="position:absolute; left:0; top:7px; bottom:7px; width:3px; border-radius:2px; background:{{ l.bar }};"></span>
+                  <span style="width:40px; font-size:11px; font-weight:600; font-family:'JetBrains Mono',monospace;">{{ l.n }}</span>
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column;"><span style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.loc }}</span><span style="font-size:10.5px; color:var(--muted-foreground); font-family:'JetBrains Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ l.eta }}</span></div>
+                  <span style="display:inline-flex; align-items:center; height:20px; padding:0 7px; border-radius:5px; flex:none; border:1px {{ l.chipBorder }}; background:{{ l.chipBg }}; color:{{ l.chipFg }}; font-size:11px; font-weight:600; font-family:'JetBrains Mono',monospace;">{{ l.chip }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-top:1px solid var(--border);">
+              <span title="Edit" style="height:32px; display:inline-flex; align-items:center; gap:7px; padding:0 13px; border-radius:6px; font-size:12.5px; font-weight:500; border:1px solid var(--border); color:var(--foreground);">{{ icx.pencil }}Edit</span>
+              <span style="flex:1;"></span>
+              <span title="Check passage" style="height:32px; display:inline-flex; align-items:center; gap:7px; padding:0 13px; border-radius:6px; font-size:12.5px; font-weight:500; background:var(--selected); color:var(--selected-foreground); border:1px solid var(--selected);">{{ ics.radar }}Check passage</span>
+            </div>
+          </div>
+
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+            <div style="flex:1; min-height:0; position:relative; overflow:hidden;">
+              <div style="position:absolute; inset:0;">{{ mapCheck }}</div>
+              <div style="position:absolute; left:12px; bottom:12px; display:flex; flex-direction:column; gap:5px; padding:8px 10px; border-radius:8px; background:color-mix(in srgb, var(--background) 94%, transparent); border:1px solid var(--border); font-size:11px; box-shadow:0 1px 3px rgba(0,0,0,.1);">
+                <span style="font-size:10px; font-weight:600; letter-spacing:.06em; color:var(--muted-foreground);">UKC AT ETA</span>
+                <span style="display:flex; align-items:center; gap:7px;"><span style="width:16px; height:4px; border-radius:2px; background:#13895B;"></span>Meets your settings</span>
+                <span style="display:flex; align-items:center; gap:7px;"><span style="width:16px; height:4px; border-radius:2px; background:#E0A008;"></span>Tight · within 0,5 m</span>
+                <span style="display:flex; align-items:center; gap:7px;"><span style="width:16px; height:5px; border-radius:2px; background:#D42A3A;"></span>Below your UKC setting</span>
+                <span style="display:flex; align-items:center; gap:7px;"><span style="width:16px; height:0; border-top:3px dashed #5E6B7E;"></span>Low confidence · S-101</span>
+              </div>
+              <div style="position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:6px;">
+                <sc-for list="{{ toolsCheck }}" as="t" hint-placeholder-count="4"><span style="width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:{{ t.bg }}; color:{{ t.fg }}; box-shadow:0 1px 3px rgba(0,0,0,.12);">{{ t.ic }}</span></sc-for>
+              </div>
+            </div>
+            <div style="height:262px; flex:none; border-top:1px solid var(--border); display:flex; flex-direction:column;">
+              <div style="height:36px; flex:none; display:flex; align-items:center; gap:16px; padding:0 12px 0 16px; border-bottom:1px solid var(--border);">
+                <span style="font-size:11px; font-weight:600; letter-spacing:.06em; color:var(--muted-foreground); height:36px; display:flex; align-items:center;">TIMELINE</span>
+                <span style="font-size:11px; font-weight:600; letter-spacing:.06em; height:36px; display:flex; align-items:center; border-bottom:2px solid var(--selected);">CLEARANCE</span>
+                <span style="flex:1;"></span>
+                <span style="display:inline-flex; padding:2px; border-radius:6px; background:var(--secondary); font-size:11px; font-weight:500;"><sc-for list="{{ xModes }}" as="m" hint-placeholder-count="2"><span onClick="{{ m.on }}" style="padding:3px 9px; border-radius:4px; background:{{ m.bg }}; color:{{ m.fg }}; cursor:pointer;">{{ m.label }}</span></sc-for></span>
+                <span style="display:inline-flex; align-items:center; gap:5px; font-size:11.5px; color:var(--muted-foreground);">{{ icx.info }}Sources</span>
+                <span style="color:var(--muted-foreground);">{{ icx.chevD }}</span>
+              </div>
+              <div style="flex:1; min-height:0; display:flex; gap:12px; padding:8px 12px 10px 16px;">
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:4px;">
+                  <div style="display:flex; align-items:center; gap:14px; font-size:10.5px; color:var(--muted-foreground);">
+                    <span style="display:flex; align-items:center; gap:5px;"><span style="width:14px; height:2px; background:#2563EB;"></span>Water level</span>
+                    <span style="display:flex; align-items:center; gap:5px;"><span style="width:14px; height:2px; background:#18181B;"></span>Keel</span>
+                    <span style="display:flex; align-items:center; gap:5px;"><span style="width:14px; height:7px; background:rgba(217,119,6,.3);"></span>Required UKC</span>
+                    <span style="display:flex; align-items:center; gap:5px;"><span style="width:14px; height:7px; background:#E6DAB9;"></span>Seabed S-102</span>
+                    <span style="display:flex; align-items:center; gap:5px;"><span style="width:14px; height:7px; background:repeating-linear-gradient(45deg,#A08B5B 0 1px,#F1EAD6 1px 4px);"></span>S-101</span>
+                  </div>
+                  <div onMouseMove="{{ profMoveMain }}" style="width:492px; height:142px; cursor:crosshair;">{{ profMain }}</div>
+                  <div style="display:flex; align-items:center; gap:10px; margin-top:2px;">
+                    <span style="font-size:11px; color:var(--muted-foreground);">Departure</span>
+                    <span style="font-size:12px; font-weight:600; font-family:'JetBrains Mono',monospace; width:40px;">{{ depHM }}</span>
+                    <div style="position:relative; flex:1; height:30px;">
+                      <sc-for list="{{ winSegs }}" as="s" hint-placeholder-count="3"><span style="position:absolute; top:7px; height:8px; left:{{ s.left }}; width:{{ s.width }}; background:{{ s.bg }};"></span></sc-for>
+                      <span style="position:absolute; top:2px; left:{{ depPct }}; width:4px; height:18px; margin-left:-2px; border-radius:2px; background:var(--foreground); box-shadow:0 0 0 2px var(--background);"></span>
+                      <span style="position:absolute; left:0; bottom:0; font-size:9.5px; color:var(--muted-foreground); font-family:'JetBrains Mono',monospace;">00:00</span>
+                      <span style="position:absolute; left:50%; bottom:0; transform:translateX(-50%); font-size:9.5px; color:var(--muted-foreground); font-family:'JetBrains Mono',monospace;">06:00</span>
+                      <span style="position:absolute; right:0; bottom:0; font-size:9.5px; color:var(--muted-foreground); font-family:'JetBrains Mono',monospace;">12:00 · S-104 ends</span>
+                      <input type="range" min="0" max="720" step="5" value="{{ depMin }}" onChange="{{ onDep }}" style="position:absolute; left:0; right:0; top:0; height:22px; width:100%; margin:0; opacity:0; cursor:ew-resize;">
+                    </div>
+                  </div>
+                </div>
+                <div style="width:196px; flex:none; border:1px solid var(--border); border-radius:8px; padding:9px 10px; display:flex; flex-direction:column; gap:4px; font-size:11px;">
+                  <div style="display:flex; justify-content:space-between; font-weight:600; font-size:11.5px;"><span>{{ ro.head }}</span><span style="font-family:'JetBrains Mono',monospace;">{{ ro.eta }}</span></div>
+                  <div style="color:var(--muted-foreground); font-size:10.5px; margin-bottom:3px;">{{ ro.leg }}</div>
+                  <div style="display:flex; justify-content:space-between;"><span>Charted depth</span><span style="font-family:'JetBrains Mono',monospace;">{{ ro.cd }}</span></div>
+                  <div style="color:var(--muted-foreground); font-size:10px; margin-top:-3px;">{{ ro.cdSrc }}</div>
+                  <div style="display:flex; justify-content:space-between;"><span>Water level</span><span style="font-family:'JetBrains Mono',monospace;">{{ ro.tide }}</span></div>
+                  <div style="color:var(--muted-foreground); font-size:10px; margin-top:-3px;">{{ ro.tideSrc }}</div>
+                  <div style="display:flex; justify-content:space-between;"><span>Draft + squat</span><span style="font-family:'JetBrains Mono',monospace;">−11,9 m</span></div>
+                  <div style="height:1px; background:var(--border); margin:2px 0;"></div>
+                  <div style="display:flex; justify-content:space-between; font-weight:600; color:{{ ro.fg }};"><span>UKC</span><span style="font-family:'JetBrains Mono',monospace;">{{ ro.ukc }}</span></div>
+                  <div style="color:var(--muted-foreground); font-size:10.5px;">{{ ro.verdict }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="width:26px; flex:none; border-left:1px solid var(--border); display:flex; justify-content:center; padding-top:12px;"><span style="writing-mode:vertical-rl; font-size:10.5px; font-weight:600; letter-spacing:.06em; color:var(--muted-foreground);">OBJECT INFORMATION</span></div>
+        </div>
+        <div style="height:26px; flex:none; border-top:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 12px; font-size:11px; color:var(--muted-foreground);"><span>Checking passage · recomputes on edit</span><span style="flex:1;"></span><span>Scale</span><span style="font-family:'JetBrains Mono',monospace; color:var(--foreground);">1:211 000</span><span style="width:1px; height:12px; background:var(--border);"></span><span>MCP :51653 · 1 clients</span></div>
+      </div>
+      <div style="max-width:1100px; display:flex; gap:28px; font-size:12.5px; line-height:1.55; color:#52525B;">
+        <div style="flex:1;"><strong style="color:#09090B;">Verdict card</strong> names the worst place and time, then the departure window with a one-click fix. Leg rows get a min-UKC chip; hover a leg to move the profile cursor.</div>
+        <div style="flex:1;"><strong style="color:#09090B;">Route colours</strong> sit on a casing over a washed chart so they read over S-111 arrows. Below-UKC is thicker so it doesn't rely on red alone. S-101 fallback is dashed.</div>
+        <div style="flex:1;"><strong style="color:#09090B;">Profile</strong> plots seabed, water level, keel and the required band against chart datum, so you can see whether depth or tide causes a squeeze. The readout names the cell and station behind each number.</div>
+      </div>
+    </div>
+
+    <!-- ================= 1c FINDINGS + TIMELINE (dark / night) ================= -->
+    <div id="1c" style="display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; align-items:center; gap:10px;"><span style="display:inline-flex; align-items:center; height:22px; padding:0 8px; border-radius:6px; background:#18181B; color:#FAFAFA; font-size:12px; font-weight:600; font-family:'JetBrains Mono',monospace;">1c</span><span style="font-size:15px; font-weight:600;">Findings (#887 + #888) · passage on the Timeline</span><span style="font-size:13px; color:#71717A;">Dark · Night chart</span></div>
+      <div class="app dark" style="width:1100px; height:700px; display:flex; flex-direction:column; background:var(--background); color:var(--foreground); border-radius:10px; overflow:hidden; box-shadow:0 20px 50px -20px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.2);">
+        <div style="height:34px; flex:none; display:flex; align-items:center; justify-content:center; position:relative; border-bottom:1px solid var(--border);"><div style="display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600;">{{ ic.map }}SoundCharts</div><div style="position:absolute; right:14px; top:0; bottom:0; display:flex; align-items:center; gap:14px; color:var(--muted-foreground);">{{ ic.users }}{{ ic.moon }}</div></div>
+        <div style="flex:1; min-height:0; display:flex;">
+          <div style="width:48px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:center; padding:6px 0;">
+            <sc-for list="{{ rail }}" as="r" hint-placeholder-count="8"><div style="position:relative; width:48px; height:42px; display:flex; align-items:center; justify-content:center; color:{{ r.color }};"><span style="position:absolute; left:0; top:9px; bottom:9px; width:3px; border-radius:0 2px 2px 0; background:{{ r.bar }};"></span>{{ r.ic }}</div></sc-for>
+            <div style="flex:1;"></div><div style="height:42px; display:flex; align-items:center; color:var(--muted-foreground);">{{ ic.settings }}</div>
+          </div>
+          <div style="width:320px; flex:none; border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0;">
+            <div style="display:flex; align-items:center; gap:4px; padding:10px 10px 6px 16px;"><span style="font-size:11px; font-weight:600; letter-spacing:.06em; color:var(--muted-foreground);">ROUTES</span><span style="flex:1;"></span><span style="width:28px; height:28px; display:flex; align-items:center; justify-content:center; color:var(--muted-foreground);">{{ ics.plus }}</span></div>
+            <div style="padding:2px 10px 10px 16px; display:flex; align-items:center; gap:8px;">
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;"><span style="font-size:14px; font-weight:600;">Nab Tower to Southampton</span><span style="font-size:11.5px; color:var(--muted-foreground);">dep {{ depHM }} · arr {{ arrHM }}</span></div>
+              
+            </div>
+            <div style="margin:0 10px 10px; padding:10px 12px; border-radius:10px; border:1px solid {{ v.border }}; background:{{ v.bg }}; display:flex; align-items:center; gap:10px;">
+              <span style="color:{{ v.fg }};">{{ v.icon }}</span>
+              <div style="flex:1; min-width:0; display:flex; flex-direction:column;"><span style="font-size:12px; font-weight:600; color:{{ v.fg }};">{{ v.title }}</span><span style="font-size:11px; color:var(--muted-foreground);">Min {{ v.minVal }} · {{ v.whereShort }}</span></div>
+            </div>
+            <div style="display:flex; gap:2px; margin:0 10px; padding:2px; border-radius:7px; background:var(--secondary); font-size:12px; font-weight:500;"><span style="flex:1; text-align:center; padding:5px 0; color:var(--muted-foreground);">Legs</span><span style="flex:1; text-align:center; padding:5px 0; border-radius:5px; background:var(--background);">Findings {{ findCount }}</span></div>
+            <div style="flex:1; min-height:0; overflow:auto; padding:8px 8px;">
+              <sc-for list="{{ findGroups }}" as="g" hint-placeholder-count="3">
+                <div style="font-size:10.5px; font-weight:600; letter-spacing:.06em; color:var(--muted-foreground); padding:8px 8px 4px;">{{ g.label }}</div>
+                <sc-for list="{{ g.items }}" as="f" hint-placeholder-count="2">
+                  <div style="position:relative; display:flex; gap:10px; padding:8px 8px 8px 12px; border-radius:6px; background:{{ f.rowBg }};">
+                    <span style="position:absolute; left:0; top:8px; bottom:8px; width:3px; border-radius:2px; background:{{ f.bar }};"></span>
+                    <span style="flex:none; margin-top:1px; color:{{ f.color }};">{{ f.icon }}</span>
+                    <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;"><span style="font-size:12px; font-weight:600; line-height:1.3;">{{ f.title }}</span><span style="font-size:11px; color:var(--muted-foreground); line-height:1.35;">{{ f.meta }}</span></div>
+                    <span style="flex:none; align-self:flex-start; height:18px; display:inline-flex; align-items:center; padding:0 6px; border-radius:4px; border:1px solid var(--border); font-size:10px; color:var(--muted-foreground); white-space:nowrap;">{{ f.tag }}</span>
+                  </div>
+                </sc-for>
+              </sc-for>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-top:1px solid var(--border);">
+              <span title="Edit" style="height:32px; display:inline-flex; align-items:center; gap:7px; padding:0 13px; border-radius:6px; font-size:12.5px; font-weight:500; border:1px solid var(--border); color:var(--foreground);">{{ icx.pencil }}Edit</span>
+              <span style="flex:1;"></span>
+              <span title="Check passage" style="height:32px; display:inline-flex; align-items:center; gap:7px; padding:0 13px; border-radius:6px; font-size:12.5px; font-weight:500; background:var(--selected); color:var(--selected-foreground); border:1px solid var(--selected);">{{ ics.radar }}Check passage</span>
+            </div>
+          </div>
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+            <div style="flex:1; min-height:0; position:relative; overflow:hidden;">
+              <div style="position:absolute; inset:0;">{{ mapNight }}</div>
+              <div style="position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:6px;">
+                <sc-for list="{{ toolsNight }}" as="t" hint-placeholder-count="4"><span style="width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:8px; background:{{ t.bg }}; color:{{ t.fg }};">{{ t.ic }}</span></sc-for>
+              </div>
+              <div style="position:absolute; left:12px; bottom:12px; display:flex; align-items:center; gap:8px; height:28px; padding:0 10px; border-radius:8px; background:rgba(9,9,11,.85); border:1px solid var(--border); font-size:11px; color:var(--muted-foreground);">Zoomed to finding · leg 6 → 7 · 1:31 300</div>
+            </div>
+            <div style="height:212px; flex:none; border-top:1px solid var(--border); display:flex; flex-direction:column;">
+              <div style="height:36px; flex:none; display:flex; align-items:center; gap:16px; padding:0 12px 0 16px; border-bottom:1px solid var(--border);">
+                <span style="font-size:11px; font-weight:600; letter-spacing:.06em; height:36px; display:flex; align-items:center; border-bottom:2px solid var(--selected);">TIMELINE</span>
+                <span style="font-size:11px; font-weight:600; letter-spacing:.06em; color:var(--muted-foreground);">CLEARANCE</span>
+                <span style="flex:1;"></span>
+                <span style="font-size:10px; font-weight:700; letter-spacing:.06em; padding:2px 7px; border:1px solid var(--border); border-radius:5px;">PINNED</span>
+                <span style="font-size:12px; font-family:'JetBrains Mono',monospace;">01.04.2021 {{ minHM }}</span>
+                <span style="display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 9px; border-radius:6px; background:color-mix(in srgb, var(--selected) 20%, transparent); color:#93B4F5; font-size:11px; font-weight:600;">{{ icx.ship }}Follow passage</span>
+              </div>
+              <div style="flex:1; min-height:0; display:flex; flex-direction:column; padding:8px 16px 10px; gap:6px; position:relative;">
+                <div style="display:flex; height:14px;"><span style="width:150px; flex:none;"></span><div style="flex:1; position:relative;"><sc-for list="{{ tlTicks }}" as="t" hint-placeholder-count="4"><span style="position:absolute; left:{{ t.left }}; transform:translateX(-50%); font-size:10px; color:var(--muted-foreground); font-family:'JetBrains Mono',monospace;">{{ t.label }}</span></sc-for></div></div>
+                <div style="display:flex; align-items:center; height:26px;"><div style="width:150px; flex:none; display:flex; flex-direction:column;"><span style="font-size:11.5px; font-weight:600;">Passage</span><span style="font-size:10px; color:var(--muted-foreground);">Nab → Southampton</span></div><div style="flex:1; position:relative; height:100%;"><span style="position:absolute; top:5px; height:16px; left:{{ tl.passLeft }}; width:{{ tl.passWidth }}; border-radius:4px; background:color-mix(in srgb, var(--selected) 35%, transparent); border:1px solid var(--selected);"></span><span style="position:absolute; top:2px; height:22px; width:3px; margin-left:-1px; left:{{ tl.minLeft }}; border-radius:2px; background:{{ tl.minColor }};"></span></div></div>
+                <div style="display:flex; align-items:center; height:22px;"><div style="width:150px; flex:none; font-size:11.5px;">Departure window</div><div style="flex:1; position:relative; height:100%;"><sc-for list="{{ tlWin }}" as="s" hint-placeholder-count="3"><span style="position:absolute; top:7px; height:8px; left:{{ s.left }}; width:{{ s.width }}; background:{{ s.bg }};"></span></sc-for><span style="position:absolute; top:3px; height:16px; width:3px; margin-left:-1px; left:{{ tl.passLeft }}; border-radius:2px; background:var(--foreground);"></span></div></div>
+                <div style="display:flex; align-items:center; height:22px;"><div style="width:150px; flex:none; font-size:11.5px;">S-104 Water level</div><div style="flex:1; position:relative; height:100%;"><span style="position:absolute; top:7px; height:8px; left:0; right:0; border-radius:2px; background:#3F3F46;"></span></div></div>
+                <div style="display:flex; align-items:center; height:22px;"><div style="width:150px; flex:none; display:flex; align-items:center; gap:6px; font-size:11.5px;">S-111 Currents<span style="font-size:9.5px; color:#F87171; border:1px solid #7F1D1D; border-radius:4px; padding:0 4px;">Expired</span></div><div style="flex:1; position:relative; height:100%;"><span style="position:absolute; top:7px; height:8px; left:0; right:0; border-radius:2px; background:repeating-linear-gradient(45deg,#3F3F46 0 4px,#27272A 4px 8px);"></span></div></div>
+                <span style="position:absolute; top:8px; bottom:10px; width:1px; left:calc(16px + 150px + (100% - 182px) * {{ tl.viewFrac }}); background:#93B4F5;"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="height:26px; flex:none; border-top:1px solid var(--border); display:flex; align-items:center; gap:12px; padding:0 12px; font-size:11px; color:var(--muted-foreground);"><span>Night palette</span><span style="flex:1;"></span><span>Scale</span><span style="font-family:'JetBrains Mono',monospace; color:var(--foreground);">1:31 300</span><span style="width:1px; height:12px; background:var(--border);"></span><span>MCP :51653 · 1 clients</span></div>
+      </div>
+      <div style="max-width:1100px; display:flex; gap:28px; font-size:12.5px; line-height:1.55; color:#71717A;">
+        <div style="flex:1;"><strong style="color:#09090B;">One findings list</strong> mixes clearance and #888 route checks, grouped by what to do. The tag names the check, not the data. Clicking a finding zooms the map and moves the profile cursor.</div>
+        <div style="flex:1;"><strong style="color:#09090B;">Timeline</strong> gets a Passage lane (departure → arrival, min-UKC tick) and a Departure window lane. With Follow passage on, view time sits at the ETA under the cursor and a ghost vessel shows where the ship is.</div>
+        <div style="flex:1;"><strong style="color:#09090B;">Night</strong> lowers route chroma and swaps the white casing for black. Red stays reserved for below-UKC and is paired with the thicker stroke.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { dep: 7 + 10 / 60, cursorD: 17.8, xMode: 'dist' };
+  legsRef = React.createRef();
+
+  componentDidMount() { const el = this.legsRef.current; if (el) el.scrollTop = 250; }
+
+  static lib() {
+    if (Component._L) return Component._L;
+    const h = React.createElement;
+    const WP = [
+      { name: 'Nab approach', lat: 50.6400, lon: -0.9350, x: 940, y: 600 },
+      { name: 'Nab Tower', lat: 50.6720, lon: -0.9780, x: 880, y: 520 },
+      { name: 'Nab Channel N', lat: 50.7250, lon: -1.0400, x: 790, y: 400 },
+      { name: 'Spithead', lat: 50.7630, lon: -1.1050, x: 740, y: 330 },
+      { name: 'Prince Consort', lat: 50.7760, lon: -1.2350, x: 560, y: 310 },
+      { name: 'Thorn Channel', lat: 50.7880, lon: -1.2800, x: 470, y: 270 },
+      { name: 'Calshot', lat: 50.8090, lon: -1.2950, x: 420, y: 225 },
+      { name: 'Fawley', lat: 50.8420, lon: -1.3420, x: 320, y: 160 },
+      { name: 'Southampton Docks', lat: 50.8880, lon: -1.3950, x: 220, y: 95 }
+    ];
+    const NM = [2.5, 4.0, 3.4, 5.0, 2.2, 1.4, 3.0, 2.6];
+    const KN = [12, 12, 12, 12, 12, 8, 12, 8];
+    const BRG = [320, 323, 313, 279, 305, 326, 313, 325];
+    const LOC = ['Nab approach', 'Nab Channel', 'Nab Channel N', 'Spithead', 'Cowes Roads', 'Thorn Channel · off Calshot', 'Calshot to Fawley', 'Southampton Water'];
+    const CUM = [0]; NM.forEach((n, i) => CUM.push(+(CUM[i] + n).toFixed(2)));
+    const TOTAL = CUM[8];
+    const CD = [[0, 21], [2.5, 19], [5, 17.5], [6.5, 16], [9.9, 14.2], [12, 13.4], [14.9, 12.6], [16, 11.2], [17.1, 10.8], [17.5, 10.0], [17.8, 9.4], [18.1, 9.9], [18.5, 10.6], [20, 11.8], [21.5, 12.2], [24.1, 12.8]];
+    const KEEL = 11.9, REQ = 1.0, TIGHT = 0.5, S104_END = 12, LOWD = 1.5;
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const cdAt = d => { for (let i = 1; i < CD.length; i++) if (d <= CD[i][0]) { const [d0, v0] = CD[i - 1], [d1, v1] = CD[i]; return lerp(v0, v1, (d - d0) / (d1 - d0)); } return CD[CD.length - 1][1]; };
+    const legAt = d => { for (let i = 0; i < 8; i++) if (d <= CUM[i + 1]) return i; return 7; };
+    const hrsTo = d => { let t = 0; for (let i = 0; i < 8; i++) { if (d <= CUM[i]) break; t += (Math.min(d, CUM[i + 1]) - CUM[i]) / KN[i]; } return t; };
+    const tide = hh => 2.4 + 1.8 * Math.cos(2 * Math.PI * (hh - 6.3) / 12.42);
+    const xyAt = d => { const i = legAt(d); const t = (d - CUM[i]) / NM[i]; return [lerp(WP[i].x, WP[i + 1].x, t), lerp(WP[i].y, WP[i + 1].y, t)]; };
+    const DS = []; for (let k = 0; k <= Math.round(TOTAL / 0.05); k++) DS.push(+(k * 0.05).toFixed(2));
+    const HT = DS.map(hrsTo), CDS = DS.map(cdAt), TT = hrsTo(TOTAL);
+    const run = dep => DS.map((d, k) => {
+      const t = dep + HT[k]; const has = t <= S104_END; const tl = has ? tide(t) : null; const ukc = has ? CDS[k] + tl - KEEL : null;
+      let st; if (!has) st = 'nodata'; else if (ukc < REQ) st = 'below'; else if (ukc < REQ + TIGHT) st = 'tight'; else if (d < LOWD) st = 'low'; else st = 'ok';
+      return { d, t, cd: CDS[k], tide: tl, ukc, st, leg: legAt(d) };
+    });
+    const groups = S => { const g = []; S.forEach((s, i) => { if (!g.length || g[g.length - 1].st !== s.st) { const prev = g.length ? g[g.length - 1].s[g[g.length - 1].s.length - 1] : null; g.push({ st: s.st, s: prev ? [prev] : [] }); } g[g.length - 1].s.push(s); }); return g; };
+    // departure sweep 00:00–12:00
+    const WIN = []; for (let m = 0; m <= 720; m += 5) { const dep = m / 60; let cls = 'pass'; if (dep + TT > S104_END) cls = 'nodata'; else { for (let k = 0; k < DS.length; k++) { if (CDS[k] + tide(dep + HT[k]) - KEEL < REQ) { cls = 'fail'; break; } } } WIN.push({ m, cls }); }
+    const winRuns = []; WIN.forEach(w => { const l = winRuns[winRuns.length - 1]; if (l && l.cls === w.cls) l.m1 = w.m; else winRuns.push({ cls: w.cls, m0: w.m, m1: w.m }); });
+    const IP = {
+      layers: 'M12 2 2 7l10 5 10-5-10-5Z|M2 17l10 5 10-5|M2 12l10 5 10-5', library: 'M4 4v16|M9 4v16|M14 4.5l4 15.5', eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z|c12,12,3', stack: 'M4 8h12v12H4z|M8 4h12v12',
+      search: 'c11,11,7|M21 21l-4.3-4.3', route: 'c6,19,3|c18,5,3|M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15', book: 'M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2Z|M22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8Z',
+      brush: 'M18 3H6v8h12z|M6 11v2a2 2 0 0 0 2 2h2v5a2 2 0 0 0 4 0v-5h2a2 2 0 0 0 2-2v-2', settings: 'c12,12,3|M12 2v3|M12 19v3|M2 12h3|M19 12h3|M4.9 4.9 7 7|M17 17l2.1 2.1|M4.9 19.1 7 17|M17 7l2.1-2.1',
+      map: 'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z|M9 3v15|M15 6v15', users: 'c9,8,4|M2 21v-1a6 6 0 0 1 12 0v1|M16 3.5a4 4 0 0 1 0 7.5|M22 21v-1a6 6 0 0 0-4-5.6', moon: 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z',
+      plus: 'M12 5v14|M5 12h14', ruler: 'M8 3h8v18H8z|M8 7h3|M8 11h4|M8 15h3', pencil: 'M17 3l4 4L8 20H4v-4z', undo: 'M9 14 4 9l5-5|M4 9h10.5a5.5 5.5 0 0 1 0 11H11', redo: 'M15 14l5-5-5-5|M20 9H9.5a5.5 5.5 0 0 0 0 11H13',
+      focus: 'M3 8V5a2 2 0 0 1 2-2h3|M16 3h3a2 2 0 0 1 2 2v3|M21 16v3a2 2 0 0 1-2 2h-3|M8 21H5a2 2 0 0 1-2-2v-3|c12,12,3', swap: 'M7 4 3 8l4 4|M3 8h18|M17 20l4-4-4-4|M21 16H3', more: 'c5,12,1|c12,12,1|c19,12,1',
+      chevD: 'M6 9l6 6 6-6', chevU: 'M6 15l6-6 6 6', chevR: 'M9 6l6 6-6 6', chevL: 'M15 6l-6 6 6 6', x: 'M18 6 6 18|M6 6l12 12', pointer: 'M4 4l7 17 2.5-7.5L21 11z',
+      sliders: 'M4 7h10|M18 7h2|c16,7,2|M4 17h4|M12 17h8|c10,17,2', zin: 'c11,11,7|M21 21l-4.3-4.3|M11 8v6|M8 11h6', zout: 'c11,11,7|M21 21l-4.3-4.3|M8 11h6',
+      check: 'c12,12,10|M8 12l3 3 5-6', alert: 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z|M12 9v4|M12 17h.01', octagon: 'M7.9 2h8.2L22 7.9v8.2L16.1 22H7.9L2 16.1V7.9z|M12 8v4|M12 16h.01',
+      info: 'c12,12,10|M12 16v-4|M12 8h.01', clock: 'c12,12,9|M12 7v5l3 2', ship: 'M2 20c2 1 4 1 6 0s4-1 6 0 4 1 6 0|M4 17l-1-5h18l-2 5|M12 3v9|M7 12V7h10v5', radar: 'c12,12,9|c12,12,5|M12 12l6-6', ban: 'c12,12,10|M5 5l14 14', waves: 'M2 8c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0|M2 14c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0'
+    };
+    const I = (n, s = 16, c = 'currentColor', sw = 1.75) => h('svg', { width: s, height: s, viewBox: '0 0 24 24', fill: 'none', stroke: c, strokeWidth: sw, strokeLinecap: 'round', strokeLinejoin: 'round', style: { flex: 'none', display: 'block' } },
+      IP[n].split('|').map((p, i) => { if (p[0] === 'c') { const [x, y, r] = p.slice(1).split(',').map(Number); return h('circle', { key: i, cx: x, cy: y, r }); } return h('path', { key: i, d: p }); }));
+    const PAL = {
+      day: { water: '#62B2EE', sh1: '#93CBF0', sh2: '#BEDFF2', dry: '#86C2A0', land: '#ECE5D5', coast: '#8C8270', cur: '#5B3FD0', wash: '#FFFFFF', washOp: .3, casing: '#FFFFFF', ok: '#13895B', tight: '#E0A008', below: '#D42A3A', low: '#5E6B7E', nodata: '#8C95A3', edit: '#2563EB', wpFill: '#FFFFFF', wpStroke: '#18181B', text: '#0B1220', halo: '#FFFFFF', cov: '#2F5E8C', inactive: '#56657A', ghost: '#18181B' },
+      night: { water: '#081019', sh1: '#0D1A28', sh2: '#122233', dry: '#16291E', land: '#1A1712', coast: '#3E372B', cur: '#4A3D8A', wash: '#000000', washOp: .3, casing: '#000000', ok: '#2E8A5E', tight: '#A27A1C', below: '#C03A46', low: '#56606E', nodata: '#4A515C', edit: '#3B6FD8', wpFill: '#0E141B', wpStroke: '#8A93A0', text: '#A9B2BE', halo: '#000000', cov: '#2A4058', inactive: '#3A4452', ghost: '#D4D8DE' }
+    };
+    const IOW = [[-300, 800], [-300, 420], [200, 400], [380, 380], [470, 360], [560, 385], [660, 400], [720, 450], [760, 520], [820, 640], [860, 900], [-300, 900]];
+    const EAST = [[1500, -300], [1500, 260], [1100, 280], [900, 300], [800, 290], [720, 262], [620, 252], [540, 232], [500, 200], [450, 170], [400, 120], [330, 60], [290, -300]];
+    const WEST = [[-300, -300], [200, -300], [180, 60], [200, 130], [260, 190], [330, 228], [400, 236], [438, 246], [425, 262], [390, 270], [400, 300], [300, 330], [-300, 365]];
+    const SPIT = [[385, 222], [445, 232], [472, 252], [440, 272], [392, 268]];
+    const pathOf = P => 'M' + P.map(p => p.join(' ')).join('L') + 'Z';
+    return Component._L = { h, WP, NM, KN, BRG, LOC, CUM, TOTAL, KEEL, REQ, TIGHT, S104_END, LOWD, hrsTo, tide, xyAt, legAt, DS, HT, TT, run, groups, WIN, winRuns, I, PAL, IOW, EAST, WEST, SPIT, pathOf };
+  }
+
+  chartMap(o) {
+    const L = Component.lib(); const { h } = L; const P = L.PAL[o.pal];
+    const u = Math.max(o.vb[2] / o.pw, o.vb[3] / o.ph); const px = v => v * u;
+    const K = []; let k = 0; const add = (t, p, c) => K.push(h(t, Object.assign({ key: k++ }, p), c));
+    add('rect', { x: -600, y: -600, width: 2400, height: 2000, fill: P.water });
+    const ar = []; for (let x = -60; x < 1150; x += 48) for (let y = -40; y < 820; y += 48) { const a = 200 + 28 * Math.sin(x / 160) + 22 * Math.cos(y / 120); ar.push(h('path', { key: x + '_' + y, d: 'M-7 0H6M2-4l4 4-4 4', transform: `translate(${x} ${y}) rotate(${a.toFixed(1)}) scale(${u.toFixed(3)})`, stroke: P.cur, strokeWidth: 1.6, fill: 'none', strokeLinecap: 'round', strokeLinejoin: 'round' })); }
+    add('g', { opacity: .75 }, ar);
+    [L.IOW, L.EAST, L.WEST].forEach(Ld => add('path', { d: L.pathOf(Ld), fill: 'none', stroke: P.sh1, strokeWidth: 46, strokeLinejoin: 'round' }));
+    [L.IOW, L.EAST, L.WEST].forEach(Ld => add('path', { d: L.pathOf(Ld), fill: 'none', stroke: P.sh2, strokeWidth: 22, strokeLinejoin: 'round' }));
+    add('path', { d: L.pathOf(L.SPIT), fill: P.dry, stroke: P.dry, strokeWidth: 6, strokeLinejoin: 'round' });
+    [L.IOW, L.EAST, L.WEST].forEach(Ld => add('path', { d: L.pathOf(Ld), fill: P.land, stroke: P.dry, strokeWidth: 7, strokeLinejoin: 'round', paintOrder: 'stroke' }));
+    [L.IOW, L.EAST, L.WEST].forEach(Ld => add('path', { d: L.pathOf(Ld), fill: 'none', stroke: P.coast, strokeWidth: px(1) }));
+    add('path', { d: 'M260 30H905V575H260Z', fill: 'none', stroke: P.cov, strokeWidth: px(1.2), strokeDasharray: `${px(2)} ${px(4)}`, opacity: .8 });
+    const txt = (x, y, s, p) => add('text', Object.assign({ x, y, fontSize: px(10.5), fontFamily: 'Inter, sans-serif', fill: P.text, stroke: P.halo, strokeWidth: px(3), paintOrder: 'stroke', strokeLinejoin: 'round' }, p), s);
+    const W = L.WP;
+    if (o.mode === 'check') add('rect', { x: -600, y: -600, width: 2400, height: 2000, fill: P.wash, opacity: P.washOp });
+    if (o.mode === 'edit') {
+      const ip = [[380, 330], [260, 360], [120, 380], [20, 372]];
+      add('polyline', { points: ip.join(' '), fill: 'none', stroke: P.inactive, strokeWidth: px(2), opacity: .6 });
+      ip.forEach(p => add('circle', { cx: p[0], cy: p[1], r: px(5), fill: P.wpFill, stroke: P.inactive, strokeWidth: px(1.4), opacity: .7 }));
+      const pts = W.map(w => w.x + ',' + w.y).join(' ');
+      add('polyline', { points: pts, fill: 'none', stroke: P.casing, strokeWidth: px(9), strokeLinejoin: 'round' });
+      if (o.selLeg != null) { const a = W[o.selLeg], b = W[o.selLeg + 1]; add('line', { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: P.edit, strokeWidth: px(12), strokeLinecap: 'round', opacity: .25 }); }
+      add('polyline', { points: pts, fill: 'none', stroke: P.edit, strokeWidth: px(3.5), strokeLinejoin: 'round' });
+      for (let i = 0; i < 8; i++) {
+        const a = W[i], b = W[i + 1]; const dx = b.x - a.x, dy = b.y - a.y; const Lp = Math.hypot(dx, dy) / u;
+        const mins = Math.round(L.NM[i] / L.KN[i] * 60);
+        const s = `${L.NM[i].toFixed(1).replace('.', ',')} NM · ${L.BRG[i]}° · ${mins} min`;
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        if (Lp > 40) { add('circle', { cx: mx, cy: my, r: px(5.5), fill: P.wpFill, stroke: P.edit, strokeWidth: px(1.5) }); add('path', { d: `M${mx - px(2.5)} ${my}H${mx + px(2.5)}M${mx} ${my - px(2.5)}V${my + px(2.5)}`, stroke: P.edit, strokeWidth: px(1.3) }); }
+        if (Lp < s.length * 5.6 + 50 && i !== o.selLeg) continue;
+        let ang = Math.atan2(dy, dx) * 180 / Math.PI; if (ang > 90) ang -= 180; if (ang < -90) ang += 180;
+        const sel = i === o.selLeg;
+        txt(0, 0, s, { transform: `translate(${mx} ${my}) rotate(${ang.toFixed(1)}) translate(${sel ? px(0) : px(30)} ${-px(10)})`, textAnchor: 'middle', fontWeight: sel ? 650 : 500, fill: sel ? P.edit : P.text });
+      }
+      W.forEach((w, i) => { add('circle', { cx: w.x, cy: w.y, r: px(10.5), fill: P.wpFill, stroke: P.edit, strokeWidth: px(2) }); add('text', { x: w.x, y: w.y + px(3.8), textAnchor: 'middle', fontSize: px(10.5), fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', fill: P.edit }, String(i + 1)); });
+    } else {
+      const S = o.S; const all = S.map(s => L.xyAt(s.d).map(v => v.toFixed(1)).join(',')).join(' ');
+      add('polyline', { points: all, fill: 'none', stroke: P.casing, strokeWidth: px(10), strokeLinejoin: 'round', strokeLinecap: 'round', opacity: .95 });
+      L.groups(S).forEach(g => {
+        const pts = g.s.map(s => L.xyAt(s.d).map(v => v.toFixed(1)).join(',')).join(' ');
+        const dash = (g.st === 'low' || g.st === 'nodata') ? `${px(6)} ${px(4)}` : undefined;
+        add('polyline', { points: pts, fill: 'none', stroke: P[g.st], strokeWidth: px(g.st === 'below' ? 7 : 5), strokeDasharray: dash, strokeLinejoin: 'round' });
+      });
+      W.forEach((w, i) => { add('circle', { cx: w.x, cy: w.y, r: px(8), fill: P.wpFill, stroke: P.wpStroke, strokeWidth: px(1.5) }); add('text', { x: w.x, y: w.y + px(3.2), textAnchor: 'middle', fontSize: px(9), fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', fill: P.wpStroke }, String(i + 1)); });
+      if (o.finding) {
+        add('circle', { cx: 438, cy: 250, r: 30, fill: 'none', stroke: P.below, strokeWidth: px(1.5), strokeDasharray: `${px(5)} ${px(3)}` });
+        txt(472, 292, 'Drying · Calshot Spit', { fill: '#E6A0A6', fontWeight: 600 });
+      }
+      const m = o.min; if (m) {
+        const [x, y] = L.xyAt(m.d); const c = P[m.st === 'below' ? 'below' : m.st === 'tight' ? 'tight' : 'ok'];
+        add('circle', { cx: x, cy: y, r: px(12), fill: 'none', stroke: c, strokeWidth: px(2.5) });
+        const s = `Min UKC ${m.ukc.toFixed(1).replace('.', ',')} m · ${o.fmt(m.t)}`; const tw = px(s.length * 6 + 16);
+        const bx = x + px(18), by = y - px(34);
+        add('rect', { x: bx, y: by, width: tw, height: px(20), rx: px(10), fill: P.wpFill, stroke: c, strokeWidth: px(1.5) });
+        add('text', { x: bx + tw / 2, y: by + px(13.5), textAnchor: 'middle', fontSize: px(10.5), fontWeight: 600, fontFamily: 'Inter, sans-serif', fill: P.text }, s);
+      }
+      if (o.cursorD != null) {
+        const [x, y] = L.xyAt(o.cursorD); const b = L.BRG[L.legAt(o.cursorD)];
+        add('path', { d: 'M0 -9 L5.5 7 L0 3.5 L-5.5 7Z', transform: `translate(${x} ${y}) rotate(${b}) scale(${u})`, fill: P.ghost, stroke: P.halo, strokeWidth: 1.5, strokeLinejoin: 'round' });
+      }
+    }
+    const vb = o.vb.join(' ');
+    return h('svg', { viewBox: vb, preserveAspectRatio: 'xMidYMid meet', width: '100%', height: '100%', style: { display: 'block', background: P.land } }, K);
+  }
+
+  profile(o) {
+    const L = Component.lib(); const { h } = L;
+    const C = { grid: '#E4E4E7', txt: '#71717A', sand: '#E6DAB9', sandLine: '#A08B5B', req: 'rgba(217,119,6,.30)', water: '#2563EB', keel: '#18181B', below: '#DC2626', tight: '#D97706', ok: '#16A34A', low: '#71717A', nodata: '#A1A1AA' };
+    const pl = 30, pr = 8, pt = 14, pb = 22; const W = o.w - pl - pr, H = o.h - pt - pb;
+    const yTop = 4, yBot = -15; const Y = m => pt + (yTop - Math.max(yBot, Math.min(yTop, m))) / (yTop - yBot) * H;
+    const Xd = d => pl + (o.xMode === 'time' ? L.hrsTo(d) / L.TT : d / L.TOTAL) * W;
+    const S = o.S; const K = []; let k = 0; const add = (t, p, c) => K.push(h(t, Object.assign({ key: k++ }, p), c));
+    const pid = 'hp' + o.id;
+    add('defs', {}, h('pattern', { id: pid, width: 5, height: 5, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, [h('rect', { key: 0, width: 5, height: 5, fill: '#F1EAD6' }), h('line', { key: 1, x1: 0, y1: 0, x2: 0, y2: 5, stroke: C.sandLine, strokeWidth: 1.2 })]));
+    [0, -5, -10, -15].forEach(m => { add('line', { x1: pl, x2: pl + W, y1: Y(m), y2: Y(m), stroke: C.grid, strokeWidth: 1, strokeDasharray: m === 0 ? undefined : '2 3' }); add('text', { x: pl - 4, y: Y(m) + 3, textAnchor: 'end', fontSize: 9, fill: C.txt, fontFamily: 'JetBrains Mono, monospace' }, m === 0 ? 'CD' : String(m).replace('-', '−')); });
+    const sb = S.map(s => `${Xd(s.d).toFixed(1)},${Y(-s.cd).toFixed(1)}`);
+    add('polygon', { points: `${pl},${pt + H} ${sb.join(' ')} ${pl + W},${pt + H}`, fill: C.sand });
+    const low = S.filter(s => s.d <= L.LOWD);
+    add('polygon', { points: `${pl},${pt + H} ${low.map(s => `${Xd(s.d).toFixed(1)},${Y(-s.cd).toFixed(1)}`).join(' ')} ${Xd(L.LOWD).toFixed(1)},${pt + H}`, fill: `url(#${pid})` });
+    add('polygon', { points: S.map(s => `${Xd(s.d).toFixed(1)},${Y(-s.cd + L.REQ).toFixed(1)}`).join(' ') + ' ' + S.slice().reverse().map(s => `${Xd(s.d).toFixed(1)},${Y(-s.cd).toFixed(1)}`).join(' '), fill: C.req });
+    add('polyline', { points: sb.join(' '), fill: 'none', stroke: C.sandLine, strokeWidth: 1.2 });
+    L.groups(S).forEach(g => {
+      const has = g.s.filter(s => s.tide != null); if (has.length < 2) return;
+      const top = has.map(s => `${Xd(s.d).toFixed(1)},${Y(s.tide - L.KEEL).toFixed(1)}`).join(' ');
+      const bot = has.slice().reverse().map(s => `${Xd(s.d).toFixed(1)},${Y(-s.cd).toFixed(1)}`).join(' ');
+      if (g.st === 'below' || g.st === 'tight') add('polygon', { points: top + ' ' + bot, fill: C[g.st], opacity: .35 });
+      add('rect', { x: Xd(g.s[0].d), y: pt + H + 3, width: Math.max(1, Xd(g.s[g.s.length - 1].d) - Xd(g.s[0].d)), height: 4, fill: C[g.st] });
+    });
+    const valid = S.filter(s => s.tide != null);
+    if (valid.length > 1) {
+      add('polyline', { points: valid.map(s => `${Xd(s.d).toFixed(1)},${Y(s.tide).toFixed(1)}`).join(' '), fill: 'none', stroke: C.water, strokeWidth: 1.5 });
+      add('polyline', { points: valid.map(s => `${Xd(s.d).toFixed(1)},${Y(s.tide - L.KEEL).toFixed(1)}`).join(' '), fill: 'none', stroke: C.keel, strokeWidth: 1.5 });
+    }
+    L.CUM.forEach((d, i) => { const x = Xd(d); add('line', { x1: x, x2: x, y1: pt - 2, y2: pt + H, stroke: '#A1A1AA', strokeWidth: 1, strokeDasharray: '1 3' }); add('text', { x, y: pt - 4, textAnchor: 'middle', fontSize: 9, fontWeight: 600, fill: C.txt, fontFamily: 'JetBrains Mono, monospace' }, String(i + 1)); });
+    if (o.xMode === 'time') { const t0 = o.dep, t1 = o.dep + L.TT; for (let hr = Math.ceil(t0 * 2) / 2; hr <= t1; hr += 0.5) { const x = pl + (hr - t0) / L.TT * W; add('text', { x, y: pt + H + 17, textAnchor: 'middle', fontSize: 9, fill: C.txt, fontFamily: 'JetBrains Mono, monospace' }, o.fmt(hr)); } }
+    else[0, 5, 10, 15, 20].forEach(d => add('text', { x: Xd(d), y: pt + H + 17, textAnchor: 'middle', fontSize: 9, fill: C.txt, fontFamily: 'JetBrains Mono, monospace' }, d === 0 ? '0 NM' : String(d)));
+    if (o.min) { const x = Xd(o.min.d), y = Y(o.min.tide - L.KEEL); const c = C[o.min.st === 'below' ? 'below' : o.min.st === 'tight' ? 'tight' : 'ok']; add('circle', { cx: x, cy: y, r: 3.5, fill: '#fff', stroke: c, strokeWidth: 2 }); add('text', { x: x + 6, y: y - 6, fontSize: 10, fontWeight: 700, fill: c, fontFamily: 'JetBrains Mono, monospace' }, o.min.ukc.toFixed(1).replace('.', ',') + ' m'); }
+    if (o.cursorD != null) { const x = Xd(o.cursorD); add('line', { x1: x, x2: x, y1: pt, y2: pt + H, stroke: '#18181B', strokeWidth: 1 }); }
+    return h('svg', { width: o.w, height: o.h, viewBox: `0 0 ${o.w} ${o.h}`, style: { display: 'block' } }, K);
+  }
+
+  renderVals() {
+    const L = Component.lib(); const { h, I } = L;
+    const { dep, cursorD, xMode } = this.state;
+    const pad = n => String(n).padStart(2, '0');
+    const fmt = hh => { const m = Math.round(hh * 60); return pad(Math.floor(m / 60) % 24) + ':' + pad(m % 60); };
+    const f1 = x => x.toFixed(1).replace('.', ',').replace('-', '−');
+    const S = L.run(dep);
+    let min = null; S.forEach(s => { if (s.ukc != null && (!min || s.ukc < min.ukc)) min = s; });
+    const G = L.groups(S); const below = G.filter(g => g.st === 'below').length; const tight = G.filter(g => g.st === 'tight').length; const nd = S.some(s => s.st === 'nodata');
+    const belowMin = Math.round(S.filter(s => s.st === 'below').reduce((a, s) => a + 0.05 / L.KN[s.leg] * 60, 0));
+
+    const ic = {}, ics = {}, icx = {};
+    ['map', 'users', 'moon', 'settings'].forEach(n => ic[n] = I(n, 16));
+    ['ruler', 'plus', 'route', 'more', 'undo', 'redo', 'focus', 'swap', 'radar'].forEach(n => ics[n] = I(n, 15));
+    ['pencil', 'chevU', 'chevD', 'chevL', 'chevR', 'ship', 'clock', 'x', 'info'].forEach(n => icx[n] = I(n, 13));
+
+    const railN = ['layers', 'library', 'eye', 'stack', 'search', 'route', 'book', 'brush'];
+    const rail = railN.map(n => ({ ic: I(n, 19), color: n === 'route' ? 'var(--selected)' : 'var(--muted-foreground)', bar: n === 'route' ? 'var(--selected)' : 'transparent' }));
+    const tools = (active, dark) => ['pointer', 'ruler', 'route', 'sliders', 'zin', 'zout'].map(n => ({ ic: I(n, 15), bg: n === active ? 'var(--selected)' : (dark ? 'rgba(24,24,27,.9)' : 'rgba(255,255,255,.92)'), fg: n === active ? '#fff' : 'var(--foreground)' }));
+
+    const v = (() => {
+      const red = { fg: 'var(--destructive)', bg: 'color-mix(in srgb, var(--destructive) 6%, var(--card))', bgSolid: 'color-mix(in srgb, var(--destructive) 6%, var(--card))', border: 'color-mix(in srgb, var(--destructive) 30%, var(--border))', icon: I('octagon', 16) };
+      const amb = { fg: 'var(--warning)', bg: 'color-mix(in srgb, var(--warning) 7%, var(--card))', bgSolid: 'color-mix(in srgb, var(--warning) 7%, var(--card))', border: 'color-mix(in srgb, var(--warning) 35%, var(--border))', icon: I('alert', 16) };
+      const grn = { fg: 'var(--success)', bg: 'color-mix(in srgb, var(--success) 6%, var(--card))', bgSolid: 'color-mix(in srgb, var(--success) 6%, var(--card))', border: 'color-mix(in srgb, var(--success) 30%, var(--border))', icon: I('check', 16) };
+      const gry = { fg: 'var(--muted-foreground)', bg: 'var(--muted)', bgSolid: 'var(--card)', border: 'var(--border)', icon: I('ban', 16) };
+      let base, title;
+      if (nd) { base = gry; title = 'Arrival is after the water-level data ends'; }
+      else if (below) { base = red; title = `Below your UKC setting in ${below} place${below > 1 ? 's' : ''}`; }
+      else if (tight) { base = amb; title = 'Meets your settings · tight'; }
+      else { base = grn; title = 'Meets your settings'; }
+      const where = min ? `Leg ${min.leg + 1} → ${min.leg + 2} · ${L.LOC[min.leg]} · ${fmt(min.t)}${below ? ` · ${belowMin} min below` : ''}` : 'No clearance computed';
+      return Object.assign({}, base, { title, minVal: min ? f1(min.ukc) + ' m' : '—', where, whereShort: min ? `leg ${min.leg + 1} → ${min.leg + 2} · ${fmt(min.t)}` : '' });
+    })();
+
+    const pass = L.winRuns.filter(r => r.cls === 'pass');
+    const depM = Math.round(dep * 60);
+    const inPass = pass.find(r => depM >= r.m0 && depM <= r.m1);
+    const nearest = pass.length ? pass.reduce((a, r) => Math.abs(r.m1 - depM) < Math.abs(a.m1 - depM) ? r : a) : null;
+    const windowText = pass.length ? `Departures ${pass.map(r => fmt(r.m0 / 60) + '–' + fmt(r.m1 / 60)).join(', ')} meet your settings` : 'No departure before 12:00 meets your settings';
+    const winSegs = L.winRuns.map(r => ({ left: (r.m0 / 720 * 100) + '%', width: (Math.max(5, r.m1 - r.m0 + 5) / 720 * 100) + '%', bg: r.cls === 'pass' ? 'var(--success)' : r.cls === 'fail' ? 'color-mix(in srgb, var(--destructive) 35%, transparent)' : 'repeating-linear-gradient(45deg, var(--border) 0 3px, transparent 3px 6px)' }));
+
+    const planItems = [];
+    L.WP.forEach((w, i) => {
+      planItems.push({ isWp: true, isLeg: false, isOpen: false, n: i + 1, name: w.name, coords: this.dm(w.lat, true) + '  ' + this.dm(w.lon, false), eta: fmt(dep + L.hrsTo(L.CUM[i])) });
+      if (i < 8) {
+        const mins = Math.round(L.NM[i] / L.KN[i] * 60);
+        const txt = `${f1(L.NM[i])} NM · ${L.BRG[i]}° · ${mins} min`;
+        planItems.push({ isWp: false, isLeg: i !== 5, isOpen: i === 5, txt, hasOvr: L.KN[i] !== 12, ovr: L.KN[i] + ' kn' });
+      }
+    });
+
+    const legRows = L.NM.map((nm, i) => {
+      const ls = S.filter(s => s.leg === i && s.d >= L.CUM[i] && s.d <= L.CUM[i + 1]);
+      const order = ['ok', 'low', 'tight', 'below', 'nodata']; let worst = 'ok'; let mn = null;
+      ls.forEach(s => { if (order.indexOf(s.st) > order.indexOf(worst)) worst = s.st; if (s.ukc != null && (mn == null || s.ukc < mn)) mn = s.ukc; });
+      const chip = { below: ['color-mix(in srgb, var(--destructive) 12%, transparent)', 'var(--destructive)'], tight: ['color-mix(in srgb, var(--warning) 15%, transparent)', 'var(--warning)'], ok: ['color-mix(in srgb, var(--success) 12%, transparent)', 'var(--success)'], low: ['var(--secondary)', 'var(--muted-foreground)'], nodata: ['var(--secondary)', 'var(--muted-foreground)'] }[worst];
+      const sel = cursorD >= L.CUM[i] && cursorD <= L.CUM[i + 1];
+      return { n: `${i + 1} → ${i + 2}`, loc: L.LOC[i], eta: `${fmt(dep + L.hrsTo(L.CUM[i]))}–${fmt(dep + L.hrsTo(L.CUM[i + 1]))} · ${f1(nm)} NM`, chip: worst === 'nodata' ? 'no tide' : (mn == null ? '—' : f1(mn) + ' m'), chipBorder: worst === 'low' ? 'dashed var(--muted-foreground)' : 'solid transparent', chipBg: chip[0], chipFg: chip[1], rowBg: sel ? 'color-mix(in srgb, var(--selected) 9%, transparent)' : 'transparent', bar: sel ? 'var(--selected)' : 'transparent', hover: () => this.setState({ cursorD: (L.CUM[i] + L.CUM[i + 1]) / 2 }) };
+    });
+
+    const cs = S[Math.min(S.length - 1, Math.round(cursorD / 0.05))];
+    const ro = {
+      head: f1(cs.d) + ' NM', eta: fmt(cs.t), leg: `Leg ${cs.leg + 1} → ${cs.leg + 2} · ${L.LOC[cs.leg]}`,
+      cd: f1(cs.cd) + ' m', cdSrc: cs.d < L.LOWD ? 'S-101 DepthArea · lower confidence' : 'S-102 · 102GB00502038 · ±0,3 m',
+      tide: cs.tide == null ? '—' : (cs.tide >= 0 ? '+' : '') + f1(cs.tide) + ' m', tideSrc: cs.tide == null ? 'No S-104 at this ETA · tide not applied' : `S-104 · Portsmouth · ${fmt(Math.floor(cs.t * 4) / 4)} step`,
+      ukc: cs.ukc == null ? 'no data' : f1(cs.ukc) + ' m', fg: cs.st === 'below' ? 'var(--destructive)' : cs.st === 'tight' ? 'var(--warning)' : cs.st === 'nodata' ? 'var(--muted-foreground)' : 'var(--success)',
+      verdict: { below: 'Below your UKC setting (1,0 m)', tight: 'Tight · within 0,5 m of 1,0 m', ok: 'Meets your settings', low: 'Meets your settings · low confidence', nodata: 'No data' }[cs.st]
+    };
+
+    const findGroups = [];
+    const must = [{ icon: I('octagon', 15), color: 'var(--destructive)', title: 'Leg 6 → 7 crosses drying ground', meta: 'Calshot Spit · S-101 DepthArea, dries 0,8 m', tag: 'Route check', sel: true }];
+    if (below) must.push({ icon: I('octagon', 15), color: 'var(--destructive)', title: `Below your UKC setting for ${belowMin} min`, meta: `Leg ${min.leg + 1} → ${min.leg + 2} · min ${f1(min.ukc)} m at ${fmt(min.t)}`, tag: 'Clearance' });
+    findGroups.push({ label: 'MUST REVIEW', items: must });
+    findGroups.push({ label: 'CHECK', items: [
+      { icon: I('alert', 15), color: 'var(--warning)', title: 'Navigational warning within 0,3 NM', meta: 'NAVAREA I 112/21 · buoy off station · leg 4 → 5', tag: 'S-124' },
+      { icon: I('waves', 15), color: 'var(--muted-foreground)', title: 'Charted depth from S-101 only', meta: 'Leg 1 → 2 · first 1,5 NM outside S-102 coverage', tag: 'Confidence' }] });
+    findGroups.push({ label: 'INFO', items: [{ icon: I('info', 15), color: 'var(--muted-foreground)', title: 'S-111 forecast run has expired', meta: 'Currents shown for reference; not used in ETAs', tag: 'Data' }] });
+    findGroups.forEach(g => g.items.forEach(f => { f.rowBg = f.sel ? 'color-mix(in srgb, var(--selected) 14%, transparent)' : 'transparent'; f.bar = f.sel ? 'var(--selected)' : 'transparent'; }));
+    const findCount = findGroups.reduce((a, g) => a + g.items.length, 0);
+
+    const tp = t => Math.max(0, Math.min(100, (t - 3) / 9 * 100));
+    const arr = dep + L.TT;
+    const tl = { passLeft: tp(dep) + '%', passWidth: (tp(arr) - tp(dep)) + '%', minLeft: tp(min ? min.t : dep) + '%', minColor: below ? '#EF4444' : tight ? '#F59E0B' : '#22C55E', viewFrac: (tp(min ? min.t : dep) / 100).toFixed(4) };
+    const tlWin = L.winRuns.filter(r => r.m1 / 60 >= 3).map(r => { const a = Math.max(3, r.m0 / 60), b = (r.m1 + 5) / 60; return { left: tp(a) + '%', width: (tp(b) - tp(a)) + '%', bg: r.cls === 'pass' ? '#22C55E' : r.cls === 'fail' ? 'rgba(239,68,68,.35)' : 'repeating-linear-gradient(45deg,#3F3F46 0 3px,transparent 3px 6px)' }; });
+    const tlTicks = [3, 5, 7, 9, 11].map(t => ({ left: tp(t) + '%', label: pad(t) + ':00' }));
+
+    const mv = (w) => e => {
+      const r = e.currentTarget.getBoundingClientRect(); const fx = (e.clientX - r.left) / r.width * w;
+      let f = (fx - 30) / (w - 38); f = Math.max(0, Math.min(1, f));
+      let d = f * L.TOTAL;
+      if (this.state.xMode === 'time') { const target = f * L.TT; let best = 0; L.DS.forEach((dd, kk) => { if (Math.abs(L.HT[kk] - target) < Math.abs(L.HT[best] - target)) best = kk; }); d = L.DS[best]; }
+      this.setState({ cursorD: d });
+    };
+    const setDep = m => this.setState({ dep: Math.max(0, Math.min(720, m)) / 60 });
+
+    return {
+      ic, ics, icx, rail,
+      toolsEdit: tools('route'), toolsCheck: tools('radar_none').slice(0, 4).concat([]), toolsNight: tools('', true).slice(0, 4),
+      depHM: fmt(dep), arrHM: fmt(arr), depMin: depM, minHM: min ? fmt(min.t) : fmt(dep),
+      durLabel: `${Math.floor(L.TT)} h ${pad(Math.round((L.TT % 1) * 60))} min`,
+      onDep: e => setDep(+e.target.value), depUp: () => setDep(depM + 5), depDown: () => setDep(depM - 5),
+      depPct: (depM / 720 * 100) + '%',
+      v, windowText: inPass ? `This departure is inside the window. ${windowText}.` : windowText + '.',
+      showUse: !inPass && !!nearest && !nd ? true : (!inPass && !!nearest),
+      useHM: nearest ? fmt(nearest.m1 / 60) : '', useWindow: () => nearest && setDep(nearest.m1),
+      winSegs, planItems, legRows, legsRef: this.legsRef, ro, findGroups, findCount,
+      tl, tlWin, tlTicks,
+      xModes: [['dist', 'Distance'], ['time', 'Time']].map(([k, l]) => ({ label: l, on: () => this.setState({ xMode: k }), bg: xMode === k ? 'var(--background)' : 'transparent', fg: xMode === k ? 'var(--foreground)' : 'var(--muted-foreground)' })),
+      mapPlan: this.chartMap({ pal: 'day', mode: 'edit', vb: [150, 40, 860, 680], pw: 732, ph: 640, selLeg: 5 }),
+      mapCheck: this.chartMap({ pal: 'day', mode: 'check', vb: [80, 50, 1000, 590], pw: 706, ph: 376, S, min, cursorD, fmt }),
+      mapNight: this.chartMap({ pal: 'night', mode: 'check', vb: [300, 150, 340, 220], pw: 732, ph: 426, S, min, cursorD: min ? min.d : null, fmt, finding: true }),
+      profMain: this.profile({ id: 'm', w: 492, h: 142, S, min, cursorD, xMode, dep, fmt }),
+      profMoveMain: mv(492)
+    };
+  }
+
+  dm(v, isLat) {
+    const a = Math.abs(v), d = Math.floor(a), m = (a - d) * 60;
+    const ds = String(d).padStart(isLat ? 2 : 3, '0');
+    return `${ds}°${m.toFixed(2).replace('.', ',').padStart(5, '0')}′${isLat ? (v >= 0 ? 'N' : 'S') : (v >= 0 ? 'E' : 'W')}`;
+  }
+}
+</script>
+</body>
+</html>
