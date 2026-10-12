@@ -778,25 +778,37 @@ Routes are ordered waypoints joined by legs. They stay on the map and are saved
 between sessions. An agent can also create and change them over the
 [MCP server](#connect-ai-agents-over-mcp).
 
-To edit a route, turn on **Route Edit Mode** (the route button on the map
-toolbar):
+To edit a route, turn on edit mode: **Edit** at the bottom of the **Routes**
+panel, the route button on the map toolbar, **View** > **Appearance** >
+**Route Edit Mode**, or Ctrl+E (⌘E on macOS). Then:
 
 - Select the water to add a waypoint at the end.
 - Drag a waypoint to move it.
 - Select a leg to insert a waypoint that splits it.
 - Right-click a waypoint, or select it and press Delete, to remove it.
   Backspace removes the last waypoint.
-- **Done** leaves Route Edit Mode.
+- Turn **Edit** off, or press Esc or Ctrl+E again, when you're done.
 
 The status bar shows the latest leg's distance and bearing and the route total.
 
-The **Routes** panel lists your routes. **Add** creates a route and starts
-editing it, and **Remove** deletes the selected one. Each route's menu has
-**Rename**, **Reverse** and **Remove**. The active route's waypoints and legs
-are listed with each leg's distance, initial bearing and geometry. Switch a leg
-between a **Rhumb** line (loxodrome, the ECDIS default) and a **Great circle**
-(geodesic) with **Toggle leg geometry**; a great-circle leg is drawn as a
-curve. **Insert** and **Delete waypoint** edit the selected waypoint.
+Every change to a route can be undone: Ctrl+Z (⌘Z) undoes and Ctrl+Shift+Z
+(⇧⌘Z) redoes, or use the buttons under the route's name. Each route keeps its
+own history, which includes changes an agent made. The route shortcuts don't
+apply while you're typing in a text field.
+
+The **Routes** panel lists your routes. **Add** creates a route. Each route's
+menu has **Rename**, **Reverse** and **Remove**. Under the active route's name
+are **Undo**, **Redo**, **Zoom to route** and **Reverse**. The route's
+waypoints and legs are listed with each leg's distance, initial bearing and
+geometry. Type a waypoint's name, or type or paste its position, and press
+Enter; positions are in degrees and minutes (`50°46.024'N 001°15.558'W`), and
+decimal degrees work too. A waypoint's menu has **Insert waypoint after** and
+**Delete waypoint**. Switch a leg between a **Rhumb** line (loxodrome, the
+ECDIS default) and a **Great circle** (geodesic) with its geometry chip; a
+great-circle leg is drawn as a curve.
+
+**Check passage**, next to **Edit**, is not available yet: it needs a draft,
+which you can't set yet.
 
 **From measurement** copies the current Measure Mode path into a new route and
 switches to Route Edit Mode.
@@ -1110,7 +1122,7 @@ running app:
 | `set_viewport`, `set_palette`, `set_display_category`, `set_display_mode`, `set_time_step` | Change the map view, palette, display category, display mode (such as the S-411 ice display mode, S-100 Part 9 §11.7) and time step. |
 | `set_own_ship` | Position and steer the simulated own ship (`lat`, `lon`, `cog`, `sog`, `heading`, hold and resume), whether or not it's shown. |
 | `open_dataset`, `close_dataset`, `close_all_datasets` | Load a file or exchange set the same way the **File** menu does, and report its ID, bounding box and load time; unload datasets by ID. |
-| `create_route`, `list_routes`, `get_route`, `delete_route`, `append_waypoint`, `insert_waypoint`, `move_waypoint`, `delete_waypoint`, `set_leg_attributes`, `set_route_info` | Build and edit routes, shown live in the **Routes** panel. |
+| `create_route`, `list_routes`, `get_route`, `delete_route`, `append_waypoint`, `insert_waypoint`, `move_waypoint`, `delete_waypoint`, `set_leg_attributes`, `set_route_info`, `undo_route_edit`, `redo_route_edit`, `set_route_edit_mode` | Build and edit routes, shown live in the **Routes** panel. Edits are undoable, with the viewer's own edits. |
 | `list_panels`, `set_panel` | List the dock panels and their state, and show or hide a panel by ID (such as `Datasets`, `LayerStack`, `PickReport` or `Timeline`). |
 
 The [MCP server](../../docs/mcp-server.md) page has the full tool list, which
