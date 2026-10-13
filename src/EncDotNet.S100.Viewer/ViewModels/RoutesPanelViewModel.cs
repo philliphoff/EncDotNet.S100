@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Services;
@@ -19,7 +20,9 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// with the legs that join them, with insert / delete / leg-geometry toggle,
 /// and editable waypoint names and positions). The toolbar under the route
 /// name has undo / redo / zoom to route / reverse, and the footer has the Edit
-/// and Check passage toggles. All mutations flow back into the shared
+/// and Check passage toggles. The Passage card (<see cref="Passage"/>) holds
+/// the route-level values legs inherit, and clicking a leg row opens its inline
+/// detail (<see cref="LegDetail"/>) to override them. All mutations flow back into the shared
 /// <see cref="RoutesService"/> through the route's
 /// <see cref="Route.History"/>, so the map overlay and the
 /// <c>RouteEditTool</c> stay in lock-step with the panel and every edit can be
@@ -32,13 +35,26 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
     private readonly RoutesService _routes;
     private readonly ICapabilityAccessor<IMapViewportController>? _viewport;
+    private readonly IMarinerSettingsProvider? _marinerSettings;
+    private readonly ITimeFormatProvider? _timeFormat;
     private bool _suppressSync;
+    private Route? _shownRoute;
+    private int? _openLegIndex;
 
-    public RoutesPanelViewModel(RoutesService routes, ICapabilityAccessor<IMapViewportController>? viewport = null)
+    public RoutesPanelViewModel(
+        RoutesService routes,
+        ICapabilityAccessor<IMapViewportController>? viewport = null,
+        IMarinerSettingsProvider? marinerSettings = null,
+        ITimeFormatProvider? timeFormat = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
         _routes = routes;
         _viewport = viewport;
+        _marinerSettings = marinerSettings;
+        _timeFormat = timeFormat;
+
+        Passage = new RoutePassageCardViewModel(() => _routes.Routes.ActiveRoute, () => DepthUnit, () => TimeFormat);
+        LegDetail = new RouteLegDetailViewModel(() => _routes.Routes.ActiveRoute, () => DepthUnit);
 
         Routes = new ObservableCollection<RouteRowViewModel>();
         Timeline = new ObservableCollection<RouteTimelineRowViewModel>();
@@ -65,6 +81,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         InsertWaypointAfterCommand = new RelayCommand<RouteWaypointRowViewModel>(InsertWaypointAfter);
         DeleteWaypointAtCommand = new RelayCommand<RouteWaypointRowViewModel>(DeleteWaypointAt);
         ToggleLegGeometryAtCommand = new RelayCommand<RouteLegRowViewModel>(ToggleLegGeometryAt);
+        ToggleLegDetailCommand = new RelayCommand<RouteLegRowViewModel>(ToggleLegDetail);
 
         DeleteWaypointCommand = new RelayCommand(
             () => _routes.DeleteSelectedWaypoint(),
@@ -74,6 +91,10 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         _routes.Routes.HistoryChanged += (_, _) => RefreshHistory();
         _routes.SelectionChanged += (_, _) => RefreshSelection();
         _routes.EditModeChanged += (_, _) => OnEditModeChanged();
+        if (_marinerSettings is not null)
+            _marinerSettings.Changed += _ => Rebuild();
+        if (_timeFormat is not null)
+            _timeFormat.TimeFormatChanged += _ => Rebuild();
         Rebuild();
     }
 
@@ -134,16 +155,43 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Whether Check passage can be turned on. Always <c>false</c> in this
-    /// release: checking needs a draft, which a later slice adds (#898, #901).
+    /// The Passage card: the active route's draft, speed, departure, required
+    /// UKC, vessel and cross-track, which its legs inherit.
     /// </summary>
-    public bool CanCheckPassage => false;
+    public RoutePassageCardViewModel Passage { get; }
+
+    /// <summary>The inline detail of the open leg, shown under its leg row.</summary>
+    public RouteLegDetailViewModel LegDetail { get; }
+
+    /// <summary>
+    /// Whether the active route has a draft, the one value Check passage
+    /// needs: on the passage, or overridden on every leg.
+    /// </summary>
+    public bool HasDraft => _routes.Routes.ActiveRoute is { } route
+        && (route.Passage.DraftMeters is not null
+            || (route.Legs.Count > 0 && route.Legs.All(l => l.DraftMeters is not null)));
+
+    /// <summary>
+    /// Whether Check passage can be turned on: the route needs a draft (B8),
+    /// and the check itself (#900) must be available. Until #900 lands the
+    /// toggle stays off even with a draft.
+    /// </summary>
+    public bool CanCheckPassage => HasDraft && IsCheckPassageAvailable;
+
+    /// <summary>Whether this build can check a passage. Set when the check (#900) lands.</summary>
+    internal static bool IsCheckPassageAvailable => false;
 
     /// <summary>Whether Check passage is on. Always <c>false</c> until it can be enabled.</summary>
     public bool IsCheckingPassage => false;
 
-    /// <summary>Tooltip on the Check passage toggle.</summary>
-    public string CheckPassageTooltip => Strings.Tooltip_CheckPassageNoDraft;
+    /// <summary>Tooltip on the Check passage toggle: what's missing, or what it does.</summary>
+    public string CheckPassageTooltip => HasDraft
+        ? Strings.Tooltip_CheckPassage
+        : Strings.Tooltip_CheckPassageNoDraft;
+
+    private DepthUnit DepthUnit => _marinerSettings?.Current.DepthUnit ?? DepthUnit.Metres;
+
+    private TimeFormat TimeFormat => _timeFormat?.Current ?? TimeFormat.Local;
 
     /// <summary>The toolbar hint, e.g. "Ctrl+E edit · Esc done".</summary>
     public string EditHint => string.Format(
@@ -217,6 +265,9 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     public ICommand InsertWaypointAfterCommand { get; }
     public ICommand DeleteWaypointAtCommand { get; }
     public ICommand ToggleLegGeometryAtCommand { get; }
+
+    /// <summary>Opens a leg's inline detail, closing any other; on the open leg, closes it.</summary>
+    public ICommand ToggleLegDetailCommand { get; }
     public ICommand DeleteWaypointCommand { get; }
 
     private void AddRoute()
@@ -397,6 +448,14 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         });
     }
 
+    private void ToggleLegDetail(RouteLegRowViewModel? row)
+    {
+        if (row is null)
+            return;
+        _openLegIndex = _openLegIndex == row.LegIndex ? null : row.LegIndex;
+        RebuildTimeline();
+    }
+
     /// <summary>
     /// Renames the waypoint at <paramref name="index"/>; an empty or blank
     /// name clears it so the row falls back to "Waypoint N".
@@ -487,6 +546,9 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(HasRoutes));
         OnPropertyChanged(nameof(HasActiveRoute));
+        OnPropertyChanged(nameof(HasDraft));
+        OnPropertyChanged(nameof(CanCheckPassage));
+        OnPropertyChanged(nameof(CheckPassageTooltip));
         ((RelayCommand)ReverseActiveRouteCommand).NotifyCanExecuteChanged();
         ((RelayCommand)ZoomToRouteCommand).NotifyCanExecuteChanged();
         ((RelayCommand)DeleteWaypointCommand).NotifyCanExecuteChanged();
@@ -496,15 +558,40 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
     private void RebuildTimeline()
     {
-        Timeline.Clear();
-        if (_routes.Routes.ActiveRoute is not { } route)
+        var route = _routes.Routes.ActiveRoute;
+        if (!ReferenceEquals(route, _shownRoute))
         {
+            // A different route: close any open leg, and open the Passage
+            // card only when the route already has passage values.
+            _shownRoute = route;
+            _openLegIndex = null;
+            Passage.Refresh();
+            Passage.IsExpanded = !Passage.IsEmpty;
+        }
+        else
+        {
+            Passage.Refresh();
+        }
+
+        if (route is null)
+        {
+            Timeline.Clear();
             ActiveRouteName = null;
             ActiveRouteDetailMeta = null;
             return;
         }
 
         ActiveRouteName = route.Name;
+        if (_openLegIndex >= route.Legs.Count)
+            _openLegIndex = null;
+
+        // Rows are updated in place when the route keeps its shape, so an
+        // open leg detail (and the field being tabbed to) survives an edit;
+        // waypoint rows are replaced, as their fields commit on focus loss.
+        var rowCount = Math.Max(0, (route.Waypoints.Count * 2) - 1);
+        var reuse = Timeline.Count == rowCount;
+        if (!reuse)
+            Timeline.Clear();
 
         var metrics = route.ComputeAllLegMetrics();
         var selected = _routes.SelectedWaypointIndex;
@@ -513,26 +600,21 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
             var wp = route.Waypoints[i];
             var fallbackName = string.Format(CultureInfo.CurrentCulture, Strings.Routes_WaypointNameFormat, i + 1);
             var coords = LatLonFormatter.Format(wp.Position.Latitude, wp.Position.Longitude);
-            Timeline.Add(new RouteWaypointRowViewModel(this, i, wp.Name, fallbackName, coords)
+            var waypointRow = new RouteWaypointRowViewModel(this, i, wp.Name, fallbackName, coords)
             {
                 IsSelected = selected == i,
                 IsFirst = i == 0,
                 IsLast = i == route.Waypoints.Count - 1,
-            });
+            };
+            SetRow(i * 2, waypointRow, reuse);
 
             if (i < metrics.Count)
             {
-                var m = metrics[i];
-                var legText = string.Format(
-                    CultureInfo.CurrentCulture,
-                    Strings.Routes_LegMetaFormat,
-                    m.DistanceNm,
-                    m.InitialBearingDegrees);
-                var isGeodesic = route.Legs[i].GeometryType == RouteLegGeometryType.Geodesic;
-                var geometryText = isGeodesic
-                    ? Strings.Routes_GeometryGeodesic
-                    : Strings.Routes_GeometryLoxodrome;
-                Timeline.Add(new RouteLegRowViewModel(i, legText, geometryText, isGeodesic));
+                var legRow = reuse && Timeline[(i * 2) + 1] is RouteLegRowViewModel existing
+                    ? existing
+                    : new RouteLegRowViewModel(i);
+                UpdateLegRow(route, legRow, metrics[i]);
+                SetRow((i * 2) + 1, legRow, reuse);
             }
         }
 
@@ -549,6 +631,59 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
                 route.Waypoints.Count,
                 total,
                 PredominantGeometry(route));
+    }
+
+    private void SetRow(int index, RouteTimelineRowViewModel row, bool reuse)
+    {
+        if (!reuse)
+            Timeline.Add(row);
+        else if (!ReferenceEquals(Timeline[index], row))
+            Timeline[index] = row;
+    }
+
+    private void UpdateLegRow(Route route, RouteLegRowViewModel row, RouteLegMetrics metrics)
+    {
+        var i = metrics.LegIndex;
+        var legText = string.Format(
+            CultureInfo.CurrentCulture,
+            Strings.Routes_LegMetaFormat,
+            metrics.DistanceNm,
+            metrics.InitialBearingDegrees);
+        var isGeodesic = route.Legs[i].GeometryType == RouteLegGeometryType.Geodesic;
+        var geometryText = isGeodesic ? Strings.Routes_GeometryGeodesic : Strings.Routes_GeometryLoxodrome;
+
+        var isOpen = _openLegIndex == i;
+        if (isOpen)
+        {
+            var title = string.Format(CultureInfo.CurrentCulture, Strings.Routes_LegDetailTitleFormat, i + 1, i + 2);
+            LegDetail.Show(i, title, legText);
+        }
+        row.Update(legText, geometryText, isGeodesic, OverrideText(route, i), isOpen ? LegDetail : null);
+    }
+
+    /// <summary>
+    /// The leg row's override summary, e.g. "8,0 kn · 10,0 m", or <c>null</c>
+    /// when the leg inherits every passage value.
+    /// </summary>
+    private string? OverrideText(Route route, int legIndex)
+    {
+        var leg = route.Legs[legIndex];
+        var unit = DepthUnit;
+        var parts = new List<string>();
+        if (leg.PlannedSpeedKnots is { } speed)
+            parts.Add(PassageFormatting.Format(speed, PassageQuantity.Speed, unit));
+        if (leg.DraftMeters is { } draft)
+            parts.Add(PassageFormatting.Format(draft, PassageQuantity.Depth, unit));
+        if (leg.PortCrossTrackDistanceLimitMeters is not null || leg.StarboardCrossTrackDistanceLimitMeters is not null)
+        {
+            parts.Add(RoutePassageCardViewModel.FormatCrossTrack(
+                route.GetEffectiveLegValue(legIndex, RoutePassageField.PortCrossTrack),
+                route.GetEffectiveLegValue(legIndex, RoutePassageField.StarboardCrossTrack))!);
+        }
+        if (leg.StaticUnderKeelClearanceMeters is { } ukc)
+            parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Routes_SummaryUkcFormat,
+                PassageFormatting.Format(ukc, PassageQuantity.Depth, unit)));
+        return parts.Count == 0 ? null : string.Join(" · ", parts);
     }
 
     private static string RouteMeta(Route route)
@@ -760,26 +895,81 @@ internal sealed class RouteWaypointRowViewModel : RouteTimelineRowViewModel
     }
 }
 
-/// <summary>A leg row sitting between two waypoint rows in the timeline.</summary>
+/// <summary>
+/// A leg row sitting between two waypoint rows in the timeline. It is updated
+/// in place across edits, so its open detail keeps focus.
+/// </summary>
 internal sealed class RouteLegRowViewModel : RouteTimelineRowViewModel
 {
-    public RouteLegRowViewModel(int legIndex, string legText, string geometryText, bool isGeodesic)
+    public RouteLegRowViewModel(int legIndex)
     {
         LegIndex = legIndex;
-        LegText = legText;
-        GeometryText = geometryText;
-        IsGeodesic = isGeodesic;
     }
 
     /// <summary>Zero-based leg index within the active route.</summary>
     public int LegIndex { get; }
 
+    private string _legText = string.Empty;
     /// <summary>Distance/bearing of the leg, pre-formatted (e.g. "1.6 NM · 070°T").</summary>
-    public string LegText { get; }
+    public string LegText
+    {
+        get => _legText;
+        private set => SetProperty(ref _legText, value);
+    }
 
-    /// <summary>Geometry chip label ("Rhumb" / "Great circle").</summary>
-    public string GeometryText { get; }
+    private string _geometryText = string.Empty;
+    /// <summary>Geometry label ("Rhumb" / "Great circle").</summary>
+    public string GeometryText
+    {
+        get => _geometryText;
+        private set => SetProperty(ref _geometryText, value);
+    }
 
+    private bool _isGeodesic;
     /// <summary>True when the leg uses great-circle geometry.</summary>
-    public bool IsGeodesic { get; }
+    public bool IsGeodesic
+    {
+        get => _isGeodesic;
+        private set => SetProperty(ref _isGeodesic, value);
+    }
+
+    private string? _overrideText;
+    /// <summary>The leg's overridden passage values, e.g. "8,0 kn", or <c>null</c>.</summary>
+    public string? OverrideText
+    {
+        get => _overrideText;
+        private set
+        {
+            if (SetProperty(ref _overrideText, value))
+                OnPropertyChanged(nameof(HasOverride));
+        }
+    }
+
+    /// <summary>True when the leg overrides a passage value (the row shows a blue dot).</summary>
+    public bool HasOverride => _overrideText is not null;
+
+    private RouteLegDetailViewModel? _detail;
+    /// <summary>The inline detail when this leg is open, else <c>null</c>.</summary>
+    public RouteLegDetailViewModel? Detail
+    {
+        get => _detail;
+        private set
+        {
+            if (SetProperty(ref _detail, value))
+                OnPropertyChanged(nameof(IsOpen));
+        }
+    }
+
+    /// <summary>True when this leg's detail is open.</summary>
+    public bool IsOpen => _detail is not null;
+
+    /// <summary>Updates the row from the route.</summary>
+    public void Update(string legText, string geometryText, bool isGeodesic, string? overrideText, RouteLegDetailViewModel? detail)
+    {
+        LegText = legText;
+        GeometryText = geometryText;
+        IsGeodesic = isGeodesic;
+        OverrideText = overrideText;
+        Detail = detail;
+    }
 }

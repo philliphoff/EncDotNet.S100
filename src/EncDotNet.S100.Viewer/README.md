@@ -803,12 +803,28 @@ waypoints and legs are listed with each leg's distance, initial bearing and
 geometry. Type a waypoint's name, or type or paste its position, and press
 Enter; positions are in degrees and minutes (`50°46.024'N 001°15.558'W`), and
 decimal degrees work too. A waypoint's menu has **Insert waypoint after** and
-**Delete waypoint**. Switch a leg between a **Rhumb** line (loxodrome, the
-ECDIS default) and a **Great circle** (geodesic) with its geometry chip; a
-great-circle leg is drawn as a curve.
+**Delete waypoint**.
 
-**Check passage**, next to **Edit**, is not available yet: it needs a draft,
-which you can't set yet.
+A route needs only waypoints. The **Passage** card under the route's name holds
+optional values for the whole route: **Draft · squat**, **Speed** (over ground,
+in knots), **Departure** (empty uses the view time), **Required UKC** (static),
+**Vessel** (name, MMSI, IMO, call sign, length and beam) and **Cross-track**
+(one value for both sides, or `port / stbd`, in metres). A set field has a
+solid border; an empty one is dashed and reads **+ Add**. Type a value and
+press Enter, or clear a field to unset it. Draft, squat and UKC use the depth
+unit from Mariner Settings (feet for any unit other than metres). On a new
+route the card is one line; click it to open it.
+
+Every leg inherits the passage values. Click a leg to open its detail and give
+it its own speed, draft, cross-track or required UKC: an overridden field has a
+blue label and a **Reset** link, and an inherited one is dashed and shows the
+passage value. A leg with an override shows a blue dot and its values in the
+list. The detail also switches the leg between a **Rhumb** line (loxodrome, the
+ECDIS default) and a **Great circle** (geodesic), drawn as a curve, and adds a
+**Note**. Safety contour and depth come from Mariner Settings, not the route.
+
+**Check passage**, next to **Edit**, needs a draft, on the passage or on every
+leg. It isn't available yet.
 
 **From measurement** copies the current Measure Mode path into a new route and
 switches to Route Edit Mode.

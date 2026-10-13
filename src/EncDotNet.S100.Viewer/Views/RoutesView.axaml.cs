@@ -19,6 +19,19 @@ public partial class RoutesView : UserControl
         AddHandler(LostFocusEvent, OnFieldLostFocus, RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
+    static RoutesView()
+    {
+        // Passage and leg fields commit on focus loss too. A class handler,
+        // because the vessel fields sit in a flyout outside this tree.
+        TextBox.LostFocusEvent.AddClassHandler<TextBox>(
+            (field, _) =>
+            {
+                if (field.Classes.Contains("routeField") && field.DataContext is ICommittableField committable)
+                    committable.CommitCommand.Execute(null);
+            },
+            handledEventsToo: true);
+    }
+
     private static void OnFieldLostFocus(object? sender, RoutedEventArgs e)
     {
         if (e.Source is not TextBox { DataContext: RouteWaypointRowViewModel row } field)

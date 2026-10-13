@@ -4538,4 +4538,127 @@
   <data name="Keys_Import_NoSources" xml:space="preserve">
     <value>No source is waiting for a certificate.</value>
   </data>
+  <data name="Routes_FieldAdd" xml:space="preserve">
+    <value>+ Add</value>
+  </data>
+  <data name="Routes_FieldOverrideFormat" xml:space="preserve">
+    <value>{0} · override</value>
+  </data>
+  <data name="Routes_FieldReset" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="Tooltip_ResetOverride" xml:space="preserve">
+    <value>Inherit the passage value</value>
+  </data>
+  <data name="Routes_PassageTitle" xml:space="preserve">
+    <value>Passage</value>
+  </data>
+  <data name="Routes_PassageOptional" xml:space="preserve">
+    <value>Optional</value>
+  </data>
+  <data name="Tooltip_PassageToggle" xml:space="preserve">
+    <value>Show or hide the passage values</value>
+  </data>
+  <data name="Routes_PassageDraftSquat" xml:space="preserve">
+    <value>Draft · squat</value>
+  </data>
+  <data name="Routes_PassageSquat" xml:space="preserve">
+    <value>Squat</value>
+  </data>
+  <data name="Routes_PassageAddSquat" xml:space="preserve">
+    <value>+ squat</value>
+  </data>
+  <data name="Routes_PassageSpeed" xml:space="preserve">
+    <value>Speed</value>
+  </data>
+  <data name="Routes_PassageDeparture" xml:space="preserve">
+    <value>Departure</value>
+  </data>
+  <data name="Routes_PassageViewTime" xml:space="preserve">
+    <value>View time</value>
+  </data>
+  <data name="Tooltip_PassageDeparture" xml:space="preserve">
+    <value>A date and time. Leave empty to use the view time.</value>
+  </data>
+  <data name="Routes_PassageRequiredUkc" xml:space="preserve">
+    <value>Required UKC</value>
+  </data>
+  <data name="Routes_PassageStatic" xml:space="preserve">
+    <value>static</value>
+  </data>
+  <data name="Routes_PassageVessel" xml:space="preserve">
+    <value>Vessel</value>
+  </data>
+  <data name="Routes_PassageCrossTrack" xml:space="preserve">
+    <value>Cross-track</value>
+  </data>
+  <data name="Tooltip_PassageCrossTrack" xml:space="preserve">
+    <value>One value for both sides, or port / stbd</value>
+  </data>
+  <data name="Routes_PassageHelp" xml:space="preserve">
+    <value>Draft enables Check passage. Speed gives ETAs. Everything else is optional.</value>
+  </data>
+  <data name="Routes_PassagePrompt" xml:space="preserve">
+    <value>Add draft and speed to check clearance</value>
+  </data>
+  <data name="Routes_DraftSquatFormat" xml:space="preserve">
+    <value>{0} · squat {1}</value>
+  </data>
+  <data name="Routes_SummaryDepartureFormat" xml:space="preserve">
+    <value>dep {0}</value>
+  </data>
+  <data name="Routes_SummaryUkcFormat" xml:space="preserve">
+    <value>UKC {0}</value>
+  </data>
+  <data name="Routes_SummaryCrossTrackFormat" xml:space="preserve">
+    <value>cross-track {0}</value>
+  </data>
+  <data name="Routes_CrossTrackPairFormat" xml:space="preserve">
+    <value>{0} / {1} m</value>
+  </data>
+  <data name="Routes_VesselName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Routes_VesselMmsi" xml:space="preserve">
+    <value>MMSI</value>
+  </data>
+  <data name="Routes_VesselImo" xml:space="preserve">
+    <value>IMO</value>
+  </data>
+  <data name="Routes_VesselCallsign" xml:space="preserve">
+    <value>Call sign</value>
+  </data>
+  <data name="Routes_VesselLength" xml:space="preserve">
+    <value>Length (m)</value>
+  </data>
+  <data name="Routes_VesselBeam" xml:space="preserve">
+    <value>Beam (m)</value>
+  </data>
+  <data name="Routes_LegDraft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Routes_LegCrossTrack" xml:space="preserve">
+    <value>Cross-track port / stbd</value>
+  </data>
+  <data name="Routes_LegNote" xml:space="preserve">
+    <value>Note</value>
+  </data>
+  <data name="Routes_LegNotePlaceholder" xml:space="preserve">
+    <value>Add a note</value>
+  </data>
+  <data name="Routes_LegAddNote" xml:space="preserve">
+    <value>+ Note</value>
+  </data>
+  <data name="Routes_LegDetailTitleFormat" xml:space="preserve">
+    <value>Leg {0} → {1}</value>
+  </data>
+  <data name="Routes_LegDetailFootnote" xml:space="preserve">
+    <value>Dashed = inherited from Passage. Safety contour and depth come from Mariner settings.</value>
+  </data>
+  <data name="Tooltip_LegDetail" xml:space="preserve">
+    <value>Show this leg's speed, draft, cross-track and UKC</value>
+  </data>
+  <data name="Tooltip_CheckPassage" xml:space="preserve">
+    <value>Check this departure against your settings</value>
+  </data>
 </root>
