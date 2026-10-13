@@ -79,6 +79,17 @@ records directly under the root, with no wrapper. The JCOMM/IHO S-411 sample
 sets do this. The reader handles both: it reads the wrapper's children when the
 wrapper is present, and scans the root otherwise.
 
+### Cancelled datasets
+
+A catalogue can list a cancelled dataset as a record with
+`purpose=cancellation`. Producers of GML and HDF5 products usually ship no file
+for it. AMSA's S-124 navigational-warning sets, for example, list every
+withdrawn warning this way, and some sets hold nothing else.
+`DatasetDiscoveryMetadata.IsWithdrawal` is `true` for such a record.
+`ExchangeCatalogue.CurrentDatasets` lists every other record, so use it to
+choose what to load. An S-101 cancellation is an update file (edition 0) that
+is applied to its base cell, so it isn't a withdrawal.
+
 ## Verify signatures and checksums
 
 `ExchangeSetVerifier` checks two things for each file in an exchange set:
@@ -151,6 +162,10 @@ result for a file, and `SignatureResults` has the result of each signature.
 and `ExpectedHash`. `ExchangeCatalogue.Certificates` holds the
 `CertificateBlock`.
 
+The reader takes a signature's form from its `xsi:type` when it has one, so
+`<S100_SE_DigitalSignature xsi:type="S100_SE_SignatureOnData">` (as AMSA writes
+it) reads as a signature on data.
+
 ### Verification outcomes
 
 Each `FileVerificationResult` reports two independent results: the signature
@@ -171,14 +186,16 @@ Both results use the `VerificationOutcome` enum:
 | `Error` | both | An unexpected error occurred during verification. |
 | `NoChecksum` | checksum | The file is present and readable, but there's no declared hash to compare with. |
 | `ChecksumMismatch` | checksum | The computed digest doesn't match the declared hash. |
+| `Withdrawn` | both | The record cancels a dataset (`IsWithdrawal`), so it isn't verified. Not a failure. |
 
 New `VerificationOutcome` members are only ever added at the end. Names and
 numeric values don't change, so other code, including the S-57 exchange-set
-bridge, can mirror them.
+bridge, can mirror them. `Withdrawn` is S-100 only.
 
 `ExchangeSetVerificationResult` summarizes all files:
 
 - Signatures: `AllValid`, `HasInvalidSignatures` and `IsUnsigned`.
+  `AllValid` and `IsUnsigned` leave out `Withdrawn` records.
 - Integrity: `HasChecksumMismatches`, `HasMissingFiles` and
   `IntegrityVerified`.
 

@@ -332,7 +332,7 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
 
     private static string SignatureSummary(ExchangeSetVerificationResult result)
     {
-        if (result.FileResults.Count > 0 && result.IsUnsigned)
+        if (result.FileResults.Any(f => f.Outcome != VerificationOutcome.Withdrawn) && result.IsUnsigned)
             return "unsigned";
         return result.AllValid ? "all valid" : "see table";
     }
@@ -346,6 +346,7 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
         {
             VerificationOutcome.Ok => "green",
             VerificationOutcome.NotSigned or VerificationOutcome.NoChecksum => failed ? "yellow" : "grey",
+            VerificationOutcome.Withdrawn => "grey",
             _ => "red",
         };
         return $"[{colour}]{outcome}[/]";

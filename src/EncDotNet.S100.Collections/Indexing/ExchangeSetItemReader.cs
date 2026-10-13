@@ -52,7 +52,7 @@ internal static class ExchangeSetItemReader
     public static IEnumerable<CollectionItem> ReadS100(
         ExchangeCatalogue catalogue, ExchangeSetContext context, List<IndexDiagnostic> diagnostics)
     {
-        var datasets = catalogue.DatasetDiscoveryMetadata;
+        var datasets = catalogue.CurrentDatasets;
 
         // Group numbered ISO 8211 files by directory + cell stem.
         var groups = new Dictionary<string, List<(int Update, DatasetDiscoveryMetadata Dataset)>>(

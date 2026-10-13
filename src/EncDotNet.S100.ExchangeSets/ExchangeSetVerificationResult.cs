@@ -28,8 +28,12 @@ public sealed class ExchangeSetVerificationResult
     /// (<see cref="VerificationOutcome.NoChecksum"/>) as non-failing and fails
     /// only on mismatch, missing file, error, or invalid signature.
     /// </para>
+    /// <para>
+    /// Withdrawn records (<see cref="VerificationOutcome.Withdrawn"/>) ship no
+    /// file and are left out, here and in <see cref="IsUnsigned"/>.
+    /// </para>
     /// </remarks>
-    public bool AllValid => FileResults.All(r => r.Outcome == VerificationOutcome.Ok);
+    public bool AllValid => Delivered.All(r => r.Outcome == VerificationOutcome.Ok);
 
     /// <summary>
     /// Returns <c>true</c> when at least one file has
@@ -39,9 +43,10 @@ public sealed class ExchangeSetVerificationResult
 
     /// <summary>
     /// Returns <c>true</c> when no file carries a signature
-    /// (all are <see cref="VerificationOutcome.NotSigned"/>).
+    /// (all are <see cref="VerificationOutcome.NotSigned"/>), leaving out
+    /// withdrawn records.
     /// </summary>
-    public bool IsUnsigned => FileResults.All(r => r.Outcome == VerificationOutcome.NotSigned);
+    public bool IsUnsigned => Delivered.All(r => r.Outcome == VerificationOutcome.NotSigned);
 
     /// <summary>
     /// Returns <c>true</c> when at least one file's computed digest did not
@@ -69,4 +74,7 @@ public sealed class ExchangeSetVerificationResult
     /// mandate per-resource hashes.
     /// </summary>
     public bool IntegrityVerified => !HasMissingFiles && !HasChecksumMismatches;
+
+    private IEnumerable<FileVerificationResult> Delivered =>
+        FileResults.Where(r => r.Outcome != VerificationOutcome.Withdrawn);
 }

@@ -10,7 +10,8 @@ namespace EncDotNet.S100.ExchangeSets;
 /// and the checksum/integrity dimension
 /// (<see cref="FileVerificationResult.ChecksumOutcome"/>). Members are
 /// append-only so downstream consumers (including the S-57 exchange-set
-/// bridge) can mirror the names and ordinals.
+/// bridge) can mirror the names and ordinals; <see cref="Withdrawn"/> is
+/// S-100 only.
 /// </remarks>
 public enum VerificationOutcome
 {
@@ -55,4 +56,11 @@ public enum VerificationOutcome
     /// </summary>
     /// <remarks>S-100 Edition 5.2.1 Part 15 §15-8.10.</remarks>
     ChecksumMismatch,
+
+    /// <summary>
+    /// The record withdraws a cancelled dataset
+    /// (<see cref="DatasetDiscoveryMetadata.IsWithdrawal"/>), so it is not
+    /// verified: nothing loads it, and its file is usually absent. Not a failure.
+    /// </summary>
+    Withdrawn,
 }

@@ -41,12 +41,44 @@ public class Part15DigitalSignatureTests
     [InlineData("""<S100SE:S100_SE_SignatureOnData id="s" certificateRef="cert" dataStatus="unknown">AQ==</S100SE:S100_SE_SignatureOnData>""")]
     [InlineData("""<S100SE:S100_SE_SignatureOnSignature id="s" certificateRef="cert">AQ==</S100SE:S100_SE_SignatureOnSignature>""")]
     [InlineData("""<S100SE:S100_SE_SignatureOnData id="s" certificateRef="cert" dataStatus="unencrypted">not-base64</S100SE:S100_SE_SignatureOnData>""")]
+    [InlineData("""<S100SE:S100_SE_DigitalSignature xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xs="http://www.w3.org/2001/XMLSchema" xsi:type="xs:string" id="s" certificateRef="cert">AQ==</S100SE:S100_SE_DigitalSignature>""")]
+    [InlineData("""<S100SE:S100_SE_DigitalSignature xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="S100SE:S100_SE_Unknown" id="s" certificateRef="cert">AQ==</S100SE:S100_SE_DigitalSignature>""")]
     public void Read_RejectsMalformedSignature(string signatureElement)
     {
         var exception = Assert.Throws<XmlException>(() => ReadCatalogue(
             $"<S100XC:digitalSignatureValue>{signatureElement}</S100XC:digitalSignatureValue>"));
 
         Assert.NotEmpty(exception.Message);
+    }
+
+    [Fact]
+    public void Read_TakesTheSignatureKindFromXsiType()
+    {
+        // AMSA's SECOM service writes the base element with a derived type (#919).
+        var catalogue = ReadCatalogue(
+            """
+            <S100XC:digitalSignatureValue>
+              <S100SE:S100_SE_DigitalSignature xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:type="S100SE:S100_SE_SignatureOnData" dataStatus="unencrypted" id="s" certificateRef="cert">AQ==</S100SE:S100_SE_DigitalSignature>
+            </S100XC:digitalSignatureValue>
+            """);
+
+        var signature = Assert.Single(catalogue.DatasetDiscoveryMetadata[0].DigitalSignatures);
+        Assert.Equal(DigitalSignatureKind.SignatureOnData, signature.Kind);
+        Assert.Equal(SignatureDataStatus.Unencrypted, signature.DataStatus);
+    }
+
+    [Fact]
+    public void Read_StillRejectsDataStatusOnALegacySignature()
+    {
+        var exception = Assert.Throws<XmlException>(() => ReadCatalogue(
+            """
+            <S100XC:digitalSignatureValue>
+              <S100SE:S100_SE_DigitalSignature dataStatus="unencrypted" id="s" certificateRef="cert">AQ==</S100SE:S100_SE_DigitalSignature>
+            </S100XC:digitalSignatureValue>
+            """));
+
+        Assert.Contains("cannot declare dataStatus", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -116,6 +116,26 @@ public sealed class DatasetDiscoveryMetadata
     public string? Purpose { get; init; }
 
     /// <summary>
+    /// <see langword="true"/> when <see cref="Purpose"/> is <c>cancellation</c>
+    /// (compared ignoring case and surrounding white space).
+    /// </summary>
+    public bool IsCancellation =>
+        string.Equals(Purpose?.Trim(), "cancellation", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <see langword="true"/> when the record withdraws a dataset instead of
+    /// delivering one: a cancellation whose file is not an ISO 8211 sequential
+    /// file (<c>.000</c>, <c>.001</c>, …).
+    /// </summary>
+    /// <remarks>
+    /// Producers of GML and HDF5 products list a withdrawn dataset as a
+    /// <c>cancellation</c> record and usually ship no file for it (e.g. AMSA's
+    /// S-124 navigational warnings). An S-101 cancellation is an update file
+    /// (edition 0) that is applied to its base cell, so it is not a withdrawal.
+    /// </remarks>
+    public bool IsWithdrawal => IsCancellation && !HasSequentialExtension(FileName);
+
+    /// <summary>
     /// <see langword="true"/> when <c>notForNavigation</c> is <c>true</c>;
     /// <see langword="false"/> when absent or any other value.
     /// </summary>
@@ -298,4 +318,10 @@ public sealed class DatasetDiscoveryMetadata
     /// <c>transit</c> or <c>overview</c>), kept verbatim; <see langword="null"/> when absent.
     /// </summary>
     public string? NavigationPurpose { get; init; }
+
+    private static bool HasSequentialExtension(string fileName)
+    {
+        var extension = Path.GetExtension(fileName);
+        return extension.Length == 4 && extension.AsSpan(1).IndexOfAnyExceptInRange('0', '9') < 0;
+    }
 }

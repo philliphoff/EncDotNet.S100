@@ -26,6 +26,13 @@ public class SupportedSpecEditionsTests
     }
 
     [Fact]
+    public void For_S124_IsEdition2()
+    {
+        // The bundled catalogues and live SECOM data are S-124 2.0.0 (#921).
+        Assert.Equal([new SpecVersion(2, 0, 0)], SupportedSpecEditions.For("S-124"));
+    }
+
+    [Fact]
     public void For_AcceptsTolerantNameForms()
     {
         Assert.NotEmpty(SupportedSpecEditions.For("s101"));

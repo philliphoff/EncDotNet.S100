@@ -63,7 +63,7 @@ public sealed class ExchangeSetLoader
     {
         ArgumentNullException.ThrowIfNull(exchangeSet);
 
-        var datasets = exchangeSet.Catalogue.DatasetDiscoveryMetadata;
+        var datasets = exchangeSet.Catalogue.CurrentDatasets;
 
         // Index the catalogue's support files by name so S-101 can resolve
         // `fileReference` external text files through the catalogue — the

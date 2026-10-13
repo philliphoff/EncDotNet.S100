@@ -35,7 +35,9 @@ public static class SupportedSpecEditions
             ["S-104"] = [new SpecVersion(2, 0, 0)],
             ["S-111"] = [new SpecVersion(2, 0, 0)],
             ["S-122"] = [new SpecVersion(1, 0, 0)],
-            ["S-124"] = [new SpecVersion(1, 0, 0)],
+            // The bundled S-124 Feature and Portrayal Catalogues and the test
+            // data are Edition 2.0.0, as is live SECOM data (AMSA, CCG) (#921).
+            ["S-124"] = [new SpecVersion(2, 0, 0)],
             ["S-125"] = [new SpecVersion(1, 0, 0)],
             ["S-127"] = [new SpecVersion(2, 0, 0)],
             ["S-128"] = [new SpecVersion(2, 0, 0)],
