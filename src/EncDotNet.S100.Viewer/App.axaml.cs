@@ -804,6 +804,8 @@ public partial class App : Application
         services.AddSingleton<IApplicationControlService, ApplicationControlService>();
         services.AddSingleton<PortrayalCatalogueSeeder>();
         services.AddSingleton<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider, MeasureOverlayAppearanceProvider>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.IRouteViewTime>(sp => new EncDotNet.S100.Viewer.Services.TimelineRouteViewTime(
+            sp.GetRequiredService<GlobalTimeService>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutesService>();
         // Loads persisted routes at startup and writes them back (debounced)
         // on change, so user/agent routes survive a restart. Eagerly

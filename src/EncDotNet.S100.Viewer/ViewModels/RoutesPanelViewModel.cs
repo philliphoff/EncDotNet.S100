@@ -96,6 +96,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         _routes.Routes.HistoryChanged += (_, _) => RefreshHistory();
         _routes.SelectionChanged += (_, _) => RefreshSelection();
         _routes.EditModeChanged += (_, _) => OnEditModeChanged();
+        _routes.ViewTime.Changed += (_, _) => OnViewTimeChanged();
         if (_marinerSettings is not null)
             _marinerSettings.Changed += _ => Rebuild();
         if (_timeFormat is not null)
@@ -607,6 +608,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
             Timeline.Clear();
 
         var metrics = route.ComputeAllLegMetrics();
+        var etas = RouteEtas.Compute(route, _routes.ViewTime.Current);
         var selected = _routes.SelectedWaypointIndex;
         for (var i = 0; i < route.Waypoints.Count; i++)
         {
@@ -619,6 +621,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
                 IsFirst = i == 0,
                 IsLast = i == route.Waypoints.Count - 1,
             };
+            ShowEta(waypointRow, etas);
             SetRow(i * 2, waypointRow, reuse);
 
             if (i < metrics.Count)
@@ -626,24 +629,80 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
                 var legRow = reuse && Timeline[(i * 2) + 1] is RouteLegRowViewModel existing
                     ? existing
                     : new RouteLegRowViewModel(i);
-                UpdateLegRow(route, legRow, metrics[i]);
+                UpdateLegRow(route, legRow, metrics[i], etas.LegDuration(i));
                 SetRow((i * 2) + 1, legRow, reuse);
             }
         }
 
+        ActiveRouteDetailMeta = DetailMeta(route, etas);
+    }
+
+    /// <summary>
+    /// The route header's sub-line (B6): <c>9 WP · 24,1 NM · Rhumb</c>, or with
+    /// a speed <c>9 WP · 24,1 NM · 2 h 10 min · arrives 09:21</c>, saying when
+    /// the arrival runs from the view time and where ETAs stop for want of a speed.
+    /// </summary>
+    private string DetailMeta(Route route, RouteEtas etas)
+    {
         var total = route.TotalDistanceNm();
-        ActiveRouteDetailMeta = route.Legs.Count == 0
-            ? string.Format(
+        if (etas.FirstLegWithoutSpeed is { } stop)
+        {
+            return string.Format(
+                CultureInfo.CurrentCulture, Strings.Routes_DetailEtasStopFormat,
+                route.Waypoints.Count, total, stop + 1, stop + 2);
+        }
+        if (etas is { Arrival: { } arrival, Duration: { } duration })
+        {
+            return string.Format(
                 CultureInfo.CurrentCulture,
-                Strings.Routes_DetailMetaFormat,
+                etas.IsFromViewTime ? Strings.Routes_DetailArrivalFromViewTimeFormat : Strings.Routes_DetailArrivalFormat,
                 route.Waypoints.Count,
-                total)
+                total,
+                PassageFormatting.FormatDuration(duration),
+                PassageFormatting.FormatEta(arrival, etas.Departure, TimeFormat));
+        }
+        return route.Legs.Count == 0
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Routes_DetailMetaFormat, route.Waypoints.Count, total)
             : string.Format(
                 CultureInfo.CurrentCulture,
                 Strings.Routes_DetailMetaWithGeometryFormat,
                 route.Waypoints.Count,
                 total,
                 PredominantGeometry(route));
+    }
+
+    private void ShowEta(RouteWaypointRowViewModel row, RouteEtas etas)
+    {
+        if (etas.WaypointEta(row.Index) is { } eta)
+        {
+            row.Eta = PassageFormatting.FormatEta(eta, etas.Departure, TimeFormat);
+            row.EtaTooltip = string.Format(
+                CultureInfo.CurrentCulture,
+                etas.IsFromViewTime ? Strings.Tooltip_WaypointEtaFromViewTime : Strings.Tooltip_WaypointEta,
+                TimeFormatting.Format(eta, TimeFormat));
+        }
+        else
+        {
+            row.Eta = null;
+            row.EtaTooltip = null;
+        }
+    }
+
+    /// <summary>
+    /// Moves the ETAs with the view time when the active route has no
+    /// departure, updating the rows in place: the view time moves often (Live),
+    /// and a rebuild would take focus from a field being typed in.
+    /// </summary>
+    private void OnViewTimeChanged()
+    {
+        if (_routes.Routes.ActiveRoute is not { Passage.Departure: null, Legs.Count: > 0 } route)
+            return;
+        var etas = RouteEtas.Compute(route, _routes.ViewTime.Current);
+        if (!etas.HasEtas)
+            return;
+        foreach (var row in Timeline.OfType<RouteWaypointRowViewModel>())
+            ShowEta(row, etas);
+        ActiveRouteDetailMeta = DetailMeta(route, etas);
     }
 
     private void SetRow(int index, RouteTimelineRowViewModel row, bool reuse)
@@ -654,7 +713,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
             Timeline[index] = row;
     }
 
-    private void UpdateLegRow(Route route, RouteLegRowViewModel row, RouteLegMetrics metrics)
+    private void UpdateLegRow(Route route, RouteLegRowViewModel row, RouteLegMetrics metrics, TimeSpan? duration)
     {
         var i = metrics.LegIndex;
         var legText = string.Format(
@@ -662,6 +721,8 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
             Strings.Routes_LegMetaFormat,
             metrics.DistanceNm,
             metrics.InitialBearingDegrees);
+        if (duration is { } d)
+            legText += " · " + PassageFormatting.FormatDuration(d);
         var isGeodesic = route.Legs[i].GeometryType == RouteLegGeometryType.Geodesic;
         var geometryText = isGeodesic ? Strings.Routes_GeometryGeodesic : Strings.Routes_GeometryLoxodrome;
 
@@ -890,6 +951,29 @@ internal sealed class RouteWaypointRowViewModel : RouteTimelineRowViewModel
 
     /// <summary>True for the last waypoint (no outbound connector).</summary>
     public bool IsLast { get; init; }
+
+    private string? _eta;
+    /// <summary>The ETA at this waypoint (A8), e.g. "09:21", or <c>null</c> when unknown.</summary>
+    public string? Eta
+    {
+        get => _eta;
+        set
+        {
+            if (SetProperty(ref _eta, value))
+                OnPropertyChanged(nameof(HasEta));
+        }
+    }
+
+    /// <summary>True when <see cref="Eta"/> is shown.</summary>
+    public bool HasEta => _eta is not null;
+
+    private string? _etaTooltip;
+    /// <summary>The ETA's full date and time, and whether it runs from the view time.</summary>
+    public string? EtaTooltip
+    {
+        get => _etaTooltip;
+        set => SetProperty(ref _etaTooltip, value);
+    }
 
     private void CommitName()
     {

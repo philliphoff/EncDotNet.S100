@@ -821,16 +821,31 @@
                                                                Text="{Binding Number}" />
                                                 </Border>
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                    <TextBox Classes="inlineEdit wpName"
-                                                             AutomationProperties.AutomationId="Routes.Waypoint.Name"
-                                                             AutomationProperties.Name="{x:Static loc:Strings.Label_WaypointName}"
-                                                             Text="{Binding NameText, Mode=TwoWay}"
-                                                             PlaceholderText="{Binding FallbackName}">
-                                                        <TextBox.KeyBindings>
-                                                            <KeyBinding Gesture="Enter" Command="{Binding CommitNameCommand}" />
-                                                            <KeyBinding Gesture="Escape" Command="{Binding RevertNameCommand}" />
-                                                        </TextBox.KeyBindings>
-                                                    </TextBox>
+                                                    <!-- The name, with the ETA (A8) on its right
+                                                         once the route has a speed. -->
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBox Grid.Column="0"
+                                                                 Classes="inlineEdit wpName"
+                                                                 AutomationProperties.AutomationId="Routes.Waypoint.Name"
+                                                                 AutomationProperties.Name="{x:Static loc:Strings.Label_WaypointName}"
+                                                                 Text="{Binding NameText, Mode=TwoWay}"
+                                                                 PlaceholderText="{Binding FallbackName}">
+                                                            <TextBox.KeyBindings>
+                                                                <KeyBinding Gesture="Enter" Command="{Binding CommitNameCommand}" />
+                                                                <KeyBinding Gesture="Escape" Command="{Binding RevertNameCommand}" />
+                                                            </TextBox.KeyBindings>
+                                                        </TextBox>
+                                                        <TextBlock Grid.Column="1"
+                                                                   AutomationProperties.AutomationId="Routes.Waypoint.Eta"
+                                                                   Text="{Binding Eta}"
+                                                                   IsVisible="{Binding HasEta}"
+                                                                   ToolTip.Tip="{Binding EtaTooltip}"
+                                                                   FontSize="11"
+                                                                   FontFamily="{DynamicResource LibraryMonoFont}"
+                                                                   Opacity="0.7"
+                                                                   Margin="6,0,0,0"
+                                                                   VerticalAlignment="Center" />
+                                                    </Grid>
                                                     <TextBox Classes="inlineEdit wpCoords"
                                                              Classes.invalid="{Binding HasCoordsError}"
                                                              AutomationProperties.AutomationId="Routes.Waypoint.Position"

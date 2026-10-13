@@ -830,6 +830,16 @@ list. The detail also switches the leg between a **Rhumb** line (loxodrome, the
 ECDIS default) and a **Great circle** (geodesic), drawn as a curve, and adds a
 **Note**. Safety contour and depth come from Mariner Settings, not the route.
 
+With a speed, the route shows times. Each leg shows how long it takes, in the
+list and on its map label (`2.5 NM · 320° · 12 min`), each waypoint shows its
+ETA, and the line under the route's name shows the time under way and the
+arrival (`9 WP · 24.1 NM · 2 h 10 min · arrives 09:21`). ETAs run from the
+**Departure**; with no departure they run from the Timeline's view time (or
+now, with no time-aware data loaded), move with it, and say "from view time".
+Times follow your Local/UTC setting. If a leg has no speed, the ETAs stop
+there and the route's line says so. The speed is the speed over ground you
+enter; S-111 currents aren't applied.
+
 **Check passage**, next to **Edit**, needs a draft, on the passage or on every
 leg. It isn't available yet.
 

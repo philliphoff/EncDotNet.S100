@@ -1,5 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.Routing;
 
@@ -116,5 +117,39 @@ internal static class PassageFormatting
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Formats a leg or passage duration in whole minutes: <c>12 min</c>,
+    /// <c>2 h</c> or <c>2 h 10 min</c>.
+    /// </summary>
+    public static string FormatDuration(TimeSpan duration)
+    {
+        var minutes = (long)Math.Round(duration.TotalMinutes, MidpointRounding.AwayFromZero);
+        if (minutes < 60)
+            return string.Format(CultureInfo.CurrentCulture, Strings.Routes_DurationMinutesFormat, Math.Max(minutes, 1));
+        var hours = minutes / 60;
+        var rest = minutes % 60;
+        return rest == 0
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Routes_DurationHoursFormat, hours)
+            : string.Format(CultureInfo.CurrentCulture, Strings.Routes_DurationHoursMinutesFormat, hours, rest);
+    }
+
+    /// <summary>
+    /// Formats an ETA compactly in the user's time preference: the app's short
+    /// time (local) or <c>HH:mmZ</c> (UTC), with the weekday in front when it
+    /// falls on a different day from <paramref name="departure"/>.
+    /// </summary>
+    public static string FormatEta(DateTimeOffset eta, DateTimeOffset departure, TimeFormat format)
+    {
+        var (at, from) = format == TimeFormat.Utc
+            ? (eta.ToUniversalTime(), departure.ToUniversalTime())
+            : (eta.ToLocalTime(), departure.ToLocalTime());
+        var time = format == TimeFormat.Utc
+            ? at.ToString("HH:mm", CultureInfo.InvariantCulture) + "Z"
+            : at.ToString("t", CultureInfo.CurrentCulture);
+        return at.Date == from.Date
+            ? time
+            : at.ToString("ddd", CultureInfo.CurrentCulture) + " " + time;
     }
 }
