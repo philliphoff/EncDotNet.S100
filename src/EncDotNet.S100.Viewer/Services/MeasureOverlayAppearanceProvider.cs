@@ -33,6 +33,7 @@ internal sealed class MeasureOverlayAppearanceProvider : IMeasureOverlayAppearan
             return new MeasureOverlayAppearance((c.R, c.G, c.B), _theme.IsDarkTheme)
             {
                 ChartBackground = MeasureOverlayAppearance.ChartBackgroundFor(_settings.SelectedPalette),
+                Palette = _settings.SelectedPalette,
             };
         }
     }

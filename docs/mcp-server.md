@@ -157,6 +157,7 @@ Both hosts provide these tools.
 | `search_features` | No | Finds vector features by name. Searches the `OBJNAM`, `NOBJNM` and `objectName` attributes (including S-101) and the `name` and `displayName` of the repeatable `featureName` complex attribute (GML products). Matches case-insensitive substrings by default; `exact` matches whole names and `caseSensitive` matches case. Scope with `spec`, `datasetId` and a spatial `query`. Each match reports `matchedName` and `matchedAttribute`. Paged. |
 | `sample_coverage` | No | Samples a depth, water level or current at a point from an S-102, S-104 or S-111 dataset. For S-104 and S-111, `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). |
 | `sample_coverage_along` | No | Samples a coverage at each vertex of a polyline, with the same time handling as `sample_coverage`. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
+| `get_passage_result` | No | Checks under-keel clearance along a passage. See [Check a passage's clearance](#check-a-passages-clearance). |
 
 ### Session tools
 
@@ -258,7 +259,7 @@ revert a drag on the map and Ctrl+Z (⌘Z) can revert a tool's edit.
 |---|---|---|
 | `create_route` | Yes | Creates an empty route and makes it the active route. Optional `name` and `id` (a GUID is generated when you omit `id`; ids must be unique). Returns the route's full state, as `get_route` does. |
 | `list_routes` | No | Lists every route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm` and `isActive`, the collection's `activeRouteId`, and `editMode` (whether the route editor is on). |
-| `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `passage` (as `get_passage` returns it), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs`, `totalDistanceNm`, and the undo state: `canUndo`, `canRedo`, `undoLabel` and `redoLabel` (for example `move waypoint`). Each leg has its `index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, its passage values twice (`effective`, the values that apply, and `overrides`, only the leg's own values), and the rest of its S-421 navigational envelope. |
+| `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `passage` (as `get_passage` returns it), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs`, `totalDistanceNm`, the undo state (`canUndo`, `canRedo`, `undoLabel` and `redoLabel`, for example `move waypoint`), and, for the active route, the selection: `selectedWaypointIndex` and `selectedLegIndex`. Each leg has its `index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, its passage values twice (`effective`, the values that apply, and `overrides`, only the leg's own values), and the rest of its S-421 navigational envelope. |
 | `delete_route` | Yes | Removes a route. Returns `routeId`, `deleted` and the new `activeRouteId`. |
 | `append_waypoint` | Yes | Adds a waypoint (`lat`, `lon`) at the end of a route, with optional `number`, `name`, `fixed` and `turnRadiusNm`. Returns the updated route. |
 | `insert_waypoint` | Yes | Inserts a waypoint at `index` (`0` to `waypointCount`; `0` prepends and `waypointCount` appends), splitting the leg there. Takes the same optional fields as `append_waypoint`. Returns the updated route. |
@@ -270,6 +271,7 @@ revert a drag on the map and Ctrl+Z (⌘Z) can revert a tool's edit.
 | `set_passage` | Yes | Updates a route's passage values: `draftMeters`, `squatMeters`, `speedKnots`, `departure`, `requiredUkcMeters`, and the cross-track limits (`crossTrackMeters` for both sides, or `portCrossTrackMeters` and `starboardCrossTrackMeters`). Values you pass overwrite, values you omit are unchanged, and names in `clear` are unset. Set the vessel with `set_route_info`. Returns the updated route. |
 | `undo_route_edit` | Yes | Undoes the most recent edit to a route, whether it was made in the viewer or by a route tool. Returns the updated route. Fails with `route_history_empty` when there is nothing to undo. |
 | `redo_route_edit` | Yes | Redoes the most recently undone edit. Any new edit clears what can be redone. Fails with `route_history_empty` when there is nothing to redo. |
+| `select_route_item` | Yes | Selects a waypoint (`waypointIndex`) or a leg (`legIndex`), as clicking its row in the **Routes** panel does, or clears the selection when you pass neither. The map highlights the selected waypoint, or haloes the selected leg and always shows its label. Selecting makes the route active. Returns the updated route. |
 | `set_route_edit_mode` | Yes | Turns the route editor on (`enabled: true`) or off, as the Routes panel's **Edit** toggle and Ctrl+E (⌘E) do. While it is on, clicks on the map add waypoints to the active route. Returns `enabled` and `activeRouteId`. |
 
 A typical sequence:
@@ -297,6 +299,90 @@ do.
 | `set_test_clock` | Yes | Moves (`now`, or `advance` such as `+1h`), freezes (`freeze`) or resets (`reset`) the app's notion of now, so forecasts age, runs expire and a Live Timeline advances without waiting. The Timeline and the Library's expiry check react at once. |
 | `ui_tree` | No | Lists the UI as an accessibility client sees it: one root per window and open popup (`kind` `window` or `popup`, such as context menus and flyouts), each a tree of elements. Each element has a `ref` (such as `e12`, valid while the element stays on screen), `id` (its automation id, such as `Datasets.DatasetsTab`, `Library.Tree` or `ActivityBar.Datasets`; see the convention in the [viewer tests README](https://github.com/philliphoff/EncDotNet.S100/blob/main/tests/EncDotNet.S100.Viewer.Tests/README.md)), `role` (`button`, `listItem`, `tabItem`, `treeItem`, `edit`, `checkBox`, `menuItem` and so on), `name`, `text` (a row's visible text, or an icon button's tooltip, when it has no name), `enabled`, `focused`, `patterns` (the actions it supports: `invoke`, `toggle`, `value`, `rangeValue`, `selectionItem`, `expandCollapse`) with their state (`toggle`, `value`, `selected`, `expanded`), and `bounds` in its window. `filter` `interactive` (default) keeps elements with an id or an action and lifts the children of the rest; `all` lists everything. `root` (an id or ref) lists one subtree. `depth` (default 30) and `maxNodes` (default 400; `truncated` says when it cut) limit the size. The map is one element; use the map tools for chart content. |
 | `ui_invoke`, `ui_set_value`, `ui_toggle`, `ui_select`, `ui_expand`, `ui_collapse`, `ui_focus`, `ui_context_menu` | Yes | Act on one element as the user does: click a button or menu item (`ui_invoke`); replace a text box's text or set a slider (`ui_set_value`, `value`); flip a check box or toggle button, or set it with `state` `on` or `off` (`ui_toggle`); select a list row, tab, tree node or radio button (`ui_select`); expand or collapse a tree node, expander, combo box or submenu; move keyboard focus (`ui_focus`; leaving a text box runs its lost-focus behaviour, so an in-place rename commits); or open a context menu as a right-click does, selecting the row or node first (`ui_context_menu`). Target an element by `id` or `ref`, not both. An id repeated in every row (such as `Datasets.Row.Remove`) is ambiguous alone: scope it with `within` (the row's ref or an ancestor's id), or use the ref. Returns the element afterwards. Errors: `ui_element_not_found` (with similar ids on screen), `ui_element_ambiguous` (each match's `ref` and row text), `ui_element_disabled` and `ui_action_not_supported` (with the element's `patterns`). A closing dialog or popup animates briefly after the call returns, so read `ui_tree` again before relying on it being gone. |
+
+## Check a passage's clearance
+
+`get_passage_result` computes, at each sample's ETA, UKC = charted depth +
+water level − draft − squat, and compares it with the required UKC. It uses
+the same engine as SoundCharts' Check passage (the `EncDotNet.S100.Navigation`
+package). The result isn't for navigation; show its `disclaimer` once, with
+the verdict.
+
+Pass the passage in one of two ways:
+
+- **A polyline and a draft.** `polyline` is `{"vertices":[[lat,lon],...]}`,
+  and each pair of consecutive vertices is a leg. `draftMeters` is required.
+  Both hosts accept this form.
+- **A route.** In SoundCharts, pass `routeId`, or neither `routeId` nor
+  `polyline` to check the active route. Each leg's draft, speed (maximum SOG,
+  else minimum) and required UKC (static UKC) come from the route.
+  `s100 mcp serve` has no routes and returns `invalid_argument` for this form.
+
+These arguments override every leg's value:
+
+- `draftMeters`
+- `speedKnots`: the speed over ground. S-111 currents aren't applied.
+- `squatMeters`: a fixed allowance; it isn't modelled from speed.
+- `requiredUkcMeters`: when unset, the check uses 0 m and sets `noMarginSet`.
+
+`departure` defaults to the view time for a route, or the current time for a
+polyline. Without a speed, every sample uses the departure time.
+
+How it samples and classifies:
+
+- **Charted depth** comes from S-102. Where there's no S-102, or a cell is
+  NoData, it falls back to S-101: the shallowest covering `DredgedArea`, then
+  `DepthArea` (DRVAL1), then a `Sounding` within 250 m. S-101 depths are low
+  confidence.
+- **Spacing.** Along S-102, the check steps at half the finest grid cell so no
+  cell is skipped. Each sample stands for at most `sampleSpacingMeters`
+  (default 50) and keeps the shallowest depth in its stretch.
+- **Water level** comes from S-104 at the ETA, interpolated between time
+  steps. Grids are used first, then the nearest station within 10 km. Outside
+  the S-104 extent or time range, or where a value is NoData, the sample is
+  `no_data` ("tide not applied").
+- **Datums.** When the S-102 or S-101 and S-104 vertical datums differ, the
+  water level is reported but not applied, and the stretch is a
+  `datum_mismatch` gap. When a datum isn't declared, or isn't an S-100 code,
+  the water level is applied and the stretch is low confidence
+  (`datum_unconfirmed`).
+- **States:**
+  - `meets_settings`
+  - `tight`: less than 0,5 m above the required UKC.
+  - `below_setting`
+  - `low_confidence`: meets the required UKC, but from S-101 or with
+    unconfirmed datums.
+  - `no_data`
+- **Verdict**, in priority order:
+  1. `water_level_ends_before_arrival`
+  2. `below_setting`
+  3. `incomplete_data`
+  4. `meets_settings_tight`
+  5. `meets_settings`
+
+  `verdictTitle` gives the same verdict in the app's words, such as "Below
+  your UKC setting in 2 places".
+
+The result has:
+
+- `minimum`: the smallest margin over the required UKC, with where and when.
+- `minutesBelow` and `placesBelow`.
+- `legs`: per leg, the values used, the minimum, the `worstState`, the
+  minutes below the setting, `lowConfidence` and `noWaterLevel`.
+- `gaps` and `lowConfidence`: stretches by kind, with their distances and
+  times.
+- `sources`: the S-102 and S-101 datasets, the S-104 datasets and stations,
+  the datums and the largest S-102 uncertainty.
+
+Set `includeSamples` to get per-sample values. Each sample has its depth
+source, dataset and cell, uncertainty, water level, station, time step and
+datum agreement. `maxSamples` (default 500) caps the list, and the samples
+with the least clearance are kept.
+
+To find a departure window, set `windowFrom` and `windowTo` (and optionally
+`windowStepMinutes`, default 5). `window` then lists every departure's verdict,
+the runs of departures that meet your settings, and the meeting departure
+nearest `departure`.
 
 ## Times outside the data
 

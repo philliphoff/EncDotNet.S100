@@ -661,6 +661,8 @@ internal static class Strings
     public static string Tooltip_RouteRowMenu => Get(nameof(Tooltip_RouteRowMenu));
     public static string Tooltip_WaypointRowMenu => Get(nameof(Tooltip_WaypointRowMenu));
     public static string Tooltip_EditRouteName => Get(nameof(Tooltip_EditRouteName));
+    public static string Map_RouteEditChipTitle => Get(nameof(Map_RouteEditChipTitle));
+    public static string Map_RouteEditChipHint => Get(nameof(Map_RouteEditChipHint));
     public static string Routes_EditingBadge => Get(nameof(Routes_EditingBadge));
     public static string Routes_EditHintFormat => Get(nameof(Routes_EditHintFormat));
     public static string Button_EditRoute => Get(nameof(Button_EditRoute));

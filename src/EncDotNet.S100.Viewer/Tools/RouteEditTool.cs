@@ -13,7 +13,8 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// Interactive editor for the active <see cref="Route"/> in the shared
 /// <see cref="RoutesService"/>. Click on empty water appends a waypoint (or
 /// inserts one when the click lands on an existing leg); drag a waypoint to
-/// move it; click a waypoint to select it; right-click removes the waypoint
+/// move it; click or drag a leg's insert handle (the ⊕ at its midpoint) to
+/// insert a waypoint there; click a waypoint to select it; right-click removes the waypoint
 /// under the pointer; Backspace removes the last. The Delete key (bound by the
 /// host, see <c>RouteEditorKeys</c>) removes the selected waypoint.
 /// </summary>
@@ -48,6 +49,7 @@ internal sealed class RouteEditTool : IMapTool
     private Point? _pressPosition;
     private bool _pressIsLeftButton;
     private int? _dragWaypointIndex;
+    private int? _pressHandleLeg;
     private bool _dragActive;
     private IDisposable? _dragGesture;
 
@@ -80,6 +82,7 @@ internal sealed class RouteEditTool : IMapTool
         _pressPosition = null;
         _pressIsLeftButton = false;
         _dragWaypointIndex = null;
+        _pressHandleLeg = null;
         _dragActive = false;
     }
 
@@ -113,11 +116,12 @@ internal sealed class RouteEditTool : IMapTool
             _pressIsLeftButton = true;
             _dragActive = false;
             _dragWaypointIndex = HitTestWaypoint(pos);
+            _pressHandleLeg = _dragWaypointIndex is null ? HitTestHandle(pos) : null;
 
-            // Pressing on a waypoint begins a potential drag — consume so
-            // Mapsui doesn't pan. Pressing empty water lets pan win until we
-            // know (on release) that it was a click.
-            return _dragWaypointIndex is not null;
+            // Pressing on a waypoint or an insert handle begins a potential
+            // drag — consume so Mapsui doesn't pan. Pressing empty water lets
+            // pan win until we know (on release) that it was a click.
+            return _dragWaypointIndex is not null || _pressHandleLeg is not null;
         }
 
         return false;
@@ -125,7 +129,7 @@ internal sealed class RouteEditTool : IMapTool
 
     public bool OnPointerMoved(PointerEventArgs e)
     {
-        if (_context is null || !_pressIsLeftButton || _dragWaypointIndex is not { } index)
+        if (_context is null || !_pressIsLeftButton || (_dragWaypointIndex is null && _pressHandleLeg is null))
             return false;
 
         var pos = e.GetPosition(_context.MapControl);
@@ -137,6 +141,18 @@ internal sealed class RouteEditTool : IMapTool
                 return true; // not yet a drag, but keep consuming
             _dragActive = true;
         }
+
+        // Dragging an insert handle inserts a waypoint at the leg's midpoint
+        // and drags it, as one undoable step.
+        if (_pressHandleLeg is { } leg && _routes.Routes.ActiveRoute is { } target)
+        {
+            _pressHandleLeg = null;
+            _dragGesture ??= target.History.BeginGesture(RouteEditLabels.InsertWaypoint);
+            _dragWaypointIndex = InsertAtHandle(target, leg);
+        }
+
+        if (_dragWaypointIndex is not { } index)
+            return true;
 
         var world = _context.ScreenToLatLon(pos);
         if (world is { } w && _routes.Routes.ActiveRoute is { } route && index < route.Waypoints.Count)
@@ -158,10 +174,20 @@ internal sealed class RouteEditTool : IMapTool
         EndDragGesture();
         var release = e.GetPosition(_context.MapControl);
         var draggedIndex = _dragWaypointIndex;
+        var handleLeg = _pressHandleLeg;
         var wasDragActive = _dragActive;
         _pressPosition = null;
         _dragWaypointIndex = null;
+        _pressHandleLeg = null;
         _dragActive = false;
+
+        if (handleLeg is { } clickedLeg && _routes.Routes.ActiveRoute is { } handleRoute)
+        {
+            // A click on an insert handle inserts a waypoint at the leg's midpoint.
+            handleRoute.History.Execute(RouteEditLabels.InsertWaypoint, () => InsertAtHandle(handleRoute, clickedLeg));
+            PushSummary();
+            return true;
+        }
 
         var dx = release.X - press.X;
         var dy = release.Y - press.Y;
@@ -287,33 +313,91 @@ internal sealed class RouteEditTool : IMapTool
     }
 
     /// <summary>
-    /// Returns the index of the active-route leg whose screen-space segment
-    /// passes within <see cref="SegmentHitTolerancePx"/> of
-    /// <paramref name="screen"/>, or <c>null</c>.
+    /// Returns the index of the active-route leg whose drawn path passes
+    /// within <see cref="SegmentHitTolerancePx"/> of <paramref name="screen"/>,
+    /// or <c>null</c>.
     /// </summary>
     private int? HitTestLeg(Point screen)
     {
-        if (_context is null || _routes.Routes.ActiveRoute is not { } route)
-            return null;
-
         int? best = null;
         var bestDist = SegmentHitTolerancePx;
-        for (var i = 0; i < route.Legs.Count; i++)
+        foreach (var leg in LayoutActiveRoute())
         {
-            var a = route.Waypoints[i].Position;
-            var b = route.Waypoints[i + 1].Position;
-            if (_context.LatLonToScreen(new GeoPosition(a.Latitude, a.Longitude)) is not { } pa ||
-                _context.LatLonToScreen(new GeoPosition(b.Latitude, b.Longitude)) is not { } pb)
-                continue;
-
-            var dist = DistancePointToSegment(screen, pa, pb);
-            if (dist <= bestDist)
+            foreach (var part in leg.Parts)
             {
-                bestDist = dist;
-                best = i;
+                for (var i = 1; i < part.Count; i++)
+                {
+                    var dist = DistancePointToSegment(screen, part[i - 1], part[i]);
+                    if (dist <= bestDist)
+                    {
+                        bestDist = dist;
+                        best = leg.Index;
+                    }
+                }
             }
         }
         return best;
+    }
+
+    /// <summary>
+    /// Returns the index of the leg whose insert handle is within
+    /// <see cref="WaypointHitRadiusPx"/> of <paramref name="screen"/>, or
+    /// <c>null</c>. Handles show only on legs longer than
+    /// <see cref="RouteOverlayLayout.InsertHandleMinLegPx"/> on screen.
+    /// </summary>
+    internal int? HitTestHandle(Point screen) => HitTestHandle(LayoutActiveRoute(), screen);
+
+    /// <summary>The leg in <paramref name="layout"/> whose insert handle is under <paramref name="screen"/>.</summary>
+    internal static int? HitTestHandle(IReadOnlyList<LegLayout> layout, Point screen)
+    {
+        int? best = null;
+        var bestDistSq = WaypointHitRadiusPx * WaypointHitRadiusPx;
+        foreach (var leg in layout)
+        {
+            if (!leg.ShowInsertHandle || leg.Midpoint is not { } m)
+                continue;
+            var dx = m.X - screen.X;
+            var dy = m.Y - screen.Y;
+            var distSq = dx * dx + dy * dy;
+            if (distSq <= bestDistSq)
+            {
+                bestDistSq = distSq;
+                best = leg.Index;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Inserts a waypoint at the midpoint of <paramref name="route"/>'s leg
+    /// <paramref name="leg"/> (under its insert handle), selects it and
+    /// returns its index. The caller records the edit in the route's history.
+    /// </summary>
+    internal int InsertAtHandle(Route route, int leg)
+    {
+        var layout = LayoutActiveRoute();
+        var position = leg < layout.Count && layout[leg].MidpointPosition is { } mid
+            ? mid
+            : Midpoint(route.Waypoints[leg].Position, route.Waypoints[leg + 1].Position);
+        route.InsertWaypoint(leg + 1, position);
+        _routes.SelectedWaypointIndex = leg + 1;
+        return leg + 1;
+    }
+
+    private static GeoPosition Midpoint(GeoPosition a, GeoPosition b)
+        => new((a.Latitude + b.Latitude) / 2.0, (a.Longitude + b.Longitude) / 2.0);
+
+    /// <summary>Lays out the active route for the current viewport, as the overlay draws it.</summary>
+    private IReadOnlyList<LegLayout> LayoutActiveRoute()
+    {
+        if (_context is not { } context || _routes.Routes.ActiveRoute is not { } route)
+            return [];
+        return RouteOverlayLayout.Layout(
+            RouteOverlayScene.SceneRoute.From(route, isActive: true),
+            context.LatLonToScreen,
+            _ => 0,
+            _routes.SelectedLegIndex,
+            isEditing: true);
     }
 
     private static double DistancePointToSegment(Point p, Point a, Point b)

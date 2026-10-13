@@ -108,6 +108,7 @@ These read an `IDatasetCatalog` and never change it.
 | `DescribeFeatureTypeTool` | `describe_feature_type` | Lists a product's feature types, or one type's attributes and allowed values, from the bundled feature catalogue. It needs no catalog or loaded dataset. |
 | `SampleCoverageTool` | `sample_coverage` | Samples an S-102, S-104 or S-111 coverage at a point, at one time or over a time window. |
 | `SampleCoverageAlongTool` | `sample_coverage_along` | Samples a coverage at each vertex of a polyline. A vertex with no value has an error instead of failing the whole call. |
+| `GetPassageResultTool` | `get_passage_result` | Checks under-keel clearance along a polyline or a host route (through `IPassageRouteProvider`) with `EncDotNet.S100.Navigation`. |
 
 The vector tools (`identify_features`, `nearest_features`, `query_features`,
 `count_features` and `search_features`) work on every vector product: S-101,

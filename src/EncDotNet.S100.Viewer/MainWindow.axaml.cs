@@ -1016,6 +1016,7 @@ public partial class MainWindow : ShadUI.Window
         _mapHost.AddToolLayer(_routeOverlayLayer);
 
         _routeStore.Changed += OnRouteStoreChanged;
+        _routeStore.EditModeChanged += OnRouteStoreChanged;
         _routeAppearance.Changed += OnRouteStoreChanged;
 
         RebuildRouteOverlay();
@@ -1038,6 +1039,8 @@ public partial class MainWindow : ShadUI.Window
             _routeOverlayLayer,
             _routeStore.Routes,
             _routeStore.SelectedWaypointIndex,
+            _routeStore.SelectedLegIndex,
+            _routeStore.IsEditModeActive,
             _routeAppearance.Current);
         _mapHost.RequestRedraw();
     }

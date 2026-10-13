@@ -28,17 +28,42 @@ internal sealed class RoutesService
     /// Index of the highlighted waypoint within
     /// <see cref="RouteCollection.ActiveRoute"/>, or <c>null</c> when none
     /// is selected. Cleared automatically whenever the active route changes
-    /// or the index would fall out of range.
+    /// or the index would fall out of range. Selecting a waypoint clears
+    /// <see cref="SelectedLegIndex"/>: one item is selected at a time.
     /// </summary>
     public int? SelectedWaypointIndex
     {
         get => _selectedWaypointIndex;
         set
         {
-            var normalized = Normalize(value);
-            if (_selectedWaypointIndex == normalized)
+            var normalized = Normalize(value, waypoint: true);
+            var leg = normalized is null ? _selectedLegIndex : null;
+            if (_selectedWaypointIndex == normalized && _selectedLegIndex == leg)
                 return;
             _selectedWaypointIndex = normalized;
+            _selectedLegIndex = leg;
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private int? _selectedLegIndex;
+
+    /// <summary>
+    /// Index of the selected leg within <see cref="RouteCollection.ActiveRoute"/>,
+    /// or <c>null</c>. The map gives the selected leg a halo and always shows
+    /// its label. Selecting a leg clears <see cref="SelectedWaypointIndex"/>.
+    /// </summary>
+    public int? SelectedLegIndex
+    {
+        get => _selectedLegIndex;
+        set
+        {
+            var normalized = Normalize(value, waypoint: false);
+            var waypoint = normalized is null ? _selectedWaypointIndex : null;
+            if (_selectedLegIndex == normalized && _selectedWaypointIndex == waypoint)
+                return;
+            _selectedLegIndex = normalized;
+            _selectedWaypointIndex = waypoint;
             SelectionChanged?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -101,7 +126,7 @@ internal sealed class RoutesService
     /// </summary>
     public event EventHandler? Changed;
 
-    /// <summary>Raised when <see cref="SelectedWaypointIndex"/> changes.</summary>
+    /// <summary>Raised when <see cref="SelectedWaypointIndex"/> or <see cref="SelectedLegIndex"/> changes.</summary>
     public event EventHandler? SelectionChanged;
 
     public RoutesService()
@@ -109,10 +134,12 @@ internal sealed class RoutesService
         Routes.Changed += (_, _) =>
         {
             // Keep the selection valid as routes/waypoints change.
-            var normalized = Normalize(_selectedWaypointIndex);
-            if (normalized != _selectedWaypointIndex)
+            var waypoint = Normalize(_selectedWaypointIndex, waypoint: true);
+            var leg = Normalize(_selectedLegIndex, waypoint: false);
+            if (waypoint != _selectedWaypointIndex || leg != _selectedLegIndex)
             {
-                _selectedWaypointIndex = normalized;
+                _selectedWaypointIndex = waypoint;
+                _selectedLegIndex = leg;
                 SelectionChanged?.Invoke(this, EventArgs.Empty);
             }
             Changed?.Invoke(this, EventArgs.Empty);
@@ -121,12 +148,13 @@ internal sealed class RoutesService
         SelectionChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    private int? Normalize(int? candidate)
+    private int? Normalize(int? candidate, bool waypoint)
     {
         if (candidate is not { } index || index < 0)
             return null;
         var active = Routes.ActiveRoute;
-        if (active is null || index >= active.Waypoints.Count)
+        var count = waypoint ? active?.Waypoints.Count : active?.Legs.Count;
+        if (count is null || index >= count)
             return null;
         return index;
     }

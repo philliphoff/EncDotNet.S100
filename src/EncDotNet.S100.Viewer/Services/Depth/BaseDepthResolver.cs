@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services.Depth;
@@ -8,7 +9,9 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// Chooses a picked location's base (tide-independent) depth from the
 /// available S-100 sources, applying the depth-assimilation priority chain:
 /// S-102 bathymetry → S-101 <c>DredgedArea</c> → S-101 <c>DepthArea</c> →
-/// nearest S-101 <c>Sounding</c>.
+/// nearest S-101 <c>Sounding</c>. The chain and the minimum-depth attribute
+/// codes are <see cref="ChartedDepthResolver"/>'s, shared with the passage
+/// check so the pick report and Check passage agree.
 /// </summary>
 /// <remarks>
 /// The S-102 sample and the nearest sounding are produced by the caller (via
@@ -20,17 +23,6 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// </remarks>
 internal sealed class BaseDepthResolver
 {
-    /// <summary>
-    /// Attribute codes carrying the S-101 minimum depth of an area
-    /// (<c>depthRangeMinimumValue</c>, DRVAL1) — the shoalest depth, taken as
-    /// the conservative base depth for depth/dredged areas.
-    /// </summary>
-    private static readonly string[] MinimumDepthCodes =
-    [
-        "depthRangeMinimumValue",
-        "DRVAL1",
-    ];
-
     /// <summary>
     /// Resolves the base depth for a pick, returning <c>null</c> when no
     /// source can supply a depth.
@@ -65,51 +57,35 @@ internal sealed class BaseDepthResolver
     {
         ArgumentNullException.ThrowIfNull(hits);
 
-        if (bathymetry is { } bathy)
-        {
-            return new BaseDepthResult(
-                bathy.DepthMeters,
-                BaseDepthSource.Bathymetry,
-                bathy.UncertaintyMeters,
-                bathy.VerticalDatumCode,
-                SoundingDistanceMeters: null,
-                SourceDatasetId: bathymetryDatasetId);
-        }
+        var chosen = ChartedDepthResolver.Resolve(
+            bathymetry is { } bathy
+                ? new ChartedDepth(bathy.DepthMeters, ChartedDepthKind.Bathymetry, bathy.UncertaintyMeters, bathy.VerticalDatumCode, bathymetryDatasetId)
+                : null,
+            TryReadAreaMinimumDepth(hits, "DredgedArea") is { } dredged
+                ? new ChartedDepth(dredged.Depth, ChartedDepthKind.DredgedArea, DatasetId: dredged.DatasetId)
+                : null,
+            TryReadAreaMinimumDepth(hits, "DepthArea") is { } area
+                ? new ChartedDepth(area.Depth, ChartedDepthKind.DepthArea, DatasetId: area.DatasetId)
+                : null,
+            nearestSounding is { } sounding
+                ? new ChartedDepth(sounding.DepthMeters, ChartedDepthKind.Sounding, DatasetId: soundingDatasetId, SoundingDistanceMeters: sounding.DistanceMeters)
+                : null);
 
-        if (TryReadAreaMinimumDepth(hits, "DredgedArea") is { } dredged)
-        {
-            return new BaseDepthResult(
-                dredged.Depth,
-                BaseDepthSource.DredgedArea,
-                UncertaintyMeters: null,
-                VerticalDatumCode: null,
-                SoundingDistanceMeters: null,
-                SourceDatasetId: dredged.DatasetId);
-        }
-
-        if (TryReadAreaMinimumDepth(hits, "DepthArea") is { } depthArea)
-        {
-            return new BaseDepthResult(
-                depthArea.Depth,
-                BaseDepthSource.DepthArea,
-                UncertaintyMeters: null,
-                VerticalDatumCode: null,
-                SoundingDistanceMeters: null,
-                SourceDatasetId: depthArea.DatasetId);
-        }
-
-        if (nearestSounding is { } sounding)
-        {
-            return new BaseDepthResult(
-                sounding.DepthMeters,
-                BaseDepthSource.Sounding,
-                UncertaintyMeters: null,
-                VerticalDatumCode: null,
-                sounding.DistanceMeters,
-                SourceDatasetId: soundingDatasetId);
-        }
-
-        return null;
+        return chosen is null
+            ? null
+            : new BaseDepthResult(
+                chosen.DepthMeters,
+                chosen.Kind switch
+                {
+                    ChartedDepthKind.Bathymetry => BaseDepthSource.Bathymetry,
+                    ChartedDepthKind.DredgedArea => BaseDepthSource.DredgedArea,
+                    ChartedDepthKind.DepthArea => BaseDepthSource.DepthArea,
+                    _ => BaseDepthSource.Sounding,
+                },
+                chosen.UncertaintyMeters,
+                chosen.VerticalDatum,
+                chosen.SoundingDistanceMeters,
+                chosen.DatasetId);
     }
 
     /// <summary>
@@ -148,7 +124,7 @@ internal sealed class BaseDepthResolver
     {
         foreach (var attribute in attributes)
         {
-            foreach (var code in MinimumDepthCodes)
+            foreach (var code in ChartedDepthResolver.MinimumDepthAttributeCodes)
             {
                 if (string.Equals(attribute.Code, code, StringComparison.Ordinal)
                     && attribute.DepthMetresValue is { } metres)

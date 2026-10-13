@@ -36,6 +36,24 @@
             <Setter Property="CornerRadius" Value="1.5" />
             <Setter Property="Background" Value="Transparent" />
         </Style>
+        <!-- Leg rows share the waypoint rows' selection look (#896): the
+             selected leg is haloed on the map too. -->
+        <Style Selector="Grid.legRow">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Grid.legRow.selected Border.wpBar">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Grid.legRow:pointerover Border.wpTint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <Style Selector="Grid.legRow.selected Border.wpTint">
+            <Setter Property="Opacity" Value="0.12" />
+        </Style>
+        <Style Selector="Grid.legRow.selected TextBlock.legText">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
         <Style Selector="Grid.wpRow.selected Border.wpBar">
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
@@ -342,6 +360,10 @@
         </Style>
         <Style Selector="Button.legRow:pointerover">
             <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <!-- In a leg row the row's tint shows hover and selection. -->
+        <Style Selector="Button.legRow.plain:pointerover">
+            <Setter Property="Background" Value="Transparent" />
         </Style>
     </UserControl.Styles>
 
@@ -863,45 +885,55 @@
                                  waypoint circle centres above and below. -->
                             <DataTemplate x:DataType="vm:RouteLegRowViewModel">
                                 <StackPanel>
-                                    <!-- The row opens the leg's detail. A leg that
+                                    <!-- The row selects the leg (haloed on the map,
+                                         #896) and opens its detail. A leg that
                                          overrides a passage value shows a blue dot
                                          and the overridden values (B4). -->
-                                    <Button Classes="legRow"
-                                            AutomationProperties.AutomationId="Routes.Leg"
-                                            AutomationProperties.Name="{Binding LegText}"
-                                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LegDetail}"
-                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegDetail}"
-                                            Command="{Binding $parent[ItemsControl].((vm:RoutesPanelViewModel)DataContext).ToggleLegDetailCommand}"
-                                            CommandParameter="{Binding}">
-                                        <Grid ColumnDefinitions="28,*" ColumnSpacing="8" Margin="11,5,8,5">
-                                            <Border Grid.Column="0" Classes="legConnector" />
-                                            <StackPanel Grid.Column="1"
-                                                        Orientation="Horizontal"
-                                                        Spacing="8"
-                                                        VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding LegText}"
-                                                           FontSize="11"
-                                                           Opacity="0.75"
-                                                           VerticalAlignment="Center" />
-                                                <TextBlock Text="{Binding GeometryText}"
-                                                           FontSize="10"
-                                                           Opacity="0.55"
-                                                           VerticalAlignment="Center"
-                                                           IsVisible="{Binding IsGeodesic}" />
-                                                <StackPanel Orientation="Horizontal"
-                                                            Spacing="4"
-                                                            IsVisible="{Binding HasOverride}">
-                                                    <Ellipse Classes="overrideDot" />
-                                                    <TextBlock AutomationProperties.AutomationId="Routes.Leg.Overrides"
-                                                               Text="{Binding OverrideText}"
-                                                               FontSize="11"
-                                                               FontFamily="{DynamicResource LibraryMonoFont}"
-                                                               Foreground="{DynamicResource AccentBrush}"
-                                                               VerticalAlignment="Center" />
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Button>
+                                    <Grid Classes="legRow"
+                                          Classes.selected="{Binding IsSelected}"
+                                          ColumnDefinitions="3,*">
+                                        <Border Grid.Column="0" Classes="wpBar" />
+                                        <Panel Grid.Column="1">
+                                            <Border Classes="wpTint" />
+                                            <Button Classes="legRow plain"
+                                                    AutomationProperties.AutomationId="Routes.Leg"
+                                                    AutomationProperties.Name="{Binding LegText}"
+                                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LegDetail}"
+                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegDetail}"
+                                                    Command="{Binding $parent[ItemsControl].((vm:RoutesPanelViewModel)DataContext).ToggleLegDetailCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <Grid ColumnDefinitions="28,*" ColumnSpacing="8" Margin="8,5,8,5">
+                                                    <Border Grid.Column="0" Classes="legConnector" />
+                                                    <StackPanel Grid.Column="1"
+                                                                Orientation="Horizontal"
+                                                                Spacing="8"
+                                                                VerticalAlignment="Center">
+                                                        <TextBlock Classes="legText"
+                                                                   Text="{Binding LegText}"
+                                                                   FontSize="11"
+                                                                   Opacity="0.75"
+                                                                   VerticalAlignment="Center" />
+                                                        <TextBlock Text="{Binding GeometryText}"
+                                                                   FontSize="10"
+                                                                   Opacity="0.55"
+                                                                   VerticalAlignment="Center"
+                                                                   IsVisible="{Binding IsGeodesic}" />
+                                                        <StackPanel Orientation="Horizontal"
+                                                                    Spacing="4"
+                                                                    IsVisible="{Binding HasOverride}">
+                                                            <Ellipse Classes="overrideDot" />
+                                                            <TextBlock AutomationProperties.AutomationId="Routes.Leg.Overrides"
+                                                                       Text="{Binding OverrideText}"
+                                                                       FontSize="11"
+                                                                       FontFamily="{DynamicResource LibraryMonoFont}"
+                                                                       Foreground="{DynamicResource AccentBrush}"
+                                                                       VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Button>
+                                        </Panel>
+                                    </Grid>
 
                                     <!-- Inline leg detail (B5): one leg open at a
                                          time, a tinted card with the accent bar. -->

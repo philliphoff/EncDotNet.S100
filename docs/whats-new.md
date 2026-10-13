@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Under-keel clearance along a route.** The new
+  `EncDotNet.S100.Navigation` package computes leg ETAs and checks UKC along a
+  passage. It adds S-104 water level to S-102 charted depth at each sample's
+  ETA, falls back to S-101 depths as low confidence, and reports datum
+  mismatches instead of mixing datums. The new MCP tool `get_passage_result`
+  checks a SoundCharts route or a polyline and draft, and can sweep departures
+  to find a window. See the
+  [package README](../src/EncDotNet.S100.Navigation/README.md) and
+  [Check a passage's clearance](mcp-server.md#check-a-passages-clearance).
 - **Raster tiles.** The new `s100 tiles export` command renders a dataset, a
   composite or an exchange set as XYZ Web Mercator tiles for MapLibre,
   Leaflet and OpenLayers, written as a `{z}/{x}/{y}` folder, a PMTiles

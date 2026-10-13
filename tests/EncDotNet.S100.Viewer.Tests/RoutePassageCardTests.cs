@@ -288,6 +288,18 @@ public sealed class RoutePassageCardTests : IDisposable
     }
 
     [Fact]
+    public void Opening_a_leg_selects_it_for_the_map_halo()
+    {
+        var (service, _, vm) = Create();
+
+        vm.ToggleLegDetailCommand.Execute(LegRow(vm, 1));
+
+        Assert.Equal(1, service.SelectedLegIndex);
+        Assert.True(LegRow(vm, 1).IsSelected);
+        Assert.False(LegRow(vm, 0).IsSelected);
+    }
+
+    [Fact]
     public void Leg_detail_sets_geometry_cross_track_and_note()
     {
         var (_, route, vm) = Create();

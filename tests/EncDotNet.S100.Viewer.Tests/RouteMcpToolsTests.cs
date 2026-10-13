@@ -737,4 +737,50 @@ public class RouteMcpToolsTests
         Assert.True(doc.RootElement.GetProperty("enabled").GetBoolean());
         Assert.Equal("r1", doc.RootElement.GetProperty("activeRouteId").GetString());
     }
+
+    // ----- selection ---------------------------------------------------------
+
+    [Fact]
+    public async Task Select_route_item_selects_a_leg_or_waypoint_and_get_route_reports_it()
+    {
+        var (routes, invoker) = Make();
+        var ct = TestContext.Current.CancellationToken;
+        var first = routes.Routes.CreateRoute("A", "a");
+        first.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 0));
+        first.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 1));
+        first.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 2));
+        routes.Routes.CreateRoute("B", "b");
+        var select = new SelectRouteItemTool(routes, invoker);
+
+        var detail = Value(await select.InvokeAsync(new SelectRouteItemRequest("a", LegIndex: 1), ct));
+        Assert.True(detail.IsActive);
+        Assert.Equal(1, detail.SelectedLegIndex);
+        Assert.Null(detail.SelectedWaypointIndex);
+        Assert.Equal(1, Value(await new GetRouteTool(routes, invoker).InvokeAsync(new GetRouteRequest("a"), ct)).SelectedLegIndex);
+
+        detail = Value(await select.InvokeAsync(new SelectRouteItemRequest(WaypointIndex: 2), ct));
+        Assert.Equal(2, detail.SelectedWaypointIndex);
+        Assert.Null(detail.SelectedLegIndex);
+
+        detail = Value(await select.InvokeAsync(new SelectRouteItemRequest(), ct));
+        Assert.Null(detail.SelectedWaypointIndex);
+        Assert.Null(detail.SelectedLegIndex);
+
+        // Other routes never report a selection.
+        Assert.Null(Value(await new GetRouteTool(routes, invoker).InvokeAsync(new GetRouteRequest("b"), ct)).SelectedLegIndex);
+    }
+
+    [Fact]
+    public async Task Select_route_item_rejects_bad_indexes()
+    {
+        var (routes, invoker) = Make();
+        var ct = TestContext.Current.CancellationToken;
+        var route = routes.Routes.CreateRoute("A");
+        route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 0));
+        route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 1));
+        var select = new SelectRouteItemTool(routes, invoker);
+
+        Assert.Equal("invalid_argument", Error(await select.InvokeAsync(new SelectRouteItemRequest(LegIndex: 1), ct)).Code);
+        Assert.Equal("invalid_argument", Error(await select.InvokeAsync(new SelectRouteItemRequest(WaypointIndex: 0, LegIndex: 0), ct)).Code);
+    }
 }

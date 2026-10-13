@@ -66,6 +66,7 @@ A host with its own live set of datasets, such as a viewer, implements
 | `MaxConcurrentConnections` | `16` | A soft cap on concurrent sessions. Extra connections are still accepted, but `ConnectionCount` reports them so the host can refuse or throttle. |
 | `IdleTimeout` | 10 minutes | How long an idle session is kept. |
 | `AdditionalTools` | `null` | Host tools to serve alongside the built-in tools. See [Add host tools](#add-host-tools). |
+| `PassageRoutes` | `null` | The host's routes, so `get_passage_result` can check a route as well as a polyline. |
 
 ### Server members
 
@@ -103,7 +104,8 @@ error. Don't write to `Console.Out` from your own code while it runs.
 `list_datasets`, `describe_feature`, `describe_feature_type`,
 `sample_coverage`, `find_at`, `identify_features`, `nearest_features`,
 `query_features`, `count_features`, `search_features`,
-`sample_coverage_along`, `list_specs` and `list_time_steps`.
+`sample_coverage_along`, `list_specs`, `list_time_steps` and
+`get_passage_result`.
 
 [Query tools](../../docs/mcp-server.md#query-tools) in the MCP server guide
 describes each one.

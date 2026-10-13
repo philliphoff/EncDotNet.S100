@@ -170,6 +170,18 @@ public sealed class RoutesViewTests
     }
 
     [AvaloniaFact]
+    public void Clicking_a_leg_row_selects_the_leg()
+    {
+        var (service, _, host) = Show();
+        using var _host = host;
+
+        host.Click(host.FindAll<Button>("Routes.Leg")[1]);
+
+        Assert.Equal(1, service.SelectedLegIndex);
+        Assert.Null(service.SelectedWaypointIndex);
+    }
+
+    [AvaloniaFact]
     public void Waypoint_name_commits_when_the_field_loses_focus()
     {
         var (_, route, host) = Show();
