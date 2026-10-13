@@ -62,6 +62,11 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         CancelRenameCommand = new RelayCommand(CancelRename);
 
         SelectWaypointCommand = new RelayCommand<RouteWaypointRowViewModel>(SelectWaypoint);
+        SelectLegCommand = new RelayCommand<RouteLegRowViewModel>(row =>
+        {
+            if (row is not null)
+                _routes.SelectedLegIndex = row.LegIndex;
+        });
         InsertWaypointAfterCommand = new RelayCommand<RouteWaypointRowViewModel>(InsertWaypointAfter);
         DeleteWaypointAtCommand = new RelayCommand<RouteWaypointRowViewModel>(DeleteWaypointAt);
         ToggleLegGeometryAtCommand = new RelayCommand<RouteLegRowViewModel>(ToggleLegGeometryAt);
@@ -214,6 +219,9 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     public ICommand CommitRenameCommand { get; }
     public ICommand CancelRenameCommand { get; }
     public ICommand SelectWaypointCommand { get; }
+
+    /// <summary>Selects a leg: the map haloes it and always shows its label.</summary>
+    public ICommand SelectLegCommand { get; }
     public ICommand InsertWaypointAfterCommand { get; }
     public ICommand DeleteWaypointAtCommand { get; }
     public ICommand ToggleLegGeometryAtCommand { get; }
@@ -458,6 +466,9 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         var selected = _routes.SelectedWaypointIndex;
         foreach (var row in Timeline.OfType<RouteWaypointRowViewModel>())
             row.IsSelected = row.Index == selected;
+        var selectedLeg = _routes.SelectedLegIndex;
+        foreach (var row in Timeline.OfType<RouteLegRowViewModel>())
+            row.IsSelected = row.LegIndex == selectedLeg;
         ((RelayCommand)DeleteWaypointCommand).NotifyCanExecuteChanged();
     }
 
@@ -532,7 +543,10 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
                 var geometryText = isGeodesic
                     ? Strings.Routes_GeometryGeodesic
                     : Strings.Routes_GeometryLoxodrome;
-                Timeline.Add(new RouteLegRowViewModel(i, legText, geometryText, isGeodesic));
+                Timeline.Add(new RouteLegRowViewModel(i, legText, geometryText, isGeodesic)
+                {
+                    IsSelected = _routes.SelectedLegIndex == i,
+                });
             }
         }
 
@@ -782,4 +796,12 @@ internal sealed class RouteLegRowViewModel : RouteTimelineRowViewModel
 
     /// <summary>True when the leg uses great-circle geometry.</summary>
     public bool IsGeodesic { get; }
+
+    private bool _isSelected;
+    /// <summary>True when this is the selected leg (haloed on the map).</summary>
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => SetProperty(ref _isSelected, value);
+    }
 }

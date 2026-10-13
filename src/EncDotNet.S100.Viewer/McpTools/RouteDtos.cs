@@ -112,7 +112,9 @@ internal sealed record RouteDetail(
     [property: Description("Whether undo_route_edit has an edit to undo on this route.")] bool CanUndo,
     [property: Description("Whether redo_route_edit has an edit to redo on this route.")] bool CanRedo,
     [property: Description("What undo_route_edit would revert (e.g. \"move waypoint\"), or null.")] string? UndoLabel,
-    [property: Description("What redo_route_edit would replay, or null.")] string? RedoLabel);
+    [property: Description("What redo_route_edit would replay, or null.")] string? RedoLabel,
+    [property: Description("The selected waypoint's index on the active route (set with select_route_item), or null; always null for other routes.")] int? SelectedWaypointIndex,
+    [property: Description("The selected leg's index on the active route (haloed on the map, set with select_route_item), or null; always null for other routes.")] int? SelectedLegIndex);
 
 /// <summary>Result of list_routes.</summary>
 [Description("Result of list_routes: every route in the collection plus the active route id.")]
@@ -185,10 +187,11 @@ internal static class RouteProjection
                 leg.Note));
         }
 
+        var isActive = ReferenceEquals(route, routes.Routes.ActiveRoute);
         return new RouteDetail(
             route.Id,
             route.Name,
-            ReferenceEquals(route, routes.Routes.ActiveRoute),
+            isActive,
             Info(route.Info),
             Passage(route),
             waypoints,
@@ -197,7 +200,9 @@ internal static class RouteProjection
             route.History.CanUndo,
             route.History.CanRedo,
             route.History.UndoLabel,
-            route.History.RedoLabel);
+            route.History.RedoLabel,
+            isActive ? routes.SelectedWaypointIndex : null,
+            isActive ? routes.SelectedLegIndex : null);
     }
 
     /// <summary>Projects a single route to a compact <see cref="RouteSummary"/>.</summary>

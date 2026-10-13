@@ -408,6 +408,7 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(UndoRouteEditMcpAdapter.Create(new UndoRouteEditTool(_routesService, invoker)));
             tools.Add(RedoRouteEditMcpAdapter.Create(new RedoRouteEditTool(_routesService, invoker)));
             tools.Add(SetRouteEditModeMcpAdapter.Create(new SetRouteEditModeTool(_routesService, invoker)));
+            tools.Add(SelectRouteItemMcpAdapter.Create(new SelectRouteItemTool(_routesService, invoker)));
             tools.Add(GetPassageMcpAdapter.Create(new GetPassageTool(_routesService, invoker)));
             tools.Add(SetPassageMcpAdapter.Create(new SetPassageTool(_routesService, invoker)));
         }

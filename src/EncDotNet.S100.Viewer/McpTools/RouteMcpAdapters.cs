@@ -573,3 +573,39 @@ internal static class SetRouteEditModeMcpAdapter
     internal static CallToolResult TranslateResult(ToolResult<RouteEditModeResult> result)
         => McpAdapterShared.Translate(result);
 }
+
+/// <summary>Wraps <see cref="SelectRouteItemTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class SelectRouteItemMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Selects a waypoint (waypointIndex) or a leg (legIndex) of a route in the live viewer, as clicking " +
+        "its row in the Routes panel does, or clears the selection when given neither. The map highlights " +
+        "the selected waypoint, or haloes the selected leg and always shows its label. Selecting makes the " +
+        "route active. Returns the route; selectedWaypointIndex and selectedLegIndex report the selection. " +
+        "Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SelectRouteItemTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route; omit to use the active route.")] string? routeId = null,
+            [System.ComponentModel.Description("Index of the waypoint to select; give this or legIndex, or neither to clear.")] int? waypointIndex = null,
+            [System.ComponentModel.Description("Index of the leg to select; leg i joins waypoint i to i+1.")] int? legIndex = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SelectRouteItemRequest(routeId, waypointIndex, legIndex), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SelectRouteItemTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    /// <summary>Test seam mirroring the production translation.</summary>
+    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
+        => McpAdapterShared.Translate(result);
+}

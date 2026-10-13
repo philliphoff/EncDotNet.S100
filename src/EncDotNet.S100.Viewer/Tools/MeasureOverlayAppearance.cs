@@ -22,6 +22,12 @@ public readonly record struct MeasureOverlayAppearance(
     /// </summary>
     public (byte R, byte G, byte B) ChartBackground { get; init; } = ChartBackgroundFor(EncDotNet.S100.Pipelines.PaletteType.Day);
 
+    /// <summary>
+    /// The active chart palette (Day, Dusk or Night). Route styling follows it,
+    /// not only the chrome theme: on Night the route casing turns black.
+    /// </summary>
+    public EncDotNet.S100.Pipelines.PaletteType Palette { get; init; } = EncDotNet.S100.Pipelines.PaletteType.Day;
+
     /// <summary>The chart's background colour (S-101 <c>DEPDW</c>) in <paramref name="palette"/>.</summary>
     public static (byte R, byte G, byte B) ChartBackgroundFor(EncDotNet.S100.Pipelines.PaletteType palette) => palette switch
     {

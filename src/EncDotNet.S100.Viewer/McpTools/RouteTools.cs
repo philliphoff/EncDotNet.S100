@@ -1092,3 +1092,67 @@ internal sealed class SetPassageTool : RouteToolBase
         _ => "starboardCrossTrackMeters",
     };
 }
+
+// ---------------------------------------------------------------------------
+// select_route_item
+// ---------------------------------------------------------------------------
+
+/// <summary>Request for <see cref="SelectRouteItemTool"/>.</summary>
+[Description("Request for select_route_item: select a waypoint or a leg of a route, or clear the selection.")]
+internal sealed record SelectRouteItemRequest(
+    [property: Description("Id of the route; omit to use the active route. Selecting makes the route active.")] string? RouteId = null,
+    [property: Description("Index of the waypoint to select. Give this or legIndex, not both; give neither to clear the selection.")] int? WaypointIndex = null,
+    [property: Description("Index of the leg to select (leg i joins waypoint i to i+1). Give this or waypointIndex, not both.")] int? LegIndex = null);
+
+/// <summary>
+/// Selects a waypoint or a leg, as clicking its row in the Routes panel does.
+/// The map highlights the selected waypoint, or haloes the selected leg and
+/// always shows its label. <c>get_route</c> reports the selection.
+/// </summary>
+internal sealed class SelectRouteItemTool : RouteToolBase
+{
+    /// <summary>Public tool name as exposed over MCP.</summary>
+    public const string Name = "select_route_item";
+
+    /// <summary>Creates a new <see cref="SelectRouteItemTool"/>.</summary>
+    public SelectRouteItemTool(RoutesService routes, IRouteEditInvoker invoker)
+        : base(routes, invoker) { }
+
+    /// <summary>Executes the tool.</summary>
+    public Task<ToolResult<RouteDetail>> InvokeAsync(
+        SelectRouteItemRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (request.WaypointIndex.HasValue && request.LegIndex.HasValue)
+            return Task.FromResult(ToolResult<RouteDetail>.Err(new InvalidArgument(
+                "legIndex", "give waypointIndex or legIndex, not both")));
+
+        return Invoker.InvokeAsync(() =>
+        {
+            var route = Resolve(request.RouteId, out var error);
+            if (route is null)
+                return ToolResult<RouteDetail>.Err(error!);
+
+            if (request.WaypointIndex is { } w && (w < 0 || w >= route.Waypoints.Count))
+                return ToolResult<RouteDetail>.Err(new InvalidArgument(
+                    "waypointIndex", $"value {w} is outside the waypoint range [0, {route.Waypoints.Count - 1}]"));
+            if (request.LegIndex is { } l && (l < 0 || l >= route.Legs.Count))
+                return ToolResult<RouteDetail>.Err(new InvalidArgument(
+                    "legIndex", $"value {l} is outside the leg range [0, {route.Legs.Count - 1}]"));
+
+            Routes.Routes.SetActiveRoute(route);
+            if (request.LegIndex is { } leg)
+            {
+                Routes.SelectedLegIndex = leg;
+            }
+            else
+            {
+                Routes.SelectedLegIndex = null;
+                Routes.SelectedWaypointIndex = request.WaypointIndex;
+            }
+            return Ok(route, Routes);
+        });
+    }
+}

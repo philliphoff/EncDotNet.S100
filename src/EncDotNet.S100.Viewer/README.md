@@ -784,10 +784,17 @@ panel, the route button on the map toolbar, **View** > **Appearance** >
 
 - Select the water to add a waypoint at the end.
 - Drag a waypoint to move it.
-- Select a leg to insert a waypoint that splits it.
+- Select a leg, or the ⊕ handle at its midpoint, to insert a waypoint that
+  splits it. Drag the handle to place the new waypoint.
 - Right-click a waypoint, or select it and press Delete, to remove it.
   Backspace removes the last waypoint.
 - Turn **Edit** off, or press Esc or Ctrl+E again, when you're done.
+
+While you edit, the route is drawn on a casing (white, or black on the Dusk
+and Night palettes), other routes are dimmed, and a chip at the top left of the
+map lists the gestures. Leg labels (`2,5 NM · 320°`) run along each leg and are
+hidden on legs too short to fit them. Select a leg's row in the **Routes** panel
+to highlight it on the map; its label always shows.
 
 The status bar shows the latest leg's distance and bearing and the route total.
 
