@@ -282,7 +282,7 @@ s100 render warnings.gml out.txt --format json
 {
   "dataset": "navwarn_surface.gml",
   "product": "S-124",
-  "spec": "S-124/1.0.0",
+  "spec": "S-124/2.0.0",
   "palette": "day",
   "instructionCount": 3,
   "categoryCounts": { "areas": 0, "lines": 0, "points": 3, "text": 0 },
