@@ -259,7 +259,13 @@ split into focused packages.
 | **EncDotNet.S100.Datasets.S411** | S-411 sea ice reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S421** | S-421 route plan reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S57** | Legacy S-57 ENC reader that translates to the in-memory S-101 model; pre-translation rules + delegation to the S-101 validation pack. |
-| **EncDotNet.S100.Datasets.Pipelines** | Per-spec `IDatasetProcessor` implementations, the S-98 interoperability authority, the validation runner, and the `ConcatReports` rebadge helper used by S-57. |
+| **EncDotNet.S100.Datasets.Pipelines** | Per-spec `IDatasetProcessor` implementations, the S-98 interoperability authority, the validation runner, the `ConcatReports` rebadge helper used by S-57, and the passage-check data sources (S-102, S-101, S-104) over loaded datasets. |
+
+### Navigation
+
+| Package | Description |
+|---|---|
+| **EncDotNet.S100.Navigation** | Leg ETAs and an under-keel clearance check along a route: charted depth (S-102, S-101 fallback) plus S-104 water level, minus draft and squat, at each sample's ETA. Depends only on Core. |
 
 The **EncDotNet.S100.Datasets.S129.Fusion** library (project reference,
 not published to NuGet) is a purely additive cross-product helper that

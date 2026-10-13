@@ -52,7 +52,8 @@ internal static class S100McpServerToolFactory
         SearchFeaturesTool searchFeatures,
         SampleCoverageAlongTool sampleCoverageAlong,
         ListSpecsTool listSpecs,
-        ListTimeStepsTool listTimeSteps)
+        ListTimeStepsTool listTimeSteps,
+        GetPassageResultTool getPassageResult)
     {
         yield return CreateListDatasetsTool(listDatasets);
         yield return CreateDescribeFeatureTool(describeFeature);
@@ -67,6 +68,7 @@ internal static class S100McpServerToolFactory
         yield return CreateSampleCoverageAlongTool(sampleCoverageAlong);
         yield return CreateListSpecsTool(listSpecs);
         yield return CreateListTimeStepsTool(listTimeSteps);
+        yield return CreateGetPassageResultTool(getPassageResult);
     }
 
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)
@@ -488,6 +490,59 @@ internal static class S100McpServerToolFactory
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = SampleCoverageAlongTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateGetPassageResultTool(GetPassageResultTool inner)
+    {
+        var description =
+            "Checks under-keel clearance (UKC) along a passage: UKC = charted depth + water level − draft − squat at each " +
+            "sample's ETA, against the required UKC (0 m when unset). Charted depth is S-102, falling back to S-101 depth/dredged " +
+            "areas and soundings (low confidence); water level is S-104 at the ETA (no data outside its extent or time range). " +
+            "Datums must match: a mismatch is reported as a gap, never mixed. Returns the verdict, the minimum with where and when, " +
+            "per-leg results, gaps, low-confidence stretches, minutes below the setting and the sources; optionally per-sample " +
+            "values and a departure sweep (window). Pass a polyline with draftMeters, or (in the viewer) a routeId or nothing for the " +
+            "active route. SOG is the entered speed (S-111 is not applied); squat is a fixed allowance. Not for navigation.";
+
+        var del = ([Description("Id of a viewer route; omit with no polyline for the active route.")] string? routeId = null,
+                   [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]}; each pair of consecutive vertices is a leg. WGS-84 decimal degrees. Takes precedence over routeId.")] string? polyline = null,
+                   [Description("Draft in metres; required with a polyline, overrides the route's legs otherwise.")] double? draftMeters = null,
+                   [Description("Speed over ground in knots; overrides the route's legs. Without one, every sample uses the departure time.")] double? speedKnots = null,
+                   [Description("Fixed squat allowance in metres.")] double? squatMeters = null,
+                   [Description("Required UKC in metres; unset checks against 0 m.")] double? requiredUkcMeters = null,
+                   [Description("Departure time (ISO-8601); defaults to the viewer's view time for a route, or now.")] DateTimeOffset? departure = null,
+                   [Description("For a polyline, run legs as great circles instead of rhumb lines.")] bool greatCircle = false,
+                   [Description("Longest stretch one sample stands for, metres (default 50).")] double? sampleSpacingMeters = null,
+                   [Description("Include per-sample values.")] bool includeSamples = false,
+                   [Description("Most samples to return (default 500).")] int maxSamples = 500,
+                   [Description("With windowTo, sweep departures from this time (ISO-8601) for the departure window.")] DateTimeOffset? windowFrom = null,
+                   [Description("Last swept departure (ISO-8601).")] DateTimeOffset? windowTo = null,
+                   [Description("Minutes between swept departures (default 5).")] int windowStepMinutes = 5,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new GetPassageResultRequest(
+                        routeId,
+                        string.IsNullOrWhiteSpace(polyline) ? null : ParsePolyline(polyline),
+                        draftMeters,
+                        speedKnots,
+                        squatMeters,
+                        requiredUkcMeters,
+                        departure,
+                        greatCircle,
+                        sampleSpacingMeters,
+                        includeSamples,
+                        maxSamples,
+                        windowFrom,
+                        windowTo,
+                        windowStepMinutes),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = GetPassageResultTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });

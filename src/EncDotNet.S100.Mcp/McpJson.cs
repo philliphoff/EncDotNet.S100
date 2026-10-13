@@ -85,6 +85,7 @@ public static class McpJson
 [JsonSerializable(typeof(SampleCoverageAlongResult))]
 [JsonSerializable(typeof(ListSpecsResult))]
 [JsonSerializable(typeof(ListTimeStepsResult))]
+[JsonSerializable(typeof(GetPassageResultResult))]
 // Mutating tool results.
 [JsonSerializable(typeof(OpenDatasetResult))]
 [JsonSerializable(typeof(CloseDatasetResult))]

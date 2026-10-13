@@ -60,6 +60,10 @@
       href: EncDotNet.S100.Datasets.S57/README.md
     - name: EncDotNet.S100.Datasets.Pipelines
       href: EncDotNet.S100.Datasets.Pipelines/README.md
+- name: Navigation
+  items:
+    - name: EncDotNet.S100.Navigation
+      href: EncDotNet.S100.Navigation/README.md
 - name: Rendering
   items:
     - name: EncDotNet.S100.Rendering.Scene

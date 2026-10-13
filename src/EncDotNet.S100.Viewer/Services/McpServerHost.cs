@@ -185,6 +185,9 @@ internal sealed class McpServerHost : IAsyncDisposable
             BindAddress = bindAddress,
             Port = port,
             AdditionalTools = additionalTools,
+            PassageRoutes = _routesService is null
+                ? null
+                : new ViewerPassageRouteProvider(_routesService, new DispatcherRouteEditInvoker(), _timeline, _testClock),
         };
         var next = new S100McpServer(_catalog, options, _loggers);
         try

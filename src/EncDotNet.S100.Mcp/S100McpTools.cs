@@ -22,13 +22,17 @@ public static class S100McpTools
     /// Creates the built-in read-only tool set bound to <paramref name="catalog"/>.
     /// </summary>
     /// <param name="catalog">The dataset catalog the tools read from.</param>
+    /// <param name="passageRoutes">
+    /// The host's routes for <c>get_passage_result</c>, or <c>null</c> when
+    /// the host has none (the tool then takes a polyline and draft only).
+    /// </param>
     /// <returns>
     /// The tools in a stable order. Tool names are the <c>Name</c> constants on
     /// the corresponding <c>EncDotNet.S100.Mcp.Tools</c> types (e.g.
     /// <c>list_datasets</c>, <c>describe_feature</c>, <c>sample_coverage</c>);
     /// host-supplied tools must not collide with them.
     /// </returns>
-    public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog)
+    public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog, IPassageRouteProvider? passageRoutes = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
 
@@ -45,7 +49,8 @@ public static class S100McpTools
             new SearchFeaturesTool(catalog),
             new SampleCoverageAlongTool(catalog),
             new ListSpecsTool(catalog),
-            new ListTimeStepsTool(catalog))
+            new ListTimeStepsTool(catalog),
+            new GetPassageResultTool(catalog, passageRoutes))
             .ToList();
     }
 }
