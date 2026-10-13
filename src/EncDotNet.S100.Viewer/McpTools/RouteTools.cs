@@ -482,18 +482,21 @@ internal sealed class DeleteWaypointTool : RouteToolBase
 
 /// <summary>Request for <see cref="SetLegAttributesTool"/>.</summary>
 /// <remarks>
-/// Every attribute is optional and overwrites the corresponding leg field
-/// when supplied; an omitted (null) field leaves the existing value
-/// unchanged. There is no facility to clear a previously-set field in this
-/// version.
+/// Every attribute is optional. A supplied value overwrites; an omitted
+/// (null) value is left unchanged; a name listed in <see cref="Clear"/> is
+/// unset. The passage fields (<see cref="SpeedKnots"/>,
+/// <see cref="DraftMeters"/>, the cross-track limits and
+/// <see cref="StaticUnderKeelClearanceMeters"/>) are leg overrides of the
+/// route's passage: a value equal to the passage value stores no override,
+/// and clearing one resets the leg to inherit.
 /// </remarks>
-[Description("Request for set_leg_attributes: update one leg's geometry type and/or navigational envelope. All attributes optional; supplied values overwrite, omitted values are left unchanged.")]
+[Description("Request for set_leg_attributes: update one leg's geometry type, passage overrides and navigational envelope. All attributes optional; supplied values overwrite, omitted values are left unchanged, names in 'clear' are unset.")]
 internal sealed record SetLegAttributesRequest(
     [property: Description("Index of the leg to edit in [0, legCount); leg i joins waypoint i to waypoint i+1.")] int LegIndex,
     [property: Description("Id of the route to edit; omit to use the active route.")] string? RouteId = null,
     [property: Description("Leg path geometry: \"loxodrome\" (rhumb line) or \"geodesic\" (great circle).")] string? GeometryType = null,
-    [property: Description("Starboard cross-track distance limit in metres.")] double? StarboardCrossTrackDistanceLimitMeters = null,
-    [property: Description("Port cross-track distance limit in metres.")] double? PortCrossTrackDistanceLimitMeters = null,
+    [property: Description("Override: starboard cross-track distance limit in metres.")] double? StarboardCrossTrackDistanceLimitMeters = null,
+    [property: Description("Override: port cross-track distance limit in metres.")] double? PortCrossTrackDistanceLimitMeters = null,
     [property: Description("Starboard channel limit in metres.")] double? StarboardChannelLimitMeters = null,
     [property: Description("Port channel limit in metres.")] double? PortChannelLimitMeters = null,
     [property: Description("Safety contour for the leg in metres.")] double? SafetyContourMeters = null,
@@ -502,21 +505,55 @@ internal sealed record SetLegAttributesRequest(
     [property: Description("Maximum speed over ground in knots.")] double? SpeedOverGroundMaxKnots = null,
     [property: Description("Minimum speed through water in knots.")] double? SpeedThroughWaterMinKnots = null,
     [property: Description("Maximum speed through water in knots.")] double? SpeedThroughWaterMaxKnots = null,
-    [property: Description("Planned draft for the leg in metres.")] double? DraftMeters = null,
-    [property: Description("Static under-keel clearance in metres.")] double? StaticUnderKeelClearanceMeters = null,
+    [property: Description("Override: draft for the leg in metres.")] double? DraftMeters = null,
+    [property: Description("Override: required static under-keel clearance in metres.")] double? StaticUnderKeelClearanceMeters = null,
     [property: Description("Dynamic under-keel clearance in metres.")] double? DynamicUnderKeelClearanceMeters = null,
     [property: Description("Safety margin in metres.")] double? SafetyMarginMeters = null,
-    [property: Description("Free-text note for the leg.")] string? Note = null);
+    [property: Description("Free-text note for the leg.")] string? Note = null,
+    [property: Description("Override: planned speed over ground for the leg in knots (> 0).")] double? SpeedKnots = null,
+    [property: Description("Names of attributes to unset, using this tool's parameter names (for example \"speedKnots\", \"draftMeters\", \"note\"). Unsetting a passage override resets the leg to inherit the route's passage value.")] IReadOnlyList<string>? Clear = null);
 
-/// <summary>Updates a single route leg's geometry type and navigational envelope.</summary>
+/// <summary>
+/// Updates a single route leg's geometry type, passage overrides and
+/// navigational envelope.
+/// </summary>
 internal sealed class SetLegAttributesTool : RouteToolBase
 {
     /// <summary>Public tool name as exposed over MCP.</summary>
     public const string Name = "set_leg_attributes";
 
+    // Parameter name → passage field, for the leg's passage overrides.
+    private static readonly (string Name, RoutePassageField Field)[] OverrideParameters =
+    [
+        ("speedKnots", RoutePassageField.Speed),
+        ("draftMeters", RoutePassageField.Draft),
+        ("portCrossTrackDistanceLimitMeters", RoutePassageField.PortCrossTrack),
+        ("starboardCrossTrackDistanceLimitMeters", RoutePassageField.StarboardCrossTrack),
+        ("staticUnderKeelClearanceMeters", RoutePassageField.RequiredUkc),
+    ];
+
+    // Parameter name → setter, for the plain (non-inheriting) leg attributes.
+    private static readonly (string Name, Action<RouteLeg, double?> Set)[] EnvelopeParameters =
+    [
+        ("starboardChannelLimitMeters", (l, v) => l.StarboardChannelLimitMeters = v),
+        ("portChannelLimitMeters", (l, v) => l.PortChannelLimitMeters = v),
+        ("safetyContourMeters", (l, v) => l.SafetyContourMeters = v),
+        ("safetyDepthMeters", (l, v) => l.SafetyDepthMeters = v),
+        ("speedOverGroundMinKnots", (l, v) => l.SpeedOverGroundMinKnots = v),
+        ("speedOverGroundMaxKnots", (l, v) => l.SpeedOverGroundMaxKnots = v),
+        ("speedThroughWaterMinKnots", (l, v) => l.SpeedThroughWaterMinKnots = v),
+        ("speedThroughWaterMaxKnots", (l, v) => l.SpeedThroughWaterMaxKnots = v),
+        ("dynamicUnderKeelClearanceMeters", (l, v) => l.DynamicUnderKeelClearanceMeters = v),
+        ("safetyMarginMeters", (l, v) => l.SafetyMarginMeters = v),
+    ];
+
     /// <summary>Creates a new <see cref="SetLegAttributesTool"/>.</summary>
     public SetLegAttributesTool(RoutesService routes, IRouteEditInvoker invoker)
         : base(routes, invoker) { }
+
+    /// <summary>The names <see cref="SetLegAttributesRequest.Clear"/> accepts.</summary>
+    internal static IEnumerable<string> ClearableNames
+        => OverrideParameters.Select(p => p.Name).Concat(EnvelopeParameters.Select(p => p.Name)).Append("note");
 
     /// <summary>Executes the tool.</summary>
     public Task<ToolResult<RouteDetail>> InvokeAsync(
@@ -535,6 +572,44 @@ internal sealed class SetLegAttributesTool : RouteToolBase
             geometry = parsed;
         }
 
+        // In OverrideParameters order.
+        var overrides = new[]
+        {
+            request.SpeedKnots, request.DraftMeters,
+            request.PortCrossTrackDistanceLimitMeters, request.StarboardCrossTrackDistanceLimitMeters,
+            request.StaticUnderKeelClearanceMeters,
+        };
+        // In EnvelopeParameters order.
+        var envelope = new double?[]
+        {
+            request.StarboardChannelLimitMeters, request.PortChannelLimitMeters,
+            request.SafetyContourMeters, request.SafetyDepthMeters,
+            request.SpeedOverGroundMinKnots, request.SpeedOverGroundMaxKnots,
+            request.SpeedThroughWaterMinKnots, request.SpeedThroughWaterMaxKnots,
+            request.DynamicUnderKeelClearanceMeters, request.SafetyMarginMeters,
+        };
+
+        for (var i = 0; i < overrides.Length; i++)
+        {
+            var (name, field) = OverrideParameters[i];
+            if (PassageValues.Validate(name, field, overrides[i]) is { } invalid)
+                return Task.FromResult(ToolResult<RouteDetail>.Err(invalid));
+        }
+        for (var i = 0; i < envelope.Length; i++)
+        {
+            if (envelope[i] is { } v && NotFinite(v))
+                return Task.FromResult(ToolResult<RouteDetail>.Err(new InvalidArgument(
+                    EnvelopeParameters[i].Name, $"value {v} is not a finite number")));
+        }
+
+        var supplied = OverrideParameters.Where((_, i) => overrides[i].HasValue).Select(p => p.Name)
+            .Concat(EnvelopeParameters.Where((_, i) => envelope[i].HasValue).Select(p => p.Name));
+        if (request.Note is not null)
+            supplied = supplied.Append("note");
+        if (PassageValues.ValidateClear(request.Clear, ClearableNames, supplied) is { } clearError)
+            return Task.FromResult(ToolResult<RouteDetail>.Err(clearError));
+        var clear = PassageValues.ClearSet(request.Clear);
+
         return Invoker.InvokeAsync(() =>
         {
             var route = Resolve(request.RouteId, out var error);
@@ -547,31 +622,39 @@ internal sealed class SetLegAttributesTool : RouteToolBase
                     $"value {request.LegIndex} is outside the leg range [0, {route.Legs.Count - 1}]"));
 
             var leg = route.Legs[request.LegIndex];
-            route.History.Execute(RouteEditLabels.EditLeg, () => Apply(leg, geometry, request, route));
+            route.History.Execute(RouteEditLabels.EditLeg, () =>
+            {
+                // Passage overrides go through the route so the "only when it
+                // differs" rule holds.
+                for (var i = 0; i < overrides.Length; i++)
+                {
+                    var (name, field) = OverrideParameters[i];
+                    if (clear.Contains(name))
+                        route.ResetLegOverride(request.LegIndex, field);
+                    else if (overrides[i].HasValue)
+                        route.SetLegOverride(request.LegIndex, field, overrides[i]);
+                }
+
+                // The plain attributes are set in place; notify only when one
+                // changed, so a no-op call records no undo step.
+                var before = leg.Clone();
+                if (geometry.HasValue) leg.GeometryType = geometry.Value;
+                for (var i = 0; i < envelope.Length; i++)
+                {
+                    var (name, set) = EnvelopeParameters[i];
+                    if (clear.Contains(name))
+                        set(leg, null);
+                    else if (envelope[i].HasValue)
+                        set(leg, envelope[i]);
+                }
+                if (clear.Contains("note")) leg.Note = null;
+                else if (request.Note is not null) leg.Note = request.Note;
+
+                if (!before.HasSameAttributes(leg))
+                    route.NotifyChanged();
+            });
             return Ok(route, Routes);
         });
-    }
-
-    private static void Apply(RouteLeg leg, RouteLegGeometryType? geometry, SetLegAttributesRequest request, Route route)
-    {
-        if (geometry.HasValue) leg.GeometryType = geometry.Value;
-        if (request.StarboardCrossTrackDistanceLimitMeters.HasValue) leg.StarboardCrossTrackDistanceLimitMeters = request.StarboardCrossTrackDistanceLimitMeters;
-        if (request.PortCrossTrackDistanceLimitMeters.HasValue) leg.PortCrossTrackDistanceLimitMeters = request.PortCrossTrackDistanceLimitMeters;
-        if (request.StarboardChannelLimitMeters.HasValue) leg.StarboardChannelLimitMeters = request.StarboardChannelLimitMeters;
-        if (request.PortChannelLimitMeters.HasValue) leg.PortChannelLimitMeters = request.PortChannelLimitMeters;
-        if (request.SafetyContourMeters.HasValue) leg.SafetyContourMeters = request.SafetyContourMeters;
-        if (request.SafetyDepthMeters.HasValue) leg.SafetyDepthMeters = request.SafetyDepthMeters;
-        if (request.SpeedOverGroundMinKnots.HasValue) leg.SpeedOverGroundMinKnots = request.SpeedOverGroundMinKnots;
-        if (request.SpeedOverGroundMaxKnots.HasValue) leg.SpeedOverGroundMaxKnots = request.SpeedOverGroundMaxKnots;
-        if (request.SpeedThroughWaterMinKnots.HasValue) leg.SpeedThroughWaterMinKnots = request.SpeedThroughWaterMinKnots;
-        if (request.SpeedThroughWaterMaxKnots.HasValue) leg.SpeedThroughWaterMaxKnots = request.SpeedThroughWaterMaxKnots;
-        if (request.DraftMeters.HasValue) leg.DraftMeters = request.DraftMeters;
-        if (request.StaticUnderKeelClearanceMeters.HasValue) leg.StaticUnderKeelClearanceMeters = request.StaticUnderKeelClearanceMeters;
-        if (request.DynamicUnderKeelClearanceMeters.HasValue) leg.DynamicUnderKeelClearanceMeters = request.DynamicUnderKeelClearanceMeters;
-        if (request.SafetyMarginMeters.HasValue) leg.SafetyMarginMeters = request.SafetyMarginMeters;
-        if (request.Note is not null) leg.Note = request.Note;
-
-        route.NotifyChanged();
     }
 
     private static bool TryParseGeometry(string value, out RouteLegGeometryType type)
@@ -787,6 +870,227 @@ internal sealed class SetRouteEditModeTool : RouteToolBase
                 new RouteEditModeResult(Routes.IsEditModeActive, Routes.Routes.ActiveRoute?.Id));
         });
     }
+}
+
+// ---------------------------------------------------------------------------
+// Passage value validation shared by set_passage and set_leg_attributes
+// ---------------------------------------------------------------------------
+
+/// <summary>Validation shared by the passage-editing tools.</summary>
+internal static class PassageValues
+{
+    /// <summary>
+    /// Validates one passage value: finite, non-negative, and positive for a
+    /// speed. Returns <c>null</c> when <paramref name="value"/> is valid or absent.
+    /// </summary>
+    public static ToolError? Validate(string parameter, RoutePassageField field, double? value)
+    {
+        if (value is not { } v)
+            return null;
+        if (double.IsNaN(v) || double.IsInfinity(v))
+            return new InvalidArgument(parameter, $"value {v} is not a finite number");
+        if (field == RoutePassageField.Speed ? v <= 0 : v < 0)
+            return new InvalidArgument(
+                parameter,
+                field == RoutePassageField.Speed
+                    ? $"value {v} must be greater than 0"
+                    : $"value {v} must not be negative");
+        return null;
+    }
+
+    /// <summary>
+    /// Validates a <c>clear</c> list: every name is known, and none is also
+    /// supplied as a value in the same call.
+    /// </summary>
+    public static ToolError? ValidateClear(
+        IReadOnlyList<string>? clear, IEnumerable<string> known, IEnumerable<string> supplied)
+    {
+        if (clear is null || clear.Count == 0)
+            return null;
+
+        var knownSet = new HashSet<string>(known, StringComparer.OrdinalIgnoreCase);
+        foreach (var name in clear)
+        {
+            if (!knownSet.Contains(name))
+                return new InvalidArgument(
+                    "clear",
+                    $"'{name}' is not one of: {string.Join(", ", knownSet)}");
+        }
+
+        var suppliedSet = new HashSet<string>(supplied, StringComparer.OrdinalIgnoreCase);
+        foreach (var name in clear)
+        {
+            if (suppliedSet.Contains(name))
+                return new InvalidArgument("clear", $"'{name}' is both set and cleared");
+        }
+        return null;
+    }
+
+    /// <summary>The <c>clear</c> list as a case-insensitive set.</summary>
+    public static HashSet<string> ClearSet(IReadOnlyList<string>? clear)
+        => new(clear ?? [], StringComparer.OrdinalIgnoreCase);
+}
+
+// ---------------------------------------------------------------------------
+// get_passage
+// ---------------------------------------------------------------------------
+
+/// <summary>Request for <see cref="GetPassageTool"/>.</summary>
+[Description("Request for get_passage: return a route's passage values.")]
+internal sealed record GetPassageRequest(
+    [property: Description("Id of the route to read; omit to use the active route.")] string? RouteId = null);
+
+/// <summary>Returns a route's passage values.</summary>
+internal sealed class GetPassageTool : RouteToolBase
+{
+    /// <summary>Public tool name as exposed over MCP.</summary>
+    public const string Name = "get_passage";
+
+    /// <summary>Creates a new <see cref="GetPassageTool"/>.</summary>
+    public GetPassageTool(RoutesService routes, IRouteEditInvoker invoker)
+        : base(routes, invoker) { }
+
+    /// <summary>Executes the tool.</summary>
+    public Task<ToolResult<GetPassageResult>> InvokeAsync(
+        GetPassageRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Invoker.InvokeAsync(() =>
+        {
+            var route = Resolve(request.RouteId, out var error);
+            return route is null
+                ? ToolResult<GetPassageResult>.Err(error!)
+                : ToolResult<GetPassageResult>.Ok(new GetPassageResult(route.Id, RouteProjection.Passage(route)));
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// set_passage
+// ---------------------------------------------------------------------------
+
+/// <summary>Request for <see cref="SetPassageTool"/>.</summary>
+/// <remarks>
+/// Every value is optional. A supplied value overwrites; an omitted (null)
+/// value is left unchanged; a name listed in <see cref="Clear"/> is unset.
+/// Legs inherit each value unless they override it, so a change reaches only
+/// the inheriting legs.
+/// </remarks>
+[Description("Request for set_passage: update a route's passage values, which legs inherit unless they override them. All values optional; supplied values overwrite, omitted values are left unchanged, names in 'clear' are unset.")]
+internal sealed record SetPassageRequest(
+    [property: Description("Id of the route to edit; omit to use the active route.")] string? RouteId = null,
+    [property: Description("Draft in metres (>= 0).")] double? DraftMeters = null,
+    [property: Description("Fixed squat allowance in metres (>= 0).")] double? SquatMeters = null,
+    [property: Description("Planned speed over ground in knots (> 0).")] double? SpeedKnots = null,
+    [property: Description("Planned departure (ISO-8601). Unset means ETAs use the view time.")] DateTimeOffset? Departure = null,
+    [property: Description("Required static under-keel clearance in metres (>= 0).")] double? RequiredUkcMeters = null,
+    [property: Description("Cross-track distance limit in metres for both port and starboard (>= 0). Don't combine with portCrossTrackMeters or starboardCrossTrackMeters.")] double? CrossTrackMeters = null,
+    [property: Description("Port cross-track distance limit in metres (>= 0).")] double? PortCrossTrackMeters = null,
+    [property: Description("Starboard cross-track distance limit in metres (>= 0).")] double? StarboardCrossTrackMeters = null,
+    [property: Description("Names of values to unset: draftMeters, squatMeters, speedKnots, departure, requiredUkcMeters, crossTrackMeters (both sides), portCrossTrackMeters, starboardCrossTrackMeters.")] IReadOnlyList<string>? Clear = null);
+
+/// <summary>Updates a route's passage values.</summary>
+internal sealed class SetPassageTool : RouteToolBase
+{
+    /// <summary>Public tool name as exposed over MCP.</summary>
+    public const string Name = "set_passage";
+
+    private static readonly string[] ClearableNames =
+    [
+        "draftMeters", "squatMeters", "speedKnots", "departure", "requiredUkcMeters",
+        "crossTrackMeters", "portCrossTrackMeters", "starboardCrossTrackMeters",
+    ];
+
+    /// <summary>Creates a new <see cref="SetPassageTool"/>.</summary>
+    public SetPassageTool(RoutesService routes, IRouteEditInvoker invoker)
+        : base(routes, invoker) { }
+
+    /// <summary>Executes the tool.</summary>
+    public Task<ToolResult<RouteDetail>> InvokeAsync(
+        SetPassageRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (request.CrossTrackMeters.HasValue
+            && (request.PortCrossTrackMeters.HasValue || request.StarboardCrossTrackMeters.HasValue))
+            return Task.FromResult(ToolResult<RouteDetail>.Err(new InvalidArgument(
+                "crossTrackMeters",
+                "set both sides with crossTrackMeters, or each side with portCrossTrackMeters and starboardCrossTrackMeters, not both")));
+
+        var port = request.CrossTrackMeters ?? request.PortCrossTrackMeters;
+        var starboard = request.CrossTrackMeters ?? request.StarboardCrossTrackMeters;
+        var values = new (string Name, RoutePassageField Field, double? Value)[]
+        {
+            ("draftMeters", RoutePassageField.Draft, request.DraftMeters),
+            ("squatMeters", RoutePassageField.Squat, request.SquatMeters),
+            ("speedKnots", RoutePassageField.Speed, request.SpeedKnots),
+            ("requiredUkcMeters", RoutePassageField.RequiredUkc, request.RequiredUkcMeters),
+            (request.CrossTrackMeters.HasValue ? "crossTrackMeters" : "portCrossTrackMeters", RoutePassageField.PortCrossTrack, port),
+            (request.CrossTrackMeters.HasValue ? "crossTrackMeters" : "starboardCrossTrackMeters", RoutePassageField.StarboardCrossTrack, starboard),
+        };
+
+        foreach (var (name, field, value) in values)
+        {
+            if (PassageValues.Validate(name, field, value) is { } invalid)
+                return Task.FromResult(ToolResult<RouteDetail>.Err(invalid));
+        }
+
+        var supplied = values.Where(v => v.Value.HasValue).Select(v => v.Name).ToList();
+        if (request.Departure.HasValue)
+            supplied.Add("departure");
+        // Clearing both sides conflicts with setting either side, and the reverse.
+        if (port.HasValue || starboard.HasValue)
+            supplied.Add("crossTrackMeters");
+        if (request.CrossTrackMeters.HasValue)
+            supplied.AddRange(["portCrossTrackMeters", "starboardCrossTrackMeters"]);
+        if (PassageValues.ValidateClear(request.Clear, ClearableNames, supplied) is { } clearError)
+            return Task.FromResult(ToolResult<RouteDetail>.Err(clearError));
+
+        var clear = PassageValues.ClearSet(request.Clear);
+        if (clear.Contains("crossTrackMeters"))
+        {
+            clear.Add("portCrossTrackMeters");
+            clear.Add("starboardCrossTrackMeters");
+        }
+
+        return Invoker.InvokeAsync(() =>
+        {
+            var route = Resolve(request.RouteId, out var error);
+            if (route is null)
+                return ToolResult<RouteDetail>.Err(error!);
+
+            route.History.Execute(RouteEditLabels.EditPassage, () =>
+            {
+                foreach (var (_, field, value) in values)
+                {
+                    if (clear.Contains(ClearName(field)))
+                        route.SetPassageValue(field, null);
+                    else if (value.HasValue)
+                        route.SetPassageValue(field, value);
+                }
+
+                if (clear.Contains("departure"))
+                    route.SetDeparture(null);
+                else if (request.Departure.HasValue)
+                    route.SetDeparture(request.Departure);
+            });
+
+            return Ok(route, Routes);
+        });
+    }
+
+    private static string ClearName(RoutePassageField field) => field switch
+    {
+        RoutePassageField.Draft => "draftMeters",
+        RoutePassageField.Squat => "squatMeters",
+        RoutePassageField.Speed => "speedKnots",
+        RoutePassageField.RequiredUkc => "requiredUkcMeters",
+        RoutePassageField.PortCrossTrack => "portCrossTrackMeters",
+        _ => "starboardCrossTrackMeters",
+    };
 }
 
 // ---------------------------------------------------------------------------

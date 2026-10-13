@@ -15,15 +15,27 @@ internal sealed record WaypointDto(
     [property: Description("Whether the waypoint is pinned and must not be moved, or null when unset.")] bool? Fixed,
     [property: Description("Planned turn radius at the waypoint in nautical miles, or null.")] double? TurnRadiusNm);
 
+/// <summary>
+/// The passage-inheritable values of one leg: either the effective values or
+/// only the leg's overrides.
+/// </summary>
+[Description("A leg's passage values (speed, draft, cross-track limits, required UKC). In 'effective' each is the leg's override when set, else the route's passage value; in 'overrides' only the leg's own values are present.")]
+internal sealed record LegPassageValuesDto(
+    [property: Description("Planned speed over ground in knots, or null.")] double? SpeedKnots,
+    [property: Description("Draft in metres, or null.")] double? DraftMeters,
+    [property: Description("Port cross-track distance limit in metres, or null.")] double? PortCrossTrackMeters,
+    [property: Description("Starboard cross-track distance limit in metres, or null.")] double? StarboardCrossTrackMeters,
+    [property: Description("Required static under-keel clearance in metres, or null.")] double? RequiredUkcMeters);
+
 /// <summary>One leg of a route, including its computed geometry.</summary>
-[Description("A single route leg (the segment joining two consecutive waypoints) with its computed metrics and navigational envelope.")]
+[Description("A single route leg (the segment joining two consecutive waypoints) with its computed metrics, its passage values (effective and overridden) and the rest of its S-421 navigational envelope.")]
 internal sealed record LegDto(
     [property: Description("Zero-based index of the leg; leg i joins waypoint i to waypoint i+1.")] int Index,
     [property: Description("Leg path geometry: \"loxodrome\" (rhumb line, constant bearing) or \"geodesic\" (great circle).")] string GeometryType,
     [property: Description("Computed leg length in nautical miles.")] double DistanceNm,
     [property: Description("Computed initial true bearing in degrees [0, 360).")] double InitialBearingDegrees,
-    [property: Description("Starboard cross-track distance limit in metres, or null.")] double? StarboardCrossTrackDistanceLimitMeters,
-    [property: Description("Port cross-track distance limit in metres, or null.")] double? PortCrossTrackDistanceLimitMeters,
+    [property: Description("The passage values that apply to this leg: its override when set, else the route's passage value.")] LegPassageValuesDto Effective,
+    [property: Description("Only this leg's overrides; a value absent here is inherited from the route's passage.")] LegPassageValuesDto Overrides,
     [property: Description("Starboard channel limit in metres, or null.")] double? StarboardChannelLimitMeters,
     [property: Description("Port channel limit in metres, or null.")] double? PortChannelLimitMeters,
     [property: Description("Safety contour for the leg in metres, or null.")] double? SafetyContourMeters,
@@ -32,11 +44,27 @@ internal sealed record LegDto(
     [property: Description("Maximum speed over ground in knots, or null.")] double? SpeedOverGroundMaxKnots,
     [property: Description("Minimum speed through water in knots, or null.")] double? SpeedThroughWaterMinKnots,
     [property: Description("Maximum speed through water in knots, or null.")] double? SpeedThroughWaterMaxKnots,
-    [property: Description("Planned draft for the leg in metres, or null.")] double? DraftMeters,
-    [property: Description("Static under-keel clearance in metres, or null.")] double? StaticUnderKeelClearanceMeters,
     [property: Description("Dynamic under-keel clearance in metres, or null.")] double? DynamicUnderKeelClearanceMeters,
     [property: Description("Safety margin in metres, or null.")] double? SafetyMarginMeters,
     [property: Description("Free-text note for the leg, or null.")] string? Note);
+
+/// <summary>Route-level passage values.</summary>
+[Description("A route's passage values, which every leg inherits unless it overrides them; all optional.")]
+internal sealed record PassageDto(
+    [property: Description("Draft in metres, or null. Enables Check passage.")] double? DraftMeters,
+    [property: Description("Fixed squat allowance in metres, or null.")] double? SquatMeters,
+    [property: Description("Planned speed over ground in knots, or null. Enables ETAs.")] double? SpeedKnots,
+    [property: Description("Planned departure (ISO-8601), or null to use the view time.")] DateTimeOffset? Departure,
+    [property: Description("Required static under-keel clearance in metres, or null.")] double? RequiredUkcMeters,
+    [property: Description("Port cross-track distance limit in metres, or null.")] double? PortCrossTrackMeters,
+    [property: Description("Starboard cross-track distance limit in metres, or null.")] double? StarboardCrossTrackMeters,
+    [property: Description("The vessel (from the route info; set it with set_route_info), or null.")] VesselDto? Vessel);
+
+/// <summary>Result of get_passage.</summary>
+[Description("Result of get_passage: a route's passage values.")]
+internal sealed record GetPassageResult(
+    [property: Description("Stable route identifier.")] string RouteId,
+    [property: Description("The route's passage values.")] PassageDto Passage);
 
 /// <summary>Vessel metadata carried by a route's info block.</summary>
 [Description("Vessel metadata the route is planned for; all fields optional.")]
@@ -71,12 +99,13 @@ internal sealed record RouteSummary(
     [property: Description("Total route length in nautical miles.")] double TotalDistanceNm);
 
 /// <summary>The full projection of a single route.</summary>
-[Description("The full state of one route: identity, metadata, ordered waypoints and legs, and total distance.")]
+[Description("The full state of one route: identity, metadata, passage values, ordered waypoints and legs, and total distance.")]
 internal sealed record RouteDetail(
     [property: Description("Stable route identifier.")] string RouteId,
     [property: Description("Route name, or null.")] string? Name,
     [property: Description("Whether this is the collection's active (default-target) route.")] bool IsActive,
     [property: Description("Route-level metadata.")] RouteInfoDto Info,
+    [property: Description("Route-level passage values that legs inherit.")] PassageDto Passage,
     [property: Description("Waypoints in route order.")] IReadOnlyList<WaypointDto> Waypoints,
     [property: Description("Legs in route order; leg i joins waypoint i to waypoint i+1.")] IReadOnlyList<LegDto> Legs,
     [property: Description("Total route length in nautical miles.")] double TotalDistanceNm,
@@ -143,8 +172,8 @@ internal static class RouteProjection
                 GeometryToken(leg.GeometryType),
                 metrics.DistanceNm,
                 metrics.InitialBearingDegrees,
-                leg.StarboardCrossTrackDistanceLimitMeters,
-                leg.PortCrossTrackDistanceLimitMeters,
+                LegValues(field => route.GetEffectiveLegValue(i, field)),
+                LegValues(leg.GetOverride),
                 leg.StarboardChannelLimitMeters,
                 leg.PortChannelLimitMeters,
                 leg.SafetyContourMeters,
@@ -153,8 +182,6 @@ internal static class RouteProjection
                 leg.SpeedOverGroundMaxKnots,
                 leg.SpeedThroughWaterMinKnots,
                 leg.SpeedThroughWaterMaxKnots,
-                leg.DraftMeters,
-                leg.StaticUnderKeelClearanceMeters,
                 leg.DynamicUnderKeelClearanceMeters,
                 leg.SafetyMarginMeters,
                 leg.Note));
@@ -166,6 +193,7 @@ internal static class RouteProjection
             route.Name,
             isActive,
             Info(route.Info),
+            Passage(route),
             waypoints,
             legs,
             route.TotalDistanceNm(),
@@ -191,6 +219,35 @@ internal static class RouteProjection
             route.TotalDistanceNm());
     }
 
+    /// <summary>Projects a route's passage values to a <see cref="PassageDto"/>.</summary>
+    public static PassageDto Passage(Route route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        var p = route.Passage;
+        return new PassageDto(
+            p.DraftMeters,
+            p.SquatMeters,
+            p.SpeedKnots,
+            p.Departure,
+            p.RequiredUkcMeters,
+            p.PortCrossTrackMeters,
+            p.StarboardCrossTrackMeters,
+            Vessel(route.Info.Vessel));
+    }
+
+    private static LegPassageValuesDto LegValues(Func<RoutePassageField, double?> value)
+        => new(
+            value(RoutePassageField.Speed),
+            value(RoutePassageField.Draft),
+            value(RoutePassageField.PortCrossTrack),
+            value(RoutePassageField.StarboardCrossTrack),
+            value(RoutePassageField.RequiredUkc));
+
+    private static VesselDto? Vessel(RouteVesselInfo? vessel)
+        => vessel is { } v
+            ? new VesselDto(v.Name, v.Mmsi, v.Imo, v.Callsign, v.LengthMeters, v.BeamMeters)
+            : null;
+
     private static RouteInfoDto Info(RouteInfo info)
         => new(
             info.Name,
@@ -200,7 +257,5 @@ internal static class RouteProjection
             info.ArrivalPortId,
             info.ValidityStart,
             info.ValidityEnd,
-            info.Vessel is { } v
-                ? new VesselDto(v.Name, v.Mmsi, v.Imo, v.Callsign, v.LengthMeters, v.BeamMeters)
-                : null);
+            Vessel(info.Vessel));
 }
