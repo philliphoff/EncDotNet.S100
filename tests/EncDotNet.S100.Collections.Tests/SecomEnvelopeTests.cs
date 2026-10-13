@@ -39,7 +39,7 @@ public sealed class SecomEnvelopeTests : IDisposable
     {
         using var identity = Identity(ECCurve.NamedCurves.nistP384);
         var signer = new SecomEnvelopeSigner(identity, SecomTrustAnchors.None);
-        Assert.Equal("ecdsa-384-sha3", signer.SignatureReference);
+        Assert.Equal("ecdsa-384-sha2", signer.SignatureReference);
 
         var now = new DateTimeOffset(2026, 10, 9, 5, 0, 0, TimeSpan.Zero);
         var body = signer.SummaryRequest(new SecomQuery(GeometryWkt: "POLYGON((0 0,1 0,1 1,0 0))", PageSize: 50), 2, now);
@@ -60,6 +60,24 @@ public sealed class SecomEnvelopeTests : IDisposable
         Assert.Equal("ecdsa-256-sha2-256", new SecomEnvelopeSigner(p256).SignatureReference);
         Assert.Equal("ecdsa-384-sha2", new SecomEnvelopeSigner(identity, signatureReference: "ECDSA-384-SHA2").SignatureReference);
         Assert.Throws<InvalidDataException>(() => new SecomEnvelopeSigner(identity, signatureReference: "dsa"));
+    }
+
+    [Fact]
+    public void An_envelope_carries_the_signer_and_its_intermediates_but_not_the_root()
+    {
+        // #882: AMSA (SECOMLib) refused the signer alone and accepted it with the
+        // MCP Identity Registry intermediate; its trust store holds only the root.
+        using var pki = TestPki.Create();
+        using var identity = SecomClientIdentity.FromCertificate(pki.ClientLeaf("urn:mrn:mcp:entity:mcc:test:admin"), pki.Anchors);
+        var signer = new SecomEnvelopeSigner(identity, pki.Anchors);
+
+        var envelope = signer.SummaryRequest(new SecomQuery(PageSize: 5), 1, DateTimeOffset.UtcNow)["envelope"]!.AsObject();
+        var sent = envelope["envelopeSignatureCertificate"]!.AsArray().Select(n => Convert.FromBase64String((string)n!)).ToArray();
+        Assert.Equal(2, sent.Length);
+        Assert.Equal(identity.Certificate.RawData, sent[0]);
+        Assert.Equal(pki.Intermediate.RawData, sent[1]);
+        Assert.Equal(Convert.ToHexString(SHA384.HashData(pki.Root.RawData)).ToLowerInvariant(),
+            (string)envelope["envelopeRootCertificateThumbprint"]!);
     }
 
     [Fact]
@@ -205,7 +223,7 @@ public sealed class SecomEnvelopeTests : IDisposable
         /// <summary>
         /// Checks an envelope's signature as SECOMLib does: the canonical string
         /// of its fields in order (absent is empty, times as epoch seconds,
-        /// lists joined with ','), signed with SHA3-384 or SHA-256 ECDSA (DER)
+        /// lists joined with ','), signed with SHA-384 or SHA-256 ECDSA (DER)
         /// by the first presented certificate, and the thumbprint as SHA-384 of the root.
         /// </summary>
         public static bool Verifies(JsonObject body, string[] filterFields)
@@ -232,7 +250,7 @@ public sealed class SecomEnvelopeTests : IDisposable
             using var key = certificate.GetECDsaPublicKey()!;
             var data = Encoding.UTF8.GetBytes(canonical);
             var digest = key.KeySize >= 384
-                ? (SHA3_384.IsSupported ? SHA3_384.HashData(data) : Sha3.HashData384(data))
+                ? SHA384.HashData(data)
                 : SHA256.HashData(data);
             return key.VerifyHash(digest, Convert.FromHexString((string)body["envelopeSignature"]!), DSASignatureFormat.Rfc3279DerSequence);
         }

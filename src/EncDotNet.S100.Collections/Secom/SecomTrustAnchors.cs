@@ -197,6 +197,8 @@ public sealed partial class SecomTrustAnchors
     /// The root <paramref name="leaf"/> chains to among these anchors (time
     /// validity ignored), or <see langword="null"/> when it reaches none.
     /// </summary>
+    internal X509Certificate2[]? Chain(X509Certificate2 leaf) => BuildChain(leaf, []);
+
     internal X509Certificate2? FindRoot(X509Certificate2 leaf) =>
         BuildChain(leaf, []) is { Length: > 0 } elements ? elements[^1] : null;
 

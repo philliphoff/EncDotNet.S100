@@ -116,6 +116,26 @@ public sealed class RoutePassageCardTests : IDisposable
     }
 
     [Fact]
+    public void The_card_state_is_mirrored_on_the_routes_service_both_ways()
+    {
+        var (service, route, vm) = Create();
+        Assert.False(service.IsPassageCardExpanded);
+
+        vm.Passage.ToggleExpandedCommand.Execute(null);
+        Assert.True(service.IsPassageCardExpanded);
+
+        service.IsPassageCardExpanded = false;
+        Assert.False(vm.Passage.IsExpanded);
+
+        // Switching routes still follows the card's rule, and the service sees it.
+        route.SetPassageValue(RoutePassageField.Speed, 10);
+        service.Routes.CreateRoute("Other");
+        Assert.False(service.IsPassageCardExpanded);
+        service.Routes.SetActiveRoute(route);
+        Assert.True(service.IsPassageCardExpanded);
+    }
+
+    [Fact]
     public void Fields_are_dashed_until_set_and_show_their_unit()
     {
         var (_, route, vm) = Create();

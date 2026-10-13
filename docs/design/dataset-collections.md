@@ -1392,11 +1392,21 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   - `SecomEnvelopeSigner` builds both bodies. The root comes from
 >     `SecomTrustAnchors` (MCP Root for an MCC identity); a certificate
 >     under no anchor names itself.
+>   - `envelopeSignatureCertificate` carries the signer **and the CAs
+>     below the root** (for an MCC identity, the MCP Identity Registry
+>     intermediate). SECOMLib validates exactly the certificates sent
+>     against its trust store, which may hold only the root.
 > - **Algorithm.** A search envelope names none; SECOMLib checks it with
->   the server's configured algorithm (DMA's services sign data with
->   `ecdsa-384-sha3`).
->   - The default follows the key: SHA3-384 for P-384 (the MCP curve),
+>   the server's configured algorithm.
+>   - The default follows the key: **SHA-384** for P-384 (the MCP curve),
 >     SHA-256 otherwise.
+>   - Corrected on 2026-10-13 (#882). The first default was SHA3-384,
+>     because DMA signs its data with `ecdsa-384-sha3`. With a real MCC
+>     identity, AMSA and KHRA rejected SHA3-384 envelopes and accepted
+>     SHA-384 ones, carrying the intermediate. KRISO answers 401 to both,
+>     an access question.
+> - **Page size.** Summaries are read 100 at a time, SECOMLib's default.
+>   AMSA answers 400 to a signed summary asking for 250.
 >   - `SecomServerTrust.EnvelopeSignatureReference`, or
 >     `set_secom_identity {signatureAlgorithm}`, overrides it.
 > - **Client.** `SecomClient` switches to the POST forms

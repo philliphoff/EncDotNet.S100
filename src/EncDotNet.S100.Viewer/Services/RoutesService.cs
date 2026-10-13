@@ -122,6 +122,29 @@ internal sealed class RoutesService
     /// <summary>Raised when <see cref="IsCheckModeActive"/> changes.</summary>
     public event EventHandler? CheckModeChanged;
 
+    private bool _isPassageCardExpanded;
+
+    /// <summary>
+    /// Whether the Routes panel's Passage card is expanded. The panel keeps it
+    /// in step with the card (which opens for a route that already has
+    /// passage values); the MCP <c>set_passage_card</c> tool and
+    /// <c>list_routes</c> set and read it.
+    /// </summary>
+    public bool IsPassageCardExpanded
+    {
+        get => _isPassageCardExpanded;
+        set
+        {
+            if (_isPassageCardExpanded == value)
+                return;
+            _isPassageCardExpanded = value;
+            PassageCardChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raised when <see cref="IsPassageCardExpanded"/> changes.</summary>
+    public event EventHandler? PassageCardChanged;
+
     /// <summary>
     /// Undoes the most recent edit to the active route.
     /// </summary>

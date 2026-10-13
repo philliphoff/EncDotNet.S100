@@ -14,8 +14,12 @@ namespace EncDotNet.S100.Collections.Secom;
 /// </summary>
 /// <remarks>
 /// <para>
-/// An envelope carries its filter fields, then the signer's certificate
-/// (base64 DER), a SHA-384 thumbprint of its root and the signing time. The
+/// An envelope carries its filter fields, then the signer's certificate chain
+/// (base64 DER, the signer first, then any intermediates up to but not
+/// including the root), a SHA-384 thumbprint of its root and the signing time.
+/// SECOMLib validates exactly the certificates sent against its trust store,
+/// which may hold only the root: AMSA refused the signer alone and accepted it
+/// with the MCP Identity Registry intermediate (#882). The
 /// signature is over the envelope's <em>canonical string</em>: its fields in
 /// declared order joined with <c>.</c>, where a missing value is empty, a time
 /// is its Unix epoch seconds, a list is joined with <c>,</c> and a container
@@ -24,14 +28,16 @@ namespace EncDotNet.S100.Collections.Secom;
 /// </para>
 /// <para>
 /// A search envelope names no algorithm, so a service checks it with the one
-/// it is configured for. The default follows the key: SHA3-384 for P-384
-/// (the MCP curve; what DMA's SECOMLib services use), SHA-256 otherwise.
+/// it is configured for. The default follows the key: SHA-384 for P-384 (the
+/// MCP curve), SHA-256 otherwise. Live on 2026-10-13, AMSA and KHRA verified
+/// SHA-384 envelopes and rejected SHA3-384 ones (#882).
 /// </para>
 /// </remarks>
 public sealed class SecomEnvelopeSigner
 {
     private readonly SecomClientIdentity _identity;
     private readonly string _rootThumbprint;
+    private readonly string[] _certificates;
 
     /// <summary>Creates a signer for <paramref name="identity"/>.</summary>
     /// <param name="identity">The identity whose key signs.</param>
@@ -51,7 +57,7 @@ public sealed class SecomEnvelopeSigner
         {
             SignatureReference = signatureReference is { Length: > 0 } stated
                 ? stated.Trim().ToLowerInvariant()
-                : key.KeySize >= 384 ? "ecdsa-384-sha3" : "ecdsa-256-sha2-256";
+                : key.KeySize >= 384 ? "ecdsa-384-sha2" : "ecdsa-256-sha2-256";
         }
 
         if (SecomSignatureVerifier.Algorithm(SignatureReference, identity.Certificate).Family != "ecdsa")
@@ -59,11 +65,17 @@ public sealed class SecomEnvelopeSigner
 
         // The root the identity chains to (MCP Root for an MCC identity); a
         // certificate under no anchor names itself, as a self-signed one would.
-        var root = (anchors ?? SecomTrustAnchors.BuiltIn).FindRoot(identity.Certificate) ?? identity.Certificate;
+        var chain = (anchors ?? SecomTrustAnchors.BuiltIn).Chain(identity.Certificate);
+        var root = chain is { Length: > 0 } ? chain[^1] : identity.Certificate;
         _rootThumbprint = Convert.ToHexString(SHA384.HashData(root.RawData)).ToLowerInvariant();
+
+        // The signer, then the CAs below the root: what a SECOMLib service needs to build the path.
+        _certificates = chain is { Length: > 1 }
+            ? [.. chain[..^1].Select(c => Convert.ToBase64String(c.RawData))]
+            : [Convert.ToBase64String(identity.Certificate.RawData)];
     }
 
-    /// <summary>The signature reference used, e.g. <c>ecdsa-384-sha3</c>.</summary>
+    /// <summary>The signature reference used, e.g. <c>ecdsa-384-sha2</c>.</summary>
     public string SignatureReference { get; }
 
     /// <summary>The identity that signs.</summary>
@@ -122,10 +134,9 @@ public sealed class SecomEnvelopeSigner
     private JsonObject Sign(IReadOnlyList<(string Name, object? Value)> filter, DateTimeOffset now)
     {
         var at = DateTimeOffset.FromUnixTimeSeconds(now.ToUnixTimeSeconds());
-        string[] certificates = [Convert.ToBase64String(_identity.Certificate.RawData)];
         (string Name, object? Value)[] signature =
         [
-            ("envelopeSignatureCertificate", certificates),
+            ("envelopeSignatureCertificate", _certificates),
             ("envelopeRootCertificateThumbprint", _rootThumbprint),
             ("envelopeSignatureTime", at),
         ];
