@@ -25,10 +25,17 @@
                                            Text="{Binding Title,
                                                   RelativeSource={RelativeSource TemplatedParent},
                                                   Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                           IsVisible="{Binding TitleContent,
+                                                       RelativeSource={RelativeSource TemplatedParent},
+                                                       Converter={x:Static ObjectConverters.IsNull}}"
                                            FontSize="11"
                                            FontWeight="Normal"
                                            LetterSpacing="1"
                                            VerticalAlignment="Center" />
+                                <!-- Replaces the title when set (the bottom dock's tabs, #902). -->
+                                <ContentPresenter Grid.Column="0"
+                                                  Content="{TemplateBinding TitleContent}"
+                                                  VerticalAlignment="Stretch" />
                                 <!-- Close button modeled on the title-bar theme
                                      toggle: a plain Button (default ShadUI template,
                                      so hover/pressed come for free) with Padding=0

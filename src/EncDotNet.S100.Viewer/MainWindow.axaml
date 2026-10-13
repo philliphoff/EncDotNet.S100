@@ -11,6 +11,7 @@
         xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
         xmlns:diag="using:EncDotNet.S100.Viewer.Diagnostics"
         xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
+        xmlns:conv="using:EncDotNet.S100.Viewer"
         xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -55,6 +56,74 @@
     </shadui:Window.KeyBindings>
 
     <shadui:Window.Styles>
+        <!-- Bottom-dock tabs (#902 D1): upper-case labels, the selected one
+             underlined in the accent colour. -->
+        <Style Selector="ToggleButton.dockTab">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="LetterSpacing" Value="1" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border x:Name="Underline"
+                            BorderThickness="0,0,0,2"
+                            BorderBrush="Transparent"
+                            Padding="0,6,0,4"
+                            Background="Transparent">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Setter Property="Opacity" Value="0.65" />
+        </Style>
+        <Style Selector="ToggleButton.dockTab:checked">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="ToggleButton.dockTab:checked /template/ Border#Underline">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!-- The Clearance tab's Distance / Time switch (#902 D1). -->
+        <Style Selector="ToggleButton.dockSegment">
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="CornerRadius" Value="6,0,0,6" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.dockSegment.last">
+            <Setter Property="CornerRadius" Value="0,6,6,0" />
+            <Setter Property="Margin" Value="-1,0,0,0" />
+        </Style>
+        <Style Selector="ToggleButton.dockSegment:checked">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="ToggleButton.dockSegment:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
         <!-- Activity bar toggle buttons: no fill, muted icon, primary on hover/selected -->
         <Style Selector="ToggleButton.ActivityIcon">
             <Setter Property="Background" Value="Transparent" />
@@ -968,18 +1037,91 @@
                                         CloseCommandParameter="Bottom"
                                         CloseButtonToolTip="{x:Static loc:Strings.Tooltip_CloseTimelinePanel}"
                                         IsVisible="{Binding IsBottomDockShown}">
-                    <!-- #710 E6: lanes or the strip, remembered. -->
+                    <!-- #902 D1: TIMELINE | CLEARANCE while Check passage adds the
+                         Clearance tab; the plain title otherwise. -->
+                    <views:ApplicationPanel.TitleContent>
+                        <Panel>
+                            <TextBlock Text="{Binding BottomDockTitle, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                       IsVisible="{Binding !HasBottomDockTabs}"
+                                       FontSize="11"
+                                       LetterSpacing="1"
+                                       VerticalAlignment="Center" />
+                            <ItemsControl ItemsSource="{Binding VisibleBottomTabs}"
+                                          IsVisible="{Binding HasBottomDockTabs}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="14" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="activities:IActivityTab">
+                                        <ToggleButton Classes="dockTab"
+                                                      AutomationProperties.AutomationId="{Binding Id, StringFormat=Dock.Tab.{0}}"
+                                                      AutomationProperties.Name="{Binding Title}"
+                                                      Content="{Binding Title, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                                      Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
+                                                      CommandParameter="{Binding}">
+                                            <ToggleButton.IsChecked>
+                                                <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                                    <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedBottomTabId" />
+                                                    <Binding Path="Id" />
+                                                </MultiBinding>
+                                            </ToggleButton.IsChecked>
+                                        </ToggleButton>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Panel>
+                    </views:ApplicationPanel.TitleContent>
                     <views:ApplicationPanel.HeaderContent>
-                        <Button Classes="Ghost"
-                                AutomationProperties.AutomationId="Timeline.ToggleStrip"
-                                x:DataType="vm:TimelineViewModel"
-                                DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Timeline}"
-                                IsVisible="{Binding IsActive}"
-                                Command="{Binding ToggleStripCommand}"
-                                Content="{Binding StripToggleLabel}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineCollapseToStrip}"
-                                Height="22" MinHeight="0" Padding="6,0"
-                                FontSize="11.5" />
+                        <Panel>
+                            <!-- #710 E6: lanes or the strip, remembered. -->
+                            <Panel IsVisible="{Binding IsTimelineTabSelected}">
+                            <Button Classes="Ghost"
+                                    AutomationProperties.AutomationId="Timeline.ToggleStrip"
+                                    x:DataType="vm:TimelineViewModel"
+                                    DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Timeline}"
+                                    IsVisible="{Binding IsActive}"
+                                    Command="{Binding ToggleStripCommand}"
+                                    Content="{Binding StripToggleLabel}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineCollapseToStrip}"
+                                    Height="22" MinHeight="0" Padding="6,0"
+                                    FontSize="11.5" />
+                            </Panel>
+                            <!-- #902 D1: the Clearance tab's Distance / Time switch and Sources. -->
+                            <StackPanel Orientation="Horizontal"
+                                        Spacing="10"
+                                        x:DataType="vm:ClearanceViewModel"
+                                        DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Clearance}"
+                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsClearanceTabSelected}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ToggleButton Classes="dockSegment"
+                                                  AutomationProperties.AutomationId="Clearance.AxisDistance"
+                                                  Content="{x:Static loc:Strings.Clearance_Distance}"
+                                                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearanceDistance}"
+                                                  IsChecked="{Binding IsDistanceAxis, Mode=OneWay}"
+                                                  Command="{Binding ShowDistanceCommand}" />
+                                    <ToggleButton Classes="dockSegment last"
+                                                  AutomationProperties.AutomationId="Clearance.AxisTime"
+                                                  Content="{x:Static loc:Strings.Clearance_Time}"
+                                                  ToolTip.Tip="{Binding TimeTooltip}"
+                                                  ToolTip.ShowOnDisabled="True"
+                                                  IsChecked="{Binding IsTimeAxis, Mode=OneWay}"
+                                                  Command="{Binding ShowTimeCommand}" />
+                                </StackPanel>
+                                <ToggleButton Classes="Ghost"
+                                              AutomationProperties.AutomationId="Clearance.SourcesToggle"
+                                              AutomationProperties.Name="{x:Static loc:Strings.Clearance_Sources}"
+                                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearanceSources}"
+                                              IsChecked="{Binding IsSourcesOpen, Mode=TwoWay}"
+                                              Height="22" MinHeight="0" Padding="6,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <ic:FluentIcon Icon="Info" IconVariant="Regular" FontSize="13" VerticalAlignment="Center" />
+                                        <TextBlock Text="{x:Static loc:Strings.Clearance_Sources}" FontSize="11.5" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </ToggleButton>
+                            </StackPanel>
+                        </Panel>
                     </views:ApplicationPanel.HeaderContent>
                 </views:ApplicationPanel>
             </Grid>

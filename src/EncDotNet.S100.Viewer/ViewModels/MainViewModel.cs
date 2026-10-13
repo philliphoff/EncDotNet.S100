@@ -179,6 +179,9 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectedBottomTabId));
                 OnPropertyChanged(nameof(BottomDockTitle));
+                OnPropertyChanged(nameof(IsTimelineTabSelected));
+                OnPropertyChanged(nameof(IsClearanceTabSelected));
+                OnPropertyChanged(nameof(IsTimeHudVisible));
 
                 if (_settingsInitialized)
                 {
@@ -365,7 +368,7 @@ internal sealed class MainViewModel : ViewModelBase
     /// True when the Time HUD is on the map (#712, handoff F5): something is
     /// time-aware and the Timeline dock is not shown (closed, or the window too narrow).
     /// </summary>
-    public bool IsTimeHudVisible => Timeline.IsActive && !IsBottomDockShown;
+    public bool IsTimeHudVisible => Timeline.IsActive && !(IsBottomDockShown && IsTimelineTabSelected);
 
     /// <summary>Opens or closes the Timeline dock from the Time HUD; unavailable in a narrow window.</summary>
     public ICommand ToggleTimelineDockCommand { get; private set; } = null!;
@@ -602,6 +605,9 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     private void OnTabVisibilityChanged(IActivityTab tab)
     {
+        if (tab.Dock == TabDock.Bottom)
+            OnBottomTabVisibilityChanged(tab);
+
         if (tab.IsVisible) return;
 
         switch (tab.Dock)
@@ -626,6 +632,57 @@ internal sealed class MainViewModel : ViewModelBase
             case TabDock.Bottom when ReferenceEquals(_selectedBottomTab, tab):
                 SelectedBottomTab = BottomTabs.FirstOrDefault(t => t.IsVisible);
                 break;
+        }
+    }
+
+    /// <summary>Id of the Timeline tab in the bottom dock.</summary>
+    internal const string TimelineTabId = "Timeline";
+
+    /// <summary>Id of the Clearance tab in the bottom dock (#902), shown while Check passage is on.</summary>
+    internal const string ClearanceTabId = "Clearance";
+
+    private IActivityTab? _bottomTabBeforeCheck;
+    private bool _bottomDockOpenBeforeCheck;
+
+    /// <summary>The bottom-dock tabs that can be shown now, for the dock's tab strip (D1).</summary>
+    public IReadOnlyList<IActivityTab> VisibleBottomTabs => BottomTabs.Where(t => t.IsVisible).ToArray();
+
+    /// <summary>Whether the bottom dock shows a tab strip instead of a title: more than one tab is available.</summary>
+    public bool HasBottomDockTabs => BottomTabs.Count(t => t.IsVisible) > 1;
+
+    /// <summary>Whether the bottom dock is showing the Timeline.</summary>
+    public bool IsTimelineTabSelected => SelectedBottomTabId == TimelineTabId;
+
+    /// <summary>Whether the bottom dock is showing the Clearance profile.</summary>
+    public bool IsClearanceTabSelected => SelectedBottomTabId == ClearanceTabId;
+
+    /// <summary>The Clearance tab's view model, for its controls in the dock header.</summary>
+    public ClearanceViewModel? Clearance =>
+        _tabsById.TryGetValue(ClearanceTabId, out var tab) ? tab.ViewModel as ClearanceViewModel : null;
+
+    /// <summary>
+    /// Check passage opens the bottom dock on Clearance (handoff C1) and
+    /// turning it off puts back the tab and open state it found.
+    /// </summary>
+    private void OnBottomTabVisibilityChanged(IActivityTab tab)
+    {
+        OnPropertyChanged(nameof(VisibleBottomTabs));
+        OnPropertyChanged(nameof(HasBottomDockTabs));
+        if (tab.Id != ClearanceTabId)
+            return;
+
+        if (tab.IsVisible)
+        {
+            _bottomTabBeforeCheck = _selectedBottomTab;
+            _bottomDockOpenBeforeCheck = _isBottomDockOpen;
+            SelectedBottomTab = tab;
+        }
+        else if (ReferenceEquals(_selectedBottomTab, tab))
+        {
+            SelectedBottomTab = _bottomTabBeforeCheck is { IsVisible: true } previous
+                ? previous
+                : BottomTabs.FirstOrDefault(t => t.IsVisible);
+            IsBottomDockOpen = _bottomDockOpenBeforeCheck;
         }
     }
 
@@ -1347,7 +1404,16 @@ internal sealed class MainViewModel : ViewModelBase
         ToggleStatusBarCommand = new RelayCommand(() => IsStatusBarVisible = !IsStatusBarVisible);
 
         ToggleTimelineCommand = new RelayCommand(() => IsBottomDockOpen = !IsBottomDockOpen);
-        ToggleTimelineDockCommand = new RelayCommand(() => IsBottomDockOpen = !IsBottomDockOpen, () => !IsWindowNarrow);
+        ToggleTimelineDockCommand = new RelayCommand(
+            () =>
+            {
+                // From the HUD while the dock shows another tab (Clearance): switch to the Timeline.
+                if (IsBottomDockOpen && !IsTimelineTabSelected && _tabsById.TryGetValue(TimelineTabId, out var timelineTab))
+                    SelectedBottomTab = timelineTab;
+                else
+                    IsBottomDockOpen = !IsBottomDockOpen;
+            },
+            () => !IsWindowNarrow);
 
         TogglePickPanelCommand = new RelayCommand(() =>
         {

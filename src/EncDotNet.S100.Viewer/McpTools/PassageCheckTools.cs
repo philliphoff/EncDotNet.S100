@@ -263,3 +263,133 @@ internal static class PassageCheckMcpAdapters
         });
     }
 }
+
+/// <summary>What the Clearance tab shows (#902).</summary>
+[Description("Clearance tab state: the profile's x axis, whether Sources is open, the readout at the cursor and the Sources groups.")]
+internal sealed record ClearanceStateDto(
+    [property: Description("True when there is a profile (Check passage is on and has a result).")] bool HasProfile,
+    [property: Description("The profile's x axis: \"distance\" (NM) or \"time\" (ETA).")] string Axis,
+    [property: Description("True when the Time axis is available (the passage has ETAs).")] bool CanShowTime,
+    [property: Description("True when the Sources disclosure is open in place of the readout.")] bool SourcesOpen,
+    [property: Description("The readout's sample index (as in get_passage_result's samples), or null.")] int? ReadoutSample,
+    [property: Description("Readout position, \"{NM} · {ETA}\".")] string? ReadoutPosition,
+    [property: Description("Readout leg and place name.")] string? ReadoutLeg,
+    [property: Description("Charted depth, formatted.")] string? Depth,
+    [property: Description("Charted depth source, e.g. \"S-102 · {cell} · ±0.3 m\" or \"S-101 DepthArea · lower confidence\".")] string? DepthSource,
+    [property: Description("Water level, formatted.")] string? WaterLevel,
+    [property: Description("Water level source, e.g. \"S-104 · {station} · {step}\" or \"No S-104 at this ETA · tide not applied\".")] string? WaterLevelSource,
+    [property: Description("Draft + squat, formatted.")] string? DraftSquat,
+    [property: Description("UKC at the readout, formatted.")] string? Ukc,
+    [property: Description("The verdict words for the readout's state.")] string? State,
+    [property: Description("The Sources groups: title and lines.")] IReadOnlyList<ClearanceSourcesGroupDto> Sources);
+
+/// <summary>One Sources group.</summary>
+internal sealed record ClearanceSourcesGroupDto(
+    [property: Description("The group heading, e.g. \"S-102 cells\".")] string Title,
+    [property: Description("The group's lines.")] IReadOnlyList<string> Items);
+
+/// <summary>Request for <see cref="SetClearanceViewTool"/>.</summary>
+[Description("Request for set_clearance_view: switch the Clearance profile's axis and open or close Sources.")]
+internal sealed record SetClearanceViewRequest(
+    [property: Description("\"distance\" or \"time\"; omit to leave unchanged.")] string? Axis = null,
+    [property: Description("True to open Sources in place of the readout, false to close it; omit to leave unchanged.")] bool? SourcesOpen = null);
+
+/// <summary>Reads and sets the Clearance tab's view state (#902).</summary>
+internal sealed class ClearanceTools
+{
+    public const string GetName = "get_clearance_state";
+    public const string SetName = "set_clearance_view";
+
+    private readonly ClearanceViewModel _clearance;
+    private readonly IRouteEditInvoker _invoker;
+
+    public ClearanceTools(ClearanceViewModel clearance, IRouteEditInvoker invoker)
+    {
+        ArgumentNullException.ThrowIfNull(clearance);
+        ArgumentNullException.ThrowIfNull(invoker);
+        _clearance = clearance;
+        _invoker = invoker;
+    }
+
+    public Task<ToolResult<ClearanceStateDto>> GetAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return _invoker.InvokeAsync(() => ToolResult<ClearanceStateDto>.Ok(State(_clearance)));
+    }
+
+    public Task<ToolResult<ClearanceStateDto>> SetAsync(SetClearanceViewRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        ClearanceAxis? axis = request.Axis?.Trim().ToLowerInvariant() switch
+        {
+            null or "" => null,
+            "distance" => ClearanceAxis.Distance,
+            "time" => ClearanceAxis.Time,
+            _ => (ClearanceAxis)(-1),
+        };
+        if (axis is (ClearanceAxis)(-1))
+            return Task.FromResult(ToolResult<ClearanceStateDto>.Err(new InvalidArgument("axis", "must be \"distance\" or \"time\"")));
+
+        return _invoker.InvokeAsync(() =>
+        {
+            if (axis == ClearanceAxis.Time && !_clearance.CanShowTime)
+                return ToolResult<ClearanceStateDto>.Err(new InvalidArgument("axis", "the passage has no ETAs; set a speed first"));
+            if (axis is { } a)
+                _clearance.Axis = a;
+            if (request.SourcesOpen is { } open)
+                _clearance.IsSourcesOpen = open;
+            return ToolResult<ClearanceStateDto>.Ok(State(_clearance));
+        });
+    }
+
+    internal static ClearanceStateDto State(ClearanceViewModel c) => new(
+        c.HasProfile,
+        c.Axis == ClearanceAxis.Time ? "time" : "distance",
+        c.CanShowTime,
+        c.IsSourcesOpen,
+        c.HasReadout ? c.ReadoutSample?.Index : null,
+        c.HasReadout ? c.ReadoutPosition : null,
+        c.HasReadout ? c.ReadoutLeg : null,
+        c.HasReadout ? c.DepthText : null,
+        c.HasReadout ? c.DepthSource : null,
+        c.HasReadout ? c.WaterLevelText : null,
+        c.HasReadout ? c.WaterLevelSource : null,
+        c.HasReadout ? c.DraftText : null,
+        c.HasReadout ? c.UkcText : null,
+        c.HasReadout ? c.StateText : null,
+        c.SourceGroups.Select(g => new ClearanceSourcesGroupDto(g.Title, g.Items)).ToList());
+
+    public McpServerTool CreateGet()
+    {
+        var del = (CancellationToken ct = default) => McpAdapterShared.DispatchAsync(() => GetAsync(ct));
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = GetName,
+            Description =
+                "Returns what the Clearance tab (bottom dock, while Check passage is on) shows: the profile's axis " +
+                "(distance or time), whether Sources is open, the readout at the cursor (position, leg, charted depth " +
+                "and its source cell, water level and its station or grid and time step, draft + squat, UKC and state) " +
+                "and the Sources groups. Move the cursor with set_passage_cursor; open the tab with set_panel Clearance.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    public McpServerTool CreateSet()
+    {
+        var del = (
+            [Description("\"distance\" or \"time\"; omit to leave unchanged.")] string? axis = null,
+            [Description("True to open Sources, false to close it; omit to leave unchanged.")] bool? sourcesOpen = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => SetAsync(new SetClearanceViewRequest(axis, sourcesOpen), ct));
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetName,
+            Description =
+                "Switches the Clearance profile between distance and time on its x axis, and opens or closes the " +
+                "Sources disclosure, as the Clearance tab's header controls do. The cursor stays on the same sample. " +
+                "Returns the state get_clearance_state returns. Viewer-injected tool — mutates live state.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+}

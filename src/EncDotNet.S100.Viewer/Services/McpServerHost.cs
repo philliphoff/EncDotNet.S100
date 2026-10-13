@@ -43,6 +43,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IAppScreenshotProvider? _appScreenshot;
     private readonly IViewerTimelineController? _timeline;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? _passageCheck;
+    private readonly EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel? _clearance;
     private readonly IViewerDatasetStateController? _datasetState;
     private readonly IViewerNotificationController? _notifications;
     private readonly AdjustableTimeProvider? _testClock;
@@ -85,9 +86,11 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Collections.Secom.SecomRegistry? secomRegistry = null,
         EncDotNet.S100.Collections.Secom.SecomServerTrust? secomServerTrust = null,
         ISecomIdentityReferences? secomIdentities = null,
-        EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? passageCheck = null)
+        EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? passageCheck = null,
+        EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel? clearance = null)
     {
         _passageCheck = passageCheck;
+        _clearance = clearance;
         _secomRegistry = secomRegistry;
         _secomServerTrust = secomServerTrust;
         _secomIdentities = secomIdentities;
@@ -413,6 +416,12 @@ internal sealed class McpServerHost : IAsyncDisposable
                 tools.Add(PassageCheckMcpAdapters.Create(new SetCheckModeTool(_routesService, invoker, _passageCheck)));
                 tools.Add(PassageCheckMcpAdapters.Create(new GetCheckStateTool(_routesService, invoker, _passageCheck)));
                 tools.Add(PassageCheckMcpAdapters.Create(new SetPassageCursorTool(_routesService, invoker, _passageCheck)));
+            }
+            if (_clearance is not null)
+            {
+                var clearanceTools = new ClearanceTools(_clearance, invoker);
+                tools.Add(clearanceTools.CreateGet());
+                tools.Add(clearanceTools.CreateSet());
             }
             tools.Add(UndoRouteEditMcpAdapter.Create(new UndoRouteEditTool(_routesService, invoker)));
             tools.Add(RedoRouteEditMcpAdapter.Create(new RedoRouteEditTool(_routesService, invoker)));

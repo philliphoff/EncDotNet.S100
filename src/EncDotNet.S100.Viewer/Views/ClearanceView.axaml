@@ -1,0 +1,159 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.ClearanceView"
+             x:DataType="vm:ClearanceViewModel">
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.readoutLabel">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Opacity" Value="0.6" />
+        </Style>
+        <Style Selector="TextBlock.readoutValue">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
+        </Style>
+        <Style Selector="TextBlock.readoutSource">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Opacity" Value="0.7" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="Panel.success TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.warning TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.destructive TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.neutral TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource MutedColor}" /></Style>
+    </UserControl.Styles>
+
+    <Panel>
+        <!-- No profile: check mode off, or the first result still computing. -->
+        <TextBlock AutomationProperties.AutomationId="Clearance.Empty"
+                   Text="{Binding EmptyText}"
+                   IsVisible="{Binding !HasProfile}"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   FontSize="11.5"
+                   Opacity="0.6" />
+
+        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasProfile}">
+            <!-- D2: the profile. Hover moves the shared cursor (and the map ghost). -->
+            <lvc:CartesianChart x:Name="Chart"
+                                Grid.Column="0"
+                                AutomationProperties.AutomationId="Clearance.Chart"
+                                Opacity="{Binding ProfileOpacity}"
+                                Series="{Binding Series}"
+                                XAxes="{Binding XAxes}"
+                                YAxes="{Binding YAxes}"
+                                Sections="{Binding Sections}"
+                                TooltipPosition="Hidden"
+                                ZoomMode="None"
+                                PointerMoved="OnChartPointerMoved"
+                                Margin="8,4,4,4" />
+
+            <!-- D4: the readout at the cursor; D6: Sources in its place when open. -->
+            <Border Grid.Column="1"
+                    Width="196"
+                    Margin="4,6,10,8"
+                    Padding="10,8"
+                    CornerRadius="8"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource BorderColor}">
+                <Panel>
+                    <ScrollViewer IsVisible="{Binding !IsSourcesOpen}" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel AutomationProperties.AutomationId="Clearance.Readout"
+                                    Spacing="6"
+                                    IsVisible="{Binding HasReadout}">
+                            <StackPanel>
+                                <TextBlock AutomationProperties.AutomationId="Clearance.Readout.Position"
+                                           Text="{Binding ReadoutPosition}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           FontFamily="{DynamicResource LibraryMonoFont}" />
+                                <TextBlock Text="{Binding ReadoutLeg}"
+                                           FontSize="10.5"
+                                           Opacity="0.65"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <StackPanel>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Classes="readoutLabel" Text="{x:Static loc:Strings.Clearance_ChartedDepth}" />
+                                    <TextBlock Grid.Column="1" Classes="readoutValue"
+                                               AutomationProperties.AutomationId="Clearance.Readout.Depth"
+                                               Text="{Binding DepthText}" />
+                                </Grid>
+                                <TextBlock Classes="readoutSource"
+                                           AutomationProperties.AutomationId="Clearance.Readout.DepthSource"
+                                           Text="{Binding DepthSource}" />
+                            </StackPanel>
+                            <StackPanel>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Classes="readoutLabel" Text="{x:Static loc:Strings.Clearance_WaterLevel}" />
+                                    <TextBlock Grid.Column="1" Classes="readoutValue"
+                                               AutomationProperties.AutomationId="Clearance.Readout.WaterLevel"
+                                               Text="{Binding WaterLevelText}" />
+                                </Grid>
+                                <TextBlock Classes="readoutSource"
+                                           AutomationProperties.AutomationId="Clearance.Readout.WaterLevelSource"
+                                           Text="{Binding WaterLevelSource}" />
+                            </StackPanel>
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Classes="readoutLabel" Text="{x:Static loc:Strings.Clearance_DraftSquat}" />
+                                <TextBlock Grid.Column="1" Classes="readoutValue"
+                                           AutomationProperties.AutomationId="Clearance.Readout.Draft"
+                                           Text="{Binding DraftText}" />
+                            </Grid>
+                            <Border Height="1" Background="{DynamicResource BorderColor}" />
+                            <Panel Classes.success="{Binding IsSuccess}"
+                                   Classes.warning="{Binding IsWarning}"
+                                   Classes.destructive="{Binding IsDestructive}"
+                                   Classes.neutral="{Binding IsNeutral}">
+                                <StackPanel>
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Classes="readoutLabel" Text="{x:Static loc:Strings.Clearance_Ukc}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1"
+                                                   Classes="toneInk"
+                                                   AutomationProperties.AutomationId="Clearance.Readout.Ukc"
+                                                   Text="{Binding UkcText}"
+                                                   FontSize="16"
+                                                   FontFamily="{DynamicResource LibraryMonoFont}" />
+                                    </Grid>
+                                    <TextBlock Classes="toneInk"
+                                               AutomationProperties.AutomationId="Clearance.Readout.State"
+                                               Text="{Binding StateText}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold" />
+                                </StackPanel>
+                            </Panel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <ScrollViewer IsVisible="{Binding IsSourcesOpen}" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl AutomationProperties.AutomationId="Clearance.Sources"
+                                      ItemsSource="{Binding SourceGroups}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ClearanceSourceGroup">
+                                    <StackPanel Margin="0,0,0,8">
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontSize="10.5"
+                                                   FontWeight="SemiBold"
+                                                   Opacity="0.75" />
+                                        <ItemsControl ItemsSource="{Binding Items}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="x:String">
+                                                    <TextBlock Text="{Binding}"
+                                                               FontSize="10.5"
+                                                               TextWrapping="Wrap" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Panel>
+            </Border>
+        </Grid>
+    </Panel>
+</UserControl>

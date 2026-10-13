@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Clearance profile.** While Check passage is on, the bottom dock gains a
+  **Clearance** tab next to the Timeline. It shows the seabed, the
+  required-UKC band, the water level and the keel along the route, against
+  distance or ETA. A readout traces each number to its S-102 cell or S-101
+  area, and to its S-104 station and time step. The MCP tools
+  `get_clearance_state` and `set_clearance_view` read and set the tab.
 - **Check passage.** In SoundCharts, the Routes panel's **Check passage**
   toggle colours the active route by under-keel clearance at ETA. It shows a
   verdict card with the minimum UKC and where it occurs, and a min-UKC chip on
