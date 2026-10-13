@@ -4667,4 +4667,28 @@
   <data name="Tooltip_CheckPassage" xml:space="preserve">
     <value>Check this departure against your settings</value>
   </data>
+  <data name="Routes_DurationMinutesFormat" xml:space="preserve">
+    <value>{0} min</value>
+  </data>
+  <data name="Routes_DurationHoursFormat" xml:space="preserve">
+    <value>{0} h</value>
+  </data>
+  <data name="Routes_DurationHoursMinutesFormat" xml:space="preserve">
+    <value>{0} h {1} min</value>
+  </data>
+  <data name="Routes_DetailArrivalFormat" xml:space="preserve">
+    <value>{0} WP · {1:0.0} NM · {2} · arrives {3}</value>
+  </data>
+  <data name="Routes_DetailArrivalFromViewTimeFormat" xml:space="preserve">
+    <value>{0} WP · {1:0.0} NM · {2} · arrives {3} from view time</value>
+  </data>
+  <data name="Routes_DetailEtasStopFormat" xml:space="preserve">
+    <value>{0} WP · {1:0.0} NM · ETAs stop at leg {2} → {3}: no speed</value>
+  </data>
+  <data name="Tooltip_WaypointEta" xml:space="preserve">
+    <value>ETA {0}</value>
+  </data>
+  <data name="Tooltip_WaypointEtaFromViewTime" xml:space="preserve">
+    <value>ETA {0}, from the view time. Set a departure to fix it.</value>
+  </data>
 </root>
