@@ -182,6 +182,47 @@ public sealed class RoutesViewTests
     }
 
     [AvaloniaFact]
+    public void The_passage_card_expands_and_typed_values_set_the_passage()
+    {
+        var (service, route, host) = Show();
+        using var _host = host;
+        Assert.True(host.IsShown("Routes.Passage.Collapsed"));
+        Assert.False(host.IsShown("Routes.Passage.Speed"));
+
+        host.Click(host.Find<Button>("Routes.Passage.Toggle"));
+        Assert.True(service.IsPassageCardExpanded);
+        Assert.False(host.IsShown("Routes.Passage.Collapsed"));
+
+        var speed = host.Find<TextBox>("Routes.Passage.Speed");
+        host.Click(speed);
+        host.Type("12");
+        host.Press(PhysicalKey.Enter);
+
+        Assert.Equal(12, route.Passage.SpeedKnots);
+    }
+
+    [AvaloniaFact]
+    public void An_open_leg_shows_its_detail_and_reset_clears_an_override()
+    {
+        var (service, route, host) = Show();
+        using var _host = host;
+        route.SetPassageValue(Routing.RoutePassageField.Speed, 12);
+        route.SetLegOverride(1, Routing.RoutePassageField.Speed, 8);
+        host.Settle();
+        Assert.True(host.IsShown("Routes.Leg.Overrides"));
+
+        // The leg text is click-through to the row's select target.
+        host.Click(host.Find<TextBlock>("Routes.Leg.Overrides"));
+        Assert.Equal(1, service.SelectedLegIndex);
+        Assert.True(host.IsShown("Routes.Leg.Speed"));
+
+        host.Click(host.Find<Button>("Routes.Leg.Speed.Reset"));
+
+        Assert.False(route.IsLegOverridden(1, Routing.RoutePassageField.Speed));
+        Assert.False(host.IsShown("Routes.Leg.Overrides"));
+    }
+
+    [AvaloniaFact]
     public void Waypoint_name_commits_when_the_field_loses_focus()
     {
         var (_, route, host) = Show();

@@ -258,7 +258,7 @@ revert a drag on the map and Ctrl+Z (⌘Z) can revert a tool's edit.
 | Tool | Changes state | What it does |
 |---|---|---|
 | `create_route` | Yes | Creates an empty route and makes it the active route. Optional `name` and `id` (a GUID is generated when you omit `id`; ids must be unique). Returns the route's full state, as `get_route` does. |
-| `list_routes` | No | Lists every route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm` and `isActive`, the collection's `activeRouteId`, and `editMode` (whether the route editor is on). |
+| `list_routes` | No | Lists every route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm` and `isActive`, the collection's `activeRouteId`, `editMode` (whether the route editor is on), and `passageCardExpanded` (whether the **Routes** panel's Passage card is expanded). |
 | `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `passage` (as `get_passage` returns it), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs`, `totalDistanceNm`, the undo state (`canUndo`, `canRedo`, `undoLabel` and `redoLabel`, for example `move waypoint`), and, for the active route, the selection: `selectedWaypointIndex` and `selectedLegIndex`. Each leg has its `index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, its passage values twice (`effective`, the values that apply, and `overrides`, only the leg's own values), and the rest of its S-421 navigational envelope. |
 | `delete_route` | Yes | Removes a route. Returns `routeId`, `deleted` and the new `activeRouteId`. |
 | `append_waypoint` | Yes | Adds a waypoint (`lat`, `lon`) at the end of a route, with optional `number`, `name`, `fixed` and `turnRadiusNm`. Returns the updated route. |
@@ -272,6 +272,7 @@ revert a drag on the map and Ctrl+Z (⌘Z) can revert a tool's edit.
 | `undo_route_edit` | Yes | Undoes the most recent edit to a route, whether it was made in the viewer or by a route tool. Returns the updated route. Fails with `route_history_empty` when there is nothing to undo. |
 | `redo_route_edit` | Yes | Redoes the most recently undone edit. Any new edit clears what can be redone. Fails with `route_history_empty` when there is nothing to redo. |
 | `select_route_item` | Yes | Selects a waypoint (`waypointIndex`) or a leg (`legIndex`), as clicking its row in the **Routes** panel does, or clears the selection when you pass neither. The map highlights the selected waypoint, or haloes the selected leg and always shows its label. Selecting makes the route active. Returns the updated route. |
+| `set_passage_card` | Yes | Expands (`expanded: true`) or collapses the **Routes** panel's Passage card, as clicking its header does. The card resets when the active route changes: collapsed for a route with no passage values, expanded otherwise. To open a leg's detail, select the leg with `select_route_item`. Returns `expanded`. |
 | `set_route_edit_mode` | Yes | Turns the route editor on (`enabled: true`) or off, as the Routes panel's **Edit** toggle and Ctrl+E (⌘E) do. While it is on, clicks on the map add waypoints to the active route. Returns `enabled` and `activeRouteId`. |
 
 A typical sequence:

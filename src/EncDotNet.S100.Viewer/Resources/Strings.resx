@@ -1449,6 +1449,120 @@
   <data name="Tooltip_SelectLeg" xml:space="preserve">
     <value>Select this leg</value>
   </data>
+  <data name="Passage_Title" xml:space="preserve">
+    <value>Passage</value>
+  </data>
+  <data name="Passage_Optional" xml:space="preserve">
+    <value>Optional</value>
+  </data>
+  <data name="Passage_DraftSquat" xml:space="preserve">
+    <value>Draft · squat</value>
+  </data>
+  <data name="Passage_Speed" xml:space="preserve">
+    <value>Speed</value>
+  </data>
+  <data name="Passage_Departure" xml:space="preserve">
+    <value>Departure</value>
+  </data>
+  <data name="Passage_RequiredUkc" xml:space="preserve">
+    <value>Required UKC</value>
+  </data>
+  <data name="Passage_Vessel" xml:space="preserve">
+    <value>Vessel</value>
+  </data>
+  <data name="Passage_CrossTrack" xml:space="preserve">
+    <value>Cross-track</value>
+  </data>
+  <data name="Passage_Add" xml:space="preserve">
+    <value>+ Add</value>
+  </data>
+  <data name="Passage_ViewTime" xml:space="preserve">
+    <value>View time</value>
+  </data>
+  <data name="Passage_Static" xml:space="preserve">
+    <value>static</value>
+  </data>
+  <data name="Passage_Help" xml:space="preserve">
+    <value>Draft enables Check passage. Speed gives ETAs. Everything else is optional.</value>
+  </data>
+  <data name="Passage_CollapsedPrompt" xml:space="preserve">
+    <value>Passage · Add draft and speed to check clearance</value>
+  </data>
+  <data name="Passage_CollapsedSummaryFormat" xml:space="preserve">
+    <value>Passage · {0}</value>
+  </data>
+  <data name="Passage_DepartureSummaryFormat" xml:space="preserve">
+    <value>dep {0}</value>
+  </data>
+  <data name="Passage_UkcSummaryFormat" xml:space="preserve">
+    <value>UKC {0}</value>
+  </data>
+  <data name="Passage_CrossTrackSummaryFormat" xml:space="preserve">
+    <value>XTD {0}</value>
+  </data>
+  <data name="Passage_InvalidDepth" xml:space="preserve">
+    <value>Enter a depth, such as {0}, or leave it empty.</value>
+  </data>
+  <data name="Passage_InvalidSpeed" xml:space="preserve">
+    <value>Enter a speed in knots greater than 0, or leave it empty.</value>
+  </data>
+  <data name="Passage_InvalidDeparture" xml:space="preserve">
+    <value>Enter a time, such as 07:30, or a date and time. Leave it empty to use the view time.</value>
+  </data>
+  <data name="Passage_InvalidCrossTrack" xml:space="preserve">
+    <value>Enter metres for both sides, such as 150, or port / starboard, such as 150 / 120.</value>
+  </data>
+  <data name="Tooltip_PassageToggle" xml:space="preserve">
+    <value>Show or hide the passage values</value>
+  </data>
+  <data name="Label_VesselName" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="Label_VesselMmsi" xml:space="preserve">
+    <value>MMSI</value>
+  </data>
+  <data name="Label_VesselImo" xml:space="preserve">
+    <value>IMO</value>
+  </data>
+  <data name="Label_VesselCallsign" xml:space="preserve">
+    <value>Call sign</value>
+  </data>
+  <data name="Label_VesselLength" xml:space="preserve">
+    <value>Length (m)</value>
+  </data>
+  <data name="Label_VesselBeam" xml:space="preserve">
+    <value>Beam (m)</value>
+  </data>
+  <data name="Leg_HeaderFormat" xml:space="preserve">
+    <value>Leg {0} → {1}</value>
+  </data>
+  <data name="Leg_Draft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Leg_CrossTrack" xml:space="preserve">
+    <value>Cross-track port / stbd</value>
+  </data>
+  <data name="Leg_OverrideFormat" xml:space="preserve">
+    <value>{0} · override</value>
+  </data>
+  <data name="Leg_Reset" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="Tooltip_LegReset" xml:space="preserve">
+    <value>Use the Passage value for this leg</value>
+  </data>
+  <data name="Leg_AddNote" xml:space="preserve">
+    <value>+ Note</value>
+  </data>
+  <data name="Leg_Note" xml:space="preserve">
+    <value>Note</value>
+  </data>
+  <data name="Leg_Footnote" xml:space="preserve">
+    <value>Dashed = inherited from Passage. Safety contour and depth come from Mariner settings.</value>
+  </data>
+  <data name="Tooltip_CloseLeg" xml:space="preserve">
+    <value>Close the leg detail</value>
+  </data>
   <data name="Tooltip_EditRouteName" xml:space="preserve">
     <value>Rename this route</value>
   </data>

@@ -222,7 +222,149 @@
         <Style Selector="ToggleButton.modeToggle:disabled">
             <Setter Property="Opacity" Value="0.5" />
         </Style>
+
+        <!-- Passage card and leg detail fields (#898, handoff B1/B2/B5):
+             26 px. A set value has a solid border and a mono value; an
+             unset one is dashed (a Rectangle behind a borderless box) and
+             shows its muted placeholder. An overridden leg value has an
+             accent border; text that doesn't parse, a destructive one. -->
+        <Style Selector="TextBox.passageField">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBox.passageField.set">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="FontFamily" Value="Menlo,Consolas,Courier New,monospace" />
+        </Style>
+        <Style Selector="TextBox.passageField.clock">
+            <Setter Property="Padding" Value="26,0,8,0" />
+        </Style>
+        <Style Selector="TextBox.passageField.overridden">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Padding" Value="8,0,44,0" />
+        </Style>
+        <Style Selector="TextBox.passageField:focus-within">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBox.passageField.invalid">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="Rectangle.dashedField">
+            <Setter Property="Stroke" Value="{DynamicResource BorderColor}" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="StrokeDashArray" Value="3,2" />
+            <Setter Property="RadiusX" Value="6" />
+            <Setter Property="RadiusY" Value="6" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="TextBlock.passageLabel">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Opacity" Value="0.65" />
+        </Style>
+        <Style Selector="TextBlock.passageLabel.overridden">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Button.fieldButton">
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.fieldButton.set">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="Button.link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Opacity" Value="0.7" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.link:pointerover">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
     </UserControl.Styles>
+
+    <UserControl.Resources>
+        <!-- One passage value: label (with an override dot), then the field. -->
+        <DataTemplate x:Key="PassageFieldTemplate" x:DataType="vm:PassageFieldViewModel">
+            <StackPanel Spacing="3">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Ellipse Width="5" Height="5"
+                             VerticalAlignment="Center"
+                             Fill="{DynamicResource AccentBrush}"
+                             IsVisible="{Binding IsOverridden}" />
+                    <TextBlock Classes="passageLabel"
+                               Classes.overridden="{Binding IsOverridden}"
+                               Text="{Binding Label}"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <Panel Height="26">
+                    <Rectangle Classes="dashedField" IsVisible="{Binding IsUnset}" />
+                    <TextBox Classes="passageField"
+                             Classes.set="{Binding IsSet}"
+                             Classes.clock="{Binding ShowsClockWhenUnset}"
+                             Classes.overridden="{Binding IsOverridden}"
+                             Classes.invalid="{Binding HasError}"
+                             AutomationProperties.AutomationId="{Binding Id}"
+                             AutomationProperties.Name="{Binding Label}"
+                             Text="{Binding Text, Mode=TwoWay}"
+                             PlaceholderText="{Binding Placeholder}"
+                             ToolTip.Tip="{Binding ErrorTip}">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Gesture="Enter" Command="{Binding CommitCommand}" />
+                            <KeyBinding Gesture="Escape" Command="{Binding RevertCommand}" />
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                    <ic:FluentIcon Icon="Clock"
+                                   IconVariant="Regular"
+                                   FontSize="13"
+                                   Margin="8,0,0,0"
+                                   Opacity="0.6"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   IsHitTestVisible="False"
+                                   IsVisible="{Binding ShowsClock}" />
+                    <TextBlock Text="{Binding Suffix}"
+                               FontSize="10.5"
+                               Opacity="0.55"
+                               Margin="0,0,8,0"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False"
+                               IsVisible="{Binding ShowsSuffix}" />
+                    <Button Classes="link"
+                            AutomationProperties.AutomationId="{Binding ResetId}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LegReset}"
+                            Content="{x:Static loc:Strings.Leg_Reset}"
+                            Margin="0,0,4,0"
+                            HorizontalAlignment="Right"
+                            IsVisible="{Binding IsOverridden}"
+                            Command="{Binding ResetCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegReset}" />
+                </Panel>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
 
     <DockPanel LastChildFill="True">
 
@@ -438,6 +580,134 @@
                 <ScrollViewer Grid.Row="0"
                               IsVisible="{Binding HasActiveRoute}"
                               HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                    <!-- Passage card (#898, handoff B1–B3). It scrolls with the
+                         waypoints so small windows keep room for both. -->
+                    <Border Margin="10,8,10,4"
+                            CornerRadius="8"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource BorderColor}"
+                            Background="{DynamicResource CardBackgroundColor}">
+                        <StackPanel>
+                            <Panel>
+                                <!-- Full-area toggle target under the (non-hit-testable) header. -->
+                                <Button Classes="wpHit"
+                                        AutomationProperties.AutomationId="Routes.Passage.Toggle"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Passage_Title}"
+                                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PassageToggle}"
+                                        Command="{Binding PassageCard.ToggleCommand}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_PassageToggle}" />
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto"
+                                      ColumnSpacing="6"
+                                      Margin="10,7,10,5"
+                                      IsHitTestVisible="False">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{x:Static loc:Strings.Passage_Title}"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"
+                                               IsVisible="{Binding PassageCard.IsExpanded}" />
+                                    <Border Grid.Column="1"
+                                            CornerRadius="9"
+                                            Padding="6,1"
+                                            Background="{DynamicResource MutedBackgroundColor}"
+                                            VerticalAlignment="Center"
+                                            IsVisible="{Binding PassageCard.IsExpanded}">
+                                        <TextBlock Text="{x:Static loc:Strings.Passage_Optional}"
+                                                   FontSize="10"
+                                                   Opacity="0.7" />
+                                    </Border>
+                                    <TextBlock Grid.Column="0"
+                                               Grid.ColumnSpan="3"
+                                               AutomationProperties.AutomationId="Routes.Passage.Collapsed"
+                                               Text="{Binding PassageCard.CollapsedText}"
+                                               FontSize="11.5"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center"
+                                               IsVisible="{Binding !PassageCard.IsExpanded}" />
+                                    <Panel Grid.Column="3" VerticalAlignment="Center" Opacity="0.6">
+                                        <ic:FluentIcon Icon="ChevronUp" IconVariant="Regular" FontSize="12"
+                                                       IsVisible="{Binding PassageCard.IsExpanded}" />
+                                        <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="12"
+                                                       IsVisible="{Binding !PassageCard.IsExpanded}" />
+                                    </Panel>
+                                </Grid>
+                            </Panel>
+                            <StackPanel IsVisible="{Binding PassageCard.IsExpanded}">
+                                <Grid ColumnDefinitions="*,*"
+                                      RowDefinitions="Auto,Auto,Auto"
+                                      ColumnSpacing="8"
+                                      RowSpacing="6"
+                                      Margin="10,2,10,6">
+                                    <ContentControl Grid.Row="0" Grid.Column="0"
+                                                    Content="{Binding PassageCard.DraftSquat}"
+                                                    ContentTemplate="{StaticResource PassageFieldTemplate}" />
+                                    <ContentControl Grid.Row="0" Grid.Column="1"
+                                                    Content="{Binding PassageCard.Speed}"
+                                                    ContentTemplate="{StaticResource PassageFieldTemplate}" />
+                                    <ContentControl Grid.Row="1" Grid.Column="0"
+                                                    Content="{Binding PassageCard.Departure}"
+                                                    ContentTemplate="{StaticResource PassageFieldTemplate}" />
+                                    <ContentControl Grid.Row="1" Grid.Column="1"
+                                                    Content="{Binding PassageCard.RequiredUkc}"
+                                                    ContentTemplate="{StaticResource PassageFieldTemplate}" />
+                                    <!-- Vessel: the name, with the particulars in a popover. -->
+                                    <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
+                                        <TextBlock Classes="passageLabel" Text="{x:Static loc:Strings.Passage_Vessel}" />
+                                        <Panel Height="26">
+                                            <Rectangle Classes="dashedField" IsVisible="{Binding PassageCard.Vessel.IsUnset}" />
+                                            <Button Classes="fieldButton"
+                                                    Classes.set="{Binding PassageCard.Vessel.IsSet}"
+                                                    AutomationProperties.AutomationId="Routes.Passage.Vessel"
+                                                    AutomationProperties.Name="{x:Static loc:Strings.Passage_Vessel}">
+                                                <Panel>
+                                                    <TextBlock Text="{Binding PassageCard.Vessel.Summary}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               IsVisible="{Binding PassageCard.Vessel.IsSet}" />
+                                                    <TextBlock Text="{Binding PassageCard.Vessel.Placeholder}"
+                                                               FontSize="11.5"
+                                                               Opacity="0.55"
+                                                               IsVisible="{Binding PassageCard.Vessel.IsUnset}" />
+                                                </Panel>
+                                                <Button.Flyout>
+                                                    <Flyout Placement="Bottom">
+                                                        <Grid DataContext="{Binding PassageCard.Vessel}"
+                                                              x:DataType="vm:VesselFieldsViewModel"
+                                                              ColumnDefinitions="Auto,180"
+                                                              RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                                                              ColumnSpacing="8"
+                                                              RowSpacing="6"
+                                                              Margin="4">
+                                                            <TextBlock Grid.Row="0" Classes="passageLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Label_VesselName}" />
+                                                            <TextBox Grid.Row="0" Grid.Column="1" AutomationProperties.AutomationId="Routes.Passage.Vessel.Name" AutomationProperties.Name="{x:Static loc:Strings.Label_VesselName}" Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                                            <TextBlock Grid.Row="1" Classes="passageLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Label_VesselMmsi}" />
+                                                            <TextBox Grid.Row="1" Grid.Column="1" AutomationProperties.AutomationId="Routes.Passage.Vessel.Mmsi" AutomationProperties.Name="{x:Static loc:Strings.Label_VesselMmsi}" Text="{Binding Mmsi, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                                            <TextBlock Grid.Row="2" Classes="passageLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Label_VesselImo}" />
+                                                            <TextBox Grid.Row="2" Grid.Column="1" AutomationProperties.AutomationId="Routes.Passage.Vessel.Imo" AutomationProperties.Name="{x:Static loc:Strings.Label_VesselImo}" Text="{Binding Imo, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                                            <TextBlock Grid.Row="3" Classes="passageLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Label_VesselCallsign}" />
+                                                            <TextBox Grid.Row="3" Grid.Column="1" AutomationProperties.AutomationId="Routes.Passage.Vessel.Callsign" AutomationProperties.Name="{x:Static loc:Strings.Label_VesselCallsign}" Text="{Binding Callsign, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                                            <TextBlock Grid.Row="4" Classes="passageLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Label_VesselLength}" />
+                                                            <TextBox Grid.Row="4" Grid.Column="1" AutomationProperties.AutomationId="Routes.Passage.Vessel.Length" AutomationProperties.Name="{x:Static loc:Strings.Label_VesselLength}" Text="{Binding Length, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                                            <TextBlock Grid.Row="5" Classes="passageLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Label_VesselBeam}" />
+                                                            <TextBox Grid.Row="5" Grid.Column="1" AutomationProperties.AutomationId="Routes.Passage.Vessel.Beam" AutomationProperties.Name="{x:Static loc:Strings.Label_VesselBeam}" Text="{Binding Beam, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                                        </Grid>
+                                                    </Flyout>
+                                                </Button.Flyout>
+                                            </Button>
+                                        </Panel>
+                                    </StackPanel>
+                                    <ContentControl Grid.Row="2" Grid.Column="1"
+                                                    Content="{Binding PassageCard.CrossTrack}"
+                                                    ContentTemplate="{StaticResource PassageFieldTemplate}" />
+                                </Grid>
+                                <TextBlock Text="{Binding PassageCard.HelpText}"
+                                           FontSize="10.5"
+                                           Opacity="0.6"
+                                           TextWrapping="Wrap"
+                                           Margin="10,0,10,9" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                     <ItemsControl x:Name="TimelineItems"
                                   ItemsSource="{Binding Timeline}"
                                   Margin="8,2,8,4">
@@ -542,7 +812,9 @@
                                  margin) lines the connector up with the
                                  waypoint circle centres above and below. -->
                             <DataTemplate x:DataType="vm:RouteLegRowViewModel">
+                                <Panel>
                                 <Grid Classes="legRow"
+                                      IsVisible="{Binding IsCollapsed}"
                                       Classes.selected="{Binding IsSelected}"
                                       ColumnDefinitions="3,*">
                                     <Border Grid.Column="0" Classes="wpBar" />
@@ -567,6 +839,22 @@
                                                    Opacity="0.75"
                                                    IsHitTestVisible="False"
                                                    VerticalAlignment="Center" />
+                                        <!-- Overridden values (handoff B4): "● 8,0 kn". -->
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="4"
+                                                    VerticalAlignment="Center"
+                                                    IsHitTestVisible="False"
+                                                    IsVisible="{Binding HasOverrides}">
+                                            <Ellipse Width="5" Height="5"
+                                                     VerticalAlignment="Center"
+                                                     Fill="{DynamicResource AccentBrush}" />
+                                            <TextBlock AutomationProperties.AutomationId="Routes.Leg.Overrides"
+                                                       Text="{Binding OverrideSummary}"
+                                                       FontSize="10.5"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource AccentBrush}"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
                                         <Button Classes="geoChip"
                                                 AutomationProperties.AutomationId="Routes.Leg.Geometry"
                                                 Classes.geodesic="{Binding IsGeodesic}"
@@ -578,9 +866,109 @@
                                 </Grid>
                                     </Panel>
                                 </Grid>
+                                <!-- Leg detail (#898, handoff B5): the selected leg
+                                     opens inline, so one leg is open at a time. -->
+                                <Panel Margin="10,2,0,2" IsVisible="{Binding IsSelected}">
+                                    <Border CornerRadius="8"
+                                            Background="{DynamicResource CardBackgroundColor}" />
+                                    <Border CornerRadius="8"
+                                            Background="{DynamicResource AccentBrush}"
+                                            Opacity="0.07" />
+                                    <Border CornerRadius="8"
+                                            BorderThickness="1"
+                                            BorderBrush="{DynamicResource AccentBrush}"
+                                            Opacity="0.3" />
+                                    <Border Width="3"
+                                            CornerRadius="1.5"
+                                            Margin="0,8"
+                                            HorizontalAlignment="Left"
+                                            Background="{DynamicResource AccentBrush}" />
+                                    <StackPanel Spacing="8" Margin="14,9,10,10">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Header}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource AccentBrush}"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding LegText}"
+                                                       FontSize="11"
+                                                       Opacity="0.65"
+                                                       FontFamily="Menlo,Consolas,Courier New,monospace"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                            <Button Grid.Column="2"
+                                                    Classes="link"
+                                                    AutomationProperties.AutomationId="Routes.Leg.Close"
+                                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CloseLeg}"
+                                                    Command="{Binding CloseCommand}"
+                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseLeg}">
+                                                <ic:FluentIcon Icon="ChevronUp" IconVariant="Regular" FontSize="12" />
+                                            </Button>
+                                        </Grid>
+                                        <Grid ColumnDefinitions="*,*"
+                                              RowDefinitions="Auto,Auto"
+                                              ColumnSpacing="8"
+                                              RowSpacing="6">
+                                            <ContentControl Grid.Row="0" Grid.Column="0"
+                                                            Content="{Binding Speed}"
+                                                            ContentTemplate="{StaticResource PassageFieldTemplate}" />
+                                            <ContentControl Grid.Row="0" Grid.Column="1"
+                                                            Content="{Binding Draft}"
+                                                            ContentTemplate="{StaticResource PassageFieldTemplate}" />
+                                            <ContentControl Grid.Row="1" Grid.Column="0"
+                                                            Content="{Binding CrossTrack}"
+                                                            ContentTemplate="{StaticResource PassageFieldTemplate}" />
+                                            <ContentControl Grid.Row="1" Grid.Column="1"
+                                                            Content="{Binding RequiredUkc}"
+                                                            ContentTemplate="{StaticResource PassageFieldTemplate}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <Border Grid.Column="0" Classes="segmentTrack">
+                                                <UniformGrid Rows="1">
+                                                    <ToggleButton Classes="segment"
+                                                                  AutomationProperties.AutomationId="Routes.Leg.Rhumb"
+                                                                  Content="{x:Static loc:Strings.Routes_GeometryLoxodrome}"
+                                                                  IsChecked="{Binding IsRhumb, Mode=OneWay}"
+                                                                  Command="{Binding SetRhumbCommand}" />
+                                                    <ToggleButton Classes="segment"
+                                                                  AutomationProperties.AutomationId="Routes.Leg.GreatCircle"
+                                                                  Content="{x:Static loc:Strings.Routes_GeometryGeodesic}"
+                                                                  IsChecked="{Binding IsGeodesic, Mode=OneWay}"
+                                                                  Command="{Binding SetGreatCircleCommand}" />
+                                                </UniformGrid>
+                                            </Border>
+                                            <Button Grid.Column="2"
+                                                    Classes="link"
+                                                    AutomationProperties.AutomationId="Routes.Leg.AddNote"
+                                                    Content="{x:Static loc:Strings.Leg_AddNote}"
+                                                    FontSize="11"
+                                                    IsVisible="{Binding IsNoteHidden}"
+                                                    Command="{Binding AddNoteCommand}" />
+                                        </Grid>
+                                        <TextBox Classes="legNote"
+                                                 AutomationProperties.AutomationId="Routes.Leg.Note"
+                                                 AutomationProperties.Name="{x:Static loc:Strings.Leg_Note}"
+                                                 PlaceholderText="{x:Static loc:Strings.Leg_Note}"
+                                                 FontSize="12"
+                                                 Text="{Binding Note, Mode=TwoWay}"
+                                                 IsVisible="{Binding IsNoteVisible}">
+                                            <TextBox.KeyBindings>
+                                                <KeyBinding Gesture="Enter" Command="{Binding CommitNoteCommand}" />
+                                            </TextBox.KeyBindings>
+                                        </TextBox>
+                                        <TextBlock Text="{Binding Footnote}"
+                                                   FontSize="10.5"
+                                                   Opacity="0.6"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Panel>
+                                </Panel>
                             </DataTemplate>
                         </ItemsControl.DataTemplates>
                     </ItemsControl>
+                    </StackPanel>
                 </ScrollViewer>
 
                 <!-- No-active-route hint. -->

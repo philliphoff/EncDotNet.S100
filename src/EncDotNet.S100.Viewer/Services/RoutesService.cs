@@ -89,6 +89,30 @@ internal sealed class RoutesService
         }
     }
 
+    private bool _isPassageCardExpanded;
+    private Route? _passageCardRoute;
+
+    /// <summary>
+    /// Whether the Routes panel's Passage card is expanded. When the active
+    /// route changes it resets: collapsed for a route with no passage values
+    /// (a new route), expanded once any are set. The MCP
+    /// <c>set_passage_card</c> tool sets it too.
+    /// </summary>
+    public bool IsPassageCardExpanded
+    {
+        get => _isPassageCardExpanded;
+        set
+        {
+            if (_isPassageCardExpanded == value)
+                return;
+            _isPassageCardExpanded = value;
+            PassageCardChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raised when <see cref="IsPassageCardExpanded"/> changes.</summary>
+    public event EventHandler? PassageCardChanged;
+
     /// <summary>Raised when <see cref="IsEditModeActive"/> changes.</summary>
     public event EventHandler? EditModeChanged;
 
@@ -141,6 +165,11 @@ internal sealed class RoutesService
                 _selectedWaypointIndex = waypoint;
                 _selectedLegIndex = leg;
                 SelectionChanged?.Invoke(this, EventArgs.Empty);
+            }
+            if (!ReferenceEquals(_passageCardRoute, Routes.ActiveRoute))
+            {
+                _passageCardRoute = Routes.ActiveRoute;
+                IsPassageCardExpanded = _passageCardRoute is { Passage.IsEmpty: false };
             }
             Changed?.Invoke(this, EventArgs.Empty);
         };

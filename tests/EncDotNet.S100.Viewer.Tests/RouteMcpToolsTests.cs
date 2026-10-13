@@ -783,4 +783,19 @@ public class RouteMcpToolsTests
         Assert.Equal("invalid_argument", Error(await select.InvokeAsync(new SelectRouteItemRequest(LegIndex: 1), ct)).Code);
         Assert.Equal("invalid_argument", Error(await select.InvokeAsync(new SelectRouteItemRequest(WaypointIndex: 0, LegIndex: 0), ct)).Code);
     }
+
+    [Fact]
+    public async Task Passage_card_state_is_settable_and_readable()
+    {
+        var (routes, invoker) = Make();
+        var ct = TestContext.Current.CancellationToken;
+        routes.Routes.CreateRoute("R");
+        Assert.False(Value(await new ListRoutesTool(routes, invoker).InvokeAsync(new ListRoutesRequest(), ct)).PassageCardExpanded);
+
+        var result = Value(await new SetPassageCardTool(routes, invoker).InvokeAsync(new SetPassageCardRequest(true), ct));
+
+        Assert.True(result.Expanded);
+        Assert.True(routes.IsPassageCardExpanded);
+        Assert.True(Value(await new ListRoutesTool(routes, invoker).InvokeAsync(new ListRoutesRequest(), ct)).PassageCardExpanded);
+    }
 }

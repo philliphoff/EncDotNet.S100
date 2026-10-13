@@ -1210,6 +1210,7 @@ public partial class App : Application
         services.AddSingleton<EcdisLabelOverrideProvider>();
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
+        services.AddSingleton<IRouteDisplayUnits, SettingsRouteDisplayUnits>();
         services.AddSingleton<RoutesPanelViewModel>();
         services.AddSingleton<MainViewModel>();
 
