@@ -719,6 +719,14 @@ internal static class Strings
     public static string Routes_LegDetailFootnote => Get(nameof(Routes_LegDetailFootnote));
     public static string Tooltip_LegDetail => Get(nameof(Tooltip_LegDetail));
     public static string Tooltip_CheckPassage => Get(nameof(Tooltip_CheckPassage));
+    public static string Routes_DurationMinutesFormat => Get(nameof(Routes_DurationMinutesFormat));
+    public static string Routes_DurationHoursFormat => Get(nameof(Routes_DurationHoursFormat));
+    public static string Routes_DurationHoursMinutesFormat => Get(nameof(Routes_DurationHoursMinutesFormat));
+    public static string Routes_DetailArrivalFormat => Get(nameof(Routes_DetailArrivalFormat));
+    public static string Routes_DetailArrivalFromViewTimeFormat => Get(nameof(Routes_DetailArrivalFromViewTimeFormat));
+    public static string Routes_DetailEtasStopFormat => Get(nameof(Routes_DetailEtasStopFormat));
+    public static string Tooltip_WaypointEta => Get(nameof(Tooltip_WaypointEta));
+    public static string Tooltip_WaypointEtaFromViewTime => Get(nameof(Tooltip_WaypointEtaFromViewTime));
 
     // ECDIS Display Planes
     public static string EcdisPanel_DisplayPlanesHeader => Get(nameof(EcdisPanel_DisplayPlanesHeader));

@@ -22,6 +22,13 @@ internal sealed class RoutesService
     /// <summary>The editable route collection. Never <c>null</c>.</summary>
     public RouteCollection Routes { get; } = new();
 
+    /// <summary>
+    /// The view time a route with no departure computes its ETAs from
+    /// (<see cref="Routing.RouteEtas"/>), shared by the Routes panel, the map
+    /// labels and <c>get_route</c>.
+    /// </summary>
+    public IRouteViewTime ViewTime { get; }
+
     private int? _selectedWaypointIndex;
 
     /// <summary>
@@ -152,8 +159,12 @@ internal sealed class RoutesService
     /// <summary>Raised when <see cref="SelectedWaypointIndex"/> or <see cref="SelectedLegIndex"/> changes.</summary>
     public event EventHandler? SelectionChanged;
 
-    public RoutesService()
+    /// <summary>Creates the service.</summary>
+    /// <param name="viewTime">Where ETAs run from on a route with no departure;
+    /// now when omitted.</param>
+    public RoutesService(IRouteViewTime? viewTime = null)
     {
+        ViewTime = viewTime ?? new ClockRouteViewTime(TimeProvider.System);
         Routes.Changed += (_, _) =>
         {
             // Keep the selection valid as routes/waypoints change.

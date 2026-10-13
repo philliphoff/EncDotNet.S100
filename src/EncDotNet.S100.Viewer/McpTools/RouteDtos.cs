@@ -13,7 +13,8 @@ internal sealed record WaypointDto(
     [property: Description("Author-assigned ordinal (S-421 routeWaypointID), or null.")] int? Number,
     [property: Description("Human-readable waypoint name, or null.")] string? Name,
     [property: Description("Whether the waypoint is pinned and must not be moved, or null when unset.")] bool? Fixed,
-    [property: Description("Planned turn radius at the waypoint in nautical miles, or null.")] double? TurnRadiusNm);
+    [property: Description("Planned turn radius at the waypoint in nautical miles, or null.")] double? TurnRadiusNm,
+    [property: Description("ETA at the waypoint (ISO-8601), or null when unknown: no speed on this or an earlier leg. See the route's 'times'.")] DateTimeOffset? Eta = null);
 
 /// <summary>
 /// The passage-inheritable values of one leg: either the effective values or
@@ -46,7 +47,8 @@ internal sealed record LegDto(
     [property: Description("Maximum speed through water in knots, or null.")] double? SpeedThroughWaterMaxKnots,
     [property: Description("Dynamic under-keel clearance in metres, or null.")] double? DynamicUnderKeelClearanceMeters,
     [property: Description("Safety margin in metres, or null.")] double? SafetyMarginMeters,
-    [property: Description("Free-text note for the leg, or null.")] string? Note);
+    [property: Description("Free-text note for the leg, or null.")] string? Note,
+    [property: Description("Time to run the leg at its effective speed, in minutes, or null when it has no speed.")] double? DurationMinutes = null);
 
 /// <summary>Route-level passage values.</summary>
 [Description("A route's passage values, which every leg inherits unless it overrides them; all optional.")]
@@ -59,6 +61,15 @@ internal sealed record PassageDto(
     [property: Description("Port cross-track distance limit in metres, or null.")] double? PortCrossTrackMeters,
     [property: Description("Starboard cross-track distance limit in metres, or null.")] double? StarboardCrossTrackMeters,
     [property: Description("The vessel (from the route info; set it with set_route_info), or null.")] VesselDto? Vessel);
+
+/// <summary>A route's timing: departure, arrival and where ETAs stop.</summary>
+[Description("A route's timing at each leg's effective speed over ground (S-111 currents aren't applied).")]
+internal sealed record RouteTimesDto(
+    [property: Description("The time the ETAs run from (ISO-8601): the passage departure, or the view time when none is set.")] DateTimeOffset Departure,
+    [property: Description("True when the route has no departure, so the ETAs follow the viewer's view time.")] bool FromViewTime,
+    [property: Description("Arrival at the last waypoint (ISO-8601), or null when a leg has no speed.")] DateTimeOffset? Arrival,
+    [property: Description("Time under way in minutes, or null when a leg has no speed.")] double? DurationMinutes,
+    [property: Description("Index of the first leg with no speed, where the ETAs stop, or null when every leg has a speed.")] int? EtasStopAtLeg);
 
 /// <summary>Result of get_passage.</summary>
 [Description("Result of get_passage: a route's passage values.")]
@@ -114,7 +125,8 @@ internal sealed record RouteDetail(
     [property: Description("What undo_route_edit would revert (e.g. \"move waypoint\"), or null.")] string? UndoLabel,
     [property: Description("What redo_route_edit would replay, or null.")] string? RedoLabel,
     [property: Description("The selected waypoint's index on the active route (set with select_route_item), or null; always null for other routes.")] int? SelectedWaypointIndex,
-    [property: Description("The selected leg's index on the active route (haloed on the map, set with select_route_item), or null; always null for other routes.")] int? SelectedLegIndex);
+    [property: Description("The selected leg's index on the active route (haloed on the map, set with select_route_item), or null; always null for other routes.")] int? SelectedLegIndex,
+    [property: Description("Departure, arrival and duration when at least one leg has a speed (set speedKnots with set_passage or set_leg_attributes), else null.")] RouteTimesDto? Times = null);
 
 /// <summary>Result of list_routes.</summary>
 [Description("Result of list_routes: every route in the collection plus the active route id.")]
@@ -159,13 +171,14 @@ internal static class RouteProjection
         ArgumentNullException.ThrowIfNull(route);
         ArgumentNullException.ThrowIfNull(routes);
 
+        var etas = RouteEtas.Compute(route, routes.ViewTime.Current);
         var waypoints = new List<WaypointDto>(route.Waypoints.Count);
         for (var i = 0; i < route.Waypoints.Count; i++)
         {
             var wp = route.Waypoints[i];
             waypoints.Add(new WaypointDto(
                 i, wp.Position.Latitude, wp.Position.Longitude,
-                wp.Number, wp.Name, wp.Fixed, wp.TurnRadiusNm));
+                wp.Number, wp.Name, wp.Fixed, wp.TurnRadiusNm, etas.WaypointEta(i)));
         }
 
         var legs = new List<LegDto>(route.Legs.Count);
@@ -190,7 +203,8 @@ internal static class RouteProjection
                 leg.SpeedThroughWaterMaxKnots,
                 leg.DynamicUnderKeelClearanceMeters,
                 leg.SafetyMarginMeters,
-                leg.Note));
+                leg.Note,
+                etas.LegDuration(i)?.TotalMinutes));
         }
 
         var isActive = ReferenceEquals(route, routes.Routes.ActiveRoute);
@@ -208,8 +222,19 @@ internal static class RouteProjection
             route.History.UndoLabel,
             route.History.RedoLabel,
             isActive ? routes.SelectedWaypointIndex : null,
-            isActive ? routes.SelectedLegIndex : null);
+            isActive ? routes.SelectedLegIndex : null,
+            Times(etas));
     }
+
+    private static RouteTimesDto? Times(RouteEtas etas)
+        => etas.Schedule.Legs.Any(l => l.Duration is not null)
+            ? new RouteTimesDto(
+                etas.Departure,
+                etas.IsFromViewTime,
+                etas.Arrival,
+                etas.Duration?.TotalMinutes,
+                etas.FirstLegWithoutSpeed)
+            : null;
 
     /// <summary>Projects a single route to a compact <see cref="RouteSummary"/>.</summary>
     public static RouteSummary Summary(Route route, RoutesService routes)

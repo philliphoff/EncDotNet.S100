@@ -48,6 +48,8 @@ internal sealed record RouteOverlayScene(
         {
             var waypoints = route.Waypoints.Select(w => w.Position).ToArray();
             var legs = new SceneLeg[route.Legs.Count];
+            // Durations need only each leg's speed, so any departure will do.
+            var etas = legs.Length > 0 ? RouteEtas.Compute(route, DateTimeOffset.UnixEpoch) : null;
             for (var i = 0; i < legs.Length; i++)
             {
                 var a = waypoints[i];
@@ -56,7 +58,7 @@ internal sealed record RouteOverlayScene(
                     ? MarineGeodesy.GreatCircleIntermediatePoints(a.Latitude, a.Longitude, b.Latitude, b.Longitude, GeodesicSegments)
                     : [a, b];
                 var metrics = route.ComputeLegMetrics(i);
-                legs[i] = new SceneLeg(path, LegLabel(metrics.DistanceNm, metrics.InitialBearingDegrees));
+                legs[i] = new SceneLeg(path, LegLabel(metrics.DistanceNm, metrics.InitialBearingDegrees, etas!.LegDuration(i)));
             }
             return new SceneRoute(isActive, waypoints, legs);
         }
@@ -65,7 +67,7 @@ internal sealed record RouteOverlayScene(
     /// <summary>One leg as drawn.</summary>
     /// <param name="Path">The leg's path from its start to its end waypoint:
     /// the two endpoints for a rhumb line, a densified arc for a great circle.</param>
-    /// <param name="Label">The leg label, e.g. <c>2,5 NM · 320°</c>.</param>
+    /// <param name="Label">The leg label, e.g. <c>2,5 NM · 320° · 12 min</c>.</param>
     internal sealed record SceneLeg(IReadOnlyList<GeoPosition> Path, string Label);
 
     /// <summary>Snapshots <paramref name="routes"/> for drawing.</summary>
@@ -84,9 +86,15 @@ internal sealed record RouteOverlayScene(
             scene, selectedWaypointIndex, selectedLegIndex, isEditing, RouteOverlayColors.For(appearance));
     }
 
-    /// <summary>The leg label: distance and initial bearing, in the app's locale.</summary>
-    internal static string LegLabel(double distanceNm, double bearingDegrees)
-        => string.Format(CultureInfo.CurrentCulture, Strings.Route_LegLabel, distanceNm, bearingDegrees);
+    /// <summary>
+    /// The leg label (A7): distance and initial bearing in the app's locale,
+    /// and the leg's duration when its speed is known.
+    /// </summary>
+    internal static string LegLabel(double distanceNm, double bearingDegrees, TimeSpan? duration = null)
+    {
+        var label = string.Format(CultureInfo.CurrentCulture, Strings.Route_LegLabel, distanceNm, bearingDegrees);
+        return duration is { } d ? label + " · " + PassageFormatting.FormatDuration(d) : label;
+    }
 }
 
 /// <summary>

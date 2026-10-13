@@ -263,6 +263,22 @@ public sealed class RoutesViewTests
     }
 
     [AvaloniaFact]
+    public void Waypoint_etas_show_once_the_route_has_a_speed()
+    {
+        var (_, route, host) = Show();
+        using var _host = host;
+        Assert.False(host.IsShown("Routes.Waypoint.Eta"));
+
+        route.SetPassageValue(RoutePassageField.Speed, 10);
+        host.Settle();
+
+        var etas = host.FindAll<TextBlock>("Routes.Waypoint.Eta");
+        Assert.Equal(3, etas.Count);
+        Assert.All(etas, eta => Assert.True(eta.IsEffectivelyVisible));
+        Assert.Contains("from the view time", ToolTip.GetTip(etas[1]) as string);
+    }
+
+    [AvaloniaFact]
     public void Leg_detail_geometry_segments_switch_the_leg()
     {
         var (_, route, host) = Show();
