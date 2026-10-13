@@ -98,7 +98,7 @@ public static class LibraryMcpAdapters
             [Description("A PKCS#12 (.p12/.pfx) or PEM file holding an MCP client certificate and its private key, or a stored identity's reference id from the viewer's Keys & certificates settings (e.g. 'sc-ident:4f9c2a7e'); omit to report the current identity.")] string? path = null,
             [Description("The PKCS#12 or encrypted-key password, if any.")] string? password = null,
             [Description("True to clear the identity.")] bool? clear = null,
-            [Description("The algorithm SECOM 2.0 request envelopes are signed with: 'ecdsa-384-sha3', 'ecdsa-384-sha2', 'ecdsa-256-sha2-256' or 'ecdsa-256-sha3-256'; '' to follow the key (the default). Services check search envelopes with the algorithm they are configured for.")] string? signatureAlgorithm = null,
+            [Description("The algorithm SECOM 2.0 request envelopes are signed with: 'ecdsa-384-sha2', 'ecdsa-384-sha3', 'ecdsa-256-sha2-256' or 'ecdsa-256-sha3-256'; '' to follow the key (the default: 'ecdsa-384-sha2' for P-384 keys). Services check search envelopes with the algorithm they are configured for.")] string? signatureAlgorithm = null,
             CancellationToken ct = default) =>
             McpToolDispatch.DispatchAsync(() => inner.InvokeAsync(path, password, clear, signatureAlgorithm, ct));
         return Tool(del, SetSecomIdentityTool.Name,

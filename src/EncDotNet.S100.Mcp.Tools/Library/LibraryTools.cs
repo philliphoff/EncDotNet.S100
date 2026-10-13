@@ -244,8 +244,8 @@ public sealed record SecomIdentityDto(
     [Description("The stored identity's reference id (e.g. 'sc-ident:4f9c2a7e'), or null for one loaded from a file for this session.")]
     public string? Reference { get; init; }
 
-    /// <summary>The algorithm SECOM 2.0 request envelopes are signed with, e.g. 'ecdsa-384-sha3'.</summary>
-    [Description("The algorithm SECOM 2.0 request envelopes are signed with, e.g. 'ecdsa-384-sha3'.")]
+    /// <summary>The algorithm SECOM 2.0 request envelopes are signed with, e.g. 'ecdsa-384-sha2'.</summary>
+    [Description("The algorithm SECOM 2.0 request envelopes are signed with, e.g. 'ecdsa-384-sha2'.")]
     public string? SignatureAlgorithm { get; init; }
 }
 
