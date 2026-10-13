@@ -1773,4 +1773,41 @@ internal static class Strings
     public static string Keys_Import_SourcesFormat => Get(nameof(Keys_Import_SourcesFormat));
     public static string Keys_Import_OneSourceFormat => Get(nameof(Keys_Import_OneSourceFormat));
     public static string Keys_Import_NoSources => Get(nameof(Keys_Import_NoSources));
+
+    // Check passage (#901).
+    public static string Check_VerdictWaterLevelEnds => Get(nameof(Check_VerdictWaterLevelEnds));
+    public static string Check_VerdictBelowOne => Get(nameof(Check_VerdictBelowOne));
+    public static string Check_VerdictBelowFormat => Get(nameof(Check_VerdictBelowFormat));
+    public static string Check_VerdictIncomplete => Get(nameof(Check_VerdictIncomplete));
+    public static string Check_VerdictTight => Get(nameof(Check_VerdictTight));
+    public static string Check_VerdictMeets => Get(nameof(Check_VerdictMeets));
+    public static string Check_MinUkcLabel => Get(nameof(Check_MinUkcLabel));
+    public static string Check_RequiredFormat => Get(nameof(Check_RequiredFormat));
+    public static string Check_NoMarginSet => Get(nameof(Check_NoMarginSet));
+    public static string Check_LegFormat => Get(nameof(Check_LegFormat));
+    public static string Check_MinutesBelowFormat => Get(nameof(Check_MinutesBelowFormat));
+    public static string Check_FooterFormat => Get(nameof(Check_FooterFormat));
+    public static string Check_FooterNoData => Get(nameof(Check_FooterNoData));
+    public static string Check_Computing => Get(nameof(Check_Computing));
+    public static string Check_ErrorFormat => Get(nameof(Check_ErrorFormat));
+    public static string Check_NoClearance => Get(nameof(Check_NoClearance));
+    public static string Check_TabLegs => Get(nameof(Check_TabLegs));
+    public static string Check_TabFindingsFormat => Get(nameof(Check_TabFindingsFormat));
+    public static string Check_FindingsPlaceholder => Get(nameof(Check_FindingsPlaceholder));
+    public static string Check_LegTimesFormat => Get(nameof(Check_LegTimesFormat));
+    public static string Check_LegDistanceFormat => Get(nameof(Check_LegDistanceFormat));
+    public static string Check_ChipNoTide => Get(nameof(Check_ChipNoTide));
+    public static string Check_ChipNoData => Get(nameof(Check_ChipNoData));
+    public static string Check_DepartureFormat => Get(nameof(Check_DepartureFormat));
+    public static string Check_ArrivalFormat => Get(nameof(Check_ArrivalFormat));
+    public static string Check_LegendTitle => Get(nameof(Check_LegendTitle));
+    public static string Check_LegendMeets => Get(nameof(Check_LegendMeets));
+    public static string Check_LegendTight => Get(nameof(Check_LegendTight));
+    public static string Check_LegendBelow => Get(nameof(Check_LegendBelow));
+    public static string Check_LegendNoData => Get(nameof(Check_LegendNoData));
+    public static string Check_MinUkcPillFormat => Get(nameof(Check_MinUkcPillFormat));
+    public static string Tooltip_CheckLegRow => Get(nameof(Tooltip_CheckLegRow));
+    public static string Tooltip_CheckLowConfidence => Get(nameof(Tooltip_CheckLowConfidence));
+    public static string Dock_ObjectInformationEdge => Get(nameof(Dock_ObjectInformationEdge));
+    public static string Tooltip_ObjectInformationEdge => Get(nameof(Tooltip_ObjectInformationEdge));
 }

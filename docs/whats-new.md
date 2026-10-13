@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Check passage.** In SoundCharts, the Routes panel's **Check passage**
+  toggle colours the active route by under-keel clearance at ETA. It shows a
+  verdict card with the minimum UKC and where it occurs, and a min-UKC chip on
+  each leg. Edits recompute live. The MCP tools `set_check_mode`,
+  `get_check_state` and `set_passage_cursor` drive it. See the
+  [viewer README](../src/EncDotNet.S100.Viewer/README.md) and the
+  [route tools](mcp-server.md#route-tools).
 - **Under-keel clearance along a route.** The new
   `EncDotNet.S100.Navigation` package computes leg ETAs and checks UKC along a
   passage. It adds S-104 water level to S-102 charted depth at each sample's

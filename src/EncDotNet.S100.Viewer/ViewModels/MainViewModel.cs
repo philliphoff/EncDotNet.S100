@@ -261,13 +261,49 @@ internal sealed class MainViewModel : ViewModelBase
         get => _isRightDockOpen;
         set
         {
-            if (SetProperty(ref _isRightDockOpen, value) && _settingsInitialized)
+            if (!SetProperty(ref _isRightDockOpen, value))
+                return;
+            OnPropertyChanged(nameof(IsRightDockShown));
+            OnPropertyChanged(nameof(IsRightDockEdgeTabVisible));
+            if (_settingsInitialized)
             {
                 _settings.IsRightDockOpen = value;
                 _settings.Save();
             }
         }
     }
+
+    private bool _isRightDockFolded;
+    /// <summary>
+    /// True while Check passage has folded the Object Information dock to its
+    /// 26 px edge tab (#901, handoff C1). Not persisted: turning the mode off,
+    /// or clicking the tab, restores the dock.
+    /// </summary>
+    public bool IsRightDockFolded
+    {
+        get => _isRightDockFolded;
+        set
+        {
+            if (!SetProperty(ref _isRightDockFolded, value))
+                return;
+            OnPropertyChanged(nameof(IsRightDockShown));
+            OnPropertyChanged(nameof(IsRightDockEdgeTabVisible));
+        }
+    }
+
+    /// <summary>Whether the right dock's panel is shown: open and not folded.</summary>
+    public bool IsRightDockShown => IsRightDockOpen && !IsRightDockFolded;
+
+    /// <summary>Whether the folded dock's edge tab is shown.</summary>
+    public bool IsRightDockEdgeTabVisible => IsRightDockOpen && IsRightDockFolded;
+
+    /// <summary>Unfolds the right dock from its edge tab.</summary>
+    public ICommand UnfoldRightDockCommand => _unfoldRightDockCommand ??= new RelayCommand(() => IsRightDockFolded = false);
+
+    private ICommand? _unfoldRightDockCommand;
+
+    /// <summary>Whether Check passage is on (the map legend and wash follow it).</summary>
+    public bool IsCheckModeActive => _routes.IsCheckModeActive;
 
     private bool _isBottomDockOpen;
     /// <summary>
@@ -1313,7 +1349,13 @@ internal sealed class MainViewModel : ViewModelBase
         ToggleTimelineCommand = new RelayCommand(() => IsBottomDockOpen = !IsBottomDockOpen);
         ToggleTimelineDockCommand = new RelayCommand(() => IsBottomDockOpen = !IsBottomDockOpen, () => !IsWindowNarrow);
 
-        TogglePickPanelCommand = new RelayCommand(() => IsRightDockOpen = !IsRightDockOpen);
+        TogglePickPanelCommand = new RelayCommand(() =>
+        {
+            if (IsRightDockFolded)
+                IsRightDockFolded = false;
+            else
+                IsRightDockOpen = !IsRightDockOpen;
+        });
 
         TogglePickModeCommand = new RelayCommand(() => Tools.Toggle(PickTool.ToolId));
         ExitPickModeCommand = new RelayCommand(() => Tools.Activate(null));
@@ -1357,6 +1399,14 @@ internal sealed class MainViewModel : ViewModelBase
         // Route edit mode is shared state on RoutesService: the Routes panel's
         // Edit toggle, Ctrl+E (⌘E) and the MCP set_route_edit_mode tool set it
         // there, and the route edit tool follows.
+        // Check passage folds the Object Information dock to its edge tab
+        // while it's on, and restores it when it's turned off (C1).
+        _routes.CheckModeChanged += (_, _) =>
+        {
+            IsRightDockFolded = _routes.IsCheckModeActive;
+            OnPropertyChanged(nameof(IsCheckModeActive));
+        };
+
         _routes.EditModeChanged += (_, _) =>
         {
             if (_routes.IsEditModeActive != IsRouteEditModeActive)

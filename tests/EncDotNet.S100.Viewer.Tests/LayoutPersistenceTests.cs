@@ -78,7 +78,7 @@ public sealed class LayoutPersistenceTests : IDisposable
         public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
-    private MainViewModel CreateViewModel(IEnumerable<IActivityTab>? tabs, ViewerSettings? settings = null)
+    private MainViewModel CreateViewModel(IEnumerable<IActivityTab>? tabs, ViewerSettings? settings = null, RoutesService? routes = null)
     {
         settings ??= new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var catalogues = new PortrayalCatalogueManager();
@@ -101,7 +101,8 @@ public sealed class LayoutPersistenceTests : IDisposable
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: Notifications.TestNotifications.Create(),
-            activityTabs: tabs);
+            activityTabs: tabs,
+            routes: routes);
     }
 
     private static IActivityTab[] StandardTabs() => new IActivityTab[]
@@ -110,6 +111,51 @@ public sealed class LayoutPersistenceTests : IDisposable
         new FakeTab { Id = "Pick", Order = 10, Dock = TabDock.Right },
         new FakeTab { Id = "Timeline", Order = 10, Dock = TabDock.Bottom },
     };
+
+    [Fact]
+    public void Check_passage_folds_object_information_to_its_edge_tab_and_restores_it()
+    {
+        var routes = new RoutesService();
+        var vm = CreateViewModel(StandardTabs(), routes: routes);
+        vm.IsRightDockOpen = true;
+        Assert.True(vm.IsRightDockShown);
+        Assert.False(vm.IsRightDockEdgeTabVisible);
+
+        routes.IsCheckModeActive = true;
+
+        Assert.True(vm.IsCheckModeActive);
+        Assert.True(vm.IsRightDockOpen);
+        Assert.False(vm.IsRightDockShown);
+        Assert.True(vm.IsRightDockEdgeTabVisible);
+
+        // The edge tab unfolds the dock while the mode stays on.
+        vm.UnfoldRightDockCommand.Execute(null);
+        Assert.True(vm.IsRightDockShown);
+        routes.IsCheckModeActive = false;
+        routes.IsCheckModeActive = true;
+        Assert.False(vm.IsRightDockShown);
+
+        routes.IsCheckModeActive = false;
+
+        Assert.False(vm.IsCheckModeActive);
+        Assert.True(vm.IsRightDockShown);
+        Assert.False(vm.IsRightDockEdgeTabVisible);
+    }
+
+    [Fact]
+    public void Check_passage_leaves_a_closed_object_information_dock_closed()
+    {
+        var routes = new RoutesService();
+        var vm = CreateViewModel(StandardTabs(), routes: routes);
+        Assert.False(vm.IsRightDockOpen);
+
+        routes.IsCheckModeActive = true;
+
+        Assert.False(vm.IsRightDockShown);
+        Assert.False(vm.IsRightDockEdgeTabVisible);
+        routes.IsCheckModeActive = false;
+        Assert.False(vm.IsRightDockShown);
+    }
 
     [Fact]
     public void IsLeftDockOpen_DefaultsToTrue_WhenSettingsAbsent()

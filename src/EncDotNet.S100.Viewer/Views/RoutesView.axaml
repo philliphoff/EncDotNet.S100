@@ -365,6 +365,69 @@
         <Style Selector="Button.legRow.plain:pointerover">
             <Setter Property="Background" Value="Transparent" />
         </Style>
+
+        <!-- Check passage (#901). The verdict card and leg chips take a tone:
+             a fill and a border in the tone colour at low opacity (separate
+             layers, because a theme brush can't be given an alpha here). -->
+        <Style Selector="Border.toneFill">
+            <Setter Property="Opacity" Value="0.06" />
+            <Setter Property="Background" Value="{DynamicResource MutedColor}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Border.toneEdge">
+            <Setter Property="Opacity" Value="0.3" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource MutedColor}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Panel.success Border.toneFill"><Setter Property="Background" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.warning Border.toneFill"><Setter Property="Background" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.destructive Border.toneFill"><Setter Property="Background" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.success Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.warning Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.destructive Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.success TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.success ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.warning TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.warning ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.destructive TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.destructive ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.neutral TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource MutedColor}" /></Style>
+        <Style Selector="Panel.neutral ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource MutedColor}" /></Style>
+        <!-- A chip is tinted more strongly than the card. -->
+        <Style Selector="Panel.chip Border.toneFill">
+            <Setter Property="Opacity" Value="0.16" />
+            <Setter Property="CornerRadius" Value="9" />
+        </Style>
+        <Style Selector="Panel.chip Border.toneEdge">
+            <Setter Property="Opacity" Value="0.45" />
+            <Setter Property="CornerRadius" Value="9" />
+        </Style>
+        <!-- Low confidence: the chip's border is dashed and muted. -->
+        <Style Selector="Rectangle.chipDash">
+            <Setter Property="Stroke" Value="{DynamicResource MutedColor}" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="StrokeDashArray" Value="3,2" />
+            <Setter Property="RadiusX" Value="9" />
+            <Setter Property="RadiusY" Value="9" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Panel.chip.lowConfidence Border.toneEdge">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Button.checkLeg">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.checkLeg:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
+        </Style>
     </UserControl.Styles>
 
     <UserControl.DataTemplates>
@@ -574,7 +637,15 @@
                     </TextBox>
                     <TextBlock Text="{Binding ActiveRouteDetailMeta}"
                                FontSize="11"
-                               Opacity="0.6" />
+                               Opacity="0.6"
+                               IsVisible="{Binding !ShowCheckPanel}" />
+                    <!-- Check passage header (C2): vessel · draft · dep · arr. -->
+                    <TextBlock AutomationProperties.AutomationId="Routes.Check.HeaderMeta"
+                               Text="{Binding Check.HeaderMeta, FallbackValue={x:Null}}"
+                               FontSize="11"
+                               Opacity="0.6"
+                               TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding ShowCheckPanel}" />
 
                     <!-- Editing toolbar: undo / redo, zoom to route / reverse,
                          and the keyboard hint. -->
@@ -780,7 +851,160 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Check passage (#901, C3–C5): the verdict card, the
+                         Legs / Findings switch and the check-mode leg rows,
+                         in place of the waypoint timeline. -->
+                    <Panel IsVisible="{Binding ShowCheckPanel}">
+                    <StackPanel Margin="8,4,8,4"
+                                Spacing="6"
+                                DataContext="{Binding Check}"
+                                x:DataType="vm:PassageCheckViewModel">
+                        <TextBlock AutomationProperties.AutomationId="Routes.Check.Status"
+                                   Text="{Binding StatusText}"
+                                   IsVisible="{Binding StatusText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   FontSize="11.5"
+                                   Opacity="0.7"
+                                   TextWrapping="Wrap"
+                                   Margin="4,2" />
+                        <Panel AutomationProperties.AutomationId="Routes.Check.Verdict"
+                               AutomationProperties.Name="{Binding Title}"
+                               IsVisible="{Binding HasVerdict}"
+                               Opacity="{Binding VerdictOpacity}"
+                               Classes.success="{Binding IsSuccess}"
+                               Classes.warning="{Binding IsWarning}"
+                               Classes.destructive="{Binding IsDestructive}"
+                               Classes.neutral="{Binding IsNeutral}">
+                            <Border Classes="toneFill" CornerRadius="8" />
+                            <Border Classes="toneEdge" CornerRadius="8" />
+                            <StackPanel Margin="12,10,12,9" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Panel VerticalAlignment="Center">
+                                        <ic:FluentIcon Classes="toneInk" Icon="CheckmarkCircle" IconVariant="Filled" FontSize="16" IsVisible="{Binding IsSuccess}" />
+                                        <ic:FluentIcon Classes="toneInk" Icon="Warning" IconVariant="Filled" FontSize="16" IsVisible="{Binding IsWarning}" />
+                                        <ic:FluentIcon Classes="toneInk" Icon="ErrorCircle" IconVariant="Filled" FontSize="16" IsVisible="{Binding IsDestructive}" />
+                                        <ic:FluentIcon Classes="toneInk" Icon="Prohibited" IconVariant="Regular" FontSize="16" IsVisible="{Binding IsNeutral}" />
+                                    </Panel>
+                                    <TextBlock AutomationProperties.AutomationId="Routes.Check.VerdictTitle"
+                                               Text="{Binding Title}"
+                                               FontSize="12.5"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Classes="toneInk"
+                                               AutomationProperties.AutomationId="Routes.Check.MinUkc"
+                                               Text="{Binding MinUkcText}"
+                                               FontSize="26"
+                                               FontFamily="{DynamicResource LibraryMonoFont}"
+                                               VerticalAlignment="Bottom" />
+                                    <TextBlock Text="{Binding MinUkcCaption}"
+                                               FontSize="11"
+                                               Opacity="0.7"
+                                               Margin="0,0,0,6"
+                                               VerticalAlignment="Bottom" />
+                                </StackPanel>
+                                <TextBlock AutomationProperties.AutomationId="Routes.Check.Where"
+                                           Text="{Binding WhereText}"
+                                           IsVisible="{Binding WhereText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                           FontSize="11.5"
+                                           TextWrapping="Wrap" />
+                                <TextBlock AutomationProperties.AutomationId="Routes.Check.Footer"
+                                           Text="{Binding FooterText}"
+                                           FontSize="10.5"
+                                           Opacity="0.6"
+                                           TextWrapping="Wrap"
+                                           Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Panel>
+
+                        <!-- C4: Legs / Findings. Findings fill in with #905. -->
+                        <StackPanel Orientation="Horizontal" IsVisible="{Binding HasVerdict}">
+                            <ToggleButton Classes="segment"
+                                          AutomationProperties.AutomationId="Routes.Check.LegsTab"
+                                          Content="{x:Static loc:Strings.Check_TabLegs}"
+                                          IsChecked="{Binding ShowLegs, Mode=OneWay}"
+                                          Command="{Binding ShowLegsCommand}" />
+                            <ToggleButton Classes="segment last"
+                                          AutomationProperties.AutomationId="Routes.Check.FindingsTab"
+                                          Content="{Binding FindingsLabel}"
+                                          IsChecked="{Binding ShowFindings, Mode=OneWay}"
+                                          Command="{Binding ShowFindingsCommand}" />
+                        </StackPanel>
+                        <TextBlock AutomationProperties.AutomationId="Routes.Check.FindingsPlaceholder"
+                                   Text="{x:Static loc:Strings.Check_FindingsPlaceholder}"
+                                   IsVisible="{Binding ShowFindings}"
+                                   FontSize="11"
+                                   Opacity="0.55"
+                                   TextWrapping="Wrap"
+                                   Margin="4,2" />
+
+                        <!-- C5: one 34 px row per leg with its min-UKC chip.
+                             Hovering a row moves the cursor and ghost there. -->
+                        <ItemsControl AutomationProperties.AutomationId="Routes.Check.Legs"
+                                      ItemsSource="{Binding Legs}"
+                                      IsVisible="{Binding ShowLegs}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PassageCheckLegRowViewModel">
+                                    <Button Classes="checkLeg"
+                                            AutomationProperties.AutomationId="Routes.Check.Leg"
+                                            AutomationProperties.Name="{Binding Name}"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CheckLegRow}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckLegRow}"
+                                            PointerEntered="OnCheckLegPointerEntered"
+                                            Command="{Binding $parent[ItemsControl].((vm:PassageCheckViewModel)DataContext).HoverLegCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Grid ColumnDefinitions="22,*,Auto" ColumnSpacing="6">
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Number}"
+                                                       FontFamily="{DynamicResource LibraryMonoFont}"
+                                                       FontSize="11"
+                                                       Opacity="0.7"
+                                                       VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding TimesText}"
+                                                           FontSize="10.5"
+                                                           Opacity="0.6"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <Panel Grid.Column="2"
+                                                   Classes="chip"
+                                                   Classes.success="{Binding IsChipSuccess}"
+                                                   Classes.warning="{Binding IsChipWarning}"
+                                                   Classes.destructive="{Binding IsChipDestructive}"
+                                                   Classes.neutral="{Binding IsChipNeutral}"
+                                                   Classes.lowConfidence="{Binding IsLowConfidence}"
+                                                   AutomationProperties.AutomationId="Routes.Check.Leg.Chip"
+                                                   AutomationProperties.Name="{Binding ChipText}"
+                                                   MinWidth="52"
+                                                   Height="20"
+                                                   VerticalAlignment="Center">
+                                                <Border Classes="toneFill" />
+                                                <Border Classes="toneEdge" />
+                                                <Rectangle Classes="chipDash"
+                                                           IsVisible="{Binding IsLowConfidence}"
+                                                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckLowConfidence}" />
+                                                <TextBlock Classes="toneInk"
+                                                           Text="{Binding ChipText}"
+                                                           FontFamily="{DynamicResource LibraryMonoFont}"
+                                                           FontSize="11"
+                                                           Margin="8,0"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Panel>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                    </Panel>
+
                     <ItemsControl x:Name="TimelineItems"
+                                  IsVisible="{Binding !ShowCheckPanel}"
                                   ItemsSource="{Binding Timeline}"
                                   Margin="8,2,8,4">
                         <ItemsControl.DataTemplates>
@@ -1047,7 +1271,7 @@
                                       AutomationProperties.Name="{x:Static loc:Strings.Button_CheckPassage}"
                                       AutomationProperties.HelpText="{Binding CheckPassageTooltip}"
                                       IsEnabled="{Binding CanCheckPassage}"
-                                      IsChecked="{Binding IsCheckingPassage, Mode=OneWay}"
+                                      IsChecked="{Binding IsCheckingPassage, Mode=TwoWay}"
                                       ToolTip.Tip="{Binding CheckPassageTooltip}"
                                       ToolTip.ShowOnDisabled="True">
                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">

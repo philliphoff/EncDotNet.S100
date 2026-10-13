@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -30,6 +31,15 @@ public partial class RoutesView : UserControl
                     committable.CommitCommand.Execute(null);
             },
             handledEventsToo: true);
+    }
+
+    // C5: hovering a check-mode leg row moves the cursor and ghost to the middle of that leg.
+    private void OnCheckLegPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: PassageCheckLegRowViewModel row }
+            && DataContext is RoutesPanelViewModel { Check: { } check }
+            && check.HoverLegCommand.CanExecute(row))
+            check.HoverLegCommand.Execute(row);
     }
 
     private static void OnFieldLostFocus(object? sender, RoutedEventArgs e)

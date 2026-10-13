@@ -32,6 +32,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(RouteEditModeResult))]
 [JsonSerializable(typeof(PassageCardResult))]
 [JsonSerializable(typeof(GetPassageResult))]
+[JsonSerializable(typeof(CheckStateDto))]
 // Errors, written by their concrete type.
 [JsonSerializable(typeof(MapNotReady))]
 [JsonSerializable(typeof(WindowNotReady))]
@@ -49,6 +50,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 // Parameter types the adapters bind, beyond the shared tools'.
 [JsonSerializable(typeof(long?))]
 [JsonSerializable(typeof(float?))]
+[JsonSerializable(typeof(double?))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(JsonElement))]
 internal sealed partial class ViewerMcpJsonContext : JsonSerializerContext;

@@ -65,7 +65,8 @@ internal sealed class ViewerUiController : IViewerUiController
             Available: available,
             Selected: selected,
             DockOpen: dockOpen,
-            Showing: available && selected && dockOpen);
+            // Check passage folds the right dock to its edge tab (#901): open, but not showing.
+            Showing: available && selected && dockOpen && !(tab.Dock == TabDock.Right && _viewModel.IsRightDockFolded));
     }
 
     private PanelMutationOutcome ApplyVisibility(string panelId, bool visible)
@@ -110,6 +111,11 @@ internal sealed class ViewerUiController : IViewerUiController
     /// </summary>
     private void ShowTab(IActivityTab tab)
     {
+        if (tab.Dock == TabDock.Right && _viewModel.IsRightDockFolded)
+        {
+            _viewModel.IsRightDockFolded = false;
+        }
+
         if (IsSelected(tab) && IsDockOpen(tab.Dock))
         {
             return;
