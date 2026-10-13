@@ -1157,7 +1157,7 @@ running app:
 | `set_viewport`, `set_palette`, `set_display_category`, `set_display_mode`, `set_time_step` | Change the map view, palette, display category, display mode (such as the S-411 ice display mode, S-100 Part 9 §11.7) and time step. |
 | `set_own_ship` | Position and steer the simulated own ship (`lat`, `lon`, `cog`, `sog`, `heading`, hold and resume), whether or not it's shown. |
 | `open_dataset`, `close_dataset`, `close_all_datasets` | Load a file or exchange set the same way the **File** menu does, and report its ID, bounding box and load time; unload datasets by ID. |
-| `create_route`, `list_routes`, `get_route`, `delete_route`, `append_waypoint`, `insert_waypoint`, `move_waypoint`, `delete_waypoint`, `set_leg_attributes`, `set_route_info`, `get_passage`, `set_passage`, `undo_route_edit`, `redo_route_edit`, `set_route_edit_mode` | Build and edit routes, shown live in the **Routes** panel. Edits are undoable, with the viewer's own edits. |
+| `create_route`, `list_routes`, `get_route`, `delete_route`, `append_waypoint`, `insert_waypoint`, `move_waypoint`, `delete_waypoint`, `set_leg_attributes`, `set_route_info`, `get_passage`, `set_passage`, `undo_route_edit`, `redo_route_edit`, `set_route_edit_mode`, `select_route_item`, `set_passage_card` | Build and edit routes, shown live in the **Routes** panel. Edits are undoable, with the viewer's own edits. |
 | `list_panels`, `set_panel` | List the dock panels and their state, and show or hide a panel by ID (such as `Datasets`, `LayerStack`, `PickReport` or `Timeline`). |
 
 The [MCP server](../../docs/mcp-server.md) page has the full tool list, which

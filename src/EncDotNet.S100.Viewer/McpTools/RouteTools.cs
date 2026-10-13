@@ -185,7 +185,7 @@ internal sealed class ListRoutesTool : RouteToolBase
             foreach (var route in Routes.Routes.Routes)
                 summaries.Add(RouteProjection.Summary(route, Routes));
             return ToolResult<ListRoutesResult>.Ok(
-                new ListRoutesResult(summaries, Routes.Routes.ActiveRoute?.Id, Routes.IsEditModeActive));
+                new ListRoutesResult(summaries, Routes.Routes.ActiveRoute?.Id, Routes.IsEditModeActive, Routes.IsPassageCardExpanded));
         });
     }
 }
@@ -1153,6 +1153,45 @@ internal sealed class SelectRouteItemTool : RouteToolBase
                 Routes.SelectedWaypointIndex = request.WaypointIndex;
             }
             return Ok(route, Routes);
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// set_passage_card
+// ---------------------------------------------------------------------------
+
+/// <summary>Request for <see cref="SetPassageCardTool"/>.</summary>
+[Description("Request for set_passage_card: expand or collapse the Routes panel's Passage card.")]
+internal sealed record SetPassageCardRequest(
+    [property: Description("True to expand the Passage card, false to collapse it to its one-line summary.")] bool Expanded);
+
+/// <summary>
+/// Expands or collapses the Routes panel's Passage card, as its header does.
+/// Switching the active route sets it again: expanded for a route with
+/// passage values, collapsed otherwise. Read the state from
+/// <c>list_routes</c>'s <c>passageCardExpanded</c>.
+/// </summary>
+internal sealed class SetPassageCardTool : RouteToolBase
+{
+    /// <summary>Public tool name as exposed over MCP.</summary>
+    public const string Name = "set_passage_card";
+
+    /// <summary>Creates a new <see cref="SetPassageCardTool"/>.</summary>
+    public SetPassageCardTool(RoutesService routes, IRouteEditInvoker invoker)
+        : base(routes, invoker) { }
+
+    /// <summary>Executes the tool.</summary>
+    public Task<ToolResult<PassageCardResult>> InvokeAsync(
+        SetPassageCardRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Invoker.InvokeAsync(() =>
+        {
+            Routes.IsPassageCardExpanded = request.Expanded;
+            return ToolResult<PassageCardResult>.Ok(new PassageCardResult(Routes.IsPassageCardExpanded));
         });
     }
 }

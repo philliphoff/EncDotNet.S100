@@ -97,6 +97,15 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         _routes.SelectionChanged += (_, _) => RefreshSelection();
         _routes.EditModeChanged += (_, _) => OnEditModeChanged();
         _routes.ViewTime.Changed += (_, _) => OnViewTimeChanged();
+
+        // The card's expanded state is mirrored on RoutesService so MCP tools
+        // can read and set it (set_passage_card, list_routes).
+        Passage.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(RoutePassageCardViewModel.IsExpanded))
+                _routes.IsPassageCardExpanded = Passage.IsExpanded;
+        };
+        _routes.PassageCardChanged += (_, _) => Passage.IsExpanded = _routes.IsPassageCardExpanded;
         if (_marinerSettings is not null)
             _marinerSettings.Changed += _ => Rebuild();
         if (_timeFormat is not null)
