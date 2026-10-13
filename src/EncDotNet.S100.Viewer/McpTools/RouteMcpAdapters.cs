@@ -609,3 +609,37 @@ internal static class SelectRouteItemMcpAdapter
     internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
         => McpAdapterShared.Translate(result);
 }
+
+/// <summary>Wraps <see cref="SetPassageCardTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class SetPassageCardMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Expands or collapses the live viewer's Passage card in the Routes panel, as clicking its header does. " +
+        "Collapsed, it shows one line: a prompt to add draft and speed, or a summary of the values. Switching " +
+        "the active route sets it again (expanded when the route has passage values). Read the state from " +
+        "list_routes (passageCardExpanded). Open a leg's detail with select_route_item legIndex. " +
+        "Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SetPassageCardTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("True to expand the Passage card, false to collapse it.")] bool expanded,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetPassageCardRequest(expanded), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetPassageCardTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    /// <summary>Test seam mirroring the production translation.</summary>
+    internal static CallToolResult TranslateResult(ToolResult<PassageCardResult> result)
+        => McpAdapterShared.Translate(result);
+}
