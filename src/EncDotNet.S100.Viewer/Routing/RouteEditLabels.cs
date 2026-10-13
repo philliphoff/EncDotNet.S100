@@ -31,6 +31,9 @@ public static class RouteEditLabels
     /// <summary>A leg's geometry type or attributes changed.</summary>
     public const string EditLeg = "edit leg";
 
+    /// <summary>The route's passage values (draft, speed, departure, …) changed.</summary>
+    public const string EditPassage = "edit passage";
+
     /// <summary>The route's metadata or vessel changed.</summary>
     public const string EditRouteInfo = "edit route info";
 }

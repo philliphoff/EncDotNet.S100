@@ -204,10 +204,11 @@ public sealed class RouteEditHistory
 }
 
 /// <summary>
-/// A deep copy of a route's waypoints, legs and route-level info, captured
+/// A deep copy of a route's waypoints, legs, route-level info and passage, captured
 /// before an edit so <see cref="RouteEditHistory"/> can restore it.
 /// </summary>
 internal sealed record RouteSnapshot(
     IReadOnlyList<RouteWaypoint> Waypoints,
     IReadOnlyList<RouteLeg> Legs,
-    RouteInfo Info);
+    RouteInfo Info,
+    RoutePassage Passage);

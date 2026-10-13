@@ -72,9 +72,10 @@ internal static class GetRouteMcpAdapter
     private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
-        "Returns the full state of one route in the live viewer: identity, metadata, ordered " +
-        "waypoints, and legs with computed distance/bearing. Omit routeId to read the active route. " +
-        "Viewer-injected tool.";
+        "Returns the full state of one route in the live viewer: identity, metadata, passage values, " +
+        "ordered waypoints, and legs with computed distance/bearing. Each leg reports 'effective' passage " +
+        "values (its override, else the route's passage value) and its 'overrides'. Omit routeId to read " +
+        "the active route. Viewer-injected tool.";
 
     /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
     public static McpServerTool Create(GetRouteTool inner)
@@ -283,10 +284,13 @@ internal static class SetLegAttributesMcpAdapter
     private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
 
     private const string Description =
-        "Updates one leg of a route in the live viewer: its geometry type (loxodrome|geodesic) and/or " +
-        "navigational envelope (cross-track and channel limits, safety contour/depth, speed and draft " +
-        "limits, under-keel clearances, note). All attributes optional; supplied values overwrite. " +
-        "Omit routeId to use the active route. Viewer-injected tool — mutates live state.";
+        "Updates one leg of a route in the live viewer: its geometry type (loxodrome|geodesic), its passage " +
+        "overrides (speedKnots, draftMeters, port/starboard cross-track limits, staticUnderKeelClearanceMeters) " +
+        "and the rest of its navigational envelope (channel limits, safety contour/depth, SOG/STW limits, " +
+        "dynamic UKC, safety margin, note). All attributes optional; supplied values overwrite, omitted values " +
+        "are unchanged. An override equal to the route's passage value is not stored. List parameter names in " +
+        "'clear' to unset them; clearing an override resets the leg to inherit the passage value. Omit routeId " +
+        "to use the active route. Viewer-injected tool — mutates live state.";
 
     /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
     public static McpServerTool Create(SetLegAttributesTool inner)
@@ -296,8 +300,8 @@ internal static class SetLegAttributesMcpAdapter
             [System.ComponentModel.Description("Index of the leg to edit in [0, legCount); leg i joins waypoint i to waypoint i+1.")] int legIndex,
             [System.ComponentModel.Description("Id of the route to edit; omit to use the active route.")] string? routeId = null,
             [System.ComponentModel.Description("Leg path geometry: \"loxodrome\" (rhumb line) or \"geodesic\" (great circle).")] string? geometryType = null,
-            [System.ComponentModel.Description("Starboard cross-track distance limit in metres.")] double? starboardCrossTrackDistanceLimitMeters = null,
-            [System.ComponentModel.Description("Port cross-track distance limit in metres.")] double? portCrossTrackDistanceLimitMeters = null,
+            [System.ComponentModel.Description("Override: starboard cross-track distance limit in metres.")] double? starboardCrossTrackDistanceLimitMeters = null,
+            [System.ComponentModel.Description("Override: port cross-track distance limit in metres.")] double? portCrossTrackDistanceLimitMeters = null,
             [System.ComponentModel.Description("Starboard channel limit in metres.")] double? starboardChannelLimitMeters = null,
             [System.ComponentModel.Description("Port channel limit in metres.")] double? portChannelLimitMeters = null,
             [System.ComponentModel.Description("Safety contour for the leg in metres.")] double? safetyContourMeters = null,
@@ -306,11 +310,13 @@ internal static class SetLegAttributesMcpAdapter
             [System.ComponentModel.Description("Maximum speed over ground in knots.")] double? speedOverGroundMaxKnots = null,
             [System.ComponentModel.Description("Minimum speed through water in knots.")] double? speedThroughWaterMinKnots = null,
             [System.ComponentModel.Description("Maximum speed through water in knots.")] double? speedThroughWaterMaxKnots = null,
-            [System.ComponentModel.Description("Planned draft for the leg in metres.")] double? draftMeters = null,
-            [System.ComponentModel.Description("Static under-keel clearance in metres.")] double? staticUnderKeelClearanceMeters = null,
+            [System.ComponentModel.Description("Override: draft for the leg in metres.")] double? draftMeters = null,
+            [System.ComponentModel.Description("Override: required static under-keel clearance in metres.")] double? staticUnderKeelClearanceMeters = null,
             [System.ComponentModel.Description("Dynamic under-keel clearance in metres.")] double? dynamicUnderKeelClearanceMeters = null,
             [System.ComponentModel.Description("Safety margin in metres.")] double? safetyMarginMeters = null,
             [System.ComponentModel.Description("Free-text note for the leg.")] string? note = null,
+            [System.ComponentModel.Description("Override: planned speed over ground for the leg in knots (> 0).")] double? speedKnots = null,
+            [System.ComponentModel.Description("Names of attributes to unset, using this tool's parameter names (for example \"speedKnots\", \"draftMeters\", \"note\"). Unsetting an override resets the leg to inherit the passage value.")] string[]? clear = null,
             CancellationToken ct = default) =>
             McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
                 new SetLegAttributesRequest(
@@ -321,7 +327,7 @@ internal static class SetLegAttributesMcpAdapter
                     speedOverGroundMinKnots, speedOverGroundMaxKnots,
                     speedThroughWaterMinKnots, speedThroughWaterMaxKnots,
                     draftMeters, staticUnderKeelClearanceMeters, dynamicUnderKeelClearanceMeters,
-                    safetyMarginMeters, note),
+                    safetyMarginMeters, note, speedKnots, clear),
                 ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
@@ -378,6 +384,87 @@ internal static class SetRouteInfoMcpAdapter
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = SetRouteInfoTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    /// <summary>Test seam mirroring the production translation.</summary>
+    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
+        => McpAdapterShared.Translate(result);
+}
+
+/// <summary>Wraps <see cref="GetPassageTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class GetPassageMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Returns a route's passage values in the live viewer: draftMeters, squatMeters, speedKnots, " +
+        "departure (absent means ETAs use the view time), requiredUkcMeters, port/starboard cross-track " +
+        "limits and the vessel. Every value is optional; legs inherit them unless they override them. " +
+        "Omit routeId to read the active route. Viewer-injected tool.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(GetPassageTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route to read; omit to use the active route.")] string? routeId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new GetPassageRequest(routeId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = GetPassageTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    /// <summary>Test seam mirroring the production translation.</summary>
+    internal static CallToolResult TranslateResult(ToolResult<GetPassageResult> result)
+        => McpAdapterShared.Translate(result);
+}
+
+/// <summary>Wraps <see cref="SetPassageTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class SetPassageMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Updates a route's passage values in the live viewer: draft, squat allowance, speed (SOG), " +
+        "departure, required static UKC and cross-track limits. Legs inherit each value unless they " +
+        "override it (set_leg_attributes), so a change reaches only the inheriting legs. All values " +
+        "optional; supplied values overwrite, omitted values are unchanged, names in 'clear' are unset. " +
+        "Set the vessel with set_route_info. Returns the updated route. Omit routeId to use the active " +
+        "route. Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SetPassageTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route to edit; omit to use the active route.")] string? routeId = null,
+            [System.ComponentModel.Description("Draft in metres (>= 0).")] double? draftMeters = null,
+            [System.ComponentModel.Description("Fixed squat allowance in metres (>= 0).")] double? squatMeters = null,
+            [System.ComponentModel.Description("Planned speed over ground in knots (> 0).")] double? speedKnots = null,
+            [System.ComponentModel.Description("Planned departure (ISO-8601). Unset means ETAs use the view time.")] DateTimeOffset? departure = null,
+            [System.ComponentModel.Description("Required static under-keel clearance in metres (>= 0).")] double? requiredUkcMeters = null,
+            [System.ComponentModel.Description("Cross-track distance limit in metres for both sides (>= 0). Don't combine with portCrossTrackMeters or starboardCrossTrackMeters.")] double? crossTrackMeters = null,
+            [System.ComponentModel.Description("Port cross-track distance limit in metres (>= 0).")] double? portCrossTrackMeters = null,
+            [System.ComponentModel.Description("Starboard cross-track distance limit in metres (>= 0).")] double? starboardCrossTrackMeters = null,
+            [System.ComponentModel.Description("Names of values to unset: draftMeters, squatMeters, speedKnots, departure, requiredUkcMeters, crossTrackMeters (both sides), portCrossTrackMeters, starboardCrossTrackMeters.")] string[]? clear = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+                new SetPassageRequest(
+                    routeId, draftMeters, squatMeters, speedKnots, departure, requiredUkcMeters,
+                    crossTrackMeters, portCrossTrackMeters, starboardCrossTrackMeters, clear),
+                ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetPassageTool.Name,
             Description = Description,
             SerializerOptions = JsonOptions,
         });

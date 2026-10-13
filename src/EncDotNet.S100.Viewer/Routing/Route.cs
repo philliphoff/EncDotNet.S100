@@ -27,7 +27,7 @@ namespace EncDotNet.S100.Viewer.Routing;
 /// the underlying geographic segment is preserved.
 /// </para>
 /// </remarks>
-public sealed class Route
+public sealed partial class Route
 {
     private readonly List<RouteWaypoint> _waypoints = new();
     private readonly List<RouteLeg> _legs = new();
@@ -287,15 +287,16 @@ public sealed class Route
     /// </summary>
     public void NotifyChanged() => OnChanged();
 
-    /// <summary>Captures a deep copy of the route's waypoints, legs and info.</summary>
+    /// <summary>Captures a deep copy of the route's waypoints, legs, info and passage.</summary>
     internal RouteSnapshot CaptureSnapshot()
         => new(
             _waypoints.Select(w => w.Clone()).ToArray(),
             _legs.Select(l => l.Clone()).ToArray(),
-            Info.Clone());
+            Info.Clone(),
+            Passage.Clone());
 
     /// <summary>
-    /// Replaces the route's waypoints, legs and info with copies of
+    /// Replaces the route's waypoints, legs, info and passage with copies of
     /// <paramref name="snapshot"/>'s, raising <see cref="Changed"/> once.
     /// </summary>
     internal void RestoreSnapshot(RouteSnapshot snapshot)
@@ -305,6 +306,7 @@ public sealed class Route
         _legs.Clear();
         _legs.AddRange(snapshot.Legs.Select(l => l.Clone()));
         Info.CopyFrom(snapshot.Info);
+        Passage.CopyFrom(snapshot.Passage);
         OnChanged();
     }
 
