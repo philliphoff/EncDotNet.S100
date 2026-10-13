@@ -450,4 +450,18 @@ public class RoutesPanelViewModelTests
         Assert.True(extent.Width > 0);
         Assert.True(extent.Height > 0);
     }
+
+    [Fact]
+    public void Selecting_a_leg_row_selects_the_leg_and_highlights_only_it()
+    {
+        var (svc, vm) = Create();
+        TwoPointRoute(svc);
+        svc.SelectedWaypointIndex = 0;
+
+        vm.SelectLegCommand.Execute(FirstLegRow(vm));
+
+        Assert.Equal(0, svc.SelectedLegIndex);
+        Assert.True(FirstLegRow(vm).IsSelected);
+        Assert.False(WaypointRow(vm, 0).IsSelected);
+    }
 }

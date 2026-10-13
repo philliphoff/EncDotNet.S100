@@ -91,4 +91,42 @@ public class RoutesServiceTests
 
         Assert.Null(svc.SelectedWaypointIndex);
     }
+
+    [Fact]
+    public void Selecting_a_leg_clears_the_waypoint_and_the_other_way_round()
+    {
+        var svc = new RoutesService();
+        var route = svc.Routes.CreateRoute("R");
+        route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 0));
+        route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 1));
+        route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 2));
+        var changes = 0;
+        svc.SelectionChanged += (_, _) => changes++;
+
+        svc.SelectedWaypointIndex = 1;
+        svc.SelectedLegIndex = 1;
+        Assert.Null(svc.SelectedWaypointIndex);
+        Assert.Equal(1, svc.SelectedLegIndex);
+
+        svc.SelectedWaypointIndex = 2;
+        Assert.Null(svc.SelectedLegIndex);
+        Assert.Equal(3, changes);
+    }
+
+    [Fact]
+    public void The_selected_leg_is_cleared_when_it_no_longer_exists()
+    {
+        var svc = new RoutesService();
+        var route = svc.Routes.CreateRoute("R");
+        route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 0));
+        route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 1));
+        route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(0, 2));
+
+        svc.SelectedLegIndex = 5;
+        Assert.Null(svc.SelectedLegIndex);
+
+        svc.SelectedLegIndex = 1;
+        route.RemoveWaypoint(2);
+        Assert.Null(svc.SelectedLegIndex);
+    }
 }

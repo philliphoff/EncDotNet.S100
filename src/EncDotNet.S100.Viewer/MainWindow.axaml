@@ -559,6 +559,35 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                 </Panel>
+                <!-- Route editing chip (#896, handoff A6), below the scale bar and
+                     clear of the map buttons so it never covers them. -->
+                <Border HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Margin="12,44,64,0"
+                        IsHitTestVisible="False"
+                        AutomationProperties.AutomationId="Map.RouteEditChip"
+                        IsVisible="{Binding IsRouteEditModeActive}"
+                        Background="{DynamicResource MapOverlaySurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="8,4">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Width="7" Height="7"
+                                 VerticalAlignment="Center"
+                                 Fill="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="{x:Static loc:Strings.Map_RouteEditChipTitle}"
+                                   FontSize="11.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource ForegroundColor}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{x:Static loc:Strings.Map_RouteEditChipHint}"
+                                   FontSize="11.5"
+                                   Foreground="{DynamicResource MutedColor}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
                 <StackPanel Orientation="Vertical"
                             Spacing="2"
                             HorizontalAlignment="Right"

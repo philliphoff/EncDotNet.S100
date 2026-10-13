@@ -1303,7 +1303,7 @@
 
   <!-- Routing -->
   <data name="Route_LegLabel" xml:space="preserve">
-    <value>{0:0.0} NM @ {1:000}°T</value>
+    <value>{0:0.0} NM · {1:000}°</value>
   </data>
   <data name="Tooltip_RouteEditMode" xml:space="preserve">
     <value>Edit route ({0}): click to add waypoints, drag to move</value>
@@ -1439,6 +1439,15 @@
   </data>
   <data name="Label_WaypointPosition" xml:space="preserve">
     <value>Waypoint position</value>
+  </data>
+  <data name="Map_RouteEditChipTitle" xml:space="preserve">
+    <value>Editing route</value>
+  </data>
+  <data name="Map_RouteEditChipHint" xml:space="preserve">
+    <value>Click water to add · drag to move · Del removes · Esc done</value>
+  </data>
+  <data name="Tooltip_SelectLeg" xml:space="preserve">
+    <value>Select this leg</value>
   </data>
   <data name="Tooltip_EditRouteName" xml:space="preserve">
     <value>Rename this route</value>
