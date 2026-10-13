@@ -36,7 +36,7 @@ public sealed class S100ExchangeSet : IDisposable, IAsyncDisposable
         _ownsSource = ownsSource;
         Catalogue = catalogue;
         SupportFiles = BuildSupportFileMap(catalogue);
-        Datasets = S101ExchangeSetUpdatePlan.Build(catalogue.DatasetDiscoveryMetadata)
+        Datasets = S101ExchangeSetUpdatePlan.Build(catalogue.CurrentDatasets)
             .Select(item => new S100ExchangeSetDataset(this, item))
             .ToArray();
     }

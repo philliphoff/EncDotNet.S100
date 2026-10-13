@@ -116,6 +116,22 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         TrustAnchorOptions trustAnchors,
         CancellationToken cancellationToken)
     {
+        // A withdrawal names a cancelled dataset: nothing loads it, its file is
+        // usually absent, and its signature covers the cancelled content, which
+        // may differ from a current record's file of the same name (#919).
+        if (resource.IsWithdrawal)
+        {
+            const string detail = "The record cancels the dataset, so it is not verified.";
+            return new FileVerificationResult
+            {
+                FileName = resource.RelativePath,
+                Outcome = VerificationOutcome.Withdrawn,
+                SignatureResults = UnavailableSignatureResults(resource.Signatures, VerificationOutcome.Withdrawn, detail),
+                ChecksumOutcome = VerificationOutcome.Withdrawn,
+                Detail = detail,
+            };
+        }
+
         // Hash the file content once, regardless of whether it is signed, so
         // that an unsigned exchange set can still be integrity-checked. The
         // same SHA-256 digest feeds both the checksum dimension and (when a
@@ -885,6 +901,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
             {
                 ResourceId = resourceId++,
                 RelativePath = metadata.RelativePath,
+                IsWithdrawal = metadata.IsWithdrawal,
                 DataProtection = metadata.DataProtection,
                 CompressionFlag = metadata.CompressionFlag,
                 Algorithm = metadata.DigitalSignatureAlgorithm,
@@ -973,6 +990,8 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         public required int ResourceId { get; init; }
 
         public required string RelativePath { get; init; }
+
+        public bool IsWithdrawal { get; init; }
 
         public bool DataProtection { get; init; }
 

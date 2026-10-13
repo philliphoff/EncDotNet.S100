@@ -1154,6 +1154,9 @@
   <data name="Status_ExchangeSetCatalogNotFound" xml:space="preserve">
     <value>No CATALOG.XML found in {0}.</value>
   </data>
+  <data name="Status_ExchangeSetOnlyWithdrawals" xml:space="preserve">
+    <value>Every dataset in {0} is cancelled, so there is nothing to show.</value>
+  </data>
   <data name="Status_S57ExchangeSetNoCells" xml:space="preserve">
     <value>No renderable cells found in the S-57 exchange set {0}.</value>
   </data>

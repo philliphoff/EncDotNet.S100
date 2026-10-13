@@ -486,6 +486,7 @@ internal static class Strings
     public static string Status_ExchangeSetRegistered => Get(nameof(Status_ExchangeSetRegistered));
     public static string Status_ExchangeSetFailed => Get(nameof(Status_ExchangeSetFailed));
     public static string Status_ExchangeSetCatalogNotFound => Get(nameof(Status_ExchangeSetCatalogNotFound));
+    public static string Status_ExchangeSetOnlyWithdrawals => Get(nameof(Status_ExchangeSetOnlyWithdrawals));
     public static string Status_S57ExchangeSetNoCells => Get(nameof(Status_S57ExchangeSetNoCells));
     public static string Status_LooseCellFolderNoCells => Get(nameof(Status_LooseCellFolderNoCells));
     public static string Status_ExchangeSetUnsupportedSpec => Get(nameof(Status_ExchangeSetUnsupportedSpec));

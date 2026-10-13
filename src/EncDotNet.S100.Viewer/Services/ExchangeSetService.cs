@@ -172,7 +172,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 };
             }
 
-            var datasets = exchangeSet.Catalogue.DatasetDiscoveryMetadata;
+            var datasets = exchangeSet.Catalogue.CurrentDatasets;
             activity?.SetTag("s100.exchangeset.dataset.count", datasets.Count);
             activity?.SetTag(
                 "s100.exchangeset.producer",
@@ -180,6 +180,21 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             activity?.SetTag(
                 "s100.exchangeset.product",
                 exchangeSet.Catalogue.ProductSpecification?.ProductIdentifier);
+
+            if (datasets.Count == 0 && exchangeSet.Catalogue.DatasetDiscoveryMetadata.Count > 0)
+            {
+                // Every record withdraws a cancelled dataset (e.g. a SECOM
+                // navigational-warning set with no warnings in force).
+                var withdrawnMsg = string.Format(Strings.Status_ExchangeSetOnlyWithdrawals, folderOrZipPath);
+                Terminal(notification, NotificationSeverity.Info, Strings.Toast_Info, withdrawnMsg);
+                exchangeSet.Dispose();
+                exchangeSet = null;
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrZipPath,
+                    FailureMessage = withdrawnMsg,
+                };
+            }
 
             if (datasets.Count == 0)
             {

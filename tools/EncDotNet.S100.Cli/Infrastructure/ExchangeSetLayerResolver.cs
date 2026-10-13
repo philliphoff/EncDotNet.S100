@@ -95,7 +95,7 @@ internal sealed class ExchangeSetLayerResolution : IDisposable
 
             var layers = new List<ResolvedExchangeSetLayer>();
             var warnings = new List<string>();
-            var plan = S101ExchangeSetUpdatePlan.Build(catalogue.DatasetDiscoveryMetadata);
+            var plan = S101ExchangeSetUpdatePlan.Build(catalogue.CurrentDatasets);
 
             foreach (var item in plan)
             {

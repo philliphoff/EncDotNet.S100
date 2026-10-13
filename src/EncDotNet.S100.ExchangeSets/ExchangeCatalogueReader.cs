@@ -23,6 +23,7 @@ public static class ExchangeCatalogueReader
     private static readonly XNamespace Gco = "http://standards.iso.org/iso/19115/-3/gco/1.0";
     private static readonly XNamespace Cit = "http://standards.iso.org/iso/19115/-3/cit/2.0";
     private static readonly XNamespace Mri = "http://standards.iso.org/iso/19115/-3/mri/1.0";
+    private static readonly XNamespace Xsi = "http://www.w3.org/2001/XMLSchema-instance";
     /// <summary>
     /// S-100 security-schema namespaces accepted for backwards-compatible
     /// exchange catalogue parsing.
@@ -662,15 +663,16 @@ public static class ExchangeCatalogueReader
         XElement element,
         SignatureDataStatus? inferredDataStatus)
     {
-        var kind = element.Name.LocalName switch
+        var typeName = SignatureTypeName(element);
+        var kind = typeName switch
         {
             "S100_SE_DigitalSignature" => DigitalSignatureKind.Legacy,
             "S100_SE_SignatureOnData" => DigitalSignatureKind.SignatureOnData,
             "S100_SE_SignatureOnSignature" => DigitalSignatureKind.SignatureOnSignature,
             _ => throw new XmlException(
-                $"Unsupported digital signature element '{element.Name.LocalName}'."),
+                $"Unsupported digital signature element '{typeName}'."),
         };
-        ValidateSignatureAttributes(element, kind);
+        ValidateSignatureAttributes(element, typeName, kind);
 
         SignatureDataStatus? dataStatus = kind == DigitalSignatureKind.SignatureOnData
             ? element.Attribute("dataStatus") is null
@@ -692,22 +694,50 @@ public static class ExchangeCatalogueReader
         };
     }
 
+    /// <summary>
+    /// The signature's type name: the security-namespace type an
+    /// <c>xsi:type</c> attribute names, otherwise the element's own name.
+    /// </summary>
+    /// <remarks>
+    /// Some producers (e.g. AMSA's SECOM service) write the base element with
+    /// a derived type, <c>&lt;S100_SE_DigitalSignature
+    /// xsi:type="S100_SE_SignatureOnData"&gt;</c>, as XML Schema allows.
+    /// </remarks>
+    private static string SignatureTypeName(XElement element)
+    {
+        if ((string?)element.Attribute(Xsi + "type") is not { } qualified)
+            return element.Name.LocalName;
+
+        var colon = qualified.IndexOf(':', StringComparison.Ordinal);
+        var prefix = colon < 0 ? string.Empty : qualified[..colon];
+        var localName = qualified[(colon + 1)..].Trim();
+        var typeNamespace = element.GetNamespaceOfPrefix(prefix) ?? (colon < 0 ? element.GetDefaultNamespace() : null);
+        if (typeNamespace is null || !IsSecurityNamespace(typeNamespace))
+        {
+            throw new XmlException(
+                $"Digital signature '{element.Name.LocalName}' declares an unsupported type '{qualified}'.");
+        }
+
+        return localName;
+    }
+
     private static void ValidateSignatureAttributes(
         XElement element,
+        string typeName,
         DigitalSignatureKind kind)
     {
         if (kind != DigitalSignatureKind.SignatureOnData &&
             element.Attribute("dataStatus") is not null)
         {
             throw new XmlException(
-                $"Digital signature '{element.Name.LocalName}' cannot declare dataStatus.");
+                $"Digital signature '{typeName}' cannot declare dataStatus.");
         }
 
         if (kind != DigitalSignatureKind.SignatureOnSignature &&
             element.Attribute("signatureRef") is not null)
         {
             throw new XmlException(
-                $"Digital signature '{element.Name.LocalName}' cannot declare signatureRef.");
+                $"Digital signature '{typeName}' cannot declare signatureRef.");
         }
     }
 

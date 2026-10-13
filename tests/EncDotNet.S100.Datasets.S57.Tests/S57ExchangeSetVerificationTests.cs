@@ -26,9 +26,10 @@ public sealed class S57ExchangeSetVerificationTests
     public void MapOutcome_CoversEntireS100Enum()
     {
         // Every S-100 outcome must be reachable from an S-57 outcome of the same
-        // name, otherwise the two enumerations have silently diverged.
+        // name, otherwise the two enumerations have silently diverged. Withdrawn
+        // is S-100 only: an S-57 catalogue has no cancellation records (#919).
         var s57Names = Enum.GetNames<S57Outcome>().ToHashSet();
-        foreach (string name in Enum.GetNames<VerificationOutcome>())
+        foreach (string name in Enum.GetNames<VerificationOutcome>().Except([nameof(VerificationOutcome.Withdrawn)]))
             Assert.Contains(name, s57Names);
     }
 

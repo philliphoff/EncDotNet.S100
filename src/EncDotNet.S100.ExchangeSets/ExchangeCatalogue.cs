@@ -66,6 +66,18 @@ public sealed class ExchangeCatalogue
     public IReadOnlyList<DatasetDiscoveryMetadata> DatasetDiscoveryMetadata { get; init; } = [];
 
     /// <summary>
+    /// The datasets the exchange set delivers, in catalogue order: every record
+    /// in <see cref="DatasetDiscoveryMetadata"/> except withdrawals
+    /// (<see cref="ExchangeSets.DatasetDiscoveryMetadata.IsWithdrawal"/>), which
+    /// name a cancelled dataset and usually ship no file. Use it to choose what
+    /// to load or list.
+    /// </summary>
+    public IReadOnlyList<DatasetDiscoveryMetadata> CurrentDatasets =>
+        DatasetDiscoveryMetadata.Any(d => d.IsWithdrawal)
+            ? [.. DatasetDiscoveryMetadata.Where(d => !d.IsWithdrawal)]
+            : DatasetDiscoveryMetadata;
+
+    /// <summary>
     /// Discovery metadata for each support file in the exchange set, in catalogue
     /// order; empty when there are none. Both typed
     /// <c>*_SupportFileDiscoveryMetadata</c> children and inline
