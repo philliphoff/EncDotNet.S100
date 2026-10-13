@@ -474,3 +474,102 @@ internal static class SetPassageMcpAdapter
     internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
         => McpAdapterShared.Translate(result);
 }
+
+/// <summary>Wraps <see cref="UndoRouteEditTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class UndoRouteEditMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Undoes the most recent edit to a route in the live viewer: the same per-route history as " +
+        "Ctrl+Z in the viewer, recording edits made there and through the route tools alike. Omit " +
+        "routeId to use the active route. Returns the route's full updated state; canUndo / undoLabel " +
+        "on it say what can be undone next. Errors with route_history_empty when there is nothing to " +
+        "undo. Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(UndoRouteEditTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route; omit to use the active route.")] string? routeId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new RouteHistoryRequest(routeId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = UndoRouteEditTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    /// <summary>Test seam mirroring the production translation.</summary>
+    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
+        => McpAdapterShared.Translate(result);
+}
+
+/// <summary>Wraps <see cref="RedoRouteEditTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class RedoRouteEditMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Redoes the most recently undone edit to a route in the live viewer (Ctrl+Shift+Z in the " +
+        "viewer). Omit routeId to use the active route. Returns the route's full updated state. Errors " +
+        "with route_history_empty when there is nothing to redo; any new edit clears the redo history. " +
+        "Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(RedoRouteEditTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route; omit to use the active route.")] string? routeId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new RouteHistoryRequest(routeId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = RedoRouteEditTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    /// <summary>Test seam mirroring the production translation.</summary>
+    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
+        => McpAdapterShared.Translate(result);
+}
+
+/// <summary>Wraps <see cref="SetRouteEditModeTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class SetRouteEditModeMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Turns the live viewer's interactive route editor on or off, as the Routes panel's Edit toggle " +
+        "and Ctrl+E do. While it is on, map clicks add waypoints to the active route. Read the current " +
+        "mode from list_routes (editMode). Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SetRouteEditModeTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("True to turn route edit mode on; false to turn it off.")] bool enabled,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetRouteEditModeRequest(enabled), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetRouteEditModeTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    /// <summary>Test seam mirroring the production translation.</summary>
+    internal static CallToolResult TranslateResult(ToolResult<RouteEditModeResult> result)
+        => McpAdapterShared.Translate(result);
+}

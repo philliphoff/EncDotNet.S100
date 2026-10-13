@@ -43,6 +43,56 @@ internal sealed class RoutesService
         }
     }
 
+    private bool _isEditModeActive;
+
+    /// <summary>
+    /// Whether the interactive route editor is on. The single source of truth
+    /// for edit mode: the map's route tool, the Routes panel's Edit toggle,
+    /// the Ctrl+E (⌘E) shortcut and the MCP <c>set_route_edit_mode</c> tool all
+    /// read and set it, and the host activates or deactivates the route edit
+    /// tool to match.
+    /// </summary>
+    public bool IsEditModeActive
+    {
+        get => _isEditModeActive;
+        set
+        {
+            if (_isEditModeActive == value)
+                return;
+            _isEditModeActive = value;
+            EditModeChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raised when <see cref="IsEditModeActive"/> changes.</summary>
+    public event EventHandler? EditModeChanged;
+
+    /// <summary>
+    /// Undoes the most recent edit to the active route.
+    /// </summary>
+    /// <returns><c>true</c> when an edit was undone.</returns>
+    public bool UndoActiveRoute() => Routes.ActiveRoute?.History.Undo() ?? false;
+
+    /// <summary>
+    /// Redoes the most recently undone edit to the active route.
+    /// </summary>
+    /// <returns><c>true</c> when an edit was redone.</returns>
+    public bool RedoActiveRoute() => Routes.ActiveRoute?.History.Redo() ?? false;
+
+    /// <summary>
+    /// Deletes the selected waypoint of the active route as one undoable edit
+    /// and clears the selection.
+    /// </summary>
+    /// <returns><c>true</c> when a waypoint was deleted.</returns>
+    public bool DeleteSelectedWaypoint()
+    {
+        if (Routes.ActiveRoute is not { } route || SelectedWaypointIndex is not { } index)
+            return false;
+        route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(index));
+        SelectedWaypointIndex = null;
+        return true;
+    }
+
     /// <summary>
     /// Raised when the collection changes (routes added/removed, active
     /// route changed, or any member route edited) or when the selection

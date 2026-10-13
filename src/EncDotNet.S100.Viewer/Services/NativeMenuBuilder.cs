@@ -106,9 +106,23 @@ internal sealed class NativeMenuBuilder
             checkedSelector: () => _viewModel.IsMeasureModeActive,
             gesture: new KeyGesture(Key.M, KeyModifiers.Meta));
 
+        // ⌘E is also handled by Tools.RouteEditorKeys; the menu's copy of the
+        // shortcut must not fire while a text field has focus either.
+        var routeEditModeItem = BuildToggleItem(
+            Strings.Menu_RouteEditMode,
+            initiallyChecked: _viewModel.IsRouteEditModeActive,
+            execute: () =>
+            {
+                if (!Tools.RouteEditorKeys.IsTextInputFocused(window))
+                    _viewModel.ToggleRouteEditModeCommand.Execute(null);
+            },
+            propertyName: nameof(MainViewModel.IsRouteEditModeActive),
+            checkedSelector: () => _viewModel.IsRouteEditModeActive,
+            gesture: new KeyGesture(Key.E, KeyModifiers.Meta));
+
         var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
         {
-            Menu = new NativeMenu { sideBarItem, statusBarItem, timelineItem, pickPanelItem, pickModeItem, measureModeItem },
+            Menu = new NativeMenu { sideBarItem, statusBarItem, timelineItem, pickPanelItem, pickModeItem, measureModeItem, routeEditModeItem },
         };
 
         var viewMenu = new NativeMenuItem(Strings.Menu_View)

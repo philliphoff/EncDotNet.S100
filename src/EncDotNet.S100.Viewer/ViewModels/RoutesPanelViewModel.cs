@@ -6,6 +6,8 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Services;
+using Mapsui;
+using Mapsui.Projections;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -14,19 +16,29 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// <see cref="RouteCollection"/> owned by <see cref="RoutesService"/>: the
 /// list of routes (with add / rename / reverse / remove / select), and the
 /// active route's waypoint-and-leg timeline (numbered waypoints interleaved
-/// with the legs that join them, with insert / delete / leg-geometry toggle).
-/// All mutations flow back into the shared <see cref="RoutesService"/>, so the
-/// map overlay and the <c>RouteEditTool</c> stay in lock-step with the panel.
+/// with the legs that join them, with insert / delete / leg-geometry toggle,
+/// and editable waypoint names and positions). The toolbar under the route
+/// name has undo / redo / zoom to route / reverse, and the footer has the Edit
+/// and Check passage toggles. All mutations flow back into the shared
+/// <see cref="RoutesService"/> through the route's
+/// <see cref="Route.History"/>, so the map overlay and the
+/// <c>RouteEditTool</c> stay in lock-step with the panel and every edit can be
+/// undone.
 /// </summary>
 internal sealed class RoutesPanelViewModel : ViewModelBase
 {
+    /// <summary>Half-size of the box zoomed to for a one-waypoint route, in metres.</summary>
+    private const double SinglePointZoomHalfMetres = 2000.0;
+
     private readonly RoutesService _routes;
+    private readonly ICapabilityAccessor<IMapViewportController>? _viewport;
     private bool _suppressSync;
 
-    public RoutesPanelViewModel(RoutesService routes)
+    public RoutesPanelViewModel(RoutesService routes, ICapabilityAccessor<IMapViewportController>? viewport = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
         _routes = routes;
+        _viewport = viewport;
 
         Routes = new ObservableCollection<RouteRowViewModel>();
         Timeline = new ObservableCollection<RouteTimelineRowViewModel>();
@@ -34,12 +46,16 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         AddRouteCommand = new RelayCommand(AddRoute);
         RemoveRouteCommand = new RelayCommand<RouteRowViewModel>(RemoveRoute);
         RenameRouteCommand = new RelayCommand<RouteRowViewModel>(RenameRoute);
-        ReverseRouteCommand = new RelayCommand<RouteRowViewModel>(ReverseRoute);
+        ReverseRouteCommand = new RelayCommand<RouteRowViewModel>(row => Reverse(row?.Route));
 
-        ReverseActiveRouteCommand = new RelayCommand(ReverseActiveRoute, () => HasActiveRoute);
-        InsertAfterSelectedCommand = new RelayCommand(
-            InsertAfterSelected,
-            () => _routes.SelectedWaypointIndex is not null);
+        ReverseActiveRouteCommand = new RelayCommand(
+            () => Reverse(_routes.Routes.ActiveRoute),
+            () => _routes.Routes.ActiveRoute is { Waypoints.Count: >= 2 });
+        UndoCommand = new RelayCommand(() => _routes.UndoActiveRoute(), () => CanUndo);
+        RedoCommand = new RelayCommand(() => _routes.RedoActiveRoute(), () => CanRedo);
+        ZoomToRouteCommand = new RelayCommand(
+            ZoomToActiveRoute,
+            () => _routes.Routes.ActiveRoute is { Waypoints.Count: > 0 });
 
         BeginRenameCommand = new RelayCommand(BeginRename, () => HasActiveRoute);
         CommitRenameCommand = new RelayCommand(CommitRename);
@@ -51,10 +67,13 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         ToggleLegGeometryAtCommand = new RelayCommand<RouteLegRowViewModel>(ToggleLegGeometryAt);
 
         DeleteWaypointCommand = new RelayCommand(
-            DeleteSelectedWaypoint,
+            () => _routes.DeleteSelectedWaypoint(),
             () => _routes.SelectedWaypointIndex is not null);
 
-        _routes.Changed += (_, _) => Rebuild();
+        _routes.Routes.Changed += (_, _) => Rebuild();
+        _routes.Routes.HistoryChanged += (_, _) => RefreshHistory();
+        _routes.SelectionChanged += (_, _) => RefreshSelection();
+        _routes.EditModeChanged += (_, _) => OnEditModeChanged();
         Rebuild();
     }
 
@@ -98,6 +117,56 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     /// <summary>Placeholder shown when routes exist but none is active.</summary>
     public string NoActiveRouteText => Strings.Routes_NoActiveRoute;
 
+    /// <summary>
+    /// Whether the route editor is on. Bound two-way to the footer's Edit
+    /// toggle; turning it off is "done": it commits an open rename and leaves
+    /// edit mode.
+    /// </summary>
+    public bool IsEditing
+    {
+        get => _routes.IsEditModeActive;
+        set
+        {
+            if (!value)
+                CommitRename();
+            _routes.IsEditModeActive = value;
+        }
+    }
+
+    /// <summary>
+    /// Whether Check passage can be turned on. Always <c>false</c> in this
+    /// release: checking needs a draft, which a later slice adds (#898, #901).
+    /// </summary>
+    public bool CanCheckPassage => false;
+
+    /// <summary>Whether Check passage is on. Always <c>false</c> until it can be enabled.</summary>
+    public bool IsCheckingPassage => false;
+
+    /// <summary>Tooltip on the Check passage toggle.</summary>
+    public string CheckPassageTooltip => Strings.Tooltip_CheckPassageNoDraft;
+
+    /// <summary>The toolbar hint, e.g. "Ctrl+E edit · Esc done".</summary>
+    public string EditHint => string.Format(
+        CultureInfo.CurrentCulture, Strings.Routes_EditHintFormat, ShortcutText.Command("E"));
+
+    /// <summary>Tooltip on the footer's Edit toggle, naming its shortcut.</summary>
+    public string EditToggleTooltip => string.Format(
+        CultureInfo.CurrentCulture, Strings.Tooltip_EditRouteToggle, ShortcutText.Command("E"));
+
+    /// <summary>Tooltip on the Undo button, naming its shortcut.</summary>
+    public string UndoTooltip => string.Format(
+        CultureInfo.CurrentCulture, Strings.Tooltip_UndoRouteEdit, ShortcutText.Command("Z"));
+
+    /// <summary>Tooltip on the Redo button, naming its shortcut.</summary>
+    public string RedoTooltip => string.Format(
+        CultureInfo.CurrentCulture, Strings.Tooltip_RedoRouteEdit, ShortcutText.Command("Z", shift: true));
+
+    /// <summary>True when the active route has an edit to undo.</summary>
+    public bool CanUndo => _routes.Routes.ActiveRoute?.History.CanUndo ?? false;
+
+    /// <summary>True when the active route has an edit to redo.</summary>
+    public bool CanRedo => _routes.Routes.ActiveRoute?.History.CanRedo ?? false;
+
     private string? _activeRouteName;
     /// <summary>Display name of the active route (null when none).</summary>
     public string? ActiveRouteName
@@ -138,7 +207,9 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     public ICommand RenameRouteCommand { get; }
     public ICommand ReverseRouteCommand { get; }
     public ICommand ReverseActiveRouteCommand { get; }
-    public ICommand InsertAfterSelectedCommand { get; }
+    public ICommand UndoCommand { get; }
+    public ICommand RedoCommand { get; }
+    public ICommand ZoomToRouteCommand { get; }
     public ICommand BeginRenameCommand { get; }
     public ICommand CommitRenameCommand { get; }
     public ICommand CancelRenameCommand { get; }
@@ -173,14 +244,49 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         }
     }
 
-    private void ReverseRoute(RouteRowViewModel? row)
+    private static void Reverse(Route? route)
+        => route?.History.Execute(RouteEditLabels.Reverse, route.Reverse);
+
+    private void ZoomToActiveRoute()
     {
-        row?.Route.Reverse();
+        if (_viewport?.Current is not { } viewport ||
+            _routes.Routes.ActiveRoute is not { Waypoints.Count: > 0 } route)
+        {
+            return;
+        }
+
+        if (ResolveZoomExtent(route) is { } extent)
+            viewport.ZoomToExtent(extent);
     }
 
-    private void ReverseActiveRoute()
+    /// <summary>
+    /// The EPSG:3857 extent <see cref="ZoomToRouteCommand"/> zooms to: the
+    /// route's waypoints, or a small box around a single waypoint.
+    /// </summary>
+    internal static MRect? ResolveZoomExtent(Route route)
     {
-        _routes.Routes.ActiveRoute?.Reverse();
+        if (route.Waypoints.Count == 0)
+            return null;
+
+        double minX = double.MaxValue, minY = double.MaxValue;
+        double maxX = double.MinValue, maxY = double.MinValue;
+        foreach (var waypoint in route.Waypoints)
+        {
+            var (x, y) = SphericalMercator.FromLonLat(waypoint.Position.Longitude, waypoint.Position.Latitude);
+            minX = Math.Min(minX, x);
+            minY = Math.Min(minY, y);
+            maxX = Math.Max(maxX, x);
+            maxY = Math.Max(maxY, y);
+        }
+
+        if (maxX - minX < 1.0 && maxY - minY < 1.0)
+        {
+            var (cx, cy) = ((minX + maxX) / 2.0, (minY + maxY) / 2.0);
+            return new MRect(
+                cx - SinglePointZoomHalfMetres, cy - SinglePointZoomHalfMetres,
+                cx + SinglePointZoomHalfMetres, cy + SinglePointZoomHalfMetres);
+        }
+        return new MRect(minX, minY, maxX, maxY);
     }
 
     private void BeginRename()
@@ -196,8 +302,11 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         if (!IsRenamingActiveRoute)
             return;
         IsRenamingActiveRoute = false;
-        if (_routes.Routes.ActiveRoute is { } route)
-            route.Name = string.IsNullOrWhiteSpace(RenameText) ? route.Name : RenameText;
+        if (_routes.Routes.ActiveRoute is { } route && !string.IsNullOrWhiteSpace(RenameText))
+        {
+            var name = RenameText;
+            route.History.Execute(RouteEditLabels.Rename, () => route.Name = name);
+        }
     }
 
     private void CancelRename()
@@ -210,12 +319,6 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         if (row is null)
             return;
         _routes.SelectedWaypointIndex = row.Index;
-    }
-
-    private void InsertAfterSelected()
-    {
-        if (_routes.SelectedWaypointIndex is { } index)
-            InsertAfter(index);
     }
 
     private void InsertWaypointAfter(RouteWaypointRowViewModel? row)
@@ -260,28 +363,17 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
             }
         }
 
-        route.InsertWaypoint(index + 1, position);
+        route.History.Execute(RouteEditLabels.InsertWaypoint, () => route.InsertWaypoint(index + 1, position));
         _routes.SelectedWaypointIndex = index + 1;
-    }
-
-    private void DeleteSelectedWaypoint()
-    {
-        if (_routes.SelectedWaypointIndex is { } index)
-            DeleteWaypointIndex(index);
     }
 
     private void DeleteWaypointAt(RouteWaypointRowViewModel? row)
     {
-        if (row is not null)
-            DeleteWaypointIndex(row.Index);
-    }
-
-    private void DeleteWaypointIndex(int index)
-    {
-        if (_routes.Routes.ActiveRoute is { } route &&
-            index >= 0 && index < route.Waypoints.Count)
+        if (row is not null &&
+            _routes.Routes.ActiveRoute is { } route &&
+            row.Index >= 0 && row.Index < route.Waypoints.Count)
         {
-            route.RemoveWaypoint(index);
+            route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(row.Index));
             _routes.SelectedWaypointIndex = null;
         }
     }
@@ -296,10 +388,77 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         }
 
         var leg = route.Legs[row.LegIndex];
-        leg.GeometryType = leg.GeometryType == RouteLegGeometryType.Geodesic
-            ? RouteLegGeometryType.Loxodrome
-            : RouteLegGeometryType.Geodesic;
-        route.NotifyChanged();
+        route.History.Execute(RouteEditLabels.EditLeg, () =>
+        {
+            leg.GeometryType = leg.GeometryType == RouteLegGeometryType.Geodesic
+                ? RouteLegGeometryType.Loxodrome
+                : RouteLegGeometryType.Geodesic;
+            route.NotifyChanged();
+        });
+    }
+
+    /// <summary>
+    /// Renames the waypoint at <paramref name="index"/>; an empty or blank
+    /// name clears it so the row falls back to "Waypoint N".
+    /// </summary>
+    internal void CommitWaypointName(int index, string? text)
+    {
+        if (_routes.Routes.ActiveRoute is not { } route || index < 0 || index >= route.Waypoints.Count)
+            return;
+
+        var waypoint = route.Waypoints[index];
+        var name = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+        if (name == waypoint.Name)
+            return;
+        route.History.Execute(RouteEditLabels.EditWaypoint, () =>
+        {
+            waypoint.Name = name;
+            route.NotifyChanged();
+        });
+    }
+
+    /// <summary>
+    /// Moves the waypoint at <paramref name="index"/> to the position typed or
+    /// pasted as <paramref name="text"/>, in the app's degrees-minutes format
+    /// or any form <see cref="LatLonFormatter.TryParse"/> accepts.
+    /// </summary>
+    /// <returns><c>false</c>, leaving the waypoint where it is, when the text
+    /// is not a valid position.</returns>
+    internal bool CommitWaypointPosition(int index, string? text)
+    {
+        if (!LatLonFormatter.TryParse(text, out var latitude, out var longitude))
+            return false;
+        if (_routes.Routes.ActiveRoute is not { } route || index < 0 || index >= route.Waypoints.Count)
+            return true;
+
+        var position = new GeoPosition(latitude, longitude);
+        route.History.Execute(RouteEditLabels.MoveWaypoint, () => route.MoveWaypoint(index, position));
+        return true;
+    }
+
+    private void OnEditModeChanged()
+    {
+        if (!_routes.IsEditModeActive)
+            CommitRename();
+        OnPropertyChanged(nameof(IsEditing));
+    }
+
+    private void RefreshHistory()
+    {
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+        ((RelayCommand)UndoCommand).NotifyCanExecuteChanged();
+        ((RelayCommand)RedoCommand).NotifyCanExecuteChanged();
+    }
+
+    private void RefreshSelection()
+    {
+        // Selection changes only move the highlight: rebuilding the rows would
+        // drop the focus of a waypoint name or position being typed.
+        var selected = _routes.SelectedWaypointIndex;
+        foreach (var row in Timeline.OfType<RouteWaypointRowViewModel>())
+            row.IsSelected = row.Index == selected;
+        ((RelayCommand)DeleteWaypointCommand).NotifyCanExecuteChanged();
     }
 
     private void Rebuild()
@@ -329,9 +488,10 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasRoutes));
         OnPropertyChanged(nameof(HasActiveRoute));
         ((RelayCommand)ReverseActiveRouteCommand).NotifyCanExecuteChanged();
-        ((RelayCommand)InsertAfterSelectedCommand).NotifyCanExecuteChanged();
+        ((RelayCommand)ZoomToRouteCommand).NotifyCanExecuteChanged();
         ((RelayCommand)DeleteWaypointCommand).NotifyCanExecuteChanged();
         ((RelayCommand)BeginRenameCommand).NotifyCanExecuteChanged();
+        RefreshHistory();
     }
 
     private void RebuildTimeline()
@@ -351,15 +511,9 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         for (var i = 0; i < route.Waypoints.Count; i++)
         {
             var wp = route.Waypoints[i];
-            var label = string.IsNullOrWhiteSpace(wp.Name)
-                ? string.Format(CultureInfo.CurrentCulture, Strings.Routes_WaypointNameFormat, i + 1)
-                : wp.Name!;
-            var coords = string.Format(
-                CultureInfo.CurrentCulture,
-                Strings.Routes_WaypointCoordFormat,
-                wp.Position.Latitude,
-                wp.Position.Longitude);
-            Timeline.Add(new RouteWaypointRowViewModel(i, i + 1, label, coords, InsertWaypointAfterCommand, DeleteWaypointAtCommand)
+            var fallbackName = string.Format(CultureInfo.CurrentCulture, Strings.Routes_WaypointNameFormat, i + 1);
+            var coords = LatLonFormatter.Format(wp.Position.Latitude, wp.Position.Longitude);
+            Timeline.Add(new RouteWaypointRowViewModel(this, i, wp.Name, fallbackName, coords)
             {
                 IsSelected = selected == i,
                 IsFirst = i == 0,
@@ -460,23 +614,41 @@ internal abstract class RouteTimelineRowViewModel : ViewModelBase
 {
 }
 
-/// <summary>A numbered waypoint row in the timeline.</summary>
+/// <summary>
+/// A numbered waypoint row in the timeline, with an editable name and an
+/// editable, pasteable position.
+/// </summary>
 internal sealed class RouteWaypointRowViewModel : RouteTimelineRowViewModel
 {
+    private readonly RoutesPanelViewModel _panel;
+    private readonly string? _name;
+    private readonly string _coords;
+
     public RouteWaypointRowViewModel(
+        RoutesPanelViewModel panel,
         int index,
-        int number,
-        string label,
-        string coords,
-        ICommand insertAfterCommand,
-        ICommand deleteCommand)
+        string? name,
+        string fallbackName,
+        string coords)
     {
+        _panel = panel;
         Index = index;
-        Number = number;
-        Label = label;
-        Coords = coords;
-        InsertAfterCommand = insertAfterCommand;
-        DeleteCommand = deleteCommand;
+        Number = index + 1;
+        _name = name;
+        Label = string.IsNullOrWhiteSpace(name) ? fallbackName : name;
+        FallbackName = fallbackName;
+        _coords = coords;
+        _nameText = name ?? string.Empty;
+        _coordsText = coords;
+
+        CommitNameCommand = new RelayCommand(CommitName);
+        RevertNameCommand = new RelayCommand(() => NameText = _name ?? string.Empty);
+        CommitCoordsCommand = new RelayCommand(CommitCoords);
+        RevertCoordsCommand = new RelayCommand(() =>
+        {
+            CoordsText = _coords;
+            CoordsError = null;
+        });
     }
 
     /// <summary>
@@ -486,25 +658,75 @@ internal sealed class RouteWaypointRowViewModel : RouteTimelineRowViewModel
     /// not resolve from inside a flyout popup, but the inherited DataContext
     /// does, so command access must live on the row item itself.
     /// </summary>
-    public ICommand InsertAfterCommand { get; }
+    public ICommand InsertAfterCommand => _panel.InsertWaypointAfterCommand;
 
     /// <summary>
     /// Delete-this-waypoint command, surfaced on the row for the same
     /// flyout-binding reason as <see cref="InsertAfterCommand"/>.
     /// </summary>
-    public ICommand DeleteCommand { get; }
+    public ICommand DeleteCommand => _panel.DeleteWaypointAtCommand;
+
+    /// <summary>Commits <see cref="NameText"/> as the waypoint's name (Enter or focus loss).</summary>
+    public ICommand CommitNameCommand { get; }
+
+    /// <summary>Restores <see cref="NameText"/> to the waypoint's name (Esc).</summary>
+    public ICommand RevertNameCommand { get; }
+
+    /// <summary>
+    /// Moves the waypoint to the position in <see cref="CoordsText"/> (Enter or
+    /// focus loss), or shows <see cref="CoordsError"/> when it isn't one.
+    /// </summary>
+    public ICommand CommitCoordsCommand { get; }
+
+    /// <summary>Restores <see cref="CoordsText"/> to the waypoint's position and clears the error (Esc).</summary>
+    public ICommand RevertCoordsCommand { get; }
 
     /// <summary>Zero-based waypoint index within the active route.</summary>
     public int Index { get; }
 
-    /// <summary>One-based display number shown in the timeline circle.</summary>
+    /// <summary>One-based display number shown in the number disc.</summary>
     public int Number { get; }
 
     /// <summary>Waypoint name or a "Waypoint N" fallback.</summary>
     public string Label { get; }
 
-    /// <summary>Latitude/longitude, pre-formatted for the muted subtitle.</summary>
-    public string Coords { get; }
+    /// <summary>The "Waypoint N" name shown as the name field's placeholder.</summary>
+    public string FallbackName { get; }
+
+    private string _nameText;
+    /// <summary>The name being edited; empty clears the name.</summary>
+    public string NameText
+    {
+        get => _nameText;
+        set => SetProperty(ref _nameText, value);
+    }
+
+    private string _coordsText;
+    /// <summary>The position being edited, in the app's degrees-minutes format.</summary>
+    public string CoordsText
+    {
+        get => _coordsText;
+        set
+        {
+            if (SetProperty(ref _coordsText, value))
+                CoordsError = null;
+        }
+    }
+
+    private string? _coordsError;
+    /// <summary>The inline error under the position, or <c>null</c> when it is valid.</summary>
+    public string? CoordsError
+    {
+        get => _coordsError;
+        private set
+        {
+            if (SetProperty(ref _coordsError, value))
+                OnPropertyChanged(nameof(HasCoordsError));
+        }
+    }
+
+    /// <summary>True when <see cref="CoordsError"/> is shown.</summary>
+    public bool HasCoordsError => _coordsError is not null;
 
     private bool _isSelected;
     /// <summary>True when this is the highlighted waypoint.</summary>
@@ -519,6 +741,23 @@ internal sealed class RouteWaypointRowViewModel : RouteTimelineRowViewModel
 
     /// <summary>True for the last waypoint (no outbound connector).</summary>
     public bool IsLast { get; init; }
+
+    private void CommitName()
+    {
+        if (NameText != (_name ?? string.Empty))
+            _panel.CommitWaypointName(Index, NameText);
+    }
+
+    private void CommitCoords()
+    {
+        if (CoordsText == _coords)
+        {
+            CoordsError = null;
+            return;
+        }
+        if (!_panel.CommitWaypointPosition(Index, CoordsText))
+            CoordsError = Strings.Routes_CoordinateError;
+    }
 }
 
 /// <summary>A leg row sitting between two waypoint rows in the timeline.</summary>

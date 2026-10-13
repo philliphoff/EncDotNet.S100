@@ -250,11 +250,15 @@ values: draft, squat allowance, speed, departure, required UKC and cross-track
 limits. Each leg inherits these unless it overrides them, so changing a passage
 value changes only the legs that inherit it.
 
+Each route keeps its own undo history. Every edit a route tool makes is one
+step in it, shared with edits made in the viewer, so `undo_route_edit` can
+revert a drag on the map and Ctrl+Z (⌘Z) can revert a tool's edit.
+
 | Tool | Changes state | What it does |
 |---|---|---|
 | `create_route` | Yes | Creates an empty route and makes it the active route. Optional `name` and `id` (a GUID is generated when you omit `id`; ids must be unique). Returns the route's full state, as `get_route` does. |
-| `list_routes` | No | Lists every route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm` and `isActive`, and the collection's `activeRouteId`. |
-| `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `passage` (as `get_passage` returns it), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs` and `totalDistanceNm`. Each leg has its `index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, its passage values twice (`effective`, the values that apply, and `overrides`, only the leg's own values), and the rest of its S-421 navigational envelope. |
+| `list_routes` | No | Lists every route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm` and `isActive`, the collection's `activeRouteId`, and `editMode` (whether the route editor is on). |
+| `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `passage` (as `get_passage` returns it), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs`, `totalDistanceNm`, and the undo state: `canUndo`, `canRedo`, `undoLabel` and `redoLabel` (for example `move waypoint`). Each leg has its `index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, its passage values twice (`effective`, the values that apply, and `overrides`, only the leg's own values), and the rest of its S-421 navigational envelope. |
 | `delete_route` | Yes | Removes a route. Returns `routeId`, `deleted` and the new `activeRouteId`. |
 | `append_waypoint` | Yes | Adds a waypoint (`lat`, `lon`) at the end of a route, with optional `number`, `name`, `fixed` and `turnRadiusNm`. Returns the updated route. |
 | `insert_waypoint` | Yes | Inserts a waypoint at `index` (`0` to `waypointCount`; `0` prepends and `waypointCount` appends), splitting the leg there. Takes the same optional fields as `append_waypoint`. Returns the updated route. |
@@ -264,6 +268,9 @@ value changes only the legs that inherit it.
 | `set_route_info` | Yes | Updates route metadata (`name`, `author`, `description`, `departurePortId`, `arrivalPortId`, `validityStart`, `validityEnd`) and vessel particulars (`vesselName`, `vesselMmsi`, `vesselImo`, `vesselCallsign`, `vesselLengthMeters`, `vesselBeamMeters`; passing any vessel field creates the vessel block). Values you pass overwrite. Returns the updated route. |
 | `get_passage` | No | Returns a route's passage values: `draftMeters`, `squatMeters`, `speedKnots` (SOG), `departure`, `requiredUkcMeters`, `portCrossTrackMeters`, `starboardCrossTrackMeters` and `vessel`. Unset values are left out. With no `departure`, ETAs use the view time. |
 | `set_passage` | Yes | Updates a route's passage values: `draftMeters`, `squatMeters`, `speedKnots`, `departure`, `requiredUkcMeters`, and the cross-track limits (`crossTrackMeters` for both sides, or `portCrossTrackMeters` and `starboardCrossTrackMeters`). Values you pass overwrite, values you omit are unchanged, and names in `clear` are unset. Set the vessel with `set_route_info`. Returns the updated route. |
+| `undo_route_edit` | Yes | Undoes the most recent edit to a route, whether it was made in the viewer or by a route tool. Returns the updated route. Fails with `route_history_empty` when there is nothing to undo. |
+| `redo_route_edit` | Yes | Redoes the most recently undone edit. Any new edit clears what can be redone. Fails with `route_history_empty` when there is nothing to redo. |
+| `set_route_edit_mode` | Yes | Turns the route editor on (`enabled: true`) or off, as the Routes panel's **Edit** toggle and Ctrl+E (⌘E) do. While it is on, clicks on the map add waypoints to the active route. Returns `enabled` and `activeRouteId`. |
 
 A typical sequence:
 
@@ -271,7 +278,8 @@ A typical sequence:
 2. `append_waypoint` and `insert_waypoint` lay down the geometry. Use the query
    tools, such as `sample_coverage`, `nearest_features` and `find_at`, to check
    each leg.
-3. `move_waypoint` and `delete_waypoint` refine it.
+3. `move_waypoint` and `delete_waypoint` refine it, and `undo_route_edit`
+   steps back.
 4. `set_passage` sets the draft, speed and other values every leg inherits,
    and `set_leg_attributes` overrides them on a leg and sets its geometry type
    and navigational envelope. `set_route_info` sets the metadata and vessel

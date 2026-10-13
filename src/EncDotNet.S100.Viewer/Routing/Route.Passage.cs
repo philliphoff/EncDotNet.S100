@@ -2,7 +2,7 @@ namespace EncDotNet.S100.Viewer.Routing;
 
 // Passage values and per-leg overrides (#897). Each mutator sets one value,
 // returns the value it replaced and raises Changed only when something
-// changed, so an editor command can record (field, old, new) and revert it.
+// changed, so a no-op edit records no History step.
 public sealed partial class Route
 {
     private const double OverrideTolerance = 1e-9;

@@ -43,6 +43,7 @@ public sealed partial class Route
     {
         Id = string.IsNullOrWhiteSpace(id) ? Guid.NewGuid().ToString("n") : id;
         Info = new RouteInfo { Name = name };
+        History = new RouteEditHistory(this);
     }
 
     /// <summary>Stable identifier, unique within a <see cref="RouteCollection"/>.</summary>
@@ -50,6 +51,13 @@ public sealed partial class Route
 
     /// <summary>Route-level metadata. Never <c>null</c>.</summary>
     public RouteInfo Info { get; }
+
+    /// <summary>
+    /// This route's undo/redo history. Interactive and agent edits run through
+    /// it so each one can be undone; edits made directly on the route (for
+    /// example while loading) are not recorded.
+    /// </summary>
+    public RouteEditHistory History { get; }
 
     /// <summary>
     /// Convenience accessor for <see cref="RouteInfo.Name"/>.
@@ -278,6 +286,29 @@ public sealed partial class Route
     /// mutating methods.
     /// </summary>
     public void NotifyChanged() => OnChanged();
+
+    /// <summary>Captures a deep copy of the route's waypoints, legs, info and passage.</summary>
+    internal RouteSnapshot CaptureSnapshot()
+        => new(
+            _waypoints.Select(w => w.Clone()).ToArray(),
+            _legs.Select(l => l.Clone()).ToArray(),
+            Info.Clone(),
+            Passage.Clone());
+
+    /// <summary>
+    /// Replaces the route's waypoints, legs, info and passage with copies of
+    /// <paramref name="snapshot"/>'s, raising <see cref="Changed"/> once.
+    /// </summary>
+    internal void RestoreSnapshot(RouteSnapshot snapshot)
+    {
+        _waypoints.Clear();
+        _waypoints.AddRange(snapshot.Waypoints.Select(w => w.Clone()));
+        _legs.Clear();
+        _legs.AddRange(snapshot.Legs.Select(l => l.Clone()));
+        Info.CopyFrom(snapshot.Info);
+        Passage.CopyFrom(snapshot.Passage);
+        OnChanged();
+    }
 
     private void OnChanged() => Changed?.Invoke(this, EventArgs.Empty);
 }

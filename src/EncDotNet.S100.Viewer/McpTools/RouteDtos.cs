@@ -108,13 +108,24 @@ internal sealed record RouteDetail(
     [property: Description("Route-level passage values that legs inherit.")] PassageDto Passage,
     [property: Description("Waypoints in route order.")] IReadOnlyList<WaypointDto> Waypoints,
     [property: Description("Legs in route order; leg i joins waypoint i to waypoint i+1.")] IReadOnlyList<LegDto> Legs,
-    [property: Description("Total route length in nautical miles.")] double TotalDistanceNm);
+    [property: Description("Total route length in nautical miles.")] double TotalDistanceNm,
+    [property: Description("Whether undo_route_edit has an edit to undo on this route.")] bool CanUndo,
+    [property: Description("Whether redo_route_edit has an edit to redo on this route.")] bool CanRedo,
+    [property: Description("What undo_route_edit would revert (e.g. \"move waypoint\"), or null.")] string? UndoLabel,
+    [property: Description("What redo_route_edit would replay, or null.")] string? RedoLabel);
 
 /// <summary>Result of list_routes.</summary>
 [Description("Result of list_routes: every route in the collection plus the active route id.")]
 internal sealed record ListRoutesResult(
     [property: Description("All routes in insertion order.")] IReadOnlyList<RouteSummary> Routes,
-    [property: Description("Id of the active route, or null when the collection is empty.")] string? ActiveRouteId);
+    [property: Description("Id of the active route, or null when the collection is empty.")] string? ActiveRouteId,
+    [property: Description("Whether the interactive route editor is on (set it with set_route_edit_mode).")] bool EditMode);
+
+/// <summary>Result of set_route_edit_mode.</summary>
+[Description("Result of set_route_edit_mode: the route edit mode now in force.")]
+internal sealed record RouteEditModeResult(
+    [property: Description("Whether the interactive route editor is on.")] bool Enabled,
+    [property: Description("Id of the active route edits apply to, or null when there is none.")] string? ActiveRouteId);
 
 /// <summary>Result of delete_route.</summary>
 [Description("Result of delete_route: which route was removed and the new active route id.")]
@@ -182,7 +193,11 @@ internal static class RouteProjection
             Passage(route),
             waypoints,
             legs,
-            route.TotalDistanceNm());
+            route.TotalDistanceNm(),
+            route.History.CanUndo,
+            route.History.CanRedo,
+            route.History.UndoLabel,
+            route.History.RedoLabel);
     }
 
     /// <summary>Projects a single route to a compact <see cref="RouteSummary"/>.</summary>

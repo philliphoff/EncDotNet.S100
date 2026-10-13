@@ -640,19 +640,8 @@ internal static class Strings
     public static string Routes_NewRouteNameFormat => Get(nameof(Routes_NewRouteNameFormat));
     public static string Routes_NoRoutes => Get(nameof(Routes_NoRoutes));
     public static string Routes_NoActiveRoute => Get(nameof(Routes_NoActiveRoute));
-    public static string Routes_WaypointsHeader => Get(nameof(Routes_WaypointsHeader));
-    public static string Routes_TotalDistanceFormat => Get(nameof(Routes_TotalDistanceFormat));
-    public static string Routes_WaypointRowFormat => Get(nameof(Routes_WaypointRowFormat));
-    public static string Routes_LegRowFormat => Get(nameof(Routes_LegRowFormat));
-    public static string Button_AddRoute => Get(nameof(Button_AddRoute));
     public static string Tooltip_AddRoute => Get(nameof(Tooltip_AddRoute));
-    public static string Button_RemoveRoute => Get(nameof(Button_RemoveRoute));
-    public static string Tooltip_RemoveRoute => Get(nameof(Tooltip_RemoveRoute));
-    public static string Button_PromoteMeasurement => Get(nameof(Button_PromoteMeasurement));
     public static string Tooltip_PromoteMeasurement => Get(nameof(Tooltip_PromoteMeasurement));
-    public static string Button_DeleteWaypoint => Get(nameof(Button_DeleteWaypoint));
-    public static string Tooltip_DeleteWaypoint => Get(nameof(Tooltip_DeleteWaypoint));
-    public static string Button_ToggleLegGeometry => Get(nameof(Button_ToggleLegGeometry));
     public static string Tooltip_ToggleLegGeometry => Get(nameof(Tooltip_ToggleLegGeometry));
     public static string Routes_GeometryLoxodrome => Get(nameof(Routes_GeometryLoxodrome));
     public static string Routes_GeometryGeodesic => Get(nameof(Routes_GeometryGeodesic));
@@ -661,14 +650,9 @@ internal static class Strings
     public static string Routes_DetailMetaFormat => Get(nameof(Routes_DetailMetaFormat));
     public static string Routes_DetailMetaWithGeometryFormat => Get(nameof(Routes_DetailMetaWithGeometryFormat));
     public static string Routes_WaypointNameFormat => Get(nameof(Routes_WaypointNameFormat));
-    public static string Routes_WaypointCoordFormat => Get(nameof(Routes_WaypointCoordFormat));
     public static string Routes_LegMetaFormat => Get(nameof(Routes_LegMetaFormat));
-    public static string Button_InsertWaypoint => Get(nameof(Button_InsertWaypoint));
-    public static string Tooltip_InsertWaypoint => Get(nameof(Tooltip_InsertWaypoint));
     public static string Button_ReverseRoute => Get(nameof(Button_ReverseRoute));
     public static string Tooltip_ReverseRoute => Get(nameof(Tooltip_ReverseRoute));
-    public static string Button_DoneRouteEdit => Get(nameof(Button_DoneRouteEdit));
-    public static string Tooltip_DoneRouteEdit => Get(nameof(Tooltip_DoneRouteEdit));
     public static string Menu_RenameRoute => Get(nameof(Menu_RenameRoute));
     public static string Menu_ReverseRoute => Get(nameof(Menu_ReverseRoute));
     public static string Menu_RemoveRoute => Get(nameof(Menu_RemoveRoute));
@@ -677,6 +661,21 @@ internal static class Strings
     public static string Tooltip_RouteRowMenu => Get(nameof(Tooltip_RouteRowMenu));
     public static string Tooltip_WaypointRowMenu => Get(nameof(Tooltip_WaypointRowMenu));
     public static string Tooltip_EditRouteName => Get(nameof(Tooltip_EditRouteName));
+    public static string Routes_EditingBadge => Get(nameof(Routes_EditingBadge));
+    public static string Routes_EditHintFormat => Get(nameof(Routes_EditHintFormat));
+    public static string Button_EditRoute => Get(nameof(Button_EditRoute));
+    public static string Tooltip_EditRouteToggle => Get(nameof(Tooltip_EditRouteToggle));
+    public static string Button_CheckPassage => Get(nameof(Button_CheckPassage));
+    public static string Tooltip_CheckPassageNoDraft => Get(nameof(Tooltip_CheckPassageNoDraft));
+    public static string Label_UndoRouteEdit => Get(nameof(Label_UndoRouteEdit));
+    public static string Label_RedoRouteEdit => Get(nameof(Label_RedoRouteEdit));
+    public static string Tooltip_UndoRouteEdit => Get(nameof(Tooltip_UndoRouteEdit));
+    public static string Tooltip_RedoRouteEdit => Get(nameof(Tooltip_RedoRouteEdit));
+    public static string Label_ZoomToRoute => Get(nameof(Label_ZoomToRoute));
+    public static string Tooltip_ZoomToRoute => Get(nameof(Tooltip_ZoomToRoute));
+    public static string Routes_CoordinateError => Get(nameof(Routes_CoordinateError));
+    public static string Label_WaypointName => Get(nameof(Label_WaypointName));
+    public static string Label_WaypointPosition => Get(nameof(Label_WaypointPosition));
 
     // ECDIS Display Planes
     public static string EcdisPanel_DisplayPlanesHeader => Get(nameof(EcdisPanel_DisplayPlanesHeader));
@@ -1191,7 +1190,6 @@ internal static class Strings
     public static string Label_CopyText => Get(nameof(Label_CopyText));
     public static string Label_CopyValue => Get(nameof(Label_CopyValue));
     public static string Label_HoldResume => Get(nameof(Label_HoldResume));
-    public static string Label_InsertWaypoint => Get(nameof(Label_InsertWaypoint));
     public static string Label_MeasureMode => Get(nameof(Label_MeasureMode));
     public static string Label_MoveDown => Get(nameof(Label_MoveDown));
     public static string Label_MoveUp => Get(nameof(Label_MoveUp));

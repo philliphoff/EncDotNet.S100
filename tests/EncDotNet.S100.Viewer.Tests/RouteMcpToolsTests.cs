@@ -606,4 +606,135 @@ public class RouteMcpToolsTests
             .ToList();
         Assert.Empty(missing);
     }
+
+    // ----- undo / redo / edit mode -----------------------------------------
+
+    [Fact]
+    public async Task Route_tool_edits_are_undoable_one_step_at_a_time()
+    {
+        var (routes, invoker) = Make();
+        var ct = TestContext.Current.CancellationToken;
+        await new CreateRouteTool(routes, invoker).InvokeAsync(new CreateRouteRequest(Id: "r1"), ct);
+        var append = new AppendWaypointTool(routes, invoker);
+        await append.InvokeAsync(new AppendWaypointRequest(50, -1), ct);
+        await append.InvokeAsync(new AppendWaypointRequest(50, -2), ct);
+        await new MoveWaypointTool(routes, invoker).InvokeAsync(new MoveWaypointRequest(1, 51, -2), ct);
+        var afterLeg = Value(await new SetLegAttributesTool(routes, invoker).InvokeAsync(
+            new SetLegAttributesRequest(0, DraftMeters: 9.5, Note: "channel"), ct));
+
+        Assert.True(afterLeg.CanUndo);
+        Assert.Equal("edit leg", afterLeg.UndoLabel);
+
+        var undo = new UndoRouteEditTool(routes, invoker);
+        var detail = Value(await undo.InvokeAsync(new RouteHistoryRequest(), ct));
+        Assert.Null(detail.Legs[0].Overrides.DraftMeters);
+        Assert.Equal("move waypoint", detail.UndoLabel);
+        Assert.Equal("edit leg", detail.RedoLabel);
+
+        detail = Value(await undo.InvokeAsync(new RouteHistoryRequest("r1"), ct));
+        Assert.Equal(50, detail.Waypoints[1].Lat);
+
+        detail = Value(await new RedoRouteEditTool(routes, invoker).InvokeAsync(new RouteHistoryRequest(), ct));
+        Assert.Equal(51, detail.Waypoints[1].Lat);
+    }
+
+    [Fact]
+    public async Task Passage_and_override_edits_undo_one_step_at_a_time()
+    {
+        var (routes, invoker) = await MakeThreeLegRoute();
+        var ct = TestContext.Current.CancellationToken;
+        await new SetPassageTool(routes, invoker).InvokeAsync(
+            new SetPassageRequest(SpeedKnots: 10, Departure: DateTimeOffset.UnixEpoch), ct);
+        var afterOverride = Value(await new SetLegAttributesTool(routes, invoker).InvokeAsync(
+            new SetLegAttributesRequest(1, SpeedKnots: 6), ct));
+        Assert.Equal("edit leg", afterOverride.UndoLabel);
+
+        var undo = new UndoRouteEditTool(routes, invoker);
+        var detail = Value(await undo.InvokeAsync(new RouteHistoryRequest(), ct));
+        Assert.Null(detail.Legs[1].Overrides.SpeedKnots);
+        Assert.Equal(10, detail.Legs[1].Effective.SpeedKnots);
+        Assert.Equal("edit passage", detail.UndoLabel);
+
+        detail = Value(await undo.InvokeAsync(new RouteHistoryRequest(), ct));
+        Assert.Null(detail.Passage.SpeedKnots);
+        Assert.Null(detail.Passage.Departure);
+
+        detail = Value(await new RedoRouteEditTool(routes, invoker).InvokeAsync(new RouteHistoryRequest(), ct));
+        Assert.Equal(10, detail.Passage.SpeedKnots);
+        Assert.Equal(DateTimeOffset.UnixEpoch, detail.Passage.Departure);
+    }
+
+    [Fact]
+    public async Task Noop_passage_edit_records_no_undo_step()
+    {
+        var (routes, invoker) = await MakeThreeLegRoute();
+        var ct = TestContext.Current.CancellationToken;
+        var tool = new SetPassageTool(routes, invoker);
+        await tool.InvokeAsync(new SetPassageRequest(DraftMeters: 4), ct);
+        var before = routes.Routes.ActiveRoute!.History.UndoCount;
+
+        await tool.InvokeAsync(new SetPassageRequest(DraftMeters: 4), ct);
+        await new SetLegAttributesTool(routes, invoker).InvokeAsync(new SetLegAttributesRequest(0, DraftMeters: 4), ct);
+
+        Assert.Equal(before, routes.Routes.ActiveRoute!.History.UndoCount);
+    }
+
+    [Fact]
+    public async Task Route_tool_edits_share_the_viewer_history()
+    {
+        var (routes, invoker) = Make();
+        var ct = TestContext.Current.CancellationToken;
+        var route = routes.Routes.CreateRoute("R");
+        await new AppendWaypointTool(routes, invoker).InvokeAsync(new AppendWaypointRequest(50, -1), ct);
+        await new SetRouteInfoTool(routes, invoker).InvokeAsync(new SetRouteInfoRequest(Name: "Renamed"), ct);
+
+        Assert.True(routes.UndoActiveRoute());
+        Assert.Equal("R", route.Name);
+        Assert.True(routes.UndoActiveRoute());
+        Assert.Empty(route.Waypoints);
+    }
+
+    [Fact]
+    public async Task Undo_with_nothing_to_undo_is_an_error()
+    {
+        var (routes, invoker) = Make();
+        var ct = TestContext.Current.CancellationToken;
+        routes.Routes.CreateRoute("R", "r1");
+
+        var undoError = Error(await new UndoRouteEditTool(routes, invoker).InvokeAsync(new RouteHistoryRequest(), ct));
+        var redoError = Error(await new RedoRouteEditTool(routes, invoker).InvokeAsync(new RouteHistoryRequest(), ct));
+
+        Assert.Equal("route_history_empty", undoError.Code);
+        Assert.Equal("r1", Assert.IsType<RouteHistoryEmpty>(undoError).RouteId);
+        Assert.Equal("redo", Assert.IsType<RouteHistoryEmpty>(redoError).Direction);
+    }
+
+    [Fact]
+    public async Task Edit_mode_is_settable_and_readable()
+    {
+        var (routes, invoker) = Make();
+        var ct = TestContext.Current.CancellationToken;
+        routes.Routes.CreateRoute("R", "r1");
+
+        var set = Value(await new SetRouteEditModeTool(routes, invoker).InvokeAsync(new SetRouteEditModeRequest(true), ct));
+        Assert.True(set.Enabled);
+        Assert.Equal("r1", set.ActiveRouteId);
+        Assert.True(routes.IsEditModeActive);
+        Assert.True(Value(await new ListRoutesTool(routes, invoker).InvokeAsync(new ListRoutesRequest(), ct)).EditMode);
+
+        await new SetRouteEditModeTool(routes, invoker).InvokeAsync(new SetRouteEditModeRequest(false), ct);
+        Assert.False(Value(await new ListRoutesTool(routes, invoker).InvokeAsync(new ListRoutesRequest(), ct)).EditMode);
+    }
+
+    [Fact]
+    public void Edit_mode_adapter_payload_names_the_mode()
+    {
+        var call = SetRouteEditModeMcpAdapter.TranslateResult(
+            ToolResult<RouteEditModeResult>.Ok(new RouteEditModeResult(true, "r1")));
+
+        var text = Assert.IsType<TextContentBlock>(call.Content.Single()).Text;
+        using var doc = JsonDocument.Parse(text);
+        Assert.True(doc.RootElement.GetProperty("enabled").GetBoolean());
+        Assert.Equal("r1", doc.RootElement.GetProperty("activeRouteId").GetString());
+    }
 }

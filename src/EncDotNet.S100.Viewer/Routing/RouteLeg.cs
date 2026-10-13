@@ -90,6 +90,29 @@ public sealed class RouteLeg
     /// <summary>Free-text note for this leg (S-421 <c>routeWaypointLegNote</c>).</summary>
     public string? Note { get; set; }
 
+    /// <summary>Returns a copy of this leg.</summary>
+    internal RouteLeg Clone() => (RouteLeg)MemberwiseClone();
+
+    /// <summary>Whether every attribute of this leg equals <paramref name="other"/>'s.</summary>
+    internal bool HasSameAttributes(RouteLeg other)
+        => GeometryType == other.GeometryType
+        && StarboardCrossTrackDistanceLimitMeters == other.StarboardCrossTrackDistanceLimitMeters
+        && PortCrossTrackDistanceLimitMeters == other.PortCrossTrackDistanceLimitMeters
+        && StarboardChannelLimitMeters == other.StarboardChannelLimitMeters
+        && PortChannelLimitMeters == other.PortChannelLimitMeters
+        && SafetyContourMeters == other.SafetyContourMeters
+        && SafetyDepthMeters == other.SafetyDepthMeters
+        && SpeedOverGroundMinKnots == other.SpeedOverGroundMinKnots
+        && SpeedOverGroundMaxKnots == other.SpeedOverGroundMaxKnots
+        && SpeedThroughWaterMinKnots == other.SpeedThroughWaterMinKnots
+        && SpeedThroughWaterMaxKnots == other.SpeedThroughWaterMaxKnots
+        && PlannedSpeedKnots == other.PlannedSpeedKnots
+        && DraftMeters == other.DraftMeters
+        && StaticUnderKeelClearanceMeters == other.StaticUnderKeelClearanceMeters
+        && DynamicUnderKeelClearanceMeters == other.DynamicUnderKeelClearanceMeters
+        && SafetyMarginMeters == other.SafetyMarginMeters
+        && Note == other.Note;
+
     /// <summary>Returns this leg's override of <paramref name="field"/>.</summary>
     /// <param name="field">A leg-overridable passage field.</param>
     /// <returns>The override, or <c>null</c> when the leg inherits.</returns>

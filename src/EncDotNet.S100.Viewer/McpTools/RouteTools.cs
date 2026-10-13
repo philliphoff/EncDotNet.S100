@@ -18,7 +18,9 @@ namespace EncDotNet.S100.Viewer.McpTools;
 /// route when the id is omitted, and runs all model access inside
 /// <see cref="IRouteEditInvoker.InvokeAsync{T}"/> so that the resulting
 /// <c>Changed</c> fan-out (overlay redraw, panel rebuild) executes with UI
-/// affinity.
+/// affinity. Every edit runs through the route's <see cref="Route.History"/>
+/// as one step, so <c>undo_route_edit</c> (and Ctrl+Z in the viewer) can
+/// revert it.
 /// </remarks>
 internal abstract class RouteToolBase
 {
@@ -183,7 +185,7 @@ internal sealed class ListRoutesTool : RouteToolBase
             foreach (var route in Routes.Routes.Routes)
                 summaries.Add(RouteProjection.Summary(route, Routes));
             return ToolResult<ListRoutesResult>.Ok(
-                new ListRoutesResult(summaries, Routes.Routes.ActiveRoute?.Id));
+                new ListRoutesResult(summaries, Routes.Routes.ActiveRoute?.Id, Routes.IsEditModeActive));
         });
     }
 }
@@ -304,12 +306,15 @@ internal sealed class AppendWaypointTool : RouteToolBase
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
-            var waypoint = route.AppendWaypoint(new GeoPosition(request.Lat, request.Lon));
-            if (HasWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm))
+            route.History.Execute(RouteEditLabels.AppendWaypoint, () =>
             {
-                ApplyWaypointMetadata(waypoint, request.Number, request.Name, request.Fixed, request.TurnRadiusNm);
-                route.NotifyChanged();
-            }
+                var waypoint = route.AppendWaypoint(new GeoPosition(request.Lat, request.Lon));
+                if (HasWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm))
+                {
+                    ApplyWaypointMetadata(waypoint, request.Number, request.Name, request.Fixed, request.TurnRadiusNm);
+                    route.NotifyChanged();
+                }
+            });
             return Ok(route, Routes);
         });
     }
@@ -362,12 +367,15 @@ internal sealed class InsertWaypointTool : RouteToolBase
                     "index",
                     $"value {request.Index} is outside the insertable range [0, {route.Waypoints.Count}]"));
 
-            var waypoint = route.InsertWaypoint(request.Index, new GeoPosition(request.Lat, request.Lon));
-            if (HasWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm))
+            route.History.Execute(RouteEditLabels.InsertWaypoint, () =>
             {
-                ApplyWaypointMetadata(waypoint, request.Number, request.Name, request.Fixed, request.TurnRadiusNm);
-                route.NotifyChanged();
-            }
+                var waypoint = route.InsertWaypoint(request.Index, new GeoPosition(request.Lat, request.Lon));
+                if (HasWaypointMetadata(request.Number, request.Name, request.Fixed, request.TurnRadiusNm))
+                {
+                    ApplyWaypointMetadata(waypoint, request.Number, request.Name, request.Fixed, request.TurnRadiusNm);
+                    route.NotifyChanged();
+                }
+            });
             return Ok(route, Routes);
         });
     }
@@ -416,7 +424,9 @@ internal sealed class MoveWaypointTool : RouteToolBase
                     "index",
                     $"value {request.Index} is outside the waypoint range [0, {route.Waypoints.Count - 1}]"));
 
-            route.MoveWaypoint(request.Index, new GeoPosition(request.Lat, request.Lon));
+            route.History.Execute(
+                RouteEditLabels.MoveWaypoint,
+                () => route.MoveWaypoint(request.Index, new GeoPosition(request.Lat, request.Lon)));
             return Ok(route, Routes);
         });
     }
@@ -460,7 +470,7 @@ internal sealed class DeleteWaypointTool : RouteToolBase
                     "index",
                     $"value {request.Index} is outside the waypoint range [0, {route.Waypoints.Count - 1}]"));
 
-            route.RemoveWaypoint(request.Index);
+            route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(request.Index));
             return Ok(route, Routes);
         });
     }
@@ -612,31 +622,37 @@ internal sealed class SetLegAttributesTool : RouteToolBase
                     $"value {request.LegIndex} is outside the leg range [0, {route.Legs.Count - 1}]"));
 
             var leg = route.Legs[request.LegIndex];
-
-            // Passage overrides go through the route so the "only when it
-            // differs" rule holds and each one is a single, revertible edit.
-            for (var i = 0; i < overrides.Length; i++)
+            route.History.Execute(RouteEditLabels.EditLeg, () =>
             {
-                var (name, field) = OverrideParameters[i];
-                if (clear.Contains(name))
-                    route.ResetLegOverride(request.LegIndex, field);
-                else if (overrides[i].HasValue)
-                    route.SetLegOverride(request.LegIndex, field, overrides[i]);
-            }
+                // Passage overrides go through the route so the "only when it
+                // differs" rule holds.
+                for (var i = 0; i < overrides.Length; i++)
+                {
+                    var (name, field) = OverrideParameters[i];
+                    if (clear.Contains(name))
+                        route.ResetLegOverride(request.LegIndex, field);
+                    else if (overrides[i].HasValue)
+                        route.SetLegOverride(request.LegIndex, field, overrides[i]);
+                }
 
-            if (geometry.HasValue) leg.GeometryType = geometry.Value;
-            for (var i = 0; i < envelope.Length; i++)
-            {
-                var (name, set) = EnvelopeParameters[i];
-                if (clear.Contains(name))
-                    set(leg, null);
-                else if (envelope[i].HasValue)
-                    set(leg, envelope[i]);
-            }
-            if (clear.Contains("note")) leg.Note = null;
-            else if (request.Note is not null) leg.Note = request.Note;
+                // The plain attributes are set in place; notify only when one
+                // changed, so a no-op call records no undo step.
+                var before = leg.Clone();
+                if (geometry.HasValue) leg.GeometryType = geometry.Value;
+                for (var i = 0; i < envelope.Length; i++)
+                {
+                    var (name, set) = EnvelopeParameters[i];
+                    if (clear.Contains(name))
+                        set(leg, null);
+                    else if (envelope[i].HasValue)
+                        set(leg, envelope[i]);
+                }
+                if (clear.Contains("note")) leg.Note = null;
+                else if (request.Note is not null) leg.Note = request.Note;
 
-            route.NotifyChanged();
+                if (!before.HasSameAttributes(leg))
+                    route.NotifyChanged();
+            });
             return Ok(route, Routes);
         });
     }
@@ -712,31 +728,146 @@ internal sealed class SetRouteInfoTool : RouteToolBase
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
-            var info = route.Info;
-            if (request.Name is not null) info.Name = request.Name;
-            if (request.Author is not null) info.Author = request.Author;
-            if (request.Description is not null) info.Description = request.Description;
-            if (request.DeparturePortId is not null) info.DeparturePortId = request.DeparturePortId;
-            if (request.ArrivalPortId is not null) info.ArrivalPortId = request.ArrivalPortId;
-            if (request.ValidityStart.HasValue) info.ValidityStart = request.ValidityStart;
-            if (request.ValidityEnd.HasValue) info.ValidityEnd = request.ValidityEnd;
-
-            var hasVesselField = request.VesselName is not null || request.VesselMmsi is not null
-                || request.VesselImo is not null || request.VesselCallsign is not null
-                || request.VesselLengthMeters.HasValue || request.VesselBeamMeters.HasValue;
-            if (hasVesselField)
-            {
-                var vessel = info.Vessel ??= new RouteVesselInfo();
-                if (request.VesselName is not null) vessel.Name = request.VesselName;
-                if (request.VesselMmsi is not null) vessel.Mmsi = request.VesselMmsi;
-                if (request.VesselImo is not null) vessel.Imo = request.VesselImo;
-                if (request.VesselCallsign is not null) vessel.Callsign = request.VesselCallsign;
-                if (request.VesselLengthMeters.HasValue) vessel.LengthMeters = request.VesselLengthMeters;
-                if (request.VesselBeamMeters.HasValue) vessel.BeamMeters = request.VesselBeamMeters;
-            }
-
-            route.NotifyChanged();
+            route.History.Execute(RouteEditLabels.EditRouteInfo, () => Apply(route, request));
             return Ok(route, Routes);
+        });
+    }
+
+    private static void Apply(Route route, SetRouteInfoRequest request)
+    {
+        var info = route.Info;
+        if (request.Name is not null) info.Name = request.Name;
+        if (request.Author is not null) info.Author = request.Author;
+        if (request.Description is not null) info.Description = request.Description;
+        if (request.DeparturePortId is not null) info.DeparturePortId = request.DeparturePortId;
+        if (request.ArrivalPortId is not null) info.ArrivalPortId = request.ArrivalPortId;
+        if (request.ValidityStart.HasValue) info.ValidityStart = request.ValidityStart;
+        if (request.ValidityEnd.HasValue) info.ValidityEnd = request.ValidityEnd;
+
+        var hasVesselField = request.VesselName is not null || request.VesselMmsi is not null
+            || request.VesselImo is not null || request.VesselCallsign is not null
+            || request.VesselLengthMeters.HasValue || request.VesselBeamMeters.HasValue;
+        if (hasVesselField)
+        {
+            var vessel = info.Vessel ??= new RouteVesselInfo();
+            if (request.VesselName is not null) vessel.Name = request.VesselName;
+            if (request.VesselMmsi is not null) vessel.Mmsi = request.VesselMmsi;
+            if (request.VesselImo is not null) vessel.Imo = request.VesselImo;
+            if (request.VesselCallsign is not null) vessel.Callsign = request.VesselCallsign;
+            if (request.VesselLengthMeters.HasValue) vessel.LengthMeters = request.VesselLengthMeters;
+            if (request.VesselBeamMeters.HasValue) vessel.BeamMeters = request.VesselBeamMeters;
+        }
+
+        route.NotifyChanged();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// undo_route_edit / redo_route_edit
+// ---------------------------------------------------------------------------
+
+/// <summary>Request for <see cref="UndoRouteEditTool"/> and <see cref="RedoRouteEditTool"/>.</summary>
+[Description("Request for undo_route_edit / redo_route_edit: the route whose edit history to step.")]
+internal sealed record RouteHistoryRequest(
+    [property: Description("Id of the route; omit to use the active route.")] string? RouteId = null);
+
+/// <summary>
+/// Undoes the most recent edit to a route: the same per-route history as
+/// Ctrl+Z (⌘Z) in the viewer, which records edits made in the viewer and
+/// through the route tools alike.
+/// </summary>
+internal sealed class UndoRouteEditTool : RouteToolBase
+{
+    /// <summary>Public tool name as exposed over MCP.</summary>
+    public const string Name = "undo_route_edit";
+
+    /// <summary>Creates a new <see cref="UndoRouteEditTool"/>.</summary>
+    public UndoRouteEditTool(RoutesService routes, IRouteEditInvoker invoker)
+        : base(routes, invoker) { }
+
+    /// <summary>Executes the tool.</summary>
+    public Task<ToolResult<RouteDetail>> InvokeAsync(
+        RouteHistoryRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Invoker.InvokeAsync(() =>
+        {
+            var route = Resolve(request.RouteId, out var error);
+            if (route is null)
+                return ToolResult<RouteDetail>.Err(error!);
+            return route.History.Undo()
+                ? Ok(route, Routes)
+                : ToolResult<RouteDetail>.Err(new RouteHistoryEmpty(route.Id, "undo"));
+        });
+    }
+}
+
+/// <summary>Redoes the most recently undone edit to a route (Ctrl+Shift+Z / ⇧⌘Z in the viewer).</summary>
+internal sealed class RedoRouteEditTool : RouteToolBase
+{
+    /// <summary>Public tool name as exposed over MCP.</summary>
+    public const string Name = "redo_route_edit";
+
+    /// <summary>Creates a new <see cref="RedoRouteEditTool"/>.</summary>
+    public RedoRouteEditTool(RoutesService routes, IRouteEditInvoker invoker)
+        : base(routes, invoker) { }
+
+    /// <summary>Executes the tool.</summary>
+    public Task<ToolResult<RouteDetail>> InvokeAsync(
+        RouteHistoryRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Invoker.InvokeAsync(() =>
+        {
+            var route = Resolve(request.RouteId, out var error);
+            if (route is null)
+                return ToolResult<RouteDetail>.Err(error!);
+            return route.History.Redo()
+                ? Ok(route, Routes)
+                : ToolResult<RouteDetail>.Err(new RouteHistoryEmpty(route.Id, "redo"));
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// set_route_edit_mode
+// ---------------------------------------------------------------------------
+
+/// <summary>Request for <see cref="SetRouteEditModeTool"/>.</summary>
+[Description("Request for set_route_edit_mode: turn the interactive route editor on or off.")]
+internal sealed record SetRouteEditModeRequest(
+    [property: Description("True to turn route edit mode on (map clicks add waypoints); false to turn it off.")] bool Enabled);
+
+/// <summary>
+/// Turns the interactive route editor on or off, as the Routes panel's Edit
+/// toggle and Ctrl+E (⌘E) do. Read the current mode from <c>list_routes</c>'s
+/// <c>editMode</c>.
+/// </summary>
+internal sealed class SetRouteEditModeTool : RouteToolBase
+{
+    /// <summary>Public tool name as exposed over MCP.</summary>
+    public const string Name = "set_route_edit_mode";
+
+    /// <summary>Creates a new <see cref="SetRouteEditModeTool"/>.</summary>
+    public SetRouteEditModeTool(RoutesService routes, IRouteEditInvoker invoker)
+        : base(routes, invoker) { }
+
+    /// <summary>Executes the tool.</summary>
+    public Task<ToolResult<RouteEditModeResult>> InvokeAsync(
+        SetRouteEditModeRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Invoker.InvokeAsync(() =>
+        {
+            Routes.IsEditModeActive = request.Enabled;
+            return ToolResult<RouteEditModeResult>.Ok(
+                new RouteEditModeResult(Routes.IsEditModeActive, Routes.Routes.ActiveRoute?.Id));
         });
     }
 }
@@ -931,18 +1062,21 @@ internal sealed class SetPassageTool : RouteToolBase
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
-            foreach (var (_, field, value) in values)
+            route.History.Execute(RouteEditLabels.EditPassage, () =>
             {
-                if (clear.Contains(ClearName(field)))
-                    route.SetPassageValue(field, null);
-                else if (value.HasValue)
-                    route.SetPassageValue(field, value);
-            }
+                foreach (var (_, field, value) in values)
+                {
+                    if (clear.Contains(ClearName(field)))
+                        route.SetPassageValue(field, null);
+                    else if (value.HasValue)
+                        route.SetPassageValue(field, value);
+                }
 
-            if (clear.Contains("departure"))
-                route.SetDeparture(null);
-            else if (request.Departure.HasValue)
-                route.SetDeparture(request.Departure);
+                if (clear.Contains("departure"))
+                    route.SetDeparture(null);
+                else if (request.Departure.HasValue)
+                    route.SetDeparture(request.Departure);
+            });
 
             return Ok(route, Routes);
         });

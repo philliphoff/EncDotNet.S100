@@ -15,8 +15,9 @@ namespace EncDotNet.S100.Viewer.Routing;
 /// and leg overrides through <see cref="Route.SetLegOverride"/>, so that the
 /// "store an override only when it differs" rule and the
 /// <see cref="Route.Changed"/> event stay consistent. Each of those methods
-/// sets one value and returns the previous one, so an edit can be recorded
-/// and reverted as a single command.
+/// sets one value and returns the previous one. Interactive and agent edits
+/// run inside <see cref="Route.History"/>, whose snapshots include the
+/// passage, so each one undoes as one step.
 /// </para>
 /// <para>
 /// The vessel stays on <see cref="RouteInfo.Vessel"/>; the Passage card shows
@@ -92,6 +93,21 @@ public sealed class RoutePassage
         RoutePassageField.StarboardCrossTrack => StarboardCrossTrackMeters,
         _ => throw new ArgumentOutOfRangeException(nameof(field)),
     };
+
+    /// <summary>Returns a copy of these passage values.</summary>
+    internal RoutePassage Clone() => (RoutePassage)MemberwiseClone();
+
+    /// <summary>Overwrites every value with <paramref name="other"/>'s.</summary>
+    internal void CopyFrom(RoutePassage other)
+    {
+        DraftMeters = other.DraftMeters;
+        SquatMeters = other.SquatMeters;
+        SpeedKnots = other.SpeedKnots;
+        Departure = other.Departure;
+        RequiredUkcMeters = other.RequiredUkcMeters;
+        PortCrossTrackMeters = other.PortCrossTrackMeters;
+        StarboardCrossTrackMeters = other.StarboardCrossTrackMeters;
+    }
 
     internal void Set(RoutePassageField field, double? value)
     {

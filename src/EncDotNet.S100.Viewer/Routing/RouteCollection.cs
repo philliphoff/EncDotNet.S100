@@ -34,6 +34,12 @@ public sealed class RouteCollection
     public event EventHandler? Changed;
 
     /// <summary>
+    /// Raised when any member route's <see cref="Route.History"/> changes, so
+    /// undo/redo affordances can refresh without tracking each route.
+    /// </summary>
+    public event EventHandler? HistoryChanged;
+
+    /// <summary>
     /// Creates a new route, adds it to the collection, and makes it active.
     /// </summary>
     /// <param name="name">Optional route name.</param>
@@ -64,6 +70,7 @@ public sealed class RouteCollection
 
         _routes.Add(route);
         route.Changed += OnRouteChanged;
+        route.History.Changed += OnHistoryChanged;
         _activeRoute = route;
         OnChanged();
     }
@@ -82,6 +89,7 @@ public sealed class RouteCollection
 
         _routes.RemoveAt(position);
         route.Changed -= OnRouteChanged;
+        route.History.Changed -= OnHistoryChanged;
 
         if (ReferenceEquals(_activeRoute, route))
         {
@@ -125,6 +133,8 @@ public sealed class RouteCollection
         => _routes.FirstOrDefault(r => r.Id == id);
 
     private void OnRouteChanged(object? sender, EventArgs e) => OnChanged();
+
+    private void OnHistoryChanged(object? sender, EventArgs e) => HistoryChanged?.Invoke(this, EventArgs.Empty);
 
     private void OnChanged() => Changed?.Invoke(this, EventArgs.Empty);
 }
