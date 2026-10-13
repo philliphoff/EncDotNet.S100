@@ -32,6 +32,27 @@ public sealed class RouteInfo
 
     /// <summary>Vessel the route is planned for; absent until populated.</summary>
     public RouteVesselInfo? Vessel { get; set; }
+
+    /// <summary>Returns a deep copy of this info, including its vessel.</summary>
+    internal RouteInfo Clone()
+    {
+        var copy = (RouteInfo)MemberwiseClone();
+        copy.Vessel = Vessel?.Clone();
+        return copy;
+    }
+
+    /// <summary>Overwrites every field with a deep copy of <paramref name="other"/>'s.</summary>
+    internal void CopyFrom(RouteInfo other)
+    {
+        Name = other.Name;
+        Author = other.Author;
+        Description = other.Description;
+        DeparturePortId = other.DeparturePortId;
+        ArrivalPortId = other.ArrivalPortId;
+        ValidityStart = other.ValidityStart;
+        ValidityEnd = other.ValidityEnd;
+        Vessel = other.Vessel?.Clone();
+    }
 }
 
 /// <summary>
@@ -58,4 +79,7 @@ public sealed class RouteVesselInfo
 
     /// <summary>Beam, in metres (S-421 <c>routeInfoVesselBeam</c>).</summary>
     public double? BeamMeters { get; set; }
+
+    /// <summary>Returns a copy of this vessel info.</summary>
+    internal RouteVesselInfo Clone() => (RouteVesselInfo)MemberwiseClone();
 }

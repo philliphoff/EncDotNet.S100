@@ -65,4 +65,50 @@ public class LatLonFormatterTests
         var text = LatLonFormatter.FormatDecimal(0.0, 5.5);
         Assert.Equal("0.000000, 5.500000", text);
     }
+
+    [Theory]
+    [InlineData("50°46.024'N  001°15.558'W", 50.767067, -1.2593)]
+    [InlineData("50°46,024'N 001°15,558'W", 50.767067, -1.2593)]
+    [InlineData("50 46.024 N 1 15.558 W", 50.767067, -1.2593)]
+    [InlineData("N50°46.024' W001°15.558'", 50.767067, -1.2593)]
+    [InlineData("001°15.558'W 50°46.024'N", 50.767067, -1.2593)]
+    [InlineData("50°46'01.44\"N 1°15'33.48\"W", 50.767067, -1.2593)]
+    [InlineData("50.767067, -1.2593", 50.767067, -1.2593)]
+    [InlineData("50.767067 -1.2593", 50.767067, -1.2593)]
+    [InlineData("12°34.562'S  056°12.345'E", -12.576033, 56.20575)]
+    public void TryParse_accepts_the_app_format_and_common_variants(string text, double lat, double lon)
+    {
+        Assert.True(LatLonFormatter.TryParse(text, out var parsedLat, out var parsedLon));
+        Assert.Equal(lat, parsedLat, 5);
+        Assert.Equal(lon, parsedLon, 5);
+    }
+
+    [Theory]
+    [InlineData(50.767067, -1.2593)]
+    [InlineData(-33.8568, 151.2153)]
+    [InlineData(0.0, 0.0)]
+    [InlineData(89.999, -179.999)]
+    public void TryParse_round_trips_Format(double lat, double lon)
+    {
+        Assert.True(LatLonFormatter.TryParse(LatLonFormatter.Format(lat, lon), out var parsedLat, out var parsedLon));
+        Assert.Equal(lat, parsedLat, 4);
+        Assert.Equal(lon, parsedLon, 4);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("hello")]
+    [InlineData("50°46.024'N")]
+    [InlineData("91°00.000'N 001°00.000'W")]
+    [InlineData("50°00.000'N 181°00.000'W")]
+    [InlineData("50°61.000'N 001°00.000'W")]
+    [InlineData("50°46.024'E 001°15.558'W")]
+    [InlineData("50.5 30 N 1 15 W")]
+    [InlineData("-50°46.024'N 001°15.558'W")]
+    [InlineData("50 1 2 3 4 5 6")]
+    public void TryParse_rejects_text_that_is_not_one_position(string text)
+    {
+        Assert.False(LatLonFormatter.TryParse(text, out _, out _));
+    }
 }

@@ -128,6 +128,82 @@
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
             <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
+        <!-- Inline-edit text fields in a waypoint row: they read as plain text
+             until hovered or focused, then show a field border. -->
+        <Style Selector="TextBox.inlineEdit">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Height" Value="21" />
+            <Setter Property="Margin" Value="-5,0,0,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBox.inlineEdit:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="TextBox.inlineEdit:focus-within">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+        </Style>
+        <Style Selector="TextBox.wpName">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected TextBox.wpName">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBox.wpCoords">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontFamily" Value="Menlo,Consolas,Courier New,monospace" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="TextBox.wpCoords:focus-within">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="TextBox.wpCoords.invalid">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+
+        <!-- "Editing" pill beside the active route's name. -->
+        <Style Selector="Border.editingPill">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="8,1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- Footer mode toggles (Edit, Check passage): 32px, outlined when
+             off, filled with the accent when on. -->
+        <Style Selector="ToggleButton.modeToggle">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ToggleButton.modeToggle:checked">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="ToggleButton.modeToggle:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="ToggleButton.modeToggle:checked ic|FluentIcon">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="ToggleButton.modeToggle:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
     </UserControl.Styles>
 
     <DockPanel LastChildFill="True">
@@ -233,14 +309,16 @@
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <!-- Active-route detail header: name (+ inline rename) and meta. -->
+            <!-- Active-route detail header: name (+ inline rename), the
+                 Editing pill, meta, and the editing toolbar. -->
             <Border Grid.Row="1"
                     IsVisible="{Binding HasActiveRoute}"
                     Padding="11,6,8,6"
                     BorderBrush="{DynamicResource BorderColor}"
                     BorderThickness="0,1,0,1">
                 <StackPanel Spacing="2">
-                    <Grid ColumnDefinitions="*,Auto"
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto"
+                          ColumnSpacing="6"
                           IsVisible="{Binding !IsRenamingActiveRoute}">
                         <TextBlock Grid.Column="0"
                                    Text="{Binding ActiveRouteName}"
@@ -256,6 +334,15 @@
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_EditRouteName}">
                             <ic:FluentIcon Icon="Edit" IconVariant="Regular" FontSize="14" />
                         </Button>
+                        <Border Grid.Column="3"
+                                Classes="editingPill"
+                                AutomationProperties.AutomationId="Routes.Active.EditingBadge"
+                                IsVisible="{Binding IsEditing}">
+                            <TextBlock Text="{x:Static loc:Strings.Routes_EditingBadge}"
+                                       FontSize="10"
+                                       FontWeight="SemiBold"
+                                       Foreground="White" />
+                        </Border>
                     </Grid>
                     <TextBox Text="{Binding RenameText, Mode=TwoWay}"
                              AutomationProperties.AutomationId="Routes.Active.NameBox"
@@ -271,6 +358,60 @@
                     <TextBlock Text="{Binding ActiveRouteDetailMeta}"
                                FontSize="11"
                                Opacity="0.6" />
+
+                    <!-- Editing toolbar: undo / redo, zoom to route / reverse,
+                         and the keyboard hint. -->
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*"
+                          Margin="-6,2,0,0">
+                        <Button Grid.Column="0"
+                                AutomationProperties.AutomationId="Routes.Undo"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_UndoRouteEdit}"
+                                AutomationProperties.HelpText="{Binding UndoTooltip}"
+                                Classes="Icon"
+                                Command="{Binding UndoCommand}"
+                                ToolTip.Tip="{Binding UndoTooltip}">
+                            <ic:FluentIcon Icon="ArrowUndo" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <Button Grid.Column="1"
+                                AutomationProperties.AutomationId="Routes.Redo"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_RedoRouteEdit}"
+                                AutomationProperties.HelpText="{Binding RedoTooltip}"
+                                Classes="Icon"
+                                Command="{Binding RedoCommand}"
+                                ToolTip.Tip="{Binding RedoTooltip}">
+                            <ic:FluentIcon Icon="ArrowRedo" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <Border Grid.Column="2"
+                                Width="1"
+                                Height="16"
+                                Margin="4,0"
+                                Background="{DynamicResource BorderColor}" />
+                        <Button Grid.Column="3"
+                                AutomationProperties.AutomationId="Routes.ZoomToRoute"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_ZoomToRoute}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ZoomToRoute}"
+                                Classes="Icon"
+                                Command="{Binding ZoomToRouteCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToRoute}">
+                            <ic:FluentIcon Icon="ZoomFit" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <Button Grid.Column="4"
+                                AutomationProperties.AutomationId="Routes.Reverse"
+                                AutomationProperties.Name="{x:Static loc:Strings.Button_ReverseRoute}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ReverseRoute}"
+                                Classes="Icon"
+                                Command="{Binding ReverseActiveRouteCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReverseRoute}">
+                            <ic:FluentIcon Icon="ArrowSwap" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <TextBlock Grid.Column="5"
+                                   Text="{Binding EditHint}"
+                                   FontSize="10.5"
+                                   Opacity="0.55"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </StackPanel>
             </Border>
 
@@ -302,26 +443,51 @@
                                                 AutomationProperties.Name="{Binding Label}"
                                                 Command="{Binding $parent[ItemsControl].((vm:RoutesPanelViewModel)DataContext).SelectWaypointCommand}"
                                                 CommandParameter="{Binding}" />
-                                        <!-- Row visuals (top layer). The circle/text
-                                             are non-hit-testable so clicks fall through
-                                             to the select target; only the overflow
-                                             button captures its own clicks. -->
+                                        <!-- Row visuals (top layer). The disc is
+                                             non-hit-testable so clicks fall through
+                                             to the select target; the name and
+                                             position fields and the overflow
+                                             button take their own clicks. -->
                                         <Grid ColumnDefinitions="*,Auto" Margin="8,5">
                                             <Grid Grid.Column="0"
                                                   ColumnDefinitions="28,*"
-                                                  ColumnSpacing="8"
-                                                  IsHitTestVisible="False">
-                                                <Border Grid.Column="0" Classes="wpCircle">
+                                                  ColumnSpacing="8">
+                                                <Border Grid.Column="0"
+                                                        Classes="wpCircle"
+                                                        VerticalAlignment="Top"
+                                                        Margin="0,2,0,0"
+                                                        IsHitTestVisible="False">
                                                     <TextBlock Classes="wpNum"
                                                                Text="{Binding Number}" />
                                                 </Border>
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                    <TextBlock Classes="wpLabel"
-                                                               Text="{Binding Label}" />
-                                                    <TextBlock Text="{Binding Coords}"
+                                                    <TextBox Classes="inlineEdit wpName"
+                                                             AutomationProperties.AutomationId="Routes.Waypoint.Name"
+                                                             AutomationProperties.Name="{x:Static loc:Strings.Label_WaypointName}"
+                                                             Text="{Binding NameText, Mode=TwoWay}"
+                                                             PlaceholderText="{Binding FallbackName}">
+                                                        <TextBox.KeyBindings>
+                                                            <KeyBinding Gesture="Enter" Command="{Binding CommitNameCommand}" />
+                                                            <KeyBinding Gesture="Escape" Command="{Binding RevertNameCommand}" />
+                                                        </TextBox.KeyBindings>
+                                                    </TextBox>
+                                                    <TextBox Classes="inlineEdit wpCoords"
+                                                             Classes.invalid="{Binding HasCoordsError}"
+                                                             AutomationProperties.AutomationId="Routes.Waypoint.Position"
+                                                             AutomationProperties.Name="{x:Static loc:Strings.Label_WaypointPosition}"
+                                                             Text="{Binding CoordsText, Mode=TwoWay}">
+                                                        <TextBox.KeyBindings>
+                                                            <KeyBinding Gesture="Enter" Command="{Binding CommitCoordsCommand}" />
+                                                            <KeyBinding Gesture="Escape" Command="{Binding RevertCoordsCommand}" />
+                                                        </TextBox.KeyBindings>
+                                                    </TextBox>
+                                                    <TextBlock AutomationProperties.AutomationId="Routes.Waypoint.PositionError"
+                                                               Text="{Binding CoordsError}"
+                                                               IsVisible="{Binding HasCoordsError}"
+                                                               Foreground="{DynamicResource DestructiveColor}"
                                                                FontSize="11"
-                                                               Opacity="0.55"
-                                                               FontFamily="Menlo,Consolas,Courier New,monospace" />
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,2,0,0" />
                                                 </StackPanel>
                                             </Grid>
                                             <!-- Overflow menu. The flyout binds to
@@ -392,46 +558,41 @@
                            VerticalAlignment="Top"
                            IsVisible="{Binding !HasActiveRoute}" />
 
-                <!-- Footer action bar. -->
+                <!-- Footer mode toggles: Edit on the left, Check passage on
+                     the right, in fixed places so a mode is turned off where it
+                     was turned on. Turning Edit off is "done". -->
                 <Border Grid.Row="1"
                         IsVisible="{Binding HasActiveRoute}"
                         Padding="8,6,8,8"
                         BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="0,1,0,0">
-                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
-                        <Button Grid.Column="0"
-                                AutomationProperties.AutomationId="Routes.InsertWaypoint"
-                                AutomationProperties.Name="{x:Static loc:Strings.Label_InsertWaypoint}"
-                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_InsertWaypoint}"
-                                Classes="Outline"
-                                VerticalContentAlignment="Center"
-                                Command="{Binding InsertAfterSelectedCommand}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_InsertWaypoint}">
-                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
-                                <TextBlock Text="{x:Static loc:Strings.Button_InsertWaypoint}" FontSize="12" VerticalAlignment="Center" />
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <ToggleButton Grid.Column="0"
+                                      Classes="modeToggle"
+                                      AutomationProperties.AutomationId="Routes.EditToggle"
+                                      AutomationProperties.Name="{x:Static loc:Strings.Button_EditRoute}"
+                                      AutomationProperties.HelpText="{Binding EditToggleTooltip}"
+                                      IsChecked="{Binding IsEditing, Mode=TwoWay}"
+                                      ToolTip.Tip="{Binding EditToggleTooltip}">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <ic:FluentIcon Icon="Edit" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Button_EditRoute}" FontSize="12" VerticalAlignment="Center" />
                             </StackPanel>
-                        </Button>
-                        <Button Grid.Column="1"
-                                AutomationProperties.AutomationId="Routes.Reverse"
-                                AutomationProperties.Name="{x:Static loc:Strings.Button_ReverseRoute}"
-                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ReverseRoute}"
-                                Classes="Outline"
-                                VerticalContentAlignment="Center"
-                                Command="{Binding ReverseActiveRouteCommand}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReverseRoute}">
-                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <ic:FluentIcon Icon="ArrowSwap" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
-                                <TextBlock Text="{x:Static loc:Strings.Button_ReverseRoute}" FontSize="12" VerticalAlignment="Center" />
+                        </ToggleButton>
+                        <ToggleButton Grid.Column="2"
+                                      Classes="modeToggle"
+                                      AutomationProperties.AutomationId="Routes.CheckPassageToggle"
+                                      AutomationProperties.Name="{x:Static loc:Strings.Button_CheckPassage}"
+                                      AutomationProperties.HelpText="{Binding CheckPassageTooltip}"
+                                      IsEnabled="{Binding CanCheckPassage}"
+                                      IsChecked="{Binding IsCheckingPassage, Mode=OneWay}"
+                                      ToolTip.Tip="{Binding CheckPassageTooltip}"
+                                      ToolTip.ShowOnDisabled="True">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <ic:FluentIcon Icon="Gauge" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Button_CheckPassage}" FontSize="12" VerticalAlignment="Center" />
                             </StackPanel>
-                        </Button>
-                        <Button Grid.Column="3"
-                                AutomationProperties.AutomationId="Routes.Done"
-                                Classes="Primary"
-                                VerticalContentAlignment="Center"
-                                Content="{x:Static loc:Strings.Button_DoneRouteEdit}"
-                                Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ExitRouteEditModeCommand}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_DoneRouteEdit}" />
+                        </ToggleButton>
                     </Grid>
                 </Border>
             </Grid>

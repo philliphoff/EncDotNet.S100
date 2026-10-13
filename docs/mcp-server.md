@@ -245,11 +245,15 @@ the active route when you omit `routeId`. Waypoints are addressed by zero-based
 waypoint `i+1`. The fields follow the S-421 model, so a route maps onto S-421
 GML directly.
 
+Each route keeps its own undo history. Every edit a route tool makes is one
+step in it, shared with edits made in the viewer, so `undo_route_edit` can
+revert a drag on the map and Ctrl+Z (⌘Z) can revert a tool's edit.
+
 | Tool | Changes state | What it does |
 |---|---|---|
 | `create_route` | Yes | Creates an empty route and makes it the active route. Optional `name` and `id` (a GUID is generated when you omit `id`; ids must be unique). Returns the route's full state, as `get_route` does. |
-| `list_routes` | No | Lists every route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm` and `isActive`, and the collection's `activeRouteId`. |
-| `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs` (`index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, and the S-421 navigational envelope) and `totalDistanceNm`. |
+| `list_routes` | No | Lists every route with its `routeId`, `name`, `waypointCount`, `legCount`, `totalDistanceNm` and `isActive`, the collection's `activeRouteId`, and `editMode` (whether the route editor is on). |
+| `get_route` | No | Returns one route: `routeId`, `name`, `isActive`, `info` (name, author, description, ports, validity, vessel), `waypoints` (`index`, `lat`, `lon`, and optional `number`, `name`, `fixed`, `turnRadiusNm`), `legs` (`index`, `geometryType`, computed `distanceNm` and `initialBearingDegrees`, and the S-421 navigational envelope), `totalDistanceNm`, and the undo state: `canUndo`, `canRedo`, `undoLabel` and `redoLabel` (for example `move waypoint`). |
 | `delete_route` | Yes | Removes a route. Returns `routeId`, `deleted` and the new `activeRouteId`. |
 | `append_waypoint` | Yes | Adds a waypoint (`lat`, `lon`) at the end of a route, with optional `number`, `name`, `fixed` and `turnRadiusNm`. Returns the updated route. |
 | `insert_waypoint` | Yes | Inserts a waypoint at `index` (`0` to `waypointCount`; `0` prepends and `waypointCount` appends), splitting the leg there. Takes the same optional fields as `append_waypoint`. Returns the updated route. |
@@ -257,6 +261,9 @@ GML directly.
 | `delete_waypoint` | Yes | Removes the waypoint at `index`, merging the legs either side. Returns the updated route. |
 | `set_leg_attributes` | Yes | Updates one leg (`legIndex`): its `geometryType` (`loxodrome` or `geodesic`) and its navigational envelope (cross-track and channel limits, safety contour and depth, minimum and maximum SOG and STW, draft, static and dynamic UKC, safety margin, note; metres and knots as in S-421). Values you pass overwrite; values you omit are unchanged. Returns the updated route. |
 | `set_route_info` | Yes | Updates route metadata (`name`, `author`, `description`, `departurePortId`, `arrivalPortId`, `validityStart`, `validityEnd`) and vessel particulars (`vesselName`, `vesselMmsi`, `vesselImo`, `vesselCallsign`, `vesselLengthMeters`, `vesselBeamMeters`; passing any vessel field creates the vessel block). Values you pass overwrite. Returns the updated route. |
+| `undo_route_edit` | Yes | Undoes the most recent edit to a route, whether it was made in the viewer or by a route tool. Returns the updated route. Fails with `route_history_empty` when there is nothing to undo. |
+| `redo_route_edit` | Yes | Redoes the most recently undone edit. Any new edit clears what can be redone. Fails with `route_history_empty` when there is nothing to redo. |
+| `set_route_edit_mode` | Yes | Turns the route editor on (`enabled: true`) or off, as the Routes panel's **Edit** toggle and Ctrl+E (⌘E) do. While it is on, clicks on the map add waypoints to the active route. Returns `enabled` and `activeRouteId`. |
 
 A typical sequence:
 
@@ -264,7 +271,8 @@ A typical sequence:
 2. `append_waypoint` and `insert_waypoint` lay down the geometry. Use the query
    tools, such as `sample_coverage`, `nearest_features` and `find_at`, to check
    each leg.
-3. `move_waypoint` and `delete_waypoint` refine it.
+3. `move_waypoint` and `delete_waypoint` refine it, and `undo_route_edit`
+   steps back.
 4. `set_leg_attributes` sets each leg's geometry type and navigational
    envelope, and `set_route_info` sets the metadata and vessel particulars.
 5. `get_route` or `list_routes` reads back the result.

@@ -130,6 +130,13 @@ public partial class MainWindow : ShadUI.Window
         // the map, the Timeline or nothing has focus (never while typing).
         AddHandler(KeyDownEvent, OnTimelineKeyDown, RoutingStrategies.Tunnel);
 
+        // Route editor keys (#895): Ctrl+E (⌘E) edit, Ctrl+Z / Ctrl+Shift+Z
+        // undo and redo, Delete removes the selected waypoint; never while typing.
+        Tools.RouteEditorKeys.Attach(
+            this,
+            _viewModel.RoutesService,
+            visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
+
         // The Time HUD and the dock follow the map's width (#712 F5).
         MapArea.SizeChanged += (_, e) => _viewModel.MapWidth = e.NewSize.Width;
         SizeChanged += (_, e) => _viewModel.WindowWidth = e.NewSize.Width;

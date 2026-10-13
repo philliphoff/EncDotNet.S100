@@ -1306,7 +1306,7 @@
     <value>{0:0.0} NM @ {1:000}°T</value>
   </data>
   <data name="Tooltip_RouteEditMode" xml:space="preserve">
-    <value>Edit route (click to add waypoints, drag to move)</value>
+    <value>Edit route ({0}): click to add waypoints, drag to move</value>
   </data>
   <data name="Menu_RouteEditMode" xml:space="preserve">
     <value>Route Edit Mode</value>
@@ -1335,44 +1335,11 @@
   <data name="Routes_NoActiveRoute" xml:space="preserve">
     <value>Select a route to view its waypoints and legs.</value>
   </data>
-  <data name="Routes_WaypointsHeader" xml:space="preserve">
-    <value>Waypoints &amp; legs</value>
-  </data>
-  <data name="Routes_TotalDistanceFormat" xml:space="preserve">
-    <value>{0} waypoints · {1:0.0} NM total</value>
-  </data>
-  <data name="Routes_WaypointRowFormat" xml:space="preserve">
-    <value>{0}. {1:0.0000}, {2:0.0000}</value>
-  </data>
-  <data name="Routes_LegRowFormat" xml:space="preserve">
-    <value>{0:0.0} NM @ {1:000}°T</value>
-  </data>
-  <data name="Button_AddRoute" xml:space="preserve">
-    <value>Add</value>
-  </data>
   <data name="Tooltip_AddRoute" xml:space="preserve">
     <value>Add a new empty route and start editing it</value>
   </data>
-  <data name="Button_RemoveRoute" xml:space="preserve">
-    <value>Remove</value>
-  </data>
-  <data name="Tooltip_RemoveRoute" xml:space="preserve">
-    <value>Remove the selected route</value>
-  </data>
-  <data name="Button_PromoteMeasurement" xml:space="preserve">
-    <value>From measurement</value>
-  </data>
   <data name="Tooltip_PromoteMeasurement" xml:space="preserve">
     <value>Create a route from the current measurement path</value>
-  </data>
-  <data name="Button_DeleteWaypoint" xml:space="preserve">
-    <value>Delete waypoint</value>
-  </data>
-  <data name="Tooltip_DeleteWaypoint" xml:space="preserve">
-    <value>Delete the selected waypoint from the active route</value>
-  </data>
-  <data name="Button_ToggleLegGeometry" xml:space="preserve">
-    <value>Toggle leg geometry</value>
   </data>
   <data name="Tooltip_ToggleLegGeometry" xml:space="preserve">
     <value>Switch the selected leg between rhumb line and great circle</value>
@@ -1398,29 +1365,14 @@
   <data name="Routes_WaypointNameFormat" xml:space="preserve">
     <value>Waypoint {0}</value>
   </data>
-  <data name="Routes_WaypointCoordFormat" xml:space="preserve">
-    <value>{0:0.0000}, {1:0.0000}</value>
-  </data>
   <data name="Routes_LegMetaFormat" xml:space="preserve">
     <value>{0:0.0} NM · {1:000}°T</value>
-  </data>
-  <data name="Button_InsertWaypoint" xml:space="preserve">
-    <value>Insert</value>
-  </data>
-  <data name="Tooltip_InsertWaypoint" xml:space="preserve">
-    <value>Insert a waypoint after the selected one</value>
   </data>
   <data name="Button_ReverseRoute" xml:space="preserve">
     <value>Reverse</value>
   </data>
   <data name="Tooltip_ReverseRoute" xml:space="preserve">
     <value>Reverse the direction of the active route</value>
-  </data>
-  <data name="Button_DoneRouteEdit" xml:space="preserve">
-    <value>Done</value>
-  </data>
-  <data name="Tooltip_DoneRouteEdit" xml:space="preserve">
-    <value>Finish editing and leave route edit mode</value>
   </data>
   <data name="Menu_RenameRoute" xml:space="preserve">
     <value>Rename</value>
@@ -1442,6 +1394,51 @@
   </data>
   <data name="Tooltip_WaypointRowMenu" xml:space="preserve">
     <value>Waypoint actions</value>
+  </data>
+  <data name="Routes_EditingBadge" xml:space="preserve">
+    <value>Editing</value>
+  </data>
+  <data name="Routes_EditHintFormat" xml:space="preserve">
+    <value>{0} edit · Esc done</value>
+  </data>
+  <data name="Button_EditRoute" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Tooltip_EditRouteToggle" xml:space="preserve">
+    <value>Edit the route on the map ({0}). Turn off when done.</value>
+  </data>
+  <data name="Button_CheckPassage" xml:space="preserve">
+    <value>Check passage</value>
+  </data>
+  <data name="Tooltip_CheckPassageNoDraft" xml:space="preserve">
+    <value>Add a draft to check clearance</value>
+  </data>
+  <data name="Label_UndoRouteEdit" xml:space="preserve">
+    <value>Undo</value>
+  </data>
+  <data name="Label_RedoRouteEdit" xml:space="preserve">
+    <value>Redo</value>
+  </data>
+  <data name="Tooltip_UndoRouteEdit" xml:space="preserve">
+    <value>Undo ({0})</value>
+  </data>
+  <data name="Tooltip_RedoRouteEdit" xml:space="preserve">
+    <value>Redo ({0})</value>
+  </data>
+  <data name="Label_ZoomToRoute" xml:space="preserve">
+    <value>Zoom to route</value>
+  </data>
+  <data name="Tooltip_ZoomToRoute" xml:space="preserve">
+    <value>Zoom the map to the route</value>
+  </data>
+  <data name="Routes_CoordinateError" xml:space="preserve">
+    <value>Enter a position like 50°46.024'N 001°15.558'W</value>
+  </data>
+  <data name="Label_WaypointName" xml:space="preserve">
+    <value>Waypoint name</value>
+  </data>
+  <data name="Label_WaypointPosition" xml:space="preserve">
+    <value>Waypoint position</value>
   </data>
   <data name="Tooltip_EditRouteName" xml:space="preserve">
     <value>Rename this route</value>
@@ -2835,9 +2832,6 @@
   </data>
   <data name="Label_HoldResume" xml:space="preserve">
     <value>Hold or resume</value>
-  </data>
-  <data name="Label_InsertWaypoint" xml:space="preserve">
-    <value>Insert waypoint</value>
   </data>
   <data name="Label_MeasureMode" xml:space="preserve">
     <value>Measure</value>
