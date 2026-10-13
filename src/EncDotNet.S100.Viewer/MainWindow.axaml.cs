@@ -1029,9 +1029,43 @@ public partial class MainWindow : ShadUI.Window
         _routeMariner = App.Services.GetService<IMarinerSettingsProvider>();
         _routeTimeFormat = App.Services.GetService<ITimeFormatProvider>();
         if (_passageCheck is not null)
+        {
             _passageCheck.Changed += OnRouteStoreChanged;
 
+            // #902: hovering the checked route moves the Clearance cursor (and the ghost).
+            MapControl.AddHandler(PointerMovedEvent, OnMapPointerMovedForCheck, RoutingStrategies.Tunnel, handledEventsToo: true);
+        }
+
         RebuildRouteOverlay();
+    }
+
+    /// <summary>Within this many pixels of the checked route, the pointer moves the profile cursor.</summary>
+    private const double CheckHoverRadiusPx = 12;
+
+    private void OnMapPointerMovedForCheck(object? sender, PointerEventArgs e)
+    {
+        if (_passageCheck is not { IsActive: true, Current: { } current })
+            return;
+
+        var pointer = e.GetPosition(MapControl);
+        double? nearest = null;
+        var best = CheckHoverRadiusPx * CheckHoverRadiusPx;
+        foreach (var sample in current.Result.Samples)
+        {
+            if (LatLonToScreen(sample.Position) is not { } p)
+                continue;
+            var dx = p.X - pointer.X;
+            var dy = p.Y - pointer.Y;
+            var d2 = (dx * dx) + (dy * dy);
+            if (d2 < best)
+            {
+                best = d2;
+                nearest = sample.DistanceMeters;
+            }
+        }
+
+        if (nearest is { } distance)
+            _passageCheck.SetCursor(distance);
     }
 
     private void OnRouteStoreChanged(object? sender, EventArgs e) =>

@@ -1149,7 +1149,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>(),
             sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>(),
             new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>()),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
+            sp.GetRequiredService<ClearanceViewModel>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));
@@ -1361,6 +1362,26 @@ public partial class App : Application
             dock: TabDock.Bottom,
             // The Time HUD shows time-aware data on the map; the dock opens on request (#712 F5).
             autoOpenOnContentSignal: false);
+
+        // Clearance (#902): the profile along the checked route, next to the
+        // Timeline in the bottom dock while Check passage is on.
+        services.AddSingleton(sp => new ClearanceViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
+            sp.GetService<IMarinerSettingsProvider>(),
+            sp.GetService<ITimeFormatProvider>(),
+            sp.GetService<IThemeService>()));
+        services.AddActivityTab<ClearanceViewModel, ClearanceView>(
+            id: MainViewModel.ClearanceTabId,
+            order: 20,
+            title: Strings.Clearance_Title,
+            name: Strings.Label_Activity_Clearance,
+            tooltip: Strings.Clearance_Title,
+            iconFactory: static () => new FluentIcon { Icon = Icon.ChartMultiple, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            dock: TabDock.Bottom,
+            visibilitySourceFactory: static sp =>
+                new EncDotNet.S100.Viewer.ViewModels.Activities.CheckModeVisibilitySource(
+                    sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>()));
 
         // Main window — receives only the StartupOptions plus the small set
         // of cross-cutting services it still owns directly. Per-dataset

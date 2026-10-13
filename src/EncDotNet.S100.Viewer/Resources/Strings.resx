@@ -4796,4 +4796,148 @@
   <data name="Tooltip_ObjectInformationEdge" xml:space="preserve">
     <value>Show Object Information</value>
   </data>
+  <data name="Clearance_Title" xml:space="preserve">
+    <value>Clearance</value>
+  </data>
+  <data name="Clearance_Distance" xml:space="preserve">
+    <value>Distance</value>
+  </data>
+  <data name="Clearance_Time" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="Clearance_Sources" xml:space="preserve">
+    <value>Sources</value>
+  </data>
+  <data name="Tooltip_ClearanceSources" xml:space="preserve">
+    <value>Show where the clearance values come from</value>
+  </data>
+  <data name="Tooltip_ClearanceDistance" xml:space="preserve">
+    <value>Plot the profile against distance</value>
+  </data>
+  <data name="Tooltip_ClearanceTime" xml:space="preserve">
+    <value>Plot the profile against ETA</value>
+  </data>
+  <data name="Tooltip_ClearanceTimeUnavailable" xml:space="preserve">
+    <value>Add a speed to plot the profile against ETA</value>
+  </data>
+  <data name="Clearance_Empty" xml:space="preserve">
+    <value>Turn on Check passage on a route to see its clearance profile.</value>
+  </data>
+  <data name="Clearance_ReadoutPositionFormat" xml:space="preserve">
+    <value>{0:0.0} NM · {1}</value>
+  </data>
+  <data name="Clearance_ReadoutDistanceFormat" xml:space="preserve">
+    <value>{0:0.0} NM</value>
+  </data>
+  <data name="Clearance_ChartedDepth" xml:space="preserve">
+    <value>Charted depth</value>
+  </data>
+  <data name="Clearance_WaterLevel" xml:space="preserve">
+    <value>Water level</value>
+  </data>
+  <data name="Clearance_DraftSquat" xml:space="preserve">
+    <value>Draft + squat</value>
+  </data>
+  <data name="Clearance_Ukc" xml:space="preserve">
+    <value>UKC</value>
+  </data>
+  <data name="Clearance_SourceS102Format" xml:space="preserve">
+    <value>S-102 · {0} · ±{1}</value>
+  </data>
+  <data name="Clearance_SourceS102NoUncertaintyFormat" xml:space="preserve">
+    <value>S-102 · {0}</value>
+  </data>
+  <data name="Clearance_SourceS101Format" xml:space="preserve">
+    <value>S-101 {0} · lower confidence</value>
+  </data>
+  <data name="Clearance_NoDepth" xml:space="preserve">
+    <value>No charted depth here</value>
+  </data>
+  <data name="Clearance_SourceS104StationFormat" xml:space="preserve">
+    <value>S-104 · {0} · {1}</value>
+  </data>
+  <data name="Clearance_SourceS104GridFormat" xml:space="preserve">
+    <value>S-104 · {0} · {1}</value>
+  </data>
+  <data name="Clearance_NoTide" xml:space="preserve">
+    <value>No S-104 at this ETA · tide not applied</value>
+  </data>
+  <data name="Clearance_TideDatumMismatch" xml:space="preserve">
+    <value>S-104 on another datum · tide not applied</value>
+  </data>
+  <data name="Clearance_StateLowConfidence" xml:space="preserve">
+    <value>Low confidence</value>
+  </data>
+  <data name="Clearance_StateNoData" xml:space="preserve">
+    <value>No data</value>
+  </data>
+  <data name="Clearance_SourcesS102" xml:space="preserve">
+    <value>S-102 cells</value>
+  </data>
+  <data name="Clearance_SourcesS101" xml:space="preserve">
+    <value>S-101 fallback</value>
+  </data>
+  <data name="Clearance_SourcesS104" xml:space="preserve">
+    <value>S-104 water level</value>
+  </data>
+  <data name="Clearance_SourcesUncertainty" xml:space="preserve">
+    <value>S-102 uncertainty</value>
+  </data>
+  <data name="Clearance_SourcesDatums" xml:space="preserve">
+    <value>Vertical datums</value>
+  </data>
+  <data name="Clearance_SourcesGaps" xml:space="preserve">
+    <value>Gaps</value>
+  </data>
+  <data name="Clearance_SourcesNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="Clearance_StretchFormat" xml:space="preserve">
+    <value>{0:0.0}–{1:0.0} NM · {2}</value>
+  </data>
+  <data name="Clearance_MaxUncertaintyFormat" xml:space="preserve">
+    <value>Up to ±{0}</value>
+  </data>
+  <data name="Clearance_DatumsFormat" xml:space="preserve">
+    <value>Charted depth: {0} · water level: {1}</value>
+  </data>
+  <data name="Clearance_DatumUnknown" xml:space="preserve">
+    <value>not declared</value>
+  </data>
+  <data name="Clearance_StationFormat" xml:space="preserve">
+    <value>{0} · station {1}</value>
+  </data>
+  <data name="Clearance_GridFormat" xml:space="preserve">
+    <value>{0} · grid</value>
+  </data>
+  <data name="Clearance_Gap_NoChartedDepth" xml:space="preserve">
+    <value>No charted depth</value>
+  </data>
+  <data name="Clearance_Gap_NoWaterLevelCoverage" xml:space="preserve">
+    <value>Outside S-104</value>
+  </data>
+  <data name="Clearance_Gap_WaterLevelBeforeStart" xml:space="preserve">
+    <value>Before S-104 starts</value>
+  </data>
+  <data name="Clearance_Gap_WaterLevelAfterEnd" xml:space="preserve">
+    <value>After S-104 ends</value>
+  </data>
+  <data name="Clearance_Gap_WaterLevelNoData" xml:space="preserve">
+    <value>S-104 has no value</value>
+  </data>
+  <data name="Clearance_Gap_DatumMismatch" xml:space="preserve">
+    <value>Datum mismatch, tide not applied</value>
+  </data>
+  <data name="Clearance_Gap_ChartedDepthFromS101" xml:space="preserve">
+    <value>Charted depth from S-101</value>
+  </data>
+  <data name="Clearance_Gap_DatumUnconfirmed" xml:space="preserve">
+    <value>Datums not confirmed</value>
+  </data>
+  <data name="Label_Activity_Clearance" xml:space="preserve">
+    <value>Clearance</value>
+  </data>
+  <data name="Clearance_RangeFormat" xml:space="preserve">
+    <value>{0:0.0}–{1:0.0} NM</value>
+  </data>
 </root>

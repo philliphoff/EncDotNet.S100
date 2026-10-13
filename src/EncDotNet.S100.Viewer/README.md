@@ -861,9 +861,23 @@ loaded S-104. While it's on:
 - **Object Information** folds to an edge tab, and clicking the tab opens it
   again.
 
+- **The bottom dock** opens on **Clearance**, a tab next to **Timeline**. It
+  shows the clearance profile along the route, against distance or ETA:
+  - the seabed, hatched where it comes from S-101
+  - the required-UKC band
+  - the water level and the keel; where the keel is in the band or below it,
+    the gap is shaded
+  - leg boundaries, a strip of states and the minimum UKC
+
+  Next to the profile, a readout shows the charted depth, water level, draft
+  and UKC at the cursor, each with its source: cell, station and time step.
+  **Sources** lists every dataset, datum and gap behind the result. Hovering
+  the profile moves the ghost vessel, and hovering the route on the map moves
+  the profile's cursor.
+
 Editing recomputes live: the route draws grey and dashed, and the verdict
 dims, until the new result arrives. Turning Check passage off restores the
-map and the dock. The result is an aid for exploring the data, not for
+map and the docks. The result is an aid for exploring the data, not for
 navigation.
 
 **From measurement** copies the current Measure Mode path into a new route and

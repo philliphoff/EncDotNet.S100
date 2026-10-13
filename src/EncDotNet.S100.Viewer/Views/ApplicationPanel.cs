@@ -56,6 +56,20 @@ public class ApplicationPanel : ContentControl
         AvaloniaProperty.Register<ApplicationPanel, string?>(nameof(CloseButtonToolTip));
 
     /// <summary>
+    /// Optional content shown in place of the title, such as the bottom dock's
+    /// tab strip (#902). When <c>null</c>, the upper-cased <see cref="Title"/> shows.
+    /// </summary>
+    public static readonly StyledProperty<object?> TitleContentProperty =
+        AvaloniaProperty.Register<ApplicationPanel, object?>(nameof(TitleContent));
+
+    /// <inheritdoc cref="TitleContentProperty"/>
+    public object? TitleContent
+    {
+        get => GetValue(TitleContentProperty);
+        set => SetValue(TitleContentProperty, value);
+    }
+
+    /// <summary>
     /// Optional controls shown in the title bar before the close button
     /// (e.g. the Timeline's "Collapse to strip", #710).
     /// </summary>

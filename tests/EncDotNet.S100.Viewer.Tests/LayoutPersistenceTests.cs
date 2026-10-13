@@ -142,6 +142,64 @@ public sealed class LayoutPersistenceTests : IDisposable
         Assert.False(vm.IsRightDockEdgeTabVisible);
     }
 
+    private static IActivityTab[] TabsWithClearance(RoutesService routes) =>
+    [
+        new FakeTab { Id = "Datasets", Order = 30, Dock = TabDock.Left },
+        new FakeTab { Id = "Pick", Order = 10, Dock = TabDock.Right },
+        new ActivityTab<object, ContentControl>(
+            MainViewModel.TimelineTabId, 10, "Timeline", "Timeline", () => new ContentControl(), new object(), false, TabDock.Bottom),
+        new ActivityTab<object, ContentControl>(
+            MainViewModel.ClearanceTabId, 20, "Clearance", "Clearance", () => new ContentControl(), new object(), false, TabDock.Bottom,
+            visibility: new CheckModeVisibilitySource(routes)),
+    ];
+
+    [Fact]
+    public void Check_passage_opens_the_bottom_dock_on_clearance_and_restores_it()
+    {
+        var routes = new RoutesService();
+        var vm = CreateViewModel(TabsWithClearance(routes), routes: routes);
+        vm.WindowWidth = 1200;
+        Assert.False(vm.IsBottomDockOpen);
+        Assert.False(vm.HasBottomDockTabs);
+        Assert.Equal([MainViewModel.TimelineTabId], vm.VisibleBottomTabs.Select(t => t.Id));
+
+        routes.IsCheckModeActive = true;
+
+        Assert.True(vm.IsBottomDockOpen);
+        Assert.True(vm.IsClearanceTabSelected);
+        Assert.True(vm.HasBottomDockTabs);
+        Assert.Equal([MainViewModel.TimelineTabId, MainViewModel.ClearanceTabId], vm.VisibleBottomTabs.Select(t => t.Id));
+
+        // The dock's tabs switch between the two.
+        vm.SelectTabCommand.Execute(vm.VisibleBottomTabs[0]);
+        Assert.True(vm.IsTimelineTabSelected);
+        vm.SelectTabCommand.Execute(vm.VisibleBottomTabs[1]);
+        Assert.True(vm.IsClearanceTabSelected);
+
+        routes.IsCheckModeActive = false;
+
+        Assert.False(vm.IsBottomDockOpen);
+        Assert.True(vm.IsTimelineTabSelected);
+        Assert.False(vm.HasBottomDockTabs);
+    }
+
+    [Fact]
+    public void Check_passage_leaves_an_open_timeline_dock_open_on_the_timeline()
+    {
+        var routes = new RoutesService();
+        var vm = CreateViewModel(TabsWithClearance(routes), routes: routes);
+        vm.WindowWidth = 1200;
+        vm.SelectTabCommand.Execute(vm.VisibleBottomTabs[0]);
+        Assert.True(vm.IsBottomDockOpen);
+
+        routes.IsCheckModeActive = true;
+        Assert.True(vm.IsClearanceTabSelected);
+        routes.IsCheckModeActive = false;
+
+        Assert.True(vm.IsBottomDockOpen);
+        Assert.True(vm.IsTimelineTabSelected);
+    }
+
     [Fact]
     public void Check_passage_leaves_a_closed_object_information_dock_closed()
     {

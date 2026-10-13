@@ -27,9 +27,13 @@ internal sealed class PassageCheckFixture
         DateTime? waterEnd = null,
         int? depthDatum = Lat,
         TimeSpan? debounce = null,
-        Action<Action>? post = null)
+        Action<Action>? post = null,
+        double? s101FallbackUntilLon = null)
     {
-        Catalog = new FixedCatalog([Bathymetry(depthDatum), WaterLevel(waterEnd ?? WaterStart.AddHours(6))]);
+        var datasets = new List<LoadedDataset> { Bathymetry(depthDatum, s101FallbackUntilLon), WaterLevel(waterEnd ?? WaterStart.AddHours(6)) };
+        if (s101FallbackUntilLon is not null)
+            datasets.Add(FallbackCell());
+        Catalog = new FixedCatalog(datasets);
         Routes = new RoutesService();
         Route = Routes.Routes.CreateRoute("Fixture");
         for (var i = 0; i < 9; i++)
@@ -57,7 +61,27 @@ internal sealed class PassageCheckFixture
         return Assert.IsType<PassageCheckSnapshot>(Check.Current);
     }
 
-    private static LoadedDataset Bathymetry(int? datum)
+    /// <summary>
+    /// An S-101 cell with one 13 m <c>DepthArea</c> over the whole route and
+    /// a LAT <c>SoundingDatum</c>: the fallback where S-102 has no data.
+    /// </summary>
+    private static LoadedDataset FallbackCell()
+    {
+        var box = Mcp.Tools.Tests.Fakes.S101AreaSynth.Box(-0.02, -0.02, 0.02, 0.2);
+        var cell = Mcp.Tools.Tests.Fakes.S101AreaSynth.Cell(
+        [
+            Mcp.Tools.Tests.Fakes.S101AreaSynth.DepthArea(13, box),
+            Mcp.Tools.Tests.Fakes.S101AreaSynth.SoundingDatum(Lat, box),
+        ]);
+        return new LoadedDataset(
+            new DatasetId("101FIXTURE"),
+            new SpecRef("S-101", new SpecVersion(2, 0, 0)),
+            new BoundingBox(-0.02, -0.02, 0.02, 0.2),
+            null,
+            new S101DatasetData(cell));
+    }
+
+    private static LoadedDataset Bathymetry(int? datum, double? noDataUntilLon = null)
     {
         const int rows = 22;
         const int cols = 200;
@@ -67,7 +91,9 @@ internal sealed class PassageCheckFixture
             for (var c = 0; c < cols; c++)
             {
                 var lon = -0.01 + ((c + 0.5) * 0.001);
-                values[(r * cols) + c] = new BathymetryValue(lon is >= 0.105 and < 0.115 ? 9f : 15f, 0.3f);
+                values[(r * cols) + c] = noDataUntilLon is { } edge && lon < edge
+                    ? new BathymetryValue(S102CoverageSource.FillValue, S102CoverageSource.FillValue)
+                    : new BathymetryValue(lon is >= 0.105 and < 0.115 ? 9f : 15f, 0.3f);
             }
         }
 
