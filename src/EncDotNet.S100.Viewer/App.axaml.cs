@@ -807,6 +807,19 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Viewer.Services.IRouteViewTime>(sp => new EncDotNet.S100.Viewer.Services.TimelineRouteViewTime(
             sp.GetRequiredService<GlobalTimeService>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutesService>();
+        // Check passage (#901): recomputes the active route's UKC off the UI
+        // thread and delivers results on it.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(sp =>
+            new EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
+                sp.GetRequiredService<ViewerDatasetCatalog>(),
+                post: action =>
+                {
+                    if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+                        action();
+                    else
+                        Avalonia.Threading.Dispatcher.UIThread.Post(action);
+                }));
         // Loads persisted routes at startup and writes them back (debounced)
         // on change, so user/agent routes survive a restart. Eagerly
         // initialized in OnFrameworkInitializationCompleted and flushed on
@@ -1135,7 +1148,8 @@ public partial class App : Application
             sp.GetRequiredService<ViewerSettings>().McpTestHooks ? ViewerUiAutomation.ForApplication() : null,
             sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>(),
             sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>(),
-            new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>())));
+            new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>()),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));

@@ -96,6 +96,71 @@ public sealed class RoutesViewTests
     }
 
     [AvaloniaFact]
+    public void Check_passage_shows_the_verdict_card_and_leg_chips_and_turns_off()
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var fixture = new PassageCheckFixture(post: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
+            var panel = new RoutesPanelViewModel(fixture.Routes, check: fixture.Check);
+            using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
+
+            var check = host.Find<ToggleButton>("Routes.CheckPassageToggle");
+            Assert.True(check.IsEnabled);
+            Assert.True(host.IsShown("Routes.Waypoint"));
+
+            host.Click(check);
+            Assert.True(fixture.Routes.IsCheckModeActive);
+            WaitForResult(host, fixture);
+
+            Assert.True(host.IsShown("Routes.Check.Verdict"));
+            Assert.Equal("Below your UKC setting in 1 place", host.Find<TextBlock>("Routes.Check.VerdictTitle").Text);
+            Assert.Equal("-1.5 m", host.Find<TextBlock>("Routes.Check.MinUkc").Text);
+            Assert.StartsWith("Not for navigation", host.Find<TextBlock>("Routes.Check.Footer").Text);
+            Assert.True(host.IsShown("Routes.Check.HeaderMeta"));
+            Assert.Equal(8, host.FindAll<Button>("Routes.Check.Leg").Count);
+            var chips = host.FindAll<Panel>("Routes.Check.Leg.Chip");
+            Assert.Contains("destructive", chips[5].Classes);
+            Assert.Contains("success", chips[0].Classes);
+            Assert.False(host.IsShown("Routes.Waypoint"));
+
+            host.Click(host.Find<ToggleButton>("Routes.Check.FindingsTab"));
+            Assert.True(host.IsShown("Routes.Check.FindingsPlaceholder"));
+            Assert.False(host.IsShown("Routes.Check.Leg"));
+            host.Click(host.Find<ToggleButton>("Routes.Check.LegsTab"));
+            Assert.True(host.IsShown("Routes.Check.Leg"));
+
+            host.Click(check);
+            host.Settle();
+            Assert.False(fixture.Routes.IsCheckModeActive);
+            Assert.False(host.IsShown("Routes.Check.Verdict"));
+            Assert.True(host.IsShown("Routes.Waypoint"));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+    }
+
+    private static void WaitForResult(ViewHost host, PassageCheckFixture fixture)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        do
+        {
+            host.Settle();
+            if (!fixture.Check.IsComputing && fixture.Check.Current is not null)
+            {
+                host.Settle();
+                return;
+            }
+            Thread.Sleep(10);
+        }
+        while (DateTime.UtcNow < deadline);
+        throw new TimeoutException("Check passage didn't produce a result.");
+    }
+
+    [AvaloniaFact]
     public void Undo_and_redo_buttons_and_keys_step_through_panel_edits()
     {
         var (service, route, host) = Show();

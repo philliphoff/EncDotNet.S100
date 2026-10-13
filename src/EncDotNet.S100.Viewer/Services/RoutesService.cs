@@ -99,6 +99,29 @@ internal sealed class RoutesService
     /// <summary>Raised when <see cref="IsEditModeActive"/> changes.</summary>
     public event EventHandler? EditModeChanged;
 
+    private bool _isCheckModeActive;
+
+    /// <summary>
+    /// Whether Check passage is on for the active route (#901). Set by the
+    /// Routes panel's Check passage toggle and the MCP <c>set_check_mode</c>
+    /// tool; <see cref="PassageCheck.PassageCheckService"/> follows it.
+    /// Edit and Check can both be on.
+    /// </summary>
+    public bool IsCheckModeActive
+    {
+        get => _isCheckModeActive;
+        set
+        {
+            if (_isCheckModeActive == value)
+                return;
+            _isCheckModeActive = value;
+            CheckModeChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raised when <see cref="IsCheckModeActive"/> changes.</summary>
+    public event EventHandler? CheckModeChanged;
+
     /// <summary>
     /// Undoes the most recent edit to the active route.
     /// </summary>

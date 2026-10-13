@@ -328,7 +328,7 @@ other:
 | `.Geometry` | Point, polyline and bounding box helpers for the pick services. |
 | `.Spec` | `FeatureDescriberRegistry`, which `DescribeFeatureService` uses to describe a feature per product, and the `FeatureAccessor`, `FeatureGeometryQuery` and `FeatureNames` helpers. |
 | `.Time` | `FeatureValidity` and the time window query helpers. |
-| `.Navigation` | `PassageDataSources`, which builds the charted-depth (S-102, with S-101 fallback) and S-104 water-level sources that `EncDotNet.S100.Navigation`'s passage check reads, from a catalog snapshot. |
+| `.Navigation` | `PassageDataSources`, which builds the charted-depth (S-102, with S-101 fallback) and S-104 water-level sources that `EncDotNet.S100.Navigation`'s passage check reads, from a catalog snapshot; and `PassagePlaceNames`, which labels a point on a passage from named S-101 water and land areas ("Thorn Channel · off Calshot"). |
 
 SoundCharts' `ViewerDatasetCatalog` and the headless `FileDatasetCatalog` both
 use `LoadedDatasetProjector`, so a pick from `s100` produces the same catalog

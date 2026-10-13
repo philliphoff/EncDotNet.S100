@@ -42,6 +42,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IViewerUiControllerAccessor? _uiControllerAccessor;
     private readonly IAppScreenshotProvider? _appScreenshot;
     private readonly IViewerTimelineController? _timeline;
+    private readonly EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? _passageCheck;
     private readonly IViewerDatasetStateController? _datasetState;
     private readonly IViewerNotificationController? _notifications;
     private readonly AdjustableTimeProvider? _testClock;
@@ -83,8 +84,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         IViewerUiAutomation? uiAutomation = null,
         EncDotNet.S100.Collections.Secom.SecomRegistry? secomRegistry = null,
         EncDotNet.S100.Collections.Secom.SecomServerTrust? secomServerTrust = null,
-        ISecomIdentityReferences? secomIdentities = null)
+        ISecomIdentityReferences? secomIdentities = null,
+        EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? passageCheck = null)
     {
+        _passageCheck = passageCheck;
         _secomRegistry = secomRegistry;
         _secomServerTrust = secomServerTrust;
         _secomIdentities = secomIdentities;
@@ -187,7 +190,7 @@ internal sealed class McpServerHost : IAsyncDisposable
             AdditionalTools = additionalTools,
             PassageRoutes = _routesService is null
                 ? null
-                : new ViewerPassageRouteProvider(_routesService, new DispatcherRouteEditInvoker(), _timeline, _testClock),
+                : new ViewerPassageRouteProvider(_routesService, new DispatcherRouteEditInvoker()),
         };
         var next = new S100McpServer(_catalog, options, _loggers);
         try
@@ -405,6 +408,12 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(DeleteWaypointMcpAdapter.Create(new DeleteWaypointTool(_routesService, invoker)));
             tools.Add(SetLegAttributesMcpAdapter.Create(new SetLegAttributesTool(_routesService, invoker)));
             tools.Add(SetRouteInfoMcpAdapter.Create(new SetRouteInfoTool(_routesService, invoker)));
+            if (_passageCheck is not null)
+            {
+                tools.Add(PassageCheckMcpAdapters.Create(new SetCheckModeTool(_routesService, invoker, _passageCheck)));
+                tools.Add(PassageCheckMcpAdapters.Create(new GetCheckStateTool(_routesService, invoker, _passageCheck)));
+                tools.Add(PassageCheckMcpAdapters.Create(new SetPassageCursorTool(_routesService, invoker, _passageCheck)));
+            }
             tools.Add(UndoRouteEditMcpAdapter.Create(new UndoRouteEditTool(_routesService, invoker)));
             tools.Add(RedoRouteEditMcpAdapter.Create(new RedoRouteEditTool(_routesService, invoker)));
             tools.Add(SetRouteEditModeMcpAdapter.Create(new SetRouteEditModeTool(_routesService, invoker)));

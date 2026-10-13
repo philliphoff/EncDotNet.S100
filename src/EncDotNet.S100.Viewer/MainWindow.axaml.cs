@@ -44,6 +44,9 @@ public partial class MainWindow : ShadUI.Window
     private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
     private EncDotNet.S100.Viewer.Services.RoutesService? _routeStore;
+    private EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? _passageCheck;
+    private IMarinerSettingsProvider? _routeMariner;
+    private ITimeFormatProvider? _routeTimeFormat;
     private readonly List<IDisposable> _dynamicSourceRegistrations = new();
     private ViewerCommandSettings? _startupOptions;
     private Color _accentColor;
@@ -1017,7 +1020,16 @@ public partial class MainWindow : ShadUI.Window
 
         _routeStore.Changed += OnRouteStoreChanged;
         _routeStore.EditModeChanged += OnRouteStoreChanged;
+        _routeStore.CheckModeChanged += OnRouteStoreChanged;
         _routeAppearance.Changed += OnRouteStoreChanged;
+
+        // Check passage (#901): the route is coloured by UKC state while the
+        // mode is on, and redrawn whenever a result (or the cursor) changes.
+        _passageCheck = App.Services.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>();
+        _routeMariner = App.Services.GetService<IMarinerSettingsProvider>();
+        _routeTimeFormat = App.Services.GetService<ITimeFormatProvider>();
+        if (_passageCheck is not null)
+            _passageCheck.Changed += OnRouteStoreChanged;
 
         RebuildRouteOverlay();
     }
@@ -1041,7 +1053,15 @@ public partial class MainWindow : ShadUI.Window
             _routeStore.SelectedWaypointIndex,
             _routeStore.SelectedLegIndex,
             _routeStore.IsEditModeActive,
-            _routeAppearance.Current);
+            _routeAppearance.Current,
+            EncDotNet.S100.Viewer.Tools.RouteCheckOverlay.Build(
+                _routeStore.IsCheckModeActive && _passageCheck is not null,
+                _passageCheck?.Current,
+                _passageCheck?.IsStale ?? false,
+                _passageCheck?.Cursor,
+                _routeAppearance.Current,
+                _routeMariner?.Current.DepthUnit ?? EncDotNet.S100.Pipelines.DepthUnit.Metres,
+                _routeTimeFormat?.Current ?? TimeFormat.Local));
         _mapHost.RequestRedraw();
     }
 

@@ -25,7 +25,8 @@ internal sealed record RouteOverlayScene(
     int? SelectedWaypointIndex,
     int? SelectedLegIndex,
     bool IsEditing,
-    RouteOverlayColors Colors)
+    RouteOverlayColors Colors,
+    RouteCheckOverlay? Check = null)
 {
     /// <summary>Number of straight segments approximating a great-circle leg.</summary>
     internal const int GeodesicSegments = 24;
@@ -76,14 +77,15 @@ internal sealed record RouteOverlayScene(
         int? selectedWaypointIndex,
         int? selectedLegIndex,
         bool isEditing,
-        MeasureOverlayAppearance appearance)
+        MeasureOverlayAppearance appearance,
+        RouteCheckOverlay? check = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
         var scene = routes.Routes
             .Select(r => SceneRoute.From(r, ReferenceEquals(r, routes.ActiveRoute)))
             .ToArray();
         return new RouteOverlayScene(
-            scene, selectedWaypointIndex, selectedLegIndex, isEditing, RouteOverlayColors.For(appearance));
+            scene, selectedWaypointIndex, selectedLegIndex, isEditing, RouteOverlayColors.For(appearance), check);
     }
 
     /// <summary>

@@ -4691,4 +4691,109 @@
   <data name="Tooltip_WaypointEtaFromViewTime" xml:space="preserve">
     <value>ETA {0}, from the view time. Set a departure to fix it.</value>
   </data>
+  <data name="Check_VerdictWaterLevelEnds" xml:space="preserve">
+    <value>Arrival is after the water-level data ends</value>
+  </data>
+  <data name="Check_VerdictBelowOne" xml:space="preserve">
+    <value>Below your UKC setting in 1 place</value>
+  </data>
+  <data name="Check_VerdictBelowFormat" xml:space="preserve">
+    <value>Below your UKC setting in {0} places</value>
+  </data>
+  <data name="Check_VerdictIncomplete" xml:space="preserve">
+    <value>No data for part of the passage</value>
+  </data>
+  <data name="Check_VerdictTight" xml:space="preserve">
+    <value>Meets your settings · tight</value>
+  </data>
+  <data name="Check_VerdictMeets" xml:space="preserve">
+    <value>Meets your settings</value>
+  </data>
+  <data name="Check_MinUkcLabel" xml:space="preserve">
+    <value>min UKC</value>
+  </data>
+  <data name="Check_RequiredFormat" xml:space="preserve">
+    <value>required {0}</value>
+  </data>
+  <data name="Check_NoMarginSet" xml:space="preserve">
+    <value>no margin set</value>
+  </data>
+  <data name="Check_LegFormat" xml:space="preserve">
+    <value>Leg {0} → {1}</value>
+  </data>
+  <data name="Check_MinutesBelowFormat" xml:space="preserve">
+    <value>{0} min below</value>
+  </data>
+  <data name="Check_FooterFormat" xml:space="preserve">
+    <value>Not for navigation · computed from {0} for your settings</value>
+  </data>
+  <data name="Check_FooterNoData" xml:space="preserve">
+    <value>Not for navigation · no data loaded for this route</value>
+  </data>
+  <data name="Check_Computing" xml:space="preserve">
+    <value>Checking the passage…</value>
+  </data>
+  <data name="Check_ErrorFormat" xml:space="preserve">
+    <value>Couldn't check the passage: {0}</value>
+  </data>
+  <data name="Check_NoClearance" xml:space="preserve">
+    <value>No clearance could be computed</value>
+  </data>
+  <data name="Check_TabLegs" xml:space="preserve">
+    <value>Legs</value>
+  </data>
+  <data name="Check_TabFindingsFormat" xml:space="preserve">
+    <value>Findings {0}</value>
+  </data>
+  <data name="Check_FindingsPlaceholder" xml:space="preserve">
+    <value>Findings for this route will be listed here.</value>
+  </data>
+  <data name="Check_LegTimesFormat" xml:space="preserve">
+    <value>{0}–{1} · {2:0.0} NM</value>
+  </data>
+  <data name="Check_LegDistanceFormat" xml:space="preserve">
+    <value>{0:0.0} NM</value>
+  </data>
+  <data name="Check_ChipNoTide" xml:space="preserve">
+    <value>no tide</value>
+  </data>
+  <data name="Check_ChipNoData" xml:space="preserve">
+    <value>no data</value>
+  </data>
+  <data name="Check_DepartureFormat" xml:space="preserve">
+    <value>dep {0}</value>
+  </data>
+  <data name="Check_ArrivalFormat" xml:space="preserve">
+    <value>arr {0}</value>
+  </data>
+  <data name="Check_LegendTitle" xml:space="preserve">
+    <value>UKC AT ETA</value>
+  </data>
+  <data name="Check_LegendMeets" xml:space="preserve">
+    <value>Meets your settings</value>
+  </data>
+  <data name="Check_LegendTight" xml:space="preserve">
+    <value>Tight</value>
+  </data>
+  <data name="Check_LegendBelow" xml:space="preserve">
+    <value>Below your UKC setting</value>
+  </data>
+  <data name="Check_LegendNoData" xml:space="preserve">
+    <value>Low confidence · no data</value>
+  </data>
+  <data name="Check_MinUkcPillFormat" xml:space="preserve">
+    <value>Min UKC {0} · {1}</value>
+  </data>
+  <data name="Tooltip_CheckLegRow" xml:space="preserve">
+    <value>Move the cursor to the middle of this leg</value>
+  </data>
+  <data name="Tooltip_CheckLowConfidence" xml:space="preserve">
+    <value>Low confidence: charted depth from S-101, or datums that can't be confirmed to agree</value>
+  </data>
+  <data name="Dock_ObjectInformationEdge" xml:space="preserve">
+    <value>OBJECT INFORMATION</value>
+  </data>
+  <data name="Tooltip_ObjectInformationEdge" xml:space="preserve">
+    <value>Show Object Information</value>
+  </data>
 </root>

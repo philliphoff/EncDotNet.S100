@@ -462,11 +462,13 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600"
-                                  bh:CollapsibleColumn.IsVisible="{Binding IsRightDockOpen}"
+                                  bh:CollapsibleColumn.IsVisible="{Binding IsRightDockShown}"
                                   bh:CollapsibleColumn.ExpandedWidth="360"
                                   bh:CollapsibleColumn.MinWidthWhenVisible="240"
                                   bh:CollapsibleColumn.MaxWidthWhenVisible="600"
                                   bh:CollapsibleColumn.SavedWidth="{Binding RightDockSavedWidth, Mode=TwoWay}" />
+                <!-- The folded Object Information edge tab (#901). -->
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <!-- Left dock pane (activity tabs: Datasets, FCs, PCs, etc.).
@@ -985,7 +987,7 @@
                           Classes="PaneSplitter"
                           Width="4"
                           ResizeDirection="Columns"
-                          IsVisible="{Binding IsRightDockOpen}"
+                          IsVisible="{Binding IsRightDockShown}"
                           bh:HoverDelay.DelayMilliseconds="500"
                           Name="PickPanelSplitter" />
 
@@ -1004,7 +1006,38 @@
                                     CloseCommand="{Binding CloseDockCommand}"
                                     CloseCommandParameter="Right"
                                     CloseButtonToolTip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
-                                    IsVisible="{Binding IsRightDockOpen}" />
+                                    IsVisible="{Binding IsRightDockShown}" />
+
+            <!-- Check passage folds the Object Information dock to a 26 px
+                 edge tab with a vertical label (#901, C1); clicking it, or
+                 turning the mode off, restores the dock. -->
+            <Button Grid.Column="5"
+                    AutomationProperties.AutomationId="Dock.ObjectInformationEdge"
+                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ObjectInformationEdge}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ObjectInformationEdge}"
+                    IsVisible="{Binding IsRightDockEdgeTabVisible}"
+                    Command="{Binding UnfoldRightDockCommand}"
+                    Width="26"
+                    MinWidth="26"
+                    Padding="0"
+                    CornerRadius="0"
+                    VerticalAlignment="Stretch"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Top"
+                    BorderThickness="1,0,0,0"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    Background="Transparent">
+                <LayoutTransformControl Margin="0,12,0,0">
+                    <LayoutTransformControl.LayoutTransform>
+                        <RotateTransform Angle="90" />
+                    </LayoutTransformControl.LayoutTransform>
+                    <TextBlock Text="{x:Static loc:Strings.Dock_ObjectInformationEdge}"
+                               FontSize="10.5"
+                               FontWeight="SemiBold"
+                               LetterSpacing="1"
+                               Opacity="0.7" />
+                </LayoutTransformControl>
+            </Button>
 
             <!--
                 Full-content panel (#845): a left-dock tab that fills the
@@ -1014,7 +1047,7 @@
                 covered.
             -->
             <Border Grid.Column="0"
-                    Grid.ColumnSpan="5"
+                    Grid.ColumnSpan="6"
                     ZIndex="10"
                     IsVisible="{Binding IsContentPanelOpen}">
                 <Border.Background>

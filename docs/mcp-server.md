@@ -273,6 +273,9 @@ revert a drag on the map and Ctrl+Z (⌘Z) can revert a tool's edit.
 | `redo_route_edit` | Yes | Redoes the most recently undone edit. Any new edit clears what can be redone. Fails with `route_history_empty` when there is nothing to redo. |
 | `select_route_item` | Yes | Selects a waypoint (`waypointIndex`) or a leg (`legIndex`), as clicking its row in the **Routes** panel does, or clears the selection when you pass neither. The map highlights the selected waypoint, or haloes the selected leg and always shows its label. Selecting makes the route active. Returns the updated route. |
 | `set_route_edit_mode` | Yes | Turns the route editor on (`enabled: true`) or off, as the Routes panel's **Edit** toggle and Ctrl+E (⌘E) do. While it is on, clicks on the map add waypoints to the active route. Returns `enabled` and `activeRouteId`. |
+| `set_check_mode` | Yes | Turns **Check passage** on (`on: true`) or off for the active route, or for `routeId` (made active first), as the Routes panel's toggle does. The route needs a draft. While it's on, the map colours the route by UKC state at ETA, Object Information folds to its edge tab, and the panel shows the verdict card and leg chips. By default it waits for the result (`wait: false` returns at once). Returns what `get_check_state` returns. |
+| `get_check_state` | No | Returns what Check passage is showing: `on`, `routeId`, `computing`, `stale` (the result is being recomputed after an edit, so the route draws grey and dashed), the `verdict` and `verdictTitle`, `minUkcMeters` and `minUkcLeg`, any `error`, and the cursor (`cursorNm`, `cursorLatitude`, `cursorLongitude`, `cursorLeg`, `cursorEta`). Waits for a pending result unless `wait: false`. For the full numbers, call `get_passage_result`. |
+| `set_passage_cursor` | Yes | Moves the Check passage cursor and the ghost vessel to `distanceNm` along the checked route, as hovering a leg row does, or hides them when `distanceNm` is omitted. Returns the state, including the cursor's position and ETA. |
 
 A typical sequence:
 
@@ -287,6 +290,8 @@ A typical sequence:
    and navigational envelope. `set_route_info` sets the metadata and vessel
    particulars.
 5. `get_route` or `list_routes` reads back the result.
+6. `set_check_mode` turns on Check passage to see the verdict on the map and
+   in the panel, and `get_passage_result` returns the numbers behind it.
 
 ### Test tools
 
@@ -314,9 +319,11 @@ Pass the passage in one of two ways:
   and each pair of consecutive vertices is a leg. `draftMeters` is required.
   Both hosts accept this form.
 - **A route.** In SoundCharts, pass `routeId`, or neither `routeId` nor
-  `polyline` to check the active route. Each leg's draft, speed (maximum SOG,
-  else minimum) and required UKC (static UKC) come from the route.
-  `s100 mcp serve` has no routes and returns `invalid_argument` for this form.
+  `polyline` to check the active route. The values are the ones Check passage
+  uses: the route's passage values with each leg's overrides (`get_passage`,
+  `set_passage`, `set_leg_attributes`), and the route's departure, or the
+  view time when it has none. `s100 mcp serve` has no routes and returns
+  `invalid_argument` for this form.
 
 These arguments override every leg's value:
 

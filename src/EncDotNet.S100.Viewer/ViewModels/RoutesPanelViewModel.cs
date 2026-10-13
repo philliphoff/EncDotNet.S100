@@ -7,6 +7,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.PassageCheck;
 using Mapsui;
 using Mapsui.Projections;
 
@@ -37,6 +38,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     private readonly ICapabilityAccessor<IMapViewportController>? _viewport;
     private readonly IMarinerSettingsProvider? _marinerSettings;
     private readonly ITimeFormatProvider? _timeFormat;
+    private readonly PassageCheckService? _check;
     private bool _suppressSync;
     private Route? _shownRoute;
     private int? _openLegIndex;
@@ -45,13 +47,17 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         RoutesService routes,
         ICapabilityAccessor<IMapViewportController>? viewport = null,
         IMarinerSettingsProvider? marinerSettings = null,
-        ITimeFormatProvider? timeFormat = null)
+        ITimeFormatProvider? timeFormat = null,
+        PassageCheckService? check = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
         _routes = routes;
         _viewport = viewport;
         _marinerSettings = marinerSettings;
         _timeFormat = timeFormat;
+        _check = check;
+        if (check is not null)
+            Check = new PassageCheckViewModel(check, routes, () => DepthUnit, () => TimeFormat);
 
         Passage = new RoutePassageCardViewModel(() => _routes.Routes.ActiveRoute, () => DepthUnit, () => TimeFormat);
         LegDetail = new RouteLegDetailViewModel(() => _routes.Routes.ActiveRoute, () => DepthUnit);
@@ -96,6 +102,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         _routes.Routes.HistoryChanged += (_, _) => RefreshHistory();
         _routes.SelectionChanged += (_, _) => RefreshSelection();
         _routes.EditModeChanged += (_, _) => OnEditModeChanged();
+        _routes.CheckModeChanged += (_, _) => OnCheckModeChanged();
         _routes.ViewTime.Changed += (_, _) => OnViewTimeChanged();
         if (_marinerSettings is not null)
             _marinerSettings.Changed += _ => Rebuild();
@@ -179,16 +186,31 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
     /// <summary>
     /// Whether Check passage can be turned on: the route needs a draft (B8),
-    /// and the check itself (#900) must be available. Until #900 lands the
-    /// toggle stays off even with a draft.
+    /// and the panel needs the check service (absent in some tests).
     /// </summary>
-    public bool CanCheckPassage => HasDraft && IsCheckPassageAvailable;
+    public bool CanCheckPassage => HasDraft && _check is not null;
 
-    /// <summary>Whether this build can check a passage. Set when the check (#900) lands.</summary>
-    internal static bool IsCheckPassageAvailable => false;
+    /// <summary>
+    /// Whether Check passage is on (#901). Bound two-way to the footer's
+    /// Check passage toggle; it stays off without a draft.
+    /// </summary>
+    public bool IsCheckingPassage
+    {
+        get => _routes.IsCheckModeActive;
+        set
+        {
+            if (value && !CanCheckPassage)
+                value = false;
+            _routes.IsCheckModeActive = value;
+            OnPropertyChanged();
+        }
+    }
 
-    /// <summary>Whether Check passage is on. Always <c>false</c> until it can be enabled.</summary>
-    public bool IsCheckingPassage => false;
+    /// <summary>The verdict card, Legs / Findings switch and check-mode leg rows; <c>null</c> without the check service.</summary>
+    public PassageCheckViewModel? Check { get; }
+
+    /// <summary>Whether to show the check-mode panel content instead of the waypoint timeline.</summary>
+    public bool ShowCheckPanel => IsCheckingPassage && Check is not null;
 
     /// <summary>Tooltip on the Check passage toggle: what's missing, or what it does.</summary>
     public string CheckPassageTooltip => HasDraft
@@ -513,6 +535,13 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsEditing));
     }
 
+    private void OnCheckModeChanged()
+    {
+        OnPropertyChanged(nameof(IsCheckingPassage));
+        OnPropertyChanged(nameof(ShowCheckPanel));
+        Check?.Refresh();
+    }
+
     private void RefreshHistory()
     {
         OnPropertyChanged(nameof(CanUndo));
@@ -563,6 +592,10 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasDraft));
         OnPropertyChanged(nameof(CanCheckPassage));
         OnPropertyChanged(nameof(CheckPassageTooltip));
+
+        // Check passage needs a draft (B8): losing it (or the route) turns the mode off.
+        if (_routes.IsCheckModeActive && !CanCheckPassage)
+            _routes.IsCheckModeActive = false;
         ((RelayCommand)ReverseActiveRouteCommand).NotifyCanExecuteChanged();
         ((RelayCommand)ZoomToRouteCommand).NotifyCanExecuteChanged();
         ((RelayCommand)DeleteWaypointCommand).NotifyCanExecuteChanged();

@@ -61,11 +61,12 @@ internal static class RouteOverlayLayer
         int? selectedWaypointIndex,
         int? selectedLegIndex,
         bool isEditing,
-        MeasureOverlayAppearance appearance)
+        MeasureOverlayAppearance appearance,
+        RouteCheckOverlay? check = null)
     {
         if (StyleOf(layer) is not { } style)
             return;
-        style.Scene = RouteOverlayScene.Build(routes, selectedWaypointIndex, selectedLegIndex, isEditing, appearance);
+        style.Scene = RouteOverlayScene.Build(routes, selectedWaypointIndex, selectedLegIndex, isEditing, appearance, check);
         layer.DataHasChanged();
     }
 

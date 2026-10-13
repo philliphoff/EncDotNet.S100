@@ -841,7 +841,30 @@ there and the route's line says so. The speed is the speed over ground you
 enter; S-111 currents aren't applied.
 
 **Check passage**, next to **Edit**, needs a draft, on the passage or on every
-leg. It isn't available yet.
+leg. It checks under-keel clearance along the active route at each point's
+ETA: UKC = charted depth + water level − draft − squat, against the
+**Required UKC** (0 m when unset). Charted depth comes from loaded S-102, or
+from S-101 where there's no S-102 (low confidence); water level comes from
+loaded S-104. While it's on:
+
+- **The map** washes the chart and colours the route by state at ETA:
+  - Meets your settings, Tight (within 0.5 m of the required UKC) and Below
+    your UKC setting. The Below state is drawn wider.
+  - Low confidence and no data, drawn dashed.
+
+  A legend sits at the bottom left. A ring and a pill mark the minimum UKC,
+  and a ghost vessel marks the cursor.
+- **The panel** shows a verdict card instead of the waypoint list. The card has
+  the verdict, the minimum UKC, where and when it occurs, and the sources.
+  Below it, **Legs** lists each leg with its times and a min-UKC chip;
+  hovering a leg moves the cursor to it.
+- **Object Information** folds to an edge tab, and clicking the tab opens it
+  again.
+
+Editing recomputes live: the route draws grey and dashed, and the verdict
+dims, until the new result arrives. Turning Check passage off restores the
+map and the dock. The result is an aid for exploring the data, not for
+navigation.
 
 **From measurement** copies the current Measure Mode path into a new route and
 switches to Route Edit Mode.

@@ -90,13 +90,29 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
         }
 
         var opacity = (float)Math.Clamp(layer.Opacity, 0, 1);
+
+        // C1: a 30 % wash over the chart, under the route, so the coloured
+        // route reads over busy layers such as S-111 arrows.
+        if (scene.Check is { } washed && scene.ActiveRoute is not null)
+        {
+            using var wash = Fill(washed.Colors.Wash.WithAlpha(Alpha(washed.Colors.Wash.Alpha / 255f * opacity)));
+            canvas.DrawRect(0, 0, (float)viewport.Width, (float)viewport.Height, wash);
+        }
+
         foreach (var route in scene.Routes)
         {
             if (!route.IsActive)
                 DrawInactive(canvas, route, scene, ToScreen, opacity);
         }
         if (scene.ActiveRoute is { } active)
+        {
             DrawActive(canvas, active, scene, ToScreen, opacity);
+            if (scene.Check is { } check)
+            {
+                DrawCheckMarkers(canvas, check, ToScreen, (float)viewport.Rotation, opacity);
+                DrawLegend(canvas, check, (float)viewport.Height, opacity);
+            }
+        }
         return true;
     }
 
@@ -131,12 +147,22 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
         var layout = RouteOverlayLayout.Layout(
             route, toScreen, text => MeasureLabel(text), scene.SelectedLegIndex, editing);
 
-        if (editing)
+        if (scene.Check is { } check)
+        {
+            // C6: state colours at ETA on a 10 px casing.
+            using var casing = Stroke(check.Colors.Casing.WithAlpha(Alpha(opacity)), 10f);
+            foreach (var leg in layout)
+                DrawParts(canvas, leg.Parts, casing);
+        }
+        else if (editing)
         {
             using var casing = Stroke(colors.Casing.WithAlpha(Alpha(opacity)), 9f);
             foreach (var leg in layout)
                 DrawParts(canvas, leg.Parts, casing);
+        }
 
+        if (editing)
+        {
             if (scene.SelectedLegIndex is { } selected && selected < layout.Count)
             {
                 using var halo = Stroke(colors.Edit.WithAlpha(Alpha(0.25f * opacity)), 12f);
@@ -144,8 +170,13 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             }
         }
 
-        using (var line = Stroke(colors.Edit.WithAlpha(Alpha((editing ? 1f : 0.85f) * opacity)), editing ? 3.5f : 4f))
+        if (scene.Check is { } coloured)
         {
+            DrawCheckRoute(canvas, coloured, layout, toScreen, opacity);
+        }
+        else
+        {
+            using var line = Stroke(colors.Edit.WithAlpha(Alpha((editing ? 1f : 0.85f) * opacity)), editing ? 3.5f : 4f);
             foreach (var leg in layout)
                 DrawParts(canvas, leg.Parts, line);
         }
@@ -229,6 +260,125 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
 
             using var ink = Fill(numberColor.WithAlpha(Alpha(opacity)));
             canvas.DrawText((i + 1).ToString(CultureInfo.InvariantCulture), x, y + baseline, SKTextAlign.Center, font, ink);
+        }
+    }
+
+    /// <summary>Width of a state's line: below the setting is wider, so it doesn't rely on colour alone (C6).</summary>
+    internal static float CheckStrokeWidth(Navigation.UkcState state) => state == Navigation.UkcState.BelowSetting ? 7f : 5f;
+
+    /// <summary>Whether a state's line is dashed 6/4: low confidence and no data (C6).</summary>
+    internal static bool IsCheckDashed(Navigation.UkcState state) =>
+        state is Navigation.UkcState.LowConfidence or Navigation.UkcState.NoData;
+
+    private static void DrawCheckRoute(SKCanvas canvas, RouteCheckOverlay check, IReadOnlyList<LegLayout> layout, Func<GeoPosition, Point?> toScreen, float opacity)
+    {
+        if (check.IsStale || check.Segments.Count == 0)
+        {
+            // C10: grey and dashed while a result is computing.
+            using var stale = Stroke(check.Colors.Stale.WithAlpha(Alpha(opacity)), 5f);
+            stale.StrokeCap = SKStrokeCap.Butt;
+            stale.PathEffect = SKPathEffect.CreateDash([6f, 4f], 0);
+            foreach (var leg in layout)
+                DrawParts(canvas, leg.Parts, stale);
+            return;
+        }
+
+        foreach (var segment in check.Segments)
+        {
+            using var paint = Stroke(check.Colors.Of(segment.State).WithAlpha(Alpha(opacity)), CheckStrokeWidth(segment.State));
+            if (IsCheckDashed(segment.State))
+            {
+                paint.StrokeCap = SKStrokeCap.Butt;
+                paint.PathEffect = SKPathEffect.CreateDash([6f, 4f], 0);
+            }
+            foreach (var part in Geodesy.MarineGeodesy.SplitAtAntimeridian(segment.Path))
+                DrawPath(canvas, Project(part, toScreen), paint);
+        }
+    }
+
+    private static void DrawCheckMarkers(SKCanvas canvas, RouteCheckOverlay check, Func<GeoPosition, Point?> toScreen, float rotation, float opacity)
+    {
+        var colors = check.Colors;
+        if (!check.IsStale && check.Minimum is { } min && toScreen(min.Position) is { } m)
+        {
+            // C8: a ring in the tone colour and the pill "Min UKC 0,4 m · 07:52".
+            var (x, y) = ((float)m.X, (float)m.Y);
+            var tone = colors.Of(min.State);
+            using var halo = Stroke(colors.Casing.WithAlpha(Alpha(opacity)), 5f);
+            using var ring = Stroke(tone.WithAlpha(Alpha(opacity)), 2.5f);
+            canvas.DrawCircle(x, y, 9f, halo);
+            canvas.DrawCircle(x, y, 9f, ring);
+
+            using var font = new SKFont(LabelBoldTypeface, LabelFontSize);
+            var width = font.MeasureText(min.Label) + 14f;
+            var rect = SKRect.Create(x + 12f, y - 22f, width, 18f);
+            using var pill = Fill(colors.PillFill.WithAlpha(Alpha(opacity)));
+            using var edge = Stroke(tone.WithAlpha(Alpha(opacity)), 1.2f);
+            canvas.DrawRoundRect(rect, 9f, 9f, pill);
+            canvas.DrawRoundRect(rect, 9f, 9f, edge);
+            using var ink = Fill(colors.Ink.WithAlpha(Alpha(opacity)));
+            var baseline = rect.MidY - ((font.Metrics.Ascent + font.Metrics.Descent) / 2f);
+            canvas.DrawText(min.Label, rect.Left + 7f, baseline, SKTextAlign.Left, font, ink);
+        }
+
+        if (check.Ghost is { } ghost && toScreen(ghost.Position) is { } g)
+        {
+            // C9: an arrow at the cursor, pointing along the leg.
+            canvas.Save();
+            canvas.Translate((float)g.X, (float)g.Y);
+            canvas.RotateDegrees((float)ghost.BearingDegrees + rotation);
+            using var arrow = new SKPath();
+            arrow.MoveTo(0, -11);
+            arrow.LineTo(7, 8);
+            arrow.LineTo(0, 4);
+            arrow.LineTo(-7, 8);
+            arrow.Close();
+            using var casing = Stroke(colors.Casing.WithAlpha(Alpha(opacity)), 3f);
+            using var body = Fill(colors.Ink.WithAlpha(Alpha(0.85f * opacity)));
+            canvas.DrawPath(arrow, casing);
+            canvas.DrawPath(arrow, body);
+            canvas.Restore();
+        }
+    }
+
+    /// <summary>Space below the legend, clear of the Time HUD (36 px tall, 12 px up).</summary>
+    private const float LegendBottomMargin = 60f;
+
+    private static void DrawLegend(SKCanvas canvas, RouteCheckOverlay check, float height, float opacity)
+    {
+        // C7: "UKC AT ETA" with four swatches at the map's bottom left.
+        var colors = check.Colors;
+        var items = new (string Label, Navigation.UkcState State)[]
+        {
+            (Resources.Strings.Check_LegendMeets, Navigation.UkcState.MeetsSettings),
+            (Resources.Strings.Check_LegendTight, Navigation.UkcState.Tight),
+            (Resources.Strings.Check_LegendBelow, Navigation.UkcState.BelowSetting),
+            (Resources.Strings.Check_LegendNoData, Navigation.UkcState.NoData),
+        };
+        using var font = new SKFont(LabelTypeface, LabelFontSize);
+        using var titleFont = new SKFont(LabelBoldTypeface, 9.5f);
+        var width = 24f + items.Max(i => font.MeasureText(i.Label)) + 20f;
+        var rowHeight = 16f;
+        var boxHeight = 22f + (items.Length * rowHeight);
+        // Clear of the Time HUD at the bottom centre and the scale readout.
+        var rect = SKRect.Create(12f, height - boxHeight - LegendBottomMargin, Math.Max(width, titleFont.MeasureText(Resources.Strings.Check_LegendTitle) + 20f), boxHeight);
+
+        using var fill = Fill(colors.PillFill.WithAlpha(Alpha(0.92f * opacity)));
+        using var edge = Stroke(colors.NoData.WithAlpha(Alpha(0.5f * opacity)), 1f);
+        canvas.DrawRoundRect(rect, 6f, 6f, fill);
+        canvas.DrawRoundRect(rect, 6f, 6f, edge);
+        using var ink = Fill(colors.Ink.WithAlpha(Alpha(opacity)));
+        canvas.DrawText(Resources.Strings.Check_LegendTitle, rect.Left + 10f, rect.Top + 15f, SKTextAlign.Left, titleFont, ink);
+
+        for (var i = 0; i < items.Length; i++)
+        {
+            var y = rect.Top + 28f + (i * rowHeight);
+            using var swatch = Stroke(colors.Of(items[i].State).WithAlpha(Alpha(opacity)), CheckStrokeWidth(items[i].State) - 1f);
+            swatch.StrokeCap = SKStrokeCap.Butt;
+            if (IsCheckDashed(items[i].State))
+                swatch.PathEffect = SKPathEffect.CreateDash([6f, 4f], 0);
+            canvas.DrawLine(rect.Left + 10f, y, rect.Left + 28f, y, swatch);
+            canvas.DrawText(items[i].Label, rect.Left + 34f, y + 3.5f, SKTextAlign.Left, font, ink);
         }
     }
 
