@@ -1,6 +1,7 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
@@ -216,7 +217,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         bool retainedResolution;
         lock (_gate)
         {
-            added = AddInputsLocked(inputs);
+            added = AddInputsLocked(inputs, warnings);
             // Only keep the extraction alive if it actually contributed a
             // dataset; a failed / empty load must not leak temp resources for
             // the whole session.
@@ -292,8 +293,16 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         return removed.Count;
     }
 
-    private List<DatasetId> AddInputsLocked(IEnumerable<FileDatasetInput> inputs)
+    private List<DatasetId> AddInputsLocked(IEnumerable<FileDatasetInput> inputs, List<string>? problems = null)
     {
+        // Skipped inputs are logged and, for a LoadAsync, also returned as the
+        // outcome's problems so open_dataset can say why nothing loaded.
+        void Skip(string message)
+        {
+            Console.Error.WriteLine(message);
+            problems?.Add(message);
+        }
+
         var added = new List<DatasetId>();
         foreach (var input in inputs)
         {
@@ -317,9 +326,9 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                 or InvalidOperationException or FormatException or NotSupportedException
-                or ArgumentException)
+                or ArgumentException or S100DatasetSchemaException)
             {
-                Console.Error.WriteLine($"Skipped unreadable dataset '{input.Path}': {ex.Message}");
+                Skip($"Skipped unreadable dataset '{input.Path}': {ex.Message}");
                 _usedIds.Remove(id.Value);
                 continue;
             }
@@ -330,8 +339,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
             // is silently absent from render_to_image. Reject it up front.
             if (processor is not (IVectorPortrayalSource or ICoveragePortrayalSource))
             {
-                Console.Error.WriteLine(
-                    $"Skipped dataset '{input.Path}' (not renderable: {processor.Spec.Name}).");
+                Skip($"Skipped dataset '{input.Path}' (not renderable: {processor.Spec.Name}).");
                 (processor as IDisposable)?.Dispose();
                 _usedIds.Remove(id.Value);
                 continue;
@@ -346,9 +354,10 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
                     id, processor, input.ExternalTextResolver, _transforms);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
-                or InvalidOperationException or FormatException or NotSupportedException)
+                or InvalidOperationException or FormatException or NotSupportedException
+                or S100DatasetSchemaException)
             {
-                Console.Error.WriteLine($"Skipped unreadable dataset '{input.Path}': {ex.Message}");
+                Skip($"Skipped unreadable dataset '{input.Path}': {ex.Message}");
                 (processor as IDisposable)?.Dispose();
                 _usedIds.Remove(id.Value);
                 continue;
@@ -356,8 +365,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
 
             if (projected is null)
             {
-                Console.Error.WriteLine(
-                    $"Skipped unsupported dataset (no catalog projection): {input.Path}");
+                Skip($"Skipped unsupported dataset (no catalog projection): {input.Path}");
                 (processor as IDisposable)?.Dispose();
                 _usedIds.Remove(id.Value);
                 continue;

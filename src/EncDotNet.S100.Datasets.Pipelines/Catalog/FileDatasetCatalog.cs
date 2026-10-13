@@ -1,3 +1,4 @@
+using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
@@ -116,8 +117,13 @@ public sealed class FileDatasetCatalog : IDatasetCatalog
                 projected = LoadedDatasetProjector.Project(
                     input.Id, input.Spec, stream, input.ExternalTextResolver, transforms);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or FormatException or NotSupportedException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
+                or FormatException or NotSupportedException or S100DatasetSchemaException)
             {
+                // A non-conforming HDF5 dataset (e.g. a missing required grid
+                // attribute) is skipped like any other unreadable input; the
+                // schema exception's message names the group, the attribute and
+                // the declared edition.
                 warnings.Add($"Skipped unreadable dataset '{input.Path}': {ex.Message}");
                 continue;
             }

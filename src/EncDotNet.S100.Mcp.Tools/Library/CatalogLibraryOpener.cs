@@ -1,6 +1,7 @@
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Hdf5;
 
 namespace EncDotNet.S100.Mcp.Tools.Library;
 
@@ -74,7 +75,7 @@ public sealed class CatalogLibraryOpener : ILibraryDatasetOpener, IDisposable
                 outcome = await _catalog.LoadAsync(path, item.ProductSpec, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException
-                or FormatException or NotSupportedException or ArgumentException)
+                or FormatException or NotSupportedException or ArgumentException or S100DatasetSchemaException)
             {
                 problems.Add($"{item.Name}: {ex.Message}");
                 continue;
