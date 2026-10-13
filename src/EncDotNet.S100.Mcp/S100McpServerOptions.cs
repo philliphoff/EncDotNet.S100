@@ -49,7 +49,14 @@ public sealed class S100McpServerOptions
     /// with the built-ins (<c>list_datasets</c>, <c>describe_feature</c>,
     /// <c>sample_coverage</c>, <c>find_at</c>, <c>query_features</c>,
     /// <c>sample_coverage_along</c>, <c>list_specs</c>,
-    /// <c>list_time_steps</c>).
+    /// <c>list_time_steps</c>, <c>get_passage_result</c>).
     /// </remarks>
     public IReadOnlyList<McpServerTool>? AdditionalTools { get; init; }
+
+    /// <summary>
+    /// The host's routes, so the built-in <c>get_passage_result</c> tool can
+    /// check the active or a named route as well as a polyline. May be
+    /// <see langword="null"/> when the host has no routes.
+    /// </summary>
+    public EncDotNet.S100.Mcp.Tools.IPassageRouteProvider? PassageRoutes { get; init; }
 }

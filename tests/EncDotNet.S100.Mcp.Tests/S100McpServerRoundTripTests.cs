@@ -31,6 +31,7 @@ public class S100McpServerRoundTripTests
                 "describe_feature",
                 "describe_feature_type",
                 "find_at",
+                "get_passage_result",
                 "identify_features",
                 "list_datasets",
                 "list_specs",
@@ -928,6 +929,55 @@ public class S100McpServerRoundTripTests
         Assert.NotNull(samples[1]!["result"]);
         // Last vertex is far outside any coverage — per-vertex miss -> null.
         Assert.Null(samples[2]!["result"]);
+    }
+
+    [Fact]
+    public async Task GetPassageResult_round_trip_checks_a_polyline()
+    {
+        var catalog = McpTestHelpers.NewCatalog(
+            LoadedDatasetFactory.S102("synth-bathy-1",
+                bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+                source: S102Synth.Source(S102Synth.Dataset(depth: 17.5f, uncertainty: 0.5f))),
+            LoadedDatasetFactory.S104("synth-wl-1"));
+
+        await using var server = await McpTestHelpers.StartServerAsync(catalog);
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
+
+        var result = await client.CallToolAsync("get_passage_result", new Dictionary<string, object?>
+        {
+            ["polyline"] = """{"vertices":[[0.005,0.005],[0.005,0.025]]}""",
+            ["draftMeters"] = 10.0,
+            ["speedKnots"] = 6.0,
+            ["requiredUkcMeters"] = 2.0,
+            ["departure"] = "2024-01-01T00:00:00Z",
+            ["includeSamples"] = true,
+        }, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsError ?? false, $"get_passage_result returned an error: {DumpText(result)}");
+        var payload = ParseSingleJson(result);
+
+        // Neither synthetic dataset declares a vertical datum, so the water
+        // level is applied but every sample is low confidence.
+        Assert.Equal("meets_settings", payload["verdict"]!.GetValue<string>());
+        Assert.Equal("datum_unconfirmed", payload["lowConfidence"]!.AsArray().Single()!["kind"]!.GetValue<string>());
+        Assert.Equal("low_confidence", payload["samples"]!.AsArray()[0]!["state"]!.GetValue<string>());
+        Assert.Single(payload["legs"]!.AsArray());
+        Assert.StartsWith("Not for navigation", payload["disclaimer"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task GetPassageResult_without_routes_needs_a_polyline()
+    {
+        await using var server = await McpTestHelpers.StartServerAsync(McpTestHelpers.NewCatalog());
+        await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
+
+        var result = await client.CallToolAsync("get_passage_result", new Dictionary<string, object?>
+        {
+            ["draftMeters"] = 10.0,
+        }, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsError);
+        Assert.Contains("invalid_argument", DumpText(result));
     }
 
     [Fact]

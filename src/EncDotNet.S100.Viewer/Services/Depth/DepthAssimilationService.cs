@@ -1,3 +1,5 @@
+using EncDotNet.S100.Navigation;
+
 namespace EncDotNet.S100.Viewer.Services.Depth;
 
 /// <summary>
@@ -137,32 +139,10 @@ internal sealed class DepthAssimilationService
     /// <see cref="S104TideCandidate.DatasetId"/> wins, so selection is stable
     /// regardless of the order datasets were enumerated.
     /// </summary>
-    private static bool IsPreferred(S104TideCandidate candidate, S104TideCandidate incumbent)
-    {
-        if (candidate.SpacingDegrees < incumbent.SpacingDegrees)
-        {
-            return true;
-        }
-
-        if (candidate.SpacingDegrees > incumbent.SpacingDegrees)
-        {
-            return false;
-        }
-
-        switch (candidate.IssueDate, incumbent.IssueDate)
-        {
-            case ({ } c, { } i) when c != i:
-                return c > i;
-            case (not null, null):
-                return true;
-            case (null, not null):
-                return false;
-            default:
-                // Equal resolution and issuance: break the tie deterministically
-                // on the dataset id so a true tie never depends on input order.
-                return string.CompareOrdinal(candidate.DatasetId, incumbent.DatasetId) < 0;
-        }
-    }
+    private static bool IsPreferred(S104TideCandidate candidate, S104TideCandidate incumbent) =>
+        WaterLevelPreference.Compare(
+            candidate.SpacingDegrees, candidate.IssueDate, candidate.DatasetId,
+            incumbent.SpacingDegrees, incumbent.IssueDate, incumbent.DatasetId) < 0;
 
     /// <summary>
     /// Applies the "assume + warn" datum policy: a mismatch is flagged only for
@@ -177,9 +157,7 @@ internal sealed class DepthAssimilationService
         }
 
         // Warn when either datum is unknown (cannot confirm alignment) or the
-        // known codes differ.
-        return baseDepth.VerticalDatumCode is not { } baseDatum
-            || tide.VerticalDatumCode is not { } tideDatum
-            || baseDatum != tideDatum;
+        // known codes differ; the comparison is shared with the passage check.
+        return VerticalDatumCheck.Compare(baseDepth.VerticalDatumCode, tide.VerticalDatumCode) != DatumAgreement.Same;
     }
 }

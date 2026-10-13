@@ -1,0 +1,542 @@
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Datasets.S102;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+
+namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
+
+/// <summary>
+/// Charted depth from loaded S-102 surfaces, falling back to S-101 cells
+/// through <see cref="ChartedDepthResolver"/>.
+/// </summary>
+/// <remarks>
+/// <para>
+/// S-102 cells are found the same way as the pick report and
+/// <c>sample_coverage</c> (<see cref="CoveragePickHelper"/>): reproject into
+/// the grid CRS and floor to the containing cell. NoData cells (S-102 fill
+/// value 1 000 000) fall through to S-101. Where S-102 surfaces overlap, the
+/// finest grid wins.
+/// </para>
+/// <para>
+/// The S-101 fallback reads <c>DredgedArea</c> and <c>DepthArea</c> minimum
+/// depths (DRVAL1), then the nearest <c>Sounding</c> within
+/// <see cref="PassageDataSourceOptions.MaxSoundingDistanceMeters"/>. Where
+/// cells overlap the shoalest value wins. The depth's datum comes from the
+/// <c>SoundingDatum</c> meta-feature covering the point.
+/// </para>
+/// </remarks>
+internal sealed class CatalogChartedDepthSource : IChartedDepthSource
+{
+    private readonly List<S102Grid> _grids = new();
+    private readonly List<S101Index> _cells = new();
+    private readonly double _maxSoundingDistance;
+
+    public CatalogChartedDepthSource(
+        IReadOnlyList<LoadedDataset> datasets,
+        ICrsTransformFactory transforms,
+        PassageDataSourceOptions options)
+    {
+        _maxSoundingDistance = options.MaxSoundingDistanceMeters;
+        foreach (var dataset in datasets)
+        {
+            switch (dataset.Data)
+            {
+                case S102CoverageData s102 when S102Grid.TryCreate(dataset, s102.Source, transforms) is { } grid:
+                    _grids.Add(grid);
+                    break;
+                case S101DatasetData s101:
+                    _cells.Add(new S101Index(dataset.Id.Value, dataset.Bounds, s101.Dataset));
+                    break;
+            }
+        }
+
+        _grids.Sort((a, b) => a.SpacingMeters != b.SpacingMeters
+            ? a.SpacingMeters.CompareTo(b.SpacingMeters)
+            : string.CompareOrdinal(a.DatasetId, b.DatasetId));
+    }
+
+    public double? FinestGridSpacingMeters(double south, double west, double north, double east)
+    {
+        foreach (var grid in _grids)
+        {
+            if (Intersects(grid.Bounds, south, west, north, east))
+            {
+                return grid.SpacingMeters;
+            }
+        }
+
+        return null;
+    }
+
+    public ChartedDepth? Sample(double latitude, double longitude)
+    {
+        foreach (var grid in _grids)
+        {
+            if (grid.Sample(latitude, longitude) is { } depth)
+            {
+                return depth;
+            }
+        }
+
+        ChartedDepth? dredged = null;
+        ChartedDepth? area = null;
+        ChartedDepth? sounding = null;
+        foreach (var cell in _cells)
+        {
+            if (!Contains(cell.Bounds, latitude, longitude, padDegrees: 0.01))
+            {
+                continue;
+            }
+
+            var datum = cell.SoundingDatumAt(latitude, longitude);
+            dredged = ChartedDepthResolver.Shoaler(dredged, cell.DredgedAreaAt(latitude, longitude, datum));
+            area = ChartedDepthResolver.Shoaler(area, cell.DepthAreaAt(latitude, longitude, datum));
+            if (dredged is null && area is null
+                && cell.NearestSounding(latitude, longitude, _maxSoundingDistance, datum) is { } s
+                && (sounding is null || s.SoundingDistanceMeters < sounding.SoundingDistanceMeters))
+            {
+                sounding = s;
+            }
+        }
+
+        return ChartedDepthResolver.Resolve(null, dredged, area, dredged is null && area is null ? sounding : null);
+    }
+
+    internal static bool Contains(BoundingBox b, double lat, double lon, double padDegrees = 0) =>
+        lat >= b.SouthLatitude - padDegrees && lat <= b.NorthLatitude + padDegrees
+        && lon >= b.WestLongitude - padDegrees && lon <= b.EastLongitude + padDegrees;
+
+    private static bool Intersects(BoundingBox b, double south, double west, double north, double east) =>
+        b.NorthLatitude >= south && b.SouthLatitude <= north && b.EastLongitude >= west && b.WestLongitude <= east;
+
+    /// <summary>One S-102 coverage, sampled directly from its value array.</summary>
+    private sealed class S102Grid
+    {
+        private readonly BathymetryCoverage _coverage;
+        private readonly ICrsTransform _toNative;
+        private readonly int? _datum;
+
+        private S102Grid(string datasetId, BoundingBox bounds, BathymetryCoverage coverage, ICrsTransform toNative, int? datum, double spacingMeters)
+        {
+            DatasetId = datasetId;
+            Bounds = bounds;
+            _coverage = coverage;
+            _toNative = toNative;
+            _datum = datum;
+            SpacingMeters = spacingMeters;
+        }
+
+        public string DatasetId { get; }
+
+        public BoundingBox Bounds { get; }
+
+        public double SpacingMeters { get; }
+
+        public static S102Grid? TryCreate(LoadedDataset dataset, S102CoverageSource source, ICrsTransformFactory transforms)
+        {
+            try
+            {
+                var coverage = source.Coverage;
+                var crs = source.Metadata.HorizontalCRS;
+                var toNative = transforms.Create("EPSG:4326", crs);
+                var spacing = SpacingInMeters(coverage, toNative.IsIdentity ? null : transforms.Create(crs, "EPSG:4326"));
+                return spacing > 0
+                    ? new S102Grid(dataset.Id.Value, dataset.Bounds, coverage, toNative, source.Dataset.VerticalDatum, spacing)
+                    : null;
+            }
+            catch (Exception ex) when (ex is NotSupportedException or FormatException or OverflowException or ArgumentException or ObjectDisposedException)
+            {
+                // An unsupported or malformed CRS can't be sampled; the
+                // pick report and sample_coverage skip such tiles too.
+                return null;
+            }
+        }
+
+        public ChartedDepth? Sample(double latitude, double longitude)
+        {
+            if (!Contains(Bounds, latitude, longitude))
+            {
+                return null;
+            }
+
+            var (x, y) = _toNative.IsIdentity ? (longitude, latitude) : _toNative.Transform(longitude, latitude);
+            var row = (int)Math.Floor((y - _coverage.OriginLatitude) / _coverage.SpacingLatitudinal);
+            var col = (int)Math.Floor((x - _coverage.OriginLongitude) / _coverage.SpacingLongitudinal);
+            if (row < 0 || row >= _coverage.NumPointsLatitudinal || col < 0 || col >= _coverage.NumPointsLongitudinal)
+            {
+                return null;
+            }
+
+            var value = _coverage.Values[row * _coverage.NumPointsLongitudinal + col];
+            if (value.Depth == S102CoverageSource.FillValue || !float.IsFinite(value.Depth))
+            {
+                return null;
+            }
+
+            double? uncertainty = value.Uncertainty == S102CoverageSource.FillValue || !float.IsFinite(value.Uncertainty)
+                ? null
+                : value.Uncertainty;
+            return new ChartedDepth(value.Depth, ChartedDepthKind.Bathymetry, uncertainty, _datum, DatasetId, $"{row},{col}");
+        }
+
+        // Measures a cell in metres by converting two neighbouring grid nodes to WGS-84.
+        private static double SpacingInMeters(BathymetryCoverage coverage, ICrsTransform? toWgs84)
+        {
+            double Measure(double x0, double y0, double x1, double y1)
+            {
+                var (lon0, lat0) = toWgs84 is null ? (x0, y0) : toWgs84.Transform(x0, y0);
+                var (lon1, lat1) = toWgs84 is null ? (x1, y1) : toWgs84.Transform(x1, y1);
+                return PassageGeodesy.GreatCircleDistanceMeters(new GeoPosition(lat0, lon0), new GeoPosition(lat1, lon1));
+            }
+
+            var midRow = coverage.NumPointsLatitudinal / 2;
+            var midCol = coverage.NumPointsLongitudinal / 2;
+            var x = coverage.OriginLongitude + midCol * coverage.SpacingLongitudinal;
+            var y = coverage.OriginLatitude + midRow * coverage.SpacingLatitudinal;
+            var alongX = Measure(x, y, x + coverage.SpacingLongitudinal, y);
+            var alongY = Measure(x, y, x, y + coverage.SpacingLatitudinal);
+            return Math.Min(alongX, alongY);
+        }
+    }
+
+    /// <summary>The depth-bearing features of one S-101 cell, indexed on first use.</summary>
+    private sealed class S101Index
+    {
+        private const int Buckets = 32;
+        private readonly string _datasetId;
+        private readonly S101Dataset _dataset;
+        private readonly object _gate = new();
+        private Built? _built;
+
+        public S101Index(string datasetId, BoundingBox bounds, S101Dataset dataset)
+        {
+            _datasetId = datasetId;
+            Bounds = bounds;
+            _dataset = dataset;
+        }
+
+        public BoundingBox Bounds { get; }
+
+        public int? SoundingDatumAt(double lat, double lon)
+        {
+            foreach (var area in Index.SoundingDatums.Candidates(lat, lon))
+            {
+                if (area.Contains(lat, lon))
+                {
+                    return (int)area.Value;
+                }
+            }
+
+            return null;
+        }
+
+        public ChartedDepth? DredgedAreaAt(double lat, double lon, int? datum) =>
+            Shoalest(Index.DredgedAreas, ChartedDepthKind.DredgedArea, lat, lon, datum);
+
+        public ChartedDepth? DepthAreaAt(double lat, double lon, int? datum) =>
+            Shoalest(Index.DepthAreas, ChartedDepthKind.DepthArea, lat, lon, datum);
+
+        public ChartedDepth? NearestSounding(double lat, double lon, double maxDistance, int? datum)
+        {
+            var soundings = Index.Soundings;
+            if (soundings.Count == 0)
+            {
+                return null;
+            }
+
+            var cosLat = Math.Cos(lat * Math.PI / 180.0);
+            var latPad = maxDistance / PassageGeodesy.MetersPerDegreeLatitude;
+            var best = double.PositiveInfinity;
+            Sounding? nearest = null;
+
+            // Soundings are sorted by latitude, so only a band needs a look.
+            var start = LowerBound(soundings, lat - latPad);
+            for (var i = start; i < soundings.Count && soundings[i].Lat <= lat + latPad; i++)
+            {
+                var s = soundings[i];
+                var dy = (s.Lat - lat) * PassageGeodesy.MetersPerDegreeLatitude;
+                var dx = (s.Lon - lon) * PassageGeodesy.MetersPerDegreeLatitude * cosLat;
+                var d = Math.Sqrt(dx * dx + dy * dy);
+                if (d < best)
+                {
+                    best = d;
+                    nearest = s;
+                }
+            }
+
+            return nearest is { } n && best <= maxDistance
+                ? new ChartedDepth(n.Depth, ChartedDepthKind.Sounding, null, datum, _datasetId, n.FeatureId, best)
+                : null;
+        }
+
+        private ChartedDepth? Shoalest(AreaIndex index, ChartedDepthKind kind, double lat, double lon, int? datum)
+        {
+            Area? shoalest = null;
+            foreach (var area in index.Candidates(lat, lon))
+            {
+                if ((shoalest is null || area.Value < shoalest.Value) && area.Contains(lat, lon))
+                {
+                    shoalest = area;
+                }
+            }
+
+            return shoalest is null
+                ? null
+                : new ChartedDepth(shoalest.Value, kind, null, datum, _datasetId, shoalest.FeatureId);
+        }
+
+        private Built Index
+        {
+            get
+            {
+                if (_built is { } built)
+                {
+                    return built;
+                }
+
+                lock (_gate)
+                {
+                    return _built ??= Build();
+                }
+            }
+        }
+
+        private Built Build()
+        {
+            var dredged = new List<Area>();
+            var depth = new List<Area>();
+            var datums = new List<Area>();
+            foreach (var feature in new S101VectorSource(_dataset).GetFeatures())
+            {
+                if (feature.GeometryType != GeometryType.Surface)
+                {
+                    continue;
+                }
+
+                switch (feature.FeatureType)
+                {
+                    case "DredgedArea" when MinimumDepth(feature) is { } d:
+                        dredged.Add(Area.From(feature, d));
+                        break;
+                    case "DepthArea" when MinimumDepth(feature) is { } d:
+                        depth.Add(Area.From(feature, d));
+                        break;
+                    case "SoundingDatum" when feature.Attributes.TryGetValue("verticalDatum", out var raw)
+                                              && ChartedDepthResolver.TryReadMeters(raw, out var code):
+                        datums.Add(Area.From(feature, code));
+                        break;
+                }
+            }
+
+            return new Built(
+                new AreaIndex(dredged, Bounds),
+                new AreaIndex(depth, Bounds),
+                new AreaIndex(datums, Bounds),
+                ReadSoundings(_dataset.Document));
+        }
+
+        private static double? MinimumDepth(Feature feature)
+        {
+            foreach (var code in ChartedDepthResolver.MinimumDepthAttributeCodes)
+            {
+                if (feature.Attributes.TryGetValue(code, out var raw) && ChartedDepthResolver.TryReadMeters(raw, out var metres))
+                {
+                    return metres;
+                }
+            }
+
+            return null;
+        }
+
+        // Soundings are multipoint records with a depth per point (S-100
+        // Part 10a §10a-6); see S101SoundingSampler for the same decoding.
+        private static List<Sounding> ReadSoundings(S101Document document)
+        {
+            double cmfx = document.StructureInfo.CoordinateMultiplicationFactorX;
+            double cmfy = document.StructureInfo.CoordinateMultiplicationFactorY;
+            double cmfz = document.StructureInfo.CoordinateMultiplicationFactorZ;
+            if (cmfx == 0) cmfx = 10_000_000;
+            if (cmfy == 0) cmfy = 10_000_000;
+            if (cmfz == 0) cmfz = 10;
+
+            var result = new List<Sounding>();
+            foreach (var feature in document.Features)
+            {
+                if (!document.FeatureTypeCatalogue.TryGetValue(feature.FeatureTypeCode, out var name)
+                    || !string.Equals(name, S101SoundingSampler.SoundingFeatureType, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var id = feature.RecordId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                foreach (var association in feature.SpatialAssociations)
+                {
+                    if (document.MultiPoints.TryGetValue(association.RecordId, out var multiPoint))
+                    {
+                        foreach (var (y, x, z) in multiPoint.Points)
+                        {
+                            result.Add(new Sounding(y / cmfy, x / cmfx, z / cmfz, id));
+                        }
+                    }
+                }
+            }
+
+            result.Sort((a, b) => a.Lat.CompareTo(b.Lat));
+            return result;
+        }
+
+        private static int LowerBound(List<Sounding> sorted, double lat)
+        {
+            int lo = 0, hi = sorted.Count;
+            while (lo < hi)
+            {
+                var mid = lo + ((hi - lo) / 2);
+                if (sorted[mid].Lat < lat) lo = mid + 1;
+                else hi = mid;
+            }
+
+            return lo;
+        }
+
+        private sealed record Built(AreaIndex DredgedAreas, AreaIndex DepthAreas, AreaIndex SoundingDatums, List<Sounding> Soundings);
+
+        private readonly record struct Sounding(double Lat, double Lon, double Depth, string FeatureId);
+
+        /// <summary>A uniform bucket grid over a cell's extent for point-in-area lookups.</summary>
+        private sealed class AreaIndex
+        {
+            private static readonly List<Area> Empty = new();
+            private readonly List<Area>[] _buckets;
+            private readonly double _south;
+            private readonly double _west;
+            private readonly double _cellLat;
+            private readonly double _cellLon;
+
+            public AreaIndex(List<Area> areas, BoundingBox bounds)
+            {
+                _south = bounds.SouthLatitude;
+                _west = bounds.WestLongitude;
+                _cellLat = Math.Max((bounds.NorthLatitude - bounds.SouthLatitude) / Buckets, 1e-9);
+                _cellLon = Math.Max((bounds.EastLongitude - bounds.WestLongitude) / Buckets, 1e-9);
+                _buckets = new List<Area>[Buckets * Buckets];
+                foreach (var area in areas)
+                {
+                    var (r0, c0) = Bucket(area.South, area.West);
+                    var (r1, c1) = Bucket(area.North, area.East);
+                    for (var r = r0; r <= r1; r++)
+                    {
+                        for (var c = c0; c <= c1; c++)
+                        {
+                            (_buckets[r * Buckets + c] ??= new List<Area>()).Add(area);
+                        }
+                    }
+                }
+            }
+
+            public List<Area> Candidates(double lat, double lon)
+            {
+                var (r, c) = Bucket(lat, lon);
+                return _buckets[r * Buckets + c] ?? Empty;
+            }
+
+            private (int Row, int Col) Bucket(double lat, double lon) =>
+                (Math.Clamp((int)((lat - _south) / _cellLat), 0, Buckets - 1),
+                 Math.Clamp((int)((lon - _west) / _cellLon), 0, Buckets - 1));
+        }
+
+        /// <summary>An area feature's surfaces and the value it carries (a depth or a datum code).</summary>
+        private sealed class Area
+        {
+            private readonly IReadOnlyList<SurfacePart> _surfaces;
+
+            private Area(IReadOnlyList<SurfacePart> surfaces, double value, string featureId)
+            {
+                _surfaces = surfaces;
+                Value = value;
+                FeatureId = featureId;
+                South = West = double.MaxValue;
+                North = East = double.MinValue;
+                foreach (var surface in surfaces)
+                {
+                    foreach (var p in surface.ExteriorRing)
+                    {
+                        South = Math.Min(South, p.Latitude);
+                        North = Math.Max(North, p.Latitude);
+                        West = Math.Min(West, p.Longitude);
+                        East = Math.Max(East, p.Longitude);
+                    }
+                }
+            }
+
+            public double Value { get; }
+
+            public string FeatureId { get; }
+
+            public double South { get; }
+
+            public double West { get; }
+
+            public double North { get; }
+
+            public double East { get; }
+
+            public static Area From(Feature feature, double value) =>
+                new(((IS100Feature)feature).Surfaces, value, feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+            public bool Contains(double lat, double lon)
+            {
+                if (lat < South || lat > North || lon < West || lon > East)
+                {
+                    return false;
+                }
+
+                foreach (var surface in _surfaces)
+                {
+                    if (!InRing(surface.ExteriorRing, lat, lon))
+                    {
+                        continue;
+                    }
+
+                    var inHole = false;
+                    foreach (var hole in surface.InteriorRings)
+                    {
+                        if (InRing(hole, lat, lon))
+                        {
+                            inHole = true;
+                            break;
+                        }
+                    }
+
+                    if (!inHole)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            // Even-odd ray casting in longitude/latitude.
+            private static bool InRing(IReadOnlyList<GeoPosition> ring, double lat, double lon)
+            {
+                var inside = false;
+                for (int i = 0, j = ring.Count - 1; i < ring.Count; j = i++)
+                {
+                    var a = ring[i];
+                    var b = ring[j];
+                    if ((a.Latitude > lat) != (b.Latitude > lat)
+                        && lon < (b.Longitude - a.Longitude) * (lat - a.Latitude) / (b.Latitude - a.Latitude) + a.Longitude)
+                    {
+                        inside = !inside;
+                    }
+                }
+
+                return inside;
+            }
+        }
+    }
+}
