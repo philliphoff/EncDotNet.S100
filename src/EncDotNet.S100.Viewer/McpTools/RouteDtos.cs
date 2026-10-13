@@ -121,13 +121,7 @@ internal sealed record RouteDetail(
 internal sealed record ListRoutesResult(
     [property: Description("All routes in insertion order.")] IReadOnlyList<RouteSummary> Routes,
     [property: Description("Id of the active route, or null when the collection is empty.")] string? ActiveRouteId,
-    [property: Description("Whether the interactive route editor is on (set it with set_route_edit_mode).")] bool EditMode,
-    [property: Description("Whether the Routes panel's Passage card is expanded (set it with set_passage_card).")] bool PassageCardExpanded);
-
-/// <summary>Result of set_passage_card.</summary>
-[Description("Result of set_passage_card: whether the Passage card is expanded.")]
-internal sealed record PassageCardResult(
-    [property: Description("Whether the Passage card is expanded.")] bool Expanded);
+    [property: Description("Whether the interactive route editor is on (set it with set_route_edit_mode).")] bool EditMode);
 
 /// <summary>Result of set_route_edit_mode.</summary>
 [Description("Result of set_route_edit_mode: the route edit mode now in force.")]

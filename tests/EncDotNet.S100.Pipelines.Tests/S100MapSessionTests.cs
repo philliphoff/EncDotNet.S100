@@ -323,35 +323,47 @@ public class S100MapSessionTests
     public async Task AddDatasetAsyncFailsWhenRemoveCancelsRenderBeforeOwnershipIsReleased()
     {
         // Regression for #873. RemoveDataset cancels the in-flight render, and
-        // the cancellation completes the render — and AddDatasetAsync's
-        // continuation — synchronously on the removing thread. Running without
-        // a synchronization context makes that ordering deterministic: the add
-        // checks processor ownership from inside RemoveDataset, so ownership
-        // must already be released when the render is cancelled, or the add
-        // reports success for a dataset that is no longer on the map.
-        await Task.Run(async () =>
+        // the cancellation can complete the render — and AddDatasetAsync's
+        // ownership check — synchronously inside RemoveDataset. Ownership must
+        // therefore already be released when the render is cancelled, or the
+        // add reports success for a dataset that is no longer on the map.
+        //
+        // Whether the add actually resumes inline is not deterministic: the
+        // render runs under Task.Run, whose unwrap proxy may not yet be attached
+        // to the render when it is cancelled, and then completes the add on the
+        // pool thread after RemoveDataset returns. So rather than asserting
+        // where the add completes, record ownership at the moment of
+        // cancellation, which is exactly the ordering #873 depends on.
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var s100 = map.AddS100(new S100MapsuiOptions
         {
-            using var map = new Map();
-            using var s100 = IdentitySession(map);
-            var id = new MapDatasetId("dataset");
-            var parked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var processor = new StubProcessor(id.Value)
-            {
-                RenderHook = async token => await new ParkUntilCancelled(token, parked),
-            };
+            CrsTransformFactory = new IdentityCrsTransformFactory(),
+            ProcessorOwner = owner,
+        });
+        var id = new MapDatasetId("dataset");
+        var parked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var processor = new StubProcessor(id.Value);
+        bool? ownedAtCancellation = null;
+        processor.RenderHook = async token =>
+        {
+            // Not disposed here: the parked continuation runs first on
+            // cancellation and unwinding would unregister this callback.
+            token.Register(() => ownedAtCancellation = owner.Owns(id, processor));
+            await new ParkUntilCancelled(token, parked);
+        };
 
-            var add = s100.AddDatasetAsync(Dataset(id), processor, cancellationToken: TestContext.Current.CancellationToken);
-            await parked.Task; // the render is awaiting its cancellation
+        var add = s100.AddDatasetAsync(Dataset(id), processor, cancellationToken: TestContext.Current.CancellationToken);
+        await parked.Task; // the render is awaiting its cancellation
 
-            Assert.True(s100.RemoveDataset(id));
+        Assert.True(s100.RemoveDataset(id));
 
-            // The add finished inside RemoveDataset, so this test does not race.
-            Assert.True(add.IsCompleted);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => add);
-            Assert.Empty(map.Layers);
-            Assert.Empty(s100.GetDatasets());
-            Assert.Equal(1, processor.DisposeCount);
-        }, TestContext.Current.CancellationToken);
+        // Cancellation callbacks run inside Cancel, so this is already set.
+        Assert.False(ownedAtCancellation);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => add);
+        Assert.Empty(map.Layers);
+        Assert.Empty(s100.GetDatasets());
+        Assert.Equal(1, processor.DisposeCount);
     }
 
     [Fact]

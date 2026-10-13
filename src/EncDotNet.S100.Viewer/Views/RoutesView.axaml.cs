@@ -14,28 +14,32 @@ public partial class RoutesView : UserControl
     {
         InitializeComponent();
 
-        // A waypoint's name or position, a passage value and a leg note commit
-        // on Enter (a key binding on the field) and when the field loses focus,
-        // like any form field.
+        // A waypoint's name or position commits on Enter (a key binding on the
+        // field) and when the field loses focus, like any form field.
         AddHandler(LostFocusEvent, OnFieldLostFocus, RoutingStrategies.Bubble, handledEventsToo: true);
+    }
+
+    static RoutesView()
+    {
+        // Passage and leg fields commit on focus loss too. A class handler,
+        // because the vessel fields sit in a flyout outside this tree.
+        TextBox.LostFocusEvent.AddClassHandler<TextBox>(
+            (field, _) =>
+            {
+                if (field.Classes.Contains("routeField") && field.DataContext is ICommittableField committable)
+                    committable.CommitCommand.Execute(null);
+            },
+            handledEventsToo: true);
     }
 
     private static void OnFieldLostFocus(object? sender, RoutedEventArgs e)
     {
-        switch (e.Source)
-        {
-            case TextBox { DataContext: RouteWaypointRowViewModel row } field:
-                if (field.Classes.Contains("wpName"))
-                    row.CommitNameCommand.Execute(null);
-                else if (field.Classes.Contains("wpCoords"))
-                    row.CommitCoordsCommand.Execute(null);
-                break;
-            case TextBox { DataContext: PassageFieldViewModel passageField }:
-                passageField.CommitCommand.Execute(null);
-                break;
-            case TextBox { DataContext: RouteLegRowViewModel leg } note when note.Classes.Contains("legNote"):
-                leg.CommitNoteCommand.Execute(null);
-                break;
-        }
+        if (e.Source is not TextBox { DataContext: RouteWaypointRowViewModel row } field)
+            return;
+
+        if (field.Classes.Contains("wpName"))
+            row.CommitNameCommand.Execute(null);
+        else if (field.Classes.Contains("wpCoords"))
+            row.CommitCoordsCommand.Execute(null);
     }
 }

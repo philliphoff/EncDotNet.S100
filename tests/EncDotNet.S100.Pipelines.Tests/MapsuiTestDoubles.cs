@@ -19,7 +19,9 @@ internal sealed class IdentityCrsTransformFactory : ICrsTransformFactory
 /// Awaitable that stays pending until <c>cancellationToken</c> is cancelled,
 /// then resumes its awaiter synchronously on the cancelling thread. It
 /// completes <c>parked</c> only once the awaiter is attached, so a test knows
-/// that a later cancellation runs the awaiting code inline.
+/// that a later cancellation resumes the parked code inline. Callers further
+/// up the chain may still resume asynchronously (for example through a
+/// <c>Task.Run</c> unwrap proxy that is not yet attached).
 /// </summary>
 internal readonly struct ParkUntilCancelled(
     CancellationToken cancellationToken,
