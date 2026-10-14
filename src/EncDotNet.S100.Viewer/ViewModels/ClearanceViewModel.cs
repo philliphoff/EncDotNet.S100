@@ -45,7 +45,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
     private readonly RectangularSection _cursorSection;
     private DepartureBand? _band;
     private PassageDepartureWindow? _shownWindow;
-    private IDisposable? _departureGesture;
+    private readonly DepartureDrag _drag;
 
     public ClearanceViewModel(
         PassageCheckService check,
@@ -59,6 +59,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
         _timeFormat = timeFormat;
         _theme = theme;
 
+        _drag = new DepartureDrag(check);
         _cursorSection = new RectangularSection { Xi = double.NaN, Xj = double.NaN, ZIndex = 20 };
         ShowDistanceCommand = new RelayCommand(() => Axis = ClearanceAxis.Distance);
         ShowTimeCommand = new RelayCommand(() => Axis = ClearanceAxis.Time, () => CanShowTime);
@@ -363,39 +364,25 @@ internal sealed class ClearanceViewModel : ViewModelBase
     /// <summary>Starts a departure drag at a fraction of the band: one undo step until <see cref="EndDepartureDrag"/>.</summary>
     public void BeginDepartureDrag(double fraction)
     {
-        if (_band is null)
-            return;
-        _departureGesture?.Dispose();
-        _departureGesture = _check.BeginDepartureGesture();
-        DragDepartureTo(fraction);
+        if (_band is { } band)
+            _drag.Begin(band, band.DepartureAt(fraction));
     }
 
     /// <summary>Sets the departure to the swept departure under a fraction of the band, recomputing live.</summary>
     public void DragDepartureTo(double fraction)
     {
         if (_band is { } band)
-            SetDeparture(band.DepartureAt(fraction));
+            _drag.MoveTo(band, band.DepartureAt(fraction));
     }
 
     /// <summary>Ends a departure drag, closing its undo step.</summary>
-    public void EndDepartureDrag()
-    {
-        _departureGesture?.Dispose();
-        _departureGesture = null;
-    }
+    public void EndDepartureDrag() => _drag.End();
 
     /// <summary>Moves the departure by a number of swept departures (arrow keys).</summary>
     public void NudgeDeparture(int steps)
     {
-        if (_band is { } band && _check.Departure is { } departure)
-            SetDeparture(band.Nudge(departure, steps));
-    }
-
-    private void SetDeparture(DateTimeOffset departure)
-    {
-        if (_check.Departure == departure && _check.HasRouteDeparture)
-            return;
-        _check.SetDeparture(departure);
+        if (_band is { } band)
+            _drag.Nudge(band, steps);
     }
 
     private void UpdateBand(bool force)

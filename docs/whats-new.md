@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Passage on the Timeline.** While Check passage is on, the Timeline shows
+  the passage (departure to arrival, with a tick at the minimum UKC) and its
+  departure window, which you can drag to set the departure. **Follow
+  passage** pins the view time to the ETA at the Clearance cursor, so S-104
+  and S-111 show what the ship meets. The MCP tool `set_follow_passage`
+  turns it on, and `get_timeline_state` reports the lanes.
 - **Departure window.** The Clearance tab has a departure band under the
   profile. It shows which departures across the loaded S-104 range meet your
   settings, and which arrive after the data ends. Drag it to set the

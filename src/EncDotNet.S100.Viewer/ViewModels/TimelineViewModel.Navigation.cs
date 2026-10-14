@@ -199,6 +199,7 @@ internal sealed partial class TimelineViewModel
     private void RaiseAxis()
     {
         RebuildLanes();
+        Passage?.Refresh();
         OnPropertyChanged(nameof(CoverageBands));
         OnPropertyChanged(nameof(Gaps));
         OnPropertyChanged(nameof(AxisLabels));

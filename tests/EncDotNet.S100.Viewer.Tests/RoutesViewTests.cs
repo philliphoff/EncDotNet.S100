@@ -201,7 +201,9 @@ public sealed class RoutesViewTests
         do
         {
             host.Settle();
-            if (!fixture.Check.IsComputing && fixture.Check.Current is not null)
+            // The departure window is swept after the result lands and adds a
+            // line to the verdict card; wait for it so the layout is final.
+            if (!fixture.Check.IsComputing && !fixture.Check.IsWindowComputing && fixture.Check.Current is not null)
             {
                 host.Settle();
                 return;

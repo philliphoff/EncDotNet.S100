@@ -98,6 +98,19 @@
             <Setter Property="Opacity" Value="1" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
+        <!-- #904: the min-UKC tick on the passage lane takes the verdict colour. -->
+        <Style Selector="views|PassageLaneControl.success">
+            <Setter Property="TickBrush" Value="{DynamicResource SuccessColor}" />
+        </Style>
+        <Style Selector="views|PassageLaneControl.warning">
+            <Setter Property="TickBrush" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="views|PassageLaneControl.destructive">
+            <Setter Property="TickBrush" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="views|PassageLaneControl.neutral">
+            <Setter Property="TickBrush" Value="{DynamicResource MutedColor}" />
+        </Style>
     </UserControl.Styles>
 
     <UserControl.Resources>
@@ -254,6 +267,23 @@
                                FontSize="12"
                                Foreground="{DynamicResource AccentBrush}"
                                VerticalAlignment="Center" />
+                    <!-- E3 (#904): Follow passage, next to the Pinned/Live readout, while the passage lanes show. -->
+                    <ToggleButton Grid.Column="3"
+                                  AutomationProperties.AutomationId="Timeline.FollowPassage"
+                                  AutomationProperties.Name="{x:Static loc:Strings.Timeline_FollowPassage}"
+                                  Classes="Outline"
+                                  HorizontalAlignment="Left"
+                                  Height="26" MinHeight="0" Padding="8,0" Margin="12,0,0,0"
+                                  FontSize="12"
+                                  IsVisible="{Binding Passage.ShowFollow, FallbackValue=False}"
+                                  IsChecked="{Binding Passage.IsFollowing, Mode=OneWay, FallbackValue=False}"
+                                  Command="{Binding Passage.ToggleFollowCommand}"
+                                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineFollowPassage}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <ic:FluentIcon Icon="VehicleShip" IconVariant="Regular" FontSize="13" VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Static loc:Strings.Timeline_FollowPassage}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
                     <StackPanel Grid.Column="4"
                                 Orientation="Horizontal"
                                 Spacing="2"
@@ -486,6 +516,78 @@
                               ColumnDefinitions="248,*"
                               Background="Transparent">
                             <StackPanel Grid.ColumnSpan="2">
+                                <!-- E1–E2 (#904): the passage and its departure window, while
+                                     Check passage is on and the passage has ETAs. -->
+                                <Panel IsVisible="{Binding Passage.HasLanes, FallbackValue=False}">
+                                    <StackPanel DataContext="{Binding Passage}"
+                                                x:DataType="vm:PassageTimelineViewModel"
+                                                Opacity="{Binding Opacity}">
+                                        <Grid ColumnDefinitions="248,*"
+                                              Height="34"
+                                              Background="Transparent"
+                                              AutomationProperties.AutomationId="Timeline.PassageLane"
+                                              ToolTip.Tip="{Binding PassageTooltip}">
+                                            <DockPanel Grid.Column="0" Margin="14,0,8,0">
+                                                <Border DockPanel.Dock="Left" Width="3" Margin="0,5,8,5" CornerRadius="1"
+                                                        Background="{DynamicResource AccentBrush}" />
+                                                <StackPanel VerticalAlignment="Center" Spacing="1">
+                                                    <TextBlock Text="{x:Static loc:Strings.Timeline_PassageLane}" FontSize="12" FontWeight="SemiBold" />
+                                                    <TextBlock AutomationProperties.AutomationId="Timeline.PassageLane.Times"
+                                                               Text="{Binding PassageSub}"
+                                                               FontFamily="Menlo, Consolas, monospace"
+                                                               FontSize="10.5"
+                                                               Opacity="0.65"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                            <views:PassageLaneControl Grid.Column="1"
+                                                                      Margin="2,0,2,0"
+                                                                      VerticalAlignment="Center"
+                                                                      Start="{Binding PassageStart}"
+                                                                      End="{Binding PassageEnd}"
+                                                                      Tick="{Binding MinimumPosition}"
+                                                                      Accent="{DynamicResource AccentBrush}"
+                                                                      Classes.success="{Binding IsSuccess}"
+                                                                      Classes.warning="{Binding IsWarning}"
+                                                                      Classes.destructive="{Binding IsDestructive}"
+                                                                      Classes.neutral="{Binding IsNeutral}" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="248,*"
+                                              Height="34"
+                                              IsVisible="{Binding HasWindow}">
+                                            <DockPanel Grid.Column="0" Margin="14,0,8,0">
+                                                <Border DockPanel.Dock="Left" Width="3" Margin="0,5,8,5" CornerRadius="1"
+                                                        Background="{DynamicResource SuccessColor}" />
+                                                <StackPanel VerticalAlignment="Center" Spacing="1">
+                                                    <TextBlock Text="{x:Static loc:Strings.Timeline_WindowLane}" FontSize="12" FontWeight="SemiBold" />
+                                                    <TextBlock AutomationProperties.AutomationId="Timeline.WindowLane.Windows"
+                                                               Text="{Binding WindowSub}"
+                                                               FontFamily="Menlo, Consolas, monospace"
+                                                               FontSize="10.5"
+                                                               Opacity="0.65"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </DockPanel>
+                                            <views:DepartureBandControl Grid.Column="1"
+                                                                        Margin="2,0,2,0"
+                                                                        VerticalAlignment="Center"
+                                                                        AutomationProperties.AutomationId="Timeline.WindowLane"
+                                                                        AutomationProperties.Name="{x:Static loc:Strings.Timeline_WindowLane}"
+                                                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineWindowLane}"
+                                                                        Segments="{Binding WindowSegments}"
+                                                                        KnobFraction="{Binding DeparturePosition}"
+                                                                        SuccessColor="{DynamicResource SuccessColor}"
+                                                                        DestructiveColor="{DynamicResource DestructiveColor}"
+                                                                        MutedColor="{DynamicResource MutedColor}"
+                                                                        KnobColor="{DynamicResource ForegroundColor}"
+                                                                        KnobHaloColor="{DynamicResource BackgroundColor}"
+                                                                        DragStarted="OnWindowLaneDragStarted"
+                                                                        Dragged="OnWindowLaneDragged"
+                                                                        DragCompleted="OnWindowLaneDragCompleted"
+                                                                        Nudged="OnWindowLaneNudged" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Panel>
                                 <ItemsControl ItemsSource="{Binding LaneGroups}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:TimelineLaneGroupViewModel">

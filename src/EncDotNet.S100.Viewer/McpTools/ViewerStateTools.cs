@@ -74,7 +74,25 @@ internal sealed record TimelineStateDto(
     [property: Description("True while the In map view filter is on: only the layers in the map view are listed and set the axis (set_timeline_view inMapView changes it).")] bool InMapView,
     [property: Description("'lanes' (one lane per layer) or 'strip' (the single strip); set_timeline_view layout changes it.")] string Layout,
     [property: Description("The Timeline's lanes: the listed ones by product group, then any folded outside the map view (listed=false).")] IReadOnlyList<TimelineLaneDto> Lanes,
-    [property: Description("True while the lanes also show what the Library knows but has not loaded: online (dashed) and on disk (outlined); set_timeline_view showOnline changes it.")] bool ShowOnline);
+    [property: Description("True while the lanes also show what the Library knows but has not loaded: online (dashed) and on disk (outlined); set_timeline_view showOnline changes it.")] bool ShowOnline,
+    [property: Description("The passage and departure-window lanes, shown above the product groups while Check passage is on and the passage has ETAs; null otherwise.")] TimelinePassageDto? Passage,
+    [property: Description("True while Follow passage pins the view time to the ETA at the Clearance cursor (set_follow_passage changes it).")] bool FollowPassage);
+
+/// <summary>The Timeline's passage lanes (#904).</summary>
+[Description("The Timeline's passage lane (departure to arrival, with a tick at the minimum UKC) and departure-window lane.")]
+internal sealed record TimelinePassageDto(
+    [property: Description("The checked departure, UTC.")] DateTimeOffset Departure,
+    [property: Description("The arrival, UTC.")] DateTimeOffset Arrival,
+    [property: Description("The ETA of the minimum UKC (the tick in the verdict colour), UTC; null when none was computed.")] DateTimeOffset? MinUkcTime,
+    [property: Description("Verdict code, as get_passage_result: water_level_ends_before_arrival, below_setting, incomplete_data, meets_settings_tight or meets_settings.")] string Verdict,
+    [property: Description("True while the check is recomputing (the lanes are dimmed).")] bool Stale,
+    [property: Description("The departure's position on the axis, 0 (left) to 1 (right), clamped.")] double Start,
+    [property: Description("The arrival's position on the axis, 0–1, clamped.")] double End,
+    [property: Description("The min-UKC tick's position on the axis, 0–1; null without one.")] double? MinUkcPosition,
+    [property: Description("True when Follow passage can be turned on.")] bool CanFollow,
+    [property: Description("The window lane's departure tick on the axis, 0–1; null without a window.")] double? DeparturePosition,
+    [property: Description("The window lane's label: the runs that meet your settings, e.g. '06:00–06:40, 08:25–10:20'; null without a window.")] string? Windows,
+    [property: Description("The window lane's runs of departures, positioned on the axis; empty without a window (no S-104 covers the route, or not swept yet).")] IReadOnlyList<DepartureBandSegmentDto> WindowSegments);
 
 /// <summary>A window of data the Library knows for a Timeline lane.</summary>
 [Description("A window of data the Library knows for a Timeline lane.")]
@@ -226,7 +244,23 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
         [.. state.Lanes.Select(lane => new TimelineLaneDto(
             lane.Id, lane.Label, lane.Group, lane.Listed, lane.InMapView, lane.Expired, lane.Time, lane.Library, lane.NewRun,
             [.. lane.Windows.Select(w => new TimelineLibraryWindowDto(w.ItemId, WindowState(w.State), w.Start, w.End, w.Run, w.NewRun, w.Expired))]))],
-        state.ShowOnline);
+        state.ShowOnline,
+        state.Passage is { } passage
+            ? new TimelinePassageDto(
+                passage.Departure,
+                passage.Arrival,
+                passage.MinimumTime,
+                PassageCheckToolBase.Verdict(passage.Verdict),
+                passage.Stale,
+                Math.Round(passage.PassageStart, 4),
+                Math.Round(passage.PassageEnd, 4),
+                passage.MinimumPosition is { } m ? Math.Round(m, 4) : null,
+                passage.CanFollow,
+                passage.DeparturePosition is { } d ? Math.Round(d, 4) : null,
+                passage.Windows,
+                [.. passage.Segments.Select(ClearanceTools.Segment)])
+            : null,
+        state.FollowPassage);
 
     private static string WindowState(LibraryTimedState state) => state switch
     {

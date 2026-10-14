@@ -32,7 +32,8 @@ internal sealed class PassageCheckFixture
         Action<Action>? post = null,
         double? s101FallbackUntilLon = null,
         Func<DateTime, float>? tide = null,
-        IEnumerable<LoadedDataset>? extraDatasets = null)
+        IEnumerable<LoadedDataset>? extraDatasets = null,
+        IRouteViewTime? viewTime = null)
     {
         var datasets = new List<LoadedDataset>
         {
@@ -44,7 +45,7 @@ internal sealed class PassageCheckFixture
         if (extraDatasets is not null)
             datasets.AddRange(extraDatasets);
         Catalog = new FixedCatalog(datasets);
-        Routes = new RoutesService();
+        Routes = new RoutesService(viewTime);
         Route = Routes.Routes.CreateRoute("Fixture");
         for (var i = 0; i < 9; i++)
             Route.AppendWaypoint(new GeoPosition(0, i * 0.02));
