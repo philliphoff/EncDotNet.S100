@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Departure window.** The Clearance tab has a departure band under the
+  profile. It shows which departures across the loaded S-104 range meet your
+  settings, and which arrive after the data ends. Drag it to set the
+  departure. The verdict card lists the window, such as "Departures
+  05:35–06:40 meet your settings", and **Depart {HH:MM}** jumps to the nearest
+  departure in it. The new MCP tool `set_departure` sets the departure, and
+  `get_check_state`, `get_clearance_state` and `get_passage_result`
+  (`includeWindow`) report the window.
 - **Clearance profile.** While Check passage is on, the bottom dock gains a
   **Clearance** tab next to the Timeline. It shows the seabed, the
   required-UKC band, the water level and the keel along the route, against

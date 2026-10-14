@@ -909,6 +909,29 @@
                                            IsVisible="{Binding WhereText, Converter={x:Static ObjectConverters.IsNotNull}}"
                                            FontSize="11.5"
                                            TextWrapping="Wrap" />
+                                <!-- #903 (C3): the departure window line and Depart {HH:MM}. -->
+                                <StackPanel DataContext="{Binding Window}"
+                                            x:DataType="vm:DepartureWindowViewModel"
+                                            IsVisible="{Binding IsVisible}"
+                                            Opacity="{Binding Opacity}"
+                                            Spacing="6"
+                                            Margin="0,2,0,0">
+                                    <TextBlock AutomationProperties.AutomationId="Routes.Check.Window"
+                                               Text="{Binding Text}"
+                                               FontSize="11.5"
+                                               TextWrapping="Wrap" />
+                                    <Button Classes="Primary"
+                                            AutomationProperties.AutomationId="Routes.Check.Depart"
+                                            Content="{Binding DepartText}"
+                                            Command="{Binding DepartCommand}"
+                                            IsVisible="{Binding ShowDepart}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckDepart}"
+                                            HorizontalAlignment="Left"
+                                            Height="28"
+                                            MinHeight="28"
+                                            FontSize="12"
+                                            Padding="12,0" />
+                                </StackPanel>
                                 <TextBlock AutomationProperties.AutomationId="Routes.Check.Footer"
                                            Text="{Binding FooterText}"
                                            FontSize="10.5"

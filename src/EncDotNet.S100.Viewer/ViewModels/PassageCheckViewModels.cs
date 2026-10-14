@@ -48,6 +48,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         _depthUnit = depthUnit;
         _timeFormat = timeFormat;
         Legs = new ObservableCollection<PassageCheckLegRowViewModel>();
+        Window = new DepartureWindowViewModel(service, timeFormat);
         ShowLegsCommand = new RelayCommand(() => ShowFindings = false);
         ShowFindingsCommand = new RelayCommand(() => ShowFindings = true);
         HoverLegCommand = new RelayCommand<PassageCheckLegRowViewModel>(row =>
@@ -58,6 +59,9 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         _service.Changed += (_, _) => Refresh();
         Refresh();
     }
+
+    /// <summary>The verdict card's departure-window line and <b>Depart {HH:MM}</b> (#903).</summary>
+    public DepartureWindowViewModel Window { get; }
 
     /// <summary>The check-mode leg rows (C5).</summary>
     public ObservableCollection<PassageCheckLegRowViewModel> Legs { get; }

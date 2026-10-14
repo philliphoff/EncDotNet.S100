@@ -416,6 +416,7 @@ internal sealed class McpServerHost : IAsyncDisposable
                 tools.Add(PassageCheckMcpAdapters.Create(new SetCheckModeTool(_routesService, invoker, _passageCheck)));
                 tools.Add(PassageCheckMcpAdapters.Create(new GetCheckStateTool(_routesService, invoker, _passageCheck)));
                 tools.Add(PassageCheckMcpAdapters.Create(new SetPassageCursorTool(_routesService, invoker, _passageCheck)));
+                tools.Add(PassageCheckMcpAdapters.Create(new SetDepartureTool(_routesService, invoker, _passageCheck)));
             }
             if (_clearance is not null)
             {

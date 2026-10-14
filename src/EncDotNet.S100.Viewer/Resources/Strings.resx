@@ -4943,4 +4943,40 @@
   <data name="Clearance_RangeFormat" xml:space="preserve">
     <value>{0:0.0}–{1:0.0} NM</value>
   </data>
+  <data name="Check_WindowFormat" xml:space="preserve">
+    <value>Departures {0} meet your settings</value>
+  </data>
+  <data name="Check_WindowSingleFormat" xml:space="preserve">
+    <value>Departure {0} meets your settings</value>
+  </data>
+  <data name="Check_WindowNoneFormat" xml:space="preserve">
+    <value>No departure before {0} meets your settings</value>
+  </data>
+  <data name="Check_WindowRangeFormat" xml:space="preserve">
+    <value>{0}–{1}</value>
+  </data>
+  <data name="Check_WindowMoreFormat" xml:space="preserve">
+    <value>+{0} more</value>
+  </data>
+  <data name="Check_WindowInsideFormat" xml:space="preserve">
+    <value>This departure is inside the window. {0}.</value>
+  </data>
+  <data name="Check_WindowSentenceFormat" xml:space="preserve">
+    <value>{0}.</value>
+  </data>
+  <data name="Check_DepartFormat" xml:space="preserve">
+    <value>Depart {0}</value>
+  </data>
+  <data name="Tooltip_CheckDepart" xml:space="preserve">
+    <value>Set the departure to the nearest departure that meets your settings</value>
+  </data>
+  <data name="Clearance_Departure" xml:space="preserve">
+    <value>Departure</value>
+  </data>
+  <data name="Clearance_BandEndFormat" xml:space="preserve">
+    <value>{0} · S-104 ends</value>
+  </data>
+  <data name="Tooltip_DepartureBand" xml:space="preserve">
+    <value>Drag, or press Left and Right, to set the departure. Green departures meet your settings; red ones don't; hatched ones arrive after the S-104 data ends.</value>
+  </data>
 </root>

@@ -241,7 +241,62 @@ public sealed class PassageCheckEngine
                 tally.MinutesBelow));
         }
 
-        return new DepartureSweep(options);
+        return new DepartureSweep(options) { Step = step };
+    }
+
+    /// <summary>
+    /// Sweeps departures across the water-level data that covers the route
+    /// (<see cref="PassageDepthProfile.WaterLevelTimeRange"/>): from the first
+    /// whole <paramref name="step"/> (counted from midnight UTC) at or after
+    /// the data starts to the data's end. Departures whose arrival falls after
+    /// the data ends get <see cref="PassageVerdict.WaterLevelEndsBeforeArrival"/>
+    /// (see <see cref="DepartureSweep.ArrivalAfterDataEnds"/>). When the range
+    /// would need more than <paramref name="maxDepartures"/> departures, the
+    /// step widens to the smallest multiple of <paramref name="step"/> that
+    /// fits, so a long forecast stays cheap.
+    /// </summary>
+    /// <param name="profile">The profile from <see cref="SampleDepths(IReadOnlyList{PassageLeg}, CancellationToken)"/>.</param>
+    /// <param name="legs">Legs with the profile's points and geometry, carrying the vessel values.</param>
+    /// <param name="step">The time between departures; must be positive.</param>
+    /// <param name="maxDepartures">The most departures to evaluate; must be at least 1.</param>
+    /// <param name="cancellationToken">Cancels the sweep.</param>
+    /// <returns>The sweep, or <c>null</c> when no water-level data covers the route.</returns>
+    public DepartureSweep? SweepWaterLevelRange(
+        PassageDepthProfile profile,
+        IReadOnlyList<PassageLeg> legs,
+        TimeSpan step,
+        int maxDepartures = 2000,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (step <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(step), step, "The step must be positive.");
+        }
+
+        if (maxDepartures < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDepartures), maxDepartures, "At least one departure is needed.");
+        }
+
+        if (profile.WaterLevelTimeRange() is not { } range)
+        {
+            return null;
+        }
+
+        var start = new DateTimeOffset(DateTime.SpecifyKind(range.Start, DateTimeKind.Utc));
+        var end = new DateTimeOffset(DateTime.SpecifyKind(range.End, DateTimeKind.Utc));
+        var span = end - start;
+        var multiple = Math.Max(1, (long)Math.Ceiling(span.Ticks / (double)step.Ticks / Math.Max(1, maxDepartures - 1)));
+        var effective = TimeSpan.FromTicks(step.Ticks * multiple);
+        var remainder = start.UtcTicks % effective.Ticks;
+        var from = remainder == 0 ? start : start.AddTicks(effective.Ticks - remainder);
+        if (from > end)
+        {
+            from = start;
+        }
+
+        return SweepDepartures(profile, legs, from, end, effective, cancellationToken);
     }
 
     private double SampleLeg(int legIndex, PassageLeg leg, List<ProfilePoint> points, CancellationToken cancellationToken)
