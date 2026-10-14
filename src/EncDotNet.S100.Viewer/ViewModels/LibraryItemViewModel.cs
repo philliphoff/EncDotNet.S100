@@ -137,11 +137,10 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
 
     /// <summary>
-    /// True for a community-list entry not yet downloaded: a package that may
-    /// hold several datasets, listed as one row.
+    /// True for a package not yet listed by its datasets (a community-list
+    /// entry or a SECOM exchange set): one row that may hold several datasets.
     /// </summary>
-    public bool IsPackageEntry =>
-        Item.Location is RemoteItemLocation { Package: { } package, Layout: null } && Item.Key == package;
+    public bool IsPackageEntry => LibraryItemText.IsPackageEntry(Item);
 
     /// <summary>True for the header row of an unpacked package's datasets.</summary>
     public bool IsGroupHeader { get; private init; }
@@ -196,12 +195,12 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// </summary>
     internal static LibraryItemViewModel ForPackageGroup(
         LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle,
-        DateTimeOffset? publishedAt = null)
+        DateTimeOffset? publishedAt = null, string productSpec = "S-57")
     {
         var item = new CollectionItem
         {
             Key = "package:" + package,
-            ProductSpec = "S-57",
+            ProductSpec = productSpec,
             Name = package,
             Title = title ?? package,
             Location = NoItemLocation.Instance,

@@ -181,6 +181,14 @@ public sealed record RemoteItemLocation(
     /// and signs with (#883); <see langword="null"/> reads as the default.
     /// </summary>
     public string? Identity { get; init; }
+
+    /// <summary>
+    /// An opaque revision of the download, for a publisher that states no
+    /// <see cref="LastModified"/> (AMSA's SECOM exchange sets, #916): a copy
+    /// downloaded at another revision is outdated. <see langword="null"/> when
+    /// the publication date says it.
+    /// </summary>
+    public string? Revision { get; init; }
 }
 
 /// <summary>How a <see cref="RemoteItemLocation"/>'s download wraps its data.</summary>

@@ -1747,6 +1747,46 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   `SourceOptionsChange`, and `LibraryCatalogueReaders.Secom` takes an
 >   identity setting.
 
+### 7.16 SECOM exchange-set objects (#916)
+
+> - **Why.** AMSA, the first service to return data to our MCP identity
+>   (#882), serves every warning series as an exchange-set object
+>   (`containerType` 1). They were listed without a download.
+> - **What a Get returns** (AMSA, captured 2026-10-13). The data is a plain
+>   ZIP of an S-100 exchange set: `S100_ROOT/CATALOG.XML`, `CATALOG.SIGN`
+>   and `S-124/DATASET_FILES/*.gml`. It's neither compressed nor
+>   protected, and its SECOM signature verifies under MCP MCC. The catalogue
+>   lists the current warnings and a `cancellation` record, without a file,
+>   for each one withdrawn (#919). Three of AMSA's five sets held only
+>   cancellations.
+> - **Decision: a package, unpacked into its datasets.** An exchange-set
+>   object is indexed as a package (§7.4): one online item until it's
+>   downloaded, then one item per current dataset of its catalogue,
+>   grouped under the package and keeping its `RemoteItemLocation`. This
+>   keeps per-dataset bounds, titles and loading, and reuses the package
+>   rows, announcements and pruning. A set with only cancellations
+>   downloads as an empty package: its record names the catalogue, and its
+>   item stays a package entry with "no current datasets".
+> - **Download.** `EncCellDownloader` checks the SECOM signature, extracts
+>   the archive (unwrapping one inner ZIP if the object is also flagged
+>   compressed), and records the current datasets the catalogue lists
+>   whose files arrived, with S-101 updates folded into their base.
+> - **Names.** `dataReference` is stable, but `info_identifier` carries a
+>   generation timestamp that changes on every read. Names drop a trailing
+>   `_<ISO timestamp>`, so they, and the download folders, stay put.
+>   An exchange set's description lists its files, so it isn't used as a title.
+> - **Updates.** AMSA gives no `lastModifiedDate`, and its `info_size`
+>   isn't a byte count. For an undated object, a hash of its summary
+>   (stable identifier, name, description, size, status, product version)
+>   is `RemoteItemLocation.Revision`; it's recorded with the download, and
+>   a different revision makes the copy outdated. AMSA's description lists
+>   the set's files, cancellations included, so a warning issued or
+>   cancelled changes it. The revision is part of the fingerprint, so the
+>   change re-indexes the source.
+> - **Not yet.** Encrypted exchange sets (Part 15 protection) and
+>   SECOM-protected objects (#923). We've asked AMSA how a client should
+>   tell that an object changed.
+
 ## 8. Implementation slices
 
 Each slice is a PR. Slices 1–2 are library-only and testable without

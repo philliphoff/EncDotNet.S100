@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Collections.Downloads;
 using EncDotNet.S100.Collections.Indexing;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Persistence;
 using EncDotNet.S100.Collections.Secom;
 using EncDotNet.S100.Core;
@@ -324,7 +325,7 @@ public sealed class SecomTests : IDisposable
     }
 
     [Fact]
-    public async Task Products_filter_on_this_side_and_exchange_sets_are_listed_only()
+    public async Task Products_filter_on_this_side_and_exchange_sets_are_packages()
     {
         var summaries = Summaries(3).Append(Summary(9, "S-122")).Append(Summary(10, "S-124", containerType: 1)).ToArray();
         var indexer = new SecomSourceIndexer(new HttpClient(new FakeSecomServer(summaries)));
@@ -333,8 +334,168 @@ public sealed class SecomTests : IDisposable
 
         Assert.Equal(4, index.Items.Count);
         Assert.All(index.Items, i => Assert.Equal("S-124", i.ProductSpec));
-        Assert.IsType<NoItemLocation>(index.Items.Single(i => i.Key == "ref-0010").Location);
-        Assert.Contains(index.Diagnostics, d => d.Severity == IndexDiagnosticSeverity.Info && d.Message.Contains("exchange-set", StringComparison.Ordinal));
+        var set = index.Items.Single(i => i.Key == "ref-0010");
+        var remote = Assert.IsType<RemoteItemLocation>(set.Location);
+        Assert.Equal("NW-0010-26", remote.Package);
+        Assert.Null(remote.Layout);
+        Assert.Null(remote.SizeBytes);
+        Assert.True(LibraryItemText.IsPackageEntry(set));
+        Assert.Empty(index.Diagnostics);
+    }
+
+    [Theory]
+    [InlineData("NAVAREA X_2026-10-13T04:47:23.685467965Z", "NAVAREA X")]
+    [InlineData("AUSCOAST WARNING_2026-10-13T04:47:23Z", "AUSCOAST WARNING")]
+    [InlineData("Ports_2026-10-13T04:47:23+11:00", "Ports")]
+    [InlineData("NW-0001-26", "NW-0001-26")]
+    [InlineData("128KR0000FULL_SET.gml", "128KR0000FULL_SET.gml")]
+    [InlineData("_2026-10-13T04:47:23Z", "_2026-10-13T04:47:23Z")]
+    public void Identifiers_lose_a_trailing_generation_timestamp(string identifier, string expected) =>
+        Assert.Equal(expected, SecomSourceIndexer.WithoutTimestamp(identifier));
+
+    [Fact]
+    public async Task Exchange_set_objects_download_as_packages_and_list_their_current_datasets()
+    {
+        // AMSA serves each warning series as an S-100 exchange set (#916): its
+        // identifier carries a timestamp that changes on every read, and its
+        // catalogue lists cancelled warnings with no file.
+        using var signer = Signer.Create();
+        var set = ExchangeSet(("124AU01NA10626.gml", "newDataset"), ("124AU01NA11026.gml", null), ("124AU01NA9726.gml", "cancellation"));
+        var summary = Summary(1, "S-124", containerType: 1);
+        summary["info_identifier"] = "NAVAREA X_2026-10-13T04:47:23.685467965Z";
+        summary["info_name"] = "NAVAREA X";
+        var server = new FakeSecomServer([summary]);
+        server.Objects["ref-0001"] = (set, signer.Sign(set));
+        var downloads = Path.Combine(_temp.Path, "downloads");
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(DateTimeOffset.UtcNow);
+        var indexer = CollectionIndexer.CreateDefault(feeds: [new SecomSourceIndexer(new HttpClient(server), downloadsRoot: downloads, timeProvider: time)]);
+        var source = Source();
+
+        var index = await indexer.IndexAsync(source, cancellationToken: Ct);
+        var entry = Assert.Single(index.Items);
+        Assert.Equal("NAVAREA X", entry.Name);
+        Assert.Null(entry.Title);
+        Assert.True(LibraryItemText.IsPackageEntry(entry));
+        var remote = (RemoteItemLocation)entry.Location;
+
+        var downloader = new EncCellDownloader(new HttpClient(server), Path.Combine(downloads, remote.DownloadFolder!));
+        var downloaded = await downloader.DownloadAsync(entry, cancellationToken: Ct);
+        Assert.True(downloaded.IsPackage);
+        Assert.Equal(["124AU01NA10626", "124AU01NA11026"], downloaded.Datasets.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("CATALOG.XML", downloaded.Datasets["124AU01NA10626"].CatalogueRelativePath);
+        Assert.Equal(SecomSignatureStatus.Valid, downloaded.Signature!.Status);
+
+        // A new identifier timestamp keeps the name; the download lists the set's current datasets.
+        summary["info_identifier"] = "NAVAREA X_2026-10-14T01:00:00Z";
+        server.Summaries = [summary];
+        time.Advance(SecomSourceIndexer.ReuseInterval);
+        var after = await indexer.IndexAsync(source, index, cancellationToken: Ct);
+        Assert.Equal(["NAVAREA X/124AU01NA10626", "NAVAREA X/124AU01NA11026"], after.Items.Select(i => i.Key).Order(StringComparer.Ordinal));
+        Assert.All(after.Items, item =>
+        {
+            Assert.False(LibraryItemText.IsPackageEntry(item));
+            Assert.Equal("S-124", item.ProductSpec);
+            Assert.Equal("NAVAREA X", item.GroupKey);
+            Assert.Equal("NAVAREA X", item.Properties["package"]);
+            Assert.Equal("valid · signer not trusted", item.Properties["signature"]);
+            Assert.Equal(remote.Uri, ((RemoteItemLocation)item.Location).Uri);
+            Assert.False(downloaded.IsOlderThan(item));
+        });
+
+        // The service gives no modification date; a changed listing (a warning issued
+        // or cancelled changes AMSA's file list) makes the download outdated.
+        summary.Remove("info_lastModifiedDate");
+        server.Summaries = [summary];
+        time.Advance(SecomSourceIndexer.ReuseInterval);
+        var undated = await indexer.IndexAsync(source, after, cancellationToken: Ct);
+        Assert.NotNull(((RemoteItemLocation)undated.Items[0].Location).Revision);
+        Assert.All(undated.Items, item => Assert.True(downloaded.IsOlderThan(item)));
+        var current = await downloader.DownloadAsync(undated.Items[0], cancellationToken: Ct);
+        Assert.All(undated.Items, item => Assert.False(current.IsOlderThan(item)));
+
+        summary["info_description"] = "124AU01NA10626.gml,124AU01NA11026.gml,124AU01NA9726.gml,124AU01NA12026.gml";
+        server.Summaries = [summary];
+        time.Advance(SecomSourceIndexer.ReuseInterval);
+        var changed = await indexer.IndexAsync(source, undated, cancellationToken: Ct);
+        Assert.NotSame(undated, changed);
+        Assert.All(changed.Items, item => Assert.True(current.IsOlderThan(item)));
+    }
+
+    [Fact]
+    public async Task An_exchange_set_of_only_cancellations_downloads_as_an_empty_package()
+    {
+        using var signer = Signer.Create();
+        var set = ExchangeSet(("124AU01SS3226.gml", "cancellation"));
+        var server = new FakeSecomServer([Summary(1, "S-124", containerType: 1)]);
+        server.Objects["ref-0001"] = (set, signer.Sign(set));
+        var downloads = Path.Combine(_temp.Path, "downloads");
+        var indexer = new SecomSourceIndexer(new HttpClient(server), downloadsRoot: downloads);
+        var source = Source();
+        var entry = Assert.Single((await indexer.IndexAsync(source, null, Ct)).Items);
+        var downloader = new EncCellDownloader(new HttpClient(server), Path.Combine(downloads, ((RemoteItemLocation)entry.Location).DownloadFolder!));
+
+        var downloaded = await downloader.DownloadAsync(entry, cancellationToken: Ct);
+
+        Assert.True(downloaded.IsPackage);
+        Assert.Empty(downloaded.Datasets);
+        Assert.Equal("CATALOG.XML", downloaded.Location.RelativePath);
+        var listed = Assert.Single((await indexer.IndexAsync(source, null, Ct)).Items);
+        Assert.True(LibraryItemText.IsPackageEntry(listed));
+        Assert.Contains("cancelled", listed.Properties["contents"], StringComparison.Ordinal);
+        Assert.Equal("valid · signer not trusted", listed.Properties["signature"]);
+    }
+
+    [Fact]
+    public async Task An_exchange_set_object_that_is_not_a_zip_is_refused()
+    {
+        using var signer = Signer.Create();
+        var data = "<S124:Dataset/>"u8.ToArray();
+        var server = new FakeSecomServer([Summary(1, "S-124", containerType: 1)]);
+        server.Objects["ref-0001"] = (data, signer.Sign(data));
+        var downloads = Path.Combine(_temp.Path, "downloads");
+        var indexer = new SecomSourceIndexer(new HttpClient(server), downloadsRoot: downloads);
+        var entry = Assert.Single((await indexer.IndexAsync(Source(), null, Ct)).Items);
+        var downloader = new EncCellDownloader(new HttpClient(server), Path.Combine(downloads, ((RemoteItemLocation)entry.Location).DownloadFolder!));
+
+        var refused = await Assert.ThrowsAsync<InvalidDataException>(() => downloader.DownloadAsync(entry, cancellationToken: Ct));
+
+        Assert.Contains("not a zip", refused.Message, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(downloader.Root));
+    }
+
+    /// <summary>
+    /// The ZIP of an S-124 exchange set laid out as AMSA's: <c>S100_ROOT/CATALOG.XML</c>
+    /// and <c>S-124/DATASET_FILES/*.gml</c>; cancellations are listed without a file.
+    /// </summary>
+    private static byte[] ExchangeSet(params (string File, string? Purpose)[] datasets)
+    {
+        var records = string.Concat(datasets.Select(d => $"""
+            <S100XC:S100_DatasetDiscoveryMetadata>
+              <S100XC:fileName>file:/S-124/DATASET_FILES/{d.File}</S100XC:fileName>
+              {(d.Purpose is { } purpose ? $"<S100XC:purpose>{purpose}</S100XC:purpose>" : string.Empty)}
+              <S100XC:productSpecification><S100XC:name>Navigational Warnings</S100XC:name><S100XC:version>2.0.0</S100XC:version><S100XC:productIdentifier>S-124</S100XC:productIdentifier></S100XC:productSpecification>
+            </S100XC:S100_DatasetDiscoveryMetadata>
+            """));
+        var catalogue = $"""
+            <S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc/5.2">
+              <S100XC:identifier><S100XC:identifier>AU</S100XC:identifier></S100XC:identifier>
+              <S100XC:productSpecification><S100XC:name>Navigational Warnings</S100XC:name><S100XC:version>2.0.0</S100XC:version><S100XC:productIdentifier>S-124</S100XC:productIdentifier></S100XC:productSpecification>
+              <S100XC:datasetDiscoveryMetadata>{records}</S100XC:datasetDiscoveryMetadata>
+            </S100XC:S100_ExchangeCatalogue>
+            """;
+        using var buffer = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(buffer, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        {
+            using (var writer = new StreamWriter(zip.CreateEntry("S100_ROOT/CATALOG.XML").Open()))
+                writer.Write(catalogue);
+            foreach (var (file, purpose) in datasets.Where(d => d.Purpose != "cancellation"))
+            {
+                using var writer = new StreamWriter(zip.CreateEntry("S100_ROOT/S-124/DATASET_FILES/" + file).Open());
+                writer.Write("<S124:Dataset xmlns:S124=\"http://www.iho.int/S124/gml/2.0\"/>");
+            }
+        }
+
+        return buffer.ToArray();
     }
 
     [Fact]
