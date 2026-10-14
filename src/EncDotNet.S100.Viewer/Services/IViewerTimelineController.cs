@@ -128,6 +128,43 @@ internal sealed record ViewerTimelineState(
 
     /// <summary>The lanes: those listed, then those folded outside the map view.</summary>
     public IReadOnlyList<TimelineLaneState> Lanes { get; init; } = [];
+
+    /// <summary>The passage lanes (#904), or null when they don't show.</summary>
+    public TimelinePassageState? Passage { get; init; }
+
+    /// <summary>True while Follow passage pins the view time to the passage (#904).</summary>
+    public bool FollowPassage { get; init; }
+}
+
+/// <summary>The Timeline's passage and departure-window lanes (#904).</summary>
+/// <param name="Departure">The checked departure.</param>
+/// <param name="Arrival">The arrival.</param>
+/// <param name="MinimumTime">The ETA of the minimum UKC, or null.</param>
+/// <param name="Verdict">The verdict.</param>
+/// <param name="Stale">True while the check is recomputing.</param>
+/// <param name="PassageStart">Departure on the axis, 0–1.</param>
+/// <param name="PassageEnd">Arrival on the axis, 0–1.</param>
+/// <param name="MinimumPosition">The min-UKC tick on the axis, 0–1, or null.</param>
+/// <param name="CanFollow">True when Follow passage can be turned on.</param>
+internal sealed record TimelinePassageState(
+    DateTimeOffset Departure,
+    DateTimeOffset Arrival,
+    DateTimeOffset? MinimumTime,
+    EncDotNet.S100.Navigation.PassageVerdict Verdict,
+    bool Stale,
+    double PassageStart,
+    double PassageEnd,
+    double? MinimumPosition,
+    bool CanFollow)
+{
+    /// <summary>The departure tick on the axis, 0–1, or null without a window.</summary>
+    public double? DeparturePosition { get; init; }
+
+    /// <summary>The window lane's label, e.g. "06:00–06:40", or null without a window.</summary>
+    public string? Windows { get; init; }
+
+    /// <summary>The window lane's runs, positioned on the axis; empty without a window.</summary>
+    public IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DepartureBandSegment> Segments { get; init; } = [];
 }
 
 /// <summary>One lane of the Timeline (#710).</summary>

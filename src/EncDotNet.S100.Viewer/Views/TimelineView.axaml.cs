@@ -76,6 +76,15 @@ public partial class TimelineView : UserControl
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
+    // E2 (#904): dragging the departure window lane sets the route's departure, one undo step per drag.
+    private void OnWindowLaneDragStarted(object? sender, double position) => Timeline?.Passage?.BeginDrag(position);
+
+    private void OnWindowLaneDragged(object? sender, double position) => Timeline?.Passage?.DragTo(position);
+
+    private void OnWindowLaneDragCompleted(object? sender, EventArgs e) => Timeline?.Passage?.EndDrag();
+
+    private void OnWindowLaneNudged(object? sender, int steps) => Timeline?.Passage?.Nudge(steps);
+
     private TimelineViewModel? Timeline => DataContext as TimelineViewModel;
 
     private void ShowStepMenu(Control anchor)

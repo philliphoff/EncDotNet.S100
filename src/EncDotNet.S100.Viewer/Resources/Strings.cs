@@ -1792,6 +1792,13 @@ internal static class Strings
     public static string Check_Computing => Get(nameof(Check_Computing));
     public static string Check_ErrorFormat => Get(nameof(Check_ErrorFormat));
     public static string Check_NoClearance => Get(nameof(Check_NoClearance));
+    public static string Timeline_PassageLane => Get(nameof(Timeline_PassageLane));
+    public static string Timeline_WindowLane => Get(nameof(Timeline_WindowLane));
+    public static string Timeline_PassageWindowNone => Get(nameof(Timeline_PassageWindowNone));
+    public static string Timeline_FollowPassage => Get(nameof(Timeline_FollowPassage));
+    public static string Tooltip_TimelineFollowPassage => Get(nameof(Tooltip_TimelineFollowPassage));
+    public static string Tooltip_TimelineFollowPassageUnavailable => Get(nameof(Tooltip_TimelineFollowPassageUnavailable));
+    public static string Tooltip_TimelineWindowLane => Get(nameof(Tooltip_TimelineWindowLane));
     public static string Check_WindowFormat => Get(nameof(Check_WindowFormat));
     public static string Check_WindowSingleFormat => Get(nameof(Check_WindowSingleFormat));
     public static string Check_WindowNoneFormat => Get(nameof(Check_WindowNoneFormat));

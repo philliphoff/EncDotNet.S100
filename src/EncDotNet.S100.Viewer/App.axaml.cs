@@ -820,6 +820,11 @@ public partial class App : Application
                     else
                         Avalonia.Threading.Dispatcher.UIThread.Post(action);
                 }));
+        // Follow passage (#904): pins the view time to the ETA at the profile cursor.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>(sp =>
+            new EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
+                sp.GetRequiredService<GlobalTimeService>()));
         // Findings list (#905): built from each check result; selecting one
         // zooms the map to it and moves the profile cursor there.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(sp =>
@@ -1162,7 +1167,8 @@ public partial class App : Application
             new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>()),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
             sp.GetRequiredService<ClearanceViewModel>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));
@@ -1232,7 +1238,15 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
             sp.GetRequiredService<DatasetsViewModel>()));
         services.AddSingleton<ITimelineMapScope>(sp => sp.GetRequiredService<TimelineMapScope>());
-        services.AddSingleton<TimelineViewModel>();
+        services.AddSingleton<TimelineViewModel>(sp =>
+        {
+            var timeline = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<TimelineViewModel>(sp);
+            // Passage lanes and Follow passage (#904).
+            timeline.AttachPassage(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>());
+            return timeline;
+        });
         services.AddSingleton<DisplayToolbarViewModel>();
         services.AddSingleton<TextGroupToolbarViewModel>();
         services.AddSingleton<DisplayModeToolbarViewModel>();

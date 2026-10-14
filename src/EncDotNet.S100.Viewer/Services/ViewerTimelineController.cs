@@ -174,9 +174,32 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             ShowOnline = _timeline.ShowOnline,
             CollapsedToStrip = _timeline.IsCollapsedToStrip,
             Lanes = Lanes(),
+            Passage = Passage(),
+            FollowPassage = _timeline.Passage?.IsFollowing == true,
             Offset = _timeline.OffsetText,
             Message = _timeline.HasStatusMessage ? _timeline.StatusMessage : null,
             MessageAction = _timeline.HasStatusAction ? _timeline.StatusActionText : null,
+        };
+    }
+
+    private TimelinePassageState? Passage()
+    {
+        if (_timeline.Passage is not { HasLanes: true, Departure: { } departure, Arrival: { } arrival, Verdict: { } verdict } p)
+            return null;
+        return new TimelinePassageState(
+            departure,
+            arrival,
+            p.MinimumTime,
+            verdict,
+            p.IsStale,
+            p.PassageStart,
+            p.PassageEnd,
+            double.IsFinite(p.MinimumPosition) ? p.MinimumPosition : null,
+            p.CanFollow)
+        {
+            DeparturePosition = p.HasWindow ? p.DeparturePosition : null,
+            Windows = p.HasWindow ? p.WindowSub : null,
+            Segments = p.HasWindow ? p.WindowSegments : [],
         };
     }
 

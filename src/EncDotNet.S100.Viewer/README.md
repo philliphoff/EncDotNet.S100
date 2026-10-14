@@ -893,6 +893,18 @@ loaded S-104. While it's on:
   you drag, and one drag is one undo step. Over a forecast longer than about
   three days, the band's step widens so it stays quick.
 
+- **The Timeline** shows two lanes above the product groups while the
+  passage has ETAs (a speed on every leg). **Passage** is a bar from
+  departure to arrival with a tick at the minimum UKC in the verdict colour.
+  **Departure window** shows the same runs as the Clearance band, with a tick
+  at the departure; drag it to set the departure. **Follow passage**, next to
+  the Pinned/Live readout, pins the view time to the ETA at the Clearance
+  cursor (or at the minimum UKC), so S-104 and S-111 show what the ship meets
+  there. Turning it on sets the route's departure first if it has none, so
+  the passage doesn't move with the view time. Choosing another time on the
+  Timeline, or going live, turns it off. Expired forecast runs keep their
+  **Expired** tag on their lanes; S-111 currents aren't used in ETAs.
+
 Editing recomputes live: the route draws grey and dashed, and the verdict
 dims, until the new result arrives. Turning Check passage off restores the
 map and the docks. The result is an aid for exploring the data, not for

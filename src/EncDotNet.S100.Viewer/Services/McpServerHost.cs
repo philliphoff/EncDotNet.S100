@@ -45,6 +45,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? _passageCheck;
     private readonly EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel? _clearance;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? _routeFindings;
+    private readonly EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? _followPassage;
     private readonly IViewerDatasetStateController? _datasetState;
     private readonly IViewerNotificationController? _notifications;
     private readonly AdjustableTimeProvider? _testClock;
@@ -89,8 +90,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         ISecomIdentityReferences? secomIdentities = null,
         EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? passageCheck = null,
         EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel? clearance = null,
-        EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? routeFindings = null)
+        EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? routeFindings = null,
+        EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? followPassage = null)
     {
+        _followPassage = followPassage;
         _passageCheck = passageCheck;
         _clearance = clearance;
         _routeFindings = routeFindings;
@@ -420,6 +423,8 @@ internal sealed class McpServerHost : IAsyncDisposable
                 tools.Add(PassageCheckMcpAdapters.Create(new GetCheckStateTool(_routesService, invoker, _passageCheck)));
                 tools.Add(PassageCheckMcpAdapters.Create(new SetPassageCursorTool(_routesService, invoker, _passageCheck)));
                 tools.Add(PassageCheckMcpAdapters.Create(new SetDepartureTool(_routesService, invoker, _passageCheck)));
+                if (_followPassage is not null && _timeline is not null)
+                    tools.Add(PassageCheckMcpAdapters.Create(new SetFollowPassageTool(_followPassage, _passageCheck, invoker, _timeline)));
                 if (_routeFindings is not null)
                 {
                     tools.Add(RouteFindingsMcpAdapters.Create(new GetFindingsTool(_routesService, invoker, _passageCheck, _routeFindings)));

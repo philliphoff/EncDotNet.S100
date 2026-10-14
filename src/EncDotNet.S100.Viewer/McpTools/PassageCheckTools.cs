@@ -147,7 +147,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
             line?.DepartText);
     }
 
-    private static string Verdict(PassageVerdict verdict) => verdict switch
+    internal static string Verdict(PassageVerdict verdict) => verdict switch
     {
         PassageVerdict.MeetsSettings => "meets_settings",
         PassageVerdict.MeetsSettingsTight => "meets_settings_tight",
@@ -305,6 +305,61 @@ internal sealed class SetDepartureTool : PassageCheckToolBase
     }
 }
 
+/// <summary>Request for <see cref="SetFollowPassageTool"/>.</summary>
+[Description("Request for set_follow_passage: turn Follow passage on or off.")]
+internal sealed record SetFollowPassageRequest(
+    [property: Description("True to pin the view time to the ETA at the Clearance cursor (or at the minimum UKC without a cursor); false to stop, leaving the view time where it is.")] bool On);
+
+/// <summary>
+/// Turns Follow passage on or off (#904), as the Timeline header's toggle
+/// does, and returns the Timeline state.
+/// </summary>
+internal sealed class SetFollowPassageTool
+{
+    public const string Name = "set_follow_passage";
+
+    private readonly FollowPassageService _follow;
+    private readonly PassageCheckService _check;
+    private readonly IRouteEditInvoker _invoker;
+    private readonly IViewerTimelineController _timeline;
+
+    public SetFollowPassageTool(FollowPassageService follow, PassageCheckService check, IRouteEditInvoker invoker, IViewerTimelineController timeline)
+    {
+        ArgumentNullException.ThrowIfNull(follow);
+        ArgumentNullException.ThrowIfNull(check);
+        ArgumentNullException.ThrowIfNull(invoker);
+        ArgumentNullException.ThrowIfNull(timeline);
+        _follow = follow;
+        _check = check;
+        _invoker = invoker;
+        _timeline = timeline;
+    }
+
+    public async Task<ToolResult<TimelineStateDto>> InvokeAsync(SetFollowPassageRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        await SettleAsync(cancellationToken).ConfigureAwait(false);
+        var applied = await _invoker.InvokeAsync(() => _follow.SetOn(request.On)).ConfigureAwait(false);
+        if (!applied)
+        {
+            return ToolResult<TimelineStateDto>.Err(new InvalidArgument(
+                "on", "Follow passage needs Check passage on (set_check_mode) with a speed on every leg, and time-aware data loaded"));
+        }
+
+        // Turning it on may set the departure, which recomputes the check.
+        await SettleAsync(cancellationToken).ConfigureAwait(false);
+        return ToolResult<TimelineStateDto>.Ok(GetTimelineStateTool.ToDto(await _timeline.GetStateAsync(cancellationToken).ConfigureAwait(false)));
+    }
+
+    private async Task SettleAsync(CancellationToken cancellationToken)
+    {
+        var idle = await _invoker.InvokeAsync(() => _check.WhenIdle()).ConfigureAwait(false);
+        await idle.WaitAsync(PassageCheckToolBase.WaitTimeout, cancellationToken).ConfigureAwait(false);
+        await _invoker.InvokeAsync(() => true).ConfigureAwait(false);
+    }
+}
+
 /// <summary>Wraps the Check passage tools as <see cref="McpServerTool"/>s.</summary>
 internal static class PassageCheckMcpAdapters
 {
@@ -371,6 +426,28 @@ internal static class PassageCheckMcpAdapters
                 "nearestMeeting jumps to the departure nearest the current one that meets your settings, as the " +
                 "verdict card's Depart {HH:MM} button does. One undoable edit (undo_route_edit). Returns the state " +
                 "get_check_state returns, including the departure window. Viewer-injected tool — mutates live state.",
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    public static McpServerTool Create(SetFollowPassageTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("True to pin the view time to the ETA at the Clearance cursor; false to stop, leaving the view time where it is.")] bool on,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetFollowPassageRequest(on), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetFollowPassageTool.Name,
+            Description =
+                "Turns Follow passage on or off, as the Timeline header's toggle does. While it's on, the view time is " +
+                "pinned to the ETA at the Clearance cursor (set_passage_cursor), or at the minimum UKC without a cursor, " +
+                "so S-104 and S-111 show what the ship meets there. Turning it on pins the Timeline and, when the route " +
+                "has no departure, sets the departure to the one being checked (undoable). Choosing another time " +
+                "(set_view_time, step_time) or turning Check passage off stops it. Needs Check passage on with ETAs. " +
+                "Returns the state get_timeline_state returns. Viewer-injected tool — mutates live state.",
             SerializerOptions = JsonOptions,
         });
     }
@@ -519,8 +596,11 @@ internal sealed class ClearanceTools
                 c.BandMiddleLabel,
                 c.BandEndLabel,
                 c.IsBandStale,
-                c.BandSegments.Select(s => new DepartureBandSegmentDto(BandKind(s.Kind), s.First, s.Last, Math.Round(s.Start, 4), Math.Round(s.End, 4))).ToList())
+                c.BandSegments.Select(Segment).ToList())
             : null);
+
+    internal static DepartureBandSegmentDto Segment(DepartureBandSegment s) =>
+        new(BandKind(s.Kind), s.First, s.Last, Math.Round(s.Start, 4), Math.Round(s.End, 4));
 
     private static string BandKind(DepartureBandKind kind) => kind switch
     {

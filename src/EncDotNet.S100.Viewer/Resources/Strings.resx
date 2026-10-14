@@ -5087,4 +5087,25 @@
   <data name="Tooltip_DepartureBand" xml:space="preserve">
     <value>Drag, or press Left and Right, to set the departure. Green departures meet your settings; red ones don't; hatched ones arrive after the S-104 data ends.</value>
   </data>
+  <data name="Timeline_PassageLane" xml:space="preserve">
+    <value>Passage</value>
+  </data>
+  <data name="Timeline_WindowLane" xml:space="preserve">
+    <value>Departure window</value>
+  </data>
+  <data name="Timeline_PassageWindowNone" xml:space="preserve">
+    <value>None meet your settings</value>
+  </data>
+  <data name="Timeline_FollowPassage" xml:space="preserve">
+    <value>Follow passage</value>
+  </data>
+  <data name="Tooltip_TimelineFollowPassage" xml:space="preserve">
+    <value>Pin the view time to the ETA at the Clearance cursor, so S-104 and S-111 show what the ship meets there. Sets the route's departure if it has none.</value>
+  </data>
+  <data name="Tooltip_TimelineFollowPassageUnavailable" xml:space="preserve">
+    <value>Turn on Check passage with a speed on every leg to follow the passage</value>
+  </data>
+  <data name="Tooltip_TimelineWindowLane" xml:space="preserve">
+    <value>Departures across the S-104 range: green meet your settings, red don't, hatched arrive after the data ends. Drag, or press Left and Right, to set the departure.</value>
+  </data>
 </root>

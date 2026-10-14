@@ -161,6 +161,15 @@ internal sealed class DepartureWindowViewModel : ViewModelBase
         if (windows.Count == 1 && windows[0].First == windows[0].Last)
             return string.Format(CultureInfo.CurrentCulture, Strings.Check_WindowSingleFormat, Time(windows[0].First));
 
+        return string.Format(CultureInfo.CurrentCulture, Strings.Check_WindowFormat, Ranges(window, reference, format));
+    }
+
+    /// <summary>The windows alone: "05:35–06:40, 09:10–09:45", with "+N more" past <see cref="MaxListedWindows"/>.</summary>
+    internal static string Ranges(PassageDepartureWindow window, DateTimeOffset reference, TimeFormat format)
+    {
+        string Time(DateTimeOffset t) => PassageFormatting.FormatEta(t, reference, format);
+
+        var windows = window.Windows;
         var ranges = windows
             .Take(MaxListedWindows)
             .Select(w => w.First == w.Last
@@ -169,6 +178,6 @@ internal sealed class DepartureWindowViewModel : ViewModelBase
             .ToList();
         if (windows.Count > MaxListedWindows)
             ranges.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_WindowMoreFormat, windows.Count - MaxListedWindows));
-        return string.Format(CultureInfo.CurrentCulture, Strings.Check_WindowFormat, string.Join(", ", ranges));
+        return string.Join(", ", ranges);
     }
 }
