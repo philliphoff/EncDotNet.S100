@@ -126,7 +126,7 @@ public sealed class RoutesViewTests
             Assert.False(host.IsShown("Routes.Waypoint"));
 
             host.Click(host.Find<ToggleButton>("Routes.Check.FindingsTab"));
-            Assert.True(host.IsShown("Routes.Check.FindingsPlaceholder"));
+            Assert.True(host.IsShown("Routes.Check.Findings"));
             Assert.False(host.IsShown("Routes.Check.Leg"));
             host.Click(host.Find<ToggleButton>("Routes.Check.LegsTab"));
             Assert.True(host.IsShown("Routes.Check.Leg"));
@@ -136,6 +136,58 @@ public sealed class RoutesViewTests
             Assert.False(fixture.Routes.IsCheckModeActive);
             Assert.False(host.IsShown("Routes.Check.Verdict"));
             Assert.True(host.IsShown("Routes.Waypoint"));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = culture;
+        }
+    }
+
+    [AvaloniaFact]
+    public void The_findings_tab_lists_grouped_findings_and_clicking_one_zooms_and_moves_the_cursor()
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var fixture = new PassageCheckFixture(
+                waterEnd: PassageCheckFixture.WaterStart.AddHours(2.5),
+                post: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
+            var viewport = new RouteFindingsTests.RecordingViewport();
+            using var findings = RouteFindingsTests.Findings(fixture, viewport);
+            var panel = new RoutesPanelViewModel(fixture.Routes, check: fixture.Check, findings: findings);
+            using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
+
+            host.Click(host.Find<ToggleButton>("Routes.CheckPassageToggle"));
+            WaitForResult(host, fixture);
+
+            var tab = host.Find<ToggleButton>("Routes.Check.FindingsTab");
+            Assert.Equal($"Findings {findings.Findings.Count}", tab.Content);
+            Assert.Equal(2, findings.Findings.Count);
+            Assert.False(host.IsShown("Routes.Check.Findings"));
+
+            host.Click(tab);
+            Assert.True(host.IsShown("Routes.Check.Findings"));
+            Assert.False(host.IsShown("Routes.Check.Findings.Empty"));
+            Assert.True(host.IsShown("Routes.Check.Findings.Group.MustReview"));
+            Assert.True(host.IsShown("Routes.Check.Findings.Group.Check"));
+            Assert.False(host.IsShown("Routes.Check.Findings.Group.Info"));
+            var rows = host.FindAll<Button>("Routes.Check.Finding");
+            Assert.Equal(2, rows.Count);
+            Assert.Equal(["Clearance", "Data"], host.FindAll<Border>("Routes.Check.Finding.Tag")
+                .Select(t => Avalonia.Automation.AutomationProperties.GetName(t)));
+
+            host.Click(rows[0]);
+            host.Settle();
+            Assert.Equal("clearance.below_setting.0", findings.Selected?.Id);
+            Assert.Contains("selected", rows[0].Classes);
+            Assert.DoesNotContain("selected", rows[1].Classes);
+            Assert.Single(viewport.Zooms);
+            Assert.Equal(5, fixture.Check.Cursor?.LegIndex);
+
+            host.Click(host.Find<ToggleButton>("Routes.Check.LegsTab"));
+            Assert.False(host.IsShown("Routes.Check.Findings"));
+            Assert.True(host.IsShown("Routes.Check.Leg"));
         }
         finally
         {

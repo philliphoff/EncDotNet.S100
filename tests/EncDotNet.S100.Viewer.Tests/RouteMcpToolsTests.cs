@@ -592,10 +592,13 @@ public class RouteMcpToolsTests
                     || t.Name is nameof(RouteDetail) or nameof(RouteSummary) or nameof(GetPassageResult) or nameof(ListRoutesResult) or nameof(DeleteRouteResult))
                 && (t.Name.Contains("Route", StringComparison.Ordinal) || t.Name.Contains("Leg", StringComparison.Ordinal)
                     || t.Name.Contains("Passage", StringComparison.Ordinal) || t.Name.Contains("Waypoint", StringComparison.Ordinal)
-                    || t.Name.Contains("Vessel", StringComparison.Ordinal)))
+                    || t.Name.Contains("Vessel", StringComparison.Ordinal) || t.Name.Contains("Finding", StringComparison.Ordinal)))
             .ToList();
         Assert.Contains(typeof(PassageDto), types);
         Assert.Contains(typeof(SetPassageRequest), types);
+        Assert.Contains(typeof(RouteFindingsDto), types);
+        Assert.Contains(typeof(RouteFindingLocationDto), types);
+        Assert.Contains(typeof(SelectFindingRequest), types);
 
         var missing = types
             .SelectMany(t => t.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly)

@@ -19,12 +19,14 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// <param name="Minimum">The minimum-UKC marker, or <c>null</c>.</param>
 /// <param name="Ghost">The ghost vessel at the cursor, or <c>null</c>.</param>
 /// <param name="Colors">The state colours for the palette.</param>
+/// <param name="Finding">The selected finding's outline and chip (#905, F3), or <c>null</c>.</param>
 internal sealed record RouteCheckOverlay(
     IReadOnlyList<RouteCheckOverlay.Segment> Segments,
     bool IsStale,
     RouteCheckOverlay.Marker? Minimum,
     RouteCheckOverlay.GhostVessel? Ghost,
-    RouteCheckColors Colors)
+    RouteCheckColors Colors,
+    RouteCheckOverlay.FindingFocus? Finding = null)
 {
     /// <summary>A run of the route in one state.</summary>
     internal sealed record Segment(IReadOnlyList<GeoPosition> Path, UkcState State);
@@ -34,6 +36,16 @@ internal sealed record RouteCheckOverlay(
 
     /// <summary>The ghost vessel (C9).</summary>
     internal sealed record GhostVessel(GeoPosition Position, double BearingDegrees);
+
+    /// <summary>
+    /// The selected finding (F3): its area outlined dashed in the finding's
+    /// tone, and the chip "Zoomed to finding · leg 6 → 7 · 1:31 300" (the
+    /// renderer appends the live scale).
+    /// </summary>
+    /// <param name="Path">One position for a point, or the span's positions.</param>
+    /// <param name="Tone">The finding's tone colour.</param>
+    /// <param name="ChipText">The chip text without the scale.</param>
+    internal sealed record FindingFocus(IReadOnlyList<GeoPosition> Path, SKColor Tone, string ChipText);
 
     /// <summary>
     /// Builds the overlay for a check, or returns <c>null</c> when there is
@@ -46,7 +58,8 @@ internal sealed record RouteCheckOverlay(
         PassageCursor? cursor,
         MeasureOverlayAppearance appearance,
         DepthUnit depthUnit,
-        TimeFormat timeFormat)
+        TimeFormat timeFormat,
+        RouteFinding? selectedFinding = null)
     {
         if (!isActive)
             return null;
@@ -83,11 +96,34 @@ internal sealed record RouteCheckOverlay(
         }
 
         var ghost = cursor is { } c ? new GhostVessel(c.Position, c.BearingDegrees) : null;
-        return new RouteCheckOverlay(segments, isStale, minimum, ghost, colors);
+        return new RouteCheckOverlay(segments, isStale, minimum, ghost, colors, Focus(snapshot, selectedFinding, colors));
+    }
+
+    private static FindingFocus? Focus(PassageCheckSnapshot snapshot, RouteFinding? finding, RouteCheckColors colors)
+    {
+        if (finding?.Location is not { Path.Count: > 0 } location)
+            return null;
+
+        var tone = ViewModels.RouteFindingRowViewModel.ToneOf(finding) switch
+        {
+            ViewModels.CheckTone.Destructive => colors.Below,
+            ViewModels.CheckTone.Warning => colors.Tight,
+            _ => colors.Ink,
+        };
+        var chip = Strings.Findings_ZoomedChip;
+        if (finding.LegIndex is { } first)
+        {
+            var last = location.IsPoint ? first : Math.Max(first, PassageCheckService.CursorAt(snapshot, location.EndDistanceMeters).LegIndex);
+            chip += " · " + (first == last
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Findings_ChipLegFormat, first + 1, first + 2)
+                : string.Format(CultureInfo.CurrentCulture, Strings.Findings_ChipLegsFormat, first + 1, last + 2));
+        }
+
+        return new FindingFocus(location.Path, tone, chip);
     }
 
     // The positions along one leg between two distances from the start of the passage.
-    private static IReadOnlyList<GeoPosition> PathAlong(PassageCheckSnapshot snapshot, int legIndex, double from, double to)
+    internal static IReadOnlyList<GeoPosition> PathAlong(PassageCheckSnapshot snapshot, int legIndex, double from, double to)
     {
         var leg = snapshot.Legs[legIndex];
         var summary = snapshot.Result.Legs[legIndex];

@@ -428,6 +428,51 @@
         <Style Selector="Button.checkLeg:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
         </Style>
+        <!-- Findings (#905, F2): a row is a button over the selected-row
+             pattern (3 px accent bar and tint) shared with waypoint rows. -->
+        <!-- The theme's button template lays content out in a horizontal
+             StackPanel, which wouldn't stretch the row; this one does. -->
+        <Style Selector="Button.finding">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalContentAlignment="Stretch" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.finding:focus-visible Border.wpTint">
+            <Setter Property="Opacity" Value="0.1" />
+        </Style>
+        <Style Selector="Button.finding:pointerover Border.wpTint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <Style Selector="Button.finding.selected Border.wpTint">
+            <Setter Property="Opacity" Value="0.14" />
+        </Style>
+        <Style Selector="Button.finding.selected Border.wpBar">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Border.findingTag">
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <Style Selector="Path.octagon">
+            <Setter Property="Data" Value="M 4.7,0.5 L 10.3,0.5 L 14.5,4.7 L 14.5,10.3 L 10.3,14.5 L 4.7,14.5 L 0.5,10.3 L 0.5,4.7 Z M 6.8,3.6 L 8.2,3.6 L 8.0,8.9 L 7.0,8.9 Z M 7.5,10 A 0.95,0.95 0 1 1 7.49,10 Z" />
+            <Setter Property="Width" Value="15" />
+            <Setter Property="Height" Value="15" />
+            <Setter Property="Stretch" Value="None" />
+        </Style>
+        <Style Selector="Panel.destructive Path.toneInk"><Setter Property="Fill" Value="{DynamicResource DestructiveColor}" /></Style>
     </UserControl.Styles>
 
     <UserControl.DataTemplates>
@@ -918,7 +963,7 @@
                             </StackPanel>
                         </Panel>
 
-                        <!-- C4: Legs / Findings. Findings fill in with #905. -->
+                        <!-- C4: Legs / Findings {N}. -->
                         <StackPanel Orientation="Horizontal" IsVisible="{Binding HasVerdict}">
                             <ToggleButton Classes="segment"
                                           AutomationProperties.AutomationId="Routes.Check.LegsTab"
@@ -931,13 +976,94 @@
                                           IsChecked="{Binding ShowFindings, Mode=OneWay}"
                                           Command="{Binding ShowFindingsCommand}" />
                         </StackPanel>
-                        <TextBlock AutomationProperties.AutomationId="Routes.Check.FindingsPlaceholder"
-                                   Text="{x:Static loc:Strings.Check_FindingsPlaceholder}"
-                                   IsVisible="{Binding ShowFindings}"
-                                   FontSize="11"
-                                   Opacity="0.55"
-                                   TextWrapping="Wrap"
-                                   Margin="4,2" />
+                        <!-- F1/F2: one list per route, grouped by what to do.
+                             Clicking a row zooms the map to the finding and
+                             moves the profile cursor there (F3). -->
+                        <StackPanel AutomationProperties.AutomationId="Routes.Check.Findings"
+                                    DataContext="{Binding Findings}"
+                                    x:DataType="vm:RouteFindingsViewModel"
+                                    IsVisible="{Binding $parent[StackPanel].((vm:PassageCheckViewModel)DataContext).ShowFindings}"
+                                    Spacing="2">
+                            <TextBlock AutomationProperties.AutomationId="Routes.Check.Findings.Empty"
+                                       Text="{x:Static loc:Strings.Findings_Empty}"
+                                       IsVisible="{Binding IsEmpty}"
+                                       FontSize="11"
+                                       Opacity="0.55"
+                                       TextWrapping="Wrap"
+                                       Margin="4,2" />
+                            <ItemsControl ItemsSource="{Binding Groups}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RouteFindingGroupViewModel">
+                                        <StackPanel AutomationProperties.AutomationId="{Binding Key, StringFormat='Routes.Check.Findings.Group.{0}'}"
+                                                    AutomationProperties.Name="{Binding Label}">
+                                            <TextBlock Text="{Binding Label}"
+                                                       FontSize="10.5"
+                                                       FontWeight="SemiBold"
+                                                       LetterSpacing="0.6"
+                                                       Opacity="0.6"
+                                                       Margin="8,8,8,4" />
+                                            <ItemsControl ItemsSource="{Binding Items}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:RouteFindingRowViewModel">
+                                                        <Button Classes="finding"
+                                                                Classes.selected="{Binding IsSelected}"
+                                                                AutomationProperties.AutomationId="Routes.Check.Finding"
+                                                                AutomationProperties.Name="{Binding Title}"
+                                                                AutomationProperties.HelpText="{Binding Tooltip}"
+                                                                ToolTip.Tip="{Binding Tooltip}"
+                                                                Command="{Binding $parent[ItemsControl;1].((vm:RouteFindingsViewModel)DataContext).SelectCommand}"
+                                                                CommandParameter="{Binding}">
+                                                            <Grid>
+                                                                <Border Classes="wpTint" />
+                                                                <Border Classes="wpBar"
+                                                                        HorizontalAlignment="Left"
+                                                                        Margin="0,8" />
+                                                                <Grid ColumnDefinitions="Auto,*,Auto"
+                                                                      ColumnSpacing="10"
+                                                                      Margin="12,8,8,8">
+                                                                    <Panel Grid.Column="0"
+                                                                           VerticalAlignment="Top"
+                                                                           Margin="0,1,0,0"
+                                                                           Classes.destructive="{Binding IsDestructive}"
+                                                                           Classes.warning="{Binding IsWarning}"
+                                                                           Classes.neutral="{Binding IsNeutral}">
+                                                                        <Path Classes="octagon toneInk" IsVisible="{Binding IsOctagon}" />
+                                                                        <ic:FluentIcon Classes="toneInk" Icon="Warning" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsTriangle}" />
+                                                                        <ic:FluentIcon Classes="toneInk" Icon="Water" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsWaves}" />
+                                                                        <ic:FluentIcon Classes="toneInk" Icon="Info" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsInfo}" />
+                                                                    </Panel>
+                                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                                        <TextBlock Text="{Binding Title}"
+                                                                                   FontSize="12"
+                                                                                   FontWeight="SemiBold"
+                                                                                   LineHeight="15.6"
+                                                                                   TextWrapping="Wrap" />
+                                                                        <TextBlock Text="{Binding Meta}"
+                                                                                   FontSize="11"
+                                                                                   Opacity="0.6"
+                                                                                   LineHeight="14.85"
+                                                                                   TextWrapping="Wrap" />
+                                                                    </StackPanel>
+                                                                    <Border Grid.Column="2"
+                                                                            Classes="findingTag"
+                                                                            AutomationProperties.AutomationId="Routes.Check.Finding.Tag"
+                                                                            AutomationProperties.Name="{Binding Tag}">
+                                                                        <TextBlock Text="{Binding Tag}"
+                                                                                   FontSize="10"
+                                                                                   Opacity="0.6"
+                                                                                   VerticalAlignment="Center" />
+                                                                    </Border>
+                                                                </Grid>
+                                                            </Grid>
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
 
                         <!-- C5: one 34 px row per leg with its min-UKC chip.
                              Hovering a row moves the cursor and ghost there. -->
