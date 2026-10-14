@@ -108,10 +108,12 @@ internal static class S411DatasetReader
 
         var features = new List<S411Feature>();
 
-        // NWS and NIC write longitude first. Decide once for the dataset so
-        // rings lying wholly within ±90° longitude are read the same way as
-        // the rest (issue #760).
-        var axisOrder = GmlCoordinateParser.DetectAxisOrder(root);
+        // NWS and NIC write longitude first. The dataset-level axis-order
+        // check (issues #760, #650) decides once for the whole dataset: a
+        // latitude beyond ±90° proves longitude first, and the gml:Envelope is
+        // the other anchor. Every ring, including those lying wholly within
+        // ±90° longitude, is then read the same way.
+        var (axisOrder, axisAssessment) = GmlCoordinateParser.AssessAxisOrder(root);
 
         // Operational S-411 producers (e.g. the Canadian Ice Service) frequently
         // emit every feature with the same gml:id ("seaice.None"). The geometry
@@ -143,6 +145,7 @@ internal static class S411DatasetReader
             IssueDate = issueDate,
             Features = features,
             SourceDocument = doc,
+            AxisOrder = axisAssessment,
         };
     }
 
@@ -255,7 +258,10 @@ internal static class S411DatasetReader
         }
 
         var features = new List<S411Feature>();
-        var axisOrder = GmlCoordinateParser.DetectAxisOrder(root);
+        // Decide the axis order once for the whole dataset (issues #760,
+        // #650): a latitude beyond ±90° proves longitude first; the
+        // gml:Envelope is the other anchor.
+        var (axisOrder, axisAssessment) = GmlCoordinateParser.AssessAxisOrder(root);
         foreach (var memberContainer in EnumerateMembers(root, datasetNs))
         {
             foreach (var element in memberContainer.Elements())
@@ -273,6 +279,7 @@ internal static class S411DatasetReader
             IssueDate = issueDate,
             Features = features,
             SourceDocument = doc,
+            AxisOrder = axisAssessment,
         };
     }
 

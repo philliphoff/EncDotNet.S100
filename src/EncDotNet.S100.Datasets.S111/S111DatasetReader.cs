@@ -136,9 +136,9 @@ public static class S111DatasetReader
 
         if (dataCodingFormat is 1 or 3 or 8)
         {
-            var stations = dataCodingFormat == 8
+            var (stations, axisOrder) = dataCodingFormat == 8
                 ? ReadStationSeries(root, scGroup)
-                : ReadTimeMajorStationSeries(scGroup, dataCodingFormat);
+                : ReadTimeMajorStationSeries(root, scGroup, dataCodingFormat);
             DateTime? minTime = null, maxTime = null;
             foreach (var s in stations)
             {
@@ -159,6 +159,7 @@ public static class S111DatasetReader
                 DataCodingFormat = dataCodingFormat,
                 TypeOfCurrentData = typeOfCurrentData,
                 Stations = stations,
+                AxisOrder = axisOrder,
                 MinTime = minTime,
                 MaxTime = maxTime,
             })
@@ -168,6 +169,18 @@ public static class S111DatasetReader
         }
 
         var coverages = ReadCoverages(scGroup, dataCodingFormat, options);
+        var gridAxisOrder = horizontalCRS is null or 4326
+            ? AxisOrderCheck.Assess(
+                coverages
+                    .DistinctBy(c => c.GroupPath)
+                    .SelectMany(c => AxisOrderCheck.GridCorners(
+                        c.OriginLatitude, c.OriginLongitude,
+                        c.SpacingLatitudinal, c.SpacingLongitudinal,
+                        c.NumPointsLatitudinal, c.NumPointsLongitudinal)),
+                Hdf5DeclaredExtent.ReadDatasetExtent(root, scGroup, "SurfaceCurrent."),
+                "the SurfaceCurrent grid origins",
+                normalizes: false)
+            : null;
 
         return new S111DatasetData.GriddedCoverage(new S111Dataset
         {
@@ -182,6 +195,7 @@ public static class S111DatasetReader
             DataCodingFormat = dataCodingFormat,
             TypeOfCurrentData = typeOfCurrentData,
             Coverages = coverages,
+            AxisOrder = gridAxisOrder,
         })
         {
             DeclaredProductSpecification = productSpecification,
@@ -235,9 +249,9 @@ public static class S111DatasetReader
 
         if (dataCodingFormat is 1 or 3 or 8)
         {
-            var stations = dataCodingFormat == 8
+            var (stations, _) = dataCodingFormat == 8
                 ? ReadStationSeries(root, scGroup)
-                : ReadTimeMajorStationSeries(scGroup, dataCodingFormat);
+                : ReadTimeMajorStationSeries(root, scGroup, dataCodingFormat);
             extent = StationExtent(stations);
             time = StationTimeCoverage(stations);
         }
@@ -593,12 +607,14 @@ public static class S111DatasetReader
     /// <see cref="SurfaceCurrentStation"/> instances while retaining every
     /// explicit values-group timestamp.
     /// </remarks>
-    private static IReadOnlyList<SurfaceCurrentStation> ReadTimeMajorStationSeries(
+    private static (IReadOnlyList<SurfaceCurrentStation> Stations, AxisOrderAssessment? AxisOrder) ReadTimeMajorStationSeries(
+        IHdf5Group root,
         IHdf5Group scGroup,
         int dataCodingFormat)
     {
-        var allStations = new List<SurfaceCurrentStation>();
-
+        // Each instance carries its own positions; the axis-order check runs
+        // once over all of them (issue #650).
+        var instances = new List<(IHdf5Group Instance, string Name, string Path, IReadOnlyList<GeoPosition> Positions)>();
         foreach (var instanceName in scGroup.GroupNames)
         {
             if (!instanceName.StartsWith("SurfaceCurrent.", StringComparison.Ordinal))
@@ -606,15 +622,27 @@ public static class S111DatasetReader
 
             var instance = scGroup.OpenGroup(instanceName);
             var instancePath = $"/SurfaceCurrent/{instanceName}";
+            instances.Add((instance, instanceName, instancePath, ReadInstancePositions(instance, instancePath)));
+        }
+
+        var axisOrder = AxisOrderCheck.Assess(
+            instances.SelectMany(i => i.Positions),
+            Hdf5DeclaredExtent.ReadDatasetExtent(root, scGroup, "SurfaceCurrent."),
+            "/SurfaceCurrent/SurfaceCurrent.NN/Positioning/geometryValues");
+
+        var allStations = new List<SurfaceCurrentStation>();
+        foreach (var (instance, instanceName, instancePath, positions) in instances)
+        {
             ReadTimeMajorInstance(
                 instance,
                 instanceName,
                 instancePath,
                 dataCodingFormat,
+                AxisOrderCheck.Apply(axisOrder, positions),
                 allStations);
         }
 
-        return allStations;
+        return (allStations, axisOrder);
     }
 
     private static void ReadTimeMajorInstance(
@@ -622,12 +650,11 @@ public static class S111DatasetReader
         string instanceName,
         string instancePath,
         int dataCodingFormat,
+        IReadOnlyList<GeoPosition> positions,
         List<SurfaceCurrentStation> stations)
     {
         const string spec = "S-111 Edition 2.0.0 §10.2.2.6–10.2.2.9";
 
-        // Read per-node positions from Positioning/geometryValues under this instance.
-        var positions = ReadInstancePositions(instance, instancePath);
         int nodeCount = positions.Count;
 
         // Collect time-step groups in ascending order.
@@ -831,9 +858,16 @@ public static class S111DatasetReader
     /// shared across every <c>SurfaceCurrent.NN</c> instance under
     /// <c>/SurfaceCurrent/</c>.
     /// </remarks>
-    private static IReadOnlyList<SurfaceCurrentStation> ReadStationSeries(IHdf5Group root, IHdf5Group scGroup)
+    private static (IReadOnlyList<SurfaceCurrentStation> Stations, AxisOrderAssessment? AxisOrder) ReadStationSeries(
+        IHdf5Group root,
+        IHdf5Group scGroup)
     {
-        var positions = ReadStationPositions(root);
+        var (encoded, positionsPath) = ReadStationPositions(root);
+        var axisOrder = AxisOrderCheck.Assess(
+            encoded,
+            Hdf5DeclaredExtent.ReadDatasetExtent(root, scGroup, "SurfaceCurrent."),
+            positionsPath);
+        var positions = AxisOrderCheck.Apply(axisOrder, encoded);
 
         var stations = new List<SurfaceCurrentStation>();
 
@@ -847,10 +881,10 @@ public static class S111DatasetReader
             ReadStationInstance(instance, instancePath, positions, stations);
         }
 
-        return stations;
+        return (stations, axisOrder);
     }
 
-    private static List<GeoPosition> ReadStationPositions(IHdf5Group root)
+    private static (List<GeoPosition> Positions, string Path) ReadStationPositions(IHdf5Group root)
     {
         // S-111 Edition 2.0.0 §10.2.3 — station positions live in a
         // /Positioning group containing a compound 'geometryValues'
@@ -858,6 +892,7 @@ public static class S111DatasetReader
         // tooling places the group under /SurfaceCurrent/SurfaceCurrent.NN;
         // accept either.
         IHdf5Group? positioningGroup = null;
+        string positioningPath = "/Positioning";
         if (root.GroupNames.Contains("Positioning"))
         {
             positioningGroup = root.OpenGroup("Positioning");
@@ -872,6 +907,7 @@ public static class S111DatasetReader
                 if (inst.GroupNames.Contains("Positioning"))
                 {
                     positioningGroup = inst.OpenGroup("Positioning");
+                    positioningPath = $"/SurfaceCurrent/{name}/Positioning";
                     break;
                 }
             }
@@ -940,7 +976,7 @@ public static class S111DatasetReader
             double lon = ReadFloatingPointMember(record, lonMember);
             positions.Add(new GeoPosition(lat, lon));
         }
-        return positions;
+        return (positions, $"{positioningPath}/geometryValues");
     }
 
     private static double ReadFloatingPointMember(ReadOnlySpan<byte> record, CompoundMemberInfo member) =>

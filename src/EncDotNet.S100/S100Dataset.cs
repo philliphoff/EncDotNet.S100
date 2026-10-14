@@ -164,6 +164,15 @@ public sealed class S100Dataset : IDisposable
     public bool CanRenderHeadless => Processor is IHeadlessImageRenderer;
 
     /// <summary>
+    /// What the reader's axis-order check concluded about the dataset's
+    /// positions (issue #650): latitude first as encoded, swapped back from
+    /// longitude first, unverifiable, or inconsistent with the declared
+    /// extent. <see langword="null"/> when the product has no positions to
+    /// check (S-101) or a projected grid.
+    /// </summary>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder => Processor.AxisOrder;
+
+    /// <summary>
     /// The available time steps for time-aware products (S-104, S-111), in
     /// dataset order; empty for static products.
     /// </summary>

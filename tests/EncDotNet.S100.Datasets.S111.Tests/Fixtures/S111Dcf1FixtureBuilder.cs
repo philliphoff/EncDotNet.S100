@@ -42,7 +42,8 @@ internal static class S111Dcf1FixtureBuilder
         string path,
         IReadOnlyList<Station> stations,
         IReadOnlyList<TimeStep> timeSteps,
-        long declaredInterval = 3600)
+        long declaredInterval = 3600,
+        IReadOnlyDictionary<string, object>? extraRootAttributes = null)
     {
         var geometry = new GeometryRow[stations.Count];
         for (int index = 0; index < stations.Count; index++)
@@ -101,6 +102,12 @@ internal static class S111Dcf1FixtureBuilder
 
         var options = new H5WriteOptions(
             FieldNameMapper: field => field.GetCustomAttribute<H5NameAttribute>()?.Name);
+        if (extraRootAttributes is not null)
+        {
+            foreach (var (name, value) in extraRootAttributes)
+                file.Attributes[name] = value;
+        }
+
         file.Write(path, options);
         return path;
     }

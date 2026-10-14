@@ -44,6 +44,14 @@ public sealed class S102Dataset
     /// </summary>
     public string? DeclaredProductSpecification { get; init; }
 
+    /// <summary>
+    /// The outcome of the dataset-level axis-order check on the grid
+    /// footprints (issue #650), or <c>null</c> when it was not run (no
+    /// coverages, or a projected horizontal CRS such as UTM). Grid
+    /// georeferencing is reported, never rewritten.
+    /// </summary>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder { get; init; }
+
     /// <summary>The bathymetric coverages contained in the dataset.</summary>
     public required IReadOnlyList<BathymetryCoverage> Coverages { get; init; }
 }

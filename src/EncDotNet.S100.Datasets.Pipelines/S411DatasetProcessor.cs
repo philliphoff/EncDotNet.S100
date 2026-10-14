@@ -118,6 +118,8 @@ public sealed class S411DatasetProcessor :
         }
 
         SetDeclaredEdition(_dataset.DeclaredEdition);
+
+        SetAxisOrder(_dataset.AxisOrder);
     }
 
     /// <inheritdoc />
@@ -233,7 +235,7 @@ public sealed class S411DatasetProcessor :
     }
 
     /// <inheritdoc />
-    public override ValidationReport? Validate()
+    protected override ValidationReport? ValidateDataset()
     {
         if (!_validationCached)
         {

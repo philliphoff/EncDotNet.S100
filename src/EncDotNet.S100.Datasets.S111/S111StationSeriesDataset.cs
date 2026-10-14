@@ -67,6 +67,14 @@ public sealed class S111StationSeriesDataset
     /// </summary>
     public int? TypeOfCurrentData { get; init; }
 
+    /// <summary>
+    /// The outcome of the dataset-level axis-order check on the station
+    /// positions (issue #650), or <c>null</c> when there are no positions.
+    /// When it is <see cref="EncDotNet.S100.DataModel.AxisOrderOutcome.Swapped"/>
+    /// the reader has already swapped every station's latitude and longitude.
+    /// </summary>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder { get; init; }
+
     /// <summary>Time-series stations contained in the dataset.</summary>
     public required IReadOnlyList<SurfaceCurrentStation> Stations { get; init; }
 

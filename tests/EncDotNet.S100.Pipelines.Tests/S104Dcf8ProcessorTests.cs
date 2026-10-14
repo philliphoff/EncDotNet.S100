@@ -153,7 +153,8 @@ public class S104Dcf8ProcessorTests
             var report = Assert.IsType<ValidationReport>(processor.Validate());
 
             Assert.Empty(report.Findings);
-            Assert.Equal(2, report.RulesEvaluated);
+            // Station rules plus the axis-order check (#650).
+            Assert.Equal(3, report.RulesEvaluated);
         }
         finally
         {

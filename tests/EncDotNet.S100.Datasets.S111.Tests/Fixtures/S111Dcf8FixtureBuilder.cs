@@ -65,7 +65,8 @@ internal static class S111Dcf8FixtureBuilder
         bool includePositioning = true,
         bool useShortGeometryNames = false,
         bool positioningUnderInstance = false,
-        string? productSpecification = null)
+        string? productSpecification = null,
+        IReadOnlyDictionary<string, object>? extraRootAttributes = null)
         where TRow : struct
     {
         var instanceGroups = new Dictionary<string, object>();
@@ -155,6 +156,12 @@ internal static class S111Dcf8FixtureBuilder
 
         var options = new H5WriteOptions(
             FieldNameMapper: f => f.GetCustomAttribute<H5NameAttribute>()?.Name);
+
+        if (extraRootAttributes is not null)
+        {
+            foreach (var (name, value) in extraRootAttributes)
+                file.Attributes[name] = value;
+        }
 
         file.Write(path, options);
         return path;

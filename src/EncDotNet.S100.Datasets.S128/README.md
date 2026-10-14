@@ -190,10 +190,13 @@ other GML products:
    the inline form. The upstream 2.0.0 sample uses inline `<S128:members>`.
 3. **Commas in `gml:posList` and `gml:pos`.** It accepts `lon,lat lon,lat`
    pairs written in the `gml:coordinates` style.
-4. **Longitude-first coordinates.** When the dataset has a `<gml:Envelope>`,
-   and the parsed coordinates clearly fall outside it as parsed but inside it
-   when swapped, the reader swaps the axes for the whole dataset. Without an
-   envelope it doesn't check; the upstream 2.0.0 sample has none.
+4. **Longitude-first coordinates.** The reader runs the shared axis-order
+   check, against the `<gml:Envelope>` and the ±90° latitude bound, and swaps
+   the whole dataset when it's longitude first. Without an envelope, a
+   dataset whose coordinates are all within ±90° can't be checked (the
+   upstream 2.0.0 sample has none); `S128Dataset.AxisOrder` is then
+   `Unverified`, which `s100 info` shows. See
+   [Check the axis order](../../docs/reading-product-data.md#check-the-axis-order).
 5. **`gml:gmlId` identifiers.** Some S-128 GML 1.0 catalogue datasets from
    IC-ENC and Denmark identify features with a non-standard `gml:gmlId`
    attribute instead of `gml:id`. The reader accepts either. Without this, the
@@ -214,7 +217,7 @@ render blank. Two GML 1.0 gaps remain, tracked in
 [issue #247](https://github.com/philliphoff/EncDotNet.S100/issues/247): full
 portrayal of the GML 1.0 feature classes (`ElectronicChart`, `PaperChart` and
 others), and a reliable axis order for longitude-first datasets that have no
-`<gml:Envelope>`.
+`<gml:Envelope>` (now reported as unverified rather than silently assumed).
 
 ## Limitations
 

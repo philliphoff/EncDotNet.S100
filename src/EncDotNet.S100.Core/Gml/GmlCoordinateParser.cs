@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Xml.Linq;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Features;
 
@@ -8,54 +9,88 @@ namespace EncDotNet.S100.Features;
 /// Shared GML coordinate parsing utilities for S-100 Part 10b encoded datasets.
 /// </summary>
 /// <remarks>
-/// All methods assume <c>EPSG:4326</c> coordinate ordering (latitude first,
-/// longitude second) as required by S-100 Part 10b §6.2. Separator handling
-/// tolerates both standard whitespace and comma-separated tokens (a
-/// producer-bug compensation seen in some real-world S-122 and S-128 datasets).
-/// A second producer-bug compensation auto-corrects longitude-first axis order
-/// (seen in the US NWS and NIC S-411 sea-ice products) using the physical
-/// latitude bound of ±90°: a position list with any first ordinate beyond ±90°
-/// is read longitude first. A ring whose longitudes all lie within ±90° cannot
-/// be told apart this way, so a reader can call <see cref="DetectAxisOrder"/>
-/// once for the whole dataset and pass <see cref="GmlAxisOrder.LongitudeFirst"/>
-/// to every parse.
+/// Positions are read latitude first, the <c>EPSG:4326</c> order S-100 Part
+/// 10b §6.2 requires, unless the caller passes
+/// <see cref="GmlAxisOrder.LongitudeFirst"/>. Readers decide the order once
+/// per dataset with <see cref="AssessAxisOrder"/>, the shared axis-order check
+/// (<see cref="AxisOrderCheck"/>, issue #650), and pass it to every parse, so
+/// a dataset is never split between orders. Separator handling tolerates both
+/// standard whitespace and comma-separated tokens (a producer-bug compensation
+/// seen in some real-world S-122 and S-128 datasets).
 /// </remarks>
 public static class GmlCoordinateParser
 {
     private static readonly char[] Separators = [' ', '\t', '\n', '\r', ','];
 
     /// <summary>
-    /// Whether an ordinate pair is unambiguously longitude first. S-100 Part 10b
-    /// §6.2 mandates latitude-first for <c>EPSG:4326</c>, but some real-world
-    /// datasets (e.g. the US NWS and NIC S-411 sea-ice products) encode
-    /// longitude first. Latitude is physically bounded to ±90°, so a pair whose
-    /// first ordinate exceeds 90° in magnitude while the second does not cannot
-    /// be latitude first. Conformant data never matches.
+    /// Runs the shared axis-order check (<see cref="AxisOrderCheck"/>) over
+    /// every <c>gml:pos</c> and <c>gml:posList</c> under
+    /// <paramref name="root"/>, anchored on the dataset's
+    /// <c>gml:boundedBy/gml:Envelope</c>, and returns the order to read the
+    /// dataset in.
     /// </summary>
-    private static bool IsLongitudeFirst(double first, double second)
-        => Math.Abs(first) > 90.0 && Math.Abs(second) <= 90.0;
-
-    /// <summary>
-    /// Scans every <c>gml:pos</c> and <c>gml:posList</c> under
-    /// <paramref name="root"/> and reports whether the dataset is encoded
-    /// longitude first.
-    /// </summary>
-    /// <remarks>
-    /// One longitude-first position anywhere in a dataset makes it
-    /// non-conformant, so treating the whole dataset as longitude first is
-    /// safe. Doing so matters for rings whose longitudes all lie within ±90°
-    /// (e.g. NIC Arctic ice east of Greenwich), which per-list detection would
-    /// read latitude first and so draw as wedges (issue #760).
-    /// </remarks>
     /// <param name="root">The dataset root element.</param>
     /// <returns>
-    /// <see cref="GmlAxisOrder.LongitudeFirst"/> when any position is
-    /// unambiguously longitude first; otherwise <see cref="GmlAxisOrder.Auto"/>.
+    /// <see cref="GmlAxisOrder.LongitudeFirst"/> when the check finds the
+    /// dataset swapped, otherwise <see cref="GmlAxisOrder.LatitudeFirst"/>;
+    /// and the assessment (or <c>null</c> when the dataset has no positions),
+    /// for the reader to attach to its dataset model.
     /// </returns>
-    public static GmlAxisOrder DetectAxisOrder(XElement root)
+    public static (GmlAxisOrder Order, AxisOrderAssessment? Assessment) AssessAxisOrder(XElement root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        var assessment = AxisOrderCheck.Assess(
+            EnumerateEncodedPositions(root),
+            ReadEnvelope(root),
+            "gml:pos/gml:posList",
+            extentIsOrdinal: true);
+        var order = assessment?.Outcome == AxisOrderOutcome.Swapped
+            ? GmlAxisOrder.LongitudeFirst
+            : GmlAxisOrder.LatitudeFirst;
+        return (order, assessment);
+    }
+
+    /// <summary>
+    /// Reads the dataset's declared <c>gml:Envelope</c> (the root
+    /// <c>gml:boundedBy</c>, else the first envelope in the document) latitude
+    /// first, or returns <c>null</c> when there is none.
+    /// </summary>
+    public static BoundingBox? ReadEnvelope(XElement root)
     {
         ArgumentNullException.ThrowIfNull(root);
         var gmlNs = root.GetNamespaceOfPrefix("gml") ?? GmlNamespaces.Gml;
+        var envelope = root.Element(gmlNs + "boundedBy")?.Element(gmlNs + "Envelope")
+            ?? root.Descendants(gmlNs + "Envelope").FirstOrDefault();
+        if (envelope is null)
+            return null;
+
+        var lower = envelope.Element(gmlNs + "lowerCorner")?.Value;
+        var upper = envelope.Element(gmlNs + "upperCorner")?.Value;
+        if (lower is null || upper is null)
+            return null;
+
+        var lo = ParsePos(lower);
+        var hi = ParsePos(upper);
+        if (lo is null || hi is null)
+            return null;
+
+        // AxisOrderCheck reads reversed west/east edges back.
+        return new BoundingBox(
+            Math.Min(lo.Value.Latitude, hi.Value.Latitude),
+            lo.Value.Longitude,
+            Math.Max(lo.Value.Latitude, hi.Value.Latitude),
+            hi.Value.Longitude);
+    }
+
+    /// <summary>
+    /// Yields every position under <paramref name="root"/> as encoded (first
+    /// ordinate as latitude), including the split single-ordinate
+    /// <c>gml:pos</c> runs <see cref="ParsePosSequence"/> tolerates.
+    /// </summary>
+    private static IEnumerable<GeoPosition> EnumerateEncodedPositions(XElement root)
+    {
+        var gmlNs = root.GetNamespaceOfPrefix("gml") ?? GmlNamespaces.Gml;
+        double? pendingOrdinate = null;
         foreach (var element in root.Descendants())
         {
             if (element.Name.Namespace != gmlNs
@@ -65,25 +100,42 @@ public static class GmlCoordinateParser
             }
 
             var parts = element.Value.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
+            if (element.Name.LocalName == "pos" && parts.Length == 1)
+            {
+                if (!double.TryParse(parts[0], CultureInfo.InvariantCulture, out var ordinate))
+                {
+                    pendingOrdinate = null;
+                }
+                else if (pendingOrdinate is { } first)
+                {
+                    yield return new GeoPosition(first, ordinate);
+                    pendingOrdinate = null;
+                }
+                else
+                {
+                    pendingOrdinate = ordinate;
+                }
+
+                continue;
+            }
+
+            pendingOrdinate = null;
             for (int i = 0; i + 1 < parts.Length; i += 2)
             {
                 if (double.TryParse(parts[i], CultureInfo.InvariantCulture, out var first) &&
-                    double.TryParse(parts[i + 1], CultureInfo.InvariantCulture, out var second) &&
-                    IsLongitudeFirst(first, second))
+                    double.TryParse(parts[i + 1], CultureInfo.InvariantCulture, out var second))
                 {
-                    return GmlAxisOrder.LongitudeFirst;
+                    yield return new GeoPosition(first, second);
                 }
             }
         }
-
-        return GmlAxisOrder.Auto;
     }
 
     /// <summary>
     /// Parses a <c>gml:pos</c> value into a single coordinate pair.
     /// </summary>
     /// <returns>The parsed (latitude, longitude) pair, or <c>null</c> if parsing fails.</returns>
-    public static GeoPosition? ParsePos(string posValue) => ParsePos(posValue, GmlAxisOrder.Auto);
+    public static GeoPosition? ParsePos(string posValue) => ParsePos(posValue, GmlAxisOrder.LatitudeFirst);
 
     /// <summary>
     /// Parses a <c>gml:pos</c> value into a single coordinate pair, reading it
@@ -97,7 +149,7 @@ public static class GmlCoordinateParser
             double.TryParse(parts[0], CultureInfo.InvariantCulture, out var first) &&
             double.TryParse(parts[1], CultureInfo.InvariantCulture, out var second))
         {
-            return axisOrder == GmlAxisOrder.LongitudeFirst || IsLongitudeFirst(first, second)
+            return axisOrder == GmlAxisOrder.LongitudeFirst
                 ? new GeoPosition(second, first)
                 : new GeoPosition(first, second);
         }
@@ -105,37 +157,31 @@ public static class GmlCoordinateParser
     }
 
     /// <summary>
-    /// Parses a <c>gml:posList</c> value into a sequence of coordinate pairs.
-    /// The whole list is read longitude first when any of its pairs is.
+    /// Parses a <c>gml:posList</c> value into a sequence of coordinate pairs,
+    /// latitude first.
     /// </summary>
     public static IReadOnlyList<GeoPosition> ParsePosList(string posListValue) =>
-        ParsePosList(posListValue, GmlAxisOrder.Auto);
+        ParsePosList(posListValue, GmlAxisOrder.LatitudeFirst);
 
     /// <summary>
     /// Parses a <c>gml:posList</c> value into a sequence of coordinate pairs,
-    /// reading it in the given <paramref name="axisOrder"/>. With
-    /// <see cref="GmlAxisOrder.Auto"/> the whole list is read longitude first
-    /// when any of its pairs is.
+    /// reading it in the given <paramref name="axisOrder"/>.
     /// </summary>
     public static IReadOnlyList<GeoPosition> ParsePosList(string posListValue, GmlAxisOrder axisOrder)
     {
         var parts = posListValue.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
-        var pairs = new List<(double First, double Second)>(parts.Length / 2);
         bool longitudeFirst = axisOrder == GmlAxisOrder.LongitudeFirst;
+        var coords = new List<GeoPosition>(parts.Length / 2);
 
         for (int i = 0; i + 1 < parts.Length; i += 2)
         {
             if (double.TryParse(parts[i], CultureInfo.InvariantCulture, out var first) &&
                 double.TryParse(parts[i + 1], CultureInfo.InvariantCulture, out var second))
             {
-                pairs.Add((first, second));
-                longitudeFirst |= IsLongitudeFirst(first, second);
+                coords.Add(longitudeFirst ? new GeoPosition(second, first) : new GeoPosition(first, second));
             }
         }
 
-        var coords = new List<GeoPosition>(pairs.Count);
-        foreach (var (first, second) in pairs)
-            coords.Add(longitudeFirst ? new GeoPosition(second, first) : new GeoPosition(first, second));
         return coords;
     }
 
@@ -144,7 +190,7 @@ public static class GmlCoordinateParser
     /// searching for <c>gml:pos</c> across common nesting patterns.
     /// </summary>
     public static GeoPosition? ParsePointElement(XElement element, XNamespace? s100Ns = null) =>
-        ParsePointElement(element, s100Ns, GmlAxisOrder.Auto);
+        ParsePointElement(element, s100Ns, GmlAxisOrder.LatitudeFirst);
 
     /// <summary>
     /// Extracts a point coordinate from a GML point property element, reading
@@ -183,7 +229,7 @@ public static class GmlCoordinateParser
     /// extracting <c>gml:posList</c> and <c>gml:pos</c> children.
     /// </summary>
     public static IReadOnlyList<GeoPosition> ParseCurveCoordinates(XElement curveContainer) =>
-        ParseCurveCoordinates(curveContainer, GmlAxisOrder.Auto);
+        ParseCurveCoordinates(curveContainer, GmlAxisOrder.LatitudeFirst);
 
     /// <summary>
     /// Parses curve coordinates from a GML curve property element, reading them
@@ -218,7 +264,7 @@ public static class GmlCoordinateParser
     public static (IReadOnlyList<GeoPosition> ExteriorRing,
                     IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings)
         ParseSurfaceCoordinates(XElement surfaceContainer) =>
-        ParseSurfaceCoordinates(surfaceContainer, GmlAxisOrder.Auto);
+        ParseSurfaceCoordinates(surfaceContainer, GmlAxisOrder.LatitudeFirst);
 
     /// <summary>
     /// Parses surface coordinates (exterior ring and optional interior rings)

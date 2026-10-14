@@ -574,7 +574,11 @@ s100 info <dataset> [options]
 ```
 
 `info` prints the detected product specification and edition, and whether the
-dataset can be rendered headlessly. For a time-series dataset it lists the
+dataset can be rendered headlessly. For a dataset with positions, **Axis
+order** says whether they're latitude first, were swapped back from longitude
+first, or couldn't be checked; a swapped or inconsistent order is also
+printed on stderr. [Check the axis order](reading-product-data.md#check-the-axis-order)
+explains the check. For a time-series dataset it lists the
 time steps with the indexes `render --time-step` takes. For a product with
 display modes, such as S-411, it lists the values `render --display-mode`
 takes. For an S-101 base cell, it applies the [update files](#s-101-updates)

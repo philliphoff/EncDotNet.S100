@@ -124,6 +124,11 @@ The report has these members (namespace `EncDotNet.S100.Validation`):
   `Message`. Where possible it also has a location (`Point` or `BoundingBox`)
   and the `RelatedFeatureId` it concerns.
 
+Datasets with positions also get a `{product}-PROJ-AXIS` warning, such as
+`S122-PROJ-AXIS`, when their latitude and longitude were swapped or don't fit
+their declared extent. See
+[Check the axis order](reading-product-data.md#check-the-axis-order).
+
 The report is cached with the dataset, so calling `Validate()` again returns
 the same report without running the rules again.
 

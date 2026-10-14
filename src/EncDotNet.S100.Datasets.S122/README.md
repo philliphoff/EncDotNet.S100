@@ -146,10 +146,10 @@ S-122-specific FeatureXML source type.
 - **Longitude-first coordinates.** Some producers, such as the UKHO trial
   dataset `GBNPI12200002045.gml`, write `<gml:posList>` as longitude then
   latitude while keeping the `<gml:Envelope>` corners as latitude then
-  longitude. The reader compares the parsed coordinates with the envelope.
-  When they clearly fall outside it as parsed, and clearly inside it when
-  swapped, it swaps every feature's coordinates. Datasets that follow the
-  specification aren't changed.
+  longitude. The reader runs the shared axis-order check, which finds this
+  dataset swapped against its envelope and reads every position longitude
+  first. `S122Dataset.AxisOrder` reports the result, and validation reports it
+  as `S122-PROJ-AXIS`. See [Check the axis order](../../docs/reading-product-data.md#check-the-axis-order).
 - **Commas in `posList`.** GML 3.2 allows only whitespace between values in
   `<gml:posList>`, but some producers write `lon,lat lon,lat` pairs (the older
   `gml:coordinates` style). The reader accepts both whitespace and commas as
