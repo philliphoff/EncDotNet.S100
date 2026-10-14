@@ -145,10 +145,13 @@ public class S124NavigationalWarningRulesTests
 
     // ── S124-R-2.2 — message series identifier ──────────────────
 
-    [Fact]
-    public void MessageSeriesIdentifier_Passes_OnValidNumberAndYear()
+    [Theory]
+    [InlineData(2026)]
+    [InlineData(26)] // AMSA's "NAVAREA X 106/26" (#921)
+    [InlineData(0)]
+    public void MessageSeriesIdentifier_Passes_OnValidNumberAndYear(int year)
     {
-        var w = Warning(preamble: Preamble(warningNumber: 1, year: 2026));
+        var w = Warning(preamble: Preamble(warningNumber: 1, year: year));
         Assert.Empty(S124NavigationalWarningRules.MessageSeriesIdentifierWellFormed
             .Evaluate(w, ValidationContext.Default));
     }
@@ -182,6 +185,8 @@ public class S124NavigationalWarningRulesTests
     [Theory]
     [InlineData(1899)]
     [InlineData(2101)]
+    [InlineData(100)]
+    [InlineData(-1)]
     public void MessageSeriesIdentifier_Fails_OnImplausibleYear(int year)
     {
         var w = Warning(preamble: Preamble(warningNumber: 1, year: year));

@@ -249,14 +249,25 @@ internal static class S124DatasetReader
 
             if (child.HasElements)
             {
-                // Complex attribute — collect sub-attributes
+                // Complex attribute — collect sub-attributes. Edition 2.0.0 nests
+                // complex attributes (warningInformation/information/text): their
+                // leaves are kept as "information.text", the first of a repeated
+                // one winning. A code list value's code is kept as "<name>.code".
                 var subAttrs = new Dictionary<string, string>();
                 foreach (var sub in child.Elements())
                 {
-                    if (!sub.HasElements && sub.Attribute(XLinkNs + "href") is null)
+                    if (sub.Attribute(XLinkNs + "href") is not null)
+                        continue;
+                    if (!sub.HasElements)
                     {
                         subAttrs[sub.Name.LocalName] = sub.Value;
+                        if (sub.Attribute("code")?.Value is { Length: > 0 } code)
+                            subAttrs[sub.Name.LocalName + ".code"] = code;
+                        continue;
                     }
+
+                    foreach (var leaf in sub.Elements().Where(l => !l.HasElements && l.Attribute(XLinkNs + "href") is null))
+                        subAttrs.TryAdd(sub.Name.LocalName + "." + leaf.Name.LocalName, leaf.Value);
                 }
                 if (subAttrs.Count > 0)
                 {

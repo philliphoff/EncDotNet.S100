@@ -278,6 +278,19 @@ public class S124DatasetReaderTests
     }
 
     [Fact]
+    public void Edition2Dataset_KeepsNestedWarningInformation()
+    {
+        // 2.0.0 nests the text a level deeper: warningInformation/information/text (#921).
+        var part = Assert.Single(LoadTestData("navwarn_ccg_ed2.gml").Features);
+
+        var info = Assert.Single(part.ComplexAttributes, c => c.Code == "warningInformation").SubAttributes;
+        Assert.StartsWith("Wave monitoring buoys deployed in Burrard Inlet", info["information.text"], StringComparison.Ordinal);
+        Assert.Equal("eng", info["information.language"]);
+        Assert.Equal("Presence of Scientific Equipment", info["navwarnTypeDetails"]);
+        Assert.Equal("208", info["navwarnTypeDetails.code"]);
+    }
+
+    [Fact]
     public void Edition2Dataset_ReportsItsExtent()
     {
         var metadata = S124Dataset.ReadMetadata(Path.Combine(TestDataDir, "navwarn_ccg_ed2.gml"));

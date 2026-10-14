@@ -110,16 +110,17 @@ public static class S124NavigationalWarningRules
     /// <summary>
     /// <c>S124-R-2.2</c> — When a <c>messageSeriesIdentifier</c> is
     /// present on the preamble, the warning number must be ≥ 1 and the
-    /// year must be a plausible four-digit calendar year
-    /// (1900 ≤ year ≤ 2100).
+    /// year must be a plausible calendar year: four digits
+    /// (1900 ≤ year ≤ 2100), or two digits (0–99) as warnings are numbered
+    /// ("NAVAREA X 106/26").
     /// </summary>
     /// <remarks>
-    /// Spec reference: S-124 Edition 1.0.0 Feature Catalogue —
+    /// Spec reference: S-124 Edition 2.0.0 Feature Catalogue —
     /// <c>messageSeriesIdentifier</c> sub-attributes <c>warningNumber</c>
     /// (sequential, monotonically increasing within the series) and
-    /// <c>year</c> (the issuance calendar year). Zero or negative
-    /// warning numbers, and years outside the plausible publication
-    /// range, indicate authoring errors.
+    /// <c>year</c>, an integer with no stated range. Producers write both
+    /// forms: CCG gives <c>2026</c>, AMSA <c>26</c> (#921). Zero or negative
+    /// warning numbers, and years that are neither, indicate authoring errors.
     /// </remarks>
     public static IValidationRule<S124NavigationalWarning> MessageSeriesIdentifierWellFormed { get; } =
         ValidationRuleBuilder.RuleFor<S124NavigationalWarning>("S124-R-2.2")
@@ -144,13 +145,13 @@ public static class S124NavigationalWarningRules
                     });
                 }
 
-                if (msi.Year is { } y && (y < 1900 || y > 2100))
+                if (msi.Year is { } y && y is not (>= 0 and <= 99) && (y < 1900 || y > 2100))
                 {
                     findings.Add(new ValidationFinding
                     {
                         RuleId = "S124-R-2.2",
                         Severity = ValidationSeverity.Error,
-                        Message = $"messageSeriesIdentifier.year {y} is outside the plausible range [1900, 2100].",
+                        Message = $"messageSeriesIdentifier.year {y} is neither a two-digit year nor in the plausible range [1900, 2100].",
                         DatasetId = warning.DatasetIdentifier,
                         RelatedFeatureId = warning.Preamble!.Id,
                     });
@@ -344,7 +345,7 @@ public static class S124NavigationalWarningRules
     /// text or at least one non-empty associated <c>TextPlacement</c>.
     /// </summary>
     /// <remarks>
-    /// Spec reference: S-124 Edition 1.0.0 Feature Catalogue —
+    /// Spec reference: S-124 Editions 1.0.0 and 2.0.0 Feature Catalogues —
     /// <c>NavwarnPart</c> exists to convey a navigational message; a
     /// part with no text payload (neither <c>warningInformation</c>
     /// nor an associated <c>TextPlacement</c>) is operationally

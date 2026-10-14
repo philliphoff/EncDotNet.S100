@@ -62,7 +62,7 @@ public sealed class S124NavwarnPreamble
 }
 
 /// <summary>
-/// Typed projection of a <c>NavwarnPart</c> feature (S-124 § Edition 1.0.0):
+/// Typed projection of a <c>NavwarnPart</c> feature (S-124 Editions 1.0.0 and 2.0.0):
 /// a single part of a warning carrying restriction, warning information
 /// text, and per-part geometry.
 /// </summary>
@@ -74,8 +74,21 @@ public sealed class S124NavwarnPart
     /// <summary>The restriction code, when present.</summary>
     public int? Restriction { get; init; }
 
-    /// <summary>The warning information text from <c>warningInformation/information</c>.</summary>
+    /// <summary>
+    /// The warning information text: <c>warningInformation/information</c> in
+    /// Edition 1.0.0, <c>warningInformation/information/text</c> in 2.0.0 (the
+    /// first, when there is one per language).
+    /// </summary>
     public string? WarningInformation { get; init; }
+
+    /// <summary>
+    /// The warning type label from <c>warningInformation/navwarnTypeDetails</c>
+    /// (Edition 2.0.0, e.g. "Cable Operations"), when present.
+    /// </summary>
+    public string? NavwarnType { get; init; }
+
+    /// <summary>The warning type code from <c>navwarnTypeDetails</c>'s <c>code</c> attribute, when present.</summary>
+    public int? NavwarnTypeCode { get; init; }
 
     /// <summary>The category code, when present.</summary>
     public int? Category { get; init; }

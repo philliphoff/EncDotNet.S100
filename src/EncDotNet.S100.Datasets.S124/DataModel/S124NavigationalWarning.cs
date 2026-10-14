@@ -1,3 +1,4 @@
+using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
@@ -207,12 +208,23 @@ public sealed class S124NavigationalWarning
 
     private static S124NavwarnPart ProjectPart(S124Feature f, ProjectionContext ctx)
     {
-        // warningInformation/information text from the complex attribute payload.
+        // warningInformation/information text from the complex attribute payload:
+        // the text itself in Edition 1.0.0, information/text in 2.0.0, which also
+        // gives the warning type (navwarnTypeDetails, a code list).
         string? warningText = null;
+        string? navwarnType = null;
+        int? navwarnTypeCode = null;
         var winfo = f.ComplexAttributes.FirstOrDefault(c =>
             string.Equals(c.Code, "warningInformation", StringComparison.OrdinalIgnoreCase));
         if (winfo is not null)
-            warningText = winfo.SubAttributes.GetValueOrDefault("information");
+        {
+            warningText = winfo.SubAttributes.GetValueOrDefault("information.text")
+                ?? winfo.SubAttributes.GetValueOrDefault("information");
+            navwarnType = winfo.SubAttributes.GetValueOrDefault("navwarnTypeDetails") is { Length: > 0 } type ? type.Trim() : null;
+            navwarnTypeCode = int.TryParse(winfo.SubAttributes.GetValueOrDefault("navwarnTypeDetails.code"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var code)
+                ? code
+                : null;
+        }
 
         var (kind, coords) = ProjectGeometry(f);
 
@@ -237,6 +249,8 @@ public sealed class S124NavigationalWarning
 
         return new S124NavwarnPart
         {
+            NavwarnType = navwarnType,
+            NavwarnTypeCode = navwarnTypeCode,
             Id = f.Id,
             Restriction = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("restriction"), ctx, f.Id, "restriction"),
             Category = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("category"), ctx, f.Id, "category"),

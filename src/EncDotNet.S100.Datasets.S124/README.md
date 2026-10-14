@@ -81,13 +81,21 @@ namespace projects it into typed objects:
   number, year and production agency), the general area, locality, title,
   NAVAREA and NAVTEX values, and promulgating authority.
 - **`S124NavwarnPart`** has the restriction code, the warning text, geometry,
-  and the resolved `AffectedAreas` and `TextPlacements`.
+  and the resolved `AffectedAreas` and `TextPlacements`. The text is
+  `warningInformation/information` in Edition 1.0.0 and
+  `warningInformation/information/text` in 2.0.0, which also gives the
+  warning type (`NavwarnType` and `NavwarnTypeCode`, from
+  `navwarnTypeDetails`).
 - **`S124AffectedArea`** and **`S124TextPlacement`** are the features reached
   through the feature catalogue associations `areaAffected` and
   `TextAssociation`.
 - **`S124WarningReference`** has the reference category and message
   reference.
 - **`S124SpatialQuality`** has the quality-of-position code.
+
+The reader keeps the leaves of a nested complex attribute under dotted keys
+(`information.text`, `information.language`), the first of a repeated one
+winning, and a code list value's code as `<name>.code`.
 
 Each object keeps attributes the model doesn't read in its `ExtraAttributes`
 dictionary, so extension and later-edition attributes aren't lost. Unresolved
@@ -103,7 +111,8 @@ information types.
 the typed model. It's built on the validation types in the
 `EncDotNet.S100.Validation` namespace. Rule IDs have the form `S124-R-{clause}`
 and trace to the S-124 Edition 1.0.0 Feature Catalogue, or to S-100 Part 10b for
-shared encoding rules. The `EncDotNet.S100` package's `dataset.Validate()` runs
+shared encoding rules. `S124-R-2.2` accepts a `messageSeriesIdentifier` year of
+two digits (`26`, as AMSA writes it) or four (`2026`). The `EncDotNet.S100` package's `dataset.Validate()` runs
 the same rule set.
 
 ```csharp
