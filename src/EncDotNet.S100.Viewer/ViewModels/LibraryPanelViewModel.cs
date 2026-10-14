@@ -1448,7 +1448,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 .SelectMany(c => c.Sources)
                 .Where(s => s.Id == p.Item1)
                 .SelectMany(s => s.Index?.Items ?? [])
-                .Count(i => i.Properties.TryGetValue("package", out var pkg) && pkg == p.Item2 && i.Key != pkg))
+                .Count(i => i.Properties.TryGetValue("package", out var pkg) && pkg == p.Item2 && !LibraryItemText.IsPackageEntry(i)))
             .ToArray();
         foreach (var package in packages)
             _expandedPackages.Add(package);
@@ -1776,7 +1776,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             {
                 _packageHeaders[key] = header = LibraryItemViewModel.ForPackageGroup(
                     row.Source, key.Item2, row.Item.Properties.GetValueOrDefault("packageTitle"), members.Count, expanded, TogglePackage,
-                    members.Select(m => (m.Item.Location as RemoteItemLocation)?.LastModified).Max());
+                    members.Select(m => (m.Item.Location as RemoteItemLocation)?.LastModified).Max(),
+                    members.Select(m => m.Item.ProductSpec).Distinct(StringComparer.Ordinal).SingleOrDefault() ?? "S-57");
             }
 
             header.GroupCount = members.Count;
@@ -1795,16 +1796,16 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// The row a dataset is listed under: the unpacked package a community-list
-    /// dataset came from, or the model of a forecast run's tile (#685); else
-    /// <see langword="null"/>.
+    /// dataset or a SECOM exchange-set dataset (#916) came from, or the model of
+    /// a forecast run's tile (#685); else <see langword="null"/>.
     /// </summary>
     private static (Guid, string)? PackageOf(LibraryItemViewModel item) =>
         item.IsForecast && item.Source.Definition is S100ForecastFeedSource { Shape: ForecastShape.Tiles }
             && ForecastRuns.ModelOf(item.Item) is { } model
             ? (item.Source.Id, "model:" + model)
-        : item.Source.Definition is ChartCatalogsFeedSource
+        : item.Source.Definition is ChartCatalogsFeedSource or SecomSource
         && item.Item.Properties.TryGetValue("package", out var package)
-        && item.Item.Key != package
+        && !LibraryItemText.IsPackageEntry(item.Item)
             ? (item.Source.Id, package)
             : null;
 

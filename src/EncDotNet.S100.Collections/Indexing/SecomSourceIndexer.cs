@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using EncDotNet.S100.Collections.Downloads;
 using EncDotNet.S100.Collections.Secom;
 
@@ -25,8 +26,16 @@ namespace EncDotNet.S100.Collections.Indexing;
 /// check and the index that follows it share one round of requests, and on
 /// disk, so an unreachable service still lists what it last offered (with a
 /// warning). Large services are capped at <c>maxItems</c> objects; narrow the
-/// source to an area to see the rest. Exchange-set objects are listed but not
-/// downloadable yet.
+/// source to an area to see the rest.
+/// </para>
+/// <para>
+/// An exchange-set object (<c>containerType</c> 1, #916) is a package, as a
+/// community-list entry is (§7.4): until it is downloaded it is one online
+/// item without bounds; afterwards the current datasets of its exchange set
+/// are indexed from the local copy and listed individually, each keeping the
+/// object's <see cref="RemoteItemLocation"/>. Items are named from the
+/// identifier without the generation timestamp some services append (AMSA's
+/// <c>NAVAREA X_2026-10-13T04:47:23Z</c>), so names stay put across reads.
 /// </para>
 /// <para>
 /// Each read resolves the source's <see cref="SecomSource.Identity"/> through
@@ -40,7 +49,8 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
 {
     // v2: hosts now probe downloaded GML objects (S-124, S-122) for bounds (#809);
     // indexes built before then had none, so they are rebuilt once.
-    private const string FingerprintVersion = "secom-v2";
+    // v3: exchange-set objects are packages, and names drop identifier timestamps (#916).
+    private const string FingerprintVersion = "secom-v3";
 
     /// <summary>The default cap on objects indexed per source.</summary>
     public const int DefaultMaxItems = 5_000;
@@ -51,6 +61,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     private readonly string? _cacheDirectory;
     private readonly string? _downloadsRoot;
     private readonly DatasetProbe? _probe;
+    private readonly LocalSourceIndexer _local;
     private readonly int _maxItems;
     private readonly TimeProvider _time;
     private readonly object _gate = new();
@@ -91,6 +102,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         _cacheDirectory = cacheDirectory;
         _downloadsRoot = downloadsRoot;
         _probe = probe;
+        _local = new LocalSourceIndexer(probe);
         _maxItems = maxItems;
         _time = timeProvider ?? TimeProvider.System;
     }
@@ -172,7 +184,6 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         var client = new SecomClient(_httpClient, serviceUri, listing.Version) { UsesPostInterfaces = listing.Post };
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var items = new List<CollectionItem>();
-        var exchangeSets = 0;
         // Name in a stable order, so a name made unique by suffix keeps its suffix across refreshes.
         foreach (var summary in listing.Items.OrderBy(s => s.DataReference, StringComparer.Ordinal))
         {
@@ -180,20 +191,14 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
             var item = ToItem(summary, client, listing.Version, folder, names, secom.Identity);
             if (!secom.Filter.Matches(item))
                 continue;
-            if (summary.ContainerType == SecomContainerType.ExchangeSet)
-                exchangeSets++;
-            items.Add(downloader is null ? item : WithDownload(item, downloader, diagnostics, cancellationToken));
+            if (downloader is null)
+                items.Add(item);
+            else if (item.Location is RemoteItemLocation { Package: not null })
+                items.AddRange(await WithPackageAsync(item, downloader, diagnostics, cancellationToken).ConfigureAwait(false));
+            else
+                items.Add(WithDownload(item, downloader, diagnostics, cancellationToken));
             if (items.Count % 500 == 0)
                 progress?.Report(new IndexProgress(items.Count, null));
-        }
-
-        if (exchangeSets > 0)
-        {
-            diagnostics.Add(new IndexDiagnostic(
-                IndexDiagnosticSeverity.Info,
-                string.Create(CultureInfo.InvariantCulture,
-                    $"{exchangeSets} exchange-set objects are listed but cannot be downloaded yet."),
-                serviceUri.AbsoluteUri));
         }
 
         progress?.Report(new IndexProgress(items.Count, null));
@@ -256,8 +261,9 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         SecomSummary summary, SecomClient client, SecomApiVersion version, string folder, ISet<string> names, string? identity = null)
     {
         var product = summary.ProductSpec ?? "Unknown";
+        var identifier = WithoutTimestamp(summary.Identifier);
         var name = UniqueName(
-            SafeName(summary.Identifier) ?? SafeName(Path.GetFileNameWithoutExtension(summary.Name)) ?? SafeName(summary.DataReference)!,
+            SafeName(identifier) ?? SafeName(Path.GetFileNameWithoutExtension(summary.Name)) ?? SafeName(summary.DataReference)!,
             summary.DataReference,
             names);
 
@@ -275,17 +281,32 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         if (summary.ContainerType == SecomContainerType.ExchangeSet)
             properties["containerType"] = "exchangeSet";
 
-        ItemLocation location = summary.ContainerType == SecomContainerType.ExchangeSet
-            ? NoItemLocation.Instance
+        var envelope = client.UsesPostInterfaces ? RemoteEnvelope.SecomPost : RemoteEnvelope.Secom;
+        // Without a modification date, what the listing says of the object stands in for one.
+        var revision = summary.LastModified is null ? Revision(summary) : null;
+        // An exchange set is a package (#916): saved under its name, its datasets found
+        // after download. Its info_size is no byte count (AMSA gives 5–58), so it is left out.
+        var location = summary.ContainerType == SecomContainerType.ExchangeSet
+            ? new RemoteItemLocation(
+                client.GetObjectUri(summary.DataReference, version),
+                LastModified: summary.LastModified,
+                DownloadFolder: folder,
+                Package: name,
+                Envelope: envelope)
+            {
+                Identity = identity,
+                Revision = revision,
+            }
             : new RemoteItemLocation(
                 client.GetObjectUri(summary.DataReference, version),
                 summary.Size,
                 summary.LastModified,
                 folder,
                 Layout: new PackageLayout(name + FileExtension(product, summary.Name), []),
-                Envelope: client.UsesPostInterfaces ? RemoteEnvelope.SecomPost : RemoteEnvelope.Secom)
+                Envelope: envelope)
             {
                 Identity = identity,
+                Revision = revision,
             };
 
         return new CollectionItem
@@ -294,9 +315,14 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
             ProductSpec = product,
             ProductSpecVersion = summary.ProductVersion,
             Name = name,
-            Title = summary.Name is { Length: > 0 } title && !string.Equals(title, summary.Identifier, StringComparison.Ordinal)
+            Title = summary.Name is { Length: > 0 } title
+                && !string.Equals(title, summary.Identifier, StringComparison.Ordinal)
+                && !string.Equals(title, identifier, StringComparison.Ordinal)
                 ? title
-                : summary.Description is { Length: > 0 } && summary.Description.Length <= 80 ? summary.Description : null,
+                // An exchange set's description lists its files (AMSA): no title.
+                : summary.ContainerType != SecomContainerType.ExchangeSet && summary.Description is { Length: > 0 } && summary.Description.Length <= 80
+                    ? summary.Description
+                    : null,
             IssueDate = summary.LastModified is { } modified ? DateOnly.FromDateTime(modified.UtcDateTime) : null,
             Status = Status(summary.Status),
             Location = location,
@@ -378,6 +404,65 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         }
 
         return item with { Bounds = bounds ?? item.Bounds, Properties = properties };
+    }
+
+    /// <summary>
+    /// Lists a downloaded exchange-set object's current datasets (#916), each
+    /// keeping the object's location and properties, with the signature check;
+    /// or the object itself while it is not downloaded, or when its set holds
+    /// no current datasets (every one withdrawn).
+    /// </summary>
+    private async Task<IReadOnlyList<CollectionItem>> WithPackageAsync(
+        CollectionItem item, EncCellDownloader downloader, List<IndexDiagnostic> diagnostics, CancellationToken cancellationToken)
+    {
+        var remote = (RemoteItemLocation)item.Location;
+        var package = remote.Package!;
+        if (downloader.TryGetDownloaded(package, fetchRevocation: true) is not { IsPackage: true } downloaded)
+            return [item];
+
+        var properties = new Dictionary<string, string>(item.Properties, StringComparer.Ordinal) { ["package"] = package };
+        if (item.Title is { } title)
+            properties["packageTitle"] = title;
+        if (downloaded.Signature is { } signature)
+        {
+            properties["signature"] = Describe(signature);
+            if (signature.Signer is { } signer)
+                properties["signer"] = signer;
+        }
+
+        if (downloaded.Datasets.Count == 0)
+        {
+            properties["contents"] = "no current datasets: every dataset in it is cancelled";
+            return [item with { Properties = properties }];
+        }
+
+        var folder = Path.Combine(downloader.Root, package);
+        var index = await _local.IndexAsync(new LocalFolderSource(Guid.Empty, null, folder), null, cancellationToken)
+            .ConfigureAwait(false);
+        diagnostics.AddRange(index.Diagnostics.Where(d => d.Severity != IndexDiagnosticSeverity.Info));
+
+        var datasets = index.Items
+            .Where(i => downloaded.Datasets.ContainsKey(i.Name))
+            .DistinctBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(i => i with
+            {
+                Key = package + "/" + i.Name,
+                GroupKey = package,
+                Title = i.Title ?? item.Title,
+                Status = item.Status == CollectionItemStatus.Unknown ? i.Status : item.Status,
+                Location = remote,
+                Properties = Merge(i.Properties, properties),
+            })
+            .ToArray();
+        return datasets.Length > 0 ? datasets : [item with { Properties = properties }];
+
+        static Dictionary<string, string> Merge(IReadOnlyDictionary<string, string> own, IReadOnlyDictionary<string, string> package)
+        {
+            var merged = new Dictionary<string, string>(package, StringComparer.Ordinal);
+            foreach (var (key, value) in own)
+                merged[key] = value;
+            return merged;
+        }
     }
 
     /// <summary>
@@ -596,7 +681,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         foreach (var summary in listing.Items.OrderBy(s => s.DataReference, StringComparer.Ordinal))
         {
             hash.AppendData(Encoding.UTF8.GetBytes(string.Create(CultureInfo.InvariantCulture,
-                $"{summary.DataReference}|{summary.LastModified?.UtcTicks}|{summary.Size}|{summary.Status}\n")));
+                $"{summary.DataReference}|{summary.LastModified?.UtcTicks}|{summary.Size}|{summary.Status}|{Revision(summary)}\n")));
         }
 
         var downloads = string.Empty;
@@ -653,6 +738,34 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
             _ => ".gml",
         };
     }
+
+    /// <summary>
+    /// A revision of an object for a service that gives no modification date
+    /// (#916): a hash of what its summary says, without the identifier's
+    /// generation timestamp. AMSA's description lists an exchange set's files,
+    /// cancellations included, so it changes when a warning is issued or cancelled.
+    /// </summary>
+    internal static string Revision(SecomSummary summary)
+    {
+        var text = string.Create(CultureInfo.InvariantCulture,
+            $"{WithoutTimestamp(summary.Identifier)}|{summary.Name}|{summary.Description}|{summary.Size}|{summary.Status}|{summary.ProductVersion}");
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..16].ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// The identifier without a trailing generation timestamp, which some services
+    /// append on every read (AMSA: <c>NAVAREA X_2026-10-13T04:47:23.685467965Z</c>).
+    /// </summary>
+    internal static string? WithoutTimestamp(string? identifier)
+    {
+        if (identifier is null)
+            return null;
+        var match = TrailingTimestamp().Match(identifier);
+        return match.Success && match.Index > 0 ? identifier[..match.Index] : identifier;
+    }
+
+    [GeneratedRegex(@"[_ ]\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$", RegexOptions.CultureInvariant)]
+    private static partial Regex TrailingTimestamp();
 
     private static string UniqueName(string name, string dataReference, ISet<string> names)
     {
