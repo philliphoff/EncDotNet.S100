@@ -52,6 +52,16 @@ public class S124NavigationalWarningTests
     }
 
     [Fact]
+    public void Edition2_ExtractsWarningTextAndType()
+    {
+        var part = Assert.Single(Project("navwarn_ccg_ed2.gml", out _).Parts);
+
+        Assert.StartsWith("Wave monitoring buoys deployed in Burrard Inlet", part.WarningInformation, StringComparison.Ordinal);
+        Assert.Equal("Presence of Scientific Equipment", part.NavwarnType);
+        Assert.Equal(208, part.NavwarnTypeCode);
+    }
+
+    [Fact]
     public void Mixed_ExtractsWarningInformationAndRestriction()
     {
         var w = Project("navwarn_mixed.gml", out _);
