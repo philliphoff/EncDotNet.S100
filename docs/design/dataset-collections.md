@@ -1130,7 +1130,9 @@ S-104 or S-111 is openly downloadable over SECOM today.**
 >   - for a trusted signer, " · signer certificate revoked" or
 >     " · revocation not checked" appended (§7.11);
 >   - any of these with " · signer certificate expired" appended;
->   - or "invalid", "unsigned", "not checked (unknown algorithm)".
+>   - or "invalid", "unsigned", "not checked (unknown algorithm)", or
+>     "not checked (data encrypted)" for a protected object, whose signature
+>     covers the data before encryption (#923).
 > - **Later.**
 >   - User-added anchors in the keys & certificates UX (done in §7.13).
 >   - Revocation (CRL) followed in #833 (§7.11).

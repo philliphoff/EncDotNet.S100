@@ -193,6 +193,24 @@ public sealed class SecomTests : IDisposable
     }
 
     [Fact]
+    public void A_protected_objects_signature_is_not_checked_against_its_ciphertext()
+    {
+        // KRISO's enc-update signs the data before encryption (#923).
+        using var signer = Signer.Create();
+        var plaintext = "<S128:Dataset/>"u8.ToArray();
+        var ciphertext = RandomNumberGenerator.GetBytes(64);
+        var metadata = signer.Sign(plaintext) with { DataProtection = true };
+
+        var check = SecomSignatureVerifier.Verify(ciphertext, metadata, Anchors(signer));
+
+        Assert.Equal(SecomSignatureStatus.Encrypted, check.Status);
+        Assert.Equal(signer.Certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false), check.Signer);
+        Assert.Null(check.SignerTrusted);
+        Assert.Contains("encrypted", check.Detail, StringComparison.Ordinal);
+        Assert.Equal("not checked (data encrypted)", SecomSourceIndexer.Describe(check));
+    }
+
+    [Fact]
     public void An_unknown_signature_algorithm_is_reported_as_unsupported()
     {
         using var signer = Signer.Create();
@@ -476,7 +494,7 @@ public sealed class SecomTests : IDisposable
         Assert.Contains("signature", bad.Message, StringComparison.Ordinal);
         var encrypted = await Assert.ThrowsAsync<InvalidDataException>(() =>
             downloader.DownloadAsync(index.Items.Single(i => i.Key == "ref-0002"), cancellationToken: Ct));
-        Assert.Contains("encrypted", encrypted.Message, StringComparison.Ordinal);
+        Assert.Contains("can't decrypt SECOM-protected data", encrypted.Message, StringComparison.Ordinal);
 
         // Nothing is left behind.
         Assert.Empty(Directory.EnumerateFileSystemEntries(downloader.Root));

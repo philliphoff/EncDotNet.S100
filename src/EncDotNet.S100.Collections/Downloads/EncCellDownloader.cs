@@ -397,7 +397,7 @@ public sealed partial class EncCellDownloader
             secom = SecomClient.ReadDataObject(response);
 
         if (secom.Metadata is { DataProtection: true })
-            throw new InvalidDataException($"The SECOM object {item.Name} is encrypted; reading it needs a certificate, which is not supported yet.");
+            throw new InvalidDataException($"The SECOM object {item.Name} is encrypted, and SoundCharts can't decrypt SECOM-protected data yet.");
 
         var signature = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata, trust, now, revocation);
         if (signature.Status == SecomSignatureStatus.Invalid)

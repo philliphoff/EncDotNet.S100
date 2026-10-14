@@ -17,6 +17,13 @@ public enum SecomSignatureStatus
 
     /// <summary>The signature algorithm is not one this library knows.</summary>
     Unsupported,
+
+    /// <summary>
+    /// The data is encrypted (<c>dataProtection</c>), and the signature covers
+    /// it before encryption, so it can't be checked until the data is
+    /// decrypted (#923). The signer is still reported, but not its trust.
+    /// </summary>
+    Encrypted,
 }
 
 /// <summary>The result of <see cref="SecomSignatureVerifier.Verify"/>.</summary>
@@ -112,6 +119,16 @@ public static class SecomSignatureVerifier
         {
             var signer = certificates[0];
             var subject = signer.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
+
+            // A protected object's signature covers the data before encryption
+            // (KRISO's enc-update service, #923): checking it against the
+            // ciphertext would report tampering that isn't there.
+            if (metadata.DataProtection)
+            {
+                var encrypted = new SecomSignatureCheck(
+                    SecomSignatureStatus.Encrypted, subject, Detail: "The data is encrypted; its signature can be checked only after decryption.");
+                return WithSigner(encrypted, certificates, metadata.RootCertificateThumbprint, trust, now, revocation);
+            }
 
             SecomSignatureStatus status;
             string? detail = null;
