@@ -39,7 +39,12 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     private readonly Func<DepthUnit> _depthUnit;
     private readonly Func<TimeFormat> _timeFormat;
 
-    public PassageCheckViewModel(PassageCheckService service, RoutesService routes, Func<DepthUnit> depthUnit, Func<TimeFormat> timeFormat)
+    public PassageCheckViewModel(
+        PassageCheckService service,
+        RoutesService routes,
+        Func<DepthUnit> depthUnit,
+        Func<TimeFormat> timeFormat,
+        RouteFindingsService? findings = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(routes);
@@ -56,12 +61,20 @@ internal sealed class PassageCheckViewModel : ViewModelBase
             if (row is not null)
                 _service.SetCursor(row.MidDistanceMeters);
         });
+        if (findings is not null)
+        {
+            Findings = new RouteFindingsViewModel(findings);
+            Findings.CountChanged += (_, _) => OnPropertyChanged(nameof(FindingsLabel));
+        }
         _service.Changed += (_, _) => Refresh();
         Refresh();
     }
 
     /// <summary>The verdict card's departure-window line and <b>Depart {HH:MM}</b> (#903).</summary>
     public DepartureWindowViewModel Window { get; }
+
+    /// <summary>The Findings tab's list (#905), or <c>null</c> without a findings service.</summary>
+    public RouteFindingsViewModel? Findings { get; }
 
     /// <summary>The check-mode leg rows (C5).</summary>
     public ObservableCollection<PassageCheckLegRowViewModel> Legs { get; }
@@ -198,8 +211,8 @@ internal sealed class PassageCheckViewModel : ViewModelBase
 
     public bool ShowLegs => !ShowFindings;
 
-    /// <summary>The Findings tab label; findings arrive with #905.</summary>
-    public string FindingsLabel => string.Format(CultureInfo.CurrentCulture, Strings.Check_TabFindingsFormat, 0);
+    /// <summary>The Findings tab label, "Findings {N}" (C4).</summary>
+    public string FindingsLabel => string.Format(CultureInfo.CurrentCulture, Strings.Check_TabFindingsFormat, Findings?.Count ?? 0);
 
     /// <summary>Re-reads the service state.</summary>
     public void Refresh()

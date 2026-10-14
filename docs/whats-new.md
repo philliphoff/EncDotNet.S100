@@ -14,6 +14,14 @@ month. For package versions and release assets, see
   departure in it. The new MCP tool `set_departure` sets the departure, and
   `get_check_state`, `get_clearance_state` and `get_passage_result`
   (`includeWindow`) report the window.
+- **Findings for a route.** In Check passage mode, the Routes panel's
+  **Findings** tab lists what to review along the route, grouped **MUST
+  REVIEW**, **CHECK** and **INFO**: stretches below your UKC setting,
+  S-101-only depths, water-level gaps and expired S-111 runs. Clicking one
+  zooms the map to it and moves the Clearance cursor there. The shared
+  `RouteFinding` model in `EncDotNet.S100.Navigation` is ready for the route
+  checks in #888. The MCP tools `get_findings` and `select_finding` read and
+  select findings.
 - **Clearance profile.** While Check passage is on, the bottom dock gains a
   **Clearance** tab next to the Timeline. It shows the seabed, the
   required-UKC band, the water level and the keel along the route, against

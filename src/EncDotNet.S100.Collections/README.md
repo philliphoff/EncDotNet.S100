@@ -172,6 +172,17 @@ and `Get`, using `SecomClient`:
 - Each data object becomes an online item. Summaries have no coverage, so an
   item gets its bounds from the downloaded copy, through the host's
   `DatasetProbe`.
+- An exchange-set object (`containerType` 1) is a package, like a community
+  list entry. It downloads as the ZIP of an S-100 exchange set. Once it's
+  downloaded, each current dataset in its `CATALOG.XML` is listed as its own
+  item, grouped under the package; cancelled datasets are left out. A set
+  that only cancels datasets stays one item, with a `contents` property
+  saying so.
+- Items are named from the summary's identifier, without the generation
+  timestamp some services append (`NAVAREA X_2026-10-13T04:47:23Z`). When a
+  service gives no modification date, a hash of the summary is the item's
+  `RemoteItemLocation.Revision`, and a download made at another revision is
+  outdated.
 - The client tries SECOM edition 2 (`/v2`) first and falls back to edition 1
   (`/v1`). It reads both editions' spellings (`S124` and `S-124`,
   `summaryObject` and `informationSummaryObject`, compact dates).
@@ -181,7 +192,9 @@ and `Get`, using `SecomClient`:
 - The last listing is kept on disk, so an unreachable service still lists what
   it last offered. `DescribeAsync` counts objects per product, for choosing a
   filter.
-- Encrypted data objects aren't supported.
+- Encrypted data objects aren't supported. `SecomSignatureVerifier` reports
+  their signature as `Encrypted` rather than checking it, because the
+  signature covers the data before encryption.
 
 ## SECOM trust, identity and registry
 

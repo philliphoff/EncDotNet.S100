@@ -141,6 +141,20 @@ Every method takes a `CancellationToken`.
 duration and start and end ETA, and the arrival time. `EtaAt(leg, distance)`
 gives the ETA at any point along a leg.
 
+## Findings
+
+`RouteFinding` is one entry in a route's findings list. Each check (under-keel
+clearance, and later charted dangers, land and S-124 warnings) produces these,
+so one list can show them all. A finding has:
+
+- a `Group`: `MustReview`, `Check` or `Info`
+- a `Source`, which names the check: `Clearance`, `RouteCheck`, `S124`,
+  `Confidence` or `Data`
+- a `Title` and a `Meta` line
+- the `LegIndex` and `DistanceMeters` along the route
+- a `Location`: a point, or a span of the route
+- an optional `Feature` (dataset and feature id) that pick and describe can open
+
 ## Rules shared with the pick report
 
 SoundCharts' pick report uses the same rules as the passage check, so the two

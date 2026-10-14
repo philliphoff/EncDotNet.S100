@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using EncDotNet.S100.Collections.Secom;
+using EncDotNet.S100.ExchangeSets;
 
 namespace EncDotNet.S100.Collections.Downloads;
 
@@ -13,7 +14,10 @@ namespace EncDotNet.S100.Collections.Downloads;
 /// <param name="Update">The update number downloaded (none for a package).</param>
 /// <param name="PublishedAt">When the provider published the download, if known.</param>
 /// <param name="DownloadedAt">When the download completed.</param>
-/// <param name="Location">The downloaded cell (for a package, its first cell), ready to load.</param>
+/// <param name="Location">
+/// The downloaded cell (for a package, its first cell), ready to load; for an
+/// S-100 package with no current datasets, its catalogue.
+/// </param>
 public sealed record DownloadedCell(
     string Name,
     int? Edition,
@@ -24,6 +28,9 @@ public sealed record DownloadedCell(
 {
     /// <summary>True when this is a package: a download holding any number of cells.</summary>
     public bool IsPackage { get; init; }
+
+    /// <summary>The <see cref="RemoteItemLocation.Revision"/> downloaded, if the item had one.</summary>
+    public string? Revision { get; init; }
 
     /// <summary>
     /// The data signature check made when a SECOM object was downloaded
@@ -42,11 +49,14 @@ public sealed record DownloadedCell(
     /// True when <paramref name="item"/> (a feed item for the same cell or
     /// package) describes a newer download: a newer edition or update, or —
     /// for a package, or a dataset without editions such as a forecast run
-    /// (#685) — a later publication date.
+    /// (#685) — a later publication date, or another
+    /// <see cref="RemoteItemLocation.Revision"/> (#916).
     /// </summary>
     public bool IsOlderThan(CollectionItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
+        if (item.Location is RemoteItemLocation { Revision: { } revision })
+            return !string.Equals(revision, Revision, StringComparison.Ordinal);
         if (IsPackage || (Edition is null && item.Edition is null))
         {
             return item.Location is RemoteItemLocation { LastModified: { } published }
@@ -93,7 +103,14 @@ public sealed record DownloadedCell(
 /// (issue #804): its base64 data is decoded, its signature checked — a
 /// signature that does not match refuses the download — and the data saved
 /// as the file its <see cref="RemoteItemLocation.Layout"/> names. Encrypted
-/// SECOM data is refused; it needs a certificate.
+/// SECOM data is refused.
+/// </para>
+/// <para>
+/// A SECOM exchange-set object (#916) is a package: its data is the ZIP of an
+/// S-100 exchange set, which is extracted, and every current dataset its
+/// <c>CATALOG.XML</c> lists is recorded. Withdrawn datasets (cancellations
+/// without a file) are left out, so a set that only cancels warnings records
+/// no datasets.
 /// </para>
 /// </remarks>
 public sealed partial class EncCellDownloader
@@ -208,13 +225,25 @@ public sealed partial class EncCellDownloader
                 datasets.TryAdd(dataset.Name, location);
             }
 
-            if (datasets.Count == 0)
+            // A package whose exchange set lists no current datasets (every one
+            // withdrawn, #916) is a complete download of nothing: its catalogue stands in.
+            LocalItemLocation? first = datasets.Values.FirstOrDefault();
+            if (first is null && record is { IsPackage: true, Datasets.Count: 0, CatalogueRelativePath: { } catalogue })
+            {
+                first = new LocalItemLocation(
+                    Path.GetFullPath(Path.Combine(cellFolder, record.RootRelativePath)), catalogue, [], catalogue);
+                if (!File.Exists(Path.Combine(first.RootPath, catalogue)))
+                    return null;
+            }
+
+            if (first is null)
                 return null;
 
             return new DownloadedCell(
-                record.Name, record.Edition, record.Update, record.PublishedAt, record.DownloadedAt, datasets.Values.First())
+                record.Name, record.Edition, record.Update, record.PublishedAt, record.DownloadedAt, first)
             {
                 IsPackage = record.IsPackage,
+                Revision = record.Revision,
                 Datasets = datasets,
                 Signature = record.Signature?.ToCheck(TrustAnchors, fetchRevocation ? Revocation : Revocation?.CacheOnly, _time.GetUtcNow()),
             };
@@ -239,8 +268,8 @@ public sealed partial class EncCellDownloader
     /// <exception cref="HttpRequestException">The download failed.</exception>
     /// <exception cref="InvalidDataException">
     /// The download holds no <c>.000</c> base cell for the item (or, for a
-    /// package, none at all); or a SECOM object is encrypted, malformed, or
-    /// its signature does not match.
+    /// package, none at all and no S-100 catalogue); or a SECOM object is
+    /// encrypted, malformed, or its signature does not match.
     /// </exception>
     public async Task<DownloadedCell> DownloadAsync(
         CollectionItem item,
@@ -316,7 +345,7 @@ public sealed partial class EncCellDownloader
                 File.Move(zipPath, Path.Combine(staging, fileName));
             }
 
-            var record = Describe(item, remote, staging) with { Signature = signature };
+            var record = Describe(item, remote, staging) with { Signature = signature, Revision = remote.Revision };
             File.WriteAllText(Path.Combine(staging, RecordFileName), JsonSerializer.Serialize(record, RecordJson.CellRecord));
 
             Replace(CellFolder(folderName), staging);
@@ -378,7 +407,9 @@ public sealed partial class EncCellDownloader
 
     /// <summary>
     /// Decodes a downloaded SECOM <c>Get</c> response into the file named by
-    /// the item's layout, in <paramref name="staging"/>, after checking its signature.
+    /// the item's layout, in <paramref name="staging"/>, after checking its
+    /// signature; for an exchange-set object (a package, #916), extracts the
+    /// archive it holds into <paramref name="staging"/>.
     /// </summary>
     private static SignatureRecord UnwrapSecom(
         CollectionItem item,
@@ -389,7 +420,8 @@ public sealed partial class EncCellDownloader
         SecomRevocation? revocation,
         DateTimeOffset now)
     {
-        if (remote.Layout is not { UpdateRelativePaths.Count: 0, CatalogueRelativePath: null } layout || !IsSafeName(layout.RelativePath))
+        var isPackage = remote is { Package: not null, Layout: null };
+        if (!isPackage && (remote.Layout is not { UpdateRelativePaths.Count: 0, CatalogueRelativePath: null } || !IsSafeName(remote.Layout.RelativePath)))
             throw new InvalidDataException($"The SECOM object {item.Name} has no single-file layout to save its data as.");
 
         SecomDataObject secom;
@@ -397,15 +429,21 @@ public sealed partial class EncCellDownloader
             secom = SecomClient.ReadDataObject(response);
 
         if (secom.Metadata is { DataProtection: true })
-            throw new InvalidDataException($"The SECOM object {item.Name} is encrypted; reading it needs a certificate, which is not supported yet.");
+            throw new InvalidDataException($"The SECOM object {item.Name} is encrypted, and SoundCharts can't decrypt SECOM-protected data yet.");
 
         var signature = SecomSignatureVerifier.Verify(secom.Data, secom.Metadata, trust, now, revocation);
         if (signature.Status == SecomSignatureStatus.Invalid)
             throw new InvalidDataException($"The signature of the SECOM object {item.Name} does not match its data.");
 
+        if (isPackage)
+        {
+            ExtractExchangeSet(secom, item.Name, staging);
+            return SignatureRecord.From(signature, secom.Metadata);
+        }
+
         var data = secom.Metadata is { Compressed: true } ? Decompress(secom.Data, item.Name) : secom.Data;
         Directory.CreateDirectory(staging);
-        File.WriteAllBytes(Path.Combine(staging, layout.RelativePath), data);
+        File.WriteAllBytes(Path.Combine(staging, remote.Layout!.RelativePath), data);
         return SignatureRecord.From(signature, secom.Metadata);
     }
 
@@ -429,6 +467,40 @@ public sealed partial class EncCellDownloader
         }
     }
 
+    /// <summary>
+    /// Extracts a SECOM exchange-set object: its data is the exchange set's ZIP
+    /// (AMSA). When the object is also flagged compressed and the outer archive
+    /// holds just one ZIP, that inner archive is the exchange set.
+    /// </summary>
+    private static void ExtractExchangeSet(SecomDataObject secom, string name, string staging)
+    {
+        var data = secom.Data;
+        if (!IsZip(data))
+            throw new InvalidDataException($"The SECOM exchange set {name} is not a zip archive.");
+
+        if (secom.Metadata is { Compressed: true })
+        {
+            using var outer = new ZipArchive(new MemoryStream(data), ZipArchiveMode.Read);
+            var files = outer.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).ToArray();
+            if (files is [{ } only] && only.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                using var entry = only.Open();
+                using var buffer = new MemoryStream();
+                entry.CopyTo(buffer);
+                data = buffer.ToArray();
+                if (!IsZip(data))
+                    throw new InvalidDataException($"The SECOM exchange set {name} is not a zip archive.");
+            }
+        }
+
+        Directory.CreateDirectory(staging);
+        // ExtractToDirectory refuses entries that would land outside the folder.
+        using var archive = new ZipArchive(new MemoryStream(data), ZipArchiveMode.Read);
+        archive.ExtractToDirectory(staging);
+    }
+
+    private static bool IsZip(ReadOnlySpan<byte> data) => data.Length >= 4 && data[0] == (byte)'P' && data[1] == (byte)'K';
+
     private static readonly EnumerationOptions Recursive = new()
     {
         RecurseSubdirectories = true,
@@ -444,6 +516,20 @@ public sealed partial class EncCellDownloader
         {
             // The publisher says where the files are (S-100 feeds): any product, no discovery.
             datasets = [DescribeLayout(item, staging, layout)];
+        }
+        else if (remote.Package is { } exchangeSet && catalogues.Length == 0 && FindS100Catalogue(staging) is { } s100Catalogue)
+        {
+            // An S-100 exchange set (SECOM exchange-set objects, #916): its catalogue says what it holds.
+            var (root, described) = DescribeExchangeSet(staging, s100Catalogue);
+            if (described.Count == 0)
+            {
+                // Every dataset withdrawn: a complete download of nothing, recorded by its catalogue.
+                return new CellRecord(
+                    exchangeSet, null, null, remote.LastModified, _time.GetUtcNow(), remote.Uri.AbsoluteUri,
+                    root, Path.GetFileName(s100Catalogue), [], Path.GetFileName(s100Catalogue), true, []);
+            }
+
+            datasets = [.. described];
         }
         else if (remote.Package is { } package)
         {
@@ -501,6 +587,65 @@ public sealed partial class EncCellDownloader
             baseFile,
             layout.UpdateRelativePaths.Select(Existing).OfType<string>().ToArray(),
             Existing(layout.CatalogueRelativePath));
+    }
+
+    /// <summary>The S-100 <c>CATALOG.XML</c> nearest the top of an extracted download, if any.</summary>
+    private static string? FindS100Catalogue(string staging) =>
+        Directory.EnumerateFiles(staging, "CATALOG.XML", Recursive)
+            .OrderBy(c => c.Count(ch => ch == Path.DirectorySeparatorChar))
+            .ThenBy(c => c, StringComparer.Ordinal)
+            .FirstOrDefault();
+
+    /// <summary>
+    /// Records the current datasets of an extracted S-100 exchange set (#916):
+    /// every dataset its catalogue lists that is not a withdrawal and whose file
+    /// arrived, with any sequential updates folded into their base.
+    /// </summary>
+    /// <returns>The exchange-set root relative to <paramref name="staging"/>, and the datasets.</returns>
+    private static (string Root, IReadOnlyList<DatasetRecord> Datasets) DescribeExchangeSet(string staging, string cataloguePath)
+    {
+        ExchangeCatalogue catalogue;
+        using (var stream = File.OpenRead(cataloguePath))
+            catalogue = ExchangeCatalogueReader.Read(stream, ExchangeCatalogueReadOptions.DiscoveryOnly);
+
+        var root = Path.GetDirectoryName(cataloguePath)!;
+        var catalogueName = Path.GetFileName(cataloguePath);
+        var files = catalogue.CurrentDatasets
+            .Select(d => d.RelativePath.Replace('\\', '/'))
+            .Where(relative => IsInside(root, relative) && File.Exists(Path.Combine(root, relative)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var datasets = new List<DatasetRecord>();
+        foreach (var relative in files)
+        {
+            var stem = Path.GetFileNameWithoutExtension(relative);
+            var directory = Path.GetDirectoryName(relative) ?? string.Empty;
+            if (UpdateNumber(relative, stem) > 0
+                && files.Any(f => UpdateNumber(f, stem) == 0 && string.Equals(Path.GetDirectoryName(f) ?? string.Empty, directory, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var updates = UpdateNumber(relative, stem) == 0
+                ? files
+                    .Where(f => string.Equals(Path.GetDirectoryName(f) ?? string.Empty, directory, StringComparison.OrdinalIgnoreCase))
+                    .Select(f => (Path: f, Number: UpdateNumber(f, stem)))
+                    .Where(u => u.Number > 0)
+                    .OrderBy(u => u.Number)
+                    .Select(u => u.Path)
+                    .ToArray()
+                : [];
+            datasets.Add(new DatasetRecord(stem, Relative(staging, root), relative, updates, catalogueName));
+        }
+
+        return (Relative(staging, root), datasets.DistinctBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    private static bool IsInside(string root, string relative)
+    {
+        var full = Path.GetFullPath(Path.Combine(root, relative));
+        return full.StartsWith(Path.GetFullPath(root) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     /// <summary>A single, ordinary folder name: no separators, no <c>.</c>/<c>..</c>, no invalid characters.</summary>
@@ -628,7 +773,8 @@ public sealed partial class EncCellDownloader
         string? CatalogueRelativePath,
         bool IsPackage = false,
         IReadOnlyList<DatasetRecord>? Datasets = null,
-        SignatureRecord? Signature = null);
+        SignatureRecord? Signature = null,
+        string? Revision = null);
 
     /// <summary>
     /// The signature check of a SECOM download, with the certificates the

@@ -105,12 +105,17 @@ public static class LibraryItemText
         return source.Definition is S100CatalogueFeedSource or S100ForecastFeedSource;
     }
 
-    /// <summary>True for a community-list entry not yet downloaded: a package that may hold several datasets.</summary>
+    /// <summary>
+    /// True for a package not yet listed by its datasets: a community-list
+    /// entry, or a SECOM exchange-set object (#916), that may hold several.
+    /// The datasets of a downloaded package are keyed <c>package/name</c>.
+    /// </summary>
     /// <param name="item">The item.</param>
     public static bool IsPackageEntry(CollectionItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        return item.Location is RemoteItemLocation { Package: { } package, Layout: null } && item.Key == package;
+        return item.Location is RemoteItemLocation { Package: { } package, Layout: null }
+            && !item.Key.StartsWith(package + "/", StringComparison.Ordinal);
     }
 
     /// <summary>
