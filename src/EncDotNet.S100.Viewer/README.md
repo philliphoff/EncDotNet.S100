@@ -905,6 +905,13 @@ loaded S-104. While it's on:
   Timeline, or going live, turns it off. Expired forecast runs keep their
   **Expired** tag on their lanes; S-111 currents aren't used in ETAs.
 
+The route's colours follow the chart palette. Day draws it on a white
+casing. Dusk and Night use a black casing and dimmer colours, and on Night the
+editing line and waypoints lose most of their accent colour so they don't
+glare. Every state keeps at least 3:1 contrast against its casing on Dusk and
+Night, and red is used only for Below your UKC setting, which is also drawn
+wider. The Clearance profile uses the same colours for the chrome theme in use.
+
 Editing recomputes live: the route draws grey and dashed, and the verdict
 dims, until the new result arrives. Turning Check passage off restores the
 map and the docks. The result is an aid for exploring the data, not for

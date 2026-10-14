@@ -140,9 +140,26 @@ internal sealed record RouteCheckOverlay(
 }
 
 /// <summary>
-/// The UKC state colours (handoff C6). Dusk isn't specified; it sits half
-/// way between Day and Night until the palette pass (#906).
+/// The UKC state colours (handoff C6), per chart palette.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Day and the Meets / Tight / Below hues on Night are the handoff's. Dusk
+/// isn't mocked: it sits between Day and Night in hue, on the black casing
+/// that Dusk shares with Night, with its brightest colour no brighter than
+/// S-101 Dusk's (<c>CHWHT</c>). The palette pass (#906) set the greys so that
+/// every state keeps at least 3:1 against its casing on Dusk and Night, and
+/// No data stays fainter than Low confidence in every palette (the plain
+/// Day/Night midpoint had them the wrong way round). Night ink is dimmed
+/// towards S-101 Night's brightest colour.
+/// </para>
+/// <para>
+/// Red is reserved for Below your UKC setting (and must-review findings);
+/// Below is also drawn wider, so it doesn't rely on colour alone. Day's amber
+/// Tight is 2.3:1 against its white casing: it's identified by hue, and the
+/// casing outlines it against the chart.
+/// </para>
+/// </remarks>
 internal readonly record struct RouteCheckColors(
     SKColor Meets,
     SKColor Tight,
@@ -167,22 +184,34 @@ internal readonly record struct RouteCheckColors(
         new SKColor(0x0B, 0x12, 0x20),
         SKColors.White);
 
+    private static readonly RouteCheckColors Dusk = new(
+        new SKColor(0x20, 0x89, 0x5C),
+        new SKColor(0xC1, 0x8D, 0x12),
+        new SKColor(0xCA, 0x32, 0x40),
+        new SKColor(0x6A, 0x75, 0x84),
+        new SKColor(0x58, 0x61, 0x6E),
+        new SKColor(0x58, 0x61, 0x6E),
+        SKColors.Black,
+        SKColors.Black.WithAlpha(77),
+        new SKColor(0x9A, 0xA3, 0xAE),
+        new SKColor(0x14, 0x1A, 0x22));
+
     private static readonly RouteCheckColors Night = new(
         new SKColor(0x2E, 0x8A, 0x5E),
         new SKColor(0xA2, 0x7A, 0x1C),
         new SKColor(0xC0, 0x3A, 0x46),
-        new SKColor(0x56, 0x60, 0x6E),
-        new SKColor(0x4A, 0x51, 0x5C),
-        new SKColor(0x4A, 0x51, 0x5C),
+        new SKColor(0x5C, 0x66, 0x76),
+        new SKColor(0x52, 0x5B, 0x66),
+        new SKColor(0x52, 0x5B, 0x66),
         SKColors.Black,
         SKColors.Black.WithAlpha(77),
-        new SKColor(0xA9, 0xB2, 0xBE),
+        new SKColor(0x8A, 0x94, 0xA0),
         new SKColor(0x0E, 0x14, 0x1B));
 
     public static RouteCheckColors For(PaletteType palette) => palette switch
     {
         PaletteType.Night => Night,
-        PaletteType.Dusk => Mix(Day, Night),
+        PaletteType.Dusk => Dusk,
         _ => Day,
     };
 
@@ -196,12 +225,4 @@ internal readonly record struct RouteCheckColors(
         _ => NoData,
     };
 
-    private static RouteCheckColors Mix(RouteCheckColors a, RouteCheckColors b)
-    {
-        static SKColor M(SKColor x, SKColor y) => new(
-            (byte)((x.Red + y.Red) / 2), (byte)((x.Green + y.Green) / 2), (byte)((x.Blue + y.Blue) / 2), (byte)((x.Alpha + y.Alpha) / 2));
-        return new RouteCheckColors(
-            M(a.Meets, b.Meets), M(a.Tight, b.Tight), M(a.Below, b.Below), M(a.LowConfidence, b.LowConfidence),
-            M(a.NoData, b.NoData), M(a.Stale, b.Stale), b.Casing, b.Wash, b.Ink, b.PillFill);
-    }
 }
