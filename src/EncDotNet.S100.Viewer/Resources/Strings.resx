@@ -2749,6 +2749,9 @@
   <data name="Library_Tag_Unpacked" xml:space="preserve">
     <value>Unpacked</value>
   </data>
+  <data name="Library_PackageEmptyHint" xml:space="preserve">
+    <value>Downloaded. Every dataset in it is cancelled, so there's nothing to show.</value>
+  </data>
   <data name="Library_PackageHint" xml:space="preserve">
     <value>Holds several datasets. Coverage and contents show after download.</value>
   </data>

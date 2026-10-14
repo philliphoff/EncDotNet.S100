@@ -126,6 +126,7 @@ public sealed class LibraryLoader : IDisposable
         {
             if (item.Location is not LocalItemLocation local
                 || item.ProductSpec == "Unknown"
+                || IsCatalogueOnly(local)
                 || LibraryAvailabilityResolver.Resolve(item) != LibraryAvailability.Local)
             {
                 skipped++;
@@ -177,7 +178,10 @@ public sealed class LibraryLoader : IDisposable
 
         var (groups, skipped) = Plan(items, sourceOf);
         var opened = 0;
-        var problems = new List<string>();
+        var problems = items
+            .Where(i => i.Location is LocalItemLocation local && IsCatalogueOnly(local))
+            .Select(i => $"{i.Name} holds no current datasets: every dataset in it is cancelled.")
+            .ToList();
         foreach (var group in groups)
         {
             LibraryOpenOutcome outcome;
@@ -201,6 +205,13 @@ public sealed class LibraryLoader : IDisposable
         Changed?.Invoke(this, EventArgs.Empty);
         return new LibraryLoadResult(opened, skipped, problems.Count > 0 ? problems : null);
     }
+
+    /// <summary>
+    /// True for a downloaded package with nothing to open: its location is its
+    /// exchange-set catalogue (a SECOM set that only cancels warnings, #916).
+    /// </summary>
+    private static bool IsCatalogueOnly(LocalItemLocation local) =>
+        local.CatalogueRelativePath is { } catalogue && string.Equals(local.RelativePath, catalogue, StringComparison.OrdinalIgnoreCase);
 
     private void OnOpenerChanged(object? sender, EventArgs e) => Changed?.Invoke(this, EventArgs.Empty);
 

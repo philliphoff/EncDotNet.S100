@@ -126,7 +126,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
     /// <summary>The descriptive title, when the source supplies one (for a package: what it holds).</summary>
     /// <remarks>A dataset under an unpacked package drops a title that only repeats the package's.</remarks>
-    public string? Subtitle => IsPackageEntry ? Strings.Library_PackageHint
+    public string? Subtitle => IsPackageEntry
+            // A downloaded SECOM exchange set that only cancels warnings (#916).
+            ? Item.Properties.ContainsKey("contents") ? Strings.Library_PackageEmptyHint : Strings.Library_PackageHint
         : IsModelHeader ? Item.Title
         : IsForecastTile ? null
         : IsGroupHeader ? null
