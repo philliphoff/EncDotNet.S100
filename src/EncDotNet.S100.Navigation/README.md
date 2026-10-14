@@ -124,7 +124,14 @@ from it.
 `SweepDepartures(profile, legs, from, to, step)` evaluates a range of
 departures over the same profile and returns the verdict for each departure.
 `DepartureSweep.Windows()` returns the runs of departures that meet the
-settings.
+settings, `NearestMeeting(departure)` the meeting departure closest to one,
+and `ArrivalAfterDataEnds()` the departures that arrive after the water-level
+data ends.
+
+`SweepWaterLevelRange(profile, legs, step)` sweeps the whole time range of the
+S-104 data that covers the route (`profile.WaterLevelTimeRange()`), starting
+at the first whole step. Over a long forecast, the step widens so the sweep
+stays under `maxDepartures` (default 2000).
 
 Every method takes a `CancellationToken`.
 

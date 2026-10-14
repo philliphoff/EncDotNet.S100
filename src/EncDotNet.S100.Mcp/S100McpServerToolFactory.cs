@@ -503,7 +503,8 @@ internal static class S100McpServerToolFactory
             "areas and soundings (low confidence); water level is S-104 at the ETA (no data outside its extent or time range). " +
             "Datums must match: a mismatch is reported as a gap, never mixed. Returns the verdict, the minimum with where and when, " +
             "per-leg results, gaps, low-confidence stretches, minutes below the setting and the sources; optionally per-sample " +
-            "values and a departure sweep (window). Pass a polyline with draftMeters, or (in the viewer) a routeId or nothing for the " +
+            "values and a departure sweep (window: windowFrom/windowTo, or includeWindow for the S-104 range, with the runs that meet " +
+            "the settings and the departures arriving after the S-104 data ends). Pass a polyline with draftMeters, or (in the viewer) a routeId or nothing for the " +
             "active route. SOG is the entered speed (S-111 is not applied); squat is a fixed allowance. Not for navigation.";
 
         var del = ([Description("Id of a viewer route; omit with no polyline for the active route.")] string? routeId = null,
@@ -520,6 +521,7 @@ internal static class S100McpServerToolFactory
                    [Description("With windowTo, sweep departures from this time (ISO-8601) for the departure window.")] DateTimeOffset? windowFrom = null,
                    [Description("Last swept departure (ISO-8601).")] DateTimeOffset? windowTo = null,
                    [Description("Minutes between swept departures (default 5).")] int windowStepMinutes = 5,
+                   [Description("Sweep departures across the whole S-104 range that covers the passage (as SoundCharts' departure band does); ignored with windowFrom/windowTo.")] bool includeWindow = false,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -537,7 +539,8 @@ internal static class S100McpServerToolFactory
                         maxSamples,
                         windowFrom,
                         windowTo,
-                        windowStepMinutes),
+                        windowStepMinutes,
+                        includeWindow),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions

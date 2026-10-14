@@ -24,6 +24,33 @@ internal sealed record PassageCheckSnapshot(
     IReadOnlyList<string?> LegPlaceNames,
     string? MinimumPlaceName);
 
+/// <summary>
+/// The departure window for the checked route (#903, handoff D5 and C3):
+/// departures swept across the S-104 range that covers the route.
+/// </summary>
+/// <param name="RouteId">The route the sweep is for.</param>
+/// <param name="Sweep">The engine sweep: one option per departure, in time order (never empty).</param>
+internal sealed record PassageDepartureWindow(string RouteId, DepartureSweep Sweep)
+{
+    /// <summary>The runs of departures that meet your settings.</summary>
+    public IReadOnlyList<(DateTimeOffset First, DateTimeOffset Last)> Windows { get; } = Sweep.Windows();
+
+    /// <summary>The departures that arrive after the S-104 data ends (hatched), or <c>null</c>.</summary>
+    public (DateTimeOffset First, DateTimeOffset Last)? ArrivalAfterDataEnds { get; } = Sweep.ArrivalAfterDataEnds();
+
+    /// <summary>The first swept departure.</summary>
+    public DateTimeOffset From => Sweep.Options[0].Departure;
+
+    /// <summary>The last swept departure: where the S-104 data ends.</summary>
+    public DateTimeOffset To => Sweep.Options[^1].Departure;
+
+    /// <summary>The time between departures.</summary>
+    public TimeSpan Step => Sweep.Step;
+
+    /// <summary>The meeting departure nearest <paramref name="departure"/>, or <c>null</c>.</summary>
+    public DateTimeOffset? NearestMeeting(DateTimeOffset departure) => Sweep.NearestMeeting(departure)?.Departure;
+}
+
 /// <summary>Where the profile cursor (and the ghost vessel) is.</summary>
 /// <param name="DistanceMeters">Distance from the start of the passage.</param>
 /// <param name="LegIndex">The leg the cursor is on.</param>
@@ -51,6 +78,14 @@ internal readonly record struct PassageCursor(
 /// map draws the route grey and dashed and the verdict dims meanwhile.
 /// </para>
 /// <para>
+/// A change to the departure alone needs no resampling, so it recomputes
+/// without the debounce: dragging the departure band updates the verdict
+/// live, each step cancelling the last. The departure window
+/// (<see cref="Window"/>) is swept separately, after a result lands, and
+/// only when the legs, vessel values or datasets change; a departure change
+/// never re-sweeps, and a newer sweep cancels a stale one.
+/// </para>
+/// <para>
 /// The route is read on the calling (UI) thread; sampling and evaluation
 /// run on the thread pool and are cancelled when a newer request arrives.
 /// Unchanged legs reuse their depth samples
@@ -65,6 +100,12 @@ internal sealed class PassageCheckService : IDisposable
     /// <summary>The default delay between the last edit and a recompute.</summary>
     public static readonly TimeSpan DefaultDebounce = TimeSpan.FromMilliseconds(200);
 
+    /// <summary>The time between swept departures (handoff D5).</summary>
+    public static readonly TimeSpan WindowStep = TimeSpan.FromMinutes(5);
+
+    /// <summary>The most departures a sweep evaluates; a longer S-104 range widens the step.</summary>
+    public const int MaxWindowDepartures = 1000;
+
     private readonly RoutesService _routes;
     private readonly IDatasetCatalog _catalog;
     private readonly ICrsTransformFactory _transforms;
@@ -73,6 +114,9 @@ internal sealed class PassageCheckService : IDisposable
 
     private CancellationTokenSource? _pending;
     private Task _idle = Task.CompletedTask;
+    private Task _windowIdle = Task.CompletedTask;
+    private CancellationTokenSource? _windowPending;
+    private WindowKey? _windowKey;
     private CheckInput? _lastInput;
     private IReadOnlyList<LoadedDataset>? _sourcesSnapshot;
     private PassageDataSources? _sources;
@@ -124,6 +168,22 @@ internal sealed class PassageCheckService : IDisposable
     /// <summary>Where the profile cursor and ghost are, or <c>null</c> when hidden.</summary>
     public PassageCursor? Cursor { get; private set; }
 
+    /// <summary>
+    /// The departure being checked: the route's departure, or the view time
+    /// when it has none. It moves at once while the band is dragged, ahead of
+    /// <see cref="Current"/>; <c>null</c> when nothing is checked.
+    /// </summary>
+    public DateTimeOffset? Departure => IsActive ? _lastInput?.Departure : null;
+
+    /// <summary>Whether the checked route has its own departure (rather than the view time).</summary>
+    public bool HasRouteDeparture => IsActive && _routes.Routes.ActiveRoute?.Passage.Departure is not null;
+
+    /// <summary>The departure window for the checked route, or <c>null</c> (none yet, or no S-104 covers the route).</summary>
+    public PassageDepartureWindow? Window { get; private set; }
+
+    /// <summary>True while a sweep is running; <see cref="Window"/>, if any, is for the previous legs.</summary>
+    public bool IsWindowComputing { get; private set; }
+
     /// <summary>Raised (through the post callback) when the result, stale state or cursor changes.</summary>
     public event EventHandler? Changed;
 
@@ -134,13 +194,48 @@ internal sealed class PassageCheckService : IDisposable
     internal Func<CancellationToken, Task>? HoldHook { get; set; }
 
     /// <summary>Completes when the most recently scheduled recompute has finished (or been cancelled).</summary>
-    internal Task WhenIdle()
+    internal async Task WhenIdle()
     {
-        lock (_gate)
+        while (true)
         {
-            return _idle;
+            Task check, window;
+            lock (_gate)
+            {
+                check = _idle;
+                window = _windowIdle;
+            }
+
+            await check.ConfigureAwait(false);
+            await window.ConfigureAwait(false);
+            lock (_gate)
+            {
+                if (ReferenceEquals(check, _idle) && ReferenceEquals(window, _windowIdle))
+                    return;
+            }
         }
     }
+
+    /// <summary>
+    /// Sets the checked route's departure as one undoable edit (or as part of
+    /// an open gesture), which recomputes the check at once.
+    /// </summary>
+    /// <param name="departure">The new departure.</param>
+    /// <returns><c>false</c> when there is no checked route.</returns>
+    public bool SetDeparture(DateTimeOffset departure)
+    {
+        if (!IsActive || _routes.Routes.ActiveRoute is not { } route)
+            return false;
+        route.History.Execute(RouteEditLabels.EditPassage, () => route.SetDeparture(departure));
+        return true;
+    }
+
+    /// <summary>
+    /// Opens a departure drag on the checked route: every
+    /// <see cref="SetDeparture"/> until the scope is disposed is one undo
+    /// step. <c>null</c> when there is no checked route.
+    /// </summary>
+    public IDisposable? BeginDepartureGesture() =>
+        IsActive && _routes.Routes.ActiveRoute is { } route ? route.History.BeginGesture(RouteEditLabels.EditPassage) : null;
 
     /// <summary>
     /// Moves the cursor (and the ghost vessel) to a distance along the
@@ -170,6 +265,7 @@ internal sealed class PassageCheckService : IDisposable
         _routes.ViewTime.Changed -= OnInputsChanged;
         _catalog.Changed -= OnCatalogChanged;
         _pending?.Cancel();
+        _windowPending?.Cancel();
     }
 
     private void OnInputsChanged(object? sender, EventArgs e) => _post(Schedule);
@@ -184,7 +280,8 @@ internal sealed class PassageCheckService : IDisposable
         if (!IsActive)
         {
             CancelPending();
-            var had = Current is not null || IsComputing || Error is not null || Cursor is not null;
+            var had = Current is not null || IsComputing || Error is not null || Cursor is not null || Window is not null;
+            ClearWindow();
             Current = null;
             Cursor = null;
             IsStale = IsComputing = false;
@@ -199,6 +296,7 @@ internal sealed class PassageCheckService : IDisposable
         if (input is null)
         {
             CancelPending();
+            ClearWindow();
             Current = null;
             Cursor = null;
             IsStale = IsComputing = false;
@@ -211,6 +309,8 @@ internal sealed class PassageCheckService : IDisposable
         if (_lastInput is { } last && last.SameAs(input) && !IsComputing && Error is null)
             return;
 
+        // Only the departure (or view time) moved: no resampling, so no debounce.
+        var delay = _lastInput is { } previous && previous.SameLegs(input) && Error is null ? TimeSpan.Zero : Debounce;
         _lastInput = input;
         CancelPending();
         var cts = new CancellationTokenSource();
@@ -220,7 +320,7 @@ internal sealed class PassageCheckService : IDisposable
         Changed?.Invoke(this, EventArgs.Empty);
 
         var snapshot = _catalog.Datasets;
-        var task = RunAsync(input, snapshot, cts.Token);
+        var task = RunAsync(input, snapshot, delay, cts.Token);
         lock (_gate)
         {
             _idle = task;
@@ -233,17 +333,26 @@ internal sealed class PassageCheckService : IDisposable
         _pending = null;
     }
 
-    private async Task RunAsync(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, CancellationToken token)
+    private void ClearWindow()
+    {
+        _windowPending?.Cancel();
+        _windowPending = null;
+        _windowKey = null;
+        Window = null;
+        IsWindowComputing = false;
+    }
+
+    private async Task RunAsync(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, TimeSpan delay, CancellationToken token)
     {
         try
         {
-            if (Debounce > TimeSpan.Zero)
-                await Task.Delay(Debounce, token).ConfigureAwait(false);
+            if (delay > TimeSpan.Zero)
+                await Task.Delay(delay, token).ConfigureAwait(false);
             if (HoldHook is { } hold)
                 await hold(token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
 
-            var snapshotResult = await Task.Run(() => Compute(input, snapshot, token), token).ConfigureAwait(false);
+            var (snapshotResult, profile, engine) = await Task.Run(() => Compute(input, snapshot, token), token).ConfigureAwait(false);
             _post(() =>
             {
                 if (token.IsCancellationRequested)
@@ -253,6 +362,7 @@ internal sealed class PassageCheckService : IDisposable
                 IsStale = IsComputing = false;
                 if (Cursor is { } cursor)
                     Cursor = CursorAt(snapshotResult, cursor.DistanceMeters);
+                ScheduleWindow(input, snapshot, profile, engine);
                 Changed?.Invoke(this, EventArgs.Empty);
             });
         }
@@ -273,9 +383,66 @@ internal sealed class PassageCheckService : IDisposable
         }
     }
 
+    // On the UI thread, after a result lands: sweeps the departure window
+    // when the legs, vessel values or datasets changed since the last sweep.
+    private void ScheduleWindow(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, PassageDepthProfile profile, PassageCheckEngine engine)
+    {
+        var key = new WindowKey(input, snapshot);
+        if (_windowKey is { } last && last.SameAs(key))
+            return;
+
+        _windowPending?.Cancel();
+        var cts = new CancellationTokenSource();
+        _windowPending = cts;
+        _windowKey = key;
+        IsWindowComputing = true;
+        if (Window is { } shown && shown.RouteId != input.RouteId)
+            Window = null;
+
+        var task = SweepAsync(input, profile, engine, cts.Token);
+        lock (_gate)
+        {
+            _windowIdle = task;
+        }
+    }
+
+    private async Task SweepAsync(CheckInput input, PassageDepthProfile profile, PassageCheckEngine engine, CancellationToken token)
+    {
+        try
+        {
+            var sweep = await Task.Run(
+                () => engine.SweepWaterLevelRange(profile, input.Legs, WindowStep, MaxWindowDepartures, token),
+                token).ConfigureAwait(false);
+            _post(() =>
+            {
+                if (token.IsCancellationRequested)
+                    return;
+                Window = sweep is { Options.Count: > 0 } ? new PassageDepartureWindow(input.RouteId, sweep) : null;
+                IsWindowComputing = false;
+                Changed?.Invoke(this, EventArgs.Empty);
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a sweep for newer legs, or check mode turned off.
+        }
+        catch (Exception)
+        {
+            _post(() =>
+            {
+                if (token.IsCancellationRequested)
+                    return;
+                Window = null;
+                IsWindowComputing = false;
+                Changed?.Invoke(this, EventArgs.Empty);
+            });
+        }
+    }
+
     // Runs on the thread pool; the engine, profile and caches are touched
-    // only here, one computation at a time.
-    private PassageCheckSnapshot Compute(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, CancellationToken token)
+    // only here, one computation at a time. The returned profile and engine
+    // are immutable and safe for the window sweep to use concurrently.
+    private (PassageCheckSnapshot Snapshot, PassageDepthProfile Profile, PassageCheckEngine Engine) Compute(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, CancellationToken token)
     {
         lock (_nameCache)
         {
@@ -301,7 +468,7 @@ internal sealed class PassageCheckService : IDisposable
             }
 
             var minimumName = result.Minimum is { } min ? NameAt(min.Position) : null;
-            return new PassageCheckSnapshot(input.RouteId, input.Legs, result, legNames, minimumName);
+            return (new PassageCheckSnapshot(input.RouteId, input.Legs, result, legNames, minimumName), profile, _engine);
         }
     }
 
@@ -364,9 +531,12 @@ internal sealed class PassageCheckService : IDisposable
             return new CheckInput(route.Id, named, route.Passage.Departure ?? routes.ViewTime.Current);
         }
 
-        public bool SameAs(CheckInput other)
+        public bool SameAs(CheckInput other) => Departure == other.Departure && SameLegs(other);
+
+        /// <summary>Same route, legs and vessel values; the departure may differ.</summary>
+        public bool SameLegs(CheckInput other)
         {
-            if (RouteId != other.RouteId || Departure != other.Departure || Legs.Count != other.Legs.Count)
+            if (RouteId != other.RouteId || Legs.Count != other.Legs.Count)
                 return false;
             for (var i = 0; i < Legs.Count; i++)
             {
@@ -380,5 +550,11 @@ internal sealed class PassageCheckService : IDisposable
 
             return true;
         }
+    }
+
+    /// <summary>What a departure sweep depends on: the legs and vessel values, and the loaded data.</summary>
+    private sealed record WindowKey(CheckInput Input, IReadOnlyList<LoadedDataset> Datasets)
+    {
+        public bool SameAs(WindowKey other) => ReferenceEquals(Datasets, other.Datasets) && Input.SameLegs(other.Input);
     }
 }

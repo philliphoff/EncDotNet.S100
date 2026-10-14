@@ -34,6 +34,36 @@ public sealed class PassageDepthProfile
     /// <summary>Total length of the passage in metres.</summary>
     public double TotalDistanceMeters => LegLengths.Count == 0 ? 0 : LegStartDistances[^1] + LegLengths[^1];
 
+    /// <summary>
+    /// The time range of the water-level series that cover any sample: from
+    /// the earliest first step to the latest last step (UTC), or <c>null</c>
+    /// when no series covers the route. This is the range the departure
+    /// window is swept over.
+    /// </summary>
+    /// <returns>The range, or <c>null</c>.</returns>
+    public (DateTime Start, DateTime End)? WaterLevelTimeRange()
+    {
+        DateTime? start = null;
+        DateTime? end = null;
+        foreach (var point in Points)
+        {
+            foreach (var series in point.Series)
+            {
+                if (start is null || series.Start < start)
+                {
+                    start = series.Start;
+                }
+
+                if (end is null || series.End > end)
+                {
+                    end = series.End;
+                }
+            }
+        }
+
+        return start is { } s && end is { } e ? (s, e) : null;
+    }
+
     internal IReadOnlyList<PassageLeg> Legs { get; }
 
     internal IReadOnlyList<ProfilePoint> Points { get; }

@@ -331,6 +331,27 @@ public sealed record DepartureOption(
 /// <param name="Options">One entry per departure, in time order.</param>
 public sealed record DepartureSweep(IReadOnlyList<DepartureOption> Options)
 {
+    /// <summary>The time between departures; <see cref="TimeSpan.Zero"/> when unknown.</summary>
+    public TimeSpan Step { get; init; }
+
+    /// <summary>
+    /// The departures whose arrival is after the water-level data ends: the
+    /// trailing run of <see cref="PassageVerdict.WaterLevelEndsBeforeArrival"/>
+    /// options, as a (first, last) pair, or <c>null</c> when the last
+    /// departure arrives within the data. These never meet your settings.
+    /// </summary>
+    /// <returns>The span, or <c>null</c>.</returns>
+    public (DateTimeOffset First, DateTimeOffset Last)? ArrivalAfterDataEnds()
+    {
+        var first = Options.Count;
+        while (first > 0 && Options[first - 1].Verdict == PassageVerdict.WaterLevelEndsBeforeArrival)
+        {
+            first--;
+        }
+
+        return first < Options.Count ? (Options[first].Departure, Options[^1].Departure) : null;
+    }
+
     /// <summary>
     /// The contiguous runs of departures that meet your settings, as
     /// (first, last) departure pairs.

@@ -26,7 +26,38 @@ internal sealed record CheckStateDto(
     [property: Description("The cursor's latitude; null when hidden.")] double? CursorLatitude,
     [property: Description("The cursor's longitude; null when hidden.")] double? CursorLongitude,
     [property: Description("The cursor's leg; null when hidden.")] int? CursorLeg,
-    [property: Description("The ETA at the cursor (UTC); null when hidden or without ETAs.")] DateTimeOffset? CursorEta);
+    [property: Description("The ETA at the cursor (UTC); null when hidden or without ETAs.")] DateTimeOffset? CursorEta,
+    [property: Description("The departure being checked (UTC): the route's departure, or the view time when it has none; null when Check passage is off.")] DateTimeOffset? Departure,
+    [property: Description("True when the route has no departure of its own, so the check uses the view time.")] bool DepartureIsViewTime,
+    [property: Description("The departure window swept across the S-104 range (the verdict card's window line and the Clearance tab's band); null when Check passage is off, before the first sweep, or when no S-104 covers the route.")] DepartureWindowDto? Window,
+    [property: Description("True while the departure window is being swept again (after a leg, vessel or dataset change); window, if present, is the previous sweep.")] bool WindowComputing);
+
+/// <summary>The departure window (#903).</summary>
+[Description("The departure window: departures swept across the S-104 range that covers the route, the runs that meet your settings, and the departures that arrive after the data ends.")]
+internal sealed record DepartureWindowDto(
+    [property: Description("First swept departure, UTC (the first whole step at or after the S-104 data starts).")] DateTimeOffset From,
+    [property: Description("Last swept departure, UTC (where the S-104 data ends).")] DateTimeOffset To,
+    [property: Description("Minutes between swept departures (5, or wider over a long forecast).")] double StepMinutes,
+    [property: Description("Runs of departures that meet your settings (tight ones included), in time order.")] IReadOnlyList<DepartureRangeDto> Windows,
+    [property: Description("The departures whose arrival is after the S-104 data ends (hatched on the band; never meeting your settings), or null.")] DepartureRangeDto? ArrivalAfterDataEnds,
+    [property: Description("True when the checked departure meets your settings and a window exists (\"This departure is inside the window\").")] bool InsideWindow,
+    [property: Description("The meeting departure nearest the checked one, which Depart {HH:MM} jumps to; null when the checked departure is inside or nothing meets.")] DateTimeOffset? NearestMeetingDeparture,
+    [property: Description("The verdict card's window line, e.g. \"Departures 05:35–06:40 meet your settings.\"")] string? Text,
+    [property: Description("The Depart button's label, e.g. \"Depart 06:40\"; null when it isn't shown.")] string? DepartButton);
+
+/// <summary>A run of swept departures.</summary>
+[Description("A run of swept departures, first to last inclusive.")]
+internal sealed record DepartureRangeDto(
+    [property: Description("First departure of the run, UTC.")] DateTimeOffset First,
+    [property: Description("Last departure of the run, UTC.")] DateTimeOffset Last);
+
+/// <summary>Request for <see cref="SetDepartureTool"/>.</summary>
+[Description("Request for set_departure: set the checked route's departure, or jump to the nearest departure that meets your settings.")]
+internal sealed record SetDepartureRequest(
+    [property: Description("The new departure (ISO-8601). Give this or nearestMeeting.")] DateTimeOffset? Departure = null,
+    [property: Description("True to jump to the meeting departure nearest the current one, as the verdict card's Depart {HH:MM} button does. Needs Check passage on.")] bool NearestMeeting = false,
+    [property: Description("Route to set; omit for the active route. nearestMeeting always uses the checked (active) route.")] string? RouteId = null,
+    [property: Description("Wait for the recomputed check (and window) before returning (default true).")] bool Wait = true);
 
 /// <summary>Request for <see cref="SetCheckModeTool"/>.</summary>
 [Description("Request for set_check_mode: turn Check passage on or off.")]
@@ -79,6 +110,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
         var current = check.IsActive ? check.Current : null;
         var result = current?.Result;
         var cursor = check.Cursor;
+        var window = current is null ? null : check.Window;
         return new CheckStateDto(
             check.IsActive,
             check.IsActive ? routes.Routes.ActiveRoute?.Id : null,
@@ -93,7 +125,26 @@ internal abstract class PassageCheckToolBase : RouteToolBase
             cursor?.Position.Latitude,
             cursor?.Position.Longitude,
             cursor?.LegIndex,
-            cursor?.Eta);
+            cursor?.Eta,
+            check.Departure,
+            check.IsActive && !check.HasRouteDeparture,
+            window is null || current is null || window.RouteId != current.RouteId ? null : Window(window, check),
+            check.IsActive && check.IsWindowComputing);
+    }
+
+    private static DepartureWindowDto Window(PassageDepartureWindow window, PassageCheckService check)
+    {
+        var line = DepartureWindowViewModel.Describe(check, TimeFormat.Utc);
+        return new DepartureWindowDto(
+            window.From,
+            window.To,
+            window.Step.TotalMinutes,
+            window.Windows.Select(w => new DepartureRangeDto(w.First, w.Last)).ToList(),
+            window.ArrivalAfterDataEnds is { } hatched ? new DepartureRangeDto(hatched.First, hatched.Last) : null,
+            line?.IsInside ?? false,
+            line?.Nearest,
+            line?.Text,
+            line?.DepartText);
     }
 
     private static string Verdict(PassageVerdict verdict) => verdict switch
@@ -199,6 +250,61 @@ internal sealed class SetPassageCursorTool : PassageCheckToolBase
     }
 }
 
+/// <summary>
+/// Sets the checked route's departure (#903), as dragging the Clearance
+/// tab's departure band or pressing the verdict card's Depart {HH:MM} does.
+/// One undoable edit.
+/// </summary>
+internal sealed class SetDepartureTool : PassageCheckToolBase
+{
+    public const string Name = "set_departure";
+
+    public SetDepartureTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check)
+        : base(routes, invoker, check) { }
+
+    public async Task<ToolResult<CheckStateDto>> InvokeAsync(SetDepartureRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        if ((request.Departure is null) == !request.NearestMeeting)
+            return ToolResult<CheckStateDto>.Err(new InvalidArgument("departure", "give either departure or nearestMeeting: true"));
+
+        if (request.NearestMeeting)
+        {
+            if (request.RouteId is not null)
+                return ToolResult<CheckStateDto>.Err(new InvalidArgument("routeId", "nearestMeeting uses the checked route; omit routeId"));
+            await SettleAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var error = await Invoker.InvokeAsync<ToolError?>(() =>
+        {
+            if (request.Departure is { } departure)
+            {
+                var route = Resolve(request.RouteId, out var notFound);
+                if (route is null)
+                    return notFound;
+                route.History.Execute(RouteEditLabels.EditPassage, () => route.SetDeparture(departure));
+                return null;
+            }
+
+            if (!Check.IsActive || Check.Current is not { } current)
+                return new InvalidArgument("nearestMeeting", "Check passage is off or has no result; turn it on with set_check_mode");
+            if (Check.Window is not { } window || window.RouteId != current.RouteId)
+                return new InvalidArgument("nearestMeeting", "there is no departure window: no S-104 covers the route");
+            if (window.NearestMeeting(current.Result.Departure) is not { } nearest)
+                return new InvalidArgument("nearestMeeting", "no departure in the S-104 range meets your settings");
+            Check.SetDeparture(nearest);
+            return null;
+        }).ConfigureAwait(false);
+        if (error is not null)
+            return ToolResult<CheckStateDto>.Err(error);
+
+        if (request.Wait)
+            await SettleAsync(cancellationToken).ConfigureAwait(false);
+        return await StateAsync().ConfigureAwait(false);
+    }
+}
+
 /// <summary>Wraps the Check passage tools as <see cref="McpServerTool"/>s.</summary>
 internal static class PassageCheckMcpAdapters
 {
@@ -239,7 +345,32 @@ internal static class PassageCheckMcpAdapters
             Name = GetCheckStateTool.Name,
             Description =
                 "Returns what Check passage is showing: on or off, whether a result is computing or stale, the verdict " +
-                "card's verdict and title, the minimum UKC, and the cursor (ghost vessel) position and ETA.",
+                "card's verdict and title, the minimum UKC, the cursor (ghost vessel) position and ETA, the departure " +
+                "being checked, and the departure window (the runs of departures that meet your settings, the departures " +
+                "that arrive after the S-104 data ends, the window line and the Depart button).",
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    public static McpServerTool Create(SetDepartureTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("The new departure (ISO-8601). Give this or nearestMeeting.")] DateTimeOffset? departure = null,
+            [Description("True to jump to the meeting departure nearest the current one, as the Depart {HH:MM} button does. Needs Check passage on.")] bool nearestMeeting = false,
+            [Description("Route to set; omit for the active route. Not allowed with nearestMeeting.")] string? routeId = null,
+            [Description("Wait for the recomputed check and window before returning (default true).")] bool wait = true,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetDepartureRequest(departure, nearestMeeting, routeId, wait), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetDepartureTool.Name,
+            Description =
+                "Sets the route's departure, as dragging the Clearance tab's departure band does, or with " +
+                "nearestMeeting jumps to the departure nearest the current one that meets your settings, as the " +
+                "verdict card's Depart {HH:MM} button does. One undoable edit (undo_route_edit). Returns the state " +
+                "get_check_state returns, including the departure window. Viewer-injected tool — mutates live state.",
             SerializerOptions = JsonOptions,
         });
     }
@@ -281,7 +412,28 @@ internal sealed record ClearanceStateDto(
     [property: Description("Draft + squat, formatted.")] string? DraftSquat,
     [property: Description("UKC at the readout, formatted.")] string? Ukc,
     [property: Description("The verdict words for the readout's state.")] string? State,
-    [property: Description("The Sources groups: title and lines.")] IReadOnlyList<ClearanceSourcesGroupDto> Sources);
+    [property: Description("The Sources groups: title and lines.")] IReadOnlyList<ClearanceSourcesGroupDto> Sources,
+    [property: Description("The departure band under the profile; null when there is no departure window.")] DepartureBandDto? DepartureBand);
+
+/// <summary>The Clearance tab's departure band (#903, D5).</summary>
+[Description("The departure band: runs of swept departures across the S-104 range, the knob at the current departure, and the axis labels.")]
+internal sealed record DepartureBandDto(
+    [property: Description("The current departure as shown beside the band, e.g. \"07:10\".")] string? Departure,
+    [property: Description("Where the knob sits across the band, 0 (left) to 1 (right); null without a departure.")] double? KnobFraction,
+    [property: Description("Start label (the first departure).")] string? StartLabel,
+    [property: Description("Middle label.")] string? MiddleLabel,
+    [property: Description("End label, e.g. \"12:00 · S-104 ends\".")] string? EndLabel,
+    [property: Description("True while the band is being swept again (dimmed).")] bool Stale,
+    [property: Description("The runs, left to right.")] IReadOnlyList<DepartureBandSegmentDto> Segments);
+
+/// <summary>A run on the departure band.</summary>
+[Description("A run of departures of one kind on the departure band.")]
+internal sealed record DepartureBandSegmentDto(
+    [property: Description("meets_settings (success), below_setting (destructive, 35 %), arrival_after_data_ends (hatched) or no_data (muted).")] string Kind,
+    [property: Description("First departure of the run, UTC.")] DateTimeOffset First,
+    [property: Description("Last departure of the run, UTC.")] DateTimeOffset Last,
+    [property: Description("Left edge across the band, 0–1.")] double Start,
+    [property: Description("Right edge across the band, 0–1.")] double End);
 
 /// <summary>One Sources group.</summary>
 internal sealed record ClearanceSourcesGroupDto(
@@ -358,7 +510,25 @@ internal sealed class ClearanceTools
         c.HasReadout ? c.DraftText : null,
         c.HasReadout ? c.UkcText : null,
         c.HasReadout ? c.StateText : null,
-        c.SourceGroups.Select(g => new ClearanceSourcesGroupDto(g.Title, g.Items)).ToList());
+        c.SourceGroups.Select(g => new ClearanceSourcesGroupDto(g.Title, g.Items)).ToList(),
+        c.HasBand
+            ? new DepartureBandDto(
+                c.DepartureText,
+                c.BandKnobFraction is { } f ? Math.Round(f, 4) : null,
+                c.BandStartLabel,
+                c.BandMiddleLabel,
+                c.BandEndLabel,
+                c.IsBandStale,
+                c.BandSegments.Select(s => new DepartureBandSegmentDto(BandKind(s.Kind), s.First, s.Last, Math.Round(s.Start, 4), Math.Round(s.End, 4))).ToList())
+            : null);
+
+    private static string BandKind(DepartureBandKind kind) => kind switch
+    {
+        DepartureBandKind.Meets => "meets_settings",
+        DepartureBandKind.Below => "below_setting",
+        DepartureBandKind.ArrivalAfterDataEnds => "arrival_after_data_ends",
+        _ => "no_data",
+    };
 
     public McpServerTool CreateGet()
     {
@@ -369,8 +539,10 @@ internal sealed class ClearanceTools
             Description =
                 "Returns what the Clearance tab (bottom dock, while Check passage is on) shows: the profile's axis " +
                 "(distance or time), whether Sources is open, the readout at the cursor (position, leg, charted depth " +
-                "and its source cell, water level and its station or grid and time step, draft + squat, UKC and state) " +
-                "and the Sources groups. Move the cursor with set_passage_cursor; open the tab with set_panel Clearance.",
+                "and its source cell, water level and its station or grid and time step, draft + squat, UKC and state), " +
+                "the Sources groups, and the departure band (runs of departures across the S-104 range, the knob and " +
+                "labels). Move the cursor with set_passage_cursor and the departure with set_departure; open the tab " +
+                "with set_panel Clearance.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

@@ -403,4 +403,60 @@ public class PassageCheckEngineTests
         Assert.Equal(full.Minimum!.ClearanceMeters, option.MinimumClearanceMeters!.Value, 9);
         Assert.Equal(full.MinutesBelow, option.MinutesBelow, 9);
     }
+
+    [Fact]
+    public void The_water_level_range_sweep_starts_at_a_whole_step_and_hatches_late_arrivals()
+    {
+        var origin = Fixture.Departure.UtcDateTime; // 06:00
+        var start = origin.AddMinutes(2);
+        var end = origin.AddHours(4);
+        var water = new FakeWater((_, _) => [new FakeSeries(start, end, _ => 3)]);
+        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(12)), water);
+        var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
+        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
+
+        Assert.Equal((start, end), profile.WaterLevelTimeRange());
+        var sweep = engine.SweepWaterLevelRange(profile, legs, TimeSpan.FromMinutes(5), cancellationToken: TestContext.Current.CancellationToken)!;
+
+        Assert.Equal(TimeSpan.FromMinutes(5), sweep.Step);
+        Assert.Equal(Fixture.Departure.AddMinutes(5), sweep.Options[0].Departure);
+        Assert.Equal(Fixture.Departure.AddHours(4), sweep.Options[^1].Departure);
+        Assert.Equal(48, sweep.Options.Count);
+
+        // The passage takes about an hour; departures arriving after 10:00 are the hatched tail.
+        var firstLate = sweep.Options.First(o => o.Arrival > new DateTimeOffset(end));
+        Assert.Equal((firstLate.Departure, Fixture.Departure.AddHours(4)), sweep.ArrivalAfterDataEnds());
+        Assert.All(sweep.Options.Where(o => o.Departure >= firstLate.Departure), o => Assert.False(o.MeetsSettings));
+        var window = Assert.Single(sweep.Windows());
+        Assert.Equal(Fixture.Departure.AddMinutes(5), window.First);
+        Assert.Equal(firstLate.Departure.AddMinutes(-5), window.Last);
+    }
+
+    [Fact]
+    public void A_long_water_level_range_widens_the_sweep_step()
+    {
+        var origin = Fixture.Departure.UtcDateTime;
+        var water = new FakeWater((_, _) => [new FakeSeries(origin.AddMinutes(2), origin.AddHours(4), _ => 3)]);
+        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(12)), water);
+        var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
+        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
+
+        var sweep = engine.SweepWaterLevelRange(profile, legs, TimeSpan.FromMinutes(5), maxDepartures: 10, TestContext.Current.CancellationToken)!;
+
+        Assert.Equal(TimeSpan.FromMinutes(30), sweep.Step);
+        Assert.Equal(Fixture.Departure.AddMinutes(30), sweep.Options[0].Departure);
+        Assert.InRange(sweep.Options.Count, 2, 10);
+    }
+
+    [Fact]
+    public void Without_water_level_coverage_there_is_no_range_to_sweep()
+    {
+        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(12)), new FakeWater((_, _) => []));
+        var legs = new[] { Fixture.Leg() };
+        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
+
+        Assert.Null(profile.WaterLevelTimeRange());
+        Assert.Null(engine.SweepWaterLevelRange(profile, legs, TimeSpan.FromMinutes(5), cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Throws<ArgumentOutOfRangeException>(() => engine.SweepWaterLevelRange(profile, legs, TimeSpan.Zero, cancellationToken: TestContext.Current.CancellationToken));
+    }
 }

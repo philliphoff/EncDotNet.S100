@@ -26,4 +26,13 @@ public partial class ClearanceView : UserControl
         if (double.IsFinite(data.X))
             vm.SetCursorAtX(data.X);
     }
+
+    // D5: dragging the departure band sets the route's departure, one undo step per drag.
+    private void OnBandDragStarted(object? sender, double fraction) => (DataContext as ClearanceViewModel)?.BeginDepartureDrag(fraction);
+
+    private void OnBandDragged(object? sender, double fraction) => (DataContext as ClearanceViewModel)?.DragDepartureTo(fraction);
+
+    private void OnBandDragCompleted(object? sender, EventArgs e) => (DataContext as ClearanceViewModel)?.EndDepartureDrag();
+
+    private void OnBandNudged(object? sender, int steps) => (DataContext as ClearanceViewModel)?.NudgeDeparture(steps);
 }

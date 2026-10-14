@@ -15,7 +15,9 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// east along the equator, 0,02° (about 1,2 NM) apart, run at 6 kn from
 /// 07:10, with an 11 m draft and 1 m required UKC. The S-102 grid is 15 m
 /// deep except a 9 m shoal on leg 6 → 7 (0,105–0,115° E), and the S-104 grid
-/// holds 0,5 m. Both declare LAT unless a test says otherwise.
+/// holds 0,5 m every 30 minutes from 06:00 to 12:00. Both declare LAT
+/// unless a test says otherwise; a test can pass its own tide
+/// (<see cref="HighWaterUntil0750"/>, <see cref="TwoHighWaters"/>).
 /// </summary>
 internal sealed class PassageCheckFixture
 {
@@ -29,9 +31,14 @@ internal sealed class PassageCheckFixture
         TimeSpan? debounce = null,
         Action<Action>? post = null,
         double? s101FallbackUntilLon = null,
+        Func<DateTime, float>? tide = null,
         IEnumerable<LoadedDataset>? extraDatasets = null)
     {
-        var datasets = new List<LoadedDataset> { Bathymetry(depthDatum, s101FallbackUntilLon), WaterLevel(waterEnd ?? WaterStart.AddHours(6)) };
+        var datasets = new List<LoadedDataset>
+        {
+            Bathymetry(depthDatum, s101FallbackUntilLon),
+            WaterLevel(waterEnd ?? WaterStart.AddHours(6), tide ?? (_ => 0.5f), tide is null ? TimeSpan.FromMinutes(30) : TimeSpan.FromMinutes(10)),
+        };
         if (s101FallbackUntilLon is not null)
             datasets.Add(FallbackCell());
         if (extraDatasets is not null)
@@ -55,6 +62,20 @@ internal sealed class PassageCheckFixture
     public Route Route { get; }
 
     public PassageCheckService Check { get; }
+
+    /// <summary>
+    /// A tide (10-minute steps) that clears the 9 m shoal by 1,5 m above the
+    /// 1 m setting until 07:50, then falls to 0,5 m by 08:00: departures up
+    /// to 06:40 cross the shoal in time and meet your settings, and 07:10
+    /// doesn't.
+    /// </summary>
+    public static float HighWaterUntil0750(DateTime t) => t <= WaterStart.AddMinutes(110) ? 4f : 0.5f;
+
+    /// <summary>
+    /// <see cref="HighWaterUntil0750"/> with a second high water of 4 m from
+    /// 09:30, so the departures that meet your settings form two windows.
+    /// </summary>
+    public static float TwoHighWaters(DateTime t) => t >= WaterStart.AddMinutes(210) ? 4f : HighWaterUntil0750(t);
 
     /// <summary>Turns check mode on and waits for the result.</summary>
     public async Task<PassageCheckSnapshot> CheckAsync()
@@ -126,13 +147,13 @@ internal sealed class PassageCheckFixture
             new S102CoverageData(new S102CoverageSource(dataset)));
     }
 
-    private static LoadedDataset WaterLevel(DateTime end)
+    private static LoadedDataset WaterLevel(DateTime end, Func<DateTime, float> tide, TimeSpan step)
     {
         var coverages = new List<WaterLevelCoverage>();
-        for (var t = WaterStart; t <= end; t = t.AddMinutes(30))
+        for (var t = WaterStart; t <= end; t += step)
         {
             var values = new WaterLevelValue[5 * 25];
-            Array.Fill(values, new WaterLevelValue(0.5f, 3));
+            Array.Fill(values, new WaterLevelValue(tide(t), 3));
             coverages.Add(new WaterLevelCoverage
             {
                 OriginLatitude = -0.02,

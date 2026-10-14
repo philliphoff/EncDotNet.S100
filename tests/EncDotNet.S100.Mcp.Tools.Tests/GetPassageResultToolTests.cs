@@ -148,6 +148,25 @@ public class GetPassageResultToolTests
     }
 
     [Fact]
+    public async Task Include_window_sweeps_the_s104_range_and_reports_the_late_arrivals()
+    {
+        var value = await Ok(new GetPassageResultTool(Catalog()), new GetPassageResultRequest(
+            Polyline: Polyline, DraftMeters: 10, SpeedKnots: 6, RequiredUkcMeters: 3, Departure: Midnight, IncludeWindow: true));
+
+        var window = Assert.IsType<PassageWindowSummary>(value.Window);
+        Assert.Equal(5, window.StepMinutes);
+        Assert.Equal(Midnight.AddHours(2), window.To);
+        Assert.Equal((int)((window.To - window.From).TotalMinutes / 5) + 1, window.Departures.Count);
+
+        // The passage takes about 14 minutes and the data ends at 02:00.
+        var late = Assert.IsType<PassageWindowRangeSummary>(window.ArrivalAfterDataEnds);
+        Assert.Equal(window.To, late.Last);
+        Assert.InRange(late.First, Midnight.AddMinutes(100), Midnight.AddMinutes(110));
+        Assert.All(window.Departures.Where(d => d.Departure >= late.First), d => Assert.Equal("water_level_ends_before_arrival", d.Verdict));
+        Assert.True(window.Windows[^1].Last < late.First);
+    }
+
+    [Fact]
     public async Task A_polyline_needs_a_draft()
     {
         var error = await Err(new GetPassageResultTool(Catalog()), new GetPassageResultRequest(Polyline: Polyline));

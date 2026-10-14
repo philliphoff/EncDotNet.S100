@@ -25,6 +25,7 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="WindowFrom">With <paramref name="WindowTo"/>, sweep departures over this range to find the departure window.</param>
 /// <param name="WindowTo">The last departure of the sweep.</param>
 /// <param name="WindowStepMinutes">Minutes between swept departures.</param>
+/// <param name="IncludeWindow">Without <paramref name="WindowFrom"/> and <paramref name="WindowTo"/>, sweep departures across the S-104 range that covers the passage.</param>
 public sealed record GetPassageResultRequest(
     [property: Description("Id of a host route to check (viewer only). Omit, with no polyline, for the active route.")] string? RouteId = null,
     [property: Description("A passage given directly: each pair of consecutive vertices is a leg. Takes precedence over routeId.")] GeoPolyline? Polyline = null,
@@ -39,7 +40,8 @@ public sealed record GetPassageResultRequest(
     [property: Description("Most samples to return when includeSamples is set (default 500); extra samples are thinned, keeping the tightest of each run.")] int MaxSamples = 500,
     [property: Description("With windowTo, sweep departures from this time to find the departure window.")] DateTimeOffset? WindowFrom = null,
     [property: Description("Last departure of the sweep (inclusive).")] DateTimeOffset? WindowTo = null,
-    [property: Description("Minutes between swept departures (default 5).")] int WindowStepMinutes = 5);
+    [property: Description("Minutes between swept departures (default 5).")] int WindowStepMinutes = 5,
+    [property: Description("Sweep departures across the whole S-104 time range that covers the passage, as SoundCharts' departure band does: from the first whole step after the data starts to where it ends. Ignored when windowFrom and windowTo are set. Over a long forecast the step widens to keep the sweep under 2000 departures.")] bool IncludeWindow = false);
 
 /// <summary>Result of <see cref="GetPassageResultTool"/>.</summary>
 public sealed record GetPassageResultResult(
@@ -61,7 +63,7 @@ public sealed record GetPassageResultResult(
     [property: Description("Datasets, stations and datums behind the result.")] PassageSourcesSummary Sources,
     [property: Description("Per-sample values; present only when includeSamples is set.")] IReadOnlyList<PassageSampleSummary>? Samples,
     [property: Description("True when samples were thinned to maxSamples.")] bool? SamplesThinned,
-    [property: Description("The departure sweep; present only when windowFrom and windowTo are set.")] PassageWindowSummary? Window,
+    [property: Description("The departure sweep; present only when windowFrom and windowTo, or includeWindow, are set (and, for includeWindow, some S-104 covers the passage).")] PassageWindowSummary? Window,
     [property: Description("Disclaimer to show once with the verdict.")] string Disclaimer);
 
 /// <summary>The smallest margin over the required UKC.</summary>
@@ -158,6 +160,7 @@ public sealed record PassageWindowSummary(
     [property: Description("Minutes between departures.")] int StepMinutes,
     [property: Description("Runs of departures that meet your settings.")] IReadOnlyList<PassageWindowRangeSummary> Windows,
     [property: Description("The meeting departure nearest the requested departure; null when none meets.")] DateTimeOffset? NearestMeetingDeparture,
+    [property: Description("The trailing run of departures whose arrival is after the S-104 data ends (verdict water_level_ends_before_arrival; never meeting); null when the last departure arrives within the data.")] PassageWindowRangeSummary? ArrivalAfterDataEnds,
     [property: Description("One entry per swept departure.")] IReadOnlyList<PassageDepartureSummary> Departures);
 
 /// <summary>A run of departures that meet your settings.</summary>
@@ -236,6 +239,8 @@ public sealed class GetPassageResultTool
     private readonly IDatasetCatalog _catalog;
     private readonly ICrsTransformFactory _transforms;
     private readonly IPassageRouteProvider? _routes;
+    private const int MaxWindowDepartures = 2000;
+
     private readonly SemaphoreSlim _run = new(1, 1);
     private IReadOnlyList<LoadedDataset>? _cachedSnapshot;
     private PassageDataSources? _cachedSources;
@@ -363,7 +368,12 @@ public sealed class GetPassageResultTool
             if (request.WindowFrom is { } from && request.WindowTo is { } to)
             {
                 var sweep = engine.SweepDepartures(profile, legs, from, to, TimeSpan.FromMinutes(request.WindowStepMinutes), cancellationToken);
-                window = Window(sweep, from, to, request.WindowStepMinutes, departure);
+                window = Window(sweep, departure);
+            }
+            else if (request.IncludeWindow
+                && engine.SweepWaterLevelRange(profile, legs, TimeSpan.FromMinutes(request.WindowStepMinutes), MaxWindowDepartures, cancellationToken) is { Options.Count: > 0 } sweep)
+            {
+                window = Window(sweep, departure);
             }
         }
         catch (ArgumentException ex)
@@ -394,8 +404,10 @@ public sealed class GetPassageResultTool
         {
             if (t < f) return new InvalidArgument("windowTo", "must not be before windowFrom");
             if (request.WindowStepMinutes < 1) return new InvalidArgument("windowStepMinutes", "must be at least 1");
-            if ((t - f).TotalMinutes / request.WindowStepMinutes > 2000) return new InvalidArgument("windowStepMinutes", "the sweep would exceed 2000 departures");
+            if ((t - f).TotalMinutes / request.WindowStepMinutes > MaxWindowDepartures) return new InvalidArgument("windowStepMinutes", "the sweep would exceed 2000 departures");
         }
+
+        if (request.IncludeWindow && request.WindowStepMinutes < 1) return new InvalidArgument("windowStepMinutes", "must be at least 1");
 
         return null;
     }
@@ -597,12 +609,13 @@ public sealed class GetPassageResultTool
 
     private static PassageDatumReference Datum(int code) => new(code, VerticalDatums.GetLabel(code));
 
-    private static PassageWindowSummary Window(DepartureSweep sweep, DateTimeOffset from, DateTimeOffset to, int step, DateTimeOffset departure) => new(
-        from,
-        to,
-        step,
+    private static PassageWindowSummary Window(DepartureSweep sweep, DateTimeOffset departure) => new(
+        sweep.Options.Count > 0 ? sweep.Options[0].Departure : departure,
+        sweep.Options.Count > 0 ? sweep.Options[^1].Departure : departure,
+        (int)Math.Round(sweep.Step.TotalMinutes),
         sweep.Windows().Select(w => new PassageWindowRangeSummary(w.First, w.Last)).ToList(),
         sweep.NearestMeeting(departure)?.Departure,
+        sweep.ArrivalAfterDataEnds() is { } hatched ? new PassageWindowRangeSummary(hatched.First, hatched.Last) : null,
         sweep.Options.Select(o => new PassageDepartureSummary(
             o.Departure, o.Arrival, Verdict(o.Verdict), Round(o.MinimumClearanceMeters), Math.Round(o.MinutesBelow, 1))).ToList());
 

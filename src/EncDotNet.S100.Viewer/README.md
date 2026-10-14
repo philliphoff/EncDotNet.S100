@@ -855,7 +855,11 @@ loaded S-104. While it's on:
   A legend sits at the bottom left. A ring and a pill mark the minimum UKC,
   and a ghost vessel marks the cursor.
 - **The panel** shows a verdict card instead of the waypoint list. The card has
-  the verdict, the minimum UKC, where and when it occurs, and the sources.
+  the verdict, the minimum UKC, where and when it occurs, and the sources. Its
+  window line lists the departures that meet your settings, such as
+  "Departures 05:35–06:40 meet your settings". When the current departure is
+  outside them, **Depart {HH:MM}** moves it to the nearest one that meets
+  them.
   Below it, **Legs** lists each leg with its times and a min-UKC chip;
   hovering a leg moves the cursor to it.
   **Findings** lists what to look at, grouped **MUST REVIEW**, **CHECK** and
@@ -880,6 +884,14 @@ loaded S-104. While it's on:
   **Sources** lists every dataset, datum and gap behind the result. Hovering
   the profile moves the ghost vessel, and hovering the route on the map moves
   the profile's cursor.
+
+  Under the profile, the **Departure** band sweeps departures every 5 minutes
+  across the loaded S-104 time range. Departures that meet your settings are
+  green, those below your UKC setting are red, and those that arrive after the
+  S-104 data ends are hatched. A knob marks the current departure. Drag the
+  band, or press Left and Right, to set the departure: the check recomputes as
+  you drag, and one drag is one undo step. Over a forecast longer than about
+  three days, the band's step widens so it stays quick.
 
 Editing recomputes live: the route draws grey and dashed, and the verdict
 dims, until the new result arrives. Turning Check passage off restores the

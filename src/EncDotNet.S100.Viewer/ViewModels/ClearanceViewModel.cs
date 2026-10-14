@@ -30,7 +30,8 @@ internal sealed record ClearanceSourceGroup(string Title, IReadOnlyList<string> 
 /// clearance profile along the checked route, its readout at the cursor and
 /// the Sources disclosure, projected from <see cref="PassageCheckService"/>.
 /// The cursor is the service's, so the profile, the leg rows and the map
-/// ghost stay linked.
+/// ghost stay linked. Under the profile, the departure band (#903, D5) shows
+/// the departure window; dragging it sets the route's departure.
 /// </summary>
 internal sealed class ClearanceViewModel : ViewModelBase
 {
@@ -42,6 +43,9 @@ internal sealed class ClearanceViewModel : ViewModelBase
     private PassageCheckSnapshot? _shown;
     private ClearanceAxis _axis = ClearanceAxis.Distance;
     private readonly RectangularSection _cursorSection;
+    private DepartureBand? _band;
+    private PassageDepartureWindow? _shownWindow;
+    private IDisposable? _departureGesture;
 
     public ClearanceViewModel(
         PassageCheckService check,
@@ -283,6 +287,146 @@ internal sealed class ClearanceViewModel : ViewModelBase
     /// <summary>The sample the readout describes.</summary>
     public UkcSample? ReadoutSample { get; private set; }
 
+    // ── Departure band (D5) ─────────────────────────────────────────
+
+    private bool _hasBand;
+    /// <summary>Whether the departure band shows (a sweep over S-104 exists).</summary>
+    public bool HasBand
+    {
+        get => _hasBand;
+        private set => SetProperty(ref _hasBand, value);
+    }
+
+    private IReadOnlyList<DepartureBandSegment> _bandSegments = [];
+    /// <summary>The band's runs of departures.</summary>
+    public IReadOnlyList<DepartureBandSegment> BandSegments
+    {
+        get => _bandSegments;
+        private set => SetProperty(ref _bandSegments, value);
+    }
+
+    private double? _bandKnobFraction;
+    /// <summary>Where the knob (the current departure) sits across the band, 0–1.</summary>
+    public double? BandKnobFraction
+    {
+        get => _bandKnobFraction;
+        private set => SetProperty(ref _bandKnobFraction, value);
+    }
+
+    private string? _departureText;
+    /// <summary>The current departure, HH:MM, beside the band.</summary>
+    public string? DepartureText
+    {
+        get => _departureText;
+        private set => SetProperty(ref _departureText, value);
+    }
+
+    private string? _bandStartLabel;
+    public string? BandStartLabel
+    {
+        get => _bandStartLabel;
+        private set => SetProperty(ref _bandStartLabel, value);
+    }
+
+    private string? _bandMiddleLabel;
+    public string? BandMiddleLabel
+    {
+        get => _bandMiddleLabel;
+        private set => SetProperty(ref _bandMiddleLabel, value);
+    }
+
+    private string? _bandEndLabel;
+    /// <summary>"12:00 · S-104 ends".</summary>
+    public string? BandEndLabel
+    {
+        get => _bandEndLabel;
+        private set => SetProperty(ref _bandEndLabel, value);
+    }
+
+    private bool _isBandStale;
+    /// <summary>Whether the band is being swept again for changed legs (dimmed).</summary>
+    public bool IsBandStale
+    {
+        get => _isBandStale;
+        private set
+        {
+            if (SetProperty(ref _isBandStale, value))
+                OnPropertyChanged(nameof(BandOpacity));
+        }
+    }
+
+    public double BandOpacity => IsBandStale ? 0.45 : 1.0;
+
+    /// <summary>The band model, or <c>null</c> when there is no band.</summary>
+    public DepartureBand? Band => _band;
+
+    /// <summary>Starts a departure drag at a fraction of the band: one undo step until <see cref="EndDepartureDrag"/>.</summary>
+    public void BeginDepartureDrag(double fraction)
+    {
+        if (_band is null)
+            return;
+        _departureGesture?.Dispose();
+        _departureGesture = _check.BeginDepartureGesture();
+        DragDepartureTo(fraction);
+    }
+
+    /// <summary>Sets the departure to the swept departure under a fraction of the band, recomputing live.</summary>
+    public void DragDepartureTo(double fraction)
+    {
+        if (_band is { } band)
+            SetDeparture(band.DepartureAt(fraction));
+    }
+
+    /// <summary>Ends a departure drag, closing its undo step.</summary>
+    public void EndDepartureDrag()
+    {
+        _departureGesture?.Dispose();
+        _departureGesture = null;
+    }
+
+    /// <summary>Moves the departure by a number of swept departures (arrow keys).</summary>
+    public void NudgeDeparture(int steps)
+    {
+        if (_band is { } band && _check.Departure is { } departure)
+            SetDeparture(band.Nudge(departure, steps));
+    }
+
+    private void SetDeparture(DateTimeOffset departure)
+    {
+        if (_check.Departure == departure && _check.HasRouteDeparture)
+            return;
+        _check.SetDeparture(departure);
+    }
+
+    private void UpdateBand(bool force)
+    {
+        var window = _check.IsActive && _check.Current is { } current && _check.Window is { } w && w.RouteId == current.RouteId ? w : null;
+        if (force || !ReferenceEquals(window, _shownWindow))
+        {
+            _shownWindow = window;
+            _band = window is null ? null : DepartureBand.Build(window);
+            HasBand = _band is not null;
+            BandSegments = _band?.Segments ?? [];
+            if (_band is { } band)
+            {
+                BandStartLabel = Time(band.From, band.From);
+                BandMiddleLabel = Time(band.Middle, band.From);
+                BandEndLabel = string.Format(CultureInfo.CurrentCulture, Strings.Clearance_BandEndFormat, Time(band.To, band.From));
+            }
+            else
+            {
+                BandStartLabel = BandMiddleLabel = BandEndLabel = null;
+            }
+        }
+
+        IsBandStale = _band is not null && _check.IsWindowComputing;
+        var departure = _check.Departure;
+        BandKnobFraction = _band is { } b && departure is { } d ? b.Fraction(d) : null;
+        DepartureText = departure is { } dep ? Time(dep, dep) : null;
+    }
+
+    private string Time(DateTimeOffset t, DateTimeOffset reference) => PassageFormatting.FormatEta(t, reference, TimeFormat);
+
     // ── Sources (D6) ────────────────────────────────────────────────
 
     private bool _isSourcesOpen;
@@ -314,6 +458,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
         if (!ReferenceEquals(snapshot, _shown))
             Rebuild(force: false);
         UpdateCursor();
+        UpdateBand(force: false);
     }
 
     private DepthUnit DepthUnit => _mariner?.Current.DepthUnit ?? DepthUnit.Metres;
@@ -336,6 +481,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
             Sections = [];
             SourceGroups.Clear();
             UpdateCursor();
+            UpdateBand(force);
             return;
         }
 
@@ -355,6 +501,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
         BuildChart(profile);
         BuildSources(snapshot);
         UpdateCursor();
+        UpdateBand(force);
     }
 
     private void BuildChart(ClearanceProfile profile)
