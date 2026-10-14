@@ -324,6 +324,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
             return signature.Status switch
             {
                 SecomSignatureStatus.Unsupported => "not checked (unknown algorithm)",
+                SecomSignatureStatus.Encrypted => "not checked (data encrypted)",
                 SecomSignatureStatus.Unsigned => "unsigned",
                 _ => "invalid",
             };

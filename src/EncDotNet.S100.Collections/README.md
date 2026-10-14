@@ -181,7 +181,9 @@ and `Get`, using `SecomClient`:
 - The last listing is kept on disk, so an unreachable service still lists what
   it last offered. `DescribeAsync` counts objects per product, for choosing a
   filter.
-- Encrypted data objects aren't supported.
+- Encrypted data objects aren't supported. `SecomSignatureVerifier` reports
+  their signature as `Encrypted` rather than checking it, because the
+  signature covers the data before encryption.
 
 ## SECOM trust, identity and registry
 
