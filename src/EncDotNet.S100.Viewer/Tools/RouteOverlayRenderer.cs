@@ -110,7 +110,13 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             if (scene.Check is { } check)
             {
                 DrawCheckMarkers(canvas, check, ToScreen, (float)viewport.Rotation, opacity);
-                DrawLegend(canvas, check, (float)viewport.Height, opacity);
+                var legendTop = DrawLegend(canvas, check, (float)viewport.Height, opacity);
+                if (check.Finding is { } finding)
+                {
+                    DrawFindingOutline(canvas, finding, check.Colors, ToScreen, opacity);
+                    var scale = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
+                    DrawFindingChip(canvas, finding, check.Colors, scale, legendTop, opacity);
+                }
             }
         }
         return true;
@@ -344,7 +350,8 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
     /// <summary>Space below the legend, clear of the Time HUD (36 px tall, 12 px up).</summary>
     private const float LegendBottomMargin = 60f;
 
-    private static void DrawLegend(SKCanvas canvas, RouteCheckOverlay check, float height, float opacity)
+    /// <returns>The legend's top edge, so the finding chip can sit above it.</returns>
+    private static float DrawLegend(SKCanvas canvas, RouteCheckOverlay check, float height, float opacity)
     {
         // C7: "UKC AT ETA" with four swatches at the map's bottom left.
         var colors = check.Colors;
@@ -380,6 +387,112 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             canvas.DrawLine(rect.Left + 10f, y, rect.Left + 28f, y, swatch);
             canvas.DrawText(items[i].Label, rect.Left + 34f, y + 3.5f, SKTextAlign.Left, font, ink);
         }
+
+        return rect.Top;
+    }
+
+    /// <summary>Half the width of the corridor outlined around a selected finding's span, in pixels.</summary>
+    internal const float FindingOutlineHalfWidth = 14f;
+
+    /// <summary>Radius of the circle outlined around a selected point finding, in pixels.</summary>
+    internal const float FindingOutlineRadius = 22f;
+
+    private static void DrawFindingOutline(SKCanvas canvas, RouteCheckOverlay.FindingFocus finding, RouteCheckColors colors, Func<GeoPosition, Point?> toScreen, float opacity)
+    {
+        // F3: the finding's area outlined dashed in its tone, over a casing.
+        using var casing = Stroke(colors.Casing.WithAlpha(Alpha(0.8f * opacity)), 4f);
+        using var dash = Stroke(finding.Tone.WithAlpha(Alpha(opacity)), 1.6f);
+        dash.PathEffect = SKPathEffect.CreateDash([5f, 3f], 0);
+
+        var points = Project(finding.Path, toScreen);
+        if (points.Count == 0)
+            return;
+        var minX = points.Min(p => p.X);
+        var maxX = points.Max(p => p.X);
+        var minY = points.Min(p => p.Y);
+        var maxY = points.Max(p => p.Y);
+        if (points.Count == 1 || (maxX - minX < FindingOutlineRadius && maxY - minY < FindingOutlineRadius))
+        {
+            var (cx, cy) = ((float)((minX + maxX) / 2), (float)((minY + maxY) / 2));
+            canvas.DrawCircle(cx, cy, FindingOutlineRadius, casing);
+            canvas.DrawCircle(cx, cy, FindingOutlineRadius, dash);
+            return;
+        }
+
+        // A span: the outline of a corridor along the route.
+        using var line = new SKPath();
+        line.MoveTo((float)points[0].X, (float)points[0].Y);
+        for (var i = 1; i < points.Count; i++)
+            line.LineTo((float)points[i].X, (float)points[i].Y);
+        using var widen = new SKPaint
+        {
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = FindingOutlineHalfWidth * 2,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round,
+        };
+        using var outline = new SKPath();
+        widen.GetFillPath(line, outline);
+        using var simple = outline.Simplify() ?? outline;
+        canvas.DrawPath(simple, casing);
+        canvas.DrawPath(simple, dash);
+    }
+
+    private static void DrawFindingChip(SKCanvas canvas, RouteCheckOverlay.FindingFocus finding, RouteCheckColors colors, string scale, float legendTop, float opacity)
+    {
+        // F3: "Zoomed to finding · leg 6 → 7 · 1:31 300", above the legend.
+        var text = string.IsNullOrEmpty(scale) ? finding.ChipText : finding.ChipText + " · " + scale;
+        using var font = new SKFont(LabelTypeface, LabelFontSize);
+        var runs = FallbackRuns(text, font);
+        var rect = SKRect.Create(12f, legendTop - 8f - 26f, runs.Sum(r => r.Width) + 20f, 26f);
+        using var fill = Fill(colors.PillFill.WithAlpha(Alpha(0.92f * opacity)));
+        using var edge = Stroke(colors.NoData.WithAlpha(Alpha(0.5f * opacity)), 1f);
+        canvas.DrawRoundRect(rect, 8f, 8f, fill);
+        canvas.DrawRoundRect(rect, 8f, 8f, edge);
+        using var ink = Fill(colors.Ink.WithAlpha(Alpha(0.8f * opacity)));
+        var baseline = rect.MidY - ((font.Metrics.Ascent + font.Metrics.Descent) / 2f);
+        var x = rect.Left + 10f;
+        foreach (var run in runs)
+        {
+            canvas.DrawText(run.Text, x, baseline, SKTextAlign.Left, run.Font, ink);
+            x += run.Width;
+            if (!ReferenceEquals(run.Font, font))
+                run.Font.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Splits <paramref name="text"/> into runs the label face can draw and
+    /// runs in a platform fallback face (the label faces have no "→").
+    /// </summary>
+    private static List<(string Text, SKFont Font, float Width)> FallbackRuns(string text, SKFont font)
+    {
+        var runs = new List<(string, SKFont, float)>();
+        var start = 0;
+        SKTypeface? current = null;
+        void Flush(int end)
+        {
+            if (end <= start)
+                return;
+            var part = text[start..end];
+            var runFont = current is null ? font : new SKFont(current, font.Size);
+            runs.Add((part, runFont, runFont.MeasureText(part)));
+        }
+
+        for (var i = 0; i < text.Length; i += char.IsSurrogatePair(text, i) ? 2 : 1)
+        {
+            var cp = char.ConvertToUtf32(text, i);
+            var face = font.Typeface.ContainsGlyph(cp) ? null : SKFontManager.Default.MatchCharacter(cp);
+            if (!ReferenceEquals(face, current) && (face is null || current is null || face.FamilyName != current.FamilyName))
+            {
+                Flush(i);
+                start = i;
+                current = face;
+            }
+        }
+
+        Flush(text.Length);
+        return runs;
     }
 
     private static List<Point> Project(IReadOnlyList<GeoPosition> path, Func<GeoPosition, Point?> toScreen)

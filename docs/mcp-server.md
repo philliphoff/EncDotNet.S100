@@ -279,6 +279,8 @@ revert a drag on the map and Ctrl+Z (⌘Z) can revert a tool's edit.
 | `set_passage_cursor` | Yes | Moves the Check passage cursor and the ghost vessel to `distanceNm` along the checked route, as hovering a leg row does, or hides them when `distanceNm` is omitted. Returns the state, including the cursor's position and ETA. |
 | `get_clearance_state` | No | Returns what the **Clearance** tab shows while Check passage is on: the profile's `axis` (`distance` or `time`), `canShowTime`, `sourcesOpen`, and the readout at the cursor (`readoutSample`, the sample index in `get_passage_result`; `readoutPosition`, `readoutLeg`, `depth` and `depthSource` with its cell, `waterLevel` and `waterLevelSource` with its station or grid and time step, `draftSquat`, `ukc` and `state`). It also returns the `sources` groups. Without a cursor, the readout describes the minimum. Open the tab with `set_panel` `Clearance`. |
 | `set_clearance_view` | Yes | Sets the Clearance profile's `axis` (`distance` or `time`; time needs ETAs) and opens or closes Sources (`sourcesOpen`), as the tab's header controls do. The cursor stays on the same sample. Returns what `get_clearance_state` returns. |
+| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check passage mode: `count`, the counts per group (`mustReview`, `check`, `info`), `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, `data.s111_forecast_expired`), its `group` (`must_review`, `check` or `info`), its `source` (`clearance`, `route_check`, `s124`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), and a `feature` reference (dataset and feature id) when one is behind it. Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs a draft. |
+| `select_finding` | Yes | Selects the finding `id` in the checked route's list, as clicking its row does: the map zooms to it (unless `zoom: false`) and outlines it dashed in its tone with the chip "Zoomed to finding · leg 6 → 7 · 1:31 300", and the profile cursor and ghost vessel move to it. Omit `id` to clear the selection. Needs Check passage on. Returns what `get_findings` returns. |
 
 A typical sequence:
 
@@ -295,6 +297,8 @@ A typical sequence:
 5. `get_route` or `list_routes` reads back the result.
 6. `set_check_mode` turns on Check passage to see the verdict on the map and
    in the panel, and `get_passage_result` returns the numbers behind it.
+7. `get_findings` lists what to review, check or note along the route, and
+   `select_finding` zooms the map to one and moves the profile cursor there.
 
 ### Test tools
 

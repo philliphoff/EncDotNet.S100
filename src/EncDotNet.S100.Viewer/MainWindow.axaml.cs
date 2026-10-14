@@ -45,6 +45,7 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
     private EncDotNet.S100.Viewer.Services.RoutesService? _routeStore;
     private EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? _passageCheck;
+    private EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? _routeFindings;
     private IMarinerSettingsProvider? _routeMariner;
     private ITimeFormatProvider? _routeTimeFormat;
     private readonly List<IDisposable> _dynamicSourceRegistrations = new();
@@ -1036,6 +1037,11 @@ public partial class MainWindow : ShadUI.Window
             MapControl.AddHandler(PointerMovedEvent, OnMapPointerMovedForCheck, RoutingStrategies.Tunnel, handledEventsToo: true);
         }
 
+        // #905: the selected finding is outlined on the map with its chip.
+        _routeFindings = App.Services.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>();
+        if (_routeFindings is not null)
+            _routeFindings.Changed += OnRouteStoreChanged;
+
         RebuildRouteOverlay();
     }
 
@@ -1095,7 +1101,8 @@ public partial class MainWindow : ShadUI.Window
                 _passageCheck?.Cursor,
                 _routeAppearance.Current,
                 _routeMariner?.Current.DepthUnit ?? EncDotNet.S100.Pipelines.DepthUnit.Metres,
-                _routeTimeFormat?.Current ?? TimeFormat.Local));
+                _routeTimeFormat?.Current ?? TimeFormat.Local,
+                _routeFindings?.Selected));
         _mapHost.RequestRedraw();
     }
 

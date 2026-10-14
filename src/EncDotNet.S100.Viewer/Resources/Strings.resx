@@ -4748,8 +4748,116 @@
   <data name="Check_TabFindingsFormat" xml:space="preserve">
     <value>Findings {0}</value>
   </data>
-  <data name="Check_FindingsPlaceholder" xml:space="preserve">
-    <value>Findings for this route will be listed here.</value>
+  <data name="Findings_Empty" xml:space="preserve">
+    <value>No findings for this route.</value>
+  </data>
+  <data name="Findings_GroupMustReview" xml:space="preserve">
+    <value>MUST REVIEW</value>
+  </data>
+  <data name="Findings_GroupCheck" xml:space="preserve">
+    <value>CHECK</value>
+  </data>
+  <data name="Findings_GroupInfo" xml:space="preserve">
+    <value>INFO</value>
+  </data>
+  <data name="Findings_TagClearance" xml:space="preserve">
+    <value>Clearance</value>
+  </data>
+  <data name="Findings_TagRouteCheck" xml:space="preserve">
+    <value>Route check</value>
+  </data>
+  <data name="Findings_TagS124" xml:space="preserve">
+    <value>S-124</value>
+  </data>
+  <data name="Findings_TagConfidence" xml:space="preserve">
+    <value>Confidence</value>
+  </data>
+  <data name="Findings_TagData" xml:space="preserve">
+    <value>Data</value>
+  </data>
+  <data name="Findings_BelowMinutesFormat" xml:space="preserve">
+    <value>Below your UKC setting for {0} min</value>
+  </data>
+  <data name="Findings_BelowDistanceFormat" xml:space="preserve">
+    <value>Below your UKC setting for {0:0.0} NM</value>
+  </data>
+  <data name="Findings_MinAtFormat" xml:space="preserve">
+    <value>min {0} at {1}</value>
+  </data>
+  <data name="Findings_MinFormat" xml:space="preserve">
+    <value>min {0}</value>
+  </data>
+  <data name="Findings_LegsFormat" xml:space="preserve">
+    <value>Legs {0} → {1}</value>
+  </data>
+  <data name="Findings_S101Only" xml:space="preserve">
+    <value>Charted depth from S-101 only</value>
+  </data>
+  <data name="Findings_OutsideS102Format" xml:space="preserve">
+    <value>{0:0.0} NM outside S-102 coverage</value>
+  </data>
+  <data name="Findings_DatumUnconfirmed" xml:space="preserve">
+    <value>Datums can't be confirmed to agree</value>
+  </data>
+  <data name="Findings_DatumUnconfirmedMetaFormat" xml:space="preserve">
+    <value>{0:0.0} NM · a depth or water-level datum isn't declared</value>
+  </data>
+  <data name="Findings_WaterLevelEnds" xml:space="preserve">
+    <value>Water-level data ends before arrival</value>
+  </data>
+  <data name="Findings_WaterLevelStartsLate" xml:space="preserve">
+    <value>Water-level data starts after departure</value>
+  </data>
+  <data name="Findings_FromFormat" xml:space="preserve">
+    <value>from {0}</value>
+  </data>
+  <data name="Findings_TideNotAppliedForFormat" xml:space="preserve">
+    <value>tide not applied for {0:0.0} NM</value>
+  </data>
+  <data name="Findings_TideNotApplied" xml:space="preserve">
+    <value>tide not applied</value>
+  </data>
+  <data name="Findings_NoWaterLevelCoverage" xml:space="preserve">
+    <value>Outside water-level coverage</value>
+  </data>
+  <data name="Findings_WaterLevelNoData" xml:space="preserve">
+    <value>No water-level value</value>
+  </data>
+  <data name="Findings_DatumMismatch" xml:space="preserve">
+    <value>Water-level datum differs from the chart datum</value>
+  </data>
+  <data name="Findings_NoChartedDepth" xml:space="preserve">
+    <value>No charted depth</value>
+  </data>
+  <data name="Findings_NoDepthSource" xml:space="preserve">
+    <value>no S-102 or S-101 coverage</value>
+  </data>
+  <data name="Findings_ForecastExpired" xml:space="preserve">
+    <value>S-111 forecast run has expired</value>
+  </data>
+  <data name="Findings_ForecastsExpiredFormat" xml:space="preserve">
+    <value>{0} S-111 forecast runs have expired</value>
+  </data>
+  <data name="Findings_ForecastExpiredMetaFormat" xml:space="preserve">
+    <value>{0} · currents shown for reference; not used in ETAs</value>
+  </data>
+  <data name="Findings_AndMoreFormat" xml:space="preserve">
+    <value>{0} and {1} more</value>
+  </data>
+  <data name="Findings_ZoomedChip" xml:space="preserve">
+    <value>Zoomed to finding</value>
+  </data>
+  <data name="Findings_ChipLegFormat" xml:space="preserve">
+    <value>leg {0} → {1}</value>
+  </data>
+  <data name="Findings_ChipLegsFormat" xml:space="preserve">
+    <value>legs {0} → {1}</value>
+  </data>
+  <data name="Tooltip_FindingRow" xml:space="preserve">
+    <value>Zoom the map to this finding and move the profile cursor there.</value>
+  </data>
+  <data name="Tooltip_FindingRowNoPlace" xml:space="preserve">
+    <value>This finding has no place on the route.</value>
   </data>
   <data name="Check_LegTimesFormat" xml:space="preserve">
     <value>{0}–{1} · {2:0.0} NM</value>

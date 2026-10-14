@@ -28,11 +28,14 @@ internal sealed class PassageCheckFixture
         int? depthDatum = Lat,
         TimeSpan? debounce = null,
         Action<Action>? post = null,
-        double? s101FallbackUntilLon = null)
+        double? s101FallbackUntilLon = null,
+        IEnumerable<LoadedDataset>? extraDatasets = null)
     {
         var datasets = new List<LoadedDataset> { Bathymetry(depthDatum, s101FallbackUntilLon), WaterLevel(waterEnd ?? WaterStart.AddHours(6)) };
         if (s101FallbackUntilLon is not null)
             datasets.Add(FallbackCell());
+        if (extraDatasets is not null)
+            datasets.AddRange(extraDatasets);
         Catalog = new FixedCatalog(datasets);
         Routes = new RoutesService();
         Route = Routes.Routes.CreateRoute("Fixture");
@@ -151,6 +154,18 @@ internal sealed class PassageCheckFixture
             null,
             new S104CoverageData(new S104CoverageSource(dataset)));
     }
+
+    /// <summary>
+    /// An S-111 dataset over <paramref name="bounds"/> (the route by default)
+    /// whose forecast runs from <paramref name="start"/> to <paramref name="end"/>;
+    /// its currents are never read.
+    /// </summary>
+    public static LoadedDataset CurrentForecast(string id, DateTimeOffset start, DateTimeOffset end, BoundingBox? bounds = null) => new(
+        new DatasetId(id),
+        new SpecRef("S-111", new SpecVersion(2, 0, 0)),
+        bounds ?? new BoundingBox(-0.02, -0.02, 0.02, 0.2),
+        new TimeRange(start, end),
+        new S111CoverageData(new Datasets.S111.S111CoverageSource(new Datasets.S111.S111Dataset { Coverages = [] })));
 
     /// <summary>A fixed catalog.</summary>
     internal sealed class FixedCatalog(IReadOnlyList<LoadedDataset> datasets) : IDatasetCatalog

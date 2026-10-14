@@ -858,6 +858,12 @@ loaded S-104. While it's on:
   the verdict, the minimum UKC, where and when it occurs, and the sources.
   Below it, **Legs** lists each leg with its times and a min-UKC chip;
   hovering a leg moves the cursor to it.
+  **Findings** lists what to look at, grouped **MUST REVIEW**, **CHECK** and
+  **INFO**: each stretch below your UKC setting, depths charted from S-101
+  only, water-level gaps (such as data ending before arrival) and expired
+  S-111 runs, which aren't used in ETAs. A tag names the check behind each
+  one. Clicking a finding zooms the map to it, outlines it dashed in its tone
+  with a "Zoomed to finding" chip, and moves the profile cursor there.
 - **Object Information** folds to an edge tab, and clicking the tab opens it
   again.
 

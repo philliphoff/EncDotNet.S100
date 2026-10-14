@@ -48,7 +48,8 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         ICapabilityAccessor<IMapViewportController>? viewport = null,
         IMarinerSettingsProvider? marinerSettings = null,
         ITimeFormatProvider? timeFormat = null,
-        PassageCheckService? check = null)
+        PassageCheckService? check = null,
+        RouteFindingsService? findings = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
         _routes = routes;
@@ -57,7 +58,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         _timeFormat = timeFormat;
         _check = check;
         if (check is not null)
-            Check = new PassageCheckViewModel(check, routes, () => DepthUnit, () => TimeFormat);
+            Check = new PassageCheckViewModel(check, routes, () => DepthUnit, () => TimeFormat, findings);
 
         Passage = new RoutePassageCardViewModel(() => _routes.Routes.ActiveRoute, () => DepthUnit, () => TimeFormat);
         LegDetail = new RouteLegDetailViewModel(() => _routes.Routes.ActiveRoute, () => DepthUnit);
