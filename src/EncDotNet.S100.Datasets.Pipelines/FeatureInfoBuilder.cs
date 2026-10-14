@@ -74,15 +74,31 @@ public static class FeatureInfoBuilder
     private static PickAttribute BuildLeaf(string code, string value, FeatureCatalogueDecoder? decoder)
     {
         double? depthMetres = TryParseKnownDepthMetres(code, value);
+        // A nested complex attribute's leaf is keyed by its path ("information.text",
+        // S-124 Edition 2.0.0, #921): it is named segment by segment, and its last
+        // segment is the attribute whose listed values apply.
+        var leaf = code.LastIndexOf('.') is var dot and > 0 ? code[(dot + 1)..] : code;
         return new PickAttribute
         {
             Code = code,
-            Name = decoder?.ResolveAttributeName(code),
+            Name = ResolveName(code, decoder),
             RawValue = value,
-            DisplayValue = decoder?.ResolveListedValue(code, value),
+            DisplayValue = decoder?.ResolveListedValue(leaf, value),
             DepthMetresValue = depthMetres,
             Children = [],
         };
+    }
+
+    private static string? ResolveName(string code, FeatureCatalogueDecoder? decoder)
+    {
+        if (decoder is null)
+            return null;
+        if (!code.Contains('.', StringComparison.Ordinal))
+            return decoder.ResolveAttributeName(code);
+        var names = code.Split('.').Select(segment => decoder.ResolveAttributeName(segment) ?? segment).ToArray();
+        return names.Length > 1 && names.Any(n => !code.Split('.').Contains(n, StringComparer.Ordinal))
+            ? string.Join(" › ", names)
+            : null;
     }
 
     /// <summary>

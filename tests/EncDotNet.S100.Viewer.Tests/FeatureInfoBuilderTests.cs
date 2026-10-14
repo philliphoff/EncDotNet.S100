@@ -50,6 +50,33 @@ public class FeatureInfoBuilderTests
     }
 
     [Fact]
+    public void Build_NamesNestedSubAttributesSegmentBySegment()
+    {
+        // S-124 Edition 2.0.0 nests warningInformation/information/text (#921).
+        using var stream = Specification.TryOpenFeatureCatalogue("S-124");
+        Assert.NotNull(stream);
+        var decoder = new FeatureCatalogueDecoder(FeatureCatalogueReader.Read(stream!));
+        var complex = new[]
+        {
+            new FeatureInfoBuilder.ComplexAttributeRow("warningInformation", new Dictionary<string, string>
+            {
+                ["information.text"] = "SECURITE",
+                ["information.language"] = "eng",
+                ["navwarnTypeDetails"] = "Cable Operations",
+                ["x.y"] = "unknown",
+            }),
+        };
+
+        var result = FeatureInfoBuilder.Build(System.Array.Empty<KeyValuePair<string, string>>(), complex, decoder);
+
+        var children = Assert.Single(result).Children.ToDictionary(c => c.Code, c => c.Name);
+        Assert.Equal("Information › Text", children["information.text"]);
+        Assert.Equal("Information › Language", children["information.language"]);
+        Assert.Equal("Navwarn Type Details", children["navwarnTypeDetails"]);
+        Assert.Null(children["x.y"]);
+    }
+
+    [Fact]
     public void Build_FiltersWhitespaceAndEmptyValues()
     {
         var decoder = LoadDecoder();
