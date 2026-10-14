@@ -236,7 +236,8 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
             throw new HttpRequestException(attempt.Failure ?? "The SECOM service could not be read.");
         var products = listing.Items
             .GroupBy(s => s.ProductSpec ?? "Unknown", StringComparer.OrdinalIgnoreCase)
-            .Select(g => new CatalogFacetValue(g.Key, g.Count(), g.Sum(s => s.Size ?? 0)))
+            // An exchange set's info_size is no byte count (AMSA gives 5–58, #916).
+            .Select(g => new CatalogFacetValue(g.Key, g.Count(), g.Sum(s => s.ContainerType == SecomContainerType.ExchangeSet ? 0 : s.Size ?? 0)))
             .OrderBy(f => f.Value, StringComparer.Ordinal)
             .ToArray();
         return new SecomServiceDescription(products, listing.Items.Count, listing.TotalItems, listing.Truncated, listing.Version);

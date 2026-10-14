@@ -72,10 +72,12 @@ public sealed class LibraryOperationsTests : IDisposable
             items[0] with { Key = "x", Location = NoItemLocation.Instance },
             items[0] with { Key = "y", Location = ((LocalItemLocation)items[0].Location) with { RelativePath = "GONE/GONE.000" } },
             items[0] with { Key = "z", ProductSpec = "Unknown" },
+            // A downloaded package with no current datasets is its catalogue: nothing to open (#916).
+            items[0] with { Key = "c", Location = ((LocalItemLocation)items[0].Location) with { RelativePath = "CATALOG.031" } },
         ]);
 
         var group = Assert.Single(groups);
-        Assert.Equal(4, skipped);
+        Assert.Equal(5, skipped);
         Assert.Equal("CATALOG.031", group.CatalogueRelativePath);
         Assert.Equal(items.Select(i => i.Key), group.Items.Select(i => i.Key));
     }

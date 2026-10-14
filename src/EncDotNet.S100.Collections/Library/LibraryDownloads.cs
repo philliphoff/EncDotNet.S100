@@ -190,10 +190,17 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
             return item;
 
         // A package's cells each resolve to their own copy; a package entry
-        // not yet re-indexed into its cells stays online.
+        // not yet re-indexed into its cells stays online. A downloaded package
+        // with no current datasets (a SECOM exchange set that only cancels
+        // warnings, #916) resolves to its catalogue: it's local, so syncs don't
+        // fetch it again, and opening it says every dataset is cancelled.
         if (remote.Package is null)
             return item with { Location = cell.Location };
-        return cell.Datasets.TryGetValue(item.Name, out var location) ? item with { Location = location } : item;
+        if (cell.Datasets.TryGetValue(item.Name, out var location))
+            return item with { Location = location };
+        return cell is { IsPackage: true, Datasets.Count: 0 } && LibraryItemText.IsPackageEntry(item)
+            ? item with { Location = cell.Location }
+            : item;
     }
 
     /// <inheritdoc />

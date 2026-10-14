@@ -1212,6 +1212,7 @@ internal static class Strings
     public static string Library_CancelDownload => Get(nameof(Library_CancelDownload));
     public static string Library_Tag_Unpacked => Get(nameof(Library_Tag_Unpacked));
     public static string Library_PackageHint => Get(nameof(Library_PackageHint));
+    public static string Library_PackageEmptyHint => Get(nameof(Library_PackageEmptyHint));
     public static string Library_PackagePublishedFormat => Get(nameof(Library_PackagePublishedFormat));
     public static string Library_PackageGroupFormat => Get(nameof(Library_PackageGroupFormat));
     public static string Toast_LibraryUnpackedTitle => Get(nameof(Toast_LibraryUnpackedTitle));

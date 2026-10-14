@@ -443,6 +443,12 @@ public sealed class SecomTests : IDisposable
         Assert.True(LibraryItemText.IsPackageEntry(listed));
         Assert.Contains("cancelled", listed.Properties["contents"], StringComparison.Ordinal);
         Assert.Equal("valid · signer not trusted", listed.Properties["signature"]);
+
+        // Downloaded, it's local (its catalogue), so a sync doesn't fetch it again.
+        var library = new LibraryDownloads(downloader);
+        var local = Assert.IsType<LocalItemLocation>(library.Localize(listed).Location);
+        Assert.Equal("CATALOG.XML", local.RelativePath);
+        Assert.False(library.IsOutdated(listed));
     }
 
     [Fact]
