@@ -121,28 +121,43 @@ internal readonly record struct RouteOverlayColors(
     SKColor TextHalo)
 {
     /// <summary>The colours for <paramref name="appearance"/>.</summary>
+    /// <remarks>
+    /// Day keeps the accent on a white casing. Dusk and Night use a black
+    /// casing; the accent is toned down on Dusk and loses chroma on Night
+    /// (<see cref="ColorContrast.AccentFor"/>), and the label text dims with
+    /// the palette (palette pass, #906).
+    /// </remarks>
     public static RouteOverlayColors For(MeasureOverlayAppearance appearance)
     {
         var (r, g, b) = appearance.Accent;
-        var edit = new SKColor(r, g, b);
-        var dark = appearance.Palette is PaletteType.Dusk or PaletteType.Night;
-        return dark
-            ? new RouteOverlayColors(
+        var edit = ColorContrast.AccentFor(new SKColor(r, g, b), appearance.Palette);
+        return appearance.Palette switch
+        {
+            PaletteType.Night => new RouteOverlayColors(
                 edit,
                 Mix(edit, new SKColor(0x0E, 0x14, 0x1B), 0.55f),
-                new SKColor(0x3A, 0x44, 0x52),
+                new SKColor(0x34, 0x3C, 0x48),
                 SKColors.Black,
                 new SKColor(0x0E, 0x14, 0x1B),
-                new SKColor(0xA9, 0xB2, 0xBE),
-                SKColors.Black)
-            : new RouteOverlayColors(
+                new SKColor(0x8A, 0x94, 0xA0),
+                SKColors.Black),
+            PaletteType.Dusk => new RouteOverlayColors(
+                edit,
+                Mix(edit, new SKColor(0x14, 0x1A, 0x22), 0.55f),
+                new SKColor(0x4A, 0x54, 0x62),
+                SKColors.Black,
+                new SKColor(0x14, 0x1A, 0x22),
+                new SKColor(0x9A, 0xA3, 0xAE),
+                SKColors.Black),
+            _ => new RouteOverlayColors(
                 edit,
                 Mix(edit, SKColors.White, 0.55f),
                 new SKColor(0x56, 0x65, 0x7A),
                 SKColors.White,
                 SKColors.White,
                 new SKColor(0x0B, 0x12, 0x20),
-                SKColors.White);
+                SKColors.White),
+        };
     }
 
     private static SKColor Mix(SKColor c, SKColor toward, float amount)

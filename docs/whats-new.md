@@ -6,6 +6,10 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Route colours on Dusk and Night.** The route's check-mode colours, editing
+  line, labels and markers are tuned for the Dusk and Night chart palettes
+  and checked for contrast against the S-101 depth shades. On Night, the
+  editing accent loses most of its colour.
 - **Passage on the Timeline.** While Check passage is on, the Timeline shows
   the passage (departure to arrival, with a tick at the minimum UKC) and its
   departure window, which you can drag to set the departure. **Follow

@@ -495,7 +495,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
     {
         var dark = _theme?.IsDarkTheme ?? false;
         var theme = ChartTheme.Resolve(dark);
-        var states = RouteCheckColors.For(dark ? PaletteType.Night : PaletteType.Day);
+        var states = RouteCheckColors.For(StatePalette(_theme?.Current));
         var sand = dark ? new SKColor(0x4A, 0x42, 0x32) : new SKColor(0xEA, 0xDD, 0xBC);
         var sandLine = dark ? new SKColor(0x9C, 0x86, 0x5C) : new SKColor(0xA8, 0x8C, 0x55);
         var samples = profile.Samples;
@@ -686,6 +686,18 @@ internal sealed class ClearanceViewModel : ViewModelBase
         sections.Add(_cursorSection);
         Sections = sections;
     }
+
+    /// <summary>
+    /// The route palette whose state colours the profile uses on a chrome
+    /// theme: Day on Light, Dusk on S-100 Dusk, Night on Dark and S-100 Night
+    /// (#906), so the profile matches the route on the map.
+    /// </summary>
+    internal static PaletteType StatePalette(ChromeTheme? theme) => theme switch
+    {
+        ChromeTheme.S100Dusk => PaletteType.Dusk,
+        ChromeTheme.Dark or ChromeTheme.S100Night => PaletteType.Night,
+        _ => PaletteType.Day,
+    };
 
     private static double? MaxOrNull(double? a, double? b) => a is { } x && b is { } y ? Math.Max(x, y) : a ?? b;
 
