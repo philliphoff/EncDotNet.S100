@@ -409,7 +409,7 @@ public sealed class HeadlessCompositor
         {
             if (input.Vector is not { } vector
                 || !activeIds.Contains(vector.SourceDatasetId)
-                || (vector.CellCompilationScale ?? vector.CellMinimumDisplayScale) is not int rank
+                || CellScaleRanking.RankingScale(vector.CellCompilationScale, vector.CellMinimumDisplayScale) is not int rank
                 || vector.CoverageAreas.Count == 0)
             {
                 continue;
@@ -436,7 +436,7 @@ public sealed class HeadlessCompositor
             {
                 // Strictly finer only, so cells of the same band never clip
                 // each other's shared border away.
-                if (other.Rank >= cell.Rank || !Overlaps(cell.Coverage.Bounds, other.Coverage.Bounds))
+                if (!CellScaleRanking.IsFiner(other.Rank, cell.Rank) || !Overlaps(cell.Coverage.Bounds, other.Coverage.Bounds))
                     continue;
                 (finer ??= []).Add(other.Coverage);
             }
@@ -471,7 +471,7 @@ public sealed class HeadlessCompositor
                     vector.SourceDatasetId,
                     sub.SourceFeatureType)
                 {
-                    SourceScaleDenominator = vector.CellCompilationScale ?? vector.CellMinimumDisplayScale,
+                    SourceScaleDenominator = CellScaleRanking.RankingScale(vector.CellCompilationScale, vector.CellMinimumDisplayScale),
                 });
             }
             return (items, vector.Spec.Name, vector.SourceDatasetId);

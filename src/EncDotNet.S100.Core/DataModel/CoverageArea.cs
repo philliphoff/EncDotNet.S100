@@ -29,4 +29,44 @@ public sealed class CoverageArea
     /// solid.
     /// </summary>
     public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
+
+    /// <summary>
+    /// Whether a WGS-84 point lies inside the covered area: inside
+    /// <see cref="ExteriorRing"/> and outside every interior ring. Uses an
+    /// even-odd ray cast in longitude/latitude, so it suits cell-sized areas
+    /// that don't cross the antimeridian.
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees.</param>
+    /// <param name="longitude">Longitude in decimal degrees.</param>
+    /// <returns><see langword="true"/> when the point is covered.</returns>
+    public bool Contains(double latitude, double longitude)
+    {
+        if (!InRing(ExteriorRing, latitude, longitude))
+            return false;
+
+        foreach (var hole in InteriorRings)
+        {
+            if (InRing(hole, latitude, longitude))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool InRing(IReadOnlyList<GeoPosition> ring, double latitude, double longitude)
+    {
+        var inside = false;
+        for (int i = 0, j = ring.Count - 1; i < ring.Count; j = i++)
+        {
+            var a = ring[i];
+            var b = ring[j];
+            if ((a.Latitude > latitude) != (b.Latitude > latitude)
+                && longitude < (b.Longitude - a.Longitude) * (latitude - a.Latitude) / (b.Latitude - a.Latitude) + a.Longitude)
+            {
+                inside = !inside;
+            }
+        }
+
+        return inside;
+    }
 }

@@ -230,7 +230,7 @@ public sealed class MapsuiDatasetRenderer
                     result.SourceDatasetId,
                     sub.SourceFeatureType)
                 {
-                    SourceScaleDenominator = result.CellCompilationScale ?? result.CellMinimumDisplayScale,
+                    SourceScaleDenominator = CellScaleRanking.RankingScale(result.CellCompilationScale, result.CellMinimumDisplayScale),
                 }));
 
             union = Union(union, layer.Extent);

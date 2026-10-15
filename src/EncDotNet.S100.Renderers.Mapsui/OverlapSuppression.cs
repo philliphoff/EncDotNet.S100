@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using Mapsui.Layers;
 using NetTopologySuite.Geometries;
 
@@ -129,7 +130,7 @@ public static class OverlapSuppression
                 continue;
             // Strictly finer band only, so equal-band siblings never mutually
             // clip (which would erase their shared border from both).
-            if (otherDenom >= denom)
+            if (!CellScaleRanking.IsFiner(otherDenom, denom))
                 continue;
             if (!coverage.EnvelopeInternal.Intersects(otherCoverage.EnvelopeInternal))
                 continue;

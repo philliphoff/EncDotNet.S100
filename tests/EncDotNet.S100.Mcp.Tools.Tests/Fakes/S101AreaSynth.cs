@@ -30,6 +30,9 @@ internal static class S101AreaSynth
     public static AreaFeature SoundingDatum(int code, (double Lat, double Lon)[] ring) =>
         new("SoundingDatum", ring, new Dictionary<string, string> { ["verticalDatum"] = code.ToString(CultureInfo.InvariantCulture) });
 
+    public static AreaFeature DataCoverage(int minimumDisplayScale, (double Lat, double Lon)[] ring) =>
+        new("DataCoverage", ring, new Dictionary<string, string> { ["minimumDisplayScale"] = minimumDisplayScale.ToString(CultureInfo.InvariantCulture) });
+
     /// <summary>A closed rectangle ring.</summary>
     public static (double Lat, double Lon)[] Box(double south, double west, double north, double east) =>
         [(south, west), (south, east), (north, east), (north, west), (south, west)];

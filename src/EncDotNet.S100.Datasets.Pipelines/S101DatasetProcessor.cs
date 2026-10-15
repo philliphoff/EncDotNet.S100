@@ -1,5 +1,6 @@
 using System.Text;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -75,6 +76,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     private readonly string _datasetContentHash;
 
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
+    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
     private ValidationReport? _validationReport;
@@ -1082,6 +1084,53 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// <returns>The nearest sounding sample, or <c>null</c>.</returns>
     public S101SoundingSample? SampleNearestSounding(double latitude, double longitude)
         => S101SoundingSampler.SampleNearest(_dataset.Document, latitude, longitude);
+
+    /// <summary>
+    /// The cell's scale rank against overlapping cells (see
+    /// <see cref="CellScaleRanking"/>): the most permissive <c>DataCoverage</c>
+    /// minimum display scale, the same rank the display uses to hide a coarser
+    /// cell under a finer one. Smaller is finer; <see langword="null"/> when the
+    /// cell declares none.
+    /// </summary>
+    public int? CellRankingScale => CellExtent.RankingScale;
+
+    /// <summary>
+    /// Whether the cell's <c>DataCoverage</c> contains a WGS-84 point. A cell
+    /// that declares no coverage is treated as covering every point.
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
+    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <returns><see langword="true"/> when the cell covers the point.</returns>
+    public bool CoversPoint(double latitude, double longitude)
+    {
+        var coverage = CellExtent.Coverage;
+        if (coverage.Count == 0)
+            return true;
+
+        foreach (var area in coverage)
+        {
+            if (area.Contains(latitude, longitude))
+                return true;
+        }
+
+        return false;
+    }
+
+    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage) CellExtent
+    {
+        get
+        {
+            if (_cellExtent is { } extent)
+                return extent;
+
+            _featureIndex ??= BuildFeatureIndex();
+            extent = (
+                CellScaleRanking.RankingScale(null, ResolveOutOfBandMinDisplayScale(_featureIndex.Values)),
+                CoverageAreaResolver.Resolve(_featureIndex.Values));
+            _cellExtent = extent;
+            return extent;
+        }
+    }
 
     /// <inheritdoc/>
     public FeatureInfo? GetFeatureInfoAt(int ordinal)

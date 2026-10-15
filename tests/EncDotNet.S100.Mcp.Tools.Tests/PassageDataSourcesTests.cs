@@ -1,4 +1,5 @@
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.S104;
@@ -94,6 +95,84 @@ public class PassageDataSourcesTests
         Assert.Equal(12, dredged.DepthMeters);
 
         Assert.Null(sources.Depth.Sample(0.05, 0.05));
+    }
+
+    // Two overlapping cells as at Calshot Spit (#938): a harbour-band cell
+    // charts DRVAL1 0 m over 0…0,05°, a coastal-band cell −10 m everywhere.
+    private static LoadedDataset Banded(string id, int minimumDisplayScale, (double Lat, double Lon)[] coverage, params S101AreaSynth.AreaFeature[] areas) =>
+        LoadedDatasetFactory.S101(
+            id,
+            S101AreaSynth.Cell([S101AreaSynth.DataCoverage(minimumDisplayScale, coverage), .. areas]),
+            LoadedDatasetFactory.Box(-0.1, -0.1, 0.2, 0.2));
+
+    private static LoadedDataset Coastal(int datum = Mllw) =>
+        Banded("coastal", 90_000, S101AreaSynth.Box(-0.1, -0.1, 0.2, 0.2),
+            S101AreaSynth.DepthArea(-10, S101AreaSynth.Box(-0.1, -0.1, 0.2, 0.2)),
+            S101AreaSynth.SoundingDatum(datum, S101AreaSynth.Box(-0.1, -0.1, 0.2, 0.2)));
+
+    [Fact]
+    public void Overlapping_s101_cells_take_the_finest_cell_over_a_shoaler_coarser_one()
+    {
+        var sources = Sources(
+            Coastal(),
+            Banded("harbour", 22_000, S101AreaSynth.Box(0, 0, 0.05, 0.05),
+                S101AreaSynth.DepthArea(0, S101AreaSynth.Box(0, 0, 0.05, 0.05)),
+                S101AreaSynth.SoundingDatum(Lat, S101AreaSynth.Box(0, 0, 0.05, 0.05))));
+
+        var inHarbour = sources.Depth.Sample(0.01, 0.01)!;
+        Assert.Equal(0, inHarbour.DepthMeters);
+        Assert.Equal("harbour", inHarbour.DatasetId);
+        Assert.Equal(Lat, inHarbour.VerticalDatum);
+
+        // Inside the harbour cell's bounds but outside its data coverage.
+        var outside = sources.Depth.Sample(0.08, 0.08)!;
+        Assert.Equal(-10, outside.DepthMeters);
+        Assert.Equal("coastal", outside.DatasetId);
+        Assert.Equal(Mllw, outside.VerticalDatum);
+    }
+
+    [Fact]
+    public void Overlapping_s101_cells_of_the_same_band_take_the_shoalest()
+    {
+        var sources = Sources(
+            Banded("deeper", 22_000, S101AreaSynth.Box(-0.1, -0.1, 0.2, 0.2), S101AreaSynth.DepthArea(5, S101AreaSynth.Box(-0.1, -0.1, 0.2, 0.2))),
+            Banded("shoaler", 22_000, S101AreaSynth.Box(0, 0, 0.05, 0.05), S101AreaSynth.DepthArea(3, S101AreaSynth.Box(0, 0, 0.05, 0.05))));
+
+        var depth = sources.Depth.Sample(0.01, 0.01)!;
+        Assert.Equal(3, depth.DepthMeters);
+        Assert.Equal("shoaler", depth.DatasetId);
+    }
+
+    [Fact]
+    public void The_finest_cell_s_sounding_beats_a_coarser_cell_s_depth_area()
+    {
+        var harbour = LoadedDatasetFactory.S101(
+            "harbour",
+            S101AreaSynth.Cell([S101AreaSynth.DataCoverage(22_000, S101AreaSynth.Box(0, 0, 0.05, 0.05))], [(0.01, 0.01, 4.2)]),
+            LoadedDatasetFactory.Box(-0.1, -0.1, 0.2, 0.2));
+        var sources = Sources(Coastal(), harbour);
+
+        var depth = sources.Depth.Sample(0.0101, 0.01)!;
+        Assert.Equal(ChartedDepthKind.Sounding, depth.Kind);
+        Assert.Equal(4.2, depth.DepthMeters, 6);
+        Assert.Equal("harbour", depth.DatasetId);
+    }
+
+    [Fact]
+    public void The_passage_result_names_the_finer_cell_as_its_charted_depth_source()
+    {
+        var sources = Sources(
+            Coastal(),
+            Banded("harbour", 22_000, S101AreaSynth.Box(0, 0, 0.05, 0.05),
+                S101AreaSynth.DepthArea(8, S101AreaSynth.Box(0, 0, 0.05, 0.05)),
+                S101AreaSynth.SoundingDatum(Mllw, S101AreaSynth.Box(0, 0, 0.05, 0.05))));
+        var leg = new PassageLeg([new GeoPosition(0.01, 0.01), new GeoPosition(0.01, 0.04)], 5, 6, 0, 1);
+        var plan = new PassagePlan([leg], new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
+
+        var result = new PassageCheckEngine(sources.Depth, sources.WaterLevel).Check(plan, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["harbour"], result.Sources.FallbackDatasets);
+        Assert.All(result.Samples, s => Assert.Equal(8, s.Depth!.DepthMeters));
     }
 
     [Fact]
