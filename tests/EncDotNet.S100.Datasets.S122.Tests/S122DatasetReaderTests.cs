@@ -137,7 +137,7 @@ public class S122DatasetReaderTests
                   <geometry><S100:surfaceProperty><gml:Surface gml:id="s1">
                     <gml:patches><gml:PolygonPatch>
                       <gml:exterior><gml:LinearRing>
-                        <gml:posList>-2.0 50.4 -2.0 50.8 -1.0 50.8 -1.0 50.4 -2.0 50.4</gml:posList>
+                        <gml:posList>-2.5 50.3 -2.5 50.95 0.0 50.95 0.0 50.3 -2.5 50.3</gml:posList>
                       </gml:LinearRing></gml:exterior>
                     </gml:PolygonPatch></gml:patches>
                   </gml:Surface></S100:surfaceProperty></geometry>
@@ -205,7 +205,7 @@ public class S122DatasetReaderTests
                   <geometry><S100:surfaceProperty><gml:Surface gml:id="s1">
                     <gml:patches><gml:PolygonPatch>
                       <gml:exterior><gml:LinearRing>
-                        <gml:posList>-2.0,50.4 -2.0,50.8 -1.0,50.8 -1.0,50.4 -2.0,50.4</gml:posList>
+                        <gml:posList>-2.5,50.3 -2.5,50.95 0.0,50.95 0.0,50.3 -2.5,50.3</gml:posList>
                       </gml:LinearRing></gml:exterior>
                     </gml:PolygonPatch></gml:patches>
                   </gml:Surface></S100:surfaceProperty></geometry>
