@@ -86,7 +86,9 @@ public sealed class SecomTests : IDisposable
         var all = await client.GetSummariesAsync(new SecomQuery(PageSize: 10), cancellationToken: Ct);
         Assert.Equal(25, all.Items.Count);
         Assert.False(all.Truncated);
-        Assert.Equal(3, server.Requests.Count(r => r.AbsolutePath.EndsWith("/object/summary", StringComparison.Ordinal)));
+        // Pages read; the service is also asked its page size once (page=0), which it doesn't give.
+        Assert.Equal(3, server.Requests.Count(r => r.AbsolutePath.EndsWith("/object/summary", StringComparison.Ordinal) && !r.Query.Contains("page=0", StringComparison.Ordinal)));
+        Assert.Single(server.Requests, r => r.Query.Contains("page=0", StringComparison.Ordinal));
 
         var capped = await client.GetSummariesAsync(new SecomQuery(PageSize: 10), maxItems: 12, cancellationToken: Ct);
         Assert.Equal(12, capped.Items.Count);
@@ -103,7 +105,8 @@ public sealed class SecomTests : IDisposable
         var list = await client.GetSummariesAsync(new SecomQuery(PageSize: 2), cancellationToken: Ct);
 
         Assert.Equal(5, list.Items.Count);
-        Assert.Equal(2, server.Requests.Count);  // the second page added nothing new
+        // The second page added nothing new (and the page size was asked once, page=0).
+        Assert.Equal(2, server.Requests.Count(r => !r.Query.Contains("page=0", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -543,6 +546,49 @@ public sealed class SecomTests : IDisposable
     }
 
     [Fact]
+    public async Task A_service_allowing_smaller_pages_is_asked_its_page_size()
+    {
+        // SECOM §5.5: page 0 returns only maxItemsPerPage. A first page refused as
+        // too large is read again at the service's size.
+        var server = new FakeSecomServer(Summaries(120)) { MaxItemsPerPage = 50 };
+        var client = new SecomClient(new HttpClient(server), ServiceUri);
+
+        var list = await client.GetSummariesAsync(new SecomQuery(PageSize: 100), cancellationToken: Ct);
+
+        Assert.Equal(120, list.Items.Count);
+        Assert.Contains(server.Requests, r => r.Query.Contains("page=0", StringComparison.Ordinal));
+        Assert.All(server.Requests.Where(r => r.Query.Contains("page=", StringComparison.Ordinal) && !r.Query.Contains("page=0", StringComparison.Ordinal) && !r.Query.Contains("pageSize=100", StringComparison.Ordinal)),
+            r => Assert.Contains("pageSize=50", r.Query, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_service_allowing_larger_pages_is_read_in_fewer_requests()
+    {
+        var server = new FakeSecomServer(Summaries(1000)) { MaxItemsPerPage = 500 };
+        var client = new SecomClient(new HttpClient(server), ServiceUri);
+
+        var list = await client.GetSummariesAsync(new SecomQuery(PageSize: 100), cancellationToken: Ct);
+
+        Assert.Equal(1000, list.Items.Count);
+        var summaries = server.Requests.Count(r => r.AbsolutePath.EndsWith("/object/summary", StringComparison.Ordinal));
+        Assert.Equal(4, summaries); // page 1 at 100, page 0, then two pages of 500
+    }
+
+    [Fact]
+    public async Task A_service_that_ignores_page_0_keeps_the_requested_page_size()
+    {
+        // CCG echoes the requested pageSize and returns items for page 0: not an answer.
+        var server = new FakeSecomServer(Summaries(250));
+        var client = new SecomClient(new HttpClient(server), ServiceUri);
+
+        var list = await client.GetSummariesAsync(new SecomQuery(PageSize: 100), cancellationToken: Ct);
+
+        Assert.Equal(250, list.Items.Count);
+        Assert.All(server.Requests.Where(r => r.AbsolutePath.EndsWith("/object/summary", StringComparison.Ordinal)),
+            r => Assert.Contains("pageSize=100", r.Query, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Large_services_are_capped_with_a_warning()
     {
         var indexer = new SecomSourceIndexer(new HttpClient(new FakeSecomServer(Summaries(30))), maxItems: 10);
@@ -818,6 +864,12 @@ public sealed class SecomTests : IDisposable
 
         public int? ReportedTotal { get; init; }
 
+        /// <summary>
+        /// When set, the service follows SECOM §5.5: page 0 returns only this
+        /// maxItemsPerPage, and a larger pageSize answers 400.
+        /// </summary>
+        public int? MaxItemsPerPage { get; init; }
+
         /// <summary>Answers a summary request with a geometry filter with 404, as ELMAN does for an empty area.</summary>
         public bool NotFoundForGeometry { get; init; }
 
@@ -862,7 +914,30 @@ public sealed class SecomTests : IDisposable
             {
                 var page = int.Parse(query["page"] ?? "1", System.Globalization.CultureInfo.InvariantCulture);
                 var size = int.Parse(query["pageSize"] ?? "100", System.Globalization.CultureInfo.InvariantCulture);
-                var items = IgnorePaging ? _summaries : _summaries.Skip((page - 1) * size).Take(size);
+                if (MaxItemsPerPage is { } max && page == 0)
+                {
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(
+                            new JsonObject
+                            {
+                                [isV2 ? "summaryObject" : "informationSummaryObject"] = new JsonArray(),
+                                ["pagination"] = new JsonObject { ["totalItems"] = _summaries.Length, ["maxItemsPerPage"] = max },
+                            }.ToJsonString(),
+                            Encoding.UTF8,
+                            "application/json"),
+                    });
+                }
+
+                if (MaxItemsPerPage is { } limit && size > limit)
+                {
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+                    {
+                        Content = new StringContent("""{"message":"pageSize too large","responseCode":1}""", Encoding.UTF8, "application/json"),
+                    });
+                }
+
+                var items = IgnorePaging ? _summaries : _summaries.Skip(Math.Max(0, page - 1) * size).Take(size);
                 var list = new JsonArray(items.Select(s =>
                 {
                     var copy = s.DeepClone().AsObject();

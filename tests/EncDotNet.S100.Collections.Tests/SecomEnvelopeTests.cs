@@ -94,7 +94,8 @@ public sealed class SecomEnvelopeTests : IDisposable
         Assert.Contains(service.Requests, r => r == "GET /api/secom/v2/object/summary");  // tried first
         // Only the empty request that detects the POST form fails verification; every signed one passes.
         Assert.Equal("POST /api/secom/v2/object/search/summary bad", Assert.Single(service.Requests, r => r.EndsWith(" bad", StringComparison.Ordinal)));
-        Assert.Equal(2, service.Requests.Count(r => r == "POST /api/secom/v2/object/search/summary"));
+        // Two pages, and the page-size question (page 0) asked once, all signed.
+        Assert.Equal(3, service.Requests.Count(r => r == "POST /api/secom/v2/object/search/summary"));
 
         var data = await client.GetAsync("ref-0002", Ct);
         Assert.Equal("<S124:Dataset>ref-0002</S124:Dataset>", Encoding.UTF8.GetString(data!.Data));

@@ -1800,12 +1800,16 @@ TLS trust for the same roots followed in #829 (§7.9).
 >     object listed at 4,885 decoded to exactly 4,885 bytes), so sizes stay
 >     unused for exchange sets.
 >   - 100 is their maximum page size. A summary with `page=0` returns only
->     `maxItemsPerPage`, per SECOM §5.5.
+>     `maxItemsPerPage`, per SECOM §5.5. `SecomClient` asks it when it
+>     matters: when the first page is refused with 400 (it reads again at the
+>     service's size), or when more pages are needed (a larger size, up to
+>     1,000, means fewer requests). The answer is trusted only when it has no
+>     items and a positive size (CCG echoes the requested size with items),
+>     and it's kept per `HttpClient` and service.
 >   - They suggest subscriptions for updates.
 > - **Not yet.**
 >   - Encrypted exchange sets (Part 15 protection) and SECOM-protected
 >     objects (#923).
->   - Asking `page=0` for the page size instead of using 100.
 >   - Subscriptions.
 
 ## 8. Implementation slices

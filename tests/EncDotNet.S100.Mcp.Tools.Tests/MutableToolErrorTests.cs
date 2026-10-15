@@ -32,4 +32,17 @@ public class MutableToolErrorTests
         Assert.Equal("the exchange set contained no portrayable datasets", error.Reason);
         Assert.IsAssignableFrom<ToolError>(error);
     }
+
+    [Theory]
+    [InlineData("must be between -90 and 90", "Invalid argument 'latitude': must be between -90 and 90.")]
+    [InlineData("The identity could not be read: wrong password.", "Invalid argument 'latitude': The identity could not be read: wrong password.")]
+    public void InvalidArgument_EndsWithOnePeriod(string reason, string expected)
+    {
+        // A reason that is an exception message already ends with a period (set_secom_identity).
+        var error = new InvalidArgument("latitude", reason);
+
+        Assert.Equal("invalid_argument", error.Code);
+        Assert.Equal(expected, error.Message);
+        Assert.Equal(reason, error.Reason);
+    }
 }
