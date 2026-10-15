@@ -83,6 +83,14 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
 
+    /// <inheritdoc/>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder => _data switch
+    {
+        S111DatasetData.GriddedCoverage g => g.Dataset.AxisOrder,
+        S111DatasetData.StationSeries s => s.Dataset.AxisOrder,
+        _ => null,
+    };
+
     private DatasetMetadata? _metadata;
 
     /// <inheritdoc/>
@@ -1022,7 +1030,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     {
         if (!_validationCached)
         {
-            _validationReport = ComputeValidationReport();
+            _validationReport = AxisOrderFindings.Append(ComputeValidationReport(), AxisOrder, "S-111");
             _validationCached = true;
         }
         return _validationReport;

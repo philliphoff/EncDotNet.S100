@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
@@ -93,6 +94,16 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
 
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; private set; }
+
+    /// <inheritdoc/>
+    public AxisOrderAssessment? AxisOrder { get; private set; }
+
+    /// <summary>
+    /// Records the axis-order assessment the reader attached to the parsed
+    /// dataset (issue #650). Subclasses call this once, from their
+    /// constructor, after parsing the dataset.
+    /// </summary>
+    protected void SetAxisOrder(AxisOrderAssessment? axisOrder) => AxisOrder = axisOrder;
 
     /// <summary>
     /// Records the dataset's declared product-spec edition (parsed from the
@@ -498,21 +509,39 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     }
 
     /// <summary>
-    /// Hook for spec-specific subclasses to run their normative
-    /// validation rule pack against the parsed dataset. Returns
-    /// <c>null</c> by default, signalling that no rule pack is
-    /// defined for this product.
+    /// Runs the product's normative rule pack
+    /// (<see cref="ValidateDataset"/>) and appends the axis-order finding
+    /// (<see cref="AxisOrderFindings"/>) for <see cref="AxisOrder"/>. The
+    /// report is computed once and cached. Returns <c>null</c> when the
+    /// product has no rule pack and the reader ran no axis-order check.
+    /// </summary>
+    public ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = AxisOrderFindings.Append(ValidateDataset(), AxisOrder, Spec.Name);
+            _validationCached = true;
+        }
+
+        return _validationReport;
+    }
+
+    private bool _validationCached;
+    private ValidationReport? _validationReport;
+
+    /// <summary>
+    /// Runs the product's rule pack, or returns <c>null</c> when the product
+    /// has none. Called once by <see cref="Validate"/>, which caches the
+    /// result.
     /// </summary>
     /// <remarks>
     /// Overrides should typically delegate to
     /// <c>ValidationRunner.Run(...)</c> so that an
     /// <see cref="System.InvalidOperationException"/> from the typed
-    /// projection (e.g. an empty dataset) surfaces as an empty
-    /// report rather than propagating out of <see cref="Validate"/>.
-    /// Overrides should also cache the result so repeated calls are
-    /// cheap.
+    /// projection (e.g. an empty dataset) surfaces as an empty report rather
+    /// than propagating out of <see cref="Validate"/>.
     /// </remarks>
-    public virtual ValidationReport? Validate() => null;
+    protected virtual ValidationReport? ValidateDataset() => null;
 
     private FeatureInfo BuildFeatureInfo(TFeature feature)
     {

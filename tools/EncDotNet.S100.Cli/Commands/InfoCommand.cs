@@ -1,5 +1,6 @@
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Hdf5;
 using Spectre.Console;
@@ -62,6 +63,23 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
                 table.AddRow("Version match", $"[{colour}]{Markup.Escape(label)}[/]");
             }
 
+            var axisOrder = processor.AxisOrder;
+            if (axisOrder is not null)
+            {
+                var (label, colour) = axisOrder.Outcome switch
+                {
+                    AxisOrderOutcome.AsEncoded => ("latitude first (verified)", "green"),
+                    AxisOrderOutcome.Swapped => axisOrder.Normalized
+                        ? ("longitude first — swapped on read", "yellow")
+                        : ("longitude first — not swapped", "red"),
+                    AxisOrderOutcome.Inconsistent when axisOrder.ExtentMayBeSwapped =>
+                        ("disagrees with the envelope — kept as encoded", "yellow"),
+                    AxisOrderOutcome.Inconsistent => ("does not fit the declared extent", "red"),
+                    _ => ("unverified — latitude first assumed", "grey"),
+                };
+                table.AddRow("Axis order", $"[{colour}]{Markup.Escape(label)}[/]");
+            }
+
             table.AddRow("Headless render", processor is IHeadlessImageRenderer ? "[green]yes[/]" : "[yellow]no[/]");
 
             if (processor is IDisplayModeAwareDatasetProcessor displayModeAware &&
@@ -88,6 +106,12 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             if (assessment?.IsWarning == true)
             {
                 Console.Error.WriteLine(assessment.BuildMessage());
+            }
+
+            // Likewise for swapped or inconsistent axis order (issue #650).
+            if (axisOrder?.IsWarning == true)
+            {
+                Console.Error.WriteLine(axisOrder.BuildMessage());
             }
 
             if (processor is ITimeAwareDatasetProcessor ta && ta.AvailableTimes.Count > 0)

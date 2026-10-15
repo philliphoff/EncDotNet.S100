@@ -97,6 +97,8 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
         }
 
         SetDeclaredEdition(_dataset.DeclaredEdition);
+
+        SetAxisOrder(_dataset.AxisOrder);
     }
 
     /// <inheritdoc />
@@ -126,7 +128,7 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
         $"Information types: {_dataset.InformationTypes.Count}";
 
     /// <inheritdoc />
-    public override ValidationReport? Validate()
+    protected override ValidationReport? ValidateDataset()
     {
         if (!_validationCached)
         {

@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
 using S100Diag = EncDotNet.S100.Datasets.S102.Diagnostics;
@@ -57,6 +58,22 @@ public static class S102DatasetReader
 
         var coverages = ReadCoverages(root);
 
+        // Grid footprints are checked against the declared bounding box
+        // only in a geographic CRS; projected (UTM) origins are metres.
+        var axisOrder = horizontalCRS is null or 4326
+            ? AxisOrderCheck.Assess(
+                coverages.SelectMany(c => AxisOrderCheck.GridCorners(
+                    c.OriginLatitude, c.OriginLongitude,
+                    c.SpacingLatitudinal, c.SpacingLongitudinal,
+                    c.NumPointsLatitudinal, c.NumPointsLongitudinal)),
+                Hdf5DeclaredExtent.ReadDatasetExtent(
+                    root,
+                    root.GroupNames.Contains("BathymetryCoverage") ? root.OpenGroup("BathymetryCoverage") : null,
+                    "BathymetryCoverage."),
+                "the BathymetryCoverage grid origins",
+                normalizes: false)
+            : null;
+
         return new S102Dataset
         {
             HorizontalCRS = horizontalCRS,
@@ -68,6 +85,7 @@ public static class S102DatasetReader
             Metadata = metadata,
             DeclaredProductSpecification = productSpecification,
             Coverages = coverages,
+            AxisOrder = axisOrder,
         };
     }
 

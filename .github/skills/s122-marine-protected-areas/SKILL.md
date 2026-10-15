@@ -67,11 +67,11 @@ geometry parsing code must preserve both:
 
 1. **lon-lat `posList` vs. lat-lon envelope.** The UKHO trial dataset
    emits `<gml:posList>` in lon-lat order while keeping the
-   `<gml:Envelope>` corners correctly in lat-lon. The reader samples
-   parsed coords against the declared envelope and swaps every feature
-   when the as-parsed interpretation clearly falls outside but the
-   swapped one fits. Keep the heuristic conservative (≤25 % as-is fit,
-   ≥75 % swapped fit) so spec-conformant samples are untouched.
+   `<gml:Envelope>` corners correctly in lat-lon. The shared
+   `GmlCoordinateParser.AssessAxisOrder` (#650; `AxisOrderCheck` in
+   Core) catches it: ≤25 % as-is fit, >75 % swapped fit, and the
+   envelope tight around the swapped data. Don't reintroduce a
+   product-local swap; thread the returned `GmlAxisOrder` instead.
 2. **Comma-separated tuples in `posList`.** Some producers emit
    `lon,lat lon,lat …` tokens (the `gml:coordinates` convention)
    instead of all-whitespace. `ParsePos` / `ParsePosList` treat both

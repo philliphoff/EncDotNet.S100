@@ -114,6 +114,8 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
 
         SetDeclaredEdition(_dataset.DeclaredEdition);
 
+        SetAxisOrder(_dataset.AxisOrder);
+
         if (luaEngine is not null
             && featureCatalogueManager is not null
             && catalogueManager.HasCatalogue("S-101"))
@@ -217,7 +219,7 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
         $"Information types: {_dataset.InformationTypes.Count}";
 
     /// <inheritdoc />
-    public override ValidationReport? Validate()
+    protected override ValidationReport? ValidateDataset()
     {
         if (!_validationCached)
         {

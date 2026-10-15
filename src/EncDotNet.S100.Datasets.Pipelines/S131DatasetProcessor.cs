@@ -56,6 +56,9 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
 
+    /// <inheritdoc/>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder => _dataset.AxisOrder;
+
     /// <summary>
     /// Initializes a new <see cref="S131DatasetProcessor"/> from a file path.
     /// </summary>
@@ -258,6 +261,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
                 _dataset,
                 static raw => S131HarbourInfrastructureDataset.From(raw, out _),
                 S131HarbourInfrastructureRules.Default);
+            _validationReport = AxisOrderFindings.Append(_validationReport, AxisOrder, "S-131");
             _validationCached = true;
         }
         return _validationReport;

@@ -30,6 +30,14 @@ public sealed class S128Dataset
     /// <summary>The dataset identifier (gml:id of the dataset root).</summary>
     public string? DatasetIdentifier { get; init; }
 
+    /// <summary>
+    /// The outcome of the dataset-level axis-order check (issue #650), or
+    /// <c>null</c> when the dataset has no positions. When it is
+    /// <see cref="EncDotNet.S100.DataModel.AxisOrderOutcome.Swapped"/> the reader
+    /// has already read every position longitude first.
+    /// </summary>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder { get; init; }
+
     /// <summary>Feature instances contained in the dataset.</summary>
     /// <remarks>
     /// In S-128 2.0.0 every member of the catalogue (including metadata

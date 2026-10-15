@@ -85,6 +85,9 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
 
+    /// <inheritdoc/>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder => _dataset.AxisOrder;
+
     /// <summary>
     /// Always empty: an S-102 bathymetric surface has no time steps. The
     /// processor is an <see cref="ITimeAwareDatasetProcessor"/> only to report
@@ -551,6 +554,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             {
                 _validationReport = BuildSchemaSurrogateReport(ex);
             }
+            _validationReport = AxisOrderFindings.Append(_validationReport, AxisOrder, "S-102");
             _validationCached = true;
         }
         return _validationReport;

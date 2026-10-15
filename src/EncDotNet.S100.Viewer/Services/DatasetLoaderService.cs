@@ -344,6 +344,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             ApplyPostRegistrationPolicies(entry, processor, spec, wasKnownBySession);
 
             entry.SetVersionAssessment(processor.VersionAssessment);
+            entry.SetAxisOrder(processor.AxisOrder);
             entry.SetPortrayalSpec(processor.PortrayalSpec.Name);
             entry.AvailableTimes = [];
             entry.CurrentTime = null;

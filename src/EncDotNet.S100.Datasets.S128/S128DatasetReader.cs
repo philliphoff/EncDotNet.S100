@@ -20,7 +20,7 @@ namespace EncDotNet.S100.Datasets.S128;
 /// <item><description>S-100 GML namespace tolerance (1.0 / profile-1.0 / 5.0 plus an in-document scan).</description></item>
 /// <item><description>Acceptance of both <c>&lt;member&gt;/&lt;imember&gt;</c> per-feature wrappers and inline <c>&lt;members&gt;/&lt;imembers&gt;</c> containers.</description></item>
 /// <item><description>Comma-and-whitespace tokenisation in <c>gml:posList</c> and <c>gml:pos</c>.</description></item>
-/// <item><description>Lon-lat axis-order swap when the parsed coordinates clearly fall outside the dataset's <c>gml:Envelope</c> but their swapped form fits.</description></item>
+/// <item><description>Longitude-first positions, caught by the dataset-level axis-order check (<see cref="GmlCoordinateParser.AssessAxisOrder"/>, issue #650) against the dataset's <c>gml:Envelope</c>.</description></item>
 /// </list>
 /// <para>
 /// The S-128 2.0.0 sample dataset uses inline <c>&lt;S128:members&gt;</c>
@@ -50,6 +50,9 @@ internal static class S128DatasetReader
         var doc = XDocument.Load(stream);
         var root = doc.Root
             ?? throw new InvalidOperationException("S-128 GML document has no root element.");
+
+        // Decide the axis order once for the whole dataset (issue #650).
+        var (axisOrder, axisAssessment) = GmlCoordinateParser.AssessAxisOrder(root);
 
         var datasetNs = root.Name.Namespace;
         var s100Ns = DetectS100Namespace(root);
@@ -83,35 +86,28 @@ internal static class S128DatasetReader
                 }
                 else
                 {
-                    var feature = ParseFeature(element, s100Ns);
+                    var feature = ParseFeature(element, s100Ns, axisOrder);
                     if (feature is not null) features.Add(feature);
                 }
             }
         }
 
-        // Apply the lon-lat axis-order producer-bug heuristic. S-128 2.0.0
-        // datasets often omit a top-level <gml:Envelope>; in that case we
-        // simply leave coordinates as-parsed (the spec is lat-lon).
-        var envelope = ParseEnvelope(root);
-        if (envelope is not null && ShouldSwapAxes(features, envelope.Value))
+        if (axisAssessment?.Outcome == AxisOrderOutcome.Unverified)
         {
-            var swapped = new List<S128Feature>(features.Count);
-            foreach (var f in features) swapped.Add(SwapFeatureAxes(f));
-            features = swapped;
-        }
-        else if (envelope is null && HasGeometry(features))
-        {
-            // No <gml:Envelope> anchor: the axis-order heuristic cannot run, so
-            // coordinates are assumed to be lat-lon (S-100 Part 10b §6.2). Some
-            // GML 1.0 producers emit lon-lat, which would render a mirrored
-            // chart with no other signal. Surface a diagnostic warning so the
-            // assumption is never silent. See issue #247.
+            // The dataset-level axis-order check (issue #650) could not verify
+            // the order: S-128 2.0.0 datasets often omit a top-level
+            // <gml:Envelope>, and without that anchor (or a latitude beyond
+            // ±90°) positions are kept latitude first as encoded (S-100 Part
+            // 10b §6.2). Some GML 1.0 producers emit lon-lat, which would
+            // render a mirrored chart with no other signal, so surface a
+            // diagnostic warning so the assumption is never silent (issue
+            // #247). The dataset's AxisOrder assessment carries the details.
             __activity?.SetTag("s100.s128.axisOrderAssumed", true);
             __activity?.AddEvent(new ActivityEvent(
                 "s100.s128.axisOrderAssumed",
                 tags: new ActivityTagsCollection
                 {
-                    ["message"] = "Dataset has geometry but no gml:Envelope; axis order assumed lat-lon and could not be verified.",
+                    ["message"] = "Dataset has geometry but no usable gml:Envelope; axis order assumed lat-lon and could not be verified.",
                 }));
         }
 
@@ -122,13 +118,9 @@ internal static class S128DatasetReader
             DatasetIdentifier = datasetId,
             Features = features,
             InformationTypes = infoTypes,
+            AxisOrder = axisAssessment,
         };
     }
-
-    private static bool HasGeometry(IEnumerable<S128Feature> features) =>
-        features.Any(f => f.ExteriorRing.Count > 0
-            || f.Points.Count > 0
-            || f.Curves.Count > 0);
 
     /// <summary>
     /// Returns all member/imember candidate elements found beneath the dataset
@@ -180,10 +172,10 @@ internal static class S128DatasetReader
         return element.Name.Namespace == datasetNs || element.Name.Namespace == XNamespace.None;
     }
 
-    private static S128Feature ParseFeature(XElement element, XNamespace s100Ns)
+    private static S128Feature ParseFeature(XElement element, XNamespace s100Ns, GmlAxisOrder axisOrder)
     {
         var id = ReadGmlId(element);
-        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, s100Ns);
+        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, s100Ns, axisOrder);
         var (simple, complex) = ParseAttributes(element, s100Ns);
         var refs = ParseReferences(element);
 
@@ -230,7 +222,7 @@ internal static class S128DatasetReader
         ?? "";
 
     private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>)
-        ParseGeometry(XElement featureElement, XNamespace s100Ns)
+        ParseGeometry(XElement featureElement, XNamespace s100Ns, GmlAxisOrder axisOrder)
     {
         IReadOnlyList<GeoPosition> points = [];
         IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
@@ -249,7 +241,7 @@ internal static class S128DatasetReader
         if (surfaceProp is not null)
         {
             geometryType = S100GeometryType.Surface;
-            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp);
+            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp, axisOrder);
             exteriorRing = ext;
             interiorRings = intRings;
         }
@@ -259,7 +251,7 @@ internal static class S128DatasetReader
         if (curveProp is not null)
         {
             geometryType = S100GeometryType.Curve;
-            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
+            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp, axisOrder);
             if (coords.Count > 0)
                 curves = [coords];
         }
@@ -268,7 +260,7 @@ internal static class S128DatasetReader
             .FirstOrDefault(e => e.Name.LocalName == "pointProperty");
         if (pointProp is not null)
         {
-            var coord = GmlCoordinateParser.ParsePointElement(pointProp);
+            var coord = GmlCoordinateParser.ParsePointElement(pointProp, null, axisOrder);
             if (coord is not null)
             {
                 geometryType = S100GeometryType.Point;
@@ -373,95 +365,6 @@ internal static class S128DatasetReader
             refs.Add(new S128XlinkReference(child.Name.LocalName, href, arcrole, target));
         }
         return refs;
-    }
-
-    // ── Envelope / axis-swap heuristic ──────────────────────────────────
-
-    private static (double MinLat, double MinLon, double MaxLat, double MaxLon)? ParseEnvelope(XElement root)
-    {
-        var envelope = root.Descendants(GmlNamespaces.Gml + "Envelope").FirstOrDefault();
-        if (envelope is null) return null;
-
-        var lower = envelope.Element(GmlNamespaces.Gml + "lowerCorner")?.Value;
-        var upper = envelope.Element(GmlNamespaces.Gml + "upperCorner")?.Value;
-        if (lower is null || upper is null) return null;
-
-        var lo = GmlCoordinateParser.ParsePos(lower);
-        var hi = GmlCoordinateParser.ParsePos(upper);
-        if (lo is null || hi is null) return null;
-
-        if (Math.Abs(lo.Value.Latitude) > 90 || Math.Abs(hi.Value.Latitude) > 90 ||
-            Math.Abs(lo.Value.Longitude) > 180 || Math.Abs(hi.Value.Longitude) > 180)
-            return null;
-
-        return (
-            Math.Min(lo.Value.Latitude, hi.Value.Latitude),
-            Math.Min(lo.Value.Longitude, hi.Value.Longitude),
-            Math.Max(lo.Value.Latitude, hi.Value.Latitude),
-            Math.Max(lo.Value.Longitude, hi.Value.Longitude));
-    }
-
-    private static bool ShouldSwapAxes(
-        IEnumerable<S128Feature> features,
-        (double MinLat, double MinLon, double MaxLat, double MaxLon) env)
-    {
-        var latPad = Math.Max(0.001, (env.MaxLat - env.MinLat) * 0.05);
-        var lonPad = Math.Max(0.001, (env.MaxLon - env.MinLon) * 0.05);
-        double minLat = env.MinLat - latPad, maxLat = env.MaxLat + latPad;
-        double minLon = env.MinLon - lonPad, maxLon = env.MaxLon + lonPad;
-
-        int asIs = 0, swapped = 0, total = 0;
-        foreach (var f in features)
-        {
-            foreach (var (lat, lon) in EnumerateCoords(f))
-            {
-                total++;
-                if (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon) asIs++;
-                if (lon >= minLat && lon <= maxLat && lat >= minLon && lat <= maxLon) swapped++;
-            }
-        }
-
-        if (total == 0) return false;
-        return asIs * 4 < total && swapped * 4 > total * 3;
-    }
-
-    private static IEnumerable<GeoPosition> EnumerateCoords(S128Feature f)
-    {
-        foreach (var p in f.Points) yield return p;
-        foreach (var c in f.Curves) foreach (var p in c) yield return p;
-        foreach (var p in f.ExteriorRing) yield return p;
-        foreach (var ring in f.InteriorRings) foreach (var p in ring) yield return p;
-    }
-
-    private static S128Feature SwapFeatureAxes(S128Feature f) => new()
-    {
-        Id = f.Id,
-        FeatureType = f.FeatureType,
-        GeometryType = f.GeometryType,
-        Points = SwapMany(f.Points),
-        Curves = SwapRings(f.Curves),
-        ExteriorRing = SwapMany(f.ExteriorRing),
-        InteriorRings = SwapRings(f.InteriorRings),
-        Attributes = f.Attributes,
-        ComplexAttributes = f.ComplexAttributes,
-        References = f.References,
-    };
-
-    private static IReadOnlyList<GeoPosition> SwapMany(IReadOnlyList<GeoPosition> src)
-    {
-        if (src.Count == 0) return src;
-        var b = new List<GeoPosition>(src.Count);
-        foreach (var (a, c) in src) b.Add(new GeoPosition(c, a));
-        return b;
-    }
-
-    private static IReadOnlyList<IReadOnlyList<GeoPosition>> SwapRings(
-        IReadOnlyList<IReadOnlyList<GeoPosition>> src)
-    {
-        if (src.Count == 0) return src;
-        var b = new List<IReadOnlyList<GeoPosition>>(src.Count);
-        foreach (var ring in src) b.Add(SwapMany(ring));
-        return b;
     }
 
     // ── S100 namespace detection ────────────────────────────────────────

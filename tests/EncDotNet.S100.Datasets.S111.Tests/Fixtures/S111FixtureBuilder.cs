@@ -26,7 +26,8 @@ internal static class S111FixtureBuilder
         bool useUnsignedCounts,
         string timePoint = "20210401T000000Z",
         ProjectedGrid? projected = null,
-        string? productSpecification = null)
+        string? productSpecification = null,
+        IReadOnlyDictionary<string, object>? extraRootAttributes = null)
         where TRow : struct
     {
         var instance = new H5Group
@@ -77,6 +78,12 @@ internal static class S111FixtureBuilder
 
         var options = new H5WriteOptions(
             FieldNameMapper: f => f.GetCustomAttribute<H5NameAttribute>()?.Name);
+
+        if (extraRootAttributes is not null)
+        {
+            foreach (var (name, value) in extraRootAttributes)
+                file.Attributes[name] = value;
+        }
 
         file.Write(path, options);
         return path;

@@ -46,7 +46,8 @@ public class S104Dcf1ProcessorTests
                 color => color != SKColors.White);
             var report = Assert.IsType<ValidationReport>(processor.Validate());
             Assert.Empty(report.Findings);
-            Assert.Equal(3, report.RulesEvaluated);
+            // Station rules plus the axis-order check (#650).
+            Assert.Equal(4, report.RulesEvaluated);
         }
         finally
         {

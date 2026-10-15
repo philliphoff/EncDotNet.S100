@@ -97,6 +97,8 @@ public sealed class S129DatasetProcessor : GmlDatasetProcessorBase<S129Feature>
         }
 
         SetDeclaredEdition(_dataset.DeclaredEdition);
+
+        SetAxisOrder(_dataset.AxisOrder);
     }
 
     /// <inheritdoc />
@@ -104,7 +106,7 @@ public sealed class S129DatasetProcessor : GmlDatasetProcessorBase<S129Feature>
         new GmlFeatureXmlSource<S129Feature>(_dataset.Features);
 
     /// <inheritdoc />
-    public override ValidationReport? Validate()
+    protected override ValidationReport? ValidateDataset()
     {
         if (!_validationCached)
         {

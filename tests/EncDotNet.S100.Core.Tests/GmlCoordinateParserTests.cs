@@ -1,103 +1,68 @@
+using System.Xml.Linq;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Core.Tests;
 
 /// <summary>
-/// Tests for <see cref="GmlCoordinateParser"/>, focusing on the axis-order
-/// producer-bug compensation (S-100 Part 10b §6.2 mandates latitude-first, but
-/// the US NWS S-411 sea-ice product encodes longitude-first). See issue #413.
+/// Tests for <see cref="GmlCoordinateParser"/>'s axis-order handling. S-100
+/// Part 10b §6.2 mandates latitude first; producers that write longitude first
+/// (the UK S-122 trial, US NWS / NIC S-411 sea ice) are caught by the
+/// dataset-level <see cref="GmlCoordinateParser.AssessAxisOrder"/> (issues
+/// #413, #760, #650), never per position.
 /// </summary>
 public class GmlCoordinateParserTests
 {
     [Fact]
-    public void ParsePos_conformant_lat_first_is_unchanged()
+    public void ParsePos_reads_latitude_first_by_default()
     {
-        var coord = GmlCoordinateParser.ParsePos("70.7762 -155.86");
+        var p = GmlCoordinateParser.ParsePos("62.1 -167.3");
 
-        Assert.NotNull(coord);
-        Assert.Equal(70.7762, coord!.Value.Latitude, 6);
-        Assert.Equal(-155.86, coord.Value.Longitude, 6);
+        Assert.NotNull(p);
+        Assert.Equal(62.1, p!.Value.Latitude, 6);
+        Assert.Equal(-167.3, p.Value.Longitude, 6);
     }
 
     [Fact]
-    public void ParsePos_lon_first_is_swapped_when_lat_slot_exceeds_90()
+    public void ParsePos_does_not_swap_a_position_on_its_own()
     {
-        // NWS S-411 encoding: "<lon> <lat>" with lon in the 0–360 convention.
-        var coord = GmlCoordinateParser.ParsePos("205.8599 70.7762");
+        // The pre-#650 parser swapped any pair whose first ordinate exceeded
+        // ±90°. That is now the dataset-level check's call.
+        var p = GmlCoordinateParser.ParsePos("-167.3 62.1");
 
-        Assert.NotNull(coord);
-        Assert.Equal(70.7762, coord!.Value.Latitude, 6);
-        Assert.Equal(205.8599, coord.Value.Longitude, 6);
+        Assert.NotNull(p);
+        Assert.Equal(-167.3, p!.Value.Latitude, 6);
+        Assert.Equal(62.1, p.Value.Longitude, 6);
     }
 
     [Fact]
-    public void ParsePos_high_longitude_within_lat_bound_is_not_swapped()
+    public void ParsePos_longitude_first_order_swaps()
     {
-        // Genuine lat-first pair whose longitude (95°) is > 90 but sits in the
-        // second slot must NOT be swapped; the first ordinate is a valid latitude.
-        var coord = GmlCoordinateParser.ParsePos("60.0 95.0");
+        var p = GmlCoordinateParser.ParsePos("-1.3 50.8", GmlAxisOrder.LongitudeFirst);
 
-        Assert.NotNull(coord);
-        Assert.Equal(60.0, coord!.Value.Latitude, 6);
-        Assert.Equal(95.0, coord.Value.Longitude, 6);
-    }
-
-    [Fact]
-    public void ParsePosList_lon_first_stream_is_swapped()
-    {
-        var coords = GmlCoordinateParser.ParsePosList("205.86 70.77 210.00 71.50 225.00 66.00");
-
-        Assert.Equal(3, coords.Count);
-        Assert.All(coords, c => Assert.InRange(c.Latitude, -90.0, 90.0));
-        Assert.Equal(205.86, coords[0].Longitude, 6);
-        Assert.Equal(70.77, coords[0].Latitude, 6);
-        Assert.Equal(225.00, coords[2].Longitude, 6);
-        Assert.Equal(66.00, coords[2].Latitude, 6);
+        Assert.NotNull(p);
+        Assert.Equal(50.8, p!.Value.Latitude, 6);
+        Assert.Equal(-1.3, p.Value.Longitude, 6);
     }
 
     [Fact]
     public void ParsePosList_conformant_lat_first_stream_is_unchanged()
     {
-        var coords = GmlCoordinateParser.ParsePosList("62.1414 -67.3632 66.3292 -65.5028");
+        var coords = GmlCoordinateParser.ParsePosList("62.1 -167.3 66.3 -165.5");
 
         Assert.Equal(2, coords.Count);
-        Assert.Equal(62.1414, coords[0].Latitude, 6);
-        Assert.Equal(-67.3632, coords[0].Longitude, 6);
-        Assert.Equal(66.3292, coords[1].Latitude, 6);
-        Assert.Equal(-65.5028, coords[1].Longitude, 6);
-    }
-
-    [Fact]
-    public void ParsePos_negative_lon_first_is_swapped()
-    {
-        // Longitude-first with a negative longitude beyond ±90° also swaps.
-        var coord = GmlCoordinateParser.ParsePos("-155.0 70.0");
-
-        Assert.NotNull(coord);
-        Assert.Equal(70.0, coord!.Value.Latitude, 6);
-        Assert.Equal(-155.0, coord.Value.Longitude, 6);
-    }
-
-    [Fact]
-    public void ParsePosList_list_with_one_lon_first_pair_is_read_lon_first_throughout()
-    {
-        // NIC Arctic S-411: a ring straddling 90°E. "45 81" alone looks
-        // latitude first, but "120 80" shows the list is longitude first.
-        var coords = GmlCoordinateParser.ParsePosList("45 81 120 80");
-
-        Assert.Equal(81, coords[0].Latitude, 6);
-        Assert.Equal(45, coords[0].Longitude, 6);
-        Assert.Equal(80, coords[1].Latitude, 6);
-        Assert.Equal(120, coords[1].Longitude, 6);
+        Assert.Equal(62.1, coords[0].Latitude, 6);
+        Assert.Equal(-167.3, coords[0].Longitude, 6);
+        Assert.Equal(66.3, coords[1].Latitude, 6);
+        Assert.Equal(-165.5, coords[1].Longitude, 6);
     }
 
     [Fact]
     public void ParsePosList_longitude_first_order_swaps_every_pair()
     {
-        // A ring lying wholly within ±90° longitude in a longitude-first
-        // dataset (issue #760).
         var coords = GmlCoordinateParser.ParsePosList("30 75 60 76", GmlAxisOrder.LongitudeFirst);
 
+        Assert.Equal(2, coords.Count);
         Assert.Equal(75, coords[0].Latitude, 6);
         Assert.Equal(30, coords[0].Longitude, 6);
         Assert.Equal(76, coords[1].Latitude, 6);
@@ -105,28 +70,115 @@ public class GmlCoordinateParserTests
     }
 
     [Fact]
-    public void DetectAxisOrder_finds_a_lon_first_position_anywhere_in_the_dataset()
+    public void AssessAxisOrder_finds_a_lon_first_position_anywhere_in_the_dataset()
     {
-        var root = System.Xml.Linq.XElement.Parse("""
+        // A ring east of Greenwich (longitudes within ±90°) is read
+        // longitude first because another ring proves the dataset is (#760).
+        var root = XElement.Parse("""
             <d xmlns:gml="http://www.opengis.net/gml/3.2">
               <gml:posList>30 75 60 76</gml:posList>
               <gml:posList>200 70 210 71</gml:posList>
             </d>
             """);
 
-        Assert.Equal(GmlAxisOrder.LongitudeFirst, GmlCoordinateParser.DetectAxisOrder(root));
+        var (order, assessment) = GmlCoordinateParser.AssessAxisOrder(root);
+
+        Assert.Equal(GmlAxisOrder.LongitudeFirst, order);
+        Assert.Equal(AxisOrderOutcome.Swapped, assessment!.Outcome);
+        Assert.Equal(AxisOrderEvidence.PhysicalBounds, assessment.Evidence);
     }
 
     [Fact]
-    public void DetectAxisOrder_is_auto_for_conformant_lat_first_data()
+    public void AssessAxisOrder_conformant_data_without_envelope_is_unverified_and_lat_first()
     {
-        var root = System.Xml.Linq.XElement.Parse("""
+        var root = XElement.Parse("""
             <d xmlns:gml="http://www.opengis.net/gml/3.2">
               <gml:posList>62.1 -167.3 66.3 -165.5</gml:posList>
               <gml:pos>60 95</gml:pos>
             </d>
             """);
 
-        Assert.Equal(GmlAxisOrder.Auto, GmlCoordinateParser.DetectAxisOrder(root));
+        var (order, assessment) = GmlCoordinateParser.AssessAxisOrder(root);
+
+        Assert.Equal(GmlAxisOrder.LatitudeFirst, order);
+        Assert.Equal(AxisOrderOutcome.Unverified, assessment!.Outcome);
+        Assert.Equal(3, assessment.PositionCount);
+    }
+
+    [Fact]
+    public void AssessAxisOrder_uses_the_envelope_to_catch_a_swap_within_physical_bounds()
+    {
+        // The UK S-122 trial shape: lat-lon envelope, lon-lat posList, and
+        // every ordinate within ±90° so only the envelope can tell.
+        var root = XElement.Parse("""
+            <d xmlns:gml="http://www.opengis.net/gml/3.2">
+              <gml:boundedBy>
+                <gml:Envelope srsName="EPSG:4326">
+                  <gml:lowerCorner>50.0 -2.5</gml:lowerCorner>
+                  <gml:upperCorner>51.0 0.0</gml:upperCorner>
+                </gml:Envelope>
+              </gml:boundedBy>
+              <gml:posList>-2.5 50.95 -2.5 50.3 0.0 50.3 0.0 50.95</gml:posList>
+            </d>
+            """);
+
+        var (order, assessment) = GmlCoordinateParser.AssessAxisOrder(root);
+
+        Assert.Equal(GmlAxisOrder.LongitudeFirst, order);
+        Assert.Equal(AxisOrderEvidence.DeclaredExtent, assessment!.Evidence);
+        Assert.Equal(4, assessment.FitSwapped);
+        Assert.Equal(AxisOrderOutcome.Swapped, assessment.Outcome);
+        Assert.True(assessment.Normalized);
+    }
+
+    [Fact]
+    public void AssessAxisOrder_conformant_data_fitting_its_envelope_is_verified()
+    {
+        var root = XElement.Parse("""
+            <d xmlns:gml="http://www.opengis.net/gml/3.2">
+              <gml:boundedBy>
+                <gml:Envelope srsName="EPSG:4326">
+                  <gml:lowerCorner>50.0 -2.5</gml:lowerCorner>
+                  <gml:upperCorner>51.0 0.0</gml:upperCorner>
+                </gml:Envelope>
+              </gml:boundedBy>
+              <gml:pos>50.8 -1.3</gml:pos>
+            </d>
+            """);
+
+        var (order, assessment) = GmlCoordinateParser.AssessAxisOrder(root);
+
+        Assert.Equal(GmlAxisOrder.LatitudeFirst, order);
+        Assert.Equal(AxisOrderOutcome.AsEncoded, assessment!.Outcome);
+        Assert.False(assessment.IsNotice);
+    }
+
+    [Fact]
+    public void AssessAxisOrder_pairs_split_single_ordinate_positions()
+    {
+        // S-128 GML 1.0 IC-ENC/DK catalogues split each coordinate across
+        // consecutive single-value gml:pos elements.
+        var root = XElement.Parse("""
+            <d xmlns:gml="http://www.opengis.net/gml/3.2">
+              <gml:Polygon><gml:pos>21.1</gml:pos><gml:pos>41.1</gml:pos><gml:pos>21.9</gml:pos><gml:pos>41.9</gml:pos></gml:Polygon>
+              <gml:boundedBy><gml:Envelope><gml:lowerCorner>41 21</gml:lowerCorner><gml:upperCorner>42 22</gml:upperCorner></gml:Envelope></gml:boundedBy>
+            </d>
+            """);
+
+        var (order, assessment) = GmlCoordinateParser.AssessAxisOrder(root);
+
+        Assert.Equal(GmlAxisOrder.LongitudeFirst, order);
+        Assert.Equal(2, assessment!.PositionCount);
+    }
+
+    [Fact]
+    public void AssessAxisOrder_returns_no_assessment_without_positions()
+    {
+        var root = XElement.Parse("""<d xmlns:gml="http://www.opengis.net/gml/3.2" />""");
+
+        var (order, assessment) = GmlCoordinateParser.AssessAxisOrder(root);
+
+        Assert.Equal(GmlAxisOrder.LatitudeFirst, order);
+        Assert.Null(assessment);
     }
 }

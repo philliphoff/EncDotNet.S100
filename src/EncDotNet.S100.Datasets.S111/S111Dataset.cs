@@ -54,6 +54,14 @@ public sealed class S111Dataset
     /// </summary>
     public int? TypeOfCurrentData { get; init; }
 
+    /// <summary>
+    /// The outcome of the dataset-level axis-order check on the grid
+    /// footprints (issue #650), or <c>null</c> when it was not run (no
+    /// coverages, or a projected horizontal CRS). Grid georeferencing is
+    /// reported, never rewritten.
+    /// </summary>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder { get; init; }
+
     /// <summary>The surface current coverages contained in the dataset, one per time step.</summary>
     public required IReadOnlyList<SurfaceCurrentCoverage> Coverages { get; init; }
 }

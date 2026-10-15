@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Validation;
 using EncDotNet.S100.Viewer.Resources;
@@ -234,6 +235,53 @@ internal sealed class DatasetEntry : ViewModelBase
         UpdateMapDataset();
         OnPropertyChanged(nameof(HasVersionWarning));
         OnPropertyChanged(nameof(VersionWarningTooltip));
+        OnPropertyChanged(nameof(HasDatasetWarning));
+        OnPropertyChanged(nameof(DatasetWarningTooltip));
+    }
+
+    private AxisOrderAssessment? _axisOrder;
+
+    /// <summary>
+    /// True when the reader found the dataset's latitude and longitude
+    /// swapped, or its positions inconsistent with its declared extent
+    /// (issue #650). An unverified order is reported by validation, not by
+    /// the badge.
+    /// </summary>
+    public bool HasAxisOrderWarning => _axisOrder?.IsWarning == true;
+
+    /// <summary>
+    /// Records the axis-order assessment the dataset's reader made.
+    /// </summary>
+    public void SetAxisOrder(AxisOrderAssessment? assessment)
+    {
+        if (ReferenceEquals(_axisOrder, assessment)) return;
+
+        _axisOrder = assessment;
+        OnPropertyChanged(nameof(HasAxisOrderWarning));
+        OnPropertyChanged(nameof(HasDatasetWarning));
+        OnPropertyChanged(nameof(DatasetWarningTooltip));
+    }
+
+    /// <summary>
+    /// True when the dataset row shows the warning badge: a significant
+    /// spec-version divergence (<see cref="HasVersionWarning"/>) or an
+    /// axis-order warning (<see cref="HasAxisOrderWarning"/>).
+    /// </summary>
+    public bool HasDatasetWarning => HasVersionWarning || HasAxisOrderWarning;
+
+    /// <summary>
+    /// The badge tooltip: every active warning's message, one per line, or
+    /// <c>null</c> when <see cref="HasDatasetWarning"/> is false.
+    /// </summary>
+    public string? DatasetWarningTooltip
+    {
+        get
+        {
+            var messages = new List<string>(2);
+            if (VersionWarningTooltip is { } version) messages.Add(version);
+            if (HasAxisOrderWarning) messages.Add(_axisOrder!.BuildMessage());
+            return messages.Count == 0 ? null : string.Join(Environment.NewLine + Environment.NewLine, messages);
+        }
     }
 
     // ── Per-dataset display state ─────────────────────────────────────

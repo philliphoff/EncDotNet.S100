@@ -212,7 +212,11 @@ the catalogue sees the element names and namespaces it expects.
 - The reader accepts both the `s100gml/1.0` and `s100gml/5.0` profile
   namespaces.
 - Coordinates in `<gml:pos>` and `<gml:posList>` are latitude then longitude
-  for `EPSG:4326` (S-100 Part 10b).
+  for `EPSG:4326` (S-100 Part 10b). The US NWS and NIC sea-ice products write
+  longitude first; the shared axis-order check finds them by a latitude
+  beyond ±90° anywhere in the dataset (or against the envelope) and reads the
+  whole dataset longitude first, including rings whose longitudes are all
+  within ±90°. See [Check the axis order](../../docs/reading-product-data.md#check-the-axis-order).
 
 ## License
 

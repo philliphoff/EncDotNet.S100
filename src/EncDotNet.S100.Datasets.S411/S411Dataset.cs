@@ -31,6 +31,14 @@ public sealed class S411Dataset
     public string? DatasetIdentifier { get; init; }
 
     /// <summary>
+    /// The outcome of the dataset-level axis-order check (issue #650), or
+    /// <c>null</c> when the dataset has no positions. When it is
+    /// <see cref="EncDotNet.S100.DataModel.AxisOrderOutcome.Swapped"/> the reader
+    /// has already read every position longitude first.
+    /// </summary>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder { get; init; }
+
+    /// <summary>
     /// The dataset's reference / issue timestamp, if one was carried in the
     /// source GML. For the IHO 1.2.1 sample shape this is parsed from
     /// <c>S100:DatasetIdentificationInformation/S100:datasetReferenceDate</c>

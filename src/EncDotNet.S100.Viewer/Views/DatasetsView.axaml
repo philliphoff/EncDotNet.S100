@@ -691,8 +691,8 @@
                                                Foreground="#E8A317"
                                                VerticalAlignment="Center"
                                                Margin="6,0,0,0"
-                                               IsVisible="{Binding HasVersionWarning}"
-                                               ToolTip.Tip="{Binding VersionWarningTooltip}" />
+                                               IsVisible="{Binding HasDatasetWarning}"
+                                               ToolTip.Tip="{Binding DatasetWarningTooltip}" />
                                 <Button Grid.Column="3"
                                         AutomationProperties.Name="{x:Static loc:Strings.Label_MoveUp}"
                                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MoveDatasetUp}"

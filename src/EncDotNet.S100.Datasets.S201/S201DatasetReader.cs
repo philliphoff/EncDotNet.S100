@@ -76,6 +76,9 @@ internal static class S201DatasetReader
         var root = doc.Root
             ?? throw new InvalidOperationException("S-201 GML document has no root element.");
 
+        // Decide the axis order once for the whole dataset (issue #650).
+        var (axisOrder, axisAssessment) = GmlCoordinateParser.AssessAxisOrder(root);
+
         string? datasetId = root.Attribute(GmlNamespaces.Gml + "id")?.Value;
         string? productId = ReadProductIdentifier(root);
 
@@ -103,7 +106,7 @@ internal static class S201DatasetReader
                 }
                 else
                 {
-                    var (pending, refs) = ParseFeaturePending(element);
+                    var (pending, refs) = ParseFeaturePending(element, axisOrder);
                     pendingFeatureRefs.Add((pending, refs));
                 }
             }
@@ -123,7 +126,7 @@ internal static class S201DatasetReader
         {
             var featureElement = member.Elements().FirstOrDefault(e => IsApplicationSchema(e.Name));
             if (featureElement is null) continue;
-            var (pending, refs) = ParseFeaturePending(featureElement);
+            var (pending, refs) = ParseFeaturePending(featureElement, axisOrder);
             pendingFeatureRefs.Add((pending, refs));
         }
 
@@ -167,6 +170,7 @@ internal static class S201DatasetReader
             DatasetIdentifier = datasetId,
             Features = features,
             InformationTypes = informationTypes,
+            AxisOrder = axisAssessment,
         };
     }
 
@@ -192,12 +196,12 @@ internal static class S201DatasetReader
         IReadOnlyDictionary<string, string> Attributes,
         IReadOnlyList<S201ComplexAttribute> ComplexAttributes);
 
-    private static (PendingFeature, List<(string, string)>) ParseFeaturePending(XElement element)
+    private static (PendingFeature, List<(string, string)>) ParseFeaturePending(XElement element, GmlAxisOrder axisOrder)
     {
         var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value
             ?? element.Attribute("id")?.Value
             ?? "";
-        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element);
+        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, axisOrder);
         var (simpleAttrs, complexAttrs, xlinkRefs) = ParseAttributes(element);
 
         var pending = new PendingFeature(
@@ -223,7 +227,7 @@ internal static class S201DatasetReader
         };
     }
 
-    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement, GmlAxisOrder axisOrder)
     {
         IReadOnlyList<GeoPosition> points = [];
         IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
@@ -239,7 +243,7 @@ internal static class S201DatasetReader
         var pointProp = FindS100Element(geometryContainer, "pointProperty");
         if (pointProp is not null)
         {
-            var coord = GmlCoordinateParser.ParsePointElement(pointProp);
+            var coord = GmlCoordinateParser.ParsePointElement(pointProp, null, axisOrder);
             if (coord is not null)
             {
                 geometryType = S100GeometryType.Point;
@@ -251,7 +255,7 @@ internal static class S201DatasetReader
         if (curveProp is not null)
         {
             geometryType = S100GeometryType.Curve;
-            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
+            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp, axisOrder);
             if (coords.Count > 0)
                 curves = [coords];
         }
@@ -260,7 +264,7 @@ internal static class S201DatasetReader
         if (surfaceProp is not null)
         {
             geometryType = S100GeometryType.Surface;
-            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp);
+            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp, axisOrder);
             exteriorRing = ext;
             interiorRings = intRings;
         }

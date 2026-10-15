@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **One axis-order check for every reader.** The GML, S-102, S-104 and
+  S-111 readers share one dataset-level check for swapped latitude and
+  longitude, anchored on physical bounds and the declared extent. It replaces
+  the separate S-122, S-128 and S-411 rules, and it swaps back the UKHO S-104
+  Solent station file, which used to draw in the Indian Ocean, so Check
+  passage now applies its tide. The result is each dataset's `AxisOrder`, a
+  `{product}-PROJ-AXIS` validation finding, an **Axis order** row in
+  `s100 info`, and the dataset warning badge in SoundCharts. See
+  [Check the axis order](reading-product-data.md#check-the-axis-order).
 - **Route colours on Dusk and Night.** The route's check-mode colours, editing
   line, labels and markers are tuned for the Dusk and Night chart palettes
   and checked for contrast against the S-101 depth shades. On Night, the

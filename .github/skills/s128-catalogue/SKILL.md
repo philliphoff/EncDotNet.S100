@@ -102,9 +102,10 @@ product feature classes; consumers should query through
 ## Known pitfalls in this repo
 - The producer-bug compensations are inherited from the S-122
   reader: `s100gml` namespace tolerance, `<member>` and `<members>`
-  wrappers, comma-and-whitespace `posList` tokens, and the lon-lat
-  axis-order swap heuristic against `<gml:Envelope>`. Preserve all
-  four behaviours when refactoring.
+  wrappers, and comma-and-whitespace `posList` tokens. Preserve them when
+  refactoring. Axis order is decided once per dataset by the shared
+  `GmlCoordinateParser.AssessAxisOrder` (#650); thread its `GmlAxisOrder`
+  to every parse call rather than adding a product-local swap.
 - Per-feature XSLT rules emit area fills as
   `<color transparency="0.30">CHGRN</color>` — i.e. transparency on
   the `<color>` attribute, NOT a child `<transparency>` element.

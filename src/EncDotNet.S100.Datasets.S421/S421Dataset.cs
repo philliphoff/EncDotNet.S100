@@ -25,6 +25,14 @@ public sealed class S421Dataset
     public string? DatasetIdentifier { get; init; }
 
     /// <summary>
+    /// The outcome of the dataset-level axis-order check (issue #650), or
+    /// <c>null</c> when the dataset has no positions. When it is
+    /// <see cref="EncDotNet.S100.DataModel.AxisOrderOutcome.Swapped"/> the reader
+    /// has already read every position longitude first.
+    /// </summary>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder { get; init; }
+
+    /// <summary>
     /// Feature instances (parsed from <c>&lt;member&gt;</c> elements). For S-421 these
     /// include <c>Route</c>, <c>RouteWaypoints</c>, <c>RouteWaypoint</c>,
     /// <c>RouteSchedules</c>, <c>RouteSchedule</c>, <c>RouteWaypointLeg</c>,

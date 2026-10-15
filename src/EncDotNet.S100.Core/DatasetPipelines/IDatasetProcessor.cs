@@ -62,6 +62,19 @@ public interface IDatasetProcessor
     SpecVersionAssessment? VersionAssessment => null;
 
     /// <summary>
+    /// The outcome of the dataset-level axis-order check the reader ran on
+    /// the dataset's positions (issue #650), or <c>null</c> when the product
+    /// has no positions to check or the reader does not run it. A
+    /// <see cref="EncDotNet.S100.DataModel.AxisOrderOutcome.Swapped"/> outcome
+    /// means the reader swapped latitude and longitude for the whole dataset
+    /// (when <see cref="EncDotNet.S100.DataModel.AxisOrderAssessment.Normalized"/>
+    /// is set). Surfaced by hosts (CLI <c>info</c>, the viewer's dataset list)
+    /// and, when swapped or inconsistent, as a <c>{product}-PROJ-AXIS</c>
+    /// warning in <see cref="Validate"/>.
+    /// </summary>
+    EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder => null;
+
+    /// <summary>
     /// Returns information about a feature identified by its reference string
     /// (as stored in the rendered feature via the renderer's feature-ref key),
     /// or <c>null</c> if the feature cannot be found.

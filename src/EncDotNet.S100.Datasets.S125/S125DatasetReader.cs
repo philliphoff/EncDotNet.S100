@@ -72,6 +72,9 @@ internal static class S125DatasetReader
         var root = doc.Root
             ?? throw new InvalidOperationException("S-125 GML document has no root element.");
 
+        // Decide the axis order once for the whole dataset (issue #650).
+        var (axisOrder, axisAssessment) = GmlCoordinateParser.AssessAxisOrder(root);
+
         var datasetNs = root.Name.Namespace;
         var s100Ns = DetectS100Namespace(root);
 
@@ -107,7 +110,7 @@ internal static class S125DatasetReader
             foreach (var element in member.Elements())
             {
                 if (!IsFeatureType(element.Name, datasetNs)) continue;
-                features.Add(ParseFeature(element, s100Ns, informationTypeIds));
+                features.Add(ParseFeature(element, s100Ns, informationTypeIds, axisOrder));
             }
         }
 
@@ -118,6 +121,7 @@ internal static class S125DatasetReader
             DatasetIdentifier = datasetId,
             Features = features,
             InformationTypes = informationTypes,
+            AxisOrder = axisAssessment,
         };
     }
 
@@ -150,14 +154,14 @@ internal static class S125DatasetReader
         return S100Ns_5_0;
     }
 
-    private static S125Feature ParseFeature(XElement element, XNamespace s100Ns, HashSet<string> informationTypeIds)
+    private static S125Feature ParseFeature(XElement element, XNamespace s100Ns, HashSet<string> informationTypeIds, GmlAxisOrder axisOrder)
     {
         var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value
             ?? element.Attribute("id")?.Value
             ?? "";
         var featureType = element.Name.LocalName;
 
-        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, s100Ns);
+        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, s100Ns, axisOrder);
         var (simpleAttrs, complexAttrs, infoRefs, featureRefs) = ParseAttributes(element, s100Ns, informationTypeIds);
 
         return new S125Feature
@@ -203,7 +207,7 @@ internal static class S125DatasetReader
 
     // ── Geometry ───────────────────────────────────────────────────────
 
-    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement, XNamespace s100Ns)
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement, XNamespace s100Ns, GmlAxisOrder axisOrder)
     {
         IReadOnlyList<GeoPosition> points = [];
         IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
@@ -220,7 +224,7 @@ internal static class S125DatasetReader
             ?? geometryContainer.Element(s100Ns + "Point");
         if (pointProp is not null)
         {
-            var coord = GmlCoordinateParser.ParsePointElement(pointProp);
+            var coord = GmlCoordinateParser.ParsePointElement(pointProp, null, axisOrder);
             if (coord is not null)
             {
                 geometryType = S100GeometryType.Point;
@@ -232,7 +236,7 @@ internal static class S125DatasetReader
         if (curveProp is not null)
         {
             geometryType = S100GeometryType.Curve;
-            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp);
+            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp, axisOrder);
             curves = coords.Count > 0
                 ? [coords]
                 : [];
@@ -242,7 +246,7 @@ internal static class S125DatasetReader
         if (surfaceProp is not null)
         {
             geometryType = S100GeometryType.Surface;
-            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp);
+            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp, axisOrder);
             exteriorRing = ext;
             interiorRings = intRings;
         }

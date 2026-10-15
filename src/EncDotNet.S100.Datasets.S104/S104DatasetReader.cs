@@ -120,7 +120,7 @@ public static class S104DatasetReader
 
         if (dataCodingFormat is 1 or 8)
         {
-            var stations = ReadStationSeriesGuarded(
+            var (stations, axisOrder) = ReadStationSeriesGuarded(
                 root,
                 wlGroup,
                 dataCodingFormat,
@@ -146,6 +146,7 @@ public static class S104DatasetReader
                 MethodWaterLevelProduct = methodWaterLevelProduct,
                 WaterLevelTrendThreshold = waterLevelTrendThreshold,
                 Stations = stations,
+                AxisOrder = axisOrder,
                 MinTime = minTime,
                 MaxTime = maxTime,
             })
@@ -155,6 +156,18 @@ public static class S104DatasetReader
         }
 
         var coverages = ReadCoveragesGuarded(wlGroup, dataCodingFormat, productSpecification);
+        var gridAxisOrder = horizontalCRS is null or 4326
+            ? AxisOrderCheck.Assess(
+                coverages
+                    .DistinctBy(c => c.GroupPath)
+                    .SelectMany(c => AxisOrderCheck.GridCorners(
+                        c.OriginLatitude, c.OriginLongitude,
+                        c.SpacingLatitudinal, c.SpacingLongitudinal,
+                        c.NumPointsLatitudinal, c.NumPointsLongitudinal)),
+                Hdf5DeclaredExtent.ReadDatasetExtent(root, wlGroup, "WaterLevel."),
+                "the WaterLevel grid origins",
+                normalizes: false)
+            : null;
 
         return new S104DatasetData.GriddedCoverage(new S104Dataset
         {
@@ -169,6 +182,7 @@ public static class S104DatasetReader
             DataCodingFormat = dataCodingFormat,
             MethodWaterLevelProduct = methodWaterLevelProduct,
             Coverages = coverages,
+            AxisOrder = gridAxisOrder,
         })
         {
             DeclaredProductSpecification = productSpecification,
@@ -219,7 +233,7 @@ public static class S104DatasetReader
 
         if (dataCodingFormat is 1 or 8)
         {
-            var stations = ReadStationSeriesGuarded(
+            var (stations, _) = ReadStationSeriesGuarded(
                 root,
                 wlGroup,
                 dataCodingFormat,
@@ -351,7 +365,7 @@ public static class S104DatasetReader
     /// <see cref="S100DatasetSchemaException"/> with the declared-edition
     /// note when the dataset targets an edition other than 2.0.0.
     /// </summary>
-    private static IReadOnlyList<WaterLevelStation> ReadStationSeriesGuarded(
+    private static (IReadOnlyList<WaterLevelStation> Stations, AxisOrderAssessment? AxisOrder) ReadStationSeriesGuarded(
         IHdf5Group root,
         IHdf5Group wlGroup,
         int dataCodingFormat,
@@ -360,7 +374,7 @@ public static class S104DatasetReader
         try
         {
             return dataCodingFormat == 1
-                ? ReadTimeMajorStationSeries(wlGroup)
+                ? ReadTimeMajorStationSeries(root, wlGroup)
                 : ReadStationSeries(root, wlGroup);
         }
         catch (S100DatasetSchemaException ex) when (DeclaredEditionMismatchNote(productSpecification) is { } note)
@@ -619,10 +633,13 @@ public static class S104DatasetReader
     // dcf1 — time-major fixed stations (S-100 Part 10c §10.2.1)
     // -------------------------------------------------------------------
 
-    private static IReadOnlyList<WaterLevelStation> ReadTimeMajorStationSeries(IHdf5Group wlGroup)
+    private static (IReadOnlyList<WaterLevelStation> Stations, AxisOrderAssessment? AxisOrder) ReadTimeMajorStationSeries(
+        IHdf5Group root,
+        IHdf5Group wlGroup)
     {
-        var stations = new List<WaterLevelStation>();
-
+        // Each instance carries its own positions; the axis-order check runs
+        // once over all of them (issue #650).
+        var instances = new List<(IHdf5Group Instance, string Name, string Path, IReadOnlyList<GeoPosition> Positions)>();
         foreach (var instanceName in wlGroup.GroupNames)
         {
             if (!instanceName.StartsWith("WaterLevel.", StringComparison.Ordinal))
@@ -630,21 +647,33 @@ public static class S104DatasetReader
 
             var instance = wlGroup.OpenGroup(instanceName);
             var instancePath = $"/WaterLevel/{instanceName}";
-            ReadTimeMajorInstance(instance, instanceName, instancePath, stations);
+            instances.Add((instance, instanceName, instancePath, ReadInstancePositions(instance, instancePath)));
         }
 
-        return stations;
+        var axisOrder = AxisOrderCheck.Assess(
+            instances.SelectMany(i => i.Positions),
+            Hdf5DeclaredExtent.ReadDatasetExtent(root, wlGroup, "WaterLevel."),
+            "/WaterLevel/WaterLevel.NN/Positioning/geometryValues");
+
+        var stations = new List<WaterLevelStation>();
+        foreach (var (instance, instanceName, instancePath, positions) in instances)
+        {
+            ReadTimeMajorInstance(
+                instance, instanceName, instancePath, AxisOrderCheck.Apply(axisOrder, positions), stations);
+        }
+
+        return (stations, axisOrder);
     }
 
     private static void ReadTimeMajorInstance(
         IHdf5Group instance,
         string instanceName,
         string instancePath,
+        IReadOnlyList<GeoPosition> positions,
         List<WaterLevelStation> stations)
     {
         const string spec = "S-100 Part 10c §10.2.1";
 
-        var positions = ReadInstancePositions(instance, instancePath);
         int stationCount = positions.Count;
         var timeGroupNames = instance.GroupNames
             .Where(name => name.StartsWith("Group_", StringComparison.Ordinal))
@@ -854,9 +883,16 @@ public static class S104DatasetReader
     /// shared across every <c>WaterLevel.NN</c> instance under
     /// <c>/WaterLevel/</c>.
     /// </remarks>
-    private static IReadOnlyList<WaterLevelStation> ReadStationSeries(IHdf5Group root, IHdf5Group wlGroup)
+    private static (IReadOnlyList<WaterLevelStation> Stations, AxisOrderAssessment? AxisOrder) ReadStationSeries(
+        IHdf5Group root,
+        IHdf5Group wlGroup)
     {
-        var positions = ReadStationPositions(root);
+        var (encoded, positionsPath) = ReadStationPositions(root);
+        var axisOrder = AxisOrderCheck.Assess(
+            encoded,
+            Hdf5DeclaredExtent.ReadDatasetExtent(root, wlGroup, "WaterLevel."),
+            positionsPath);
+        var positions = AxisOrderCheck.Apply(axisOrder, encoded);
 
         var stations = new List<WaterLevelStation>();
 
@@ -870,10 +906,10 @@ public static class S104DatasetReader
             ReadStationInstance(instance, instancePath, positions, stations);
         }
 
-        return stations;
+        return (stations, axisOrder);
     }
 
-    private static List<GeoPosition> ReadStationPositions(IHdf5Group root)
+    private static (List<GeoPosition> Positions, string Path) ReadStationPositions(IHdf5Group root)
     {
         // S-104 Edition 2.0.0 §10.2.3 — station positions live in a
         // /Positioning group containing a compound 'geometryValues'
@@ -881,6 +917,7 @@ public static class S104DatasetReader
         // tooling places the group under /WaterLevel/Positioning;
         // accept either.
         IHdf5Group? positioningGroup = null;
+        string positioningPath = "/Positioning";
         if (root.GroupNames.Contains("Positioning"))
         {
             positioningGroup = root.OpenGroup("Positioning");
@@ -899,6 +936,7 @@ public static class S104DatasetReader
                     if (inst.GroupNames.Contains("Positioning"))
                     {
                         positioningGroup = inst.OpenGroup("Positioning");
+                        positioningPath = $"/WaterLevel/{name}/Positioning";
                         break;
                     }
                 }
@@ -968,7 +1006,7 @@ public static class S104DatasetReader
             double lon = ReadFloatingPointMember(record, lonMember);
             positions.Add(new GeoPosition(lat, lon));
         }
-        return positions;
+        return (positions, $"{positioningPath}/geometryValues");
     }
 
     private static double ReadFloatingPointMember(ReadOnlySpan<byte> record, CompoundMemberInfo member) =>

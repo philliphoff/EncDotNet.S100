@@ -58,8 +58,8 @@ foreach (var feature in dataset.Features)
   `Surface`. For a feature with several surfaces, `ExteriorRing` holds them all
   joined; use `Surfaces` to get each surface with its own holes.
 - Positions are `GeoPosition` values: latitude and longitude in WGS 84 degrees.
-  GML stores them as latitude then longitude (S-100 Part 10b); the reader
-  handles that for you.
+  GML stores them as latitude then longitude (S-100 Part 10b). Some producers
+  write longitude first; see [Check the axis order](#check-the-axis-order).
 - `Attributes` holds simple attributes as strings, keyed by attribute code.
   Complex attributes, which have sub-attributes, are in `ComplexAttributes`.
   `xlink` references to other features or information types are in
@@ -243,6 +243,67 @@ values are `WaterLevelValue`s:
 - `Height` is the water level in metres relative to the dataset's vertical
   datum.
 - `Trend` is 1 (decreasing), 2 (increasing), 3 (steady) or 0 (unknown).
+
+## Check the axis order
+
+S-100 puts latitude first: GML positions are latitude then longitude (Part
+10b §6.2), and HDF5 station positions and grid origins are named `latitude`
+and `longitude` (Part 10c). Producer data swaps them often enough that every
+GML, S-102, S-104 and S-111 reader checks each dataset once after reading it,
+and applies the result to the whole dataset, never to single positions.
+
+The check compares the positions with two anchors:
+
+1. **Physical bounds.** A latitude beyond ±90° can only be a longitude. If
+   any position has one and every longitude is within ±90°, the dataset is
+   longitude first.
+2. **The declared extent.** For HDF5, that's the bounding-box attributes
+   (`westBoundLongitude` and the rest), on the root or, failing that, the
+   feature instances. For GML, it's the `gml:Envelope`. If at least 75% of the
+   positions fit the extent as encoded, the order is verified. If fewer than
+   25% fit as encoded and more than 75% fit swapped, the dataset is longitude
+   first.
+
+A `gml:Envelope` is written in the same order as the positions, so it can be
+the swapped one. When the positions fit the envelope only swapped, the reader
+swaps them only if they cover at least half the envelope on both axes, as an
+envelope computed from the data does. A looser envelope is reported, and the
+positions are kept as encoded.
+
+The result is the dataset's `AxisOrder`, an `AxisOrderAssessment` (namespace
+`EncDotNet.S100.DataModel`). It's on every GML dataset type, on the S-102,
+S-104 and S-111 datasets the readers return, and on the facade's
+`S100Dataset`:
+
+| `Outcome` | Meaning | Positions |
+|---|---|---|
+| `AsEncoded` | The positions fit the declared extent latitude first. | Unchanged. |
+| `Swapped` | The positions are longitude first. `Evidence` says which anchor showed it. | Swapped back when `Normalized` is true. |
+| `Unverified` | No usable extent, and every position is within physical bounds. | Unchanged; latitude first is assumed. |
+| `Inconsistent` | The positions fit the extent in neither order, or `ExtentMayBeSwapped` is set. | Unchanged. |
+
+```csharp
+using EncDotNet.S100.Datasets.S104;
+using EncDotNet.S100.Hdf5.PureHdf;
+
+using var file = PureHdfFile.Open("104UK_20210401T000000Z_SolentAndAppr_dcf8.hdf5");
+var stations = (S104DatasetData.StationSeries)S104DatasetReader.ReadAny(file);
+
+if (stations.Dataset.AxisOrder is { IsNotice: true } axisOrder)
+    Console.WriteLine(axisOrder.BuildMessage());
+```
+
+Station positions and GML positions are swapped back. Grid origins aren't:
+the S-102, S-104 and S-111 readers only report a grid whose footprint fits
+its bounding box swapped, because a producer that swaps the origin may also
+have swapped the spacing and counts. The check doesn't run on a grid in a
+projected CRS, such as UTM.
+
+`Validate()` reports a `Swapped` or `Inconsistent` outcome as a
+`{product}-PROJ-AXIS` warning, such as `S104-PROJ-AXIS`. `Unverified` isn't a
+finding, because the GML envelope is optional, but `s100 info` shows every
+outcome as **Axis order**. SoundCharts shows the dataset's warning badge for a
+swapped or inconsistent dataset.
 
 ## Next steps
 
