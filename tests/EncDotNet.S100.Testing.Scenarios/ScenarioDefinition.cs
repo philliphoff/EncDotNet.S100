@@ -1,0 +1,44 @@
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Testing.Scenarios.World;
+using EncDotNet.S100.Testing.Scenarios.Writers;
+
+namespace EncDotNet.S100.Testing.Scenarios;
+
+/// <summary>
+/// A named, seeded set of products sampled from one world: what to write,
+/// and the places and route the scenario's tests talk about.
+/// </summary>
+/// <param name="Name">The scenario's name, such as <c>"spit-across-scales"</c>.</param>
+/// <param name="World">The world every product samples.</param>
+/// <param name="Issued">The issue time written to every dataset and the catalogue (UTC).</param>
+/// <param name="WaterLevelStart">The first water-level record (UTC).</param>
+/// <param name="WaterLevelEnd">The last water-level record (UTC).</param>
+/// <param name="Cells">The S-101 cells.</param>
+/// <param name="DredgedChannels">Dredged channels, charted in every cell they overlap.</param>
+/// <param name="Surfaces">The S-102 surfaces.</param>
+/// <param name="Stations">The S-104 station series, or <c>null</c>.</param>
+/// <param name="WaterLevelGrids">The S-104 grids.</param>
+/// <param name="Places">Named local points, in metres.</param>
+/// <param name="Route">The scenario's route as named local waypoints, in metres.</param>
+public sealed record ScenarioDefinition(
+    string Name,
+    SyntheticWorld World,
+    DateTime Issued,
+    DateTime WaterLevelStart,
+    DateTime WaterLevelEnd,
+    IReadOnlyList<S101CellSpec> Cells,
+    IReadOnlyList<DredgedChannel> DredgedChannels,
+    IReadOnlyList<S102SurfaceSpec> Surfaces,
+    S104StationsSpec? Stations,
+    IReadOnlyList<S104GridSpec> WaterLevelGrids,
+    IReadOnlyDictionary<string, (double X, double Y)> Places,
+    IReadOnlyList<string> Route)
+{
+    /// <summary>The geographic position of a named place.</summary>
+    /// <param name="name">The place's name.</param>
+    /// <returns>The position.</returns>
+    public GeoPosition Place(string name) => World.Frame.ToGeo(Places[name].X, Places[name].Y);
+
+    /// <summary>The route's waypoints as geographic positions.</summary>
+    public IReadOnlyList<GeoPosition> RoutePositions => Route.Select(Place).ToList();
+}

@@ -32,6 +32,8 @@
   href: observability.md
 - name: C# coding style
   href: coding-style.md
+- name: Test scenario generator
+  href: scenario-generator.md
 - name: Documentation style
   href: docs-style.md
 - name: MCP server

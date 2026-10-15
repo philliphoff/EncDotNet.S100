@@ -1,13 +1,13 @@
 using System.Reflection;
 using PureHDF;
 
-namespace EncDotNet.S100.Datasets.S104.Tests.Fixtures;
+namespace EncDotNet.S100.Testing.Scenarios.Hdf5;
 
 /// <summary>
 /// Helpers that author small synthetic S-104 dcf8 ("time series at fixed
 /// stations") HDF5 files for reader tests.
 /// </summary>
-internal static class S104Dcf8FixtureBuilder
+public static class S104Dcf8FixtureBuilder
 {
     // ---- Compound row variants --------------------------------------------------
 

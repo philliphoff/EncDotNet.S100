@@ -1,7 +1,7 @@
 using EncDotNet.S100.Core;
-using EncDotNet.S100.Datasets.S104.Tests.Fixtures;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Testing.Scenarios.Hdf5;
 
 namespace EncDotNet.S100.Datasets.S104.Tests;
 

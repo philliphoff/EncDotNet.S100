@@ -67,6 +67,8 @@
     <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S57.Tests/EncDotNet.S100.Datasets.S57.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Cli.Tests/EncDotNet.S100.Cli.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Testing.Scenarios.Tests/EncDotNet.S100.Testing.Scenarios.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Testing.Scenarios/EncDotNet.S100.Testing.Scenarios.csproj" />
     <Project Path="tests/EncDotNet.S100.Tests/EncDotNet.S100.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Core.Tests/EncDotNet.S100.Core.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Features.Tests/EncDotNet.S100.Features.Tests.csproj" />

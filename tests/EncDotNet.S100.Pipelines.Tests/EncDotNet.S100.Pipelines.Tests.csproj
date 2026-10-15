@@ -38,6 +38,7 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S104\EncDotNet.S100.Datasets.S104.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Testing.Scenarios\EncDotNet.S100.Testing.Scenarios.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S111\EncDotNet.S100.Datasets.S111.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
@@ -61,19 +62,14 @@
   </ItemGroup>
 
   <!--
-    Reuse the dcf8 HDF5 fixture builders from the S-104 / S-111 reader-test
-    projects rather than duplicating them. Linked compile means the source
+    Reuse the dcf8 HDF5 fixture builders from the S-111 reader-test project
+    rather than duplicating them (the S-104 builders live in
+    EncDotNet.S100.Testing.Scenarios). Linked compile means the source
     files participate in this assembly under the same namespace but as
     internal types, which matches the original visibility. NoWarn silences
     CS0649 for fixture row variants that aren't exercised by these tests.
   -->
   <ItemGroup>
-    <Compile Include="..\EncDotNet.S100.Datasets.S104.Tests\Fixtures\S104Dcf8FixtureBuilder.cs"
-             Link="Fixtures\S104Dcf8FixtureBuilder.cs" />
-    <Compile Include="..\EncDotNet.S100.Datasets.S104.Tests\Fixtures\S104Dcf1FixtureBuilder.cs"
-             Link="Fixtures\S104Dcf1FixtureBuilder.cs" />
-    <Compile Include="..\EncDotNet.S100.Datasets.S104.Tests\Fixtures\S104FixtureBuilder.cs"
-             Link="Fixtures\S104FixtureBuilder.cs" />
     <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111FixtureBuilder.cs"
              Link="Fixtures\S111FixtureBuilder.cs" />
     <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111Dcf8FixtureBuilder.cs"
