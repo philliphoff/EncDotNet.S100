@@ -187,7 +187,8 @@
                                                AutomationProperties.AutomationId="Clearance.Readout.State"
                                                Text="{Binding StateText}"
                                                FontSize="11"
-                                               FontWeight="SemiBold" />
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap" />
                                 </StackPanel>
                             </Panel>
                         </StackPanel>
