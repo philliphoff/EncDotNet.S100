@@ -419,6 +419,18 @@ public sealed class SecomTests : IDisposable
         var changed = await indexer.IndexAsync(source, undated, cancellationToken: Ct);
         Assert.NotSame(undated, changed);
         Assert.All(changed.Items, item => Assert.True(current.IsOlderThan(item)));
+
+        // The service starts giving dates (AMSA did, #882): a copy judged by its
+        // revision is outdated once, then compared by date.
+        var revisioned = await downloader.DownloadAsync(changed.Items[0], cancellationToken: Ct);
+        summary["info_lastModifiedDate"] = "2026-10-15T00:03:39Z";
+        server.Summaries = [summary];
+        time.Advance(SecomSourceIndexer.ReuseInterval);
+        var dated = await indexer.IndexAsync(source, changed, cancellationToken: Ct);
+        Assert.Null(((RemoteItemLocation)dated.Items[0].Location).Revision);
+        Assert.All(dated.Items, item => Assert.True(revisioned.IsOlderThan(item)));
+        var redownloaded = await downloader.DownloadAsync(dated.Items[0], cancellationToken: Ct);
+        Assert.All(dated.Items, item => Assert.False(redownloaded.IsOlderThan(item)));
     }
 
     [Fact]

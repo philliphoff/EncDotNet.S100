@@ -357,12 +357,7 @@ public sealed class SecomClient
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException(
-                string.Create(CultureInfo.InvariantCulture, $"SECOM {uri.AbsolutePath} answered {Status(response)}."),
-                null,
-                response.StatusCode);
-        }
+            throw await FailureAsync(response, $"SECOM {uri.AbsolutePath}", cancellationToken).ConfigureAwait(false);
 
         await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         JsonDocument document;
@@ -392,12 +387,7 @@ public sealed class SecomClient
         using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException(
-                string.Create(CultureInfo.InvariantCulture, $"SECOM POST {uri.AbsolutePath} answered {Status(response)}."),
-                null,
-                response.StatusCode);
-        }
+            throw await FailureAsync(response, $"SECOM POST {uri.AbsolutePath}", cancellationToken).ConfigureAwait(false);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         JsonDocument document;
@@ -413,6 +403,59 @@ public sealed class SecomClient
         using (document)
         {
             return read(document.RootElement);
+        }
+    }
+
+    /// <summary>The key under which a failure's <see cref="Exception.Data"/> holds the service's own explanation.</summary>
+    public const string ServiceMessageKey = "SecomServiceMessage";
+
+    /// <summary>
+    /// The exception for a failed request: its status, and the service's own
+    /// explanation when the body is a SECOM response object with a <c>message</c>
+    /// (AMSA: 400 "The requested SECOM trust anchor is not recognised or is not
+    /// valid"), which is also kept in <see cref="Exception.Data"/> under
+    /// <see cref="ServiceMessageKey"/>.
+    /// </summary>
+    internal static async Task<HttpRequestException> FailureAsync(
+        HttpResponseMessage response, string what, CancellationToken cancellationToken)
+    {
+        var message = await ServiceMessageAsync(response, cancellationToken).ConfigureAwait(false);
+        var failure = new HttpRequestException(
+            message is null
+                ? string.Create(CultureInfo.InvariantCulture, $"{what} answered {Status(response)}.")
+                : string.Create(CultureInfo.InvariantCulture, $"{what} answered {Status(response)}: {message}"),
+            null,
+            response.StatusCode);
+        if (message is not null)
+            failure.Data[ServiceMessageKey] = message;
+        return failure;
+    }
+
+    /// <summary>The <c>message</c> of a SECOM response object in a failed response's body, if any (one line, at most 300 characters).</summary>
+    private static async Task<string?> ServiceMessageAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (response.Content.Headers.ContentLength is > 64 * 1024)
+                return null;
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (body.Length is 0 or > 64 * 1024)
+                return null;
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("message", out var element)
+                || element.ValueKind != JsonValueKind.String
+                || element.GetString() is not { } text)
+            {
+                return null;
+            }
+
+            var line = string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+            return line.Length == 0 ? null : line.Length > 300 ? line[..300] + "…" : line;
+        }
+        catch (Exception ex) when (ex is JsonException or HttpRequestException or InvalidOperationException or IOException)
+        {
+            return null;
         }
     }
 

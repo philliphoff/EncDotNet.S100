@@ -59,6 +59,11 @@ public sealed record DownloadedCell(
             return !string.Equals(revision, Revision, StringComparison.Ordinal);
         if (IsPackage || (Edition is null && item.Edition is null))
         {
+            // A copy downloaded while the listing gave no date, judged by its
+            // revision, can't be compared with a date the listing now gives
+            // (AMSA added lastModifiedDate, #882): it's outdated once.
+            if (PublishedAt is null && Revision is not null)
+                return item.Location is RemoteItemLocation { LastModified: not null };
             return item.Location is RemoteItemLocation { LastModified: { } published }
                 && PublishedAt is { } downloaded
                 && published > downloaded;
@@ -306,6 +311,8 @@ public sealed partial class EncCellDownloader
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                 .ConfigureAwait(false))
             {
+                if (isSecom && !response.IsSuccessStatusCode)
+                    throw await SecomClient.FailureAsync(response, $"SECOM Get of {item.Name}", cancellationToken).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
                 await using var target = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);

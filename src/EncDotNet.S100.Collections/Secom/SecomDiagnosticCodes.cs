@@ -59,6 +59,16 @@ public static class SecomDiagnosticCodes
         if (failure is HttpRequestException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden })
             return signed ? SignedRequestRefused : presented ? CertificateRefused : NeedsCertificate;
 
+        // A signed request refused as a bad request, with the service saying it's
+        // about the certificate or signature: AMSA answers 400 "The requested
+        // SECOM trust anchor is not recognised or is not valid" (#882).
+        if (signed && failure is HttpRequestException { StatusCode: HttpStatusCode.BadRequest }
+            && failure.Data[SecomClient.ServiceMessageKey] is string explanation
+            && IsAboutIdentity(explanation))
+        {
+            return SignedRequestRefused;
+        }
+
         // The server's certificate was accepted and it asked for a client
         // certificate, yet the connection failed: the handshake was refused
         // for want of an (acceptable) client certificate.
@@ -76,4 +86,10 @@ public static class SecomDiagnosticCodes
 
         return null;
     }
+
+    private static bool IsAboutIdentity(string explanation) =>
+        explanation.Contains("certificate", StringComparison.OrdinalIgnoreCase)
+        || explanation.Contains("trust anchor", StringComparison.OrdinalIgnoreCase)
+        || explanation.Contains("signature", StringComparison.OrdinalIgnoreCase)
+        || explanation.Contains("thumbprint", StringComparison.OrdinalIgnoreCase);
 }
