@@ -1783,6 +1783,8 @@ internal static class Strings
     public static string Check_VerdictIncomplete => Get(nameof(Check_VerdictIncomplete));
     public static string Check_VerdictTight => Get(nameof(Check_VerdictTight));
     public static string Check_VerdictMeets => Get(nameof(Check_VerdictMeets));
+    public static string Check_ConfidenceDatumUnconfirmed => Get(nameof(Check_ConfidenceDatumUnconfirmed));
+    public static string Check_ConfidenceS101Format => Get(nameof(Check_ConfidenceS101Format));
     public static string Check_MinUkcLabel => Get(nameof(Check_MinUkcLabel));
     public static string Check_RequiredFormat => Get(nameof(Check_RequiredFormat));
     public static string Check_NoMarginSet => Get(nameof(Check_NoMarginSet));
@@ -1807,6 +1809,9 @@ internal static class Strings
     public static string Check_WindowMoreFormat => Get(nameof(Check_WindowMoreFormat));
     public static string Check_WindowInsideFormat => Get(nameof(Check_WindowInsideFormat));
     public static string Check_WindowSentenceFormat => Get(nameof(Check_WindowSentenceFormat));
+    public static string Check_WindowLowConfidenceFormat => Get(nameof(Check_WindowLowConfidenceFormat));
+    public static string Check_WindowCaveatDatum => Get(nameof(Check_WindowCaveatDatum));
+    public static string Check_WindowCaveatS101 => Get(nameof(Check_WindowCaveatS101));
     public static string Check_DepartFormat => Get(nameof(Check_DepartFormat));
     public static string Tooltip_CheckDepart => Get(nameof(Tooltip_CheckDepart));
     public static string Clearance_Departure => Get(nameof(Clearance_Departure));
@@ -1861,6 +1866,7 @@ internal static class Strings
     public static string Check_LegendMeets => Get(nameof(Check_LegendMeets));
     public static string Check_LegendTight => Get(nameof(Check_LegendTight));
     public static string Check_LegendBelow => Get(nameof(Check_LegendBelow));
+    public static string Check_LegendLowConfidence => Get(nameof(Check_LegendLowConfidence));
     public static string Check_LegendNoData => Get(nameof(Check_LegendNoData));
     public static string Check_MinUkcPillFormat => Get(nameof(Check_MinUkcPillFormat));
     public static string Tooltip_CheckLegRow => Get(nameof(Tooltip_CheckLegRow));
@@ -1892,7 +1898,7 @@ internal static class Strings
     public static string Clearance_SourceS104GridFormat => Get(nameof(Clearance_SourceS104GridFormat));
     public static string Clearance_NoTide => Get(nameof(Clearance_NoTide));
     public static string Clearance_TideDatumMismatch => Get(nameof(Clearance_TideDatumMismatch));
-    public static string Clearance_StateLowConfidence => Get(nameof(Clearance_StateLowConfidence));
+    public static string Clearance_StateLowConfidenceFormat => Get(nameof(Clearance_StateLowConfidenceFormat));
     public static string Clearance_StateNoData => Get(nameof(Clearance_StateNoData));
     public static string Clearance_SourcesS102 => Get(nameof(Clearance_SourcesS102));
     public static string Clearance_SourcesS101 => Get(nameof(Clearance_SourcesS101));

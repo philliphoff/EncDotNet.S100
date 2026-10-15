@@ -85,7 +85,6 @@ one of:
 | `MeetsSettings` | UKC is at least 0,5 m above the required UKC. |
 | `Tight` | UKC meets the required UKC with less than 0,5 m to spare. |
 | `BelowSetting` | UKC is less than the required UKC. |
-| `LowConfidence` | UKC meets the required UKC, but the depth is from S-101, or the depth and water-level datums can't be confirmed to agree. |
 | `NoData` | There's no charted depth, or no water level that can be applied. |
 
 The water level counts as missing outside the S-104 extent or time range,
@@ -93,7 +92,14 @@ where a value is NoData, or where its vertical datum differs from the charted
 depth's. A datum mismatch is reported as a gap and the two values are never
 added. A datum that isn't declared, or isn't an S-100 vertical datum code,
 can't be confirmed. In that case the water level is applied and the sample is
-low confidence.
+lower confidence.
+
+Confidence is separate from the state. A sample's `Confidence` lists why it's
+lower confidence (`ChartedDepthFromS101`, `DatumUnconfirmed`), and the state
+still says whether the clearance meets, is tight or is below. Legs, the
+minimum, the whole result and each departure option combine their samples'
+reasons the same way. A departure that meets your settings with lower
+confidence still meets them.
 
 `Verdict` follows this priority:
 

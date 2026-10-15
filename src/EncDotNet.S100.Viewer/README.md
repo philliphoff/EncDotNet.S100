@@ -844,18 +844,24 @@ enter; S-111 currents aren't applied.
 leg. It checks under-keel clearance along the active route at each point's
 ETA: UKC = charted depth + water level − draft − squat, against the
 **Required UKC** (0 m when unset). Charted depth comes from loaded S-102, or
-from S-101 where there's no S-102 (low confidence); water level comes from
+from S-101 where there's no S-102 (lower confidence); water level comes from
 loaded S-104. While it's on:
 
 - **The map** washes the chart and colours the route by state at ETA:
   - Meets your settings, Tight (within 0.5 m of the required UKC) and Below
     your UKC setting. The Below state is drawn wider.
-  - Low confidence and no data, drawn dashed.
+  - Lower confidence keeps its state's colour and is drawn dashed: the depth
+    is from S-101, or the depth and water-level datums can't be confirmed to
+    agree.
+  - No data is grey and dashed.
 
   A legend sits at the bottom left. A ring and a pill mark the minimum UKC,
   and a ghost vessel marks the cursor.
 - **The panel** shows a verdict card instead of the waypoint list. The card has
-  the verdict, the minimum UKC, where and when it occurs, and the sources. Its
+  the verdict, the minimum UKC, where and when it occurs, and the sources.
+  The verdict follows the clearance; a line under it explains lower
+  confidence, such as "Vertical datums unconfirmed: depth and water level may
+  not share a reference". Its
   window line lists the departures that meet your settings, such as
   "Departures 05:35–06:40 meet your settings". When the current departure is
   outside them, **Depart {HH:MM}** moves it to the nearest one that meets

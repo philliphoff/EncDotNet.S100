@@ -27,7 +27,7 @@ public sealed class RoutePaletteTests : IDisposable
     public static TheoryData<PaletteType> Palettes => [PaletteType.Day, PaletteType.Dusk, PaletteType.Night];
 
     private static readonly UkcState[] States =
-        [UkcState.MeetsSettings, UkcState.Tight, UkcState.BelowSetting, UkcState.LowConfidence, UkcState.NoData];
+        [UkcState.MeetsSettings, UkcState.Tight, UkcState.BelowSetting, UkcState.NoData];
 
     private static readonly string[] DepthTokens = ["DEPDW", "DEPMD", "DEPMS", "DEPVS", "DEPIT", "LANDA"];
 
@@ -62,12 +62,21 @@ public sealed class RoutePaletteTests : IDisposable
 
     [Theory]
     [MemberData(nameof(Palettes))]
-    public void No_data_is_fainter_than_low_confidence(PaletteType palette)
+    public void No_data_is_the_only_grey_so_a_dashed_band_never_reads_as_no_data(PaletteType palette)
     {
+        // Lower confidence is a dashed line in its band's colour (#939);
+        // only no data is grey, so the two dashed lines differ by hue.
         var colors = RouteCheckColors.For(palette);
-        Assert.True(
-            ColorContrast.Ratio(colors.NoData, colors.Casing) < ColorContrast.Ratio(colors.LowConfidence, colors.Casing),
-            $"{palette}: No data must sit closer to the casing than Low confidence");
+        static float Saturation(SKColor c)
+        {
+            c.ToHsv(out _, out var s, out _);
+            return s;
+        }
+
+        Assert.True(Saturation(colors.NoData) < 25, $"{palette}: No data should be grey");
+        Assert.All(
+            States.Where(s => s != UkcState.NoData),
+            s => Assert.True(Saturation(colors.Of(s)) > 45, $"{palette} {s} should carry its hue"));
     }
 
     [Theory]
@@ -159,6 +168,64 @@ public sealed class RoutePaletteTests : IDisposable
         Assert.Equal(palette, ClearanceViewModel.StatePalette(theme));
 
     /// <summary>
+    /// Every state × confidence combination (#939) as it draws on the map,
+    /// in seven runs along the fixture route: Meets, Tight and Below at full
+    /// confidence, the same three at lower confidence (band colour, dashed),
+    /// then No data (grey, dashed), over bands of the palette's S-101 depth
+    /// shades, with the legend.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Palettes))]
+    public async Task Check_mode_states_and_confidence(PaletteType palette)
+    {
+        var f = new PassageCheckFixture();
+        await f.CheckAsync();
+        var appearance = MeasureOverlayAppearance.Default with
+        {
+            Palette = palette,
+            ChartBackground = MeasureOverlayAppearance.ChartBackgroundFor(palette),
+        };
+        var built = RouteCheckOverlay.Build(true, f.Check.Current, false, null, appearance, DepthUnit.Metres, TimeFormat.Utc)!;
+        (UkcState State, bool Low)[] rows =
+        [
+            (UkcState.MeetsSettings, false), (UkcState.Tight, false), (UkcState.BelowSetting, false),
+            (UkcState.MeetsSettings, true), (UkcState.Tight, true), (UkcState.BelowSetting, true),
+            (UkcState.NoData, false),
+        ];
+        const double length = 0.16;
+        var segments = rows
+            .Select((r, i) => new RouteCheckOverlay.Segment(
+                [new DataModel.GeoPosition(0, i * length / rows.Length), new DataModel.GeoPosition(0, (i + 1) * length / rows.Length)], r.State, r.Low))
+            .ToList();
+        var check = built with { Segments = segments, Minimum = null, Ghost = null };
+        var scene = RouteOverlayScene.Build(f.Routes.Routes, null, null, false, appearance, check);
+
+        const int width = 900;
+        const int height = 420;
+        await Verify(Render(palette, scene, width, height), "png").UseParameters(palette);
+    }
+
+    private static byte[] Render(PaletteType palette, RouteOverlayScene scene, int width, int height)
+    {
+        var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var surface = SKSurface.Create(info);
+        var canvas = surface.Canvas;
+        var s101 = S101(palette);
+        for (var i = 0; i < DepthTokens.Length; i++)
+        {
+            using var paint = new SKPaint { Color = Token(s101, DepthTokens[i]) };
+            canvas.DrawRect(i * width / (float)DepthTokens.Length, 0, width / (float)DepthTokens.Length + 1, height, paint);
+        }
+
+        var (cx, _) = Mapsui.Projections.SphericalMercator.FromLonLat(0.08, 0);
+        var viewport = new Mapsui.Viewport(cx, 0, 22, 0, width, height);
+        RouteOverlayRenderer.Instance.Draw(canvas, viewport, new MemoryLayer(), new PointFeature(0, 0), new RouteOverlayStyle { Scene = scene }, null!, 0);
+        using var image = surface.Snapshot();
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    /// <summary>
     /// The route overlay in check mode on the fixture route (below the setting
     /// at 07:10, with the cursor and ghost at 3 NM), drawn over bands of the
     /// palette's S-101 depth shades and land.
@@ -179,7 +246,7 @@ public sealed class RoutePaletteTests : IDisposable
         var scene = RouteOverlayScene.Build(f.Routes.Routes, null, null, false, appearance, check);
 
         const int width = 900;
-        const int height = 320;
+        const int height = 400;
         var info = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
         using var surface = SKSurface.Create(info);
         var canvas = surface.Canvas;

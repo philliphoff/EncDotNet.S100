@@ -4715,6 +4715,12 @@
   <data name="Check_VerdictMeets" xml:space="preserve">
     <value>Meets your settings</value>
   </data>
+  <data name="Check_ConfidenceDatumUnconfirmed" xml:space="preserve">
+    <value>Vertical datums unconfirmed: depth and water level may not share a reference</value>
+  </data>
+  <data name="Check_ConfidenceS101Format" xml:space="preserve">
+    <value>Charted depth from S-101 on {0:0.0} NM</value>
+  </data>
   <data name="Check_MinUkcLabel" xml:space="preserve">
     <value>min UKC</value>
   </data>
@@ -4800,7 +4806,7 @@
     <value>{0:0.0} NM outside S-102 coverage</value>
   </data>
   <data name="Findings_DatumUnconfirmed" xml:space="preserve">
-    <value>Datums can't be confirmed to agree</value>
+    <value>Vertical datums unconfirmed</value>
   </data>
   <data name="Findings_DatumUnconfirmedMetaFormat" xml:space="preserve">
     <value>{0:0.0} NM · a depth or water-level datum isn't declared</value>
@@ -4892,8 +4898,11 @@
   <data name="Check_LegendBelow" xml:space="preserve">
     <value>Below your UKC setting</value>
   </data>
+  <data name="Check_LegendLowConfidence" xml:space="preserve">
+    <value>Dashed: lower confidence</value>
+  </data>
   <data name="Check_LegendNoData" xml:space="preserve">
-    <value>Low confidence · no data</value>
+    <value>No data</value>
   </data>
   <data name="Check_MinUkcPillFormat" xml:space="preserve">
     <value>Min UKC {0} · {1}</value>
@@ -4902,7 +4911,7 @@
     <value>Move the cursor to the middle of this leg</value>
   </data>
   <data name="Tooltip_CheckLowConfidence" xml:space="preserve">
-    <value>Low confidence: charted depth from S-101, or datums that can't be confirmed to agree</value>
+    <value>Lower confidence: charted depth from S-101, or datums that can't be confirmed to agree. The tint still shows the clearance.</value>
   </data>
   <data name="Dock_ObjectInformationEdge" xml:space="preserve">
     <value>OBJECT INFORMATION</value>
@@ -4979,8 +4988,8 @@
   <data name="Clearance_TideDatumMismatch" xml:space="preserve">
     <value>S-104 on another datum · tide not applied</value>
   </data>
-  <data name="Clearance_StateLowConfidence" xml:space="preserve">
-    <value>Low confidence</value>
+  <data name="Clearance_StateLowConfidenceFormat" xml:space="preserve">
+    <value>{0} · lower confidence</value>
   </data>
   <data name="Clearance_StateNoData" xml:space="preserve">
     <value>No data</value>
@@ -5074,6 +5083,15 @@
   </data>
   <data name="Check_WindowSentenceFormat" xml:space="preserve">
     <value>{0}.</value>
+  </data>
+  <data name="Check_WindowLowConfidenceFormat" xml:space="preserve">
+    <value>{0} Lower confidence: {1}.</value>
+  </data>
+  <data name="Check_WindowCaveatDatum" xml:space="preserve">
+    <value>datums unconfirmed</value>
+  </data>
+  <data name="Check_WindowCaveatS101" xml:space="preserve">
+    <value>charted depth partly from S-101</value>
   </data>
   <data name="Check_DepartFormat" xml:space="preserve">
     <value>Depart {0}</value>

@@ -45,6 +45,35 @@ public sealed class PassageCheckMcpToolsTests
     }
 
     [Fact]
+    public async Task Get_check_state_reports_the_band_led_verdict_and_confidence_separately()
+    {
+        // #939: no S-102 datum. The verdict still follows the band.
+        var f = new PassageCheckFixture(depthDatum: null, tide: PassageCheckFixture.TwoHighWaters);
+        await new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check).InvokeAsync(new SetCheckModeRequest(true), TestContext.Current.CancellationToken);
+        await f.Check.WhenIdle();
+
+        var state = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check).InvokeAsync(true, TestContext.Current.CancellationToken));
+
+        Assert.Equal("below_setting", state.Verdict);
+        Assert.Equal(["datum_unconfirmed"], state.Confidence);
+        Assert.Equal("Vertical datums unconfirmed: depth and water level may not share a reference", state.ConfidenceText);
+        var window = Assert.IsType<DepartureWindowDto>(state.Window);
+        Assert.NotEmpty(window.Windows);
+        Assert.Equal(["datum_unconfirmed"], window.Confidence);
+        Assert.EndsWith(" Lower confidence: datums unconfirmed.", window.Text);
+    }
+
+    [Fact]
+    public async Task Full_confidence_reports_no_confidence_reasons()
+    {
+        var f = new PassageCheckFixture();
+        var state = Value(await new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check).InvokeAsync(new SetCheckModeRequest(true), TestContext.Current.CancellationToken));
+
+        Assert.Empty(state.Confidence);
+        Assert.Null(state.ConfidenceText);
+    }
+
+    [Fact]
     public async Task Set_check_mode_needs_a_draft()
     {
         var f = new PassageCheckFixture();

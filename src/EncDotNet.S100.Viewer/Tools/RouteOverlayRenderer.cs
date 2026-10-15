@@ -272,9 +272,12 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
     /// <summary>Width of a state's line: below the setting is wider, so it doesn't rely on colour alone (C6).</summary>
     internal static float CheckStrokeWidth(Navigation.UkcState state) => state == Navigation.UkcState.BelowSetting ? 7f : 5f;
 
-    /// <summary>Whether a state's line is dashed 6/4: low confidence and no data (C6).</summary>
-    internal static bool IsCheckDashed(Navigation.UkcState state) =>
-        state is Navigation.UkcState.LowConfidence or Navigation.UkcState.NoData;
+    /// <summary>
+    /// Whether a run's line is dashed 6/4: no data, and lower confidence in
+    /// any band (C6, with confidence drawn over the band colour per #939).
+    /// </summary>
+    internal static bool IsCheckDashed(Navigation.UkcState state, bool isLowConfidence = false) =>
+        isLowConfidence || state == Navigation.UkcState.NoData;
 
     private static void DrawCheckRoute(SKCanvas canvas, RouteCheckOverlay check, IReadOnlyList<LegLayout> layout, Func<GeoPosition, Point?> toScreen, float opacity)
     {
@@ -292,7 +295,7 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
         foreach (var segment in check.Segments)
         {
             using var paint = Stroke(check.Colors.Of(segment.State).WithAlpha(Alpha(opacity)), CheckStrokeWidth(segment.State));
-            if (IsCheckDashed(segment.State))
+            if (IsCheckDashed(segment.State, segment.IsLowConfidence))
             {
                 paint.StrokeCap = SKStrokeCap.Butt;
                 paint.PathEffect = SKPathEffect.CreateDash([6f, 4f], 0);
@@ -353,14 +356,17 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
     /// <returns>The legend's top edge, so the finding chip can sit above it.</returns>
     private static float DrawLegend(SKCanvas canvas, RouteCheckOverlay check, float height, float opacity)
     {
-        // C7: "UKC AT ETA" with four swatches at the map's bottom left.
+        // C7: "UKC AT ETA" at the map's bottom left: the three bands, then
+        // the dashed lower-confidence key (in the Meets colour, standing for
+        // any band) and grey dashed no data (#939).
         var colors = check.Colors;
-        var items = new (string Label, Navigation.UkcState State)[]
+        var items = new (string Label, Navigation.UkcState State, bool IsLowConfidence)[]
         {
-            (Resources.Strings.Check_LegendMeets, Navigation.UkcState.MeetsSettings),
-            (Resources.Strings.Check_LegendTight, Navigation.UkcState.Tight),
-            (Resources.Strings.Check_LegendBelow, Navigation.UkcState.BelowSetting),
-            (Resources.Strings.Check_LegendNoData, Navigation.UkcState.NoData),
+            (Resources.Strings.Check_LegendMeets, Navigation.UkcState.MeetsSettings, false),
+            (Resources.Strings.Check_LegendTight, Navigation.UkcState.Tight, false),
+            (Resources.Strings.Check_LegendBelow, Navigation.UkcState.BelowSetting, false),
+            (Resources.Strings.Check_LegendLowConfidence, Navigation.UkcState.MeetsSettings, true),
+            (Resources.Strings.Check_LegendNoData, Navigation.UkcState.NoData, false),
         };
         using var font = new SKFont(LabelTypeface, LabelFontSize);
         using var titleFont = new SKFont(LabelBoldTypeface, 9.5f);
@@ -382,7 +388,7 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             var y = rect.Top + 28f + (i * rowHeight);
             using var swatch = Stroke(colors.Of(items[i].State).WithAlpha(Alpha(opacity)), CheckStrokeWidth(items[i].State) - 1f);
             swatch.StrokeCap = SKStrokeCap.Butt;
-            if (IsCheckDashed(items[i].State))
+            if (IsCheckDashed(items[i].State, items[i].IsLowConfidence))
                 swatch.PathEffect = SKPathEffect.CreateDash([6f, 4f], 0);
             canvas.DrawLine(rect.Left + 10f, y, rect.Left + 28f, y, swatch);
             canvas.DrawText(items[i].Label, rect.Left + 34f, y + 3.5f, SKTextAlign.Left, font, ink);

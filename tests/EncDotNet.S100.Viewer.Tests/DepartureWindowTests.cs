@@ -113,6 +113,20 @@ public sealed class DepartureWindowTests : IDisposable
     }
 
     [Fact]
+    public async Task Lower_confidence_departures_still_meet_with_a_caveat_on_the_window_line()
+    {
+        // No S-102 datum (#939): the same windows, with the caveat.
+        var f = new PassageCheckFixture(tide: PassageCheckFixture.TwoHighWaters, depthDatum: null);
+        var card = Card(f);
+        await f.CheckAsync();
+
+        Assert.Equal([(At(6, 0), At(6, 40)), (At(8, 25), At(10, 20))], f.Check.Window!.Windows);
+        Assert.Equal(
+            "Departures 06:00Z–06:40Z, 08:25Z–10:20Z meet your settings. Lower confidence: datums unconfirmed.",
+            card.Window.Text);
+    }
+
+    [Fact]
     public async Task Separate_windows_are_all_listed()
     {
         var f = new PassageCheckFixture(tide: PassageCheckFixture.TwoHighWaters);

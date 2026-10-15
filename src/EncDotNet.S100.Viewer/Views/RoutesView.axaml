@@ -403,7 +403,7 @@
             <Setter Property="Opacity" Value="0.45" />
             <Setter Property="CornerRadius" Value="9" />
         </Style>
-        <!-- Low confidence: the chip's border is dashed and muted. -->
+        <!-- Lower confidence: the chip keeps its band tint; its border is dashed and muted (#939). -->
         <Style Selector="Rectangle.chipDash">
             <Setter Property="Stroke" Value="{DynamicResource MutedColor}" />
             <Setter Property="StrokeThickness" Value="1" />
@@ -954,6 +954,19 @@
                                            IsVisible="{Binding WhereText, Converter={x:Static ObjectConverters.IsNotNull}}"
                                            FontSize="11.5"
                                            TextWrapping="Wrap" />
+                                <!-- #939: confidence qualifies the band-led title, never replaces it. -->
+                                <StackPanel AutomationProperties.AutomationId="Routes.Check.Confidence"
+                                            AutomationProperties.Name="{Binding ConfidenceText}"
+                                            Orientation="Horizontal"
+                                            Spacing="5"
+                                            Opacity="0.75"
+                                            IsVisible="{Binding ConfidenceText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                    <ic:FluentIcon Icon="Info" IconVariant="Regular" FontSize="12" VerticalAlignment="Top" Margin="0,1,0,0" />
+                                    <TextBlock Text="{Binding ConfidenceText}"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="260" />
+                                </StackPanel>
                                 <!-- #903 (C3): the departure window line and Depart {HH:MM}. -->
                                 <StackPanel DataContext="{Binding Window}"
                                             x:DataType="vm:DepartureWindowViewModel"

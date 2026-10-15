@@ -108,24 +108,82 @@ public sealed class PassageCheckTests : IDisposable
 
         var tail = Overlay(f).Segments[^1];
         Assert.Equal(UkcState.NoData, tail.State);
-        Assert.True(RouteOverlayRenderer.IsCheckDashed(tail.State));
+        Assert.True(RouteOverlayRenderer.IsCheckDashed(tail.State, tail.IsLowConfidence));
         Assert.Equal("no tide", vm.Check.Legs[^1].ChipText);
     }
 
     [Fact]
-    public async Task Low_confidence_draws_dashed_and_gives_the_chip_a_dashed_border()
+    public async Task Low_confidence_keeps_the_band_colour_dashed_and_gives_the_chip_a_dashed_border()
     {
-        // No S-102 datum: the water level is applied, but the datums can't be confirmed.
+        // No S-102 datum: the water level is applied, but the datums can't be
+        // confirmed. Confidence qualifies the band and never replaces it (#939).
         var f = new PassageCheckFixture(depthDatum: null);
         var vm = Panel(f);
         vm.IsCheckingPassage = true;
         await f.Check.WhenIdle();
 
-        var first = Overlay(f).Segments[0];
-        Assert.Equal(UkcState.LowConfidence, first.State);
-        Assert.True(RouteOverlayRenderer.IsCheckDashed(first.State));
-        Assert.True(vm.Check!.Legs[0].IsLowConfidence);
-        Assert.Equal(CheckTone.Neutral, vm.Check.Legs[0].ChipTone);
+        var overlay = Overlay(f);
+        var first = overlay.Segments[0];
+        Assert.Equal(UkcState.MeetsSettings, first.State);
+        Assert.True(first.IsLowConfidence);
+        Assert.True(RouteOverlayRenderer.IsCheckDashed(first.State, first.IsLowConfidence));
+        Assert.Equal(overlay.Colors.Meets, overlay.Colors.Of(first.State));
+        Assert.Contains(overlay.Segments, s => s.State == UkcState.BelowSetting && s.IsLowConfidence);
+
+        var check = vm.Check!;
+        Assert.True(check.Legs[0].IsLowConfidence);
+        Assert.Equal(CheckTone.Success, check.Legs[0].ChipTone);
+        Assert.Equal(CheckTone.Destructive, check.Legs[5].ChipTone);
+        Assert.True(check.Legs[5].IsLowConfidence);
+
+        // The title follows the band; the confidence line explains it.
+        Assert.Equal("Below your UKC setting in 1 place", check.Title);
+        Assert.Equal("Vertical datums unconfirmed: depth and water level may not share a reference", check.ConfidenceText);
+    }
+
+    [Fact]
+    public async Task No_data_stays_grey_and_dashed_beside_lower_confidence_bands()
+    {
+        var f = new PassageCheckFixture(depthDatum: null, waterEnd: PassageCheckFixture.WaterStart.AddHours(2));
+        var vm = Panel(f);
+        vm.IsCheckingPassage = true;
+        await f.Check.WhenIdle();
+
+        var overlay = Overlay(f);
+        var tail = overlay.Segments[^1];
+        Assert.Equal(UkcState.NoData, tail.State);
+        Assert.False(tail.IsLowConfidence);
+        Assert.Equal(overlay.Colors.NoData, overlay.Colors.Of(tail.State));
+        Assert.True(RouteOverlayRenderer.IsCheckDashed(tail.State, tail.IsLowConfidence));
+        Assert.Equal(UkcState.MeetsSettings, overlay.Segments[0].State);
+        Assert.NotEqual(overlay.Colors.NoData, overlay.Colors.Of(overlay.Segments[0].State));
+        Assert.Equal(CheckTone.Neutral, vm.Check!.Legs[^1].ChipTone);
+    }
+
+    [Fact]
+    public async Task S101_fallback_is_named_in_the_confidence_line_with_its_length()
+    {
+        var f = new PassageCheckFixture(s101FallbackUntilLon: 0.02);
+        var vm = Panel(f);
+        vm.IsCheckingPassage = true;
+        await f.Check.WhenIdle();
+
+        Assert.StartsWith("Charted depth from S-101 on 1.", vm.Check!.ConfidenceText);
+        Assert.EndsWith(" NM", vm.Check.ConfidenceText);
+        Assert.Equal(CheckTone.Success, vm.Check.Legs[0].ChipTone);
+        Assert.True(vm.Check.Legs[0].IsLowConfidence);
+    }
+
+    [Fact]
+    public async Task Full_confidence_has_no_confidence_line()
+    {
+        var f = new PassageCheckFixture();
+        var vm = Panel(f);
+        vm.IsCheckingPassage = true;
+        await f.Check.WhenIdle();
+
+        Assert.Null(vm.Check!.ConfidenceText);
+        Assert.All(Overlay(f).Segments, s => Assert.False(s.IsLowConfidence));
     }
 
     [Fact]

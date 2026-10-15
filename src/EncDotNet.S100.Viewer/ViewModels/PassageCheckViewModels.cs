@@ -23,7 +23,7 @@ internal enum CheckTone
     /// <summary>Below your UKC setting.</summary>
     Destructive,
 
-    /// <summary>No data, data ends before arrival, or low confidence.</summary>
+    /// <summary>No data, or data ends before arrival.</summary>
     Neutral,
 }
 
@@ -157,6 +157,18 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         private set => SetProperty(ref _title, value);
     }
 
+    private string? _confidenceText;
+    /// <summary>
+    /// The verdict's secondary line on confidence (#939): "Charted depth from
+    /// S-101 on 1,5 NM" and/or "Vertical datums unconfirmed: …", one per line;
+    /// <c>null</c> at full confidence. The title and tone follow the band.
+    /// </summary>
+    public string? ConfidenceText
+    {
+        get => _confidenceText;
+        private set => SetProperty(ref _confidenceText, value);
+    }
+
     private string? _minUkcText;
     /// <summary>The minimum UKC, e.g. "0,4 m".</summary>
     public string? MinUkcText
@@ -238,6 +250,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         var result = current.Result;
         Tone = ToneOf(result.Verdict);
         Title = VerdictTitle(result);
+        ConfidenceText = ConfidenceLine(result);
         var depthUnit = _depthUnit();
         if (result.Minimum is { } min)
         {
@@ -329,6 +342,23 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         _ => Strings.Check_VerdictMeets,
     };
 
+    /// <summary>The verdict's confidence line, or <c>null</c> at full confidence.</summary>
+    internal static string? ConfidenceLine(PassageCheckResult result)
+    {
+        var lines = new List<string>();
+        if (result.Confidence.HasFlag(ConfidenceReasons.ChartedDepthFromS101))
+        {
+            var meters = result.LowConfidence
+                .Where(s => s.Kind == PassageStretchKind.ChartedDepthFromS101)
+                .Sum(s => s.LengthMeters);
+            lines.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_ConfidenceS101Format, meters / PassageGeodesy.MetersPerNauticalMile));
+        }
+
+        if (result.Confidence.HasFlag(ConfidenceReasons.DatumUnconfirmed))
+            lines.Add(Strings.Check_ConfidenceDatumUnconfirmed);
+        return lines.Count == 0 ? null : string.Join(Environment.NewLine, lines);
+    }
+
     internal static CheckTone ToneOf(PassageVerdict verdict) => verdict switch
     {
         PassageVerdict.MeetsSettings => CheckTone.Success,
@@ -411,7 +441,10 @@ internal sealed class PassageCheckLegRowViewModel : ViewModelBase
     public bool IsChipNeutral => ChipTone == CheckTone.Neutral;
 
     private bool _isLowConfidence;
-    /// <summary>Whether part of the leg is low confidence: the chip gets a dashed muted border.</summary>
+    /// <summary>
+    /// Whether part of the leg is lower confidence: the chip keeps its band
+    /// tint and gets a dashed muted border (#939).
+    /// </summary>
     public bool IsLowConfidence
     {
         get => _isLowConfidence;
@@ -450,7 +483,6 @@ internal sealed class PassageCheckLegRowViewModel : ViewModelBase
             {
                 UkcState.BelowSetting => CheckTone.Destructive,
                 UkcState.NoData => CheckTone.Neutral,
-                UkcState.LowConfidence => CheckTone.Neutral,
                 UkcState.Tight => CheckTone.Warning,
                 _ => CheckTone.Success,
             };

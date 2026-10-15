@@ -21,13 +21,13 @@ public class GetPassageResultToolTests
     // About 1,4 NM due east, inside the S-104 node extent (0–0,03°).
     private static readonly GeoPolyline Polyline = new([new GeoPoint(0.005, 0.005), new GeoPoint(0.005, 0.028)]);
 
-    private static FakeDatasetCatalog Catalog(Func<int, int, float>? depthAt = null)
+    private static FakeDatasetCatalog Catalog(Func<int, int, float>? depthAt = null, int? depthDatum = Lat)
     {
         var bathymetry = S102Synth.Dataset(depthAt: depthAt);
         var water = S104Synth.Dataset();
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S102("102A", source: new S102CoverageSource(
-            new S102Dataset { HorizontalCRS = 4326, VerticalDatum = Lat, Coverages = bathymetry.Coverages })));
+            new S102Dataset { HorizontalCRS = 4326, VerticalDatum = depthDatum, Coverages = bathymetry.Coverages })));
         catalog.Add(LoadedDatasetFactory.S104("104A", source: new S104CoverageSource(
             new S104Dataset { HorizontalCRS = 4326, DataCodingFormat = 2, VerticalDatum = Lat, Coverages = water.Coverages })));
         return catalog;
@@ -66,12 +66,44 @@ public class GetPassageResultToolTests
         Assert.Equal(Midnight, leg.Start);
         Assert.Empty(value.Gaps);
         Assert.Empty(value.LowConfidence);
+        Assert.Empty(value.Confidence);
+        Assert.Empty(leg.Confidence);
         Assert.Equal(["102A"], value.Sources.BathymetryDatasets);
         Assert.Equal("104A", Assert.Single(value.Sources.WaterLevels).Dataset);
         Assert.Equal("Lowest Astronomical Tide", Assert.Single(value.Sources.DepthDatums).Label);
         Assert.Equal("Not for navigation · computed from S-102, S-104 for your settings", value.Disclaimer);
         Assert.Null(value.Samples);
         Assert.Null(value.Window);
+    }
+
+    [Fact]
+    public async Task An_undeclared_s102_datum_keeps_the_band_and_reports_confidence_separately()
+    {
+        // #939: the S-102 declares no vertical datum, so every sample is
+        // datum_unconfirmed, but still meets the setting.
+        var value = await Ok(new GetPassageResultTool(Catalog(depthDatum: null)), new GetPassageResultRequest(
+            Polyline: Polyline, DraftMeters: 10, SpeedKnots: 6, RequiredUkcMeters: 3, Departure: Midnight,
+            IncludeSamples: true, WindowFrom: Midnight, WindowTo: Midnight.AddMinutes(30)));
+
+        Assert.Equal("meets_settings", value.Verdict);
+        Assert.Equal(["datum_unconfirmed"], value.Confidence);
+        Assert.Equal("meets_settings", value.Minimum!.State);
+        Assert.Equal(["datum_unconfirmed"], value.Minimum.Confidence);
+        var leg = Assert.Single(value.Legs);
+        Assert.Equal("meets_settings", leg.WorstState);
+        Assert.True(leg.LowConfidence);
+        Assert.Equal(["datum_unconfirmed"], leg.Confidence);
+        Assert.All(value.Samples!, s =>
+        {
+            Assert.Equal("meets_settings", s.State);
+            Assert.Equal(["datum_unconfirmed"], s.Confidence);
+        });
+        Assert.Equal("datum_unconfirmed", Assert.Single(value.LowConfidence).Kind);
+
+        var window = Assert.IsType<PassageWindowSummary>(value.Window);
+        Assert.NotEmpty(window.Windows);
+        Assert.Equal(["datum_unconfirmed"], window.WindowConfidence);
+        Assert.All(window.Departures, d => Assert.Equal(["datum_unconfirmed"], d.Confidence));
     }
 
     [Fact]

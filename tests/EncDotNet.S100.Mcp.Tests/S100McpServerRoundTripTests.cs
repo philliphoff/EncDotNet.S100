@@ -957,10 +957,14 @@ public class S100McpServerRoundTripTests
         var payload = ParseSingleJson(result);
 
         // Neither synthetic dataset declares a vertical datum, so the water
-        // level is applied but every sample is low confidence.
+        // level is applied but every sample is lower confidence; the state
+        // still reports the clearance band (#939).
         Assert.Equal("meets_settings", payload["verdict"]!.GetValue<string>());
         Assert.Equal("datum_unconfirmed", payload["lowConfidence"]!.AsArray().Single()!["kind"]!.GetValue<string>());
-        Assert.Equal("low_confidence", payload["samples"]!.AsArray()[0]!["state"]!.GetValue<string>());
+        var sample = payload["samples"]!.AsArray()[0]!;
+        Assert.NotEqual("no_data", sample["state"]!.GetValue<string>());
+        Assert.Equal("datum_unconfirmed", sample["confidence"]!.AsArray().Single()!.GetValue<string>());
+        Assert.Contains("datum_unconfirmed", payload["confidence"]!.AsArray().Select(c => c!.GetValue<string>()));
         Assert.Single(payload["legs"]!.AsArray());
         Assert.StartsWith("Not for navigation", payload["disclaimer"]!.GetValue<string>());
     }

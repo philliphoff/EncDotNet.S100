@@ -275,11 +275,11 @@ revert a drag on the map and Ctrl+Z (⌘Z) can revert a tool's edit.
 | `set_passage_card` | Yes | Expands (`expanded: true`) or collapses the **Routes** panel's Passage card, as clicking its header does. Switching the active route sets it again: expanded for a route with passage values, collapsed otherwise. To open a leg's detail, select the leg with `select_route_item`. Returns `expanded`. |
 | `set_route_edit_mode` | Yes | Turns the route editor on (`enabled: true`) or off, as the Routes panel's **Edit** toggle and Ctrl+E (⌘E) do. While it is on, clicks on the map add waypoints to the active route. Returns `enabled` and `activeRouteId`. |
 | `set_check_mode` | Yes | Turns **Check passage** on (`on: true`) or off for the active route, or for `routeId` (made active first), as the Routes panel's toggle does. The route needs a draft. While it's on, the map colours the route by UKC state at ETA, Object Information folds to its edge tab, and the panel shows the verdict card and leg chips. By default it waits for the result (`wait: false` returns at once). Returns what `get_check_state` returns. |
-| `get_check_state` | No | Returns what Check passage is showing: `on`, `routeId`, `computing`, `stale` (the result is being recomputed after an edit, so the route draws grey and dashed), the `verdict` and `verdictTitle`, `minUkcMeters` and `minUkcLeg`, any `error`, and the cursor (`cursorNm`, `cursorLatitude`, `cursorLongitude`, `cursorLeg`, `cursorEta`). It also returns the `departure` being checked (`departureIsViewTime` when the route has none) and the departure `window`: `from`, `to` and `stepMinutes` of the sweep across the S-104 range, the `windows` of departures that meet your settings, `arrivalAfterDataEnds` (the departures that arrive after the S-104 data ends), `insideWindow`, `nearestMeetingDeparture`, the verdict card's `text` and its `departButton`. `windowComputing` is true while the window is swept again after an edit. Waits for a pending result unless `wait: false`. For the full numbers, call `get_passage_result`. |
+| `get_check_state` | No | Returns what Check passage is showing: `on`, `routeId`, `computing`, `stale` (the result is being recomputed after an edit, so the route draws grey and dashed), the `verdict` and `verdictTitle` (which follow the clearance band), the `confidence` reasons and the verdict card's `confidenceText` (for example "Vertical datums unconfirmed: depth and water level may not share a reference"), `minUkcMeters` and `minUkcLeg`, any `error`, and the cursor (`cursorNm`, `cursorLatitude`, `cursorLongitude`, `cursorLeg`, `cursorEta`). It also returns the `departure` being checked (`departureIsViewTime` when the route has none) and the departure `window`: `from`, `to` and `stepMinutes` of the sweep across the S-104 range, the `windows` of departures that meet your settings (lower-confidence ones included) with their `confidence` caveat, `arrivalAfterDataEnds` (the departures that arrive after the S-104 data ends), `insideWindow`, `nearestMeetingDeparture`, the verdict card's `text` and its `departButton`. `windowComputing` is true while the window is swept again after an edit. Waits for a pending result unless `wait: false`. For the full numbers, call `get_passage_result`. |
 | `set_departure` | Yes | Sets the route's `departure`, as dragging the Clearance tab's departure band does, or with `nearestMeeting: true` jumps to the departure nearest the current one that meets your settings, as the verdict card's **Depart {HH:MM}** does (Check passage must be on). One undoable edit. Waits for the new result and window unless `wait: false`, and returns what `get_check_state` returns. |
 | `set_follow_passage` | Yes | Turns **Follow passage** on (`on: true`) or off, as the Timeline header's toggle does. While it's on, the view time is pinned to the ETA at the Clearance cursor (`set_passage_cursor`), or at the minimum UKC when there's no cursor, so S-104 and S-111 show what the ship meets. Turning it on pins the Timeline; when the route has no departure, it first sets the departure to the one being checked, as one undoable edit. Turning it off leaves the view time where it is. Choosing another time (`set_view_time`, `step_time`, Go live) or turning Check passage off stops it. Needs Check passage on with ETAs; otherwise returns `invalid_argument`. Returns what `get_timeline_state` returns. |
 | `set_passage_cursor` | Yes | Moves the Check passage cursor and the ghost vessel to `distanceNm` along the checked route, as hovering a leg row does, or hides them when `distanceNm` is omitted. Returns the state, including the cursor's position and ETA. |
-| `get_clearance_state` | No | Returns what the **Clearance** tab shows while Check passage is on: the profile's `axis` (`distance` or `time`), `canShowTime`, `sourcesOpen`, and the readout at the cursor (`readoutSample`, the sample index in `get_passage_result`; `readoutPosition`, `readoutLeg`, `depth` and `depthSource` with its cell, `waterLevel` and `waterLevelSource` with its station or grid and time step, `draftSquat`, `ukc` and `state`). It also returns the `sources` groups, and the `departureBand`: the `departure` beside it, the `knobFraction` (0 to 1 across the band), the `startLabel`, `middleLabel` and `endLabel` ("12:00 · S-104 ends"), `stale`, and the `segments`, each a run of departures with its `kind` (`meets_settings`, `below_setting`, `arrival_after_data_ends` or `no_data`). Without a cursor, the readout describes the minimum. Open the tab with `set_panel` `Clearance`. |
+| `get_clearance_state` | No | Returns what the **Clearance** tab shows while Check passage is on: the profile's `axis` (`distance` or `time`), `canShowTime`, `sourcesOpen`, and the readout at the cursor (`readoutSample`, the sample index in `get_passage_result`; `readoutPosition`, `readoutLeg`, `depth` and `depthSource` with its cell, `waterLevel` and `waterLevelSource` with its station or grid and time step, `draftSquat`, `ukc` and `state`, such as "Meets your settings · lower confidence"). The readout's `band` (`meets_settings`, `tight`, `below_setting` or `no_data`) and `confidence` reasons are reported separately. It also returns the `sources` groups, and the `departureBand`: the `departure` beside it, the `knobFraction` (0 to 1 across the band), the `startLabel`, `middleLabel` and `endLabel` ("12:00 · S-104 ends"), `stale`, and the `segments`, each a run of departures with its `kind` (`meets_settings`, `below_setting`, `arrival_after_data_ends` or `no_data`). Without a cursor, the readout describes the minimum. Open the tab with `set_panel` `Clearance`. |
 | `set_clearance_view` | Yes | Sets the Clearance profile's `axis` (`distance` or `time`; time needs ETAs) and opens or closes Sources (`sourcesOpen`), as the tab's header controls do. The cursor stays on the same sample. Returns what `get_clearance_state` returns. |
 | `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check passage mode: `count`, the counts per group (`mustReview`, `check`, `info`), `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, `data.s111_forecast_expired`), its `group` (`must_review`, `check` or `info`), its `source` (`clearance`, `route_check`, `s124`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), and a `feature` reference (dataset and feature id) when one is behind it. Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs a draft. |
 | `select_finding` | Yes | Selects the finding `id` in the checked route's list, as clicking its row does: the map zooms to it (unless `zoom: false`) and outlines it dashed in its tone with the chip "Zoomed to finding · leg 6 → 7 · 1:31 300", and the profile cursor and ghost vessel move to it. Omit `id` to clear the selection. Needs Check passage on. Returns what `get_findings` returns. |
@@ -348,8 +348,8 @@ How it samples and classifies:
 
 - **Charted depth** comes from S-102. Where there's no S-102, or a cell is
   NoData, it falls back to S-101: the shallowest covering `DredgedArea`, then
-  `DepthArea` (DRVAL1), then a `Sounding` within 250 m. S-101 depths are low
-  confidence.
+  `DepthArea` (DRVAL1), then a `Sounding` within 250 m. S-101 depths are
+  lower confidence (`charted_depth_from_s101`).
 - **Spacing.** Along S-102, the check steps at half the finest grid cell so no
   cell is skipped. Each sample stands for at most `sampleSpacingMeters`
   (default 50) and keeps the shallowest depth in its stretch.
@@ -360,15 +360,19 @@ How it samples and classifies:
 - **Datums.** When the S-102 or S-101 and S-104 vertical datums differ, the
   water level is reported but not applied, and the stretch is a
   `datum_mismatch` gap. When a datum isn't declared, or isn't an S-100 code,
-  the water level is applied and the stretch is low confidence
+  the water level is applied and the stretch is lower confidence
   (`datum_unconfirmed`).
 - **States:**
   - `meets_settings`
   - `tight`: less than 0,5 m above the required UKC.
   - `below_setting`
-  - `low_confidence`: meets the required UKC, but from S-101 or with
-    unconfirmed datums.
   - `no_data`
+- **Confidence** is reported separately from the state, as a list of
+  reasons: `charted_depth_from_s101` and `datum_unconfirmed`, or an empty
+  list at full confidence. A sample on S-101 depth that meets the required
+  UKC is `meets_settings` with `confidence: ["charted_depth_from_s101"]`.
+  SoundCharts draws it in the band's colour, dashed. The result, `minimum`,
+  each leg, each sample and each swept departure has a `confidence` list.
 - **Verdict**, in priority order:
   1. `water_level_ends_before_arrival`
   2. `below_setting`
@@ -383,8 +387,11 @@ The result has:
 
 - `minimum`: the smallest margin over the required UKC, with where and when.
 - `minutesBelow` and `placesBelow`.
+- `confidence`: the lower-confidence reasons anywhere on the passage. The
+  verdict follows the clearance band; confidence qualifies it.
 - `legs`: per leg, the values used, the minimum, the `worstState`, the
-  minutes below the setting, `lowConfidence` and `noWaterLevel`.
+  minutes below the setting, `lowConfidence`, its `confidence` reasons and
+  `noWaterLevel`.
 - `gaps` and `lowConfidence`: stretches by kind, with their distances and
   times.
 - `sources`: the S-102 and S-101 datasets, the S-104 datasets and stations,
@@ -400,10 +407,13 @@ To find a departure window, set `windowFrom` and `windowTo` (and optionally
 S-104 time range that covers the passage, as SoundCharts' departure band does.
 That sweep starts at the first whole step after the data starts and ends where
 it ends; over a long forecast the step widens to stay under 2000 departures.
-`window` then lists every departure's verdict, the runs of departures that
-meet your settings, the meeting departure nearest `departure`, and
+`window` then lists every departure's verdict and confidence, the runs of
+departures that meet your settings, the meeting departure nearest
+`departure`, `windowConfidence`, and
 `arrivalAfterDataEnds`: the departures that arrive after the S-104 data ends,
-which never meet your settings.
+which never meet your settings. A departure that meets your settings with
+lower confidence still counts as meeting them; `windowConfidence` lists the
+reasons among the meeting departures, as the caveat on the window.
 
 ## Times outside the data
 

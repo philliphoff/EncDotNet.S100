@@ -179,7 +179,8 @@ public sealed class PassageCheckEngine
                 eval.Required,
                 eval.Clearance,
                 eval.Band,
-                eval.State);
+                eval.State,
+                eval.Confidence);
         }
 
         return Summarise(profile, plan, schedule, samples);
@@ -238,7 +239,8 @@ public sealed class PassageCheckEngine
                 tally.Verdict,
                 tally.MinimumClearance,
                 tally.MinimumMargin,
-                tally.MinutesBelow));
+                tally.MinutesBelow,
+                tally.Confidence));
         }
 
         return new DepartureSweep(options) { Step = step };
@@ -475,9 +477,21 @@ public sealed class PassageCheckEngine
             }
         }
 
+        // Confidence is reported alongside the state, never in place of it.
+        var confidence = ConfidenceReasons.None;
+        if (depth?.IsLowConfidence == true)
+        {
+            confidence |= ConfidenceReasons.ChartedDepthFromS101;
+        }
+
+        if (status == WaterLevelStatus.Applied && agreement == DatumAgreement.Unknown)
+        {
+            confidence |= ConfidenceReasons.DatumUnconfirmed;
+        }
+
         if (depth is null || status != WaterLevelStatus.Applied || height is not { } h)
         {
-            return new PointEvaluation(used, status, height, stepTime, agreement, required, null, null, UkcState.NoData);
+            return new PointEvaluation(used, status, height, stepTime, agreement, required, null, null, UkcState.NoData, confidence);
         }
 
         var charted = depth.DepthMeters - (_options.SubtractDepthUncertainty ? depth.UncertaintyMeters ?? 0 : 0);
@@ -485,16 +499,14 @@ public sealed class PassageCheckEngine
         var band = clearance < required
             ? ClearanceBand.Below
             : clearance < required + _options.TightMarginMeters ? ClearanceBand.Tight : ClearanceBand.Meets;
-        var lowConfidence = depth.IsLowConfidence || agreement == DatumAgreement.Unknown;
         var state = band switch
         {
             ClearanceBand.Below => UkcState.BelowSetting,
-            _ when lowConfidence => UkcState.LowConfidence,
             ClearanceBand.Tight => UkcState.Tight,
             _ => UkcState.MeetsSettings,
         };
 
-        return new PointEvaluation(used, status, height, stepTime, agreement, required, clearance, band, state);
+        return new PointEvaluation(used, status, height, stepTime, agreement, required, clearance, band, state, confidence);
     }
 
     private static double MinutesFor(ProfilePoint point, PassageLeg leg) =>
@@ -516,17 +528,17 @@ public sealed class PassageCheckEngine
             var end = legIndex + 1 < plan.Legs.Count ? profile.LegFirstPoint[legIndex + 1] : samples.Length;
             var legTally = new Tally();
             var worst = UkcState.MeetsSettings;
-            var lowConfidence = false;
+            var confidence = ConfidenceReasons.None;
             var noWaterLevel = false;
             for (var i = first; i < end; i++)
             {
                 var sample = samples[i];
-                var eval = new PointEvaluation(null, sample.WaterLevel.Status, sample.WaterLevel.HeightMeters, null, sample.WaterLevel.Datum, sample.RequiredUkcMeters, sample.ClearanceMeters, sample.Band, sample.State);
+                var eval = new PointEvaluation(null, sample.WaterLevel.Status, sample.WaterLevel.HeightMeters, null, sample.WaterLevel.Datum, sample.RequiredUkcMeters, sample.ClearanceMeters, sample.Band, sample.State, sample.Confidence);
                 var minutes = MinutesFor(profile.Points[i], plan.Legs[legIndex]);
                 legTally.Add(eval, minutes, i);
                 tally.Add(eval, minutes, i);
                 worst = UkcStates.Worst(worst, sample.State);
-                lowConfidence |= sample.Depth?.IsLowConfidence == true || sample.State == UkcState.LowConfidence;
+                confidence |= sample.Confidence;
                 noWaterLevel |= sample.Depth is not null && sample.WaterLevel.Status != WaterLevelStatus.Applied;
             }
 
@@ -544,7 +556,7 @@ public sealed class PassageCheckEngine
                 worst,
                 legTally.MinutesBelow,
                 legTally.PlacesBelow,
-                lowConfidence,
+                confidence,
                 noWaterLevel));
         }
 
@@ -566,7 +578,8 @@ public sealed class PassageCheckEngine
             legs,
             Stretches(samples, GapKinds, _options.SampleSpacingMeters),
             Stretches(samples, LowConfidenceKinds, _options.SampleSpacingMeters),
-            Sources(samples));
+            Sources(samples),
+            tally.Confidence);
     }
 
     private static UkcMinimum? Minimum(UkcSample[] samples, int index)
@@ -577,7 +590,7 @@ public sealed class PassageCheckEngine
         }
 
         var s = samples[index];
-        return new UkcMinimum(s.Index, s.LegIndex, s.Position, s.DistanceMeters, s.Time, s.HasEta, s.ClearanceMeters!.Value, s.RequiredUkcMeters, s.State);
+        return new UkcMinimum(s.Index, s.LegIndex, s.Position, s.DistanceMeters, s.Time, s.HasEta, s.ClearanceMeters!.Value, s.RequiredUkcMeters, s.State, s.Confidence);
     }
 
     private static readonly Func<UkcSample, PassageStretchKind?>[] GapKinds =
@@ -596,10 +609,8 @@ public sealed class PassageCheckEngine
 
     private static readonly Func<UkcSample, PassageStretchKind?>[] LowConfidenceKinds =
     [
-        s => s.Depth?.IsLowConfidence == true ? PassageStretchKind.ChartedDepthFromS101 : null,
-        s => s.WaterLevel.Status == WaterLevelStatus.Applied && s.WaterLevel.Datum == DatumAgreement.Unknown
-            ? PassageStretchKind.DatumUnconfirmed
-            : null,
+        s => s.Confidence.HasFlag(ConfidenceReasons.ChartedDepthFromS101) ? PassageStretchKind.ChartedDepthFromS101 : null,
+        s => s.Confidence.HasFlag(ConfidenceReasons.DatumUnconfirmed) ? PassageStretchKind.DatumUnconfirmed : null,
     ];
 
     // Runs of one kind separated by less than a sample spacing are merged, so
@@ -711,7 +722,8 @@ public sealed class PassageCheckEngine
         double Required,
         double? Clearance,
         ClearanceBand? Band,
-        UkcState State);
+        UkcState State,
+        ConfidenceReasons Confidence);
 
     /// <summary>Accumulates the verdict, minimum and time below over samples in order.</summary>
     private sealed class Tally
@@ -723,6 +735,8 @@ public sealed class PassageCheckEngine
         private bool _inBelow;
 
         public int MinimumIndex { get; private set; } = -1;
+
+        public ConfidenceReasons Confidence { get; private set; }
 
         public double? MinimumClearance { get; private set; }
 
@@ -744,6 +758,7 @@ public sealed class PassageCheckEngine
             _afterEnd |= eval.Status == WaterLevelStatus.AfterEnd;
             _noData |= eval.State == UkcState.NoData;
             _tight |= eval.Band == ClearanceBand.Tight;
+            Confidence |= eval.Confidence;
             if (eval.State == UkcState.BelowSetting)
             {
                 _below = true;
