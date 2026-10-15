@@ -7,10 +7,35 @@ import Features from '../components/Features.astro';
 import Palettes from '../components/Palettes.astro';
 import Developers from '../components/Developers.astro';
 import Footer from '../components/Footer.astro';
+import { links } from '../data/content';
+import iconPng from '../../../src/EncDotNet.S100.Viewer/Branding/png/AppIcon-256.png?url';
+
+const description =
+  'SoundCharts is a free, open-source viewer for IHO S-100 charts, depths, tides, currents and more, built on the EncDotNet.S100 .NET SDK.';
+
+// Lets search engines show the viewer as a free desktop app.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'SoundCharts',
+  description,
+  url: new URL(import.meta.env.BASE_URL, Astro.site).href,
+  image: new URL(iconPng, Astro.site).href,
+  applicationCategory: 'UtilitiesApplication',
+  applicationSubCategory: 'Marine charts',
+  operatingSystem: 'macOS, Windows, Linux',
+  downloadUrl: links.releases,
+  license: links.license,
+  isAccessibleForFree: true,
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  author: { '@type': 'Person', name: 'Phillip Hoff' },
+  sameAs: [links.repo],
+};
 ---
 <Base
   title="SoundCharts: S-100 marine charts on your desktop"
-  description="SoundCharts is a free, open-source viewer for IHO S-100 charts, depths, tides, currents and more, built on the EncDotNet.S100 .NET SDK."
+  description={description}
+  jsonLd={jsonLd}
 >
   <Nav />
   <main id="top">

@@ -96,6 +96,16 @@
       }
     ],
     "output": "_site",
+    "sitemap": {
+      "baseUrl": "https://soundcharts.app/",
+      "changefreq": "weekly",
+      "priority": 0.5,
+      "fileOptions": {
+        "api/**": {
+          "priority": 0.3
+        }
+      }
+    },
     "template": [
       "default",
       "modern",
