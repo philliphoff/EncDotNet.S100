@@ -2,9 +2,9 @@ using System.Reflection;
 
 using PureHDF;
 
-namespace EncDotNet.S100.Datasets.S104.Tests.Fixtures;
+namespace EncDotNet.S100.Testing.Scenarios.Hdf5;
 
-internal static class S104Dcf1FixtureBuilder
+public static class S104Dcf1FixtureBuilder
 {
     public struct ValueRow
     {

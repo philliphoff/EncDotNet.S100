@@ -193,5 +193,10 @@ This repository doesn't include real ENC data. Don't commit real ENC data to it.
   to each product specification.
 - **Test fixtures in this repository**: the small datasets under
   [`tests/datasets/`](https://github.com/philliphoff/EncDotNet.S100/tree/main/tests/datasets)
-  are synthetic. They're useful for trying the tools, but they aren't
-  navigationally meaningful.
+  come from several sources. The S-57, S-102, S-104 and S-111 files are real
+  NOAA products, the S-101 cells are IHO test data, and the other products
+  are IHO or test-bed samples and small hand-made fixtures. They're useful
+  for trying the tools, but they aren't current and aren't for navigation.
+  Each product covers a different place.
+- **Generated scenarios**: for several products covering the same fictitious
+  area, see the [test scenario generator](scenario-generator.md).
