@@ -240,7 +240,7 @@ as a desktop app.
 | B1 | SoundCharts mark + wordmark (SVG, light/dark) | The site uses the viewer's app icon (`src/EncDotNet.S100.Viewer/Branding/icon.svg`). The DocFX docs use it too (`_appLogoPath` in `docfx.json`). |
 | B2 | App icon (macOS .icns, Windows .ico, Linux PNGs) | Already exists in `Branding/`. |
 | B3 | Favicon set + `apple-touch-icon` | Done: taken from `Branding/` at build time. |
-| B4 | Open Graph card, 1200×630 | Night-palette crop of H2 + wordmark + "S-100 marine charts on your desktop". |
+| B4 | Open Graph card, 1200×630 | Done: `og/card.html` (H1 Day crop + wordmark + "S-100 marine charts on your desktop"), rendered to `public/og-card.png` by `og/render.sh [shot]`. Day rather than Night: the Night chart is too dark at feed-thumbnail size. Re-render after recapturing H1. |
 | B5 | Platform glyphs for the download buttons (macOS / Windows / Linux) | Optional. The button already picks the visitor's platform. |
 | B6 | Data attribution strip | Text only: NOAA, USACE, UKHO (if ⚖ is cleared), Natural Earth. |
 | B7 | "Not for navigation" disclaimer | The README doesn't currently say this. The page footer should, and the README probably should too. |
