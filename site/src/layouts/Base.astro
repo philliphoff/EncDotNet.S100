@@ -10,9 +10,11 @@ import iconPng from '../../../src/EncDotNet.S100.Viewer/Branding/png/AppIcon-256
 interface Props {
   title: string;
   description: string;
+  /** schema.org structured data for the page, emitted as JSON-LD. */
+  jsonLd?: Record<string, unknown>;
 }
 
-const { title, description } = Astro.props;
+const { title, description, jsonLd } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const ogImage = new URL(iconPng, Astro.site);
 const dev = import.meta.env.DEV;
@@ -29,11 +31,19 @@ const dev = import.meta.env.DEV;
     <link rel="apple-touch-icon" href={iconPng} />
     <meta name="theme-color" content="#0a1826" />
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SoundCharts" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
     <!-- TODO(B4): replace with the 1200×630 Open Graph card. -->
     <meta property="og:image" content={ogImage} />
+    <meta property="og:image:alt" content="SoundCharts app icon" />
+    <!-- A square icon, so the small card; switch to summary_large_image with the B4 card. -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
     <script is:inline>
       // A theme picked with the nav toggle (Nav.astro); without one the page follows the system.
       try {

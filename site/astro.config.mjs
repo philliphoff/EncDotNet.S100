@@ -2,6 +2,7 @@
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import sitemap from '@astrojs/sitemap';
 import { defineConfig } from 'astro/config';
 
 /**
@@ -33,10 +34,18 @@ function pruneUnreferencedImages() {
 // The Docs workflow sets SITE_URL / SITE_BASE from actions/configure-pages, so
 // the same build works on the custom domain (base "/") and on the
 // philliphoff.github.io/EncDotNet.S100 project URL before the domain is live.
+const site = process.env.SITE_URL || 'https://soundcharts.app';
+const base = process.env.SITE_BASE || '/';
+
 export default defineConfig({
-  site: process.env.SITE_URL || 'https://soundcharts.app',
-  base: process.env.SITE_BASE || '/',
-  integrations: [pruneUnreferencedImages()],
+  site,
+  base,
+  integrations: [
+    pruneUnreferencedImages(),
+    // sitemap-index.xml lists the landing page's own sitemap and DocFX's
+    // sitemap.xml (docfx.json), which covers docs/, api/ and src/.
+    sitemap({ customSitemaps: [new URL(`${base.replace(/\/?$/, '/')}sitemap.xml`, site).href] }),
+  ],
   // Stand-in screenshots are read from the repo's readme/ and docs/images/.
   vite: { server: { fs: { allow: ['..'] } } },
 });
