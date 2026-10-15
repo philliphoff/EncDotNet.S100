@@ -45,6 +45,37 @@ public sealed class SecomIdentityLibraryTests : IDisposable
         Assert.Equal(expected is not null && expected != SecomDiagnosticCodes.ServerUntrusted, SecomDiagnosticCodes.IsIdentityMatter(expected));
     }
 
+    [Theory]
+    [InlineData("The requested SECOM trust anchor is not recognised or is not valid", true, SecomDiagnosticCodes.SignedRequestRefused)]
+    [InlineData("Certificate chain verification failed", true, SecomDiagnosticCodes.SignedRequestRefused)]
+    [InlineData("The requested SECOM trust anchor is not recognised or is not valid", false, null)]
+    [InlineData("pageSize must not exceed 100", true, null)]
+    public async Task A_bad_request_is_an_identity_matter_when_the_service_says_so(string explanation, bool signed, string? expected)
+    {
+        // AMSA answers a refused chain with 400 and a SECOM response object (#882).
+        using var response = new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent($$"""{"message":"{{explanation}}","responseCode":2}""", Encoding.UTF8, "application/json"),
+        };
+        var failure = await SecomClient.FailureAsync(response, "SECOM POST /v2/object/search/summary", TestContext.Current.CancellationToken);
+        using var identity = Identity();
+
+        Assert.Equal($"SECOM POST /v2/object/search/summary answered 400 Bad Request: {explanation}", failure.Message);
+        Assert.Equal(explanation, failure.Data[SecomClient.ServiceMessageKey]);
+        Assert.Equal(expected, SecomDiagnosticCodes.Classify(failure, identity, signed));
+    }
+
+    [Fact]
+    public async Task A_failure_without_a_service_message_keeps_its_status_only()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.InternalServerError) { Content = new StringContent("<html>oops</html>") };
+
+        var failure = await SecomClient.FailureAsync(response, "SECOM POST /v2/object/search", TestContext.Current.CancellationToken);
+
+        Assert.Equal("SECOM POST /v2/object/search answered 500 Internal Server Error.", failure.Message);
+        Assert.False(failure.Data.Contains(SecomClient.ServiceMessageKey));
+    }
+
     [Fact]
     public void A_refused_handshake_is_told_from_an_untrusted_server_by_what_the_trust_saw()
     {

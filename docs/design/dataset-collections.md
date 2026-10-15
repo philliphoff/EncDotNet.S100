@@ -1783,9 +1783,30 @@ TLS trust for the same roots followed in #829 (§7.9).
 >   the set's files, cancellations included, so a warning issued or
 >   cancelled changes it. The revision is part of the fingerprint, so the
 >   change re-indexes the source.
-> - **Not yet.** Encrypted exchange sets (Part 15 protection) and
->   SECOM-protected objects (#923). We've asked AMSA how a client should
->   tell that an object changed.
+> - **AMSA's answers (2026-10-14).** AMSA updated the service after our
+>   report:
+>   - Unchanged exchange sets are no longer regenerated, so identifiers stay
+>     put.
+>   - `info_lastModifiedDate` is now the catalogue's timestamp. A copy
+>     downloaded under a revision is outdated once, then judged by date.
+>   - A refused certificate chain answers 400 with a SECOM response object
+>     (`{"message": "The requested SECOM trust anchor is not recognised or is
+>     not valid", "responseCode": 2}`). Failures now carry the service's
+>     `message`, and a signed request refused this way reads as
+>     `SignedRequestRefused`.
+>   - The chain is built with intermediates they configure, so a client
+>     sending only its own certificate is accepted too.
+>   - `info_size` is in kilobytes, per SECOM §5.7.6.2. CCG gives bytes (an
+>     object listed at 4,885 decoded to exactly 4,885 bytes), so sizes stay
+>     unused for exchange sets.
+>   - 100 is their maximum page size. A summary with `page=0` returns only
+>     `maxItemsPerPage`, per SECOM §5.5.
+>   - They suggest subscriptions for updates.
+> - **Not yet.**
+>   - Encrypted exchange sets (Part 15 protection) and SECOM-protected
+>     objects (#923).
+>   - Asking `page=0` for the page size instead of using 100.
+>   - Subscriptions.
 
 ## 8. Implementation slices
 
