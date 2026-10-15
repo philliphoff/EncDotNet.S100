@@ -16,7 +16,9 @@ interface Props {
 
 const { title, description, jsonLd } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
-const ogImage = new URL(iconPng, Astro.site);
+// The 1200×630 social card, rendered from og/card.html by og/render.sh.
+const ogImage = new URL(`${import.meta.env.BASE_URL.replace(/\/?$/, '/')}og-card.png`, Astro.site);
+const ogImageAlt = 'SoundCharts: S-100 marine charts on your desktop, over a NOAA chart of Elliott Bay, Seattle.';
 const dev = import.meta.env.DEV;
 ---
 <!doctype html>
@@ -35,14 +37,16 @@ const dev = import.meta.env.DEV;
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
-    <!-- TODO(B4): replace with the 1200×630 Open Graph card. -->
     <meta property="og:image" content={ogImage} />
-    <meta property="og:image:alt" content="SoundCharts app icon" />
-    <!-- A square icon, so the small card; switch to summary_large_image with the B4 card. -->
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={ogImageAlt} />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={ogImageAlt} />
     {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
     <script is:inline>
       // A theme picked with the nav toggle (Nav.astro); without one the page follows the system.
