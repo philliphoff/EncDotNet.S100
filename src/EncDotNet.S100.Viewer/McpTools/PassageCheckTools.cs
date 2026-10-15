@@ -18,7 +18,9 @@ internal sealed record CheckStateDto(
     [property: Description("True while a recompute is pending or running.")] bool Computing,
     [property: Description("True while the shown result is out of date (the route draws grey and dashed, the verdict is dimmed).")] bool Stale,
     [property: Description("Verdict code, as get_passage_result: water_level_ends_before_arrival, below_setting, incomplete_data, meets_settings_tight or meets_settings; null without a result.")] string? Verdict,
-    [property: Description("The verdict card's title, e.g. \"Below your UKC setting in 1 place\"; null without a result.")] string? VerdictTitle,
+    [property: Description("The verdict card's title, e.g. \"Below your UKC setting in 1 place\"; null without a result. It follows the clearance band, whatever the confidence.")] string? VerdictTitle,
+    [property: Description("Lower-confidence reasons anywhere on the passage, as get_passage_result: charted_depth_from_s101 and/or datum_unconfirmed; empty at full confidence or without a result.")] IReadOnlyList<string> Confidence,
+    [property: Description("The verdict card's confidence line, e.g. \"Vertical datums unconfirmed: depth and water level may not share a reference\" (one line per reason); null at full confidence.")] string? ConfidenceText,
     [property: Description("The minimum UKC in metres; null when none could be computed.")] double? MinUkcMeters,
     [property: Description("Zero-based leg of the minimum; null when none.")] int? MinUkcLeg,
     [property: Description("Why the last check failed, or null.")] string? Error,
@@ -38,11 +40,12 @@ internal sealed record DepartureWindowDto(
     [property: Description("First swept departure, UTC (the first whole step at or after the S-104 data starts).")] DateTimeOffset From,
     [property: Description("Last swept departure, UTC (where the S-104 data ends).")] DateTimeOffset To,
     [property: Description("Minutes between swept departures (5, or wider over a long forecast).")] double StepMinutes,
-    [property: Description("Runs of departures that meet your settings (tight ones included), in time order.")] IReadOnlyList<DepartureRangeDto> Windows,
+    [property: Description("Runs of departures that meet your settings (tight and lower-confidence ones included), in time order.")] IReadOnlyList<DepartureRangeDto> Windows,
+    [property: Description("Lower-confidence reasons among the departures that meet your settings (the caveat on the window line); empty when none.")] IReadOnlyList<string> Confidence,
     [property: Description("The departures whose arrival is after the S-104 data ends (hatched on the band; never meeting your settings), or null.")] DepartureRangeDto? ArrivalAfterDataEnds,
     [property: Description("True when the checked departure meets your settings and a window exists (\"This departure is inside the window\").")] bool InsideWindow,
     [property: Description("The meeting departure nearest the checked one, which Depart {HH:MM} jumps to; null when the checked departure is inside or nothing meets.")] DateTimeOffset? NearestMeetingDeparture,
-    [property: Description("The verdict card's window line, e.g. \"Departures 05:35–06:40 meet your settings.\"")] string? Text,
+    [property: Description("The verdict card's window line, e.g. \"Departures 05:35–06:40 meet your settings.\", with \" Lower confidence: datums unconfirmed.\" appended when meeting departures are lower confidence.")] string? Text,
     [property: Description("The Depart button's label, e.g. \"Depart 06:40\"; null when it isn't shown.")] string? DepartButton);
 
 /// <summary>A run of swept departures.</summary>
@@ -118,6 +121,8 @@ internal abstract class PassageCheckToolBase : RouteToolBase
             check.IsStale,
             result is null ? null : Verdict(result.Verdict),
             result is null ? null : PassageCheckViewModel.VerdictTitle(result),
+            result is null ? [] : Mcp.Tools.GetPassageResultTool.ConfidenceCodes(result.Confidence),
+            result is null ? null : PassageCheckViewModel.ConfidenceLine(result),
             result?.Minimum is { } min ? Math.Round(min.ClearanceMeters, 2) : null,
             result?.Minimum?.LegIndex,
             check.Error,
@@ -140,6 +145,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
             window.To,
             window.Step.TotalMinutes,
             window.Windows.Select(w => new DepartureRangeDto(w.First, w.Last)).ToList(),
+            Mcp.Tools.GetPassageResultTool.ConfidenceCodes(window.Sweep.MeetingConfidence()),
             window.ArrivalAfterDataEnds is { } hatched ? new DepartureRangeDto(hatched.First, hatched.Last) : null,
             line?.IsInside ?? false,
             line?.Nearest,
@@ -488,7 +494,9 @@ internal sealed record ClearanceStateDto(
     [property: Description("Water level source, e.g. \"S-104 · {station} · {step}\" or \"No S-104 at this ETA · tide not applied\".")] string? WaterLevelSource,
     [property: Description("Draft + squat, formatted.")] string? DraftSquat,
     [property: Description("UKC at the readout, formatted.")] string? Ukc,
-    [property: Description("The verdict words for the readout's state.")] string? State,
+    [property: Description("The verdict words for the readout's state, with \" · lower confidence\" when the sample is, e.g. \"Meets your settings · lower confidence\".")] string? State,
+    [property: Description("The readout's clearance state code: meets_settings, tight, below_setting or no_data (as get_passage_result's samples[].state); null without a readout.")] string? Band,
+    [property: Description("The readout sample's lower-confidence reasons: charted_depth_from_s101 and/or datum_unconfirmed; empty at full confidence or without a readout.")] IReadOnlyList<string> Confidence,
     [property: Description("The Sources groups: title and lines.")] IReadOnlyList<ClearanceSourcesGroupDto> Sources,
     [property: Description("The departure band under the profile; null when there is no departure window.")] DepartureBandDto? DepartureBand);
 
@@ -587,6 +595,8 @@ internal sealed class ClearanceTools
         c.HasReadout ? c.DraftText : null,
         c.HasReadout ? c.UkcText : null,
         c.HasReadout ? c.StateText : null,
+        c.HasReadout && c.ReadoutSample is { } band ? Mcp.Tools.GetPassageResultTool.State(band.State) : null,
+        c.HasReadout && c.ReadoutSample is { } sample ? Mcp.Tools.GetPassageResultTool.ConfidenceCodes(sample.Confidence) : [],
         c.SourceGroups.Select(g => new ClearanceSourcesGroupDto(g.Title, g.Items)).ToList(),
         c.HasBand
             ? new DepartureBandDto(

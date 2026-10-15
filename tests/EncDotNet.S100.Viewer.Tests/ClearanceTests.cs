@@ -143,7 +143,10 @@ public sealed class ClearanceTests : IDisposable
 
         Assert.Equal("S-101 DepthArea · lower confidence", vm.DepthSource);
         Assert.Equal("13.0 m", vm.DepthText);
-        Assert.Equal("Low confidence", vm.StateText);
+        // The band is kept, qualified by confidence (#939).
+        Assert.Equal("Meets your settings · lower confidence", vm.StateText);
+        Assert.True(vm.IsLowConfidence);
+        Assert.Equal(CheckTone.Success, vm.Tone);
 
         var s102 = (LineSeries<ObservablePoint>)vm.Series[3];
         var s101 = (LineSeries<ObservablePoint>)vm.Series[4];
@@ -188,5 +191,25 @@ public sealed class ClearanceTests : IDisposable
 
         var bad = await tools.SetAsync(new SetClearanceViewRequest("sideways"), TestContext.Current.CancellationToken);
         Assert.False(bad.TryGetValue(out _));
+    }
+
+    [Fact]
+    public async Task Get_clearance_state_reports_the_band_and_confidence_separately()
+    {
+        // #939: no S-102 datum, so the readout is lower confidence but keeps its band.
+        var (f, vm) = await CheckedAsync(new PassageCheckFixture(depthDatum: null));
+        var tools = new ClearanceTools(vm, new InlineInvoker());
+        f.Check.SetCursor(Meters(0.01));
+
+        var state = await tools.GetAsync(TestContext.Current.CancellationToken);
+        Assert.True(state.TryGetValue(out var dto));
+        Assert.Equal("meets_settings", dto!.Band);
+        Assert.Equal(["datum_unconfirmed"], dto.Confidence);
+        Assert.Equal("Meets your settings · lower confidence", dto.State);
+
+        f.Check.SetCursor(Meters(0.11));
+        Assert.True((await tools.GetAsync(TestContext.Current.CancellationToken)).TryGetValue(out var shoal));
+        Assert.Equal("below_setting", shoal!.Band);
+        Assert.Equal(["datum_unconfirmed"], shoal.Confidence);
     }
 }

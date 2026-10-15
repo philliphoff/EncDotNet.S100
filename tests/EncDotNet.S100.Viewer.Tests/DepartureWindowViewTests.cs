@@ -85,6 +85,31 @@ public sealed class DepartureWindowViewTests
     });
 
     [AvaloniaFact]
+    public void Lower_confidence_shows_a_confidence_line_under_the_band_led_title() => InCulture(() =>
+    {
+        // #939: no S-102 datum. The title follows the band, the line explains confidence.
+        var fixture = new PassageCheckFixture(
+            depthDatum: null,
+            tide: PassageCheckFixture.HighWaterUntil0750,
+            post: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
+        var panel = new RoutesPanelViewModel(fixture.Routes, timeFormat: new UtcTime(), check: fixture.Check);
+        using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
+        Assert.False(host.IsShown("Routes.Check.Confidence"));
+
+        host.Click(host.Find<ToggleButton>("Routes.CheckPassageToggle"));
+        WaitForWindow(host, fixture);
+
+        Assert.Equal("Below your UKC setting in 1 place", host.Find<TextBlock>("Routes.Check.VerdictTitle").Text);
+        Assert.True(host.IsShown("Routes.Check.Confidence"));
+        Assert.Equal(
+            "Vertical datums unconfirmed: depth and water level may not share a reference",
+            Avalonia.Automation.AutomationProperties.GetName(host.Find<StackPanel>("Routes.Check.Confidence")));
+        Assert.Equal(
+            "Departures 06:00Z–06:40Z meet your settings. Lower confidence: datums unconfirmed.",
+            host.Find<TextBlock>("Routes.Check.Window").Text);
+    });
+
+    [AvaloniaFact]
     public void Dragging_the_departure_band_sets_the_departure_and_the_labels_end_at_s104() => InCulture(() =>
     {
         var fixture = Fixture();

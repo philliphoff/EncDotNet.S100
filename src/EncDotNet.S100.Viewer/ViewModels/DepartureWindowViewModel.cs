@@ -134,11 +134,26 @@ internal sealed class DepartureWindowViewModel : ViewModelBase
             CultureInfo.CurrentCulture,
             inside ? Strings.Check_WindowInsideFormat : Strings.Check_WindowSentenceFormat,
             Summary(window, departure, format));
+        // Departures that meet your settings with lower confidence still
+        // count as meeting them; the line carries the caveat (#939).
+        if (window.Windows.Count > 0 && Caveat(window.Sweep.MeetingConfidence()) is { } caveat)
+            text = string.Format(CultureInfo.CurrentCulture, Strings.Check_WindowLowConfidenceFormat, text, caveat);
         var nearest = meets ? null : window.NearestMeeting(departure);
         var departText = nearest is { } n
             ? string.Format(CultureInfo.CurrentCulture, Strings.Check_DepartFormat, PassageFormatting.FormatEta(n, departure, format))
             : null;
         return new DepartureWindowLine(text, inside, nearest, departText);
+    }
+
+    /// <summary>"datums unconfirmed", "charted depth partly from S-101", or both; <c>null</c> at full confidence.</summary>
+    internal static string? Caveat(ConfidenceReasons reasons)
+    {
+        var parts = new List<string>();
+        if (reasons.HasFlag(ConfidenceReasons.DatumUnconfirmed))
+            parts.Add(Strings.Check_WindowCaveatDatum);
+        if (reasons.HasFlag(ConfidenceReasons.ChartedDepthFromS101))
+            parts.Add(Strings.Check_WindowCaveatS101);
+        return parts.Count == 0 ? null : string.Join(", ", parts);
     }
 
     private void Depart()

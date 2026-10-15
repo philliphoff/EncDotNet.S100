@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// C6–C10): the active route coloured by UKC state at ETA, the minimum-UKC
 /// marker, the ghost vessel at the cursor, the wash and the legend.
 /// </summary>
-/// <param name="Segments">Runs of samples with one state, in passage order; a run never crosses a leg boundary.</param>
+/// <param name="Segments">Runs of samples with one state and confidence, in passage order; a run never crosses a leg boundary.</param>
 /// <param name="IsStale">True while a recompute is running: the route draws grey and dashed (C10).</param>
 /// <param name="Minimum">The minimum-UKC marker, or <c>null</c>.</param>
 /// <param name="Ghost">The ghost vessel at the cursor, or <c>null</c>.</param>
@@ -28,8 +28,11 @@ internal sealed record RouteCheckOverlay(
     RouteCheckColors Colors,
     RouteCheckOverlay.FindingFocus? Finding = null)
 {
-    /// <summary>A run of the route in one state.</summary>
-    internal sealed record Segment(IReadOnlyList<GeoPosition> Path, UkcState State);
+    /// <summary>
+    /// A run of the route in one state. A lower-confidence run keeps its
+    /// band's colour and is drawn dashed (#939).
+    /// </summary>
+    internal sealed record Segment(IReadOnlyList<GeoPosition> Path, UkcState State, bool IsLowConfidence = false);
 
     /// <summary>The min-UKC ring and pill (C8).</summary>
     internal sealed record Marker(GeoPosition Position, string Label, UkcState State);
@@ -74,13 +77,15 @@ internal sealed record RouteCheckOverlay(
         var start = 0;
         for (var i = 1; i <= samples.Count; i++)
         {
-            if (i < samples.Count && samples[i].State == samples[start].State && samples[i].LegIndex == samples[start].LegIndex)
+            if (i < samples.Count && samples[i].State == samples[start].State && samples[i].LegIndex == samples[start].LegIndex
+                && IsLowConfidence(samples[i]) == IsLowConfidence(samples[start]))
                 continue;
             var first = samples[start];
             var last = samples[i - 1];
             segments.Add(new Segment(
                 PathAlong(snapshot, first.LegIndex, first.StartDistanceMeters, last.EndDistanceMeters),
-                first.State));
+                first.State,
+                IsLowConfidence(first)));
             start = i;
         }
 
@@ -98,6 +103,9 @@ internal sealed record RouteCheckOverlay(
         var ghost = cursor is { } c ? new GhostVessel(c.Position, c.BearingDegrees) : null;
         return new RouteCheckOverlay(segments, isStale, minimum, ghost, colors, Focus(snapshot, selectedFinding, colors));
     }
+
+    // No data is already grey and dashed; confidence only qualifies a band.
+    private static bool IsLowConfidence(UkcSample sample) => sample.State != UkcState.NoData && sample.IsLowConfidence;
 
     private static FindingFocus? Focus(PassageCheckSnapshot snapshot, RouteFinding? finding, RouteCheckColors colors)
     {
@@ -148,10 +156,15 @@ internal sealed record RouteCheckOverlay(
 /// isn't mocked: it sits between Day and Night in hue, on the black casing
 /// that Dusk shares with Night, with its brightest colour no brighter than
 /// S-101 Dusk's (<c>CHWHT</c>). The palette pass (#906) set the greys so that
-/// every state keeps at least 3:1 against its casing on Dusk and Night, and
-/// No data stays fainter than Low confidence in every palette (the plain
-/// Day/Night midpoint had them the wrong way round). Night ink is dimmed
-/// towards S-101 Night's brightest colour.
+/// every state keeps at least 3:1 against its casing on Dusk and Night. Night
+/// ink is dimmed towards S-101 Night's brightest colour.
+/// </para>
+/// <para>
+/// Lower confidence has no colour of its own (#939, a deliberate change from
+/// the handoff's C6 table): a lower-confidence run keeps its band's colour and
+/// is dashed, so meets and tight stay visible where S-102 has no declared
+/// datum or S-101 stands in. No data stays grey and dashed, and fainter than
+/// every band colour.
 /// </para>
 /// <para>
 /// Red is reserved for Below your UKC setting (and must-review findings);
@@ -164,7 +177,6 @@ internal readonly record struct RouteCheckColors(
     SKColor Meets,
     SKColor Tight,
     SKColor Below,
-    SKColor LowConfidence,
     SKColor NoData,
     SKColor Stale,
     SKColor Casing,
@@ -176,7 +188,6 @@ internal readonly record struct RouteCheckColors(
         new SKColor(0x13, 0x89, 0x5B),
         new SKColor(0xE0, 0xA0, 0x08),
         new SKColor(0xD4, 0x2A, 0x3A),
-        new SKColor(0x5E, 0x6B, 0x7E),
         new SKColor(0x8C, 0x95, 0xA3),
         new SKColor(0x8C, 0x95, 0xA3),
         SKColors.White,
@@ -188,7 +199,6 @@ internal readonly record struct RouteCheckColors(
         new SKColor(0x20, 0x89, 0x5C),
         new SKColor(0xC1, 0x8D, 0x12),
         new SKColor(0xCA, 0x32, 0x40),
-        new SKColor(0x6A, 0x75, 0x84),
         new SKColor(0x58, 0x61, 0x6E),
         new SKColor(0x58, 0x61, 0x6E),
         SKColors.Black,
@@ -200,7 +210,6 @@ internal readonly record struct RouteCheckColors(
         new SKColor(0x2E, 0x8A, 0x5E),
         new SKColor(0xA2, 0x7A, 0x1C),
         new SKColor(0xC0, 0x3A, 0x46),
-        new SKColor(0x5C, 0x66, 0x76),
         new SKColor(0x52, 0x5B, 0x66),
         new SKColor(0x52, 0x5B, 0x66),
         SKColors.Black,
@@ -221,8 +230,6 @@ internal readonly record struct RouteCheckColors(
         UkcState.MeetsSettings => Meets,
         UkcState.Tight => Tight,
         UkcState.BelowSetting => Below,
-        UkcState.LowConfidence => LowConfidence,
         _ => NoData,
     };
-
 }

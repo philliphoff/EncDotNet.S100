@@ -222,6 +222,14 @@ internal sealed class ClearanceViewModel : ViewModelBase
         private set => SetProperty(ref _isLowConfidenceDepth, value);
     }
 
+    private bool _isLowConfidence;
+    /// <summary>Whether the readout's sample is lower confidence (S-101 depth or unconfirmed datums) and has a clearance band.</summary>
+    public bool IsLowConfidence
+    {
+        get => _isLowConfidence;
+        private set => SetProperty(ref _isLowConfidence, value);
+    }
+
     private string? _waterLevelText;
     public string? WaterLevelText
     {
@@ -664,17 +672,20 @@ internal sealed class ClearanceViewModel : ViewModelBase
 
         var strip = profile.Top * 0.025;
         var start = 0;
+        // The state strip: the band's colour, fainter where it's lower confidence (#939).
+        static bool Faint(UkcSample s) => s.State != UkcState.NoData && s.IsLowConfidence;
         for (var i = 1; i <= samples.Count; i++)
         {
-            if (i < samples.Count && samples[i].State == samples[start].State)
+            if (i < samples.Count && samples[i].State == samples[start].State && Faint(samples[i]) == Faint(samples[start]))
                 continue;
+            var color = states.Of(samples[start].State);
             sections.Add(new RectangularSection
             {
                 Xi = profile.XAtDistance(samples[start].StartDistanceMeters),
                 Xj = profile.XAtDistance(samples[i - 1].EndDistanceMeters),
                 Yi = 0,
                 Yj = strip,
-                Fill = new SolidColorPaint(states.Of(samples[start].State)),
+                Fill = new SolidColorPaint(Faint(samples[start]) ? color.WithAlpha(0x8C) : color),
                 ZIndex = 10,
             });
             start = i;
@@ -779,14 +790,18 @@ internal sealed class ClearanceViewModel : ViewModelBase
         DraftText = PassageFormatting.Format(sample.DraftMeters, PassageQuantity.Depth, unit)
             + (sample.SquatMeters > 0 ? " + " + PassageFormatting.Format(sample.SquatMeters, PassageQuantity.Depth, unit) : string.Empty);
         UkcText = sample.ClearanceMeters is { } ukc ? PassageFormatting.Format(ukc, PassageQuantity.Depth, unit) : "—";
-        StateText = sample.State switch
+        var stateText = sample.State switch
         {
             UkcState.MeetsSettings => Strings.Check_LegendMeets,
             UkcState.Tight => Strings.Check_LegendTight,
             UkcState.BelowSetting => Strings.Check_LegendBelow,
-            UkcState.LowConfidence => Strings.Clearance_StateLowConfidence,
             _ => Strings.Clearance_StateNoData,
         };
+        // Confidence qualifies the band, never replaces it (#939).
+        IsLowConfidence = sample.State != UkcState.NoData && sample.IsLowConfidence;
+        StateText = IsLowConfidence
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Clearance_StateLowConfidenceFormat, stateText)
+            : stateText;
         Tone = sample.State switch
         {
             UkcState.MeetsSettings => CheckTone.Success,

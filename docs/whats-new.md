@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Confidence alongside the clearance.** Check passage no longer hides
+  "meets" and "tight" where confidence is lower. A stretch on S-101 depth, or
+  where the depth and water-level datums can't be confirmed to agree, keeps
+  its clearance colour and is drawn dashed; only no data is grey. The verdict
+  follows the clearance, with a line that explains the confidence, and
+  departures that meet your settings with lower confidence still count, with
+  a caveat. In `EncDotNet.S100.Navigation`, `UkcState.LowConfidence` is
+  replaced by `ConfidenceReasons` on each sample, leg, minimum, result and
+  departure (a breaking change). `get_passage_result`, `get_check_state` and
+  `get_clearance_state` report the state and a `confidence` list separately.
 - **One axis-order check for every reader.** The GML, S-102, S-104 and
   S-111 readers share one dataset-level check for swapped latitude and
   longitude, anchored on physical bounds and the declared extent. It replaces

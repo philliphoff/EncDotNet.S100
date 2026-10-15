@@ -6,9 +6,17 @@ namespace EncDotNet.S100.Navigation;
 /// The state of a sample, a leg or a stretch, in the handoff's words.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The order runs from best to worst for display: a leg's worst state is the
-/// highest value among its samples, except that <see cref="BelowSetting"/>
-/// always wins (see <see cref="UkcStates.Worst"/>).
+/// highest value among its samples, so <see cref="BelowSetting"/> always wins
+/// (see <see cref="UkcStates.Worst"/>).
+/// </para>
+/// <para>
+/// Confidence is a separate dimension (<see cref="ConfidenceReasons"/>): a
+/// sample that meets your settings on S-101 depth, or where the datums can't
+/// be confirmed, is still <see cref="MeetsSettings"/> or <see cref="Tight"/>,
+/// with its low-confidence reasons alongside.
+/// </para>
 /// </remarks>
 public enum UkcState
 {
@@ -17,13 +25,6 @@ public enum UkcState
 
     /// <summary>Tight: clearance meets the required UKC with less than 0,5 m to spare.</summary>
     Tight,
-
-    /// <summary>
-    /// Low confidence: the charted depth comes from S-101 rather than S-102,
-    /// or the depth and water-level datums can't be confirmed to agree. The
-    /// clearance still meets the required UKC.
-    /// </summary>
-    LowConfidence,
 
     /// <summary>No data: there is no charted depth, or the water level can't be applied (outside the S-104 extent or time range, masked, or on a different datum).</summary>
     NoData,
@@ -38,13 +39,32 @@ public static class UkcStates
     /// <summary>
     /// The worse of two states. <see cref="UkcState.BelowSetting"/> beats
     /// everything, then <see cref="UkcState.NoData"/>,
-    /// <see cref="UkcState.LowConfidence"/>, <see cref="UkcState.Tight"/>
-    /// and <see cref="UkcState.MeetsSettings"/>.
+    /// <see cref="UkcState.Tight"/> and <see cref="UkcState.MeetsSettings"/>.
     /// </summary>
     /// <param name="a">A state.</param>
     /// <param name="b">Another state.</param>
     /// <returns>The worse state.</returns>
     public static UkcState Worst(UkcState a, UkcState b) => (UkcState)Math.Max((int)a, (int)b);
+}
+
+/// <summary>
+/// Why a sample, a leg or a departure is lower confidence. Confidence is shown
+/// alongside the clearance band, never in place of it.
+/// </summary>
+[Flags]
+public enum ConfidenceReasons
+{
+    /// <summary>Full confidence: S-102 depth on a confirmed datum.</summary>
+    None = 0,
+
+    /// <summary>The charted depth comes from S-101 rather than S-102.</summary>
+    ChartedDepthFromS101 = 1,
+
+    /// <summary>
+    /// The charted-depth or water-level datum isn't declared, so the depth
+    /// and water level can't be confirmed to share a reference.
+    /// </summary>
+    DatumUnconfirmed = 2,
 }
 
 /// <summary>How the clearance compares with the required UKC, ignoring confidence.</summary>
@@ -196,6 +216,11 @@ public sealed record UkcWaterLevel(
 /// </param>
 /// <param name="Band">How the clearance compares with the required UKC, or <c>null</c> without a clearance.</param>
 /// <param name="State">The sample's state.</param>
+/// <param name="Confidence">
+/// Why the sample is lower confidence, or <see cref="ConfidenceReasons.None"/>.
+/// Independent of <paramref name="State"/>: a no-data sample can carry
+/// <see cref="ConfidenceReasons.ChartedDepthFromS101"/> too.
+/// </param>
 public sealed record UkcSample(
     int Index,
     int LegIndex,
@@ -212,7 +237,12 @@ public sealed record UkcSample(
     double RequiredUkcMeters,
     double? ClearanceMeters,
     ClearanceBand? Band,
-    UkcState State);
+    UkcState State,
+    ConfidenceReasons Confidence = ConfidenceReasons.None)
+{
+    /// <summary><c>true</c> when <see cref="Confidence"/> has any reason.</summary>
+    public bool IsLowConfidence => Confidence != ConfidenceReasons.None;
+}
 
 /// <summary>The smallest margin over the required UKC, and where and when it occurs.</summary>
 /// <param name="SampleIndex">Index of the sample.</param>
@@ -224,6 +254,7 @@ public sealed record UkcSample(
 /// <param name="ClearanceMeters">The UKC there.</param>
 /// <param name="RequiredUkcMeters">The required UKC there.</param>
 /// <param name="State">The sample's state.</param>
+/// <param name="Confidence">Why the sample is lower confidence, or <see cref="ConfidenceReasons.None"/>.</param>
 public sealed record UkcMinimum(
     int SampleIndex,
     int LegIndex,
@@ -233,7 +264,8 @@ public sealed record UkcMinimum(
     bool HasEta,
     double ClearanceMeters,
     double RequiredUkcMeters,
-    UkcState State);
+    UkcState State,
+    ConfidenceReasons Confidence = ConfidenceReasons.None);
 
 /// <summary>The check result for one leg.</summary>
 /// <param name="LegIndex">Index of the leg.</param>
@@ -248,7 +280,7 @@ public sealed record UkcMinimum(
 /// <param name="WorstState">The worst state among the leg's samples.</param>
 /// <param name="MinutesBelow">Time spent below the setting on this leg, in minutes (0 without ETAs).</param>
 /// <param name="PlacesBelow">Number of separate stretches below the setting on this leg.</param>
-/// <param name="HasLowConfidence"><c>true</c> when any sample on the leg is low confidence.</param>
+/// <param name="Confidence">The low-confidence reasons of every sample on the leg, combined.</param>
 /// <param name="HasNoWaterLevel"><c>true</c> when any sample on the leg has a charted depth but no applied water level.</param>
 public sealed record LegUkcResult(
     int LegIndex,
@@ -263,8 +295,12 @@ public sealed record LegUkcResult(
     UkcState WorstState,
     double MinutesBelow,
     int PlacesBelow,
-    bool HasLowConfidence,
-    bool HasNoWaterLevel);
+    ConfidenceReasons Confidence,
+    bool HasNoWaterLevel)
+{
+    /// <summary><c>true</c> when any sample on the leg is lower confidence.</summary>
+    public bool HasLowConfidence => Confidence != ConfidenceReasons.None;
+}
 
 /// <summary>The datasets and datums behind a result, for the Sources disclosure.</summary>
 /// <param name="BathymetryDatasets">The S-102 datasets that supplied charted depth.</param>
@@ -294,6 +330,7 @@ public sealed record PassageSources(
 /// <param name="Gaps">Stretches with no data, or where the datums don't match.</param>
 /// <param name="LowConfidence">Stretches charted from S-101, or where the datums can't be confirmed.</param>
 /// <param name="Sources">The datasets and datums behind the result.</param>
+/// <param name="Confidence">The low-confidence reasons of every sample, combined.</param>
 public sealed record PassageCheckResult(
     DateTimeOffset Departure,
     DateTimeOffset? Arrival,
@@ -306,7 +343,8 @@ public sealed record PassageCheckResult(
     IReadOnlyList<LegUkcResult> Legs,
     IReadOnlyList<PassageStretch> Gaps,
     IReadOnlyList<PassageStretch> LowConfidence,
-    PassageSources Sources);
+    PassageSources Sources,
+    ConfidenceReasons Confidence = ConfidenceReasons.None);
 
 /// <summary>The outcome of one departure in a <see cref="DepartureSweep"/>.</summary>
 /// <param name="Departure">The departure time.</param>
@@ -315,13 +353,18 @@ public sealed record PassageCheckResult(
 /// <param name="MinimumClearanceMeters">The UKC at the smallest margin, or <c>null</c> when no sample has a clearance.</param>
 /// <param name="MinimumMarginMeters">The smallest clearance minus required UKC, or <c>null</c>.</param>
 /// <param name="MinutesBelow">Time below the setting, in minutes.</param>
+/// <param name="Confidence">
+/// The low-confidence reasons along the passage at this departure, combined.
+/// A departure that meets your settings with lower confidence still meets them.
+/// </param>
 public sealed record DepartureOption(
     DateTimeOffset Departure,
     DateTimeOffset? Arrival,
     PassageVerdict Verdict,
     double? MinimumClearanceMeters,
     double? MinimumMarginMeters,
-    double MinutesBelow)
+    double MinutesBelow,
+    ConfidenceReasons Confidence = ConfidenceReasons.None)
 {
     /// <summary><c>true</c> when the verdict is <see cref="PassageVerdict.MeetsSettings"/> or <see cref="PassageVerdict.MeetsSettingsTight"/>.</summary>
     public bool MeetsSettings => Verdict is PassageVerdict.MeetsSettings or PassageVerdict.MeetsSettingsTight;
@@ -381,6 +424,25 @@ public sealed record DepartureSweep(IReadOnlyList<DepartureOption> Options)
         }
 
         return windows;
+    }
+
+    /// <summary>
+    /// The low-confidence reasons of the departures that meet your settings,
+    /// combined: the caveat on the departure window.
+    /// </summary>
+    /// <returns>The reasons, or <see cref="ConfidenceReasons.None"/>.</returns>
+    public ConfidenceReasons MeetingConfidence()
+    {
+        var reasons = ConfidenceReasons.None;
+        foreach (var option in Options)
+        {
+            if (option.MeetsSettings)
+            {
+                reasons |= option.Confidence;
+            }
+        }
+
+        return reasons;
     }
 
     /// <summary>The meeting departure nearest <paramref name="departure"/>, or <c>null</c> when none meets.</summary>

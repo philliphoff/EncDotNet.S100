@@ -148,18 +148,23 @@ public class PassageCheckEngineTests
             {
                 Assert.Equal(ChartedDepthKind.DepthArea, s.Depth!.Kind);
                 Assert.True(s.Depth.IsLowConfidence);
-                Assert.Equal(UkcState.LowConfidence, s.State);
+                // The band is kept; confidence rides alongside it (#939).
+                Assert.Equal(UkcState.MeetsSettings, s.State);
+                Assert.Equal(ConfidenceReasons.ChartedDepthFromS101, s.Confidence);
             }
             else
             {
                 Assert.Equal(ChartedDepthKind.Bathymetry, s.Depth!.Kind);
                 Assert.Equal(UkcState.MeetsSettings, s.State);
+                Assert.False(s.IsLowConfidence);
             }
         }
 
         // Low confidence alone doesn't change the verdict.
         Assert.Equal(PassageVerdict.MeetsSettings, result.Verdict);
         Assert.True(result.Legs[0].HasLowConfidence);
+        Assert.Equal(ConfidenceReasons.ChartedDepthFromS101, result.Legs[0].Confidence);
+        Assert.Equal(ConfidenceReasons.ChartedDepthFromS101, result.Confidence);
         Assert.Equal(["102TEST"], result.Sources.BathymetryDatasets);
         Assert.Equal(["101TEST"], result.Sources.FallbackDatasets);
     }
@@ -267,10 +272,49 @@ public class PassageCheckEngineTests
             Assert.Equal(WaterLevelStatus.Applied, s.WaterLevel.Status);
             Assert.Equal(DatumAgreement.Unknown, s.WaterLevel.Datum);
             Assert.Equal(6, s.ClearanceMeters!.Value, 6);
-            Assert.Equal(UkcState.LowConfidence, s.State);
+            Assert.Equal(UkcState.MeetsSettings, s.State);
+            Assert.Equal(ConfidenceReasons.DatumUnconfirmed, s.Confidence);
         });
         Assert.Equal(PassageStretchKind.DatumUnconfirmed, Assert.Single(result.LowConfidence).Kind);
         Assert.Equal(PassageVerdict.MeetsSettings, result.Verdict);
+        Assert.Equal(ConfidenceReasons.DatumUnconfirmed, result.Confidence);
+        Assert.Equal(ConfidenceReasons.DatumUnconfirmed, result.Minimum!.Confidence);
+    }
+
+    [Theory]
+    [InlineData(10.3, UkcState.Tight, PassageVerdict.MeetsSettingsTight)]
+    [InlineData(9.3, UkcState.BelowSetting, PassageVerdict.BelowSetting)]
+    [InlineData(12, UkcState.MeetsSettings, PassageVerdict.MeetsSettings)]
+    public void Lower_confidence_keeps_the_clearance_band(double depth, UkcState expected, PassageVerdict verdict)
+    {
+        // Draft 10 m, 1 m water level, 1 m required: clearance = depth − 9.
+        // No depth datum, so every sample is DatumUnconfirmed (#939).
+        var result = Check(
+            (_, _) => FakeDepth.Bathymetry(depth, datum: null),
+            FakeWater.Constant(1, Fixture.Lat),
+            leg: Fixture.Leg(draft: 10, required: 1));
+
+        Assert.All(result.Samples, s =>
+        {
+            Assert.Equal(expected, s.State);
+            Assert.Equal(ConfidenceReasons.DatumUnconfirmed, s.Confidence);
+        });
+        Assert.Equal(verdict, result.Verdict);
+        Assert.Equal(expected, result.Legs[0].WorstState);
+        Assert.Equal(ConfidenceReasons.DatumUnconfirmed, result.Legs[0].Confidence);
+    }
+
+    [Fact]
+    public void A_no_data_sample_on_s101_depth_stays_no_data_and_carries_its_confidence()
+    {
+        var result = Check((_, _) => FakeDepth.DepthArea(14), new FakeWater((_, _) => []));
+
+        Assert.All(result.Samples, s =>
+        {
+            Assert.Equal(UkcState.NoData, s.State);
+            Assert.Equal(ConfidenceReasons.ChartedDepthFromS101, s.Confidence);
+        });
+        Assert.Equal(PassageVerdict.IncompleteData, result.Verdict);
     }
 
     [Fact]
@@ -402,6 +446,24 @@ public class PassageCheckEngineTests
         Assert.Equal(full.Verdict, option.Verdict);
         Assert.Equal(full.Minimum!.ClearanceMeters, option.MinimumClearanceMeters!.Value, 9);
         Assert.Equal(full.MinutesBelow, option.MinutesBelow, 9);
+    }
+
+    [Fact]
+    public void Departures_that_meet_with_lower_confidence_still_meet_and_carry_the_caveat()
+    {
+        // As above, but the S-102 declares no datum (#939).
+        var origin = Fixture.Departure.UtcDateTime;
+        var water = new FakeWater((_, _) => [new FakeSeries(origin.AddHours(-6), origin.AddHours(8), t => (t - origin).TotalHours)]);
+        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(12, datum: null)), water);
+        var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
+        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
+
+        var sweep = engine.SweepDepartures(profile, legs, Fixture.Departure.AddHours(-2), Fixture.Departure.AddHours(6), TimeSpan.FromMinutes(30), TestContext.Current.CancellationToken);
+
+        var window = Assert.Single(sweep.Windows());
+        Assert.Equal(Fixture.Departure.AddHours(2), window.First);
+        Assert.All(sweep.Options.Where(o => o.MeetsSettings), o => Assert.Equal(ConfidenceReasons.DatumUnconfirmed, o.Confidence));
+        Assert.Equal(ConfidenceReasons.DatumUnconfirmed, sweep.MeetingConfidence());
     }
 
     [Fact]

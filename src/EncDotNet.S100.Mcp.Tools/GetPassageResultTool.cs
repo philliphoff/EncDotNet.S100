@@ -51,6 +51,7 @@ public sealed record GetPassageResultResult(
     [property: Description("Arrival time, UTC; null when a leg has no speed.")] DateTimeOffset? Arrival,
     [property: Description("Verdict code: water_level_ends_before_arrival, below_setting, incomplete_data, meets_settings_tight or meets_settings (in that priority).")] string Verdict,
     [property: Description("The verdict in the UI's words, e.g. \"Below your UKC setting in 2 places\".")] string VerdictTitle,
+    [property: Description("Lower-confidence reasons anywhere on the passage (see samples[].confidence). The verdict follows the clearance band; these qualify it and never replace it.")] IReadOnlyList<string> Confidence,
     [property: Description("True when some leg has no required UKC, so it was checked against 0 m.")] bool NoMarginSet,
     [property: Description("The smallest margin over the required UKC, with where and when; null when no sample has a clearance.")] PassageMinimumSummary? Minimum,
     [property: Description("Minutes spent below the UKC setting (0 without ETAs).")] double MinutesBelow,
@@ -59,7 +60,7 @@ public sealed record GetPassageResultResult(
     [property: Description("Number of samples along the passage.")] int SampleCount,
     [property: Description("Per-leg results in route order.")] IReadOnlyList<PassageLegSummary> Legs,
     [property: Description("Stretches with no data: no charted depth, no S-104 coverage, before/after the S-104 time range, masked S-104 values, or a datum mismatch.")] IReadOnlyList<PassageStretchSummary> Gaps,
-    [property: Description("Low-confidence stretches: charted depth from S-101, or datums that can't be confirmed to agree.")] IReadOnlyList<PassageStretchSummary> LowConfidence,
+    [property: Description("Lower-confidence stretches: charted depth from S-101, or datums that can't be confirmed to agree. The samples in them keep their own state (meets_settings, tight or below_setting).")] IReadOnlyList<PassageStretchSummary> LowConfidence,
     [property: Description("Datasets, stations and datums behind the result.")] PassageSourcesSummary Sources,
     [property: Description("Per-sample values; present only when includeSamples is set.")] IReadOnlyList<PassageSampleSummary>? Samples,
     [property: Description("True when samples were thinned to maxSamples.")] bool? SamplesThinned,
@@ -77,7 +78,8 @@ public sealed record PassageMinimumSummary(
     [property: Description("True when time is a real ETA.")] bool HasEta,
     [property: Description("Under-keel clearance there, metres.")] double UkcMeters,
     [property: Description("Required UKC there, metres.")] double RequiredUkcMeters,
-    [property: Description("State there (see samples[].state).")] string State);
+    [property: Description("State there (see samples[].state).")] string State,
+    [property: Description("Lower-confidence reasons there (see samples[].confidence).")] IReadOnlyList<string> Confidence);
 
 /// <summary>One leg's result.</summary>
 public sealed record PassageLegSummary(
@@ -92,10 +94,11 @@ public sealed record PassageLegSummary(
     [property: Description("Squat allowance used on the leg, metres.")] double SquatMeters,
     [property: Description("Required UKC on the leg, metres; null when unset (checked against 0 m).")] double? RequiredUkcMeters,
     [property: Description("Smallest UKC margin on the leg; null when no sample has a clearance.")] PassageMinimumSummary? Minimum,
-    [property: Description("Worst state on the leg (see samples[].state); tints the leg chip.")] string WorstState,
+    [property: Description("Worst state on the leg (see samples[].state); tints the leg chip, whatever the confidence.")] string WorstState,
     [property: Description("Minutes below the UKC setting on the leg.")] double MinutesBelow,
     [property: Description("Separate stretches below the UKC setting on the leg.")] int PlacesBelow,
-    [property: Description("True when part of the leg is low confidence (dashed chip border).")] bool LowConfidence,
+    [property: Description("True when part of the leg is lower confidence (dashed chip border and dashed route line in the band's colour).")] bool LowConfidence,
+    [property: Description("Lower-confidence reasons on the leg (see samples[].confidence).")] IReadOnlyList<string> Confidence,
     [property: Description("True when part of the leg has charted depth but no applied water level (\"no tide\").")] bool NoWaterLevel);
 
 /// <summary>A run of samples sharing a gap or low-confidence reason.</summary>
@@ -151,14 +154,16 @@ public sealed record PassageSampleSummary(
     [property: Description("same, different or unknown: how the depth and water-level datums compare.")] string? Datum,
     [property: Description("Under-keel clearance = charted depth + water level − draft − squat, metres; null without both.")] double? UkcMeters,
     [property: Description("Required UKC, metres.")] double RequiredUkcMeters,
-    [property: Description("meets_settings, tight (within 0.5 m of required), below_setting, low_confidence or no_data.")] string State);
+    [property: Description("Clearance state: meets_settings, tight (within 0.5 m of required), below_setting or no_data. Confidence is reported separately.")] string State,
+    [property: Description("Lower-confidence reasons, separate from the state: charted_depth_from_s101 (S-101 stands in for S-102) and datum_unconfirmed (the depth or water-level datum isn't declared, so they can't be confirmed to share a reference). Empty at full confidence.")] IReadOnlyList<string> Confidence);
 
 /// <summary>The departure sweep.</summary>
 public sealed record PassageWindowSummary(
     [property: Description("First swept departure, UTC.")] DateTimeOffset From,
     [property: Description("Last swept departure, UTC.")] DateTimeOffset To,
     [property: Description("Minutes between departures.")] int StepMinutes,
-    [property: Description("Runs of departures that meet your settings.")] IReadOnlyList<PassageWindowRangeSummary> Windows,
+    [property: Description("Runs of departures that meet your settings, including those that meet them with lower confidence.")] IReadOnlyList<PassageWindowRangeSummary> Windows,
+    [property: Description("Lower-confidence reasons among the departures that meet your settings: the caveat on the window. Empty when none.")] IReadOnlyList<string> WindowConfidence,
     [property: Description("The meeting departure nearest the requested departure; null when none meets.")] DateTimeOffset? NearestMeetingDeparture,
     [property: Description("The trailing run of departures whose arrival is after the S-104 data ends (verdict water_level_ends_before_arrival; never meeting); null when the last departure arrives within the data.")] PassageWindowRangeSummary? ArrivalAfterDataEnds,
     [property: Description("One entry per swept departure.")] IReadOnlyList<PassageDepartureSummary> Departures);
@@ -174,7 +179,8 @@ public sealed record PassageDepartureSummary(
     [property: Description("Arrival, UTC; null without ETAs.")] DateTimeOffset? Arrival,
     [property: Description("Verdict code for this departure.")] string Verdict,
     [property: Description("UKC at the smallest margin, metres; null when no sample has a clearance.")] double? MinUkcMeters,
-    [property: Description("Minutes below the UKC setting.")] double MinutesBelow);
+    [property: Description("Minutes below the UKC setting.")] double MinutesBelow,
+    [property: Description("Lower-confidence reasons along the passage at this departure.")] IReadOnlyList<string> Confidence);
 
 /// <summary>
 /// A route the host can hand to <see cref="GetPassageResultTool"/>, with the
@@ -459,6 +465,7 @@ public sealed class GetPassageResultTool
             Math.Round(l.MinutesBelow, 1),
             l.PlacesBelow,
             l.HasLowConfidence,
+            ConfidenceCodes(l.Confidence),
             l.HasNoWaterLevel)).ToList();
 
         return new GetPassageResultResult(
@@ -468,6 +475,7 @@ public sealed class GetPassageResultTool
             result.Arrival,
             Verdict(result.Verdict),
             VerdictTitle(result),
+            ConfidenceCodes(result.Confidence),
             result.NoMarginSet,
             Minimum(result.Minimum),
             Math.Round(result.MinutesBelow, 1),
@@ -571,7 +579,8 @@ public sealed class GetPassageResultTool
         s.WaterLevel.Datum is { } d ? Snake(d.ToString()) : null,
         Round(s.ClearanceMeters),
         s.RequiredUkcMeters,
-        State(s.State));
+        State(s.State),
+        ConfidenceCodes(s.Confidence));
 
     private static PassageMinimumSummary? Minimum(UkcMinimum? m) => m is null
         ? null
@@ -585,7 +594,8 @@ public sealed class GetPassageResultTool
             m.HasEta,
             Round(m.ClearanceMeters)!.Value,
             m.RequiredUkcMeters,
-            State(m.State));
+            State(m.State),
+            ConfidenceCodes(m.Confidence));
 
     private static PassageStretchSummary Stretch(PassageStretch s) => new(
         Snake(s.Kind.ToString()),
@@ -614,19 +624,44 @@ public sealed class GetPassageResultTool
         sweep.Options.Count > 0 ? sweep.Options[^1].Departure : departure,
         (int)Math.Round(sweep.Step.TotalMinutes),
         sweep.Windows().Select(w => new PassageWindowRangeSummary(w.First, w.Last)).ToList(),
+        ConfidenceCodes(sweep.MeetingConfidence()),
         sweep.NearestMeeting(departure)?.Departure,
         sweep.ArrivalAfterDataEnds() is { } hatched ? new PassageWindowRangeSummary(hatched.First, hatched.Last) : null,
         sweep.Options.Select(o => new PassageDepartureSummary(
-            o.Departure, o.Arrival, Verdict(o.Verdict), Round(o.MinimumClearanceMeters), Math.Round(o.MinutesBelow, 1))).ToList());
+            o.Departure, o.Arrival, Verdict(o.Verdict), Round(o.MinimumClearanceMeters), Math.Round(o.MinutesBelow, 1), ConfidenceCodes(o.Confidence))).ToList());
 
-    internal static string State(UkcState state) => state switch
+    /// <summary>The wire code for a clearance state: <c>meets_settings</c>, <c>tight</c>, <c>below_setting</c> or <c>no_data</c>.</summary>
+    /// <param name="state">The state.</param>
+    /// <returns>The code.</returns>
+    public static string State(UkcState state) => state switch
     {
         UkcState.MeetsSettings => "meets_settings",
         UkcState.Tight => "tight",
         UkcState.BelowSetting => "below_setting",
-        UkcState.LowConfidence => "low_confidence",
         _ => "no_data",
     };
+
+    /// <summary>
+    /// The wire codes for lower-confidence reasons, in a fixed order:
+    /// <c>charted_depth_from_s101</c>, then <c>datum_unconfirmed</c>.
+    /// </summary>
+    /// <param name="reasons">The reasons.</param>
+    /// <returns>The codes; empty at full confidence.</returns>
+    public static IReadOnlyList<string> ConfidenceCodes(ConfidenceReasons reasons)
+    {
+        var codes = new List<string>(2);
+        if (reasons.HasFlag(ConfidenceReasons.ChartedDepthFromS101))
+        {
+            codes.Add("charted_depth_from_s101");
+        }
+
+        if (reasons.HasFlag(ConfidenceReasons.DatumUnconfirmed))
+        {
+            codes.Add("datum_unconfirmed");
+        }
+
+        return codes;
+    }
 
     internal static string Verdict(PassageVerdict verdict) => verdict switch
     {
