@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Text;
@@ -34,6 +35,14 @@ public sealed class SecomClient
     private readonly HttpClient _httpClient;
     private SecomApiVersion? _version;
     private bool _post;
+
+    // Each service's maxItemsPerPage (SECOM §5.5: constant per server), or 0
+    // when it didn't say; by service URI and interface (GET or signed POST),
+    // kept with the HttpClient that asked, which hosts reuse across reads.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<HttpClient, ConcurrentDictionary<string, int>> PageSizes = new();
+
+    /// <summary>The largest page size asked for, whatever a service allows.</summary>
+    private const int MaxPageSize = 1_000;
 
     /// <summary>Creates a client for the service at <paramref name="serviceUri"/>.</summary>
     /// <param name="httpClient">The client used for requests.</param>
@@ -141,12 +150,46 @@ public sealed class SecomClient
     /// 404. So for a filtered query the interface version is detected first,
     /// with an unfiltered request; once it is known, a 404 means an empty page.
     /// </remarks>
-    public async Task<SecomSummaryPage> GetSummaryPageAsync(
+    public Task<SecomSummaryPage> GetSummaryPageAsync(
         SecomQuery query, int page = 1, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
+        return GetSummaryPageCoreAsync(query, page, cancellationToken);
+    }
 
+    /// <summary>
+    /// The service's <c>maxItemsPerPage</c>: a summary request for page 0
+    /// returns no items, only that value, which is the same for every query on
+    /// the server (SECOM §5.5). <see langword="null"/> when the service doesn't
+    /// say: it fails the request, returns items anyway, or gives no positive
+    /// value (some echo the requested page size with items). The answer is kept
+    /// for the service.
+    /// </summary>
+    internal async Task<int?> GetMaxItemsPerPageAsync(SecomQuery query, CancellationToken cancellationToken = default)
+    {
+        var key = ServiceUri.AbsoluteUri + (_post ? "|post" : "|get");
+        var sizes = PageSizes.GetValue(_httpClient, static _ => new ConcurrentDictionary<string, int>(StringComparer.Ordinal));
+        if (sizes.TryGetValue(key, out var known))
+            return known > 0 ? known : null;
+
+        int size;
+        try
+        {
+            var result = await GetSummaryPageCoreAsync(new SecomQuery(PageSize: query.PageSize), 0, cancellationToken).ConfigureAwait(false);
+            size = result is { Items.Count: 0, MaxItemsPerPage: > 0 and var max } ? max : 0;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidDataException && !cancellationToken.IsCancellationRequested)
+        {
+            size = 0;
+        }
+
+        sizes[key] = size;
+        return size > 0 ? size : null;
+    }
+
+    private async Task<SecomSummaryPage> GetSummaryPageCoreAsync(SecomQuery query, int page, CancellationToken cancellationToken)
+    {
         var filtered = query.GeometryWkt is { Length: > 0 } || query.ValidFrom is not null || query.ValidTo is not null;
         if (!_post)
         {
@@ -220,9 +263,25 @@ public sealed class SecomClient
         var seen = new HashSet<string>(StringComparer.Ordinal);
         int? reported = null;
         var truncated = false;
+        // The service's own page size (SECOM §5.5) is asked only when it matters:
+        // the first page is refused (too large?) or more pages are needed (larger allowed?).
+        var asked = false;
         for (var page = 1; items.Count < maxItems; page++)
         {
-            var result = await GetSummaryPageAsync(query, page, cancellationToken).ConfigureAwait(false);
+            SecomSummaryPage result;
+            try
+            {
+                result = await GetSummaryPageCoreAsync(query, page, cancellationToken).ConfigureAwait(false);
+            }
+            catch (HttpRequestException ex) when (page == 1 && !asked && ex.StatusCode == HttpStatusCode.BadRequest)
+            {
+                asked = true;
+                if (await GetMaxItemsPerPageAsync(query, cancellationToken).ConfigureAwait(false) is not { } max || max >= query.PageSize)
+                    throw;
+                query = query with { PageSize = max };
+                result = await GetSummaryPageCoreAsync(query, page, cancellationToken).ConfigureAwait(false);
+            }
+
             reported ??= result.TotalItems;
             var added = 0;
             foreach (var item in result.Items)
@@ -245,6 +304,20 @@ public sealed class SecomClient
                 || (result.TotalItems is null && result.Items.Count < pageSize))
             {
                 break;
+            }
+
+            if (page == 1 && !asked)
+            {
+                // More to read: larger pages, if the service allows them, mean fewer requests.
+                asked = true;
+                if (await GetMaxItemsPerPageAsync(query, cancellationToken).ConfigureAwait(false) is { } larger
+                    && Math.Min(larger, MaxPageSize) > query.PageSize
+                    && result.Items.Count > 0)
+                {
+                    // Pages of another size don't line up: read again from the start.
+                    query = query with { PageSize = Math.Min(larger, MaxPageSize) };
+                    page = 0;
+                }
             }
         }
 

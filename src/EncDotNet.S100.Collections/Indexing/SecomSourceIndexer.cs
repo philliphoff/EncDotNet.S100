@@ -497,7 +497,8 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         Attempt attempt;
         try
         {
-            // 100 is SECOMLib's default page size; AMSA answers 400 to larger pages (#882).
+            // 100 is SECOMLib's default and AMSA's maximum (#882); the client asks a
+            // service its own size (page=0, SECOM §5.5) when a page is refused or more are needed.
             var query = new SecomQuery(GeometryWkt: source.Filter.GeometryWkt, PageSize: 100);
             var list = await client.GetSummariesAsync(query, _maxItems, cancellationToken).ConfigureAwait(false);
             listing = new Listing(list.Items, list.TotalItems, list.Truncated, client.ApiVersion ?? SecomApiVersion.V2, now)

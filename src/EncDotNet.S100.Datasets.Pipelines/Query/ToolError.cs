@@ -31,7 +31,7 @@ public sealed record InvalidArgument(
     [property: Description("Name of the request property that was rejected.")] string Parameter,
     [property: Description("Human-readable description of why the value was rejected; not localised.")] string Reason) : ToolError(
     "invalid_argument",
-    $"Invalid argument '{Parameter}': {Reason}.");
+    $"Invalid argument '{Parameter}': {Reason?.TrimEnd('.')}.");
 
 /// <summary>The named dataset is not present in the catalog snapshot.</summary>
 /// <param name="Id">The dataset identifier that could not be resolved.</param>
