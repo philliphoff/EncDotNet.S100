@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
@@ -2067,7 +2068,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     // Overlap ranking prefers the cell's compilation scale (S-57 CSCL) over its
     // zoom-out window, which for S-57 extends to the largest SCAMIN.
     private static int? RankingScale(Entry entry) =>
-        entry.CellCompilationScale ?? EffectiveMinimumDisplayScale(entry);
+        CellScaleRanking.RankingScale(entry.CellCompilationScale, EffectiveMinimumDisplayScale(entry));
 
     private void OnAuthorityChanged()
     {

@@ -24,10 +24,27 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// <para>
 /// The S-101 fallback reads <c>DredgedArea</c> and <c>DepthArea</c> minimum
 /// depths (DRVAL1), then the nearest <c>Sounding</c> within
-/// <see cref="PassageDataSourceOptions.MaxSoundingDistanceMeters"/>. Where
-/// cells overlap the shoalest value wins. The depth's datum comes from the
-/// <c>SoundingDatum</c> meta-feature covering the point.
+/// <see cref="PassageDataSourceOptions.MaxSoundingDistanceMeters"/>. The
+/// depth's datum comes from the <c>SoundingDatum</c> meta-feature covering the
+/// point in the cell that supplied it.
 /// </para>
+/// <para>
+/// Where S-101 cells overlap, two rules apply in turn (issue #938):
+/// </para>
+/// <list type="number">
+/// <item><description>
+/// The finest cell wins. Of the cells whose <c>DataCoverage</c> contains the
+/// point (or whose bounds do, for a cell without one), only those at the finest
+/// scale are read. Cells are ranked with <see cref="CellScaleRanking"/>, the
+/// same rule the display uses to hide a coarser cell under a finer one, so the
+/// check reads the chart the mariner sees. A coarser cell is generalised for
+/// its band, and its depth there is not a safer answer than the finer survey.
+/// </description></item>
+/// <item><description>
+/// Among cells of that same scale, the shoalest value wins, for each of
+/// <c>DredgedArea</c> and <c>DepthArea</c>, and the nearest sounding wins.
+/// </description></item>
+/// </list>
 /// </remarks>
 internal sealed class CatalogChartedDepthSource : IChartedDepthSource
 {
@@ -82,16 +99,20 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             }
         }
 
+        var covering = new List<S101Index>();
+        foreach (var cell in _cells)
+        {
+            if (Contains(cell.Bounds, latitude, longitude, padDegrees: 0.01) && cell.Covers(latitude, longitude))
+            {
+                covering.Add(cell);
+            }
+        }
+
         ChartedDepth? dredged = null;
         ChartedDepth? area = null;
         ChartedDepth? sounding = null;
-        foreach (var cell in _cells)
+        foreach (var cell in CellScaleRanking.FinestBand(covering, c => c.RankingScale))
         {
-            if (!Contains(cell.Bounds, latitude, longitude, padDegrees: 0.01))
-            {
-                continue;
-            }
-
             var datum = cell.SoundingDatumAt(latitude, longitude);
             dredged = ChartedDepthResolver.Shoaler(dredged, cell.DredgedAreaAt(latitude, longitude, datum));
             area = ChartedDepthResolver.Shoaler(area, cell.DepthAreaAt(latitude, longitude, datum));
@@ -221,6 +242,32 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
 
         public BoundingBox Bounds { get; }
 
+        /// <summary>The cell's <see cref="CellScaleRanking"/> scale; smaller is finer.</summary>
+        public int? RankingScale => Index.RankingScale;
+
+        /// <summary>
+        /// Whether the cell's <c>DataCoverage</c> contains the point. A cell
+        /// that declares no coverage covers its whole extent.
+        /// </summary>
+        public bool Covers(double lat, double lon)
+        {
+            var coverage = Index.Coverage;
+            if (coverage.Count == 0)
+            {
+                return true;
+            }
+
+            foreach (var area in coverage)
+            {
+                if (area.Contains(lat, lon))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public int? SoundingDatumAt(double lat, double lon)
         {
             foreach (var area in Index.SoundingDatums.Candidates(lat, lon))
@@ -310,7 +357,8 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             var dredged = new List<Area>();
             var depth = new List<Area>();
             var datums = new List<Area>();
-            foreach (var feature in new S101VectorSource(_dataset).GetFeatures())
+            var features = new S101VectorSource(_dataset).GetFeatures().ToList();
+            foreach (var feature in features)
             {
                 if (feature.GeometryType != GeometryType.Surface)
                 {
@@ -332,7 +380,11 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
                 }
             }
 
+            // Ranked like the display ranks S-101 cells: S-101 carries no
+            // compilation scale, so by the DataCoverage minimum display scale.
             return new Built(
+                CellScaleRanking.RankingScale(null, S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features)),
+                CoverageAreaResolver.Resolve(features),
                 new AreaIndex(dredged, Bounds),
                 new AreaIndex(depth, Bounds),
                 new AreaIndex(datums, Bounds),
@@ -402,7 +454,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             return lo;
         }
 
-        private sealed record Built(AreaIndex DredgedAreas, AreaIndex DepthAreas, AreaIndex SoundingDatums, List<Sounding> Soundings);
+        private sealed record Built(int? RankingScale, IReadOnlyList<CoverageArea> Coverage, AreaIndex DredgedAreas, AreaIndex DepthAreas, AreaIndex SoundingDatums, List<Sounding> Soundings);
 
         private readonly record struct Sounding(double Lat, double Lon, double Depth, string FeatureId);
 

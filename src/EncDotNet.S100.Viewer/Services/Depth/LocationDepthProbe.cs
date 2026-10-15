@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -12,6 +13,13 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// <see cref="DepthAssimilationService"/> to produce a single
 /// <see cref="LocationDepthResult"/> and a water/land classification.
 /// </summary>
+/// <remarks>
+/// Where S-101 cells overlap, only the finest cells whose <c>DataCoverage</c>
+/// contains the point supply the base depth (area hits and the nearest
+/// sounding), ranked with <see cref="CellScaleRanking"/> as the display ranks
+/// them; among cells of that scale the shoalest area wins. This is the same rule
+/// the passage check's depth source applies (issue #938).
+/// </remarks>
 internal sealed class LocationDepthProbe
 {
     private readonly WaterLandClassifier _classifier = new();
@@ -51,8 +59,10 @@ internal sealed class LocationDepthProbe
         S101SoundingSample? nearestSounding = null;
         string? soundingDatasetId = null;
         var tideCandidates = new List<S104TideCandidate>();
+        var entries = processors as IReadOnlyCollection<KeyValuePair<DatasetEntry, IDatasetProcessor>> ?? processors.ToList();
+        var finest = FinestCoveringCells(entries.Select(p => p.Value).OfType<S101DatasetProcessor>(), latitude, longitude);
 
-        foreach (var (entry, processor) in processors)
+        foreach (var (entry, processor) in entries)
         {
             switch (processor)
             {
@@ -64,7 +74,7 @@ internal sealed class LocationDepthProbe
                     }
                     break;
 
-                case S101DatasetProcessor s101:
+                case S101DatasetProcessor s101 when finest is null || finest.Contains(s101):
                     var sounding = SafeSampleSounding(s101, latitude, longitude);
                     if (sounding is { } s && (nearestSounding is not { } best || s.DistanceMeters < best.DistanceMeters))
                     {
@@ -88,11 +98,42 @@ internal sealed class LocationDepthProbe
         }
 
         var waterLand = _classifier.Classify(hits, s102CoversPoint: bathymetry is not null);
+        var depthHits = finest is null
+            ? hits
+            : hits.Where(h => h.OwningProcessor is not S101DatasetProcessor s101 || finest.Contains(s101)).ToList();
         var baseDepth = _baseResolver.Resolve(
-            bathymetry, hits, nearestSounding, bathymetryDatasetId, soundingDatasetId);
+            bathymetry, depthHits, nearestSounding, bathymetryDatasetId, soundingDatasetId);
         var result = _assimilation.Assimilate(baseDepth, tideCandidates);
 
         return new Probe(waterLand, result);
+    }
+
+    /// <summary>
+    /// The S-101 cells at the finest scale among those covering the point, or
+    /// <see langword="null"/> when none covers it (no cell is then preferred).
+    /// </summary>
+    internal static HashSet<S101DatasetProcessor>? FinestCoveringCells(
+        IEnumerable<S101DatasetProcessor> cells, double latitude, double longitude)
+    {
+        var covering = new List<(S101DatasetProcessor Cell, int? Rank)>();
+        foreach (var cell in cells)
+        {
+            try
+            {
+                if (cell.CoversPoint(latitude, longitude))
+                {
+                    covering.Add((cell, cell.CellRankingScale));
+                }
+            }
+            catch
+            {
+                // A cell whose features can't be read takes no part in the ranking.
+            }
+        }
+
+        return covering.Count == 0
+            ? null
+            : CellScaleRanking.FinestBand(covering, c => c.Rank).Select(c => c.Cell).ToHashSet();
     }
 
     private static S102DepthSample? TrySampleBathymetry(S102DatasetProcessor processor, double latitude, double longitude)
