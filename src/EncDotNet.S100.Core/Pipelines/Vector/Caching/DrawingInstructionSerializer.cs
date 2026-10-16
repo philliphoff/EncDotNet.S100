@@ -35,8 +35,11 @@ public static class DrawingInstructionSerializer
     /// v3: the base fields carry <see cref="DrawingInstruction.AdditionalViewingGroups"/>
     /// (a count-prefixed id list after the primary viewing group), so v2 lists —
     /// which dropped every viewing group but the first — are rebuilt.
+    /// v4: text instructions carry <see cref="TextInstruction.FontWeight"/>,
+    /// <see cref="TextInstruction.FontProportion"/>, <see cref="TextInstruction.HaloColor"/>
+    /// and <see cref="TextInstruction.HaloWidth"/>.
     /// </remarks>
-    public const int FormatVersion = 3;
+    public const int FormatVersion = 4;
 
     private const byte TagPoint = 1;
     private const byte TagLine = 2;
@@ -157,6 +160,10 @@ public static class DrawingInstructionSerializer
                 WriteNullableDouble(w, t.LineEndOffset);
                 WriteNullableInt(w, t.LineOffsetMode is { } mode ? (int)mode : null);
                 WriteNullableCoordinate(w, t.CoordinateOverride);
+                w.Write((int)t.FontWeight);
+                w.Write((int)t.FontProportion);
+                WriteString(w, t.HaloColor);
+                w.Write(t.HaloWidth);
                 break;
 
             default:
@@ -270,6 +277,10 @@ public static class DrawingInstructionSerializer
             LineEndOffset = ReadNullableDouble(r),
             LineOffsetMode = ReadNullableInt(r) is { } mode ? (LinePlacementMode)mode : null,
             CoordinateOverride = ReadNullableCoordinate(r),
+            FontWeight = (TextFontWeight)r.ReadInt32(),
+            FontProportion = (TextFontProportion)r.ReadInt32(),
+            HaloColor = ReadString(r),
+            HaloWidth = r.ReadDouble(),
         };
     }
 

@@ -60,6 +60,12 @@ public sealed class HarnessOptions
     public GeographicBounds? Viewport { get; init; }
 
     /// <summary>
+    /// Display rotation in degrees, applied about the framed centre after
+    /// framing, as the viewer's rotate gesture does. Default: 0 (north up).
+    /// </summary>
+    public double Rotation { get; init; }
+
+    /// <summary>
     /// Background color (any valid SkiaSharp color). Default: white.
     /// </summary>
     public uint BackgroundColor { get; init; } = 0xFFFFFFFFu;

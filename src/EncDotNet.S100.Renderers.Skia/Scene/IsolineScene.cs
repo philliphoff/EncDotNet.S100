@@ -30,8 +30,11 @@ public sealed class IsolineAppearance
     /// <summary>Dash pattern (dash, gap, …); empty for a solid line.</summary>
     public IReadOnlyList<float> DashPattern { get; init; } = [6f, 3f];
 
-    /// <summary>Label font size.</summary>
+    /// <summary>Label font size (already scaled by the text scale).</summary>
     public float LabelFontSize { get; init; } = 10f;
+
+    /// <summary>Width of the halo stroked under each label (already scaled by the text scale).</summary>
+    public float LabelHaloWidth { get; init; } = 3f;
 
     /// <summary>The line length between labels.</summary>
     public float LabelSpacing { get; init; } = 250f;
@@ -172,8 +175,8 @@ public sealed class IsolineScene : IDisposable
 
             if (drawLabels)
             {
-                foreach (var anchor in LabelAnchors(matrix))
-                    DrawLabel(canvas, anchor.Label, anchor.Point, opacity);
+                foreach (var (label, point) in Declutter(LabelAnchors(matrix)))
+                    DrawLabel(canvas, label, point, opacity);
             }
         }
         finally
@@ -210,12 +213,11 @@ public sealed class IsolineScene : IDisposable
 
         var matrix = LocalToScreen(mercatorToScreen);
         var turn = SKMatrix.CreateRotationDegrees((float)rotationDegrees, centerX, centerY);
-        foreach (var anchor in LabelAnchors(matrix))
-        {
-            var point = turn.MapPoint(anchor.Point);
-            if (cullBounds.Contains(point))
-                DrawLabel(canvas, anchor.Label, point, 1f);
-        }
+        var turned = LabelAnchors(matrix)
+            .Select(anchor => (anchor.Label, Point: turn.MapPoint(anchor.Point)))
+            .Where(anchor => cullBounds.Contains(anchor.Point));
+        foreach (var (label, point) in Declutter(turned))
+            DrawLabel(canvas, label, point, 1f);
     }
 
     /// <summary>
@@ -291,20 +293,57 @@ public sealed class IsolineScene : IDisposable
         canvas.SetMatrix(in before);
     }
 
+    /// <summary>
+    /// Drops labels whose footprint overlaps one already placed, in placement
+    /// order, so labels never print over each other (as the S-101 label
+    /// declutter does among a layer's labels).
+    /// </summary>
+    internal IEnumerable<(string Label, SKPoint Point)> Declutter(IEnumerable<(string Label, SKPoint Point)> anchors)
+    {
+        using var font = LabelFont();
+        var placed = new List<SKRect>();
+        foreach (var (label, point) in anchors)
+        {
+            var rect = LabelRect(font, label, point);
+            if (placed.Any(other => other.IntersectsWith(rect)))
+                continue;
+            placed.Add(rect);
+            yield return (label, point);
+        }
+    }
+
+    private SKRect LabelRect(SKFont font, string label, SKPoint point)
+    {
+        float width = font.MeasureText(label);
+        float pad = Appearance.LabelHaloWidth / 2f;
+        float half = Appearance.LabelFontSize / 2f;
+        return new SKRect(point.X - width / 2f - pad, point.Y - half - pad, point.X + width / 2f + pad, point.Y + half + pad);
+    }
+
+    private SKFont LabelFont() =>
+        new(RendererFonts.For(TextFontWeight.Bold, TextFontProportion.MonoSpaced), Appearance.LabelFontSize)
+        {
+            Subpixel = true,
+            Edging = SKFontEdging.Antialias,
+        };
+
     private void DrawLabel(SKCanvas canvas, string label, SKPoint point, float opacity)
     {
-        // Centre the label on the line, both ways.
+        // Centre the label on the line both ways; the halo is stroked under the
+        // fill, as SVG paint-order="stroke" does.
+        using var font = LabelFont();
         float baseline = point.Y + Appearance.LabelFontSize * 0.36f;
-        WaterLevelGaugePainter.DrawHaloText(
-            canvas,
-            label,
-            point.X,
-            baseline,
-            WaterLevelGaugePainter.LabelTypeface,
-            Appearance.LabelFontSize,
-            WithOpacity(Appearance.Ink, opacity),
-            WithOpacity(Appearance.LabelHalo, opacity),
-            SKTextAlign.Center);
+        using var halo = new SKPaint
+        {
+            Color = WithOpacity(Appearance.LabelHalo, opacity),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = Appearance.LabelHaloWidth,
+            StrokeJoin = SKStrokeJoin.Round,
+        };
+        using var ink = new SKPaint { Color = WithOpacity(Appearance.Ink, opacity), IsAntialias = true };
+        canvas.DrawText(label, point.X, baseline, SKTextAlign.Center, font, halo);
+        canvas.DrawText(label, point.X, baseline, SKTextAlign.Center, font, ink);
     }
 
     private SKPoint ToLocal(double x, double y) =>

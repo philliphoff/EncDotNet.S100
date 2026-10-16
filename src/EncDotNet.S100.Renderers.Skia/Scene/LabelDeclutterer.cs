@@ -127,7 +127,7 @@ public sealed class LabelDeclutterer : IDisposable
             if (!cullBounds.Contains(ax + (float)text.OffsetXpx, ay + (float)text.OffsetYpx))
                 continue;
 
-            var font = scratch.FontFor((float)text.FontSizePx);
+            var font = scratch.FontFor(text);
             var rect = SkiaDisplayListRenderer.LayoutText(text, ax, ay, font, scratch.Paint).Background;
 
             var owner = new LabelOwner(text.FeatureReference, text.World);

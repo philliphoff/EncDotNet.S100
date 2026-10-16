@@ -699,7 +699,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         if (!cullBounds.Contains(ax + (float)op.OffsetXpx, ay + (float)op.OffsetYpx))
             return;
 
-        var font = scratch.FontFor((float)op.FontSizePx);
+        var font = scratch.FontFor(op);
         var paint = scratch.Paint;
 
         var layout = LayoutText(op, ax, ay, font, paint);
@@ -708,6 +708,15 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         {
             paint.Color = back.ToSkia();
             canvas.DrawRect(layout.Background, paint);
+        }
+
+        if (op.HaloColor is { } halo && op.HaloWidthPx > 0)
+        {
+            // The halo is stroked under the fill, as SVG paint-order="stroke" does.
+            var haloPaint = scratch.HaloPaint;
+            haloPaint.Color = halo.ToSkia();
+            haloPaint.StrokeWidth = (float)op.HaloWidthPx;
+            DrawRunsWithFallback(canvas, op.Text, layout.X, layout.Baseline, (float)op.FontSizePx, font, haloPaint, scratch);
         }
 
         paint.Color = op.ForeColor.ToSkia();
@@ -768,7 +777,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         x += (float)op.OffsetXpx;
         baseline += (float)op.OffsetYpx;
 
-        const float pad = 1.5f;
+        float pad = 1.5f + (op.HaloColor is null ? 0f : (float)op.HaloWidthPx / 2f);
         var background = new SKRect(
             x + textBounds.Left - pad,
             baseline + textBounds.Top - pad,
@@ -892,18 +901,33 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// </summary>
     internal sealed class TextDrawScratch : IDisposable
     {
-        private readonly Dictionary<float, SKFont> _fonts = new();
+        private readonly Dictionary<(float, TextFontWeight, TextFontProportion), SKFont> _fonts = new();
 
         /// <summary>The shared antialiased fill paint; set its colour per op.</summary>
         public SKPaint Paint { get; } = new() { IsAntialias = true };
 
-        /// <summary>Returns a cached font for <paramref name="sizePx"/>, creating it on first use.</summary>
-        public SKFont FontFor(float sizePx)
+        /// <summary>The shared halo stroke paint; set its colour and width per op.</summary>
+        public SKPaint HaloPaint { get; } = new()
         {
-            if (!_fonts.TryGetValue(sizePx, out var font))
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeJoin = SKStrokeJoin.Round,
+        };
+
+        /// <summary>Returns a cached regular font for <paramref name="sizePx"/>, creating it on first use.</summary>
+        public SKFont FontFor(float sizePx) =>
+            FontFor(sizePx, TextFontWeight.Medium, TextFontProportion.Proportional);
+
+        /// <summary>Returns the cached font a text op is drawn and measured with.</summary>
+        public SKFont FontFor(TextPaintOp op) =>
+            FontFor((float)op.FontSizePx, op.FontWeight, op.FontProportion);
+
+        private SKFont FontFor(float sizePx, TextFontWeight weight, TextFontProportion proportion)
+        {
+            if (!_fonts.TryGetValue((sizePx, weight, proportion), out var font))
             {
-                font = new SKFont(RendererFonts.Default, sizePx);
-                _fonts[sizePx] = font;
+                font = new SKFont(RendererFonts.For(weight, proportion), sizePx);
+                _fonts[(sizePx, weight, proportion)] = font;
             }
             return font;
         }
@@ -935,6 +959,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         public void Dispose()
         {
             Paint.Dispose();
+            HaloPaint.Dispose();
             foreach (var font in _fonts.Values)
                 font.Dispose();
             _fonts.Clear();

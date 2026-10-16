@@ -769,6 +769,10 @@ public sealed class VectorSceneBuilder
             VerticalAlignment = instruction.VerticalAlignment,
             OffsetXpx = (instruction.OffsetX ?? 0) / S100PixelSizeMm,
             OffsetYpx = (instruction.OffsetY ?? 0) / S100PixelSizeMm,
+            FontWeight = instruction.FontWeight,
+            FontProportion = instruction.FontProportion,
+            HaloColor = string.IsNullOrEmpty(instruction.HaloColor) ? null : ResolveColor(instruction.HaloColor),
+            HaloWidthPx = instruction.HaloWidth / S100PixelSizeMm * TextScale,
         };
     }
 

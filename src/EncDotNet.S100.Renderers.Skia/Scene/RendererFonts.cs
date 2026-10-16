@@ -1,3 +1,4 @@
+using EncDotNet.S100.Pipelines.Vector;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Renderers.Skia.Scene;
@@ -40,6 +41,46 @@ internal static class RendererFonts
     // Docker render proof (issue #23); Select() below is unit-tested directly.
     private static SKTypeface ResolveDefault() =>
         Select(SKTypeface.Default, LoadEmbeddedFallback) ?? SKTypeface.CreateDefault();
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(TextFontWeight, TextFontProportion), SKTypeface> Faces = new();
+
+    /// <summary>
+    /// The typeface for an S-100 Part 9 font weight and proportion. Medium
+    /// proportional text uses <see cref="Default"/>, so labels that set neither
+    /// are unchanged. Other combinations match an installed family (a
+    /// monospaced stack for <see cref="TextFontProportion.MonoSpaced"/>) and fall
+    /// back to <see cref="Default"/> when none is installed.
+    /// </summary>
+    /// <param name="weight">The font weight.</param>
+    /// <param name="proportion">The font proportion.</param>
+    public static SKTypeface For(TextFontWeight weight, TextFontProportion proportion) =>
+        weight == TextFontWeight.Medium && proportion == TextFontProportion.Proportional
+            ? Default
+            : Faces.GetOrAdd((weight, proportion), static key => Match(key.Item1, key.Item2));
+
+    private static SKTypeface Match(TextFontWeight weight, TextFontProportion proportion)
+    {
+        var style = new SKFontStyle(
+            weight switch
+            {
+                TextFontWeight.Light => SKFontStyleWeight.Light,
+                TextFontWeight.Bold => SKFontStyleWeight.Bold,
+                _ => SKFontStyleWeight.Normal,
+            },
+            SKFontStyleWidth.Normal,
+            SKFontStyleSlant.Upright);
+
+        string[] families = proportion == TextFontProportion.MonoSpaced
+            ? ["JetBrains Mono", "Menlo", "Consolas", "DejaVu Sans Mono", "Courier New"]
+            : [Default.FamilyName];
+        foreach (var family in families)
+        {
+            var face = SKFontManager.Default.MatchFamily(family, style);
+            if (IsUsable(face))
+                return face!;
+        }
+        return Default;
+    }
 
     /// <summary>
     /// Chooses the label typeface: <paramref name="hostDefault"/> when it can

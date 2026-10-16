@@ -119,8 +119,11 @@ public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
     /// <summary>Dash pattern (dash, gap) in device-independent pixels; empty for solid.</summary>
     public IReadOnlyList<double> DashPattern { get; init; } = [6, 3];
 
-    /// <summary>Label font size in device-independent pixels.</summary>
+    /// <summary>Label font size in device-independent pixels, with the text scale applied.</summary>
     public double LabelFontSize { get; init; } = 10;
+
+    /// <summary>Width of the halo under each label in device-independent pixels, with the text scale applied.</summary>
+    public double LabelHaloWidth { get; init; } = 3;
 
     /// <summary>Line length between labels, in device-independent pixels.</summary>
     public double LabelSpacing { get; init; } = 250;
@@ -152,6 +155,7 @@ public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
             LineWidth = LineWidth,
             DashPattern = DashPattern,
             LabelFontSize = LabelFontSize,
+            LabelHaloWidth = LabelHaloWidth,
             LabelSpacing = LabelSpacing,
             LandAreaMask = landAreaMask,
         };
@@ -229,6 +233,40 @@ public sealed class GlyphCoverageSubLayer : CoverageSubLayerBase
 }
 
 /// <summary>
+/// A coverage sub-layer portrayed with ordinary S-100 Part 9 drawing
+/// instructions (point symbols and text), so its symbols and labels follow the
+/// same rules as a vector product's: symbol and text scale, scale minimum
+/// (SCAMIN), label declutter, upright symbols and text on a rotated display,
+/// and picking. Used for the S-104 station gauges.
+/// </summary>
+public sealed class VectorCoverageSubLayer : CoverageSubLayerBase
+{
+    /// <summary>The drawing instructions, in any order (renderers sort them by priority).</summary>
+    public required IReadOnlyList<DrawingInstruction> Instructions { get; init; }
+
+    /// <summary>Resolves each instruction's feature reference to its geometry.</summary>
+    public required IFeatureGeometryProvider GeometryProvider { get; init; }
+
+    /// <summary>The palette the instructions' colour tokens resolve against.</summary>
+    public required ColorPalette Palette { get; init; }
+
+    /// <summary>Resolves a symbol reference to its S-100 SVG.</summary>
+    public required Func<string, string?> SymbolProvider { get; init; }
+
+    /// <summary>The mariner's symbol scale.</summary>
+    public double SymbolScale { get; init; } = 1.0;
+
+    /// <summary>The mariner's text scale.</summary>
+    public double TextScale { get; init; } = 1.0;
+
+    /// <summary>The product name used for telemetry and tile cache keys, e.g. <c>"S-104"</c>.</summary>
+    public required string Product { get; init; }
+
+    /// <summary>The EPSG:3857 extent of the features, or null when there are none.</summary>
+    public MercatorBounds? Extent { get; init; }
+}
+
+/// <summary>
 /// Zoom-dependent thinning parameters for a <see cref="GlyphCoverageSubLayer"/>.
 /// </summary>
 public sealed class GlyphThinning
@@ -260,61 +298,6 @@ public enum PointGlyphSymbol
 
     /// <summary>SVG image symbol (S-111 PC arrow symbol).</summary>
     Svg,
-
-    /// <summary>
-    /// A water-level gauge: a rounded square with a trend mark and a value label,
-    /// described by <see cref="PointGlyph.Gauge"/> (S-104 stations). Drawn upright.
-    /// </summary>
-    WaterLevelGauge,
-}
-
-/// <summary>
-/// The trend mark drawn in a <see cref="WaterLevelGauge"/>.
-/// </summary>
-public enum WaterLevelGaugeTrend
-{
-    /// <summary>Trend unknown: a "?".</summary>
-    Unknown,
-
-    /// <summary>Falling: a chevron pointing down.</summary>
-    Falling,
-
-    /// <summary>Rising: a chevron pointing up.</summary>
-    Rising,
-
-    /// <summary>Steady: a dash.</summary>
-    Steady,
-
-    /// <summary>No value at this step: an em dash and no value label.</summary>
-    NoData,
-}
-
-/// <summary>
-/// The water-level gauge drawn for a <see cref="PointGlyphSymbol.WaterLevelGauge"/>
-/// glyph: SoundCharts' own S-104 station symbol (S-104 Ed 2.0.0 §9 defines none).
-/// </summary>
-public sealed class WaterLevelGauge
-{
-    /// <summary>The trend mark.</summary>
-    public required WaterLevelGaugeTrend Trend { get; init; }
-
-    /// <summary>The value label, e.g. <c>"+1.42"</c>, or <see langword="null"/> for none.</summary>
-    public string? Label { get; init; }
-
-    /// <summary>
-    /// The largest scale denominator the label is drawn at; at smaller scales
-    /// (larger denominators) only the square is drawn.
-    /// </summary>
-    public double LabelMaxScaleDenominator { get; init; } = double.PositiveInfinity;
-
-    /// <summary>Stroke, mark and label colour.</summary>
-    public required RgbaColor Ink { get; init; }
-
-    /// <summary>Square fill colour.</summary>
-    public required RgbaColor Fill { get; init; }
-
-    /// <summary>Label halo colour.</summary>
-    public required RgbaColor Halo { get; init; }
 }
 
 /// <summary>
@@ -373,12 +356,6 @@ public sealed class PointGlyph
     /// maps to this unchanged on a north-up Mercator display.
     /// </summary>
     public double Rotation { get; init; }
-
-    /// <summary>
-    /// The gauge to draw; required when <see cref="Symbol"/> is
-    /// <see cref="PointGlyphSymbol.WaterLevelGauge"/>, ignored otherwise.
-    /// </summary>
-    public WaterLevelGauge? Gauge { get; init; }
 
     /// <summary>
     /// Priority when the sub-layer is thinned (see

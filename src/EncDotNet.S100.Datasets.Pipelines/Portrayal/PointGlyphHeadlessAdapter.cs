@@ -1,4 +1,5 @@
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
@@ -20,7 +21,6 @@ internal static class PointGlyphHeadlessAdapter
                 PointGlyphSymbol.Ellipse => SkiaPointGlyphSymbol.Ellipse,
                 PointGlyphSymbol.Triangle => SkiaPointGlyphSymbol.Triangle,
                 PointGlyphSymbol.Svg => SkiaPointGlyphSymbol.Svg,
-                PointGlyphSymbol.WaterLevelGauge => SkiaPointGlyphSymbol.WaterLevelGauge,
                 _ => throw new ArgumentOutOfRangeException(nameof(glyph.Symbol)),
             },
             SvgSource = glyph.SvgSource,
@@ -32,17 +32,6 @@ internal static class PointGlyphHeadlessAdapter
             // SymbolRotation convention), as is Skia's RotateDegrees.
             RotationDegrees = glyph.Rotation,
             ThinningPriority = glyph.ThinningPriority,
-            Gauge = glyph.Gauge is { } gauge
-                ? new SkiaWaterLevelGauge
-                {
-                    Mark = (WaterLevelGaugeMark)(int)gauge.Trend,
-                    Label = gauge.Label,
-                    LabelMaxScaleDenominator = gauge.LabelMaxScaleDenominator,
-                    Ink = gauge.Ink,
-                    Fill = gauge.Fill,
-                    Halo = gauge.Halo,
-                }
-                : null,
         }).ToArray();
 
         return subLayer.Thinning is { } thinning
@@ -50,6 +39,38 @@ internal static class PointGlyphHeadlessAdapter
                 glyphs, thinning.SymbolLengthPixelsPerScale, thinning.MaxSymbolToSpacingRatio)
             : new PointGlyphCompositeLayer(glyphs);
     }
+
+    /// <summary>
+    /// Lowers a <see cref="VectorCoverageSubLayer"/> to a scene with the same
+    /// builder a vector product uses, so its symbols and labels draw by the
+    /// same rules.
+    /// </summary>
+    public static VectorScene BuildScene(VectorCoverageSubLayer subLayer, DrawingInstructionCategory hiddenCategories) =>
+        HeadlessVectorRenderer.BuildScene(
+            subLayer.Instructions,
+            subLayer.GeometryProvider,
+            subLayer.Palette,
+            subLayer.SymbolProvider,
+            lineStyleProvider: null,
+            subLayer.SymbolScale,
+            subLayer.TextScale,
+            hiddenCategories: hiddenCategories);
+
+    /// <summary>
+    /// Renders a <see cref="VectorCoverageSubLayer"/> framed on
+    /// <paramref name="extent"/>, honouring scale visibility at the framed scale.
+    /// </summary>
+    public static SKBitmap Render(
+        VectorCoverageSubLayer subLayer,
+        MercatorBounds extent,
+        int widthPixels,
+        int heightPixels,
+        RgbaColor background,
+        BasemapKind basemap,
+        DrawingInstructionCategory hiddenCategories) =>
+        RenderFitted(
+            new VectorCompositeLayer(BuildScene(subLayer, hiddenCategories)),
+            extent, widthPixels, heightPixels, background, basemap, padding: 0.1);
 
     public static SKBitmap Render(
         GlyphCoverageSubLayer subLayer,

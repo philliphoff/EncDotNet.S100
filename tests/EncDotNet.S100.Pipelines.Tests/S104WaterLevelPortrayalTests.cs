@@ -22,30 +22,52 @@ public sealed class S104WaterLevelPortrayalTests
     private static readonly ProjNetCrsTransformFactory Transforms = new();
 
     [Fact]
-    public async Task Stations_are_gauges_with_a_trend_mark_and_signed_value()
+    public async Task Stations_are_S100_symbols_with_a_trend_mark_and_signed_value_label()
     {
         var path = WriteStations();
         try
         {
-            var processor = new S104DatasetProcessor(path, Transforms);
-            var result = await processor.BuildCoveragePortrayalAsync(new S104RenderContext(), TestContext.Current.CancellationToken);
-
-            var layer = Assert.IsType<GlyphCoverageSubLayer>(Assert.Single(result.SubLayers));
+            var layer = await StationsAt(new S104DatasetProcessor(path, Transforms), new S104RenderContext());
             Assert.Equal(S104DatasetProcessor.StationLayerKey, layer.LayerKey);
             Assert.Equal(S98DisplayPlane.OtherChartOverlays, layer.Plane);
 
-            var byId = layer.Glyphs.ToDictionary(g => (string)g.Attributes["StationId"]);
-            AssertGauge(byId["Rising"], WaterLevelGaugeTrend.Rising, "+1.42");
-            AssertGauge(byId["Falling"], WaterLevelGaugeTrend.Falling, "+0.87");
-            AssertGauge(byId["Steady"], WaterLevelGaugeTrend.Steady, "−0.12");
-            AssertGauge(byId["Unknown"], WaterLevelGaugeTrend.Unknown, "+0.31");
-            AssertGauge(byId["Missing"], WaterLevelGaugeTrend.NoData, null);
+            AssertStation(layer, "Rising", S104PortrayalCatalogue.RisingSymbol, "+1.42");
+            AssertStation(layer, "Falling", S104PortrayalCatalogue.FallingSymbol, "+0.87");
+            AssertStation(layer, "Steady", S104PortrayalCatalogue.SteadySymbol, "\u22120.12");
+            AssertStation(layer, "Unknown", S104PortrayalCatalogue.UnknownSymbol, "+0.31");
+            AssertStation(layer, "Missing", S104PortrayalCatalogue.NoDataSymbol, null);
 
-            Assert.All(layer.Glyphs, glyph =>
+            // Labels follow the S-101 label rules: SCAMIN-gated at 1:100 000,
+            // drawn with the S-104 ink and halo tokens in a monospaced face.
+            Assert.All(layer.Instructions.OfType<TextInstruction>(), text =>
             {
-                Assert.Equal(PointGlyphSymbol.WaterLevelGauge, glyph.Symbol);
-                Assert.Equal(S104PortrayalCatalogue.StationLabelMaxScaleDenominator, glyph.Gauge!.LabelMaxScaleDenominator);
+                Assert.Equal(S104PortrayalCatalogue.StationLabelMaxScaleDenominator, text.ScaleMinimum);
+                Assert.Equal(S104PortrayalCatalogue.InkToken, text.FontColor);
+                Assert.Equal(S104PortrayalCatalogue.LabelHaloToken, text.HaloColor);
+                Assert.Equal(TextFontProportion.MonoSpaced, text.FontProportion);
+                Assert.Equal(TextHorizontalAlignment.Start, text.HorizontalAlignment);
             });
+            Assert.All(layer.Instructions, instruction =>
+                Assert.NotNull(layer.GeometryProvider.GetGeometry(instruction.FeatureReference)));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Stations_carry_the_mariners_symbol_and_text_scale()
+    {
+        var path = WriteStations();
+        try
+        {
+            var layer = await StationsAt(
+                new S104DatasetProcessor(path, Transforms),
+                new S104RenderContext { SymbolScale = 1.5, TextScale = 2.0 });
+
+            Assert.Equal(1.5, layer.SymbolScale);
+            Assert.Equal(2.0, layer.TextScale);
         }
         finally
         {
@@ -57,23 +79,55 @@ public sealed class S104WaterLevelPortrayalTests
     [InlineData(PaletteType.Day)]
     [InlineData(PaletteType.Dusk)]
     [InlineData(PaletteType.Night)]
-    public async Task Stations_use_one_ink_per_palette_whatever_the_trend(PaletteType palette)
+    public async Task Station_symbols_resolve_to_one_ink_per_palette(PaletteType palette)
+    {
+        var path = WriteStations();
+        try
+        {
+            var layer = await StationsAt(new S104DatasetProcessor(path, Transforms), new S104RenderContext { Palette = palette });
+            var ink = S104PortrayalCatalogue.GetInk(palette);
+
+            Assert.True(layer.Palette.TryResolve(S104PortrayalCatalogue.InkToken, out var inkHex));
+            Assert.True(layer.Palette.TryResolve(S104PortrayalCatalogue.SymbolFillToken, out var fillHex));
+            Assert.Equal(ink.Ink, RgbaColor.FromHex(inkHex));
+            Assert.Equal(ink.SymbolFill, RgbaColor.FromHex(fillHex));
+
+            foreach (var symbol in layer.Instructions.OfType<PointInstruction>().Select(p => p.SymbolReference!).Distinct())
+            {
+                var processed = Portrayals.SvgProcessor.Process(layer.SymbolProvider(symbol)!, layer.Palette);
+                Assert.Contains(inkHex, processed, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("S104INK", processed, StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Headless_station_labels_scale_with_the_text_scale()
     {
         var path = WriteStations();
         try
         {
             var processor = new S104DatasetProcessor(path, Transforms);
-            var result = await processor.BuildCoveragePortrayalAsync(
-                new S104RenderContext { Palette = palette }, TestContext.Current.CancellationToken);
+            int Ink(SKBitmap bitmap) => Enumerable.Range(0, bitmap.Width)
+                .SelectMany(x => Enumerable.Range(0, bitmap.Height).Select(y => bitmap.GetPixel(x, y)))
+                .Count(p => p != SKColors.White);
 
-            var ink = S104PortrayalCatalogue.GetInk(palette);
-            var layer = Assert.IsType<GlyphCoverageSubLayer>(Assert.Single(result.SubLayers));
-            Assert.All(layer.Glyphs, glyph =>
-            {
-                Assert.Equal(ink.Ink, glyph.Gauge!.Ink);
-                Assert.Equal(ink.SymbolFill, glyph.Gauge.Fill);
-                Assert.Equal(ink.LabelHalo, glyph.Gauge.Halo);
-            });
+            // A small frame keeps the render inside the 1:100 000 label limit.
+            using var normal = await processor.RenderHeadlessAsync(
+                400, 300, new S104RenderContext(), cancellationToken: TestContext.Current.CancellationToken);
+            using var large = await processor.RenderHeadlessAsync(
+                400, 300, new S104RenderContext { TextScale = 2.0 }, cancellationToken: TestContext.Current.CancellationToken);
+            using var noText = await processor.RenderHeadlessAsync(
+                400, 300, new S104RenderContext { HiddenInstructionCategories = DrawingInstructionCategory.Text },
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.True(Ink(large) > Ink(normal), "Doubling the text scale must enlarge the labels.");
+            Assert.True(Ink(noText) < Ink(normal), "Hiding text must drop the labels and keep the symbols.");
+            Assert.True(Ink(noText) > 0);
         }
         finally
         {
@@ -111,6 +165,25 @@ public sealed class S104WaterLevelPortrayalTests
             var second = await IsolinesAt(processor, steps[1]);
             Assert.DoesNotContain(first.Isolines, l => l.Level == 0.75);
             Assert.Contains(second.Isolines, l => l.Level == 0.75);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Isoline_labels_follow_the_text_scale()
+    {
+        var path = WriteGrid(stepLevels: [0.0]);
+        try
+        {
+            var result = await new S104DatasetProcessor(path, Transforms).BuildCoveragePortrayalAsync(
+                new S104RenderContext { TextScale = 2.0 }, TestContext.Current.CancellationToken);
+            var isolines = Assert.IsType<IsolineCoverageSubLayer>(Assert.Single(result.SubLayers));
+
+            Assert.Equal(20, isolines.LabelFontSize);
+            Assert.Equal(6, isolines.LabelHaloWidth);
         }
         finally
         {
@@ -207,10 +280,21 @@ public sealed class S104WaterLevelPortrayalTests
         return Assert.IsType<IsolineCoverageSubLayer>(Assert.Single(result.SubLayers));
     }
 
-    private static void AssertGauge(PointGlyph glyph, WaterLevelGaugeTrend trend, string? label)
+    private static async Task<VectorCoverageSubLayer> StationsAt(S104DatasetProcessor processor, S104RenderContext context)
     {
-        Assert.Equal(trend, glyph.Gauge!.Trend);
-        Assert.Equal(label, glyph.Gauge.Label);
+        var result = await processor.BuildCoveragePortrayalAsync(context, TestContext.Current.CancellationToken);
+        return Assert.IsType<VectorCoverageSubLayer>(Assert.Single(result.SubLayers));
+    }
+
+    private static void AssertStation(VectorCoverageSubLayer layer, string station, string symbol, string? label)
+    {
+        var featureRef = "station:" + station;
+        var point = Assert.Single(layer.Instructions.OfType<PointInstruction>(), p => p.FeatureReference == featureRef);
+        Assert.Equal(symbol, point.SymbolReference);
+        Assert.NotNull(layer.SymbolProvider(symbol));
+
+        var text = layer.Instructions.OfType<TextInstruction>().SingleOrDefault(t => t.FeatureReference == featureRef);
+        Assert.Equal(label, text?.Text);
     }
 
     private static string WriteStations()

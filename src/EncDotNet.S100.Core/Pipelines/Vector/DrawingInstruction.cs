@@ -324,7 +324,64 @@ public sealed class TextInstruction : DrawingInstruction
     /// </summary>
     public GeoPosition? CoordinateOverride { get; init; }
 
+    /// <summary>
+    /// Font weight (S-100 Part 9 <c>FontCharacteristics.weight</c>). Defaults to
+    /// <see cref="TextFontWeight.Medium"/>, the renderer's regular face.
+    /// </summary>
+    public TextFontWeight FontWeight { get; init; } = TextFontWeight.Medium;
+
+    /// <summary>
+    /// Font proportion (S-100 Part 9 <c>FontCharacteristics.proportion</c>).
+    /// Defaults to <see cref="TextFontProportion.Proportional"/>.
+    /// </summary>
+    public TextFontProportion FontProportion { get; init; } = TextFontProportion.Proportional;
+
+    /// <summary>
+    /// Optional S-100 colour token for a halo stroked around the glyphs, so the
+    /// label reads over busy chart content. Not an S-100 Part 9 text attribute:
+    /// it is used by portrayals SoundCharts defines itself (S-104 water level).
+    /// <see langword="null"/> draws no halo.
+    /// </summary>
+    public string? HaloColor { get; init; }
+
+    /// <summary>
+    /// Width of the <see cref="HaloColor"/> stroke in millimetres on the nominal
+    /// display surface. Ignored when <see cref="HaloColor"/> is <see langword="null"/>.
+    /// </summary>
+    public double HaloWidth { get; init; }
+
     internal override int TypeSortOrder => 3;
+}
+
+/// <summary>S-100 Part 9 font weight.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
+public enum TextFontWeight
+{
+    /// <summary>A light face.</summary>
+    Light = 0,
+
+    /// <summary>The regular face.</summary>
+    Medium = 1,
+
+    /// <summary>A bold face.</summary>
+    Bold = 2,
+}
+
+/// <summary>S-100 Part 9 font proportion.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
+public enum TextFontProportion
+{
+    /// <summary>A proportional face.</summary>
+    Proportional = 0,
+
+    /// <summary>A monospaced face.</summary>
+    MonoSpaced = 1,
 }
 
 /// <summary>S-100 Part 9 horizontal text alignment.</summary>

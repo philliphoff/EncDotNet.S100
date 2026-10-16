@@ -86,6 +86,108 @@ public sealed class S104RenderingTests
         }
     }
 
+    [Fact]
+    public Task Stations_and_labels_stay_upright_on_a_rotated_display()
+    {
+        var path = WriteStations();
+        try
+        {
+            using var harness = new RenderHarness();
+            var bitmap = harness.Render(path, new HarnessOptions
+            {
+                Width = 480,
+                Height = 320,
+                Viewport = new GeographicBounds(West: 4.33, South: 51.87, East: 4.47, North: 51.93),
+                Rotation = 30,
+            });
+
+            return TestHelpers.VerifyBitmap(bitmap);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public Task Stations_follow_the_symbol_and_text_scale()
+    {
+        var path = WriteStations();
+        try
+        {
+            using var harness = new RenderHarness();
+            var bitmap = harness.Render(path, new HarnessOptions
+            {
+                Width = 480,
+                Height = 320,
+                Viewport = new GeographicBounds(West: 4.33, South: 51.87, East: 4.47, North: 51.93),
+                SymbolScale = 1.5,
+                TextScale = 1.5,
+            });
+
+            return TestHelpers.VerifyBitmap(bitmap);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public Task Crowded_station_labels_are_decluttered()
+    {
+        // Two stations 300 m apart: at about 1:60 000 their labels overlap, so
+        // the label declutter keeps one, as it does for S-101 labels.
+        var path = Path.Combine(Path.GetTempPath(), $"104NL00_CROWDED_{Guid.NewGuid():N}.h5");
+        S104Dcf8FixtureBuilder.WriteFile(
+            path,
+            new[]
+            {
+                Station("RTM-A", 0.000f, 0.000f, 1.42f, 2),
+                Station("RTM-B", 0.0006f, 0.0035f, 0.87f, 1),
+            },
+            productSpecification: "INT.IHO.S-104.2.0");
+        try
+        {
+            using var harness = new RenderHarness();
+            var bitmap = harness.Render(path, new HarnessOptions
+            {
+                Width = 480,
+                Height = 320,
+                Viewport = new GeographicBounds(West: 4.33, South: 51.87, East: 4.47, North: 51.93),
+            });
+
+            return TestHelpers.VerifyBitmap(bitmap);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public Task Isoline_labels_stay_upright_on_a_rotated_display()
+    {
+        var path = WriteGrid(baseLevel: -0.6, slope: 0.45);
+        try
+        {
+            using var harness = new RenderHarness();
+            var bitmap = harness.Render(path, new HarnessOptions
+            {
+                Width = 480,
+                Height = 400,
+                TimeStepIndex = 1,
+                Rotation = 30,
+            });
+
+            return TestHelpers.VerifyBitmap(bitmap);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Theory]
     [InlineData(PaletteType.Day)]
     [InlineData(PaletteType.Dusk)]

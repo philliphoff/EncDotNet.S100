@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S104;
@@ -10,6 +11,7 @@ using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Validation;
 using SkiaSharp;
@@ -283,7 +285,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         var selectedTime = dataset.Coverages[step].TimePoint;
         source.SelectTime(selectedTime);
 
-        var subLayer = BuildIsolineSubLayer(step, context?.Palette ?? PaletteType.Day, cancellationToken);
+        var subLayer = BuildIsolineSubLayer(step, context, cancellationToken);
 
         var metadata = source.Metadata;
         int crs = dataset.HorizontalCRS ?? 4326;
@@ -333,10 +335,12 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <paramref name="step"/>: dashed lines in the palette's ink at the
     /// dataset's interval, labelled in metres (see <see cref="S104PortrayalCatalogue"/>).
     /// </summary>
-    private IsolineCoverageSubLayer BuildIsolineSubLayer(int step, PaletteType palette, CancellationToken cancellationToken)
+    private IsolineCoverageSubLayer BuildIsolineSubLayer(int step, RenderContext? context, CancellationToken cancellationToken)
     {
         var dataset = ((S104DatasetData.GriddedCoverage)_data).Dataset;
-        var ink = S104PortrayalCatalogue.GetInk(palette);
+        var ink = S104PortrayalCatalogue.GetInk(context?.Palette ?? PaletteType.Day);
+        // Labels follow the mariner's text scale, as S-101 labels do.
+        double textScale = context?.TextScale ?? 1.0;
         var isolines = _isolinesByStep.GetOrAdd(step, s => TraceIsolines(dataset, s, cancellationToken));
 
         return new IsolineCoverageSubLayer
@@ -350,6 +354,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             Extent = GridMercatorExtent(),
             Ink = ink.Ink,
             LabelHalo = ink.IsolineLabelHalo,
+            LabelFontSize = 10 * textScale,
+            LabelHaloWidth = 3 * textScale,
         };
     }
 
@@ -452,23 +458,24 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         if (_stationSeries is { } stationSeries)
         {
             var portrayal = BuildStationSeries(stationSeries, context);
-            var glyphLayer = portrayal.SubLayers.OfType<GlyphCoverageSubLayer>().Single();
-            if (glyphLayer.Extent is not { } glyphExtent)
+            var stations = portrayal.SubLayers.OfType<VectorCoverageSubLayer>().Single();
+            if (stations.Extent is not { } stationExtent)
                 throw new InvalidOperationException("The S-104 station portrayal has no geographic extent.");
 
             return Task.FromResult(PointGlyphHeadlessAdapter.Render(
-                glyphLayer,
-                glyphExtent,
+                stations,
+                stationExtent,
                 widthPixels,
                 heightPixels,
                 background ?? new RgbaColor(255, 255, 255, 255),
-                context?.Basemap ?? BasemapKind.None));
+                context?.Basemap ?? BasemapKind.None,
+                context?.HiddenInstructionCategories ?? DrawingInstructionCategory.None));
         }
 
         if (_source is null)
             throw new InvalidOperationException("The S-104 dataset has no renderable data source.");
 
-        var isolines = BuildIsolineSubLayer(SelectedStep(context), context?.Palette ?? PaletteType.Day, cancellationToken);
+        var isolines = BuildIsolineSubLayer(SelectedStep(context), context, cancellationToken);
         return Task.FromResult(IsolineHeadlessAdapter.Render(
             isolines,
             widthPixels,
@@ -506,63 +513,61 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         _stationSelectedTime = selectedTime;
 
-        var nativeToMerc = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:3857");
-        var ink = S104PortrayalCatalogue.GetInk(context?.Palette ?? PaletteType.Day);
+        var nativeToWgs84 = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:4326");
+        var palette = context?.Palette ?? PaletteType.Day;
 
-        var glyphs = new List<PointGlyph>(ds.Stations.Count);
+        var instructions = new List<DrawingInstruction>(ds.Stations.Count * 2);
+        var geometries = new Dictionary<string, FeatureGeometry>(ds.Stations.Count, StringComparer.Ordinal);
         double mercMinX = double.PositiveInfinity, mercMinY = double.PositiveInfinity;
         double mercMaxX = double.NegativeInfinity, mercMaxY = double.NegativeInfinity;
 
         foreach (var station in ds.Stations)
         {
-            double mx, my;
-            if (nativeToMerc.IsIdentity)
-            {
-                mx = station.Longitude;
-                my = station.Latitude;
-            }
-            else
-            {
-                (mx, my) = nativeToMerc.Transform(station.Longitude, station.Latitude);
-            }
+            var (lon, lat) = nativeToWgs84.IsIdentity
+                ? (station.Longitude, station.Latitude)
+                : nativeToWgs84.Transform(station.Longitude, station.Latitude);
+            var (mx, my) = WebMercator.FromLonLat(lon, lat);
+            mercMinX = Math.Min(mercMinX, mx);
+            mercMaxX = Math.Max(mercMaxX, mx);
+            mercMinY = Math.Min(mercMinY, my);
+            mercMaxY = Math.Max(mercMaxY, my);
 
-            if (mx < mercMinX) mercMinX = mx;
-            if (mx > mercMaxX) mercMaxX = mx;
-            if (my < mercMinY) mercMinY = my;
-            if (my > mercMaxY) mercMaxY = my;
+            var featureRef = StationFeatureRefPrefix + station.Identifier;
+            geometries[featureRef] = new FeatureGeometry
+            {
+                Type = GeometryType.Point,
+                Coordinates = [new GeoPosition(lat, lon)],
+            };
 
             int idx = station.NearestTimeIndex(selectedTime);
             var height = station.Heights[idx];
-            var trend = station.Trends[idx];
-
             bool noData = float.IsNaN(height) || height == S104CoverageSource.FillValue;
 
-            glyphs.Add(new PointGlyph
+            instructions.Add(new PointInstruction
             {
-                MercatorX = mx,
-                MercatorY = my,
-                FeatureRefTag = StationFeatureRefPrefix + station.Identifier,
-                Attributes = new Dictionary<string, object>(StringComparer.Ordinal)
-                {
-                    ["StationId"] = station.Identifier,
-                    ["WaterLevelHeight"] = height,
-                    ["WaterLevelTrend"] = (int)trend,
-                    ["WaterLevelTrendLabel"] = DecodeTrend(trend),
-                    ["SampleTime"] = station.TimeAt(idx),
-                    ["Latitude"] = station.Latitude,
-                    ["Longitude"] = station.Longitude,
-                },
-                Symbol = PointGlyphSymbol.WaterLevelGauge,
-                Gauge = new WaterLevelGauge
-                {
-                    Trend = noData ? WaterLevelGaugeTrend.NoData : GaugeTrend(trend),
-                    Label = noData ? null : S104PortrayalCatalogue.FormatStationValue(height),
-                    LabelMaxScaleDenominator = S104PortrayalCatalogue.StationLabelMaxScaleDenominator,
-                    Ink = ink.Ink,
-                    Fill = ink.SymbolFill,
-                    Halo = ink.LabelHalo,
-                },
+                FeatureReference = featureRef,
+                SymbolReference = noData ? S104PortrayalCatalogue.NoDataSymbol : StationSymbol(station.Trends[idx]),
             });
+
+            if (!noData)
+            {
+                instructions.Add(new TextInstruction
+                {
+                    FeatureReference = featureRef,
+                    Text = S104PortrayalCatalogue.FormatStationValue(height),
+                    FontSize = S104PortrayalCatalogue.StationLabelFontSize,
+                    FontColor = S104PortrayalCatalogue.InkToken,
+                    FontWeight = TextFontWeight.Bold,
+                    FontProportion = TextFontProportion.MonoSpaced,
+                    HaloColor = S104PortrayalCatalogue.LabelHaloToken,
+                    HaloWidth = S104PortrayalCatalogue.StationLabelHaloMm,
+                    HorizontalAlignment = TextHorizontalAlignment.Start,
+                    VerticalAlignment = TextVerticalAlignment.Center,
+                    OffsetX = S104PortrayalCatalogue.StationLabelOffsetMm,
+                    // Drawn at 1:100 000 and larger, as an S-101 label with SCAMIN is.
+                    ScaleMinimum = S104PortrayalCatalogue.StationLabelMaxScaleDenominator,
+                });
+            }
         }
 
         var extent = ds.Stations.Count == 0
@@ -574,19 +579,25 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         return new CoveragePortrayalResult
         {
-            // S-104 station glyphs (PR-I) are point overlays drawn above
-            // coverage but below cautions, per the MSC.530(106)/Rev.1
-            // §App.2 layer-6 catch-all reading.
+            // S-104 station gauges are point overlays drawn above coverage but
+            // below cautions, per the MSC.530(106)/Rev.1 §App.2 layer-6
+            // catch-all reading.
             SubLayers = new CoverageSubLayerBase[]
             {
-                new GlyphCoverageSubLayer
+                new VectorCoverageSubLayer
                 {
                     LayerKey = StationLayerKey,
                     LayerName = $"S-104: {_fileName}",
                     Plane = S98DisplayPlane.OtherChartOverlays,
                     WithinPlanePriority = 0,
                     SourceFeatureType = StationLayerKey,
-                    Glyphs = glyphs,
+                    Instructions = instructions,
+                    GeometryProvider = new StationGeometryProvider(geometries),
+                    Palette = S104PortrayalCatalogue.GetColorPalette(palette),
+                    SymbolProvider = S104PortrayalCatalogue.GetSymbol,
+                    SymbolScale = context?.SymbolScale ?? 1.0,
+                    TextScale = context?.TextScale ?? 1.0,
+                    Product = "S-104",
                     Extent = extent,
                 },
             },
@@ -594,6 +605,12 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             SourceDatasetId = _fileName,
             Info = info,
         };
+    }
+
+    private sealed class StationGeometryProvider(IReadOnlyDictionary<string, FeatureGeometry> geometries) : IFeatureGeometryProvider
+    {
+        public FeatureGeometry? GetGeometry(string featureReference) =>
+            geometries.TryGetValue(featureReference, out var geometry) ? geometry : null;
     }
 
     private static IReadOnlyList<DateTime> ComputeStationUnionTimes(S104StationSeriesDataset ds)
@@ -610,15 +627,15 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     }
 
     /// <summary>
-    /// The gauge mark for a <c>waterLevelTrend</c> code (S-104 Edition 2.0.0
+    /// The station symbol for a <c>waterLevelTrend</c> code (S-104 Edition 2.0.0
     /// §10.2.7: 0 unknown, 1 decreasing, 2 increasing, 3 steady).
     /// </summary>
-    private static WaterLevelGaugeTrend GaugeTrend(byte trend) => trend switch
+    private static string StationSymbol(byte trend) => trend switch
     {
-        1 => WaterLevelGaugeTrend.Falling,
-        2 => WaterLevelGaugeTrend.Rising,
-        3 => WaterLevelGaugeTrend.Steady,
-        _ => WaterLevelGaugeTrend.Unknown,
+        1 => S104PortrayalCatalogue.FallingSymbol,
+        2 => S104PortrayalCatalogue.RisingSymbol,
+        3 => S104PortrayalCatalogue.SteadySymbol,
+        _ => S104PortrayalCatalogue.UnknownSymbol,
     };
 
     /// <summary>

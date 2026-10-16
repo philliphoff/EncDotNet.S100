@@ -19,39 +19,6 @@ public enum SkiaPointGlyphSymbol
 
     /// <summary>An SVG symbol centred on the feature position.</summary>
     Svg,
-
-    /// <summary>
-    /// A water-level gauge (<see cref="WaterLevelGaugePainter"/>) described by
-    /// <see cref="SkiaPointGlyph.Gauge"/>. Drawn upright on a rotated display.
-    /// </summary>
-    WaterLevelGauge,
-}
-
-/// <summary>
-/// The water-level gauge drawn for a <see cref="SkiaPointGlyphSymbol.WaterLevelGauge"/> glyph.
-/// </summary>
-public sealed class SkiaWaterLevelGauge
-{
-    /// <summary>The trend mark.</summary>
-    public required WaterLevelGaugeMark Mark { get; init; }
-
-    /// <summary>The value label, or <see langword="null"/> for none.</summary>
-    public string? Label { get; init; }
-
-    /// <summary>
-    /// The largest scale denominator the label is drawn at; at smaller scales
-    /// only the square is drawn.
-    /// </summary>
-    public double LabelMaxScaleDenominator { get; init; } = double.PositiveInfinity;
-
-    /// <summary>Stroke, mark and label colour.</summary>
-    public required RgbaColor Ink { get; init; }
-
-    /// <summary>Square fill colour.</summary>
-    public required RgbaColor Fill { get; init; }
-
-    /// <summary>Label halo colour.</summary>
-    public required RgbaColor Halo { get; init; }
 }
 
 /// <summary>
@@ -88,9 +55,6 @@ public sealed class SkiaPointGlyph
 
     /// <summary>Thinning priority (higher is kept first); see <see cref="PointGlyphCompositeLayer"/>.</summary>
     public double ThinningPriority { get; init; }
-
-    /// <summary>The gauge to draw when <see cref="Symbol"/> is <see cref="SkiaPointGlyphSymbol.WaterLevelGauge"/>.</summary>
-    public SkiaWaterLevelGauge? Gauge { get; init; }
 }
 
 /// <summary>
@@ -126,27 +90,7 @@ public sealed class PointGlyphCompositeLayer : CompositeLayer
     }
 
     /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, Viewport viewport) => DrawGlyphs(canvas, viewport, drawGauges: true, drawOthers: true);
-
-    internal override void DrawRotating(SKCanvas canvas, Viewport viewport) =>
-        DrawGlyphs(canvas, viewport, drawGauges: false, drawOthers: true);
-
-    internal override void DrawScreenPlaced(SKCanvas canvas, Viewport viewport, double rotationDegrees, SKRect cullBounds)
-    {
-        // Gauges stay upright on a rotated display: each one is drawn at its
-        // anchor turned about the viewport centre.
-        var turn = SKMatrix.CreateRotationDegrees(
-            (float)rotationDegrees, viewport.WidthPixels / 2f, viewport.HeightPixels / 2f);
-        DrawGlyphs(canvas, viewport, drawGauges: true, drawOthers: false, turn, cullBounds);
-    }
-
-    private void DrawGlyphs(
-        SKCanvas canvas,
-        Viewport viewport,
-        bool drawGauges,
-        bool drawOthers,
-        SKMatrix? anchorTurn = null,
-        SKRect? cullBounds = null)
+    public override void Draw(SKCanvas canvas, Viewport viewport)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(viewport);
@@ -168,29 +112,6 @@ public sealed class PointGlyphCompositeLayer : CompositeLayer
             {
                 float x = (float)((glyph.MercatorX - minX) * scaleX);
                 float y = (float)((maxY - glyph.MercatorY) * scaleY);
-
-                if (glyph.Symbol == SkiaPointGlyphSymbol.WaterLevelGauge)
-                {
-                    if (!drawGauges || glyph.Gauge is not { } gauge)
-                        continue;
-                    var anchor = anchorTurn?.MapPoint(x, y) ?? new SKPoint(x, y);
-                    if (cullBounds is { } cull && !cull.Contains(anchor))
-                        continue;
-                    WaterLevelGaugePainter.Draw(
-                        canvas,
-                        anchor.X,
-                        anchor.Y,
-                        gauge.Mark,
-                        viewport.ScaleDenominator <= gauge.LabelMaxScaleDenominator ? gauge.Label : null,
-                        gauge.Ink.ToSkia(),
-                        gauge.Fill.ToSkia(),
-                        gauge.Halo.ToSkia(),
-                        (float)glyph.SymbolScale);
-                    continue;
-                }
-
-                if (!drawOthers)
-                    continue;
 
                 canvas.Save();
                 try

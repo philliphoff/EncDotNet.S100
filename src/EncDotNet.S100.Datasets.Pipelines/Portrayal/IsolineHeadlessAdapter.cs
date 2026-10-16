@@ -19,6 +19,7 @@ internal static class IsolineHeadlessAdapter
                 LineWidth = (float)subLayer.LineWidth,
                 DashPattern = subLayer.DashPattern.Select(d => (float)d).ToArray(),
                 LabelFontSize = (float)subLayer.LabelFontSize,
+                LabelHaloWidth = (float)subLayer.LabelHaloWidth,
                 LabelSpacing = (float)subLayer.LabelSpacing,
             },
             subLayer.LandAreaMask);

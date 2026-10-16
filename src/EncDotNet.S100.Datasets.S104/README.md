@@ -121,6 +121,16 @@ each station, on the `s104.stations` sub-layer:
 - A station whose height at the step is the fill value (`-9999`) draws "—" in
   the square and no value.
 
+The gauges are ordinary S-100 symbols (`S104PortrayalCatalogue.GetSymbol`, with
+colours from `GetColorPalette`) and text instructions, carried on a
+`VectorCoverageSubLayer` and drawn by the same renderer as S-101. So they follow
+the same rules as S-101 symbols and labels: the mariner's symbol and text
+scale, the label's scale minimum (SCAMIN), label decluttering (a label that
+overlaps a higher-priority one is dropped; symbols always draw), upright
+symbols and text on a rotated display, and picking. The value label uses the
+S-100 Part 9 font characteristics `MonoSpaced` and `Bold`, with a halo
+(`TextInstruction.HaloColor`).
+
 ### Surface
 
 A regular grid (data coding format 2) is drawn as dashed water-level isolines
@@ -135,6 +145,8 @@ for the selected step, on the `s104.isolines` sub-layer, with no fill:
   `1.0`, `0.5`, `0` or `−0.5` (`FormatIsolineLabel`).
 - Lines stop at fill-value nodes. A coarse grid is subdivided bilinearly before
   tracing (`IsolineTracer`) so the lines aren't angular.
+- Labels are drawn upright on a rotated display, scale with the mariner's text
+  scale, and are dropped where they would overlap another isoline label.
 
 `s100 render` draws the same stations and isolines.
 

@@ -147,7 +147,7 @@ public sealed class MapsuiDatasetRenderer
             if (processor is ICoveragePortrayalSource coverageSource)
             {
                 var result = await coverageSource.BuildCoveragePortrayalAsync(context, cancellationToken).ConfigureAwait(false);
-                return ConvertCoverage(result);
+                return ConvertCoverage(processor, result);
             }
 
             throw new NotSupportedException(
@@ -262,7 +262,7 @@ public sealed class MapsuiDatasetRenderer
         };
     }
 
-    private MapsuiDatasetResult ConvertCoverage(CoveragePortrayalResult result)
+    private MapsuiDatasetResult ConvertCoverage(IDatasetProcessor processor, CoveragePortrayalResult result)
     {
         var layers = new List<ILayer>(result.SubLayers.Count);
         var stackEntries = new List<LayerStackEntry>(result.SubLayers.Count);
@@ -307,6 +307,26 @@ public sealed class MapsuiDatasetRenderer
                     {
                         layer = BuildIsolineLayer(isolines);
                         fallback = Union(fallback, ToMercator(isolines.Extent));
+                        break;
+                    }
+
+                case VectorCoverageSubLayer vector:
+                    {
+                        // Same display-list renderer as a vector product, so the
+                        // symbols and labels follow the same rules (scale, SCAMIN,
+                        // declutter, rotation, picking).
+                        layer = new MapsuiDisplayListRenderer
+                        {
+                            LayerName = vector.LayerName,
+                            Product = vector.Product,
+                            Palette = vector.Palette,
+                            AssetCache = AssetCaches.GetValue(processor, static _ => new MapsuiRenderAssetCache()),
+                            SymbolScale = vector.SymbolScale,
+                            TextScale = vector.TextScale,
+                            SymbolProvider = vector.SymbolProvider,
+                            Options = _options,
+                        }.Render(vector.Instructions, vector.GeometryProvider);
+                        fallback = Union(fallback, ToMercator(vector.Extent));
                         break;
                     }
             }
@@ -401,6 +421,7 @@ public sealed class MapsuiDatasetRenderer
                 LineWidth = (float)sub.LineWidth,
                 DashPattern = sub.DashPattern.Select(d => (float)d).ToArray(),
                 LabelFontSize = (float)sub.LabelFontSize,
+                LabelHaloWidth = (float)sub.LabelHaloWidth,
                 LabelSpacing = (float)sub.LabelSpacing,
             },
             sub.LandAreaMask);
@@ -491,21 +512,6 @@ public sealed class MapsuiDatasetRenderer
                     SymbolRotation = glyph.Rotation,
                     // A direction on the ground: turns with a rotated map.
                     RotateWithMap = true,
-                });
-                break;
-
-            case PointGlyphSymbol.WaterLevelGauge when glyph.Gauge is { } gauge:
-                feature.Styles.Add(new WaterLevelGaugeStyle
-                {
-                    Gauge = new SkiaWaterLevelGauge
-                    {
-                        Mark = (WaterLevelGaugeMark)(int)gauge.Trend,
-                        Label = gauge.Label,
-                        LabelMaxScaleDenominator = gauge.LabelMaxScaleDenominator,
-                        Ink = gauge.Ink,
-                        Fill = gauge.Fill,
-                        Halo = gauge.Halo,
-                    },
                 });
                 break;
 

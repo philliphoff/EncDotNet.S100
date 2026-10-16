@@ -28,7 +28,6 @@ public static class S100MapsuiRendering
             }
 
             OverscaleCurtainRenderer.Register();
-            WaterLevelGaugeRenderer.Register();
             IsolineRenderer.Register();
 
             S100VectorSceneRenderer.Register();

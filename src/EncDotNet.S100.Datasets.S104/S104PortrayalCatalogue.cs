@@ -38,7 +38,10 @@ public sealed record S104Ink(RgbaColor Ink, RgbaColor SymbolFill, RgbaColor Labe
 ///   Station: a 16 px rounded square with a chevron up (rising), chevron down
 ///   (falling), dash (steady) or "?" (unknown), and the height at the selected
 ///   step to its right (<see cref="FormatStationValue"/>), shown at
-///   1:<see cref="StationLabelMaxScaleDenominator"/> and larger scales.
+///   1:<see cref="StationLabelMaxScaleDenominator"/> and larger scales. They are
+///   ordinary S-100 symbols (<see cref="GetSymbol"/>) and text, so they follow
+///   the same rules as S-101 symbols and labels: symbol and text scale, scale
+///   minimum, label declutter, and upright drawing on a rotated display.
 ///   </description></item>
 ///   <item><description>
 ///   Surface: dashed isolines every <see cref="IsolineInterval"/> m, or
@@ -65,7 +68,66 @@ public class S104PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// <summary>The dataset range, in metres, under which <see cref="FineIsolineInterval"/> is used.</summary>
     public const double FineIntervalRangeLimit = 1.0;
 
-    private const char Minus = '−';
+    /// <summary>Colour token of the ink (stroke, mark, label) in <see cref="GetColorPalette"/>.</summary>
+    public const string InkToken = "S104INK";
+
+    /// <summary>Colour token of the station square fill in <see cref="GetColorPalette"/>.</summary>
+    public const string SymbolFillToken = "S104FILL";
+
+    /// <summary>Colour token of the station label halo in <see cref="GetColorPalette"/>.</summary>
+    public const string LabelHaloToken = "S104HALO";
+
+    /// <summary>Station symbol for a rising water level.</summary>
+    public const string RisingSymbol = "S104GAUGE_RISING";
+
+    /// <summary>Station symbol for a falling water level.</summary>
+    public const string FallingSymbol = "S104GAUGE_FALLING";
+
+    /// <summary>Station symbol for a steady water level.</summary>
+    public const string SteadySymbol = "S104GAUGE_STEADY";
+
+    /// <summary>Station symbol for an unknown trend.</summary>
+    public const string UnknownSymbol = "S104GAUGE_UNKNOWN";
+
+    /// <summary>Station symbol for a time step with no value.</summary>
+    public const string NoDataSymbol = "S104GAUGE_NODATA";
+
+    /// <summary>Size of the station value label, in pixels (the text scale multiplies it).</summary>
+    public const double StationLabelFontSize = 11;
+
+    /// <summary>Distance from the station to the label's left edge, in millimetres (13 px).</summary>
+    public const double StationLabelOffsetMm = 13 * PixelSizeMm;
+
+    /// <summary>Width of the halo under station labels, in millimetres (3 px).</summary>
+    public const double StationLabelHaloMm = 3 * PixelSizeMm;
+
+    private const double PixelSizeMm = 0.32;
+    private const char Minus = '\u2212';
+
+    // S-100 SVG symbols, pivot at the origin, colours by palette class
+    // (sTOKEN stroke, fTOKEN fill). Coordinates are the design's pixels; the
+    // 18 px viewBox is sized in millimetres so the shared symbol rule (SVG
+    // millimetres at 96 DPI, times the S-100 symbol factor 0.6) draws one
+    // design pixel as one display pixel: 18 × 0.0254 / 96 × 1000 / 0.6 mm.
+    // The square is 16 px with a 1.6 px stroke; marks are 1.9 px strokes with
+    // round caps and joins.
+    private const string SymbolHead =
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.2\" width=\"7.9375mm\" height=\"7.9375mm\" viewBox=\"-9 -9 18 18\">" +
+        "<rect class=\"symbolBox layout\" fill=\"none\" x=\"-8.8\" y=\"-8.8\" width=\"17.6\" height=\"17.6\"/>" +
+        "<rect class=\"fS104FILL sS104INK\" stroke-width=\"1.6\" x=\"-8\" y=\"-8\" width=\"16\" height=\"16\" rx=\"3\"/>";
+
+    private const string SymbolTail = "<circle class=\"pivotPoint layout\" fill=\"none\" cx=\"0\" cy=\"0\" r=\"1\"/></svg>";
+
+    private static readonly IReadOnlyDictionary<string, string> Symbols = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [RisingSymbol] = SymbolHead + "<path class=\"sl f0 sS104INK\" stroke-width=\"1.9\" d=\"M -4 2 L 0 -2.5 L 4 2\"/>" + SymbolTail,
+        [FallingSymbol] = SymbolHead + "<path class=\"sl f0 sS104INK\" stroke-width=\"1.9\" d=\"M -4 -2 L 0 2.5 L 4 -2\"/>" + SymbolTail,
+        [SteadySymbol] = SymbolHead + "<path class=\"sl f0 sS104INK\" stroke-width=\"1.9\" d=\"M -4 0 L 4 0\"/>" + SymbolTail,
+        [UnknownSymbol] = SymbolHead +
+            "<path class=\"sl f0 sS104INK\" stroke-width=\"1.5\" d=\"M -2 -1.8 C -2 -4.2 2 -4.2 2 -1.8 C 2 -0.2 0 0 0 1.4\"/>" +
+            "<circle class=\"fS104INK\" cx=\"0\" cy=\"3.5\" r=\"0.8\"/>" + SymbolTail,
+        [NoDataSymbol] = SymbolHead + "<path class=\"f0 sS104INK\" stroke-width=\"1\" d=\"M -5 0 L 5 0\"/>" + SymbolTail,
+    };
 
     private static readonly IReadOnlyDictionary<PaletteType, S104Ink> Inks =
         new Dictionary<PaletteType, S104Ink>
@@ -107,6 +169,34 @@ public class S104PortrayalCatalogue : ICoveragePortrayalCatalogue
     /// <param name="palette">The palette.</param>
     public static S104Ink GetInk(PaletteType palette) =>
         Inks.TryGetValue(palette, out var ink) ? ink : Inks[PaletteType.Day];
+
+    /// <summary>
+    /// The colour palette for the station gauges' drawing instructions: the
+    /// <see cref="InkToken"/>, <see cref="SymbolFillToken"/> and
+    /// <see cref="LabelHaloToken"/> colours of <paramref name="palette"/>.
+    /// </summary>
+    /// <param name="palette">The palette.</param>
+    public static ColorPalette GetColorPalette(PaletteType palette)
+    {
+        var ink = GetInk(palette);
+        return new ColorPalette(
+            $"S-104 {palette}",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [InkToken] = ink.Ink.ToHex(),
+                [SymbolFillToken] = ink.SymbolFill.ToHex(),
+                [LabelHaloToken] = ink.LabelHalo.ToHex(),
+            });
+    }
+
+    /// <summary>
+    /// The S-100 SVG for a station symbol (<see cref="RisingSymbol"/> and the
+    /// others), or <see langword="null"/> for an unknown name. Colours are
+    /// palette classes resolved against <see cref="GetColorPalette"/>.
+    /// </summary>
+    /// <param name="name">The symbol name.</param>
+    public static string? GetSymbol(string name) =>
+        Symbols.TryGetValue(name, out var svg) ? svg : null;
 
     /// <summary>
     /// Returns <see langword="null"/>: the SoundCharts S-104 portrayal draws
