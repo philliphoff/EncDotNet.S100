@@ -83,9 +83,13 @@ public class StationSeriesHeadlessTests
                 [HeadlessCompositeInput.ForCoverage(portrayal)],
                 new HeadlessCompositeOptions { Viewport = viewport });
 
-            // The centre station's glyph covers the centre pixel; the corners,
-            // well away from it, stay background.
-            Assert.NotEqual(SKColors.White, bitmap.GetPixel(128, 128));
+            // The centre station's glyph is drawn around the centre pixel; the
+            // corners, well away from it, stay background.
+            Assert.Contains(
+                from x in Enumerable.Range(120, 17)
+                from y in Enumerable.Range(120, 17)
+                select bitmap.GetPixel(x, y),
+                color => color != SKColors.White);
             Assert.Equal(SKColors.White, bitmap.GetPixel(5, 5));
             Assert.Equal(SKColors.White, bitmap.GetPixel(250, 250));
         }

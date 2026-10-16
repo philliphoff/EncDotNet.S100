@@ -117,10 +117,11 @@ public static class S98DefaultRules
     /// R-101-104-B (Level 2) — when both an S-101 ENC and an S-104 water-level
     /// dataset are loaded and active, clip the (non-normative) S-104 gridded
     /// surface to water areas by attaching the ENC's <c>LandArea</c> geometry to
-    /// the S-104 surface sub-layer. The renderers then clip the rasterised
-    /// surface to those polygons at output-pixel resolution, so the surface —
-    /// layered like S-102 bathymetry, beneath ENC line work — never bleeds over
-    /// land (issue #483). Only the gridded (dcf2) surface is affected;
+    /// the S-104 surface sub-layer — a colour raster or, for the SoundCharts
+    /// portrayal, water-level isolines. The renderers then clip the surface to
+    /// those polygons at output-pixel resolution, so it — layered like S-102
+    /// bathymetry, beneath ENC line work — never crosses land (issue #483).
+    /// Only the gridded (dcf2) surface is affected;
     /// station-glyph (dcf8) sub-layers are discrete points and are left
     /// untouched. Cites S-98 Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6.
     /// </summary>
@@ -293,6 +294,13 @@ public static class S98DefaultRules
             {
                 var masked = grid.WithLandAreaMask(landAreas);
                 result.Add(item with { Payload = coverage.WithSubLayer(masked) });
+            }
+            else if (IsProductItem(item, context, "S-104")
+                && item.Payload is CoverageStackPayload isolineCoverage
+                && isolineCoverage.SubLayer is IsolineCoverageSubLayer isolines)
+            {
+                var masked = isolines.WithLandAreaMask(landAreas);
+                result.Add(item with { Payload = isolineCoverage.WithSubLayer(masked) });
             }
             else
             {

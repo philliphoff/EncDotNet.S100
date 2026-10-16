@@ -66,8 +66,8 @@ public static class LayerStackProjector
     /// un-suppressed payload).
     /// </param>
     /// <param name="rebuildCoverage">
-    /// Optional callback that re-rasterises a grid coverage sub-layer the
-    /// engine replaced (e.g. a coverage with a land-area mask attached). When
+    /// Optional callback that rebuilds a coverage sub-layer the engine replaced
+    /// (e.g. an S-104 surface with a land-area mask attached). When
     /// omitted, or when it returns <see langword="null"/>, the prebuilt layer
     /// is reused.
     /// </param>
@@ -79,7 +79,7 @@ public static class LayerStackProjector
     public static IReadOnlyList<LayerStackEntry> Project(
         IReadOnlyList<SubLayerStackItem> ruledItems,
         IReadOnlyDictionary<(string DatasetId, string LayerKey), LayerStackEntry> prebuilt,
-        Func<GridCoverageSubLayer, ILayer?>? rebuildCoverage = null)
+        Func<CoverageSubLayerBase, ILayer?>? rebuildCoverage = null)
     {
         System.ArgumentNullException.ThrowIfNull(ruledItems);
         System.ArgumentNullException.ThrowIfNull(prebuilt);
@@ -99,7 +99,7 @@ public static class LayerStackProjector
     private static ILayer ProjectOne(
         SubLayerStackItem ruled,
         LayerStackEntry prebuilt,
-        Func<GridCoverageSubLayer, ILayer?>? rebuildCoverage)
+        Func<CoverageSubLayerBase, ILayer?>? rebuildCoverage)
     {
         // Coverage payloads are re-rasterised (not feature-filtered) when the
         // engine replaced the sub-layer — e.g. R-101-104-B attaches a land-area
@@ -107,10 +107,10 @@ public static class LayerStackProjector
         if (ruled.Payload is CoverageStackPayload ruledCoverage
             && prebuilt.Item.Payload is CoverageStackPayload originalCoverage
             && !ReferenceEquals(ruledCoverage.SubLayer, originalCoverage.SubLayer)
-            && ruledCoverage.SubLayer is GridCoverageSubLayer ruledGrid
+            && ruledCoverage.SubLayer is GridCoverageSubLayer or IsolineCoverageSubLayer
             && rebuildCoverage is not null)
         {
-            var rebuilt = rebuildCoverage(ruledGrid);
+            var rebuilt = rebuildCoverage(ruledCoverage.SubLayer);
             if (rebuilt is null)
                 return prebuilt.Layer;
 

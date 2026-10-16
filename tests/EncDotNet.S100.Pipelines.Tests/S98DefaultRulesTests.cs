@@ -343,6 +343,44 @@ public class S98DefaultRulesTests
     }
 
     [Fact]
+    public void R_101_104_B_attaches_land_mask_to_s104_isolines_when_s101_loaded()
+    {
+        var s101 = BuildS101LandItem();
+        var isolines = new IsolineCoverageSubLayer
+        {
+            LayerKey = "s104.isolines",
+            LayerName = "S-104 isolines",
+            Plane = S98DisplayPlane.OnDemandSurface,
+            Isolines = [new Isoline { Level = 0.5, Label = "0.5", MercatorCoordinates = [0, 0, 1000, 1000] }],
+            Extent = new MercatorBounds(0, 0, 1000, 1000),
+            Ink = new RgbaColor(15, 94, 115),
+            LabelHalo = new RgbaColor(255, 255, 255),
+        };
+        var result = new CoveragePortrayalResult
+        {
+            SubLayers = [isolines],
+            Spec = new SpecRef("S-104", default),
+            SourceDatasetId = "s104.h5",
+            Info = "test",
+        };
+        var s104 = new SubLayerStackItem(
+            new CoverageStackPayload(result, isolines), S98DisplayPlane.OnDemandSurface, 0, "s104.h5");
+
+        var ruled = _auth.ApplyRules(
+            new[] { s104, s101 },
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("s104.h5", "S-104", Active: true),
+            });
+
+        var payload = Assert.IsType<CoverageStackPayload>(ruled.Single(i => i.SourceDatasetId == "s104.h5").Payload);
+        var masked = Assert.IsType<IsolineCoverageSubLayer>(payload.SubLayer);
+        Assert.NotEmpty(masked.LandAreaMask!);
+        Assert.Same(isolines.Isolines, masked.Isolines);
+    }
+
+    [Fact]
     public void R_101_104_B_does_not_mask_s102_surface()
     {
         var s101 = BuildS101LandItem();

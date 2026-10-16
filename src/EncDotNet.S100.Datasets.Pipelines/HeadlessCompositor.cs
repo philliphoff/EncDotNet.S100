@@ -571,6 +571,18 @@ public sealed class HeadlessCompositor
                     return true;
                 }
 
+            case IsolineCoverageSubLayer isolines:
+                {
+                    if (isolines.Extent is not { } extent)
+                        return false;
+
+                    layer = new IsolineCompositeLayer(IsolineHeadlessAdapter.CreateScene(isolines));
+                    var (w, s) = WebMercator.ToLonLat(extent.MinX, extent.MinY, clampLatitude: false);
+                    var (e, n) = WebMercator.ToLonLat(extent.MaxX, extent.MaxY, clampLatitude: false);
+                    west = w; east = e; south = s; north = n;
+                    return true;
+                }
+
             default:
                 return false;
         }

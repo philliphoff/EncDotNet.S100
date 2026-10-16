@@ -20,6 +20,7 @@ internal static class PointGlyphHeadlessAdapter
                 PointGlyphSymbol.Ellipse => SkiaPointGlyphSymbol.Ellipse,
                 PointGlyphSymbol.Triangle => SkiaPointGlyphSymbol.Triangle,
                 PointGlyphSymbol.Svg => SkiaPointGlyphSymbol.Svg,
+                PointGlyphSymbol.WaterLevelGauge => SkiaPointGlyphSymbol.WaterLevelGauge,
                 _ => throw new ArgumentOutOfRangeException(nameof(glyph.Symbol)),
             },
             SvgSource = glyph.SvgSource,
@@ -31,6 +32,17 @@ internal static class PointGlyphHeadlessAdapter
             // SymbolRotation convention), as is Skia's RotateDegrees.
             RotationDegrees = glyph.Rotation,
             ThinningPriority = glyph.ThinningPriority,
+            Gauge = glyph.Gauge is { } gauge
+                ? new SkiaWaterLevelGauge
+                {
+                    Mark = (WaterLevelGaugeMark)(int)gauge.Trend,
+                    Label = gauge.Label,
+                    LabelMaxScaleDenominator = gauge.LabelMaxScaleDenominator,
+                    Ink = gauge.Ink,
+                    Fill = gauge.Fill,
+                    Halo = gauge.Halo,
+                }
+                : null,
         }).ToArray();
 
         return subLayer.Thinning is { } thinning
@@ -47,22 +59,39 @@ internal static class PointGlyphHeadlessAdapter
         RgbaColor background,
         BasemapKind basemap = BasemapKind.None)
     {
-        var viewport = FitViewport(extent, widthPixels, heightPixels);
+        return RenderFitted(CreateLayer(subLayer), extent, widthPixels, heightPixels, background, basemap, padding: 0.1);
+    }
+
+    /// <summary>
+    /// Renders <paramref name="layer"/> into a new bitmap framed on
+    /// <paramref name="extent"/> (grown by <paramref name="padding"/> of its span
+    /// on each side and to the bitmap's aspect), over an optional land basemap.
+    /// </summary>
+    internal static SKBitmap RenderFitted(
+        CompositeLayer layer,
+        MercatorBounds extent,
+        int widthPixels,
+        int heightPixels,
+        RgbaColor background,
+        BasemapKind basemap,
+        double padding)
+    {
+        var viewport = FitViewport(extent, widthPixels, heightPixels, padding);
         CompositeLayer[] layers = basemap == BasemapKind.Offline
             ?
             [
-                // The land basemap goes under the glyphs, against the same viewport.
+                // The land basemap goes under the layer, against the same viewport.
                 new VectorCompositeLayer(NaturalEarthBasemap.GetLandScene(viewport), honorScaleVisibility: false),
-                CreateLayer(subLayer),
+                layer,
             ]
-            : [CreateLayer(subLayer)];
+            : [layer];
         return new HeadlessCompositeRenderer
         {
             Background = background,
         }.Render(viewport, layers);
     }
 
-    private static Viewport FitViewport(MercatorBounds extent, int widthPixels, int heightPixels)
+    private static Viewport FitViewport(MercatorBounds extent, int widthPixels, int heightPixels, double padding)
     {
         double minX = extent.MinX;
         double minY = extent.MinY;
@@ -71,8 +100,8 @@ internal static class PointGlyphHeadlessAdapter
         double spanX = maxX - minX;
         double spanY = maxY - minY;
 
-        double padX = spanX > 0 ? spanX * 0.1 : 1000;
-        double padY = spanY > 0 ? spanY * 0.1 : 1000;
+        double padX = spanX > 0 ? spanX * padding : 1000;
+        double padY = spanY > 0 ? spanY * padding : 1000;
         minX -= padX;
         maxX += padX;
         minY -= padY;

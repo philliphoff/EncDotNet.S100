@@ -34,7 +34,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 ///   </item>
 ///   <item>
 ///     <description>
-///     S-104: <c>"s104.color-band"</c> →
+///     S-104: <c>"s104.isolines"</c> →
 ///     <see cref="S98DisplayPlane.OnDemandSurface"/>;
 ///     <c>"s104.stations"</c> → <see cref="S98DisplayPlane.OtherChartOverlays"/>.
 ///     S-111: grid arrows (<c>"s111.arrows"</c>) and station / mesh

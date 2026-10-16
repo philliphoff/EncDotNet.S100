@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
@@ -9,7 +10,7 @@ using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
-using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Validation;
 using SkiaSharp;
 
@@ -22,16 +23,16 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// </summary>
 public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, ILoadedDatasetProjection
 {
-    /// <summary>
-    /// The default opacity of the gridded water-level colour band. Partly
-    /// transparent so the ENC colour fills under it stay readable (S-98 Main
-    /// §9.2.1; Annex A §4.4.1). The user's dataset opacity multiplies it.
-    /// </summary>
-    public const double ColorBandOpacity = 0.8;
+    /// <summary>The sub-layer key of the gridded surface's isolines.</summary>
+    public const string IsolineLayerKey = "s104.isolines";
+
+    /// <summary>The sub-layer key of the station gauges.</summary>
+    public const string StationLayerKey = "s104.stations";
 
     // dcf2 only
     private readonly S104CoverageSource? _source;
-    private readonly S104PortrayalCatalogue? _catalogue;
+    private readonly ConcurrentDictionary<int, IReadOnlyList<Isoline>> _isolinesByStep = new();
+    private readonly Lazy<(double Minimum, double Maximum, double Interval)>? _isolineRange;
 
     // Station-series formats only
     private readonly S104StationSeriesDataset? _stationSeries;
@@ -147,13 +148,13 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     /// <summary>
     /// <see langword="true"/> when this dataset is a regularly-gridded (dcf2)
-    /// water-level <em>surface</em> — the full-tile colour-band heatmap — rather
-    /// than a fixed-station (dcf8) point series. S-104 Edition 2.0.0 defines no
+    /// water-level <em>surface</em>, drawn as isolines, rather than a
+    /// fixed-station (dcf1 / dcf8) point series. S-104 Edition 2.0.0 defines no
     /// official portrayal catalogue and treats water level primarily as input to
     /// ECDIS vertical adjustment (see <see cref="S104PortrayalCatalogue"/>), so
-    /// the synthesised surface is hidden by default in interactive viewers and
-    /// shown on demand (issue #483). Fixed-station glyphs (dcf8) are discrete
-    /// symbols at genuine tide-station locations and remain visible by default.
+    /// the surface is hidden by default in interactive viewers and shown on
+    /// demand (issue #483). Fixed-station gauges are discrete symbols at genuine
+    /// tide-station locations and remain visible by default.
     /// </summary>
     public bool IsGriddedSurface => _source is not null;
 
@@ -238,7 +239,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         {
             case S104DatasetData.GriddedCoverage g:
                 _source = new S104CoverageSource(g.Dataset);
-                _catalogue = new S104PortrayalCatalogue();
+                _isolineRange = new(() => IsolineRange(g.Dataset));
                 break;
             case S104DatasetData.StationSeries s:
                 _stationSeries = s.Dataset;
@@ -274,81 +275,155 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         }
     }
 
-    private async Task<CoveragePortrayalResult> BuildGriddedAsync(RenderContext? context, CancellationToken cancellationToken)
+    private Task<CoveragePortrayalResult> BuildGriddedAsync(RenderContext? context, CancellationToken cancellationToken)
     {
         var source = _source!;
-        var catalogue = _catalogue!;
-        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+        var dataset = ((S104DatasetData.GriddedCoverage)_data).Dataset;
+        int step = SelectedStep(context);
+        var selectedTime = dataset.Coverages[step].TimePoint;
+        source.SelectTime(selectedTime);
 
-        DateTime selectedTime;
-        if (context is S104RenderContext { TimeStep: { } timeStep })
-        {
-            source.SelectTime(timeStep);
-            selectedTime = timeStep;
-        }
-        else
-        {
-            selectedTime = source.AvailableTimes[0];
-            source.SelectTime(selectedTime);
-        }
+        var subLayer = BuildIsolineSubLayer(step, context?.Palette ?? PaletteType.Day, cancellationToken);
 
         var metadata = source.Metadata;
-
-        // Full-grid WGS-84 frame for the sub-layer. The grid extent is native
-        // CRS units, so it must be reprojected for a projected grid.
-        var viewport = CoverageExtent.FullGridViewport(metadata, _crsTransformFactory);
-
-        var pipeline = new PortrayalPipeline();
-
-        // Viewport-scoped sampling (issue #487).
-        int crs = ((S104DatasetData.GriddedCoverage)_data).Dataset.HorizontalCRS ?? 4326;
-        ICrsTransform? wgs84ToNative = null;
-        if (context?.Viewport is not null && crs != 4326)
-        {
-            wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
-        }
-
-        var layer = await pipeline.ProcessAsync(
-            source,
-            catalogue,
-            viewport: context?.Viewport,
-            wgs84ToNative: wgs84ToNative,
-            mariner: context?.Mariner ?? MarinerSettings.Default,
-            cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        var styledLayer = (StyledCoverageLayer)layer;
-
-        var griddedDataset = ((S104DatasetData.GriddedCoverage)_data).Dataset;
-        var geoId = griddedDataset.GeographicIdentifier ?? _fileName;
+        int crs = dataset.HorizontalCRS ?? 4326;
+        var geoId = dataset.GeographicIdentifier ?? _fileName;
         var timeInfo = source.AvailableTimes.Count > 1
             ? $", time: {selectedTime:u} ({source.AvailableTimes.Count} steps)"
             : "";
         var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}{timeInfo}";
 
-        return new CoveragePortrayalResult
+        return Task.FromResult(new CoveragePortrayalResult
         {
-            // S-104 colour band → OnDemandSurface (S-98 Main §9.2.1
-            // layer 6 "Official on demand data"; Annex A §A-6.9.1).
-            SubLayers = new CoverageSubLayerBase[]
-            {
-                new GridCoverageSubLayer
-                {
-                    LayerKey = "s104.color-band",
-                    LayerName = $"S-104: {_fileName}",
-                    Plane = S98DisplayPlane.OnDemandSurface,
-                    WithinPlanePriority = 0,
-                    SourceFeatureType = "s104.color-band",
-                    Coverage = styledLayer,
-                    Viewport = viewport,
-                    // Partly transparent so the ENC colour fills under the
-                    // band stay readable (S-98 Main §9.2.1; Annex A §4.4.1).
-                    Opacity = ColorBandOpacity,
-                },
-            },
+            // S-104 isolines → OnDemandSurface (S-98 Main §9.2.1 layer 6
+            // "Official on demand data"; Annex A §A-6.9.1).
+            SubLayers = new CoverageSubLayerBase[] { subLayer },
             Spec = Spec,
             SourceDatasetId = _fileName,
             Info = info,
+        });
+    }
+
+    /// <summary>
+    /// The coverage index of the time step <paramref name="context"/> selects
+    /// (the nearest one), or the first step without one.
+    /// </summary>
+    private int SelectedStep(RenderContext? context)
+    {
+        var coverages = ((S104DatasetData.GriddedCoverage)_data).Dataset.Coverages;
+        if (context is not S104RenderContext { TimeStep: { } time })
+            return 0;
+
+        int best = 0;
+        var bestDiff = TimeSpan.MaxValue;
+        for (int i = 0; i < coverages.Count; i++)
+        {
+            var diff = (coverages[i].TimePoint - time).Duration();
+            if (diff < bestDiff)
+            {
+                bestDiff = diff;
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Builds the SoundCharts water-level isolines for time step
+    /// <paramref name="step"/>: dashed lines in the palette's ink at the
+    /// dataset's interval, labelled in metres (see <see cref="S104PortrayalCatalogue"/>).
+    /// </summary>
+    private IsolineCoverageSubLayer BuildIsolineSubLayer(int step, PaletteType palette, CancellationToken cancellationToken)
+    {
+        var dataset = ((S104DatasetData.GriddedCoverage)_data).Dataset;
+        var ink = S104PortrayalCatalogue.GetInk(palette);
+        var isolines = _isolinesByStep.GetOrAdd(step, s => TraceIsolines(dataset, s, cancellationToken));
+
+        return new IsolineCoverageSubLayer
+        {
+            LayerKey = IsolineLayerKey,
+            LayerName = $"S-104: {_fileName}",
+            Plane = S98DisplayPlane.OnDemandSurface,
+            WithinPlanePriority = 0,
+            SourceFeatureType = IsolineLayerKey,
+            Isolines = isolines,
+            Extent = GridMercatorExtent(),
+            Ink = ink.Ink,
+            LabelHalo = ink.IsolineLabelHalo,
         };
+    }
+
+    private IReadOnlyList<Isoline> TraceIsolines(S104Dataset dataset, int step, CancellationToken cancellationToken)
+    {
+        var (minimum, maximum, interval) = _isolineRange!.Value;
+        var levels = S104PortrayalCatalogue.IsolineLevels(minimum, maximum, interval);
+        var coverage = dataset.Coverages[step];
+        int rows = coverage.NumPointsLatitudinal;
+        int columns = coverage.NumPointsLongitudinal;
+
+        var heights = new float[coverage.Values.Length];
+        for (int i = 0; i < heights.Length; i++)
+            heights[i] = coverage.Values[i].Height;
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var traced = IsolineTracer.Trace(heights, rows, columns, S104CoverageSource.FillValue, levels);
+
+        var nativeToWgs84 = _crsTransformFactory.Create($"EPSG:{dataset.HorizontalCRS ?? 4326}", "EPSG:4326");
+        var result = new List<Isoline>(traced.Count);
+        foreach (var line in traced)
+        {
+            var points = line.Points;
+            var mercator = new double[points.Length];
+            for (int i = 0; i + 1 < points.Length; i += 2)
+            {
+                double x = coverage.OriginLongitude + points[i] * coverage.SpacingLongitudinal;
+                double y = coverage.OriginLatitude + points[i + 1] * coverage.SpacingLatitudinal;
+                var (lon, lat) = nativeToWgs84.IsIdentity ? (x, y) : nativeToWgs84.Transform(x, y);
+                (mercator[i], mercator[i + 1]) = WebMercator.FromLonLat(lon, lat);
+            }
+
+            result.Add(new Isoline
+            {
+                Level = line.Level,
+                Label = S104PortrayalCatalogue.FormatIsolineLabel(line.Level, interval),
+                MercatorCoordinates = mercator,
+            });
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// The dataset's value range over every time step (fill values excluded) and
+    /// the isoline interval it selects. Computed once, so the lines keep their
+    /// density while the time step changes.
+    /// </summary>
+    private static (double Minimum, double Maximum, double Interval) IsolineRange(S104Dataset dataset)
+    {
+        double minimum = double.PositiveInfinity, maximum = double.NegativeInfinity;
+        foreach (var coverage in dataset.Coverages)
+        {
+            foreach (var value in coverage.Values)
+            {
+                float h = value.Height;
+                if (float.IsNaN(h) || h == S104CoverageSource.FillValue)
+                    continue;
+                minimum = Math.Min(minimum, h);
+                maximum = Math.Max(maximum, h);
+            }
+        }
+
+        return double.IsFinite(minimum)
+            ? (minimum, maximum, S104PortrayalCatalogue.SelectIsolineInterval(minimum, maximum))
+            : (0.0, 0.0, S104PortrayalCatalogue.IsolineInterval);
+    }
+
+    /// <summary>The EPSG:3857 extent of the whole grid, half a cell beyond the outer nodes.</summary>
+    private MercatorBounds GridMercatorExtent()
+    {
+        var extent = _source!.Metadata.GetGeographicExtent(_crsTransformFactory);
+        var (minX, minY) = WebMercator.FromLonLat(extent.WestLongitude, extent.SouthLatitude);
+        var (maxX, maxY) = WebMercator.FromLonLat(extent.EastLongitude, extent.NorthLatitude);
+        return new MercatorBounds(minX, minY, maxX, maxY);
     }
 
     /// <summary>
@@ -363,7 +438,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <param name="background">Optional background fill; defaults to opaque white.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A newly allocated bitmap owned by the caller.</returns>
-    public async Task<SKBitmap> RenderHeadlessAsync(
+    public Task<SKBitmap> RenderHeadlessAsync(
         int widthPixels,
         int heightPixels,
         RenderContext? context = null,
@@ -381,54 +456,42 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             if (glyphLayer.Extent is not { } glyphExtent)
                 throw new InvalidOperationException("The S-104 station portrayal has no geographic extent.");
 
-            return PointGlyphHeadlessAdapter.Render(
+            return Task.FromResult(PointGlyphHeadlessAdapter.Render(
                 glyphLayer,
                 glyphExtent,
                 widthPixels,
                 heightPixels,
                 background ?? new RgbaColor(255, 255, 255, 255),
-                context?.Basemap ?? BasemapKind.None);
+                context?.Basemap ?? BasemapKind.None));
         }
 
         if (_source is null)
             throw new InvalidOperationException("The S-104 dataset has no renderable data source.");
 
-        var source = _source;
-        var catalogue = _catalogue!;
-        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
-
-        if (context is S104RenderContext { TimeStep: { } timeStep })
-            source.SelectTime(timeStep);
-        else
-            source.SelectTime(source.AvailableTimes[0]);
-
-        var styledLayer = (StyledCoverageLayer)await new PortrayalPipeline()
-            .ProcessAsync(source, catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-
-        // The grid georeferencing is in the dataset's native CRS; frame the
-        // render with its WGS-84 envelope and let the renderer reproject each
-        // cell (a projected grid would otherwise be read as degrees).
-        var extent = source.Metadata.GetGeographicExtent(_crsTransformFactory);
-        var renderer = new CoverageHeadlessRenderer
-        {
-            Background = background ?? new RgbaColor(255, 255, 255, 255),
-            NativeToWgs84 = _crsTransformFactory.Create(styledLayer.Georeferencer.CRS, "EPSG:4326"),
-        };
-
-        return renderer.Render(
-            styledLayer,
-            extent.WestLongitude,
-            extent.EastLongitude,
-            extent.SouthLatitude,
-            extent.NorthLatitude,
+        var isolines = BuildIsolineSubLayer(SelectedStep(context), context?.Palette ?? PaletteType.Day, cancellationToken);
+        return Task.FromResult(IsolineHeadlessAdapter.Render(
+            isolines,
             widthPixels,
             heightPixels,
-            context?.Basemap ?? BasemapKind.None);
+            background ?? new RgbaColor(255, 255, 255, 255),
+            context?.Basemap ?? BasemapKind.None));
     }
 
     // ---- station-series rendering --------------------------------------
 
+    /// <summary>
+    /// Builds the station gauges for a fixed-station series (dcf1 / dcf8) at the
+    /// selected time step.
+    /// </summary>
+    /// <remarks>
+    /// S-104 Ed 2.0.0 §9 defines no portrayal, so the gauge is SoundCharts' own
+    /// (see <see cref="S104PortrayalCatalogue"/>): a rounded square in the
+    /// palette's ink with a chevron up (rising), chevron down (falling), dash
+    /// (steady) or "?" (unknown) for <c>waterLevelTrend</c>, and the height at
+    /// the selected step as a signed label, shown at 1:100 000 and larger scales.
+    /// A station whose height at the step is the fill value draws "—" and no
+    /// label. Colour encodes neither trend nor height.
+    /// </remarks>
     private CoveragePortrayalResult BuildStationSeries(S104StationSeriesDataset ds, RenderContext? context)
     {
         DateTime selectedTime;
@@ -444,6 +507,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         _stationSelectedTime = selectedTime;
 
         var nativeToMerc = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:3857");
+        var ink = S104PortrayalCatalogue.GetInk(context?.Palette ?? PaletteType.Day);
 
         var glyphs = new List<PointGlyph>(ds.Stations.Count);
         double mercMinX = double.PositiveInfinity, mercMinY = double.PositiveInfinity;
@@ -471,8 +535,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             var height = station.Heights[idx];
             var trend = station.Trends[idx];
 
-            var fill = TrendFill(trend);
-            var stroke = ResolveStrokeColor(height, ds.WaterLevelTrendThreshold);
+            bool noData = float.IsNaN(height) || height == S104CoverageSource.FillValue;
 
             glyphs.Add(new PointGlyph
             {
@@ -489,11 +552,16 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     ["Latitude"] = station.Latitude,
                     ["Longitude"] = station.Longitude,
                 },
-                Symbol = PointGlyphSymbol.Ellipse,
-                FillColor = fill,
-                OutlineColor = stroke,
-                OutlineWidth = 1.5,
-                SymbolScale = 0.7,
+                Symbol = PointGlyphSymbol.WaterLevelGauge,
+                Gauge = new WaterLevelGauge
+                {
+                    Trend = noData ? WaterLevelGaugeTrend.NoData : GaugeTrend(trend),
+                    Label = noData ? null : S104PortrayalCatalogue.FormatStationValue(height),
+                    LabelMaxScaleDenominator = S104PortrayalCatalogue.StationLabelMaxScaleDenominator,
+                    Ink = ink.Ink,
+                    Fill = ink.SymbolFill,
+                    Halo = ink.LabelHalo,
+                },
             });
         }
 
@@ -513,11 +581,11 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             {
                 new GlyphCoverageSubLayer
                 {
-                    LayerKey = "s104.stations",
+                    LayerKey = StationLayerKey,
                     LayerName = $"S-104: {_fileName}",
                     Plane = S98DisplayPlane.OtherChartOverlays,
                     WithinPlanePriority = 0,
-                    SourceFeatureType = "s104.stations",
+                    SourceFeatureType = StationLayerKey,
                     Glyphs = glyphs,
                     Extent = extent,
                 },
@@ -542,24 +610,16 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     }
 
     /// <summary>
-    /// Trend → fill colour table (S-104 Edition 2.0.0 §10.2.7 trend
-    /// enumeration: 0 unknown, 1 decreasing, 2 increasing, 3 steady).
+    /// The gauge mark for a <c>waterLevelTrend</c> code (S-104 Edition 2.0.0
+    /// §10.2.7: 0 unknown, 1 decreasing, 2 increasing, 3 steady).
     /// </summary>
-    private static RgbaColor TrendFill(byte trend) => trend switch
+    private static WaterLevelGaugeTrend GaugeTrend(byte trend) => trend switch
     {
-        1 => new RgbaColor(42, 111, 151),    // #2a6f97 descending blue
-        2 => new RgbaColor(193, 18, 31),     // #c1121f ascending red
-        3 => new RgbaColor(42, 157, 143),    // #2a9d8f neutral teal
-        _ => new RgbaColor(128, 128, 128),   // #808080 unknown grey
+        1 => WaterLevelGaugeTrend.Falling,
+        2 => WaterLevelGaugeTrend.Rising,
+        3 => WaterLevelGaugeTrend.Steady,
+        _ => WaterLevelGaugeTrend.Unknown,
     };
-
-    private static RgbaColor ResolveStrokeColor(float height, double? trendThreshold)
-    {
-        if (trendThreshold is null) return new RgbaColor(0, 0, 0);
-        return height >= trendThreshold.Value
-            ? new RgbaColor(255, 255, 255)
-            : new RgbaColor(0, 0, 0);
-    }
 
     /// <summary>
     /// Resolves dcf8 station picks routed via the renderer's feature-ref tag

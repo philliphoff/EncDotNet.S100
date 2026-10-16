@@ -87,6 +87,93 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
 }
 
 /// <summary>
+/// A sub-layer of labelled isolines over a gridded coverage (the S-104
+/// water-level surface). The renderers draw <see cref="Isolines"/> in screen
+/// space: dashed lines of constant pixel width, with labels spaced along them.
+/// </summary>
+/// <remarks>
+/// S-104 Ed 2.0.0 §9 defines no portrayal; the S-104 isolines are SoundCharts'
+/// own (see <c>S104PortrayalCatalogue</c>).
+/// </remarks>
+public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
+{
+    /// <summary>The isolines, in EPSG:3857 metres.</summary>
+    public required IReadOnlyList<Isoline> Isolines { get; init; }
+
+    /// <summary>
+    /// The EPSG:3857 extent of the coverage the isolines were traced from, or
+    /// <see langword="null"/> when it is unknown. Covers the whole grid even
+    /// when there are no isolines, so the dataset still has an extent.
+    /// </summary>
+    public MercatorBounds? Extent { get; init; }
+
+    /// <summary>Line and label colour.</summary>
+    public required RgbaColor Ink { get; init; }
+
+    /// <summary>Label halo colour.</summary>
+    public required RgbaColor LabelHalo { get; init; }
+
+    /// <summary>Line width in device-independent pixels.</summary>
+    public double LineWidth { get; init; } = 1.1;
+
+    /// <summary>Dash pattern (dash, gap) in device-independent pixels; empty for solid.</summary>
+    public IReadOnlyList<double> DashPattern { get; init; } = [6, 3];
+
+    /// <summary>Label font size in device-independent pixels.</summary>
+    public double LabelFontSize { get; init; } = 10;
+
+    /// <summary>Line length between labels, in device-independent pixels.</summary>
+    public double LabelSpacing { get; init; } = 250;
+
+    /// <summary>
+    /// Optional land-area surface geometries (WGS84 <c>(latitude, longitude)</c>)
+    /// the isolines are clipped <em>out of</em> so they only cross water. Set by
+    /// the S-98 rule that clips S-104 to water when an S-101 ENC is loaded
+    /// (issue #483; R-101-104-B). <see langword="null"/> or empty draws them everywhere.
+    /// </summary>
+    public IReadOnlyList<FeatureGeometry>? LandAreaMask { get; init; }
+
+    /// <summary>
+    /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.
+    /// </summary>
+    /// <param name="landAreaMask">The land-area surfaces to clip out, or null.</param>
+    public IsolineCoverageSubLayer WithLandAreaMask(IReadOnlyList<FeatureGeometry>? landAreaMask) =>
+        new()
+        {
+            LayerKey = LayerKey,
+            LayerName = LayerName,
+            Plane = Plane,
+            WithinPlanePriority = WithinPlanePriority,
+            SourceFeatureType = SourceFeatureType,
+            Isolines = Isolines,
+            Extent = Extent,
+            Ink = Ink,
+            LabelHalo = LabelHalo,
+            LineWidth = LineWidth,
+            DashPattern = DashPattern,
+            LabelFontSize = LabelFontSize,
+            LabelSpacing = LabelSpacing,
+            LandAreaMask = landAreaMask,
+        };
+}
+
+/// <summary>
+/// One isoline of an <see cref="IsolineCoverageSubLayer"/>: a polyline at a
+/// single coverage value.
+/// </summary>
+public sealed class Isoline
+{
+    /// <summary>The coverage value the line follows (metres, for S-104).</summary>
+    public required double Level { get; init; }
+
+    /// <summary>The label drawn along the line, e.g. <c>"0.5"</c>.</summary>
+    public required string Label { get; init; }
+
+    /// <summary>Interleaved EPSG:3857 vertices <c>x0, y0, x1, y1, …</c>.</summary>
+    public required double[] MercatorCoordinates { get; init; }
+}
+
+/// <summary>
 /// An arrow-overlay coverage sub-layer (S-111 surface currents): the Mapsui
 /// renderer rasterises <see cref="Coverage"/> through
 /// <c>MapsuiCoverageArrowRenderer</c>. The arrow renderer may legitimately
@@ -173,6 +260,61 @@ public enum PointGlyphSymbol
 
     /// <summary>SVG image symbol (S-111 PC arrow symbol).</summary>
     Svg,
+
+    /// <summary>
+    /// A water-level gauge: a rounded square with a trend mark and a value label,
+    /// described by <see cref="PointGlyph.Gauge"/> (S-104 stations). Drawn upright.
+    /// </summary>
+    WaterLevelGauge,
+}
+
+/// <summary>
+/// The trend mark drawn in a <see cref="WaterLevelGauge"/>.
+/// </summary>
+public enum WaterLevelGaugeTrend
+{
+    /// <summary>Trend unknown: a "?".</summary>
+    Unknown,
+
+    /// <summary>Falling: a chevron pointing down.</summary>
+    Falling,
+
+    /// <summary>Rising: a chevron pointing up.</summary>
+    Rising,
+
+    /// <summary>Steady: a dash.</summary>
+    Steady,
+
+    /// <summary>No value at this step: an em dash and no value label.</summary>
+    NoData,
+}
+
+/// <summary>
+/// The water-level gauge drawn for a <see cref="PointGlyphSymbol.WaterLevelGauge"/>
+/// glyph: SoundCharts' own S-104 station symbol (S-104 Ed 2.0.0 §9 defines none).
+/// </summary>
+public sealed class WaterLevelGauge
+{
+    /// <summary>The trend mark.</summary>
+    public required WaterLevelGaugeTrend Trend { get; init; }
+
+    /// <summary>The value label, e.g. <c>"+1.42"</c>, or <see langword="null"/> for none.</summary>
+    public string? Label { get; init; }
+
+    /// <summary>
+    /// The largest scale denominator the label is drawn at; at smaller scales
+    /// (larger denominators) only the square is drawn.
+    /// </summary>
+    public double LabelMaxScaleDenominator { get; init; } = double.PositiveInfinity;
+
+    /// <summary>Stroke, mark and label colour.</summary>
+    public required RgbaColor Ink { get; init; }
+
+    /// <summary>Square fill colour.</summary>
+    public required RgbaColor Fill { get; init; }
+
+    /// <summary>Label halo colour.</summary>
+    public required RgbaColor Halo { get; init; }
 }
 
 /// <summary>
@@ -231,6 +373,12 @@ public sealed class PointGlyph
     /// maps to this unchanged on a north-up Mercator display.
     /// </summary>
     public double Rotation { get; init; }
+
+    /// <summary>
+    /// The gauge to draw; required when <see cref="Symbol"/> is
+    /// <see cref="PointGlyphSymbol.WaterLevelGauge"/>, ignored otherwise.
+    /// </summary>
+    public WaterLevelGauge? Gauge { get; init; }
 
     /// <summary>
     /// Priority when the sub-layer is thinned (see

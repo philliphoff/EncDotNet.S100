@@ -56,13 +56,13 @@ description: |
 - Trend is an enumeration, not a delta — never compute it client-side.
 - Vertical datum (`verticalDatum`) varies by producer; surface it
   through the source rather than assuming MLLW.
-- **Portrayal is synthesised, not spec-driven.** S-104 Edition 2.0.0
-  has no official IHO portrayal catalogue — the spec treats water
+- **Portrayal is SoundCharts' own, not spec-driven.** S-104 Edition
+  2.0.0 has no official IHO portrayal catalogue — the spec treats water
   levels as input to ECDIS depth adjustment rather than a visual
-  layer. `S104PortrayalCatalogue` ships hand-coded Day / Dusk / Night
-  band tables and per-palette `NoDataColor` values for viewer parity
-  with S-102 / S-111. The Day palette is preserved byte-for-byte for
-  backward compatibility; Dusk is HLS (saturation × 0.70, lightness
-  × 0.85) of Day; Night is hand-picked ECDIS-style dark navy / olive.
+  layer. `S104PortrayalCatalogue` defines station gauges (a rounded
+  square with a trend chevron, dash or "?", plus the signed height at
+  1:100 000 and larger) and dashed surface isolines (0.5 m, or 0.25 m
+  for a dataset range under 1 m), in one teal ink per palette with no
+  colour fill. See the S-104 README's Portrayal section.
   Do **not** invent a synthetic IHO-shaped PC under `content/S104/pc/`
   (kept `.gitkeep`-only by design).
