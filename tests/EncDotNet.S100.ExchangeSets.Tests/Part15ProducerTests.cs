@@ -302,6 +302,20 @@ public sealed class Part15ProducerTests : IDisposable
     };
 
     [Fact]
+    public void Permit_and_signature_files_use_newline_line_endings_on_every_platform()
+    {
+        using var signer = _scheme.CreateSigner();
+        using var permitXml = new MemoryStream();
+        using var permitSign = new MemoryStream();
+
+        PermitFileWriter.WriteSigned(PermitFile.Create([new PermitGroup(new PermitHeader { IssueDate = new DateOnly(2026, 3, 1) }, new Dictionary<string, IReadOnlyList<DataPermit>>())]), signer, permitXml, permitSign);
+
+        Assert.DoesNotContain((byte)'\r', permitXml.ToArray());
+        Assert.DoesNotContain((byte)'\r', permitSign.ToArray());
+        Assert.Contains((byte)'\n', permitXml.ToArray());
+    }
+
+    [Fact]
     public void EncryptDataset_with_a_fixed_prefix_and_iv_is_repeatable_and_decrypts()
     {
         var plaintext = "synthetic cell"u8.ToArray();
