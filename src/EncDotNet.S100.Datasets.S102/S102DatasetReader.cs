@@ -2,6 +2,7 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Validation;
 using S100Diag = EncDotNet.S100.Datasets.S102.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S102;
@@ -59,8 +60,9 @@ public static class S102DatasetReader
         var coverages = ReadCoverages(root);
 
         // Grid footprints are checked against the declared bounding box
-        // only in a geographic CRS; projected (UTM) origins are metres.
-        var axisOrder = horizontalCRS is null or 4326
+        // only in a geographic CRS (any datum, not just WGS 84); projected (UTM)
+        // origins are metres.
+        var axisOrder = GridGeoreferencing.Classify(horizontalCRS) == HorizontalCrsKind.Geographic
             ? AxisOrderCheck.Assess(
                 coverages.SelectMany(c => AxisOrderCheck.GridCorners(
                     c.OriginLatitude, c.OriginLongitude,

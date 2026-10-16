@@ -124,15 +124,14 @@ public sealed class QuirkScenarioTests : IDisposable
     }
 
     [Fact]
-    public void A_swapped_S102_grid_is_skipped_and_the_depth_falls_back_to_S101()
+    public void Swapped_S102_and_S104_grids_are_read_through_the_swap()
     {
         var scenario = Generate(QuirkScenarios.SwappedAxisOrder());
 
-        var depth = SampleDepth(scenario, "channel-west");
-
-        Assert.Equal(ChartedDepthKind.DredgedArea, depth!.Kind);
-        Assert.Equal(QuirkScenarios.HarbourCell, depth.DatasetId);
-        Assert.Equal(12.5, depth.DepthMeters);
+        AssertGridsReadAsWithoutQuirks(scenario, "channel-west");
+        AssertGridsReadAsWithoutQuirks(scenario, "channel-east");
+        var place = scenario.Definition.Place("channel-east");
+        Assert.Contains(Sources(scenario).WaterLevel.Locate(place.Latitude, place.Longitude), s => s.Source.Kind == WaterLevelSourceKind.Grid);
     }
 
     [Fact]
@@ -231,21 +230,20 @@ public sealed class QuirkScenarioTests : IDisposable
     }
 
     [Fact]
-    public void An_unusual_S102_crs_skips_the_axis_check_and_the_surface_isnt_sampled()
+    public void An_S102_grid_in_another_geographic_crs_is_axis_checked_and_sampled()
     {
         var scenario = Generate(QuirkScenarios.UnusualCrs());
 
         var surface = S102(scenario);
         Assert.Equal(4258, surface.HorizontalCRS);
-        Assert.Null(surface.AxisOrder);
+        Assert.Equal(AxisOrderOutcome.AsEncoded, surface.AxisOrder!.Outcome);
 
-        var depth = SampleDepth(scenario, "channel-west");
-        Assert.Equal(ChartedDepthKind.DredgedArea, depth!.Kind);
-        Assert.Equal(QuirkScenarios.HarbourCell, depth.DatasetId);
+        // ETRS89 is read as WGS-84: the datums differ by well under a cell.
+        AssertGridsReadAsWithoutQuirks(scenario, "channel-west");
     }
 
     [Fact]
-    public void Longitudes_in_0_to_360_are_kept_so_grids_miss_and_stations_still_match()
+    public void Longitudes_in_0_to_360_are_kept_and_grids_and_stations_are_found_from_minus_180_to_180()
     {
         var scenario = Generate(QuirkScenarios.Longitudes0To360());
         var catalog = Catalog(scenario);
@@ -253,14 +251,15 @@ public sealed class QuirkScenarioTests : IDisposable
         Assert.Equal(225, catalog.Datasets.Single(d => d.Id.Value == QuirkScenarios.Surface).Bounds.WestLongitude, 6);
         Assert.Equal(AxisOrderOutcome.AsEncoded, S102(scenario).AxisOrder!.Outcome);
 
-        // Sampled at −135°, the S-102 surface and S-104 grid don't cover the
-        // channel; the S-104 stations are still found.
-        var depth = SampleDepth(scenario, "channel-east");
-        Assert.Equal(ChartedDepthKind.DredgedArea, depth!.Kind);
+        // Sampled at −135°, the S-102 surface and S-104 grid are read as in
+        // −180…180, and the S-104 stations are still found.
+        AssertGridsReadAsWithoutQuirks(scenario, "channel-east");
         var place = scenario.Definition.Place("channel-east");
         var series = Sources(scenario).WaterLevel.Locate(place.Latitude, place.Longitude);
-        Assert.DoesNotContain(series, s => s.Source.Kind == WaterLevelSourceKind.Grid);
         Assert.Contains(series, s => s.Source.Kind == WaterLevelSourceKind.Station);
+
+        // The finest-grid lookup finds the surface from −180…180 too.
+        Assert.NotNull(Sources(scenario).Depth.FinestGridSpacingMeters(place.Latitude - 0.001, place.Longitude - 0.001, place.Latitude + 0.001, place.Longitude + 0.001));
     }
 
     [Fact]
@@ -323,6 +322,29 @@ public sealed class QuirkScenarioTests : IDisposable
         }
 
         throw new InvalidOperationException("No point in the overlap changes band.");
+    }
+
+    // Passage depth and water level read the S-102 surface and S-104 grid at
+    // the place exactly as in the same scenario without quirks: same value,
+    // same cell.
+    private void AssertGridsReadAsWithoutQuirks(GeneratedScenario scenario, string place)
+    {
+        var plain = Generate(SyntheticScenarios.SpitAcrossScales());
+        var position = scenario.Definition.Place(place);
+        var expected = Sources(plain);
+        var actual = Sources(scenario);
+
+        var depth = actual.Depth.Sample(position.Latitude, position.Longitude);
+        Assert.Equal(ChartedDepthKind.Bathymetry, depth!.Kind);
+        Assert.Equal(QuirkScenarios.Surface, depth.DatasetId);
+        Assert.Equal(expected.Depth.Sample(position.Latitude, position.Longitude), depth);
+
+        static IEnumerable<(WaterLevelSourceInfo Source, WaterLevelReading? Reading)> Grids(PassageDataSources sources, GeoPosition position) =>
+            sources.WaterLevel.Locate(position.Latitude, position.Longitude)
+                .Where(s => s.Source.Kind == WaterLevelSourceKind.Grid)
+                .Select(s => (s.Source, s.ValueAt(Morning)));
+
+        Assert.Equal(Grids(expected, position), Grids(actual, position));
     }
 
     private GeneratedScenario Generate(ScenarioDefinition definition) =>

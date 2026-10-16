@@ -296,8 +296,10 @@ if (stations.Dataset.AxisOrder is { IsNotice: true } axisOrder)
 Station positions and GML positions are swapped back. Grid origins aren't:
 the S-102, S-104 and S-111 readers only report a grid whose footprint fits
 its bounding box swapped, because a producer that swaps the origin may also
-have swapped the spacing and counts. The check doesn't run on a grid in a
-projected CRS, such as UTM.
+have swapped the spacing and counts. The check runs on a grid in any
+geographic CRS (WGS 84, ETRS89, NAD83 and so on), but not in a projected CRS,
+such as UTM. Passage checks still read a swapped grid: the passage sources
+exchange the origin, spacing and counts back when they look up a cell.
 
 `Validate()` reports a `Swapped` or `Inconsistent` outcome as a
 `{product}-PROJ-AXIS` warning, such as `S104-PROJ-AXIS`. `Unverified` isn't a

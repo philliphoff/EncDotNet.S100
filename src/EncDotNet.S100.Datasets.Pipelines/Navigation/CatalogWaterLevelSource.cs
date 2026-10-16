@@ -3,6 +3,7 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 
@@ -16,7 +17,9 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// <remarks>
 /// A grid point is found as in <c>sample_coverage</c>: the point must lie
 /// inside the grid's node extent, and the nearest node is read (S-104 Ed
-/// 2.0.0 §10.2). Heights are taken as metres above the vertical datum
+/// 2.0.0 §10.2). Swapped axis order, other geographic CRSs, projected CRSs
+/// and the 0…360° longitude frame are absorbed at lookup by
+/// <see cref="PassageGrid"/>. Heights are taken as metres above the vertical datum
 /// (vertical CS 6499, height up; S-104 Ed 2.0.0 Table 5-1). The fill value
 /// −9999 is NoData.
 /// </remarks>
@@ -26,20 +29,16 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
     private readonly List<(string DatasetId, S104StationSeriesDataset Dataset)> _stations = new();
     private readonly double _maxStationDistance;
 
-    public CatalogWaterLevelSource(IReadOnlyList<LoadedDataset> datasets, PassageDataSourceOptions options)
+    public CatalogWaterLevelSource(IReadOnlyList<LoadedDataset> datasets, ICrsTransformFactory transforms, PassageDataSourceOptions options)
     {
         _maxStationDistance = options.MaxStationDistanceMeters;
         foreach (var dataset in datasets)
         {
             switch (dataset.Data)
             {
-                case S104CoverageData grid when grid.Source.Dataset is { DataCodingFormat: 2, Coverages.Count: > 0 } model:
-                    var first = model.Coverages[0];
-                    _grids.Add(new GridCandidate(
-                        dataset.Id.Value,
-                        model,
-                        Math.Min(Math.Abs(first.SpacingLatitudinal), Math.Abs(first.SpacingLongitudinal)),
-                        S100IssueTime.Parse(model.IssueDate, model.IssueTime)));
+                case S104CoverageData grid when grid.Source.Dataset is { DataCodingFormat: 2, Coverages.Count: > 0 } model
+                    && GridCandidate.TryCreate(dataset.Id.Value, model, transforms) is { } candidate:
+                    _grids.Add(candidate);
                     break;
                 case S104StationSeriesData stations:
                     _stations.Add((dataset.Id.Value, stations.Dataset));
@@ -88,7 +87,34 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
         return result;
     }
 
-    private sealed record GridCandidate(string DatasetId, S104Dataset Model, double Spacing, DateTime? Issued);
+    private sealed record GridCandidate(string DatasetId, S104Dataset Model, PassageGrid Grid, double Spacing, DateTime? Issued)
+    {
+        public static GridCandidate? TryCreate(string datasetId, S104Dataset model, ICrsTransformFactory transforms)
+        {
+            var first = model.Coverages[0];
+            try
+            {
+                var grid = PassageGrid.Create(
+                    first.OriginLatitude, first.OriginLongitude,
+                    first.SpacingLatitudinal, first.SpacingLongitudinal,
+                    first.NumPointsLatitudinal, first.NumPointsLongitudinal,
+                    model.HorizontalCRS,
+                    model.AxisOrder,
+                    transforms);
+                return new GridCandidate(
+                    datasetId,
+                    model,
+                    grid,
+                    Math.Min(Math.Abs(first.SpacingLatitudinal), Math.Abs(first.SpacingLongitudinal)),
+                    S100IssueTime.Parse(model.IssueDate, model.IssueTime));
+            }
+            catch (Exception ex) when (ex is NotSupportedException or FormatException or OverflowException or ArgumentException)
+            {
+                // A CRS the factory can't reproject can't be sampled.
+                return null;
+            }
+        }
+    }
 
     private sealed class GridSeries : IWaterLevelSeries
     {
@@ -114,20 +140,21 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
 
         public DateTime End { get; }
 
-        public static GridSeries? TryCreate(GridCandidate grid, double lat, double lon)
+        public static GridSeries? TryCreate(GridCandidate candidate, double lat, double lon)
         {
-            var cov = grid.Model.Coverages[0];
-            var maxLat = cov.OriginLatitude + (cov.NumPointsLatitudinal - 1) * cov.SpacingLatitudinal;
-            var maxLon = cov.OriginLongitude + (cov.NumPointsLongitudinal - 1) * cov.SpacingLongitudinal;
-            if (lat < Math.Min(cov.OriginLatitude, maxLat) || lat > Math.Max(cov.OriginLatitude, maxLat)
-                || lon < Math.Min(cov.OriginLongitude, maxLon) || lon > Math.Max(cov.OriginLongitude, maxLon))
+            var grid = candidate.Grid;
+            var (x, y) = grid.ToGrid(lat, lon);
+            var maxY = grid.OriginY + (grid.Rows - 1) * grid.SpacingY;
+            var maxX = grid.OriginX + (grid.Columns - 1) * grid.SpacingX;
+            if (y < Math.Min(grid.OriginY, maxY) || y > Math.Max(grid.OriginY, maxY)
+                || x < Math.Min(grid.OriginX, maxX) || x > Math.Max(grid.OriginX, maxX))
             {
                 return null;
             }
 
-            var row = Math.Clamp((int)Math.Round((lat - cov.OriginLatitude) / cov.SpacingLatitudinal), 0, cov.NumPointsLatitudinal - 1);
-            var col = Math.Clamp((int)Math.Round((lon - cov.OriginLongitude) / cov.SpacingLongitudinal), 0, cov.NumPointsLongitudinal - 1);
-            return new GridSeries(grid, row, col, row * cov.NumPointsLongitudinal + col);
+            var row = Math.Clamp((int)Math.Round((y - grid.OriginY) / grid.SpacingY), 0, grid.Rows - 1);
+            var col = Math.Clamp((int)Math.Round((x - grid.OriginX) / grid.SpacingX), 0, grid.Columns - 1);
+            return new GridSeries(candidate, row, col, row * grid.Columns + col);
         }
 
         public WaterLevelReading? ValueAt(DateTime utc) =>

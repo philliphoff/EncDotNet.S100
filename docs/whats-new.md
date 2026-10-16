@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Passage checks read quirky S-102 and S-104 grids.** Passage depth and
+  water level now read grids whose georeferencing is longitude first, grids
+  declaring a geographic CRS other than WGS 84 (such as ETRS89), and grids in
+  the 0…360° longitude frame, instead of skipping them and falling back to
+  S-101 depths. The S-102, S-104 and S-111 readers now check the axis order
+  of a grid in any geographic CRS. `PassageDataSources.FromDatasets` uses its
+  transform factory for projected S-104 grids too.
 - **Producer quirks and protected sets in the scenario generator.** The test
   scenario generator can now reproduce producer quirks per dataset (swapped
   axes, missing or different datums, unusual CRS declarations, 0…360°

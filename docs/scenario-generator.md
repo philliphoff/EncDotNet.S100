@@ -236,9 +236,10 @@ through the hooks that apply to its product.
 `QuirkScenarios` has one scenario for each class of quirk, all variants of
 "Spit across scales". `QuirkScenarioTests` pins what the library does with
 each one today, including the validation findings it reports. Some of that
-behaviour is a gap rather than a decision: for example, a swapped S-102 grid
-is reported but not used, so passage depths fall back to S-101. When you
-change that behaviour, update the test in the same change.
+behaviour is a gap rather than a decision: for example, a quirk that a rule
+pack doesn't notice. When you change that behaviour, update the test in the
+same change. Passage depth and water level read swapped, ETRS89 and 0…360°
+grids exactly as the grids without the quirk.
 
 ## Protected exchange sets
 

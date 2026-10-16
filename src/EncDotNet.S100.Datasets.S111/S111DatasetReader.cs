@@ -2,6 +2,7 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Validation;
 using S100Diag = EncDotNet.S100.Datasets.S111.Diagnostics;
 
 namespace EncDotNet.S100.Datasets.S111;
@@ -169,7 +170,7 @@ public static class S111DatasetReader
         }
 
         var coverages = ReadCoverages(scGroup, dataCodingFormat, options);
-        var gridAxisOrder = horizontalCRS is null or 4326
+        var gridAxisOrder = GridGeoreferencing.Classify(horizontalCRS) == HorizontalCrsKind.Geographic
             ? AxisOrderCheck.Assess(
                 coverages
                     .DistinctBy(c => c.GroupPath)
