@@ -62,6 +62,45 @@ public class S124NavigationalWarningTests
     }
 
     [Fact]
+    public void Edition2_ProjectsThePreamble()
+    {
+        var w = Project("navwarn_ccg_ed2.gml", out var diagnostics);
+
+        Assert.Empty(diagnostics);
+        var preamble = Assert.IsType<S124NavwarnPreamble>(w.Preamble);
+        Assert.Equal("Obstruction", preamble.Title);
+        Assert.Equal("Vancouver Harbour", preamble.GeneralArea);
+        Assert.Equal(new DateTimeOffset(2020, 4, 3, 0, 39, 14, TimeSpan.Zero), preamble.PublicationTime);
+        Assert.Null(preamble.CancellationDate);
+        Assert.Equal(15, preamble.NavwarnTypeGeneral);
+        var msi = Assert.IsType<S124MessageSeriesIdentifier>(preamble.MessageSeriesIdentifier);
+        Assert.Equal((477, 2020, "Canadian Coast Guard", "Canada", 1), (msi.WarningNumber, msi.Year, msi.ProductionAgency, msi.Country, msi.WarningType));
+        Assert.Equal("urn:mrn:CCG.S124.CA01.P.0477.20", msi.InteroperabilityIdentifier);
+    }
+
+    [Fact]
+    public void Edition2_ProjectsTheCancellationReference()
+    {
+        var reference = Assert.Single(Project("navwarn_ccg_ed2.gml", out _).References);
+
+        Assert.Equal(1, reference.ReferenceCategory);
+        Assert.False(reference.NoMessageOnHand);
+        var cancelled = Assert.Single(reference.Warnings);
+        Assert.Equal("urn:mrn:CCG.S124.CA01.P.1383.19", cancelled.InteroperabilityIdentifier);
+        Assert.Equal(2019, cancelled.Year);
+    }
+
+    [Fact]
+    public void Edition2_ProjectsTheValidityRange()
+    {
+        var part = Assert.Single(Project("navwarn_ccg_ed2.gml", out _).Parts);
+
+        var range = Assert.Single(part.ValidityRanges);
+        Assert.Equal(new DateTimeOffset(2020, 4, 3, 0, 0, 0, TimeSpan.Zero), range.Start);
+        Assert.Null(range.End);
+    }
+
+    [Fact]
     public void Mixed_ExtractsWarningInformationAndRestriction()
     {
         var w = Project("navwarn_mixed.gml", out _);

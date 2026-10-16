@@ -382,20 +382,22 @@ public static class S124NavigationalWarningRules
 
     /// <summary>
     /// <c>S124-R-6.1</c> — Every <c>References</c> information type
-    /// that sets <c>referenceCategory</c> must also supply a non-empty
-    /// <c>messageReference</c> identifying the warning being
-    /// referenced.
+    /// that sets <c>referenceCategory</c> must identify the warnings it
+    /// refers to: a non-empty <c>messageReference</c> (Edition 1.0.0) or at
+    /// least one <c>messageSeriesIdentifier</c> (Edition 2.0.0).
     /// </summary>
     /// <remarks>
     /// Spec reference: S-124 Edition 1.0.0 Feature Catalogue,
-    /// information type <c>References</c>. A reference category
-    /// (cancellation, supersession, …) without a target message
-    /// identifier cannot be acted on by ECDIS or any downstream
-    /// consumer.
+    /// information type <c>References</c>; S-124 Edition 2.0.0 Table 8-1,
+    /// which asks a cancellation for one <c>messageSeriesIdentifier</c> per
+    /// cancelled warning. A reference category (cancellation, supersession,
+    /// …) without a target cannot be acted on by ECDIS or any downstream
+    /// consumer. An in-force bulletin with <c>noMessageOnHand</c> set has
+    /// no targets by design and isn't reported.
     /// </remarks>
     public static IValidationRule<S124NavigationalWarning> ReferenceTargetSpecified { get; } =
         ValidationRuleBuilder.RuleFor<S124NavigationalWarning>("S124-R-6.1")
-            .WithDescription("A References information type that sets referenceCategory must include messageReference.")
+            .WithDescription("A References information type that sets referenceCategory must identify the warnings it refers to.")
             .WithSeverity(ValidationSeverity.Error)
             .Yield((warning, _) =>
             {
@@ -404,7 +406,9 @@ public static class S124NavigationalWarningRules
                 {
                     if (r.ReferenceCategory is null)
                         continue;
-                    if (!string.IsNullOrWhiteSpace(r.MessageReference))
+                    if (!string.IsNullOrWhiteSpace(r.MessageReference) || r.Warnings.Count > 0)
+                        continue;
+                    if (r.NoMessageOnHand == true)
                         continue;
 
                     findings.Add(new ValidationFinding
@@ -413,7 +417,7 @@ public static class S124NavigationalWarningRules
                         Severity = ValidationSeverity.Error,
                         Message =
                             $"References '{r.Id}' sets referenceCategory={r.ReferenceCategory} but has no " +
-                            "messageReference identifying the target warning.",
+                            "messageReference or messageSeriesIdentifier identifying the target warning.",
                         DatasetId = warning.DatasetIdentifier,
                         RelatedFeatureId = r.Id,
                     });
