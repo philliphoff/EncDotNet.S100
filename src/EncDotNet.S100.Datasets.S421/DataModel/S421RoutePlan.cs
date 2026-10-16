@@ -202,7 +202,8 @@ public sealed class S421RoutePlan
         var legs = new List<S421Leg>();
         var seenLegs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var waypoints = new List<S421Waypoint>();
+        var waypointFeatures = new List<S421Feature>();
+        var referencedLegs = new List<S421Leg?>();
         foreach (var wptRef in container.Value.References.Where(r => r.Role == "routeWaypoint"))
         {
             var wptFeature = ctx.Xlinks.Resolve<S421Feature>(wptRef.Href, "routeWaypoint", ctx, container.Value.Id);
@@ -221,12 +222,26 @@ public sealed class S421RoutePlan
                 }
             }
 
-            waypoints.Add(ProjectWaypoint(wptFeature, leg, ctx));
+            waypointFeatures.Add(wptFeature);
+            referencedLegs.Add(leg);
         }
 
-        var waypointArray = waypoints;
-        LinkLegEndpoints(waypointArray, ctx);
-        return (waypointArray, legs);
+        // S-421 Edition 1.0.0 references a leg from the waypoint it ends at,
+        // so the first waypoint has none. Some producers reference each leg
+        // from the waypoint it starts at instead; a leg on the first
+        // waypoint tells the two apart.
+        var fromStart = referencedLegs.Count > 0 && referencedLegs[0] is not null;
+        var waypoints = new List<S421Waypoint>(waypointFeatures.Count);
+        for (int i = 0; i < waypointFeatures.Count; i++)
+        {
+            var outgoing = fromStart
+                ? referencedLegs[i]
+                : i + 1 < referencedLegs.Count ? referencedLegs[i + 1] : null;
+            waypoints.Add(ProjectWaypoint(waypointFeatures[i], outgoing, ctx));
+        }
+
+        LinkLegEndpoints(waypoints, ctx);
+        return (waypoints, legs);
     }
 
     /// <summary>
@@ -266,7 +281,7 @@ public sealed class S421RoutePlan
         }
     }
 
-    private static S421Waypoint ProjectWaypoint(S421Feature f, S421Leg? leg, ProjectionContext ctx)
+    private static S421Waypoint ProjectWaypoint(S421Feature f, S421Leg? outgoing, ProjectionContext ctx)
     {
         GeoPosition position = default;
         if (f.Points.Count > 0)
@@ -294,7 +309,7 @@ public sealed class S421RoutePlan
             Fixed = AttributeParser.TryParseBool(f.Attributes.GetValueOrDefault("routeWaypointFixed"), ctx, f.Id, "routeWaypointFixed"),
             TurnRadius = AttributeParser.TryParseDouble(f.Attributes.GetValueOrDefault("routeWaypointTurnRadius"), ctx, f.Id, "routeWaypointTurnRadius"),
             Position = position,
-            OutgoingLeg = leg,
+            OutgoingLeg = outgoing,
             ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes,
                 "routeWaypointID", "routeWaypointName", "routeWaypointExternalReferenceID",
                 "routeWaypointFixed", "routeWaypointTurnRadius"),
@@ -485,7 +500,10 @@ public sealed class S421RoutePlan
         return new S421ScheduleElement
         {
             Id = e.Id,
-            WaypointNumber = AttributeParser.TryParseInt(a.GetValueOrDefault("routeWaypointId"), ctx, e.Id, "routeWaypointId"),
+            // The feature catalogue spells it routeWaypointID; the IEC samples routeWaypointId.
+            WaypointNumber = a.ContainsKey("routeWaypointID")
+                ? AttributeParser.TryParseInt(a.GetValueOrDefault("routeWaypointID"), ctx, e.Id, "routeWaypointID")
+                : AttributeParser.TryParseInt(a.GetValueOrDefault("routeWaypointId"), ctx, e.Id, "routeWaypointId"),
             PlannedSpeedOverGround = AttributeParser.TryParseDouble(a.GetValueOrDefault("routeScheduleElementPlanSOG"), ctx, e.Id, "routeScheduleElementPlanSOG"),
             Etd = AttributeParser.TryParseDateTimeOffset(a.GetValueOrDefault("routeScheduleElementETD"), ctx, e.Id, "routeScheduleElementETD"),
             Eta = AttributeParser.TryParseDateTimeOffset(a.GetValueOrDefault("routeScheduleElementETA"), ctx, e.Id, "routeScheduleElementETA"),
@@ -495,7 +513,7 @@ public sealed class S421RoutePlan
             EtaWindowAfterMinutes = AttributeParser.TryParseInt(a.GetValueOrDefault("routeScheduleElementETAWindowAfter"), ctx, e.Id, "routeScheduleElementETAWindowAfter"),
             Note = a.GetValueOrDefault("routeScheduleElementNote"),
             ExtraAttributes = ExtraAttributes.ExcludeKnown(a,
-                "routeWaypointId",
+                "routeWaypointID", "routeWaypointId",
                 "routeScheduleElementPlanSOG",
                 "routeScheduleElementETD", "routeScheduleElementETA",
                 "routeScheduleElementETDWindowBefore", "routeScheduleElementETDWindowAfter",

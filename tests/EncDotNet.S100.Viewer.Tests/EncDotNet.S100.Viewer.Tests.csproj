@@ -42,6 +42,7 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Mcp.Tools\EncDotNet.S100.Mcp.Tools.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.VisualRegression\EncDotNet.S100.VisualRegression.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Testing.Scenarios\EncDotNet.S100.Testing.Scenarios.csproj" />
   </ItemGroup>
 
   <ItemGroup>

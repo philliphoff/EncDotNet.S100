@@ -4,14 +4,14 @@ namespace EncDotNet.S100.Testing.Scenarios.Tests;
 /// Every generated dataset opens through the exchange set and passes its
 /// product's rule pack with no findings.
 /// </summary>
-public sealed class ScenarioValidationTests(SpitAcrossScalesFixture fixture) : IClassFixture<SpitAcrossScalesFixture>
+public abstract class ScenarioValidationTests(GeneratedScenarioFixture fixture)
 {
     [Fact]
     public async Task The_exchange_set_lists_every_dataset()
     {
         await using var exchangeSet = await S100ExchangeSet.OpenAsync(fixture.Scenario.Root, TestContext.Current.CancellationToken);
 
-        Assert.StartsWith("SYNTHETIC spit-across-scales", exchangeSet.Catalogue.Identifier.Identifier, StringComparison.Ordinal);
+        Assert.StartsWith($"SYNTHETIC {fixture.Definition.Name} ", exchangeSet.Catalogue.Identifier.Identifier, StringComparison.Ordinal);
         Assert.Equal(
             fixture.Scenario.Datasets.Select(d => d.RelativePath),
             exchangeSet.Datasets.Select(d => d.Metadata.RelativePath));
@@ -36,4 +36,27 @@ public sealed class ScenarioValidationTests(SpitAcrossScalesFixture fixture) : I
 
         Assert.True(reports.Count == 0, string.Join(Environment.NewLine, reports.Take(20)));
     }
+
+    [Fact]
+    public void Every_dataset_loads_into_the_catalog()
+    {
+        var catalog = ScenarioLoading.Catalog(fixture.Scenario);
+
+        Assert.Equal(fixture.Scenario.Datasets.Count, catalog.Datasets.Count);
+    }
 }
+
+public sealed class SpitAcrossScalesValidationTests(SpitAcrossScalesFixture fixture)
+    : ScenarioValidationTests(fixture), IClassFixture<SpitAcrossScalesFixture>;
+
+public sealed class ApproachWithTideWindowValidationTests(ApproachWithTideWindowFixture fixture)
+    : ScenarioValidationTests(fixture), IClassFixture<ApproachWithTideWindowFixture>;
+
+public sealed class WarningsOnRouteValidationTests(WarningsOnRouteFixture fixture)
+    : ScenarioValidationTests(fixture), IClassFixture<WarningsOnRouteFixture>;
+
+public sealed class WarningsOnRouteEdition1ValidationTests(WarningsOnRouteEdition1Fixture fixture)
+    : ScenarioValidationTests(fixture), IClassFixture<WarningsOnRouteEdition1Fixture>;
+
+public sealed class PortPlanVsOwnRouteValidationTests(PortPlanVsOwnRouteFixture fixture)
+    : ScenarioValidationTests(fixture), IClassFixture<PortPlanVsOwnRouteFixture>;

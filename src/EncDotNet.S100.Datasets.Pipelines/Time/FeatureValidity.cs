@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Time;
@@ -14,8 +15,9 @@ namespace EncDotNet.S100.Datasets.Pipelines.Time;
 /// <para>
 /// The S-100 General Feature Model declares both ranges as complex
 /// attributes with <c>dateStart</c> and <c>dateEnd</c> sub-attributes
-/// in ISO-8601 form. Either bound may be absent, which means
-/// "open-ended on that side".
+/// in ISO-8601 form, each with an optional <c>timeOfDayStart</c> or
+/// <c>timeOfDayEnd</c> (UTC; see <see cref="S100DateTimes"/>). Either
+/// bound may be absent, which means "open-ended on that side".
 /// </para>
 /// <para>
 /// Per the Phase 2 plan question 4 recommendation, a feature with
@@ -98,8 +100,8 @@ public static class FeatureValidity
                 continue;
             }
 
-            var start = TryParseDate(complex.SubAttributes.GetValueOrDefault("dateStart"));
-            var end = TryParseDate(complex.SubAttributes.GetValueOrDefault("dateEnd"));
+            var start = Moment(complex.SubAttributes, "dateStart", "timeOfDayStart");
+            var end = Moment(complex.SubAttributes, "dateEnd", "timeOfDayEnd");
             if (start is null && end is null)
             {
                 continue;
@@ -115,6 +117,15 @@ public static class FeatureValidity
     {
         return string.Equals(code, "fixedDateRange", StringComparison.OrdinalIgnoreCase)
             || string.Equals(code, "periodicDateRange", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // A date with an optional time of day: the date is the sub-attribute's
+    // text, or (S-100 GML 5.0, e.g. S-124 Ed 2.0.0) the text of its nested
+    // S100:date element, which the readers keep as "dateStart.date".
+    private static DateTimeOffset? Moment(IReadOnlyDictionary<string, string> sub, string dateName, string timeName)
+    {
+        var date = sub.GetValueOrDefault(dateName) ?? sub.GetValueOrDefault(dateName + ".date");
+        return S100DateTimes.Combine(date, sub.GetValueOrDefault(timeName)) ?? TryParseDate(date);
     }
 
     private static DateTimeOffset? TryParseDate(string? value)

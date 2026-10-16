@@ -19,7 +19,7 @@ namespace EncDotNet.S100.Testing.Scenarios;
 /// <param name="Stations">The S-104 station series, or <c>null</c>.</param>
 /// <param name="WaterLevelGrids">The S-104 grids.</param>
 /// <param name="Places">Named local points, in metres.</param>
-/// <param name="Route">The scenario's route as named local waypoints, in metres.</param>
+/// <param name="Route">The scenario's route as named local waypoints, in metres (the S-421 routes are in <see cref="Routes"/>).</param>
 public sealed record ScenarioDefinition(
     string Name,
     SyntheticWorld World,
@@ -34,6 +34,24 @@ public sealed record ScenarioDefinition(
     IReadOnlyDictionary<string, (double X, double Y)> Places,
     IReadOnlyList<string> Route)
 {
+    /// <summary>The S-111 current grids.</summary>
+    public IReadOnlyList<S111GridSpec> CurrentGrids { get; init; } = [];
+
+    /// <summary>The S-111 current station series, or <c>null</c>.</summary>
+    public S111StationsSpec? CurrentStations { get; init; }
+
+    /// <summary>The S-421 routes.</summary>
+    public IReadOnlyList<S421RouteSpec> Routes { get; init; } = [];
+
+    /// <summary>The S-124 navigational warnings, one dataset each.</summary>
+    public IReadOnlyList<S124WarningSpec> Warnings { get; init; } = [];
+
+    /// <summary>The S-124 edition to write: 2 (Edition 2.0.0, the default) or 1 (Edition 1.0.0).</summary>
+    public int S124Edition { get; init; } = 2;
+
+    /// <summary>The S-129 under-keel clearance plans.</summary>
+    public IReadOnlyList<S129PlanSpec> UkcPlans { get; init; } = [];
+
     /// <summary>The geographic position of a named place.</summary>
     /// <param name="name">The place's name.</param>
     /// <returns>The position.</returns>

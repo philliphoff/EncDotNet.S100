@@ -284,9 +284,12 @@ internal static class S124DatasetReader
             }
             else
             {
-                // Simple attribute
+                // Simple attribute. A code list or enumeration value's code
+                // (Edition 2.0.0 writes code="1") is kept as "<name>.code".
                 if (!string.IsNullOrEmpty(child.Value))
                     simple[localName] = child.Value;
+                if (child.Attribute("code")?.Value is { Length: > 0 } simpleCode)
+                    simple[localName + ".code"] = simpleCode;
             }
         }
 

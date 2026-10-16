@@ -50,37 +50,8 @@ public static class SyntheticScenarios
             Issued: new DateTime(2026, 2, 28, 12, 0, 0, DateTimeKind.Utc),
             WaterLevelStart: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
             WaterLevelEnd: new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc),
-            Cells:
-            [
-                new S101CellSpec(
-                    "101ZZ00SPIT5",
-                    "Synthetic Sound harbour (SYNTHETIC, fictitious; not for navigation)",
-                    new LocalRect(0, 0, 6000, 6000),
-                    GridSpacing: 25,
-                    GeneralisationRadius: 0,
-                    DepthContours: [0, 2, 5, 10, 15, 20],
-                    SoundingSpacing: 250,
-                    MinimumDisplayScale: 22000,
-                    OptimumDisplayScale: 12000,
-                    MaximumDisplayScale: 3000,
-                    FoidSubdivision: 1),
-                new S101CellSpec(
-                    "101ZZ00SPIT3",
-                    "Synthetic Sound coastal (SYNTHETIC, fictitious; not for navigation)",
-                    new LocalRect(-12000, -12000, 18000, 18000),
-                    GridSpacing: 150,
-                    GeneralisationRadius: 150,
-                    DepthContours: [0, 5, 10, 20],
-                    SoundingSpacing: 1500,
-                    MinimumDisplayScale: 350000,
-                    OptimumDisplayScale: 90000,
-                    MaximumDisplayScale: 22000,
-                    FoidSubdivision: 2),
-            ],
-            DredgedChannels:
-            [
-                new DredgedChannel("Synthetic Sound approach channel (fictitious)", new LocalRect(0, 2850, 6000, 3150), MaintainedDepth: 12.5),
-            ],
+            Cells: SyntheticSoundCells,
+            DredgedChannels: SyntheticSoundChannels,
             Surfaces:
             [
                 new S102SurfaceSpec("102ZZ00SPIT", new LocalRect(0, 2800, 6000, 3500), Spacing: 50, DeclareVerticalDatum: declareS102VerticalDatum),
@@ -105,4 +76,345 @@ public static class SyntheticScenarios
             },
             Route: ["start", "turn-west", "spit-shoulder", "turn-east", "end"]);
     }
+
+    /// <summary>
+    /// "Approach with tide window" (#942): a route from the sea buoy over the
+    /// crest of the shoal north-west of the harbour (charted 4 m) and into the
+    /// dredged channel, for a 6 m draft that can cross the crest only near
+    /// high water.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description>
+    /// The route (S-421 <c>421ZZ00APPR</c>, 6 kn, 6,0 m draft, 0,3 m squat,
+    /// 1,0 m required UKC) runs down <c>x = 1210 m</c>, over the crest at
+    /// <c>shoal-crest</c>, to <c>channel-junction</c>, then east along the
+    /// channel to <c>berth-approach</c>. It crosses the crest with enough
+    /// water only when the tide there is above about 3,3 m, for a little over
+    /// an hour either side of high water.
+    /// </description></item>
+    /// <item><description>
+    /// An S-102 surface (50 m) covers the whole route, so every depth is
+    /// S-102; the route runs 10 m east of a node column, so each sample's
+    /// depth is the node to its south-west.
+    /// </description></item>
+    /// <item><description>
+    /// S-104 stations only (10-minute records), so every water level is
+    /// <c>SYN-W</c>'s, the nearest station.
+    /// </description></item>
+    /// <item><description>
+    /// S-111 tidal streams over the Sound: a 300 m grid every 30 minutes and
+    /// station series every 10 minutes, from the same tide.
+    /// </description></item>
+    /// </list>
+    /// </remarks>
+    /// <param name="seed">The world's seed.</param>
+    /// <returns>The scenario.</returns>
+    public static ScenarioDefinition ApproachWithTideWindow(ulong seed = DefaultSeed)
+    {
+        var world = SyntheticWorld.SyntheticSound(seed);
+        return new ScenarioDefinition(
+            "approach-with-tide-window",
+            world,
+            Issued: new DateTime(2026, 2, 28, 12, 0, 0, DateTimeKind.Utc),
+            WaterLevelStart: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            WaterLevelEnd: new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc),
+            Cells: SyntheticSoundCells,
+            DredgedChannels: SyntheticSoundChannels,
+            Surfaces:
+            [
+                new S102SurfaceSpec("102ZZ00APPR", ApproachSurface, Spacing: 50),
+            ],
+            Stations: new S104StationsSpec("104ZZ00APPR_STN", TimeSpan.FromMinutes(10)),
+            WaterLevelGrids: [],
+            Places: ApproachPlaces,
+            Route: ApproachRoute.Waypoints)
+        {
+            Routes = [ApproachRoute],
+            CurrentGrids = [new S111GridSpec("111ZZ00APPR_GRD", new LocalRect(0, 2400, 6000, 6000), Spacing: 300, TimeSpan.FromMinutes(30))],
+            CurrentStations = new S111StationsSpec("111ZZ00APPR_STN", TimeSpan.FromMinutes(10)),
+        };
+    }
+
+    /// <summary>
+    /// "Warnings on route" (#942, for #888's route checks): an S-421 route
+    /// east along the channel and S-124 warnings that cross it, or lie near
+    /// it, at different times.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The route (<c>421ZZ00WARN</c>) runs from <c>west-entrance</c> to
+    /// <c>east-berth</c> along <c>y = 3050 m</c> at 8 kn, leaving at
+    /// 06:00 UTC on 1 March 2026; it passes <c>x</c> metres east at
+    /// 06:00 + (x − 300) / 4,116 seconds. The warnings (see
+    /// <see cref="RouteWarnings"/>):
+    /// </para>
+    /// <list type="table">
+    /// <listheader><term>No.</term><description>What, and its relation to the passage</description></listheader>
+    /// <item><term>1</term><description>Survey operations, an area over the route at 2400–2800 m, 05:00–08:00: in force when the vessel crosses it.</description></item>
+    /// <item><term>2</term><description>Cable laying, a line across the route at 4000 m, 12:00–18:00: crosses the route, but starts after the vessel has passed.</description></item>
+    /// <item><term>3</term><description>A buoy off station 70 m north of the route at 1500 m, from 27 February, open-ended: in force, near the route.</description></item>
+    /// <item><term>4</term><description>A drifting hazard far north of the route: not relevant.</description></item>
+    /// <item><term>5</term><description>Diving operations, an area over the route at 4800–5100 m: cancelled by warning 6 before the passage.</description></item>
+    /// <item><term>6</term><description>Diving operations moved north of the route, cancelling warning 5 (a "new dataset with cancellation").</description></item>
+    /// <item><term>7</term><description>Towing operations, a line across the route at 1000 m whose cancellation date (05:30) is before the vessel reaches it.</description></item>
+    /// </list>
+    /// <para>
+    /// <paramref name="s124Edition"/> 1 writes the warnings in Edition 1.0.0,
+    /// which has no cancellation date, so there warning 7 stays in force.
+    /// </para>
+    /// </remarks>
+    /// <param name="seed">The world's seed.</param>
+    /// <param name="s124Edition">2 for S-124 Edition 2.0.0, 1 for Edition 1.0.0.</param>
+    /// <returns>The scenario.</returns>
+    public static ScenarioDefinition WarningsOnRoute(ulong seed = DefaultSeed, int s124Edition = 2)
+    {
+        var world = SyntheticWorld.SyntheticSound(seed);
+        var route = new S421RouteSpec(
+            "421ZZ00WARN",
+            "ZZ00-CHANNEL-1",
+            "Synthetic Sound channel transit (fictitious)",
+            ["west-entrance", "east-berth"],
+            new PassageValues(DraftMeters: 7.0, SquatMeters: 0.4, SpeedKnots: 8, RequiredUkcMeters: 1.0),
+            new DateTime(2026, 3, 1, 6, 0, 0, DateTimeKind.Utc));
+        return new ScenarioDefinition(
+            s124Edition == 2 ? "warnings-on-route" : "warnings-on-route-s124-ed1",
+            world,
+            Issued: new DateTime(2026, 2, 28, 12, 0, 0, DateTimeKind.Utc),
+            WaterLevelStart: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            WaterLevelEnd: new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc),
+            Cells: SyntheticSoundCells,
+            DredgedChannels: SyntheticSoundChannels,
+            Surfaces: [],
+            Stations: null,
+            WaterLevelGrids: [],
+            Places: new Dictionary<string, (double X, double Y)>
+            {
+                ["west-entrance"] = (300, 3050),
+                ["east-berth"] = (5700, 3050),
+            },
+            Route: route.Waypoints)
+        {
+            Routes = [route],
+            Warnings = RouteWarnings,
+            S124Edition = s124Edition,
+        };
+    }
+
+    /// <summary>
+    /// "Port plan vs own route" (#942): the port's S-129 plan for the
+    /// approach route, and the vessel's own S-421 route, which rounds the
+    /// shoal to the west instead of crossing its crest.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description>
+    /// The port's route is <see cref="ApproachWithTideWindow"/>'s
+    /// (<c>421ZZ00APPR</c>, <c>ZZ00-APPROACH-1</c>), leaving at
+    /// <see cref="PortPlanDeparture"/>, inside the tide window. The S-129
+    /// plan <c>129ZZ00PORT</c> has control points at <c>shoal-crest</c> and
+    /// <c>channel-junction</c> (waypoints) and <c>channel-mid</c> (halfway
+    /// along the channel leg), a 1,0 m UKC limit (the route's required UKC)
+    /// and a 0,5 m almost non-navigable margin. Its plan area takes in the
+    /// tip of the spit, which is non-navigable, and the shoal's crest, which
+    /// is almost non-navigable at high water.
+    /// </description></item>
+    /// <item><description>
+    /// The own route (<c>421ZZ00OWN</c>, <c>ZZ00-OWN-1</c>) goes from the sea
+    /// buoy to <c>own-west</c>, 310 m west of the crest, then to the
+    /// junction and the berth approach: the crest control point is off it.
+    /// </description></item>
+    /// <item><description>
+    /// S-102 as in the approach, and S-104 as a 200 m grid every 10 minutes
+    /// (the S-129 fusion reads gridded S-104).
+    /// </description></item>
+    /// </list>
+    /// </remarks>
+    /// <param name="seed">The world's seed.</param>
+    /// <returns>The scenario.</returns>
+    public static ScenarioDefinition PortPlanVsOwnRoute(ulong seed = DefaultSeed)
+    {
+        var world = SyntheticWorld.SyntheticSound(seed);
+        var port = ApproachRoute with { Departure = PortPlanDeparture };
+        var own = new S421RouteSpec(
+            "421ZZ00OWN",
+            "ZZ00-OWN-1",
+            "Own route round the shoal (fictitious)",
+            ["sea-buoy", "own-west", "channel-junction", "berth-approach"],
+            port.Passage,
+            PortPlanDeparture);
+        var places = new Dictionary<string, (double X, double Y)>(ApproachPlaces)
+        {
+            ["own-west"] = (900, 4400),
+            ["channel-mid"] = (1755, 3050),
+        };
+        return new ScenarioDefinition(
+            "port-plan-vs-own-route",
+            world,
+            Issued: new DateTime(2026, 2, 28, 12, 0, 0, DateTimeKind.Utc),
+            WaterLevelStart: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            WaterLevelEnd: new DateTime(2026, 3, 3, 0, 0, 0, DateTimeKind.Utc),
+            Cells: SyntheticSoundCells,
+            DredgedChannels: SyntheticSoundChannels,
+            Surfaces:
+            [
+                new S102SurfaceSpec("102ZZ00PORT", ApproachSurface, Spacing: 50),
+            ],
+            Stations: null,
+            WaterLevelGrids:
+            [
+                new S104GridSpec("104ZZ00PORT_GRD", ApproachSurface, Spacing: 200, TimeSpan.FromMinutes(10)),
+            ],
+            Places: places,
+            Route: port.Waypoints)
+        {
+            Routes = [port, own],
+            UkcPlans =
+            [
+                new S129PlanSpec(
+                    "129ZZ00PORT",
+                    "PLAN.ZZ00.PORT",
+                    port.DatasetName,
+                    ["shoal-crest", "channel-junction", "channel-mid"],
+                    UkcLimitMeters: 1.0,
+                    AlmostMarginMeters: 0.5,
+                    PlanArea: new LocalRect(600, 2200, 3400, 6000),
+                    AreaSpacing: 50),
+            ],
+        };
+    }
+
+    /// <summary>
+    /// The departure of the port's plan in <see cref="PortPlanVsOwnRoute"/>:
+    /// the vessel crosses the shoal's crest near the afternoon high water.
+    /// </summary>
+    public static DateTime PortPlanDeparture { get; } = new(2026, 3, 1, 13, 15, 0, DateTimeKind.Utc);
+
+    /// <summary>The S-102 surface over the approach: the route and its surroundings.</summary>
+    public static LocalRect ApproachSurface { get; } = new(600, 2800, 2600, 6000);
+
+    /// <summary>The approach route's places.</summary>
+    public static IReadOnlyDictionary<string, (double X, double Y)> ApproachPlaces { get; } = new Dictionary<string, (double X, double Y)>
+    {
+        ["sea-buoy"] = (1210, 5800),
+        // Over the shoal's crest (charted 4 m); the S-102 node to its south-west is (1200, 4400).
+        ["shoal-crest"] = (1210, 4400),
+        ["channel-junction"] = (1210, 3050),
+        ["berth-approach"] = (2300, 3050),
+    };
+
+    /// <summary>The approach route: 6 kn, 6,0 m draft, 0,3 m squat, 1,0 m required UKC, leaving at 06:00 UTC on 1 March 2026.</summary>
+    public static S421RouteSpec ApproachRoute { get; } = new(
+        "421ZZ00APPR",
+        "ZZ00-APPROACH-1",
+        "Synthetic Sound approach over the shoal (fictitious)",
+        ["sea-buoy", "shoal-crest", "channel-junction", "berth-approach"],
+        new PassageValues(DraftMeters: 6.0, SquatMeters: 0.3, SpeedKnots: 6, RequiredUkcMeters: 1.0),
+        new DateTime(2026, 3, 1, 6, 0, 0, DateTimeKind.Utc));
+
+    /// <summary>The warnings of <see cref="WarningsOnRoute"/>, numbered in the <c>ZZ00 LOCAL</c> series for 2026.</summary>
+    public static IReadOnlyList<S124WarningSpec> RouteWarnings { get; } =
+    [
+        new S124WarningSpec(
+            "124ZZ00W0001", 1, "Survey operations (fictitious)",
+            "SYNTHETIC. Survey vessel working in the channel. Pass with caution.",
+            TypeGeneral: 17,
+            WarningShape.Area(new LocalRect(2400, 2900, 2800, 3200)),
+            Published: new DateTime(2026, 2, 28, 9, 0, 0, DateTimeKind.Utc),
+            ValidFrom: new DateTime(2026, 3, 1, 5, 0, 0, DateTimeKind.Utc),
+            ValidTo: new DateTime(2026, 3, 1, 8, 0, 0, DateTimeKind.Utc)),
+        new S124WarningSpec(
+            "124ZZ00W0002", 2, "Cable laying (fictitious)",
+            "SYNTHETIC. Cable laying across the channel. Keep clear.",
+            TypeGeneral: 19,
+            WarningShape.Line((4000, 2700), (4000, 3400)),
+            Published: new DateTime(2026, 2, 28, 9, 0, 0, DateTimeKind.Utc),
+            ValidFrom: new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc),
+            ValidTo: new DateTime(2026, 3, 1, 18, 0, 0, DateTimeKind.Utc)),
+        new S124WarningSpec(
+            "124ZZ00W0003", 3, "Buoy off station (fictitious)",
+            "SYNTHETIC. Channel buoy reported off station.",
+            TypeGeneral: 1,
+            WarningShape.Point(1500, 3120),
+            Published: new DateTime(2026, 2, 27, 0, 0, 0, DateTimeKind.Utc),
+            ValidFrom: new DateTime(2026, 2, 27, 0, 0, 0, DateTimeKind.Utc),
+            ValidTo: null),
+        new S124WarningSpec(
+            "124ZZ00W0004", 4, "Drifting hazard (fictitious)",
+            "SYNTHETIC. Container reported adrift.",
+            TypeGeneral: 3,
+            WarningShape.Point(3000, 5500),
+            Published: new DateTime(2026, 2, 28, 9, 0, 0, DateTimeKind.Utc),
+            ValidFrom: new DateTime(2026, 2, 28, 9, 0, 0, DateTimeKind.Utc),
+            ValidTo: null),
+        new S124WarningSpec(
+            "124ZZ00W0005", 5, "Diving operations (fictitious)",
+            "SYNTHETIC. Divers in the water in the channel.",
+            TypeGeneral: 17,
+            WarningShape.Area(new LocalRect(4800, 2950, 5100, 3150)),
+            Published: new DateTime(2026, 2, 27, 0, 0, 0, DateTimeKind.Utc),
+            ValidFrom: new DateTime(2026, 2, 27, 0, 0, 0, DateTimeKind.Utc),
+            ValidTo: null),
+        new S124WarningSpec(
+            "124ZZ00W0006", 6, "Diving operations moved (fictitious)",
+            "SYNTHETIC. Diving operations moved north of the channel. Warning 0005/2026 cancelled.",
+            TypeGeneral: 17,
+            WarningShape.Area(new LocalRect(4800, 3600, 5100, 3800)),
+            Published: new DateTime(2026, 3, 1, 5, 0, 0, DateTimeKind.Utc),
+            ValidFrom: new DateTime(2026, 3, 1, 5, 0, 0, DateTimeKind.Utc),
+            ValidTo: null)
+        {
+            Cancels = [5],
+        },
+        new S124WarningSpec(
+            "124ZZ00W0007", 7, "Towing operations (fictitious)",
+            "SYNTHETIC. Tow crossing the channel.",
+            TypeGeneral: 18,
+            WarningShape.Line((1000, 2700), (1000, 3400)),
+            Published: new DateTime(2026, 2, 28, 21, 0, 0, DateTimeKind.Utc),
+            ValidFrom: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            ValidTo: new DateTime(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc))
+        {
+            CancellationDate = new DateTime(2026, 3, 1, 5, 30, 0, DateTimeKind.Utc),
+        },
+    ];
+
+    /// <summary>
+    /// The S-101 cells every Synthetic Sound scenario charts: a harbour-band
+    /// cell over 0–6000 m and a coastal-band cell around it (see
+    /// <see cref="SpitAcrossScales"/>).
+    /// </summary>
+    public static IReadOnlyList<S101CellSpec> SyntheticSoundCells { get; } =
+    [
+        new S101CellSpec(
+            "101ZZ00SPIT5",
+            "Synthetic Sound harbour (SYNTHETIC, fictitious; not for navigation)",
+            new LocalRect(0, 0, 6000, 6000),
+            GridSpacing: 25,
+            GeneralisationRadius: 0,
+            DepthContours: [0, 2, 5, 10, 15, 20],
+            SoundingSpacing: 250,
+            MinimumDisplayScale: 22000,
+            OptimumDisplayScale: 12000,
+            MaximumDisplayScale: 3000,
+            FoidSubdivision: 1),
+        new S101CellSpec(
+            "101ZZ00SPIT3",
+            "Synthetic Sound coastal (SYNTHETIC, fictitious; not for navigation)",
+            new LocalRect(-12000, -12000, 18000, 18000),
+            GridSpacing: 150,
+            GeneralisationRadius: 150,
+            DepthContours: [0, 5, 10, 20],
+            SoundingSpacing: 1500,
+            MinimumDisplayScale: 350000,
+            OptimumDisplayScale: 90000,
+            MaximumDisplayScale: 22000,
+            FoidSubdivision: 2),
+    ];
+
+    /// <summary>The dredged approach channel along <c>y = 3000 m</c>, maintained to 12,5 m.</summary>
+    public static IReadOnlyList<DredgedChannel> SyntheticSoundChannels { get; } =
+    [
+        new DredgedChannel("Synthetic Sound approach channel (fictitious)", new LocalRect(0, 2850, 6000, 3150), MaintainedDepth: 12.5),
+    ];
 }

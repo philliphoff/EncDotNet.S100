@@ -14,7 +14,16 @@ public sealed class ExportScenarioTests
         var root = Environment.GetEnvironmentVariable(Variable);
         Assert.SkipWhen(string.IsNullOrEmpty(root), $"Set {Variable} to a folder to write the scenarios there.");
 
-        foreach (var definition in new[] { SyntheticScenarios.SpitAcrossScales(), SyntheticScenarios.SpitAcrossScales(declareS102VerticalDatum: false) })
+        var definitions = new[]
+        {
+            SyntheticScenarios.SpitAcrossScales(),
+            SyntheticScenarios.SpitAcrossScales(declareS102VerticalDatum: false),
+            SyntheticScenarios.ApproachWithTideWindow(),
+            SyntheticScenarios.WarningsOnRoute(),
+            SyntheticScenarios.WarningsOnRoute(s124Edition: 1),
+            SyntheticScenarios.PortPlanVsOwnRoute(),
+        };
+        foreach (var definition in definitions)
         {
             var scenario = ScenarioGenerator.Generate(definition, Path.Combine(root!, definition.Name));
             Assert.True(File.Exists(scenario.CataloguePath));

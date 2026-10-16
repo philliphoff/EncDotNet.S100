@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Datasets.S124.DataModel;
 
 /// <summary>
 /// Strongly-typed projection of an <see cref="S124Dataset"/> as a single
-/// navigational warning (S-124 Edition 1.0.0).
+/// navigational warning (S-124 Editions 1.0.0 and 2.0.0).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -134,39 +134,66 @@ public sealed class S124NavigationalWarning
 
     private static S124NavwarnPreamble ProjectPreamble(S124InformationType p, ProjectionContext ctx)
     {
-        S124MessageSeriesIdentifier? msi = null;
         var msiBlock = p.ComplexAttributes.FirstOrDefault(c =>
             string.Equals(c.Code, "messageSeriesIdentifier", StringComparison.OrdinalIgnoreCase));
-        if (msiBlock is not null)
-        {
-            var sub = msiBlock.SubAttributes;
-            msi = new S124MessageSeriesIdentifier
-            {
-                WarningNumber = AttributeParser.TryParseInt(sub.GetValueOrDefault("warningNumber"), ctx, p.Id, "warningNumber"),
-                Year = AttributeParser.TryParseInt(sub.GetValueOrDefault("year"), ctx, p.Id, "year"),
-                ProductionAgency = sub.GetValueOrDefault("productionAgency"),
-                NameOfSeries = sub.GetValueOrDefault("nameOfSeries"),
-                Country = sub.GetValueOrDefault("country"),
-            };
-        }
+        var msi = msiBlock is null ? null : ProjectMessageSeriesIdentifier(msiBlock, p.Id, ctx);
+
+        // Edition 2.0.0 gives the general area and title as complex
+        // attributes with a text per language; the first is used.
+        var generalArea = p.Attributes.GetValueOrDefault("generalArea")
+            ?? Complex(p, "generalArea")?.SubAttributes.GetValueOrDefault("locationName.text");
+        var title = p.Attributes.GetValueOrDefault("title")
+            ?? Complex(p, "navwarnTitle")?.SubAttributes.GetValueOrDefault("text");
 
         return new S124NavwarnPreamble
         {
             Id = p.Id,
             MessageSeriesIdentifier = msi,
-            GeneralArea = p.Attributes.GetValueOrDefault("generalArea"),
+            GeneralArea = generalArea,
             Locality = p.Attributes.GetValueOrDefault("locality"),
-            Title = p.Attributes.GetValueOrDefault("title"),
+            Title = title,
             NavareaCode = p.Attributes.GetValueOrDefault("NAVAREA")
                 ?? p.Attributes.GetValueOrDefault("navarea"),
             Navtex = p.Attributes.GetValueOrDefault("NAVTEX")
                 ?? p.Attributes.GetValueOrDefault("navtex"),
             PromulgatingAuthority = p.Attributes.GetValueOrDefault("promulgatingAuthority"),
+            PublicationTime = AttributeParser.TryParseDateTimeOffset(p.Attributes.GetValueOrDefault("publicationTime"), ctx, p.Id, "publicationTime"),
+            CancellationDate = AttributeParser.TryParseDateTimeOffset(p.Attributes.GetValueOrDefault("cancellationDate"), ctx, p.Id, "cancellationDate"),
+            NavwarnTypeGeneral = Code(p.Attributes, "navwarnTypeGeneral", ctx, p.Id),
             ExtraAttributes = ExtraAttributes.ExcludeKnown(p.Attributes,
                 "generalArea", "locality", "title", "NAVAREA", "navarea",
-                "NAVTEX", "navtex", "promulgatingAuthority"),
+                "NAVTEX", "navtex", "promulgatingAuthority", "publicationTime",
+                "cancellationDate", "navwarnTypeGeneral", "navwarnTypeGeneral.code"),
         };
     }
+
+    private static S124MessageSeriesIdentifier ProjectMessageSeriesIdentifier(S124ComplexAttribute block, string relatedId, ProjectionContext ctx)
+    {
+        var sub = block.SubAttributes;
+        return new S124MessageSeriesIdentifier
+        {
+            WarningNumber = AttributeParser.TryParseInt(sub.GetValueOrDefault("warningNumber"), ctx, relatedId, "warningNumber"),
+            Year = AttributeParser.TryParseInt(sub.GetValueOrDefault("year"), ctx, relatedId, "year"),
+            ProductionAgency = sub.GetValueOrDefault("productionAgency") ?? sub.GetValueOrDefault("agencyResponsibleForProduction"),
+            NameOfSeries = sub.GetValueOrDefault("nameOfSeries"),
+            Country = sub.GetValueOrDefault("country") ?? sub.GetValueOrDefault("nationality"),
+            WarningType = Code(sub, "warningType", ctx, relatedId),
+            InteroperabilityIdentifier = sub.GetValueOrDefault("interoperabilityIdentifier"),
+        };
+    }
+
+    private static S124ComplexAttribute? Complex(S124InformationType info, string code) =>
+        info.ComplexAttributes.FirstOrDefault(c => string.Equals(c.Code, code, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// An enumeration or code list value: its <c>code</c> attribute
+    /// (Edition 2.0.0, kept as <c>"&lt;name&gt;.code"</c>), else the value
+    /// itself (Edition 1.0.0 writes the number).
+    /// </summary>
+    private static int? Code(IReadOnlyDictionary<string, string> attributes, string name, ProjectionContext ctx, string relatedId) =>
+        attributes.TryGetValue(name + ".code", out var code)
+            ? AttributeParser.TryParseInt(code, ctx, relatedId, name)
+            : AttributeParser.TryParseInt(attributes.GetValueOrDefault(name), ctx, relatedId, name);
 
     private static IReadOnlyList<S124WarningReference> ResolveReferences(S124Dataset dataset, ProjectionContext ctx)
     {
@@ -178,11 +205,15 @@ public sealed class S124NavigationalWarning
             b.Add(new S124WarningReference
             {
                 Id = i.Id,
-                ReferenceCategory = AttributeParser.TryParseInt(
-                    i.Attributes.GetValueOrDefault("referenceCategory"), ctx, i.Id, "referenceCategory"),
+                ReferenceCategory = Code(i.Attributes, "referenceCategory", ctx, i.Id),
                 MessageReference = i.Attributes.GetValueOrDefault("messageReference"),
+                Warnings = i.ComplexAttributes
+                    .Where(c => string.Equals(c.Code, "messageSeriesIdentifier", StringComparison.OrdinalIgnoreCase))
+                    .Select(c => ProjectMessageSeriesIdentifier(c, i.Id, ctx))
+                    .ToArray(),
+                NoMessageOnHand = AttributeParser.TryParseBool(i.Attributes.GetValueOrDefault("noMessageOnHand"), ctx, i.Id, "noMessageOnHand"),
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(i.Attributes,
-                    "referenceCategory", "messageReference"),
+                    "referenceCategory", "referenceCategory.code", "messageReference", "noMessageOnHand"),
             });
         }
         return b;
@@ -254,6 +285,7 @@ public sealed class S124NavigationalWarning
             Id = f.Id,
             Restriction = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("restriction"), ctx, f.Id, "restriction"),
             Category = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("category"), ctx, f.Id, "category"),
+            ValidityRanges = ProjectValidity(f, ctx),
             WarningInformation = warningText,
             AffectedAreas = areas,
             TextPlacements = texts,
@@ -261,6 +293,41 @@ public sealed class S124NavigationalWarning
             Coordinates = coords,
             ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes, "restriction", "category"),
         };
+    }
+
+    private static IReadOnlyList<S124DateRange> ProjectValidity(S124Feature f, ProjectionContext ctx)
+    {
+        var ranges = new List<S124DateRange>();
+        foreach (var range in f.ComplexAttributes.Where(c => string.Equals(c.Code, "fixedDateRange", StringComparison.OrdinalIgnoreCase)))
+        {
+            var sub = range.SubAttributes;
+            var start = Moment(sub, "dateStart", "timeOfDayStart", ctx, f.Id);
+            var end = Moment(sub, "dateEnd", "timeOfDayEnd", ctx, f.Id);
+            if (start is not null || end is not null)
+                ranges.Add(new S124DateRange(start, end));
+        }
+
+        return ranges;
+    }
+
+    // Edition 2.0.0: <dateStart><S100:date>…</S100:date></dateStart> plus an
+    // optional timeOfDayStart (S-100 Time, UTC). Edition 1.0.0: the date or
+    // date-time as the element's text.
+    private static DateTimeOffset? Moment(IReadOnlyDictionary<string, string> sub, string dateName, string timeName, ProjectionContext ctx, string relatedId)
+    {
+        var date = sub.GetValueOrDefault(dateName) ?? sub.GetValueOrDefault(dateName + ".date");
+        if (string.IsNullOrWhiteSpace(date))
+            return null;
+        var time = sub.GetValueOrDefault(timeName);
+        if (S100DateTimes.Combine(date, time) is { } moment)
+            return moment;
+
+        ctx.Warn(
+            $"Could not parse '{date}'{(time is null ? "" : $" '{time}'")} as a date and time of day.",
+            code: "attribute.parse.datetime",
+            relatedId: relatedId,
+            relatedAttribute: dateName);
+        return null;
     }
 
     private static S124AffectedArea ProjectAffectedArea(S124Feature f, ProjectionContext ctx)

@@ -4,8 +4,9 @@ using EncDotNet.S100.DataModel;
 namespace EncDotNet.S100.Datasets.S124.DataModel;
 
 /// <summary>
-/// Strongly-typed identifier for a navigational warning as defined by
-/// S-124 § (Edition 1.0.0) <c>messageSeriesIdentifier</c>.
+/// Strongly-typed identifier for a navigational warning: the
+/// <c>messageSeriesIdentifier</c> complex attribute (S-124 Editions 1.0.0
+/// and 2.0.0).
 /// </summary>
 public sealed record S124MessageSeriesIdentifier
 {
@@ -15,19 +16,57 @@ public sealed record S124MessageSeriesIdentifier
     /// <summary>The calendar year the warning was issued.</summary>
     public int? Year { get; init; }
 
-    /// <summary>The promulgating agency (e.g. <c>"NGA"</c>, <c>"USCG"</c>).</summary>
+    /// <summary>
+    /// The promulgating agency (e.g. <c>"NGA"</c>, <c>"USCG"</c>):
+    /// <c>productionAgency</c> in Edition 1.0.0,
+    /// <c>agencyResponsibleForProduction</c> in 2.0.0.
+    /// </summary>
     public string? ProductionAgency { get; init; }
 
     /// <summary>The series name, when present (e.g. <c>"HYDROLANT"</c>).</summary>
     public string? NameOfSeries { get; init; }
 
-    /// <summary>The originating country code, when present.</summary>
+    /// <summary>
+    /// The originating country, when present: <c>country</c> in Edition
+    /// 1.0.0, <c>nationality</c> in 2.0.0.
+    /// </summary>
     public string? Country { get; init; }
+
+    /// <summary>
+    /// The warning type code (Edition 2.0.0 <c>warningType</c>: 1 local,
+    /// 2 coastal, 3 sub-area, 4 NAVAREA, …), when present.
+    /// </summary>
+    public int? WarningType { get; init; }
+
+    /// <summary>The interoperability identifier (Edition 2.0.0), when present.</summary>
+    public string? InteroperabilityIdentifier { get; init; }
+}
+
+/// <summary>
+/// A validity range from a <c>fixedDateRange</c> complex attribute. Either
+/// end may be open.
+/// </summary>
+/// <remarks>
+/// Edition 2.0.0 gives each end as a date (<c>dateStart</c>,
+/// <c>dateEnd</c>) and an optional UTC time of day
+/// (<c>timeOfDayStart</c>, <c>timeOfDayEnd</c>); a date without a time is
+/// the start of that day. Edition 1.0.0 datasets may give a date or a
+/// date-time.
+/// </remarks>
+/// <param name="Start">The start (UTC), or <c>null</c> when open.</param>
+/// <param name="End">The end (UTC), or <c>null</c> when open.</param>
+public sealed record S124DateRange(DateTimeOffset? Start, DateTimeOffset? End)
+{
+    /// <summary>Whether <paramref name="time"/> falls in the range (both ends inclusive).</summary>
+    /// <param name="time">The time.</param>
+    /// <returns><c>true</c> when inside.</returns>
+    public bool Contains(DateTimeOffset time) =>
+        (Start is null || time >= Start) && (End is null || time <= End);
 }
 
 /// <summary>
 /// Typed projection of the <c>NavwarnPreamble</c> information type
-/// (S-124 § Edition 1.0.0): the header carrying identification,
+/// (S-124 Editions 1.0.0 and 2.0.0): the header carrying identification,
 /// validity, classification, and locality of the warning.
 /// </summary>
 public sealed class S124NavwarnPreamble
@@ -55,6 +94,20 @@ public sealed class S124NavwarnPreamble
 
     /// <summary>The promulgating authority's name, when supplied.</summary>
     public string? PromulgatingAuthority { get; init; }
+
+    /// <summary>When the warning was published (Edition 2.0.0 <c>publicationTime</c>), when supplied.</summary>
+    public DateTimeOffset? PublicationTime { get; init; }
+
+    /// <summary>
+    /// When the warning cancels itself (Edition 2.0.0
+    /// <c>cancellationDate</c>): the dataset is valid before this time.
+    /// <c>null</c> means valid until a cancellation dataset is issued
+    /// (S-124 Ed 2.0.0 §9.2.1).
+    /// </summary>
+    public DateTimeOffset? CancellationDate { get; init; }
+
+    /// <summary>The general warning type code (Edition 2.0.0 <c>navwarnTypeGeneral</c>), when supplied.</summary>
+    public int? NavwarnTypeGeneral { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
     public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
@@ -92,6 +145,12 @@ public sealed class S124NavwarnPart
 
     /// <summary>The category code, when present.</summary>
     public int? Category { get; init; }
+
+    /// <summary>
+    /// When the hazard applies: one range per <c>fixedDateRange</c>, in
+    /// document order. Empty when the part gives none.
+    /// </summary>
+    public IReadOnlyList<S124DateRange> ValidityRanges { get; init; } = [];
 
     /// <summary>Affected areas referenced via the <c>areaAffected</c> association.</summary>
     public IReadOnlyList<S124AffectedArea> AffectedAreas { get; init; } = [];
@@ -153,18 +212,31 @@ public sealed class S124TextPlacement
 
 /// <summary>
 /// Typed projection of a <c>References</c> information type
-/// (S-124 § Edition 1.0.0): a reference to another warning.
+/// (S-124 Editions 1.0.0 and 2.0.0): a reference to other warnings, such
+/// as a cancellation.
 /// </summary>
 public sealed class S124WarningReference
 {
     /// <summary>The GML identifier.</summary>
     public required string Id { get; init; }
 
-    /// <summary>The reference category code (cancellation, supersession, etc.), when present.</summary>
+    /// <summary>
+    /// The reference category code, when present: 1 warning cancellation,
+    /// 2 warning reference, 3 in-force (Edition 2.0.0 <c>referenceCategory</c>).
+    /// </summary>
     public int? ReferenceCategory { get; init; }
 
-    /// <summary>The referenced message identifier (e.g. <c>"HYDROLANT 0412/2026"</c>).</summary>
+    /// <summary>The referenced message identifier (Edition 1.0.0, e.g. <c>"HYDROLANT 0412/2026"</c>).</summary>
     public string? MessageReference { get; init; }
+
+    /// <summary>
+    /// The referenced warnings' identifiers (Edition 2.0.0
+    /// <c>messageSeriesIdentifier</c>, one per referenced warning).
+    /// </summary>
+    public IReadOnlyList<S124MessageSeriesIdentifier> Warnings { get; init; } = [];
+
+    /// <summary>Whether the issuer holds none of the referenced messages (Edition 2.0.0 <c>noMessageOnHand</c>), when present.</summary>
+    public bool? NoMessageOnHand { get; init; }
 
     /// <summary>Source attributes that the typed model did not consume.</summary>
     public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =

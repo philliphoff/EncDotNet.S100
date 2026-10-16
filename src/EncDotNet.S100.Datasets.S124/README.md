@@ -78,24 +78,31 @@ namespace projects it into typed objects:
   typed graph, rooted at the warning. It resolves `xlink:href` references and
   parses values.
 - **`S124NavwarnPreamble`** has a typed `MessageSeriesIdentifier` (warning
-  number, year and production agency), the general area, locality, title,
-  NAVAREA and NAVTEX values, and promulgating authority.
+  number, year, production agency, country and, in Edition 2.0.0, warning type
+  and interoperability identifier), the general area, locality, title,
+  NAVAREA and NAVTEX values, and promulgating authority. Edition 2.0.0 adds
+  `PublicationTime`, `CancellationDate` (the warning is valid before it) and
+  `NavwarnTypeGeneral`.
 - **`S124NavwarnPart`** has the restriction code, the warning text, geometry,
   and the resolved `AffectedAreas` and `TextPlacements`. The text is
   `warningInformation/information` in Edition 1.0.0 and
   `warningInformation/information/text` in 2.0.0, which also gives the
   warning type (`NavwarnType` and `NavwarnTypeCode`, from
-  `navwarnTypeDetails`).
+  `navwarnTypeDetails`). `ValidityRanges` holds one `S124DateRange` per
+  `fixedDateRange`: in Edition 2.0.0 each end is a date with an optional UTC
+  time of day.
 - **`S124AffectedArea`** and **`S124TextPlacement`** are the features reached
   through the feature catalogue associations `areaAffected` and
   `TextAssociation`.
-- **`S124WarningReference`** has the reference category and message
-  reference.
+- **`S124WarningReference`** has the reference category (from the `code`
+  attribute in Edition 2.0.0) and what it refers to: a `MessageReference` in
+  Edition 1.0.0, or one `Warnings` identifier per referenced warning in 2.0.0,
+  such as the warnings a cancellation cancels.
 - **`S124SpatialQuality`** has the quality-of-position code.
 
 The reader keeps the leaves of a nested complex attribute under dotted keys
 (`information.text`, `information.language`), the first of a repeated one
-winning, and a code list value's code as `<name>.code`.
+winning, and a code list or enumeration value's code as `<name>.code`.
 
 Each object keeps attributes the model doesn't read in its `ExtraAttributes`
 dictionary, so extension and later-edition attributes aren't lost. Unresolved
@@ -137,7 +144,7 @@ foreach (var finding in report.Findings)
 | `S124-R-4.1` | Error | All coordinates are within the WGS 84 latitude and longitude ranges. |
 | `S124-R-4.2` | Error | Surface exterior rings are closed and have at least four positions. |
 | `S124-R-5.1` | Warning | Each `NavwarnPart` has non-empty warning text. |
-| `S124-R-6.1` | Error | A `References` information type that sets `referenceCategory` includes `messageReference`. |
+| `S124-R-6.1` | Error | A `References` information type that sets `referenceCategory` identifies the warnings it refers to: `messageReference` (Edition 1.0.0) or `messageSeriesIdentifier` (2.0.0). |
 
 The rules check one dataset at a time. Cross-dataset checks, such as resolving
 the warning that a cancellation refers to, aren't included. Projection
