@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Testing.Scenarios.Quirks;
 using EncDotNet.S100.Testing.Scenarios.World;
 using EncDotNet.S100.Testing.Scenarios.Writers;
 
@@ -57,6 +58,19 @@ public sealed record ScenarioDefinition(
 
     /// <summary>The S-125 aids to navigation, or <c>null</c> for none.</summary>
     public S125AidsSpec? Aids { get; init; }
+
+    /// <summary>
+    /// Producer quirks by dataset name (the file name without extension):
+    /// how each dataset departs from a clean encoding. None by default.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<ProducerQuirk>> Quirks { get; init; } =
+        new Dictionary<string, IReadOnlyList<ProducerQuirk>>();
+
+    /// <summary>The quirks of one dataset.</summary>
+    /// <param name="datasetName">The dataset's file name without extension.</param>
+    /// <returns>Its quirks, or <see cref="DatasetQuirks.None"/>.</returns>
+    public DatasetQuirks QuirksFor(string datasetName) =>
+        Quirks.TryGetValue(datasetName, out var quirks) ? new DatasetQuirks(quirks) : DatasetQuirks.None;
 
     /// <summary>The geographic position of a named place.</summary>
     /// <param name="name">The place's name.</param>

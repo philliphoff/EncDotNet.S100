@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Permit xmlns="http://www.iho.int/s100/se/5.1">
+  <header>
+    <issueDate>2026-02-28</issueDate>
+    <dataServerName>ZZ00 TEST ONLY data server (fictitious)</dataServerName>
+    <dataServerIdentifier>ZZ</dataServerIdentifier>
+    <version>1.0.0</version>
+    <userpermit>B86A4D39945CFF7601B0252E3C19AFFBCE67450DZZTEST</userpermit>
+  </header>
+  <products>
+    <product id="S-101">
+      <datasetPermit>
+        <filename>101ZZ00MIXSW</filename>
+        <editionNumber>1</editionNumber>
+        <expiry>2099-12-31</expiry>
+        <encryptedKey>2F6799A2EB2D23A67B32EAE6AFA986B8</encryptedKey>
+      </datasetPermit>
+      <datasetPermit>
+        <filename>101ZZ00MIXNW</filename>
+        <editionNumber>2</editionNumber>
+        <expiry>2099-12-31</expiry>
+        <encryptedKey>479D35431554338C012A2C9F945C3301</encryptedKey>
+      </datasetPermit>
+      <datasetPermit>
+        <filename>101ZZ00MIXNE</filename>
+        <editionNumber>1</editionNumber>
+        <expiry>2026-02-27</expiry>
+        <encryptedKey>92A731ADF28E167D019C9E86A0F8A066</encryptedKey>
+      </datasetPermit>
+      <datasetPermit>
+        <filename>101ZZ00SPIT3</filename>
+        <editionNumber>1</editionNumber>
+        <expiry>2026-03-30</expiry>
+        <encryptedKey>8238DA7196EB8A694E3A36305B63B1CE</encryptedKey>
+      </datasetPermit>
+    </product>
+    <product id="S-102">
+      <datasetPermit>
+        <filename>102ZZ00SPIT</filename>
+        <issueDate>2026-03-01</issueDate>
+        <expiry>2099-12-31</expiry>
+        <encryptedKey>C001D97925A8AFB01C02FCC73112F12C</encryptedKey>
+      </datasetPermit>
+    </product>
+  </products>
+</Permit>

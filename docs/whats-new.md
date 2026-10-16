@@ -6,6 +6,19 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Producer quirks and protected sets in the scenario generator.** The test
+  scenario generator can now reproduce producer quirks per dataset (swapped
+  axes, missing or different datums, unusual CRS declarations, 0…360°
+  longitudes, inverted display scales, no-data holes, gaps and expired runs,
+  conflicting same-band cells, spiked areas), with tests that pin how the
+  library handles each one today. It also writes Part 15 protected exchange
+  sets deterministically, with a permit outcome for every case the reader
+  reports, and five small synthetic sets are checked in under
+  `tests/datasets/ExchangeSets/Protected-*`. Two additions support this:
+  `S100Cipher.EncryptDataset` takes a fixed prefix block and IV (for test
+  data only), and `Part15Signer` takes a signing key separate from its
+  certificate. See [Test scenario generator](scenario-generator.md#producer-quirks).
+
 - **Confidence alongside the clearance.** Check passage no longer hides
   "meets" and "tight" where confidence is lower. A stretch on S-101 depth, or
   where the depth and water-level datums can't be confirmed to agree, keeps

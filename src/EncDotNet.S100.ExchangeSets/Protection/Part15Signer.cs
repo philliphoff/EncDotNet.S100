@@ -17,7 +17,9 @@ namespace EncDotNet.S100.ExchangeSets.Protection;
 /// </para>
 /// <para>
 /// The signer does not own <see cref="Certificate"/>; dispose the signer to
-/// release the private key it extracted from the certificate.
+/// release the private key it extracted from the certificate. A key passed
+/// to <see cref="Part15Signer(X509Certificate2, ECDsa, string, string)"/>
+/// stays the caller's.
 /// </para>
 /// </remarks>
 public sealed class Part15Signer : IDisposable
@@ -25,6 +27,7 @@ public sealed class Part15Signer : IDisposable
     private const int RequiredKeySize = 384;
 
     private readonly ECDsa _key;
+    private readonly bool _ownsKey;
 
     /// <summary>
     /// Creates a signer from a certificate that carries an ECDSA P-384 private key.
@@ -58,6 +61,48 @@ public sealed class Part15Signer : IDisposable
         }
 
         _key = key;
+        _ownsKey = true;
+        Certificate = certificate;
+        CertificateId = certificateId;
+        SchemeAdministratorId = schemeAdministratorId;
+    }
+
+    /// <summary>
+    /// Creates a signer that signs with <paramref name="signingKey"/>, for a
+    /// key held outside the certificate (a hardware module, or a
+    /// deterministic test key).
+    /// </summary>
+    /// <param name="certificate">The signing certificate; its public key must match <paramref name="signingKey"/>.</param>
+    /// <param name="signingKey">The ECDSA P-384 private key. The signer doesn't dispose it.</param>
+    /// <param name="certificateId">The identifier signatures use to reference the certificate.</param>
+    /// <param name="schemeAdministratorId">The identity of the Scheme Administrator that issued the certificate.</param>
+    /// <exception cref="ArgumentException">
+    /// The key is not P-384, or the certificate's public key is not the key's.
+    /// </exception>
+    public Part15Signer(X509Certificate2 certificate, ECDsa signingKey, string certificateId, string schemeAdministratorId)
+    {
+        ArgumentNullException.ThrowIfNull(certificate);
+        ArgumentNullException.ThrowIfNull(signingKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(certificateId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(schemeAdministratorId);
+
+        if (signingKey.KeySize != RequiredKeySize)
+        {
+            throw new ArgumentException(
+                "Part 15 signatures require an ECDSA P-384 key.", nameof(signingKey));
+        }
+
+        using var publicKey = certificate.GetECDsaPublicKey()
+            ?? throw new ArgumentException(
+                "The signing certificate must carry an ECDSA public key.", nameof(certificate));
+        if (!publicKey.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(signingKey.ExportSubjectPublicKeyInfo()))
+        {
+            throw new ArgumentException(
+                "The signing key doesn't match the certificate's public key.", nameof(signingKey));
+        }
+
+        _key = signingKey;
+        _ownsKey = false;
         Certificate = certificate;
         CertificateId = certificateId;
         SchemeAdministratorId = schemeAdministratorId;
@@ -192,7 +237,13 @@ public sealed class Part15Signer : IDisposable
     }
 
     /// <inheritdoc />
-    public void Dispose() => _key.Dispose();
+    public void Dispose()
+    {
+        if (_ownsKey)
+        {
+            _key.Dispose();
+        }
+    }
 
     private DigitalSignatureValue OnData(byte[] hash, string signatureId, SignatureDataStatus dataStatus) => new()
     {

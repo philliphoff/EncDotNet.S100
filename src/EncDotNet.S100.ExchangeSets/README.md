@@ -287,7 +287,7 @@ confidentiality part of Part 15: reading encrypted datasets.
 
 | Type | Role | S-100 Part 15 ref |
 |---|---|---|
-| `S100Cipher` | AES-128 primitives: single-block key wrap and unwrap (`EncryptBlock`, `DecryptBlock`) and the dataset modified-CBC mode (`DecryptDataset`, `EncryptDataset`) | §15-6 |
+| `S100Cipher` | AES-128 primitives: single-block key wrap and unwrap (`EncryptBlock`, `DecryptBlock`) and the dataset modified-CBC mode (`DecryptDataset`, `EncryptDataset`; an overload with a fixed prefix block and IV makes reproducible test data) | §15-6 |
 | `HardwareId` | The 16-byte Data Client system id (`HW_ID`) | §15-7.3.1.1 |
 | `UserPermit` | The 46-character user permit: parse and validate (CRC-32), `Create`, and `DecryptHardwareId(M_KEY)` | §15-7.3 |
 | `DataPermit` | One `datasetPermit` record: `encryptedKey`, required expiry, and edition and issue identity | §15-7.4.4 |
@@ -390,7 +390,7 @@ verifies with them:
 
 | Type | Role | S-100 Part 15 ref |
 |---|---|---|
-| `Part15Signer` | Signs with an ECDSA P-384 certificate key (SHA-384, DER): `SignData` and `SignDataAsync` (`S100_SE_SignatureOnData` with a `dataStatus`), `SignSignature` (`S100_SE_SignatureOnSignature`), `SignStandalone`, and `CreateCertificateBlock` for the matching `CertificateBlock` | §15-8.4, §15-8.11 |
+| `Part15Signer` | Signs with an ECDSA P-384 certificate key (SHA-384, DER): `SignData` and `SignDataAsync` (`S100_SE_SignatureOnData` with a `dataStatus`), `SignSignature` (`S100_SE_SignatureOnSignature`), `SignStandalone`, and `CreateCertificateBlock` for the matching `CertificateBlock`. The key comes from the certificate, or is passed separately (for example a hardware-held key) | §15-8.4, §15-8.11 |
 | `StandaloneDigitalSignatureWriter` | Writes `PERMIT.SIGN` and `CATALOG.SIGN` documents | §15-8.11.2 |
 | `DataPermit.Create` | Issues a `datasetPermit` by wrapping a cell key with the recipient's `HardwareId` | §15-7.4.4 |
 | `PermitFile.Create` / `PermitGroup` | Builds a permit file from header and product groups | §15-7.4 |

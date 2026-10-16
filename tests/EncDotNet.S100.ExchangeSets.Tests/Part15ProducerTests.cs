@@ -301,6 +301,56 @@ public sealed class Part15ProducerTests : IDisposable
         ],
     };
 
+    [Fact]
+    public void EncryptDataset_with_a_fixed_prefix_and_iv_is_repeatable_and_decrypts()
+    {
+        var plaintext = "synthetic cell"u8.ToArray();
+        var cellKey = Enumerable.Range(1, 16).Select(i => (byte)i).ToArray();
+        var prefix = Enumerable.Range(100, 16).Select(i => (byte)i).ToArray();
+        var iv = Enumerable.Range(200, 16).Select(i => (byte)i).ToArray();
+
+        var first = S100Cipher.EncryptDataset(plaintext, cellKey, prefix, iv);
+
+        Assert.Equal(first, S100Cipher.EncryptDataset(plaintext, cellKey, prefix, iv));
+        Assert.NotEqual(first, S100Cipher.EncryptDataset(plaintext, cellKey, prefix, new byte[16]));
+        Assert.Equal(plaintext, S100Cipher.DecryptDataset(first, cellKey));
+        Assert.Throws<ArgumentException>(() => S100Cipher.EncryptDataset(plaintext, cellKey, prefix, new byte[8]));
+    }
+
+    [Fact]
+    public async Task A_signer_with_an_external_key_signs_and_leaves_the_key_to_its_owner()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+        using var certificate = _scheme.Issue(key);
+
+        using (var signer = new Part15Signer(certificate, key, TestScheme.DataServerId, TestScheme.SchemeAdministratorId))
+        using (var permitXml = new MemoryStream())
+        using (var permitSign = new MemoryStream())
+        {
+            PermitFileWriter.WriteSigned(PermitFile.Create([]), signer, permitXml, permitSign);
+            permitXml.Position = 0;
+            permitSign.Position = 0;
+            var authentication = await PermitSignatureVerifier.AuthenticateAsync(
+                permitXml, permitSign, PermitFileWriter.PermitFileName, _scheme.TrustAnchors, TestContext.Current.CancellationToken);
+            Assert.True(authentication.IsAuthenticated, authentication.Verification.Detail);
+        }
+
+        // Disposing the signer didn't dispose the caller's key.
+        Assert.NotEmpty(key.SignHash(new byte[48]));
+    }
+
+    [Fact]
+    public void A_signer_rejects_a_key_that_isnt_the_certificate_s()
+    {
+        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+        using var other = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+        using var certificate = _scheme.Issue(key);
+        using var p256 = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+
+        Assert.Throws<ArgumentException>(() => new Part15Signer(certificate, other, "id", "SA"));
+        Assert.Throws<ArgumentException>(() => new Part15Signer(certificate, p256, "id", "SA"));
+    }
+
     /// <summary>A test Scheme Administrator and a data-server certificate it issued.</summary>
     private sealed class TestScheme : IDisposable
     {
@@ -333,6 +383,15 @@ public sealed class Part15ProducerTests : IDisposable
         public TrustAnchorOptions TrustAnchors { get; }
 
         public Part15Signer CreateSigner() => new(DataServer, DataServerId, SchemeAdministratorId);
+
+        /// <summary>A data-server certificate for <paramref name="key"/>, without its private key.</summary>
+        public X509Certificate2 Issue(ECDsa key)
+        {
+            var request = new CertificateRequest("CN=Test Data Server", key, HashAlgorithmName.SHA384);
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+            request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, true));
+            return request.Create(_root, _root.NotBefore.AddMinutes(1), _root.NotAfter.AddMinutes(-1), RandomNumberGenerator.GetBytes(16));
+        }
 
         public void Dispose()
         {
