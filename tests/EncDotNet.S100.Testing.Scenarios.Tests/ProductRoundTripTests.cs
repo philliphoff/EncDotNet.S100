@@ -1,4 +1,3 @@
-using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S124.DataModel;
 using EncDotNet.S100.Datasets.S129.DataModel;
