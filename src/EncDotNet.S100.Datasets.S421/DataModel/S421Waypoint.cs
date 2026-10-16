@@ -33,10 +33,16 @@ public sealed class S421Waypoint
     public required GeoPosition Position { get; init; }
 
     /// <summary>
-    /// The leg departing this waypoint, when this waypoint references a
-    /// <c>routeWaypointLeg</c>. The final waypoint of a route has no
-    /// outgoing leg.
+    /// The leg departing this waypoint. The final waypoint of a route has
+    /// no outgoing leg.
     /// </summary>
+    /// <remarks>
+    /// S-421 Edition 1.0.0 references each leg from the waypoint it ends at
+    /// (<c>routeWaypointLeg</c>); <see cref="S421RoutePlan.From"/> also reads
+    /// datasets that reference it from the waypoint it starts at, telling
+    /// them apart by whether the first waypoint carries a leg. Populated
+    /// during projection; see <see cref="S421RoutePlan.From"/>.
+    /// </remarks>
     public S421Leg? OutgoingLeg { get; init; }
 
     /// <summary>

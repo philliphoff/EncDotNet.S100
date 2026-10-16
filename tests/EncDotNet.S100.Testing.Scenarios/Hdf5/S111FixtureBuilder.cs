@@ -1,9 +1,9 @@
 using System.Reflection;
 using PureHDF;
 
-namespace EncDotNet.S100.Datasets.S111.Tests.Fixtures;
+namespace EncDotNet.S100.Testing.Scenarios.Hdf5;
 
-internal static class S111FixtureBuilder
+public static class S111FixtureBuilder
 {
     public struct SpecRow
     {

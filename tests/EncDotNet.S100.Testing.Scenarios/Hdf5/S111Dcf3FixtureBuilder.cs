@@ -1,7 +1,7 @@
 using System.Reflection;
 using PureHDF;
 
-namespace EncDotNet.S100.Datasets.S111.Tests.Fixtures;
+namespace EncDotNet.S100.Testing.Scenarios.Hdf5;
 
 /// <summary>
 /// Helpers that author small synthetic S-111 dcf3 ("ungeorectified grid")
@@ -9,7 +9,7 @@ namespace EncDotNet.S100.Datasets.S111.Tests.Fixtures;
 /// <c>Positioning/geometryValues</c> and per-timestep value arrays in
 /// <c>Group_NNN/values</c> (S-100 Part 10c §10.2.1).
 /// </summary>
-internal static class S111Dcf3FixtureBuilder
+public static class S111Dcf3FixtureBuilder
 {
     public struct ValueRow
     {

@@ -1,14 +1,14 @@
 using System.Reflection;
 using PureHDF;
 
-namespace EncDotNet.S100.Datasets.S111.Tests.Fixtures;
+namespace EncDotNet.S100.Testing.Scenarios.Hdf5;
 
 /// <summary>
 /// Helpers that author small synthetic S-111 dcf8 ("time series at fixed
 /// stations") HDF5 files for reader tests. Mirrors the S-104 dcf8 fixture
 /// builder used by PR-C.
 /// </summary>
-internal static class S111Dcf8FixtureBuilder
+public static class S111Dcf8FixtureBuilder
 {
     // ---- Compound row variants --------------------------------------------------
 

@@ -1,7 +1,6 @@
 using System.Reflection;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
-using EncDotNet.S100.Datasets.S111.Tests.Fixtures;
 using EncDotNet.S100.Testing.Scenarios.Hdf5;
 using PureHDF;
 

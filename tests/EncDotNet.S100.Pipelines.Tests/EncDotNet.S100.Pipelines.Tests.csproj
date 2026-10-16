@@ -3,13 +3,6 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <OutputType>Exe</OutputType>
-    <!--
-      CS0649 fires on fixture-row variants from the linked S-104 / S-111
-      dcf8 fixture builders that aren't exercised by the pipeline tests
-      (only some row shapes are used here). Suppressed locally rather
-      than modifying the original test sources.
-    -->
-    <NoWarn>$(NoWarn);CS0649</NoWarn>
     <!-- See Directory.Build.targets: ship the NoDependencies Skia native on Linux (issue #23). -->
     <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
   </PropertyGroup>
@@ -61,23 +54,5 @@
     <Content Include="..\datasets\S411\empty_iceact_total_concentration.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S411\%(Filename)%(Extension)" />
   </ItemGroup>
 
-  <!--
-    Reuse the dcf8 HDF5 fixture builders from the S-111 reader-test project
-    rather than duplicating them (the S-104 builders live in
-    EncDotNet.S100.Testing.Scenarios). Linked compile means the source
-    files participate in this assembly under the same namespace but as
-    internal types, which matches the original visibility. NoWarn silences
-    CS0649 for fixture row variants that aren't exercised by these tests.
-  -->
-  <ItemGroup>
-    <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111FixtureBuilder.cs"
-             Link="Fixtures\S111FixtureBuilder.cs" />
-    <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111Dcf8FixtureBuilder.cs"
-             Link="Fixtures\S111Dcf8FixtureBuilder.cs" />
-    <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111Dcf1FixtureBuilder.cs"
-             Link="Fixtures\S111Dcf1FixtureBuilder.cs" />
-    <Compile Include="..\EncDotNet.S100.Datasets.S111.Tests\Fixtures\S111Dcf3FixtureBuilder.cs"
-             Link="Fixtures\S111Dcf3FixtureBuilder.cs" />
-  </ItemGroup>
 
 </Project>
