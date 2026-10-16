@@ -27,8 +27,14 @@ public abstract class S122FeatureBase : IS122Feature
     /// <summary>The interoperability identifier (S-122 FC §interoperabilityIdentifier), when present.</summary>
     public string? InteroperabilityIdentifier { get; init; }
 
-    /// <summary>The feature name (S-122 FC §featureName), when present.</summary>
-    public string? FeatureName { get; init; }
+    /// <summary>The feature names (S-122 FC §featureName), in document order.</summary>
+    public IReadOnlyList<S122FeatureName> FeatureNames { get; init; } = [];
+
+    /// <summary>
+    /// The name to show, chosen from <see cref="FeatureNames"/> by
+    /// <see cref="S122FeatureName.Preferred"/>, or <c>null</c>.
+    /// </summary>
+    public string? FeatureName => S122FeatureName.Preferred(FeatureNames);
 
     /// <summary>The minimum display scale (S-122 FC §scaleMinimum), when present.</summary>
     public int? ScaleMinimum { get; init; }
@@ -42,11 +48,11 @@ public abstract class S122FeatureBase : IS122Feature
     /// <summary>The text content payload (S-122 FC §textContent), when present.</summary>
     public string? TextContent { get; init; }
 
-    /// <summary>The fixed date range (S-122 FC §fixedDateRange), when present (raw text).</summary>
-    public string? FixedDateRange { get; init; }
+    /// <summary>The fixed date range (S-122 FC §fixedDateRange), when present.</summary>
+    public S122DateRange? FixedDateRange { get; init; }
 
-    /// <summary>The periodic date range (S-122 FC §periodicDateRange), when present (raw text).</summary>
-    public string? PeriodicDateRange { get; init; }
+    /// <summary>The periodic date ranges (S-122 FC §periodicDateRange), in document order.</summary>
+    public IReadOnlyList<S122DateRange> PeriodicDateRanges { get; init; } = [];
 
     /// <inheritdoc/>
     public IReadOnlyList<GmlReference> References { get; init; } = [];

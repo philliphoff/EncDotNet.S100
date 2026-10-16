@@ -292,6 +292,10 @@ internal static class S122DatasetReader
                     {
                         subAttrs[sub.Name.LocalName] = sub.Value;
                     }
+                    else if (TruncatedDateValue(sub, s100Ns) is { } date)
+                    {
+                        subAttrs[sub.Name.LocalName] = date;
+                    }
                 }
                 if (subAttrs.Count > 0)
                 {
@@ -310,6 +314,24 @@ internal static class S122DatasetReader
         }
 
         return (simple, complex, refs);
+    }
+
+    /// <summary>
+    /// The text of an <c>S100_TruncatedDate</c> sub-attribute encoded as
+    /// S-100 GML 5.0 does: a wrapper holding one S-100 element
+    /// (<c>S100:date</c>, <c>S100:gMonthDay</c>, <c>S100:gYear</c>, …)
+    /// with the date text, as in <c>fixedDateRange</c>'s <c>dateStart</c>.
+    /// </summary>
+    /// <returns>The date text, or <c>null</c> when <paramref name="sub"/> isn't that shape.</returns>
+    private static string? TruncatedDateValue(XElement sub, XNamespace s100Ns)
+    {
+        using var children = sub.Elements().GetEnumerator();
+        if (!children.MoveNext())
+            return null;
+        var only = children.Current;
+        return !children.MoveNext() && only.Name.Namespace == s100Ns && !only.HasElements && only.Value.Length > 0
+            ? only.Value.Trim()
+            : null;
     }
 
     private static bool IsFeatureType(XName name, XNamespace datasetNs)

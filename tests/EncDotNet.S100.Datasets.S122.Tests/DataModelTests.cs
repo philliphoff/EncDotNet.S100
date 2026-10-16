@@ -253,4 +253,103 @@ public class DataModelTests
         // Sample is xlink-free, so no unresolved-reference diagnostics.
         Assert.DoesNotContain(diags, d => d.Code == "xlink.unresolved");
     }
+
+    [Fact]
+    public void From_ReadsFeatureNameAndDateRangesAsComplexAttributes()
+    {
+        // S-122 FC 2.0.0: featureName (language, name, nameUsage),
+        // fixedDateRange and periodicDateRange (dateStart, dateEnd as
+        // S100_TruncatedDate, wrapped in an S-100 GML 5.0 element).
+        const string gml = """
+            <S122:MarineProtectedArea gml:id="MPA2">
+                <S122:featureName>
+                    <S122:language>fra</S122:language>
+                    <S122:name>Réserve</S122:name>
+                    <S122:nameUsage>2</S122:nameUsage>
+                </S122:featureName>
+                <S122:featureName>
+                    <S122:language>eng</S122:language>
+                    <S122:name>Seal Sanctuary</S122:name>
+                    <S122:nameUsage>1</S122:nameUsage>
+                </S122:featureName>
+                <S122:fixedDateRange>
+                    <S122:dateStart><S100:date>2026-01-01</S100:date></S122:dateStart>
+                </S122:fixedDateRange>
+                <S122:periodicDateRange>
+                    <S122:dateStart><S100:gMonthDay>--03-01</S100:gMonthDay></S122:dateStart>
+                    <S122:dateEnd><S100:gMonthDay>--05-31</S100:gMonthDay></S122:dateEnd>
+                </S122:periodicDateRange>
+                <S122:periodicDateRange>
+                    <S122:dateStart>--10-01</S122:dateStart>
+                    <S122:dateEnd>--10-15</S122:dateEnd>
+                </S122:periodicDateRange>
+                <S122:status>5</S122:status>
+            </S122:MarineProtectedArea>
+            """;
+        var typed = S122MarineProtectedAreaDataset.From(Parse(Wrap(gml)), out var diags);
+
+        var mpa = Assert.Single(typed.MarineProtectedAreas);
+        Assert.Equal(
+            [new S122FeatureName("fra", "Réserve", 2), new S122FeatureName("eng", "Seal Sanctuary", 1)],
+            mpa.FeatureNames);
+        Assert.Equal("Seal Sanctuary", mpa.FeatureName);
+        Assert.Equal(new S122DateRange("2026-01-01", null), mpa.FixedDateRange);
+        Assert.Equal(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero), mpa.FixedDateRange!.Start);
+        Assert.Equal(
+            [new S122DateRange("--03-01", "--05-31"), new S122DateRange("--10-01", "--10-15")],
+            mpa.PeriodicDateRanges);
+        Assert.Null(mpa.PeriodicDateRanges[0].Start);
+        Assert.Equal(5, mpa.Status);
+        Assert.DoesNotContain("featureName", mpa.ExtraAttributes.Keys);
+        Assert.Empty(diags);
+    }
+
+    [Fact]
+    public void From_InformationTypeFeatureName_IsComplex()
+    {
+        const string gml = """
+            <S122:Authority gml:id="AUTH2">
+                <S122:featureName>
+                    <S122:language>eng</S122:language>
+                    <S122:name>Conservation Authority</S122:name>
+                </S122:featureName>
+                <S122:categoryOfAuthority>12</S122:categoryOfAuthority>
+            </S122:Authority>
+            """;
+        var typed = S122MarineProtectedAreaDataset.From(Parse(Wrap(gml)), out _);
+
+        var authority = Assert.Single(typed.InformationTypes.OfType<S122Authority>());
+        Assert.Equal([new S122FeatureName("eng", "Conservation Authority", null)], authority.FeatureNames);
+        Assert.Equal("Conservation Authority", authority.FeatureName);
+        Assert.Equal(12, authority.CategoryOfAuthority);
+    }
+
+    [Fact]
+    public void From_LegacyFeatureNameForms_AreTolerated()
+    {
+        // A plain-text featureName, and Edition 1.0.0's displayName flag
+        // (as in the UK trial dataset) in place of nameUsage.
+        const string gml = """
+            <S122:RestrictedArea gml:id="RA4">
+                <S122:featureName>Plain name</S122:featureName>
+                <S122:restriction>3</S122:restriction>
+            </S122:RestrictedArea>
+            <S122:RestrictedArea gml:id="RA5">
+                <S122:featureName>
+                    <S122:displayName>False</S122:displayName>
+                    <S122:name>MCZ</S122:name>
+                </S122:featureName>
+                <S122:featureName>
+                    <S122:displayName>True</S122:displayName>
+                    <S122:name>Offshore Overfalls</S122:name>
+                </S122:featureName>
+                <S122:restriction>3</S122:restriction>
+            </S122:RestrictedArea>
+            """;
+        var typed = S122MarineProtectedAreaDataset.From(Parse(Wrap(gml)), out _);
+
+        Assert.Equal("Plain name", typed.RestrictedAreas[0].FeatureName);
+        Assert.Equal([new S122FeatureName(null, "MCZ", 3), new S122FeatureName(null, "Offshore Overfalls", 1)], typed.RestrictedAreas[1].FeatureNames);
+        Assert.Equal("Offshore Overfalls", typed.RestrictedAreas[1].FeatureName);
+    }
 }
