@@ -17,14 +17,20 @@ public abstract class S122InformationTypeBase : IS122InformationType
     /// <inheritdoc/>
     public abstract string TypeCode { get; }
 
-    /// <summary>The feature name (S-122 FC §featureName), when present.</summary>
-    public string? FeatureName { get; init; }
+    /// <summary>The feature names (S-122 FC §featureName), in document order.</summary>
+    public IReadOnlyList<S122FeatureName> FeatureNames { get; init; } = [];
 
-    /// <summary>The fixed date range (S-122 FC §fixedDateRange), when present (raw text).</summary>
-    public string? FixedDateRange { get; init; }
+    /// <summary>
+    /// The name to show, chosen from <see cref="FeatureNames"/> by
+    /// <see cref="S122FeatureName.Preferred"/>, or <c>null</c>.
+    /// </summary>
+    public string? FeatureName => S122FeatureName.Preferred(FeatureNames);
 
-    /// <summary>The periodic date range (S-122 FC §periodicDateRange), when present (raw text).</summary>
-    public string? PeriodicDateRange { get; init; }
+    /// <summary>The fixed date range (S-122 FC §fixedDateRange), when present.</summary>
+    public S122DateRange? FixedDateRange { get; init; }
+
+    /// <summary>The periodic date ranges (S-122 FC §periodicDateRange), in document order.</summary>
+    public IReadOnlyList<S122DateRange> PeriodicDateRanges { get; init; } = [];
 
     /// <summary>The graphic reference (S-122 FC §graphic), when present.</summary>
     public string? Graphic { get; init; }

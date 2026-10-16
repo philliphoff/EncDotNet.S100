@@ -82,8 +82,8 @@ public sealed class DeterminismTests : IDisposable
     private static readonly Dictionary<string, string[]> ExpectedProducts = new()
     {
         ["approach-with-tide-window"] = ["S-101", "S-102", "S-104", "S-111", "S-421"],
-        ["warnings-on-route"] = ["S-101", "S-124", "S-421"],
-        ["warnings-on-route-s124-ed1"] = ["S-101", "S-124", "S-421"],
+        ["warnings-on-route"] = ["S-101", "S-122", "S-124", "S-125", "S-421"],
+        ["warnings-on-route-s124-ed1"] = ["S-101", "S-122", "S-124", "S-125", "S-421"],
         ["port-plan-vs-own-route"] = ["S-101", "S-102", "S-104", "S-129", "S-421"],
     };
 

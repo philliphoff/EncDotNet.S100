@@ -149,6 +149,22 @@ public static class ScenarioGenerator
                 GmlWriting.Rectangle(frame, plan.PlanArea).Exterior, $"SYNTHETIC under-keel clearance plan in {world.Name} (fictitious)."));
         }
 
+        foreach (var area in definition.ProtectedAreas)
+        {
+            var path = Prepare("S-122", area.FileName);
+            File.WriteAllBytes(path, S122ProtectedAreaWriter.Build(world, area, definition.Issued));
+            entries.Add(GmlEntry(datasets[^1].RelativePath, "S-122", "Marine Protected Areas", "2.0.0", issueDate,
+                S122ProtectedAreaWriter.CoveragePolygon(world, area).Exterior, $"SYNTHETIC marine protected area '{area.Name}' (fictitious)."));
+        }
+
+        if (definition.Aids is { } aids)
+        {
+            var path = Prepare("S-125", aids.FileName);
+            File.WriteAllBytes(path, S125AidsWriter.Build(world, aids, definition.Issued));
+            entries.Add(GmlEntry(datasets[^1].RelativePath, "S-125", "Marine Aids to Navigation", "1.0.0", issueDate,
+                aids.Buoys.Select(b => S125AidsWriter.Position(world, b)).ToList(), $"SYNTHETIC aids to navigation in {world.Name} (fictitious)."));
+        }
+
         var seed = world.Seed.ToString(CultureInfo.InvariantCulture);
         File.WriteAllBytes(
             Path.Combine(directory, "CATALOG.XML"),

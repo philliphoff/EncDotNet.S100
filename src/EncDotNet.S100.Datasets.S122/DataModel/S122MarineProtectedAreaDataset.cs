@@ -196,22 +196,22 @@ public sealed class S122MarineProtectedAreaDataset
 
         // Inherited (FC-abstract) attribute keys consumed by the typed base.
         // Every concrete projection adds its own keys via WithBaseInit below.
-        static (string?, string?, int?, string?, string?, string?, string?, string?)
+        static (string?, IReadOnlyList<S122FeatureName>, int?, string?, string?, string?, S122DateRange?, IReadOnlyList<S122DateRange>)
             ReadBase(S122Feature feat, ProjectionContext c)
         {
             var attrs = feat.Attributes;
             var interop = attrs.GetValueOrDefault("interoperabilityIdentifier");
-            var featName = attrs.GetValueOrDefault("featureName");
+            var featNames = S122ComplexAttributes.FeatureNames(attrs, feat.ComplexAttributes);
             var scaleMin = AttributeParser.TryParseInt(attrs.GetValueOrDefault("scaleMinimum"), c, feat.Id, "scaleMinimum");
             var graphic = attrs.GetValueOrDefault("graphic");
             var srcInd = attrs.GetValueOrDefault("sourceIndication");
             var textC = attrs.GetValueOrDefault("textContent");
-            var fixedDr = attrs.GetValueOrDefault("fixedDateRange");
-            var perDr = attrs.GetValueOrDefault("periodicDateRange");
-            return (interop, featName, scaleMin, graphic, srcInd, textC, fixedDr, perDr);
+            var fixedDr = S122ComplexAttributes.DateRange(feat.ComplexAttributes, "fixedDateRange");
+            var perDr = S122ComplexAttributes.DateRanges(feat.ComplexAttributes, "periodicDateRange");
+            return (interop, featNames, scaleMin, graphic, srcInd, textC, fixedDr, perDr);
         }
 
-        var (interopId, featureName, scaleMinimum, graphic, sourceIndication, textContent, fixedDr, periodicDr) =
+        var (interopId, featureNames, scaleMinimum, graphic, sourceIndication, textContent, fixedDr, periodicDr) =
             ReadBase(f, ctx);
 
         var baseKeys = new[] {
@@ -227,13 +227,13 @@ public sealed class S122MarineProtectedAreaDataset
                 GeometryKind = kind,
                 Coordinates = coords,
                 InteroperabilityIdentifier = interopId,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 ScaleMinimum = scaleMinimum,
                 Graphic = graphic,
                 SourceIndication = sourceIndication,
                 TextContent = textContent,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = periodicDr,
+                PeriodicDateRanges = periodicDr,
                 CategoryOfMarineProtectedArea = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("categoryOfMarineProtectedArea"), ctx, f.Id, "categoryOfMarineProtectedArea"),
                 CategoryOfRestrictedArea = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("categoryOfRestrictedArea"), ctx, f.Id, "categoryOfRestrictedArea"),
                 Jurisdiction = f.Attributes.GetValueOrDefault("jurisdiction"),
@@ -251,13 +251,13 @@ public sealed class S122MarineProtectedAreaDataset
                 GeometryKind = kind,
                 Coordinates = coords,
                 InteroperabilityIdentifier = interopId,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 ScaleMinimum = scaleMinimum,
                 Graphic = graphic,
                 SourceIndication = sourceIndication,
                 TextContent = textContent,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = periodicDr,
+                PeriodicDateRanges = periodicDr,
                 CategoryOfRestrictedArea = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("categoryOfRestrictedArea"), ctx, f.Id, "categoryOfRestrictedArea"),
                 Restriction = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("restriction"), ctx, f.Id, "restriction"),
                 Status = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("status"), ctx, f.Id, "status"),
@@ -271,13 +271,13 @@ public sealed class S122MarineProtectedAreaDataset
                 GeometryKind = kind,
                 Coordinates = coords,
                 InteroperabilityIdentifier = interopId,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 ScaleMinimum = scaleMinimum,
                 Graphic = graphic,
                 SourceIndication = sourceIndication,
                 TextContent = textContent,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = periodicDr,
+                PeriodicDateRanges = periodicDr,
                 References = f.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes, baseKeys),
             },
@@ -287,13 +287,13 @@ public sealed class S122MarineProtectedAreaDataset
                 GeometryKind = kind,
                 Coordinates = coords,
                 InteroperabilityIdentifier = interopId,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 ScaleMinimum = scaleMinimum,
                 Graphic = graphic,
                 SourceIndication = sourceIndication,
                 TextContent = textContent,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = periodicDr,
+                PeriodicDateRanges = periodicDr,
                 CategoryOfRelationship = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("categoryOfRelationship"), ctx, f.Id, "categoryOfRelationship"),
                 ActionOrActivity = f.Attributes.GetValueOrDefault("actionOrActivity"),
                 References = f.References,
@@ -306,13 +306,13 @@ public sealed class S122MarineProtectedAreaDataset
                 GeometryKind = kind,
                 Coordinates = coords,
                 InteroperabilityIdentifier = interopId,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 ScaleMinimum = scaleMinimum,
                 Graphic = graphic,
                 SourceIndication = sourceIndication,
                 TextContent = textContent,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = periodicDr,
+                PeriodicDateRanges = periodicDr,
                 MaximumDisplayScale = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("maximumDisplayScale"), ctx, f.Id, "maximumDisplayScale"),
                 MinimumDisplayScale = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("minimumDisplayScale"), ctx, f.Id, "minimumDisplayScale"),
                 OptimumDisplayScale = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("optimumDisplayScale"), ctx, f.Id, "optimumDisplayScale"),
@@ -326,13 +326,13 @@ public sealed class S122MarineProtectedAreaDataset
                 GeometryKind = kind,
                 Coordinates = coords,
                 InteroperabilityIdentifier = interopId,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 ScaleMinimum = scaleMinimum,
                 Graphic = graphic,
                 SourceIndication = sourceIndication,
                 TextContent = textContent,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = periodicDr,
+                PeriodicDateRanges = periodicDr,
                 CategoryOfTemporalVariation = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("categoryOfTemporalVariation"), ctx, f.Id, "categoryOfTemporalVariation"),
                 HorizontalDistanceUncertainty = AttributeParser.TryParseDouble(f.Attributes.GetValueOrDefault("horizontalDistanceUncertainty"), ctx, f.Id, "horizontalDistanceUncertainty"),
                 HorizontalPositionUncertainty = AttributeParser.TryParseDouble(f.Attributes.GetValueOrDefault("horizontalPositionUncertainty"), ctx, f.Id, "horizontalPositionUncertainty"),
@@ -351,13 +351,13 @@ public sealed class S122MarineProtectedAreaDataset
                 GeometryKind = kind,
                 Coordinates = coords,
                 InteroperabilityIdentifier = interopId,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 ScaleMinimum = scaleMinimum,
                 Graphic = graphic,
                 SourceIndication = sourceIndication,
                 TextContent = textContent,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = periodicDr,
+                PeriodicDateRanges = periodicDr,
                 TextOffsetBearing = AttributeParser.TryParseDouble(f.Attributes.GetValueOrDefault("textOffsetBearing"), ctx, f.Id, "textOffsetBearing"),
                 TextOffsetDistance = AttributeParser.TryParseDouble(f.Attributes.GetValueOrDefault("textOffsetDistance"), ctx, f.Id, "textOffsetDistance"),
                 TextRotation = AttributeParser.TryParseDouble(f.Attributes.GetValueOrDefault("textRotation"), ctx, f.Id, "textRotation"),
@@ -372,13 +372,13 @@ public sealed class S122MarineProtectedAreaDataset
                 GeometryKind = kind,
                 Coordinates = coords,
                 InteroperabilityIdentifier = interopId,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 ScaleMinimum = scaleMinimum,
                 Graphic = graphic,
                 SourceIndication = sourceIndication,
                 TextContent = textContent,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = periodicDr,
+                PeriodicDateRanges = periodicDr,
                 References = f.References,
                 ExtraAttributes = ExtraAttributes.ExcludeKnown(f.Attributes, baseKeys),
             },
@@ -392,9 +392,9 @@ public sealed class S122MarineProtectedAreaDataset
         var baseKeys = new[] {
             "featureName", "fixedDateRange", "periodicDateRange", "graphic", "sourceIndication"
         };
-        var featureName = i.Attributes.GetValueOrDefault("featureName");
-        var fixedDr = i.Attributes.GetValueOrDefault("fixedDateRange");
-        var perDr = i.Attributes.GetValueOrDefault("periodicDateRange");
+        var featureNames = S122ComplexAttributes.FeatureNames(i.Attributes, i.ComplexAttributes);
+        var fixedDr = S122ComplexAttributes.DateRange(i.ComplexAttributes, "fixedDateRange");
+        var perDr = S122ComplexAttributes.DateRanges(i.ComplexAttributes, "periodicDateRange");
         var graphic = i.Attributes.GetValueOrDefault("graphic");
         var srcInd = i.Attributes.GetValueOrDefault("sourceIndication");
 
@@ -403,9 +403,9 @@ public sealed class S122MarineProtectedAreaDataset
             "Authority" => new S122Authority
             {
                 Id = i.Id,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = perDr,
+                PeriodicDateRanges = perDr,
                 Graphic = graphic,
                 SourceIndication = srcInd,
                 CategoryOfAuthority = AttributeParser.TryParseInt(i.Attributes.GetValueOrDefault("categoryOfAuthority"), ctx, i.Id, "categoryOfAuthority"),
@@ -417,9 +417,9 @@ public sealed class S122MarineProtectedAreaDataset
             "ContactDetails" => new S122ContactDetails
             {
                 Id = i.Id,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = perDr,
+                PeriodicDateRanges = perDr,
                 Graphic = graphic,
                 SourceIndication = srcInd,
                 CallName = i.Attributes.GetValueOrDefault("callName"),
@@ -437,9 +437,9 @@ public sealed class S122MarineProtectedAreaDataset
             "Applicability" => new S122Applicability
             {
                 Id = i.Id,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = perDr,
+                PeriodicDateRanges = perDr,
                 Graphic = graphic,
                 SourceIndication = srcInd,
                 InBallast = AttributeParser.TryParseBool(i.Attributes.GetValueOrDefault("inBallast"), ctx, i.Id, "inBallast"),
@@ -461,9 +461,9 @@ public sealed class S122MarineProtectedAreaDataset
             "NauticalInformation" => new S122NauticalInformation
             {
                 Id = i.Id,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = perDr,
+                PeriodicDateRanges = perDr,
                 Graphic = graphic,
                 SourceIndication = srcInd,
                 References = i.References,
@@ -472,9 +472,9 @@ public sealed class S122MarineProtectedAreaDataset
             "NonStandardWorkingDay" => new S122NonStandardWorkingDay
             {
                 Id = i.Id,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = perDr,
+                PeriodicDateRanges = perDr,
                 Graphic = graphic,
                 SourceIndication = srcInd,
                 DateFixed = i.Attributes.GetValueOrDefault("dateFixed"),
@@ -490,9 +490,9 @@ public sealed class S122MarineProtectedAreaDataset
             "ServiceHours" => new S122ServiceHours
             {
                 Id = i.Id,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = perDr,
+                PeriodicDateRanges = perDr,
                 Graphic = graphic,
                 SourceIndication = srcInd,
                 Information = i.Attributes.GetValueOrDefault("information"),
@@ -503,9 +503,9 @@ public sealed class S122MarineProtectedAreaDataset
             "SpatialQuality" => new S122SpatialQuality
             {
                 Id = i.Id,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = perDr,
+                PeriodicDateRanges = perDr,
                 Graphic = graphic,
                 SourceIndication = srcInd,
                 QualityOfHorizontalMeasurement = AttributeParser.TryParseInt(i.Attributes.GetValueOrDefault("qualityOfHorizontalMeasurement"), ctx, i.Id, "qualityOfHorizontalMeasurement"),
@@ -517,9 +517,9 @@ public sealed class S122MarineProtectedAreaDataset
             _ => new S122OtherInformationType(i.TypeCode)
             {
                 Id = i.Id,
-                FeatureName = featureName,
+                FeatureNames = featureNames,
                 FixedDateRange = fixedDr,
-                PeriodicDateRange = perDr,
+                PeriodicDateRanges = perDr,
                 Graphic = graphic,
                 SourceIndication = srcInd,
                 References = i.References,

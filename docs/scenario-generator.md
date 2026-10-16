@@ -25,8 +25,8 @@ GeneratedScenario scenario = ScenarioGenerator.Generate(definition, "path/to/fol
 
 The folder is an exchange set: `CATALOG.XML` at the root, and each product's
 files under `S-101/DATASET_FILES/`, `S-102/DATASET_FILES/` and so on, for
-every product the scenario writes: S-101, S-102, S-104, S-111, S-124, S-129
-and S-421. Open it
+every product the scenario writes: S-101, S-102, S-104, S-111, S-122, S-124,
+S-125, S-129 and S-421. Open it
 like any other exchange set:
 
 ```csharp
@@ -102,7 +102,9 @@ chart or for the IHO test area at 32° S 63° E.
 | S-111 | `CoverageWriters.WriteS111Grid` | A regular grid of surface currents (data coding format 2), speed in knots and direction towards, one step per record time. |
 | S-111 | `CoverageWriters.WriteS111Stations` | Current station series (data coding format 8) at the world's tide stations. |
 | S-421 | `S421RouteBuilder` and the public `S421DatasetWriter` | A route through named places, with each leg's draft and required UKC (as the static UKC), 100 m cross-track limits, and a manual schedule with the planned speed, the departure and each waypoint's ETA. |
+| S-122 | `S122ProtectedAreaWriter` | Edition 2.0.0: a `DataCoverage`, one `MarineProtectedArea` (name, category, restriction, status, and a `periodicDateRange` for each season it applies) and the `Authority` that manages it. |
 | S-124 | `S124WarningWriter` | One navigational warning per dataset: a point, line or area, its validity, publication time, an optional cancellation date, and the warnings it cancels. Edition 2.0.0 by default; `S124Edition = 1` writes Edition 1.0.0. |
+| S-125 | `S125AidsWriter` | Edition 1.0.0 buoys (lateral, safe water and cardinal, IALA A) with their number, shape, colours and name, and an all-round light on each lit buoy, linked to it as parent and child. |
 | S-129 | `S129PlanWriter` | An Actual Plan for one of the scenario's routes: control points with passing times, distance above the UKC limit and time windows, the plan area, and the non-navigable and almost non-navigable areas, all computed from the model. |
 | Exchange set | `ExchangeCatalogueBuilder` | `CATALOG.XML` in the S-100 Edition 5.2 schema, with a bounding box for each dataset. Datasets aren't signed or encrypted. |
 
@@ -168,6 +170,12 @@ expected answer for each warning: whether it crosses the route, comes within
 the vessel is there. Pass `s124Edition: 1` to write the warnings in Edition
 1.0.0.
 
+The same route crosses an S-122 seal sanctuary whose speed restriction
+applies from 1 March to 31 May each year, so it's in force for the passage
+(`S122ProtectedAreaSpec.InForce` gives the answer for any time), and S-125
+buoys mark the channel: lateral buoys on its edges, a fairway buoy at the
+west entrance and a north cardinal off the spit.
+
 ### Port plan vs own route
 
 `SyntheticScenarios.PortPlanVsOwnRoute` is the approach route with an S-129
@@ -184,10 +192,11 @@ A scenario is a `ScenarioDefinition` record: a world, the products to write
 and the times to write them for, and named places. Each product is a small
 specification record, such as `S101CellSpec`, `S102SurfaceSpec`,
 `S104StationsSpec`, `S104GridSpec`, `S111GridSpec`, `S421RouteSpec`,
-`S124WarningSpec` or `S129PlanSpec`. The coverages are constructor
-parameters; the S-111 currents, routes, warnings and plans are properties
-(`CurrentGrids`, `CurrentStations`, `Routes`, `Warnings`, `UkcPlans`) that
-default to none.
+`S122ProtectedAreaSpec`, `S124WarningSpec`, `S125AidsSpec` or
+`S129PlanSpec`. The coverages are constructor parameters; the S-111 currents,
+routes, protected areas, warnings, aids and plans are properties
+(`CurrentGrids`, `CurrentStations`, `Routes`, `ProtectedAreas`, `Warnings`,
+`Aids`, `UkcPlans`) that default to none.
 
 To vary an existing scenario, change the parts you need with `with`. This
 variant drops the S-102 surface, so every depth comes from S-101:
