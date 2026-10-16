@@ -1,11 +1,12 @@
 # EncDotNet.S100.Datasets.S421
 
-`EncDotNet.S100.Datasets.S421` reads [IHO S-421](https://iho.int/) Route Plan
-datasets: GML files (S-100 Part 10b) that hold a ship's route plan, with
-waypoints, legs, schedules and action points. It parses a dataset, resolves the
-`xlink:href` references between its objects, projects it into a typed route,
-validates it, and loads the S-421 portrayal catalogue. Reference it when you
-need typed access to an S-421 route or its validation rules. To open and render
+`EncDotNet.S100.Datasets.S421` reads and writes [IHO S-421](https://iho.int/)
+Route Plan datasets: GML files (S-100 Part 10b) that hold a ship's route plan,
+with waypoints, legs, schedules and action points. It parses a dataset,
+resolves the `xlink:href` references between its objects, projects it into a
+typed route, validates it, writes a typed route back to GML, and loads the
+S-421 portrayal catalogue. Reference it when you need typed access to an S-421
+route, its validation rules, or to export a route. To open and render
 any product, including S-421, use the
 [`EncDotNet.S100`](../EncDotNet.S100/README.md) package, which includes this
 one.
@@ -69,6 +70,38 @@ foreach (var wp in dataset.Features.Where(f => f.FeatureType == "RouteWaypoint")
 }
 ```
 
+## Write a dataset
+
+Build an `S421Route` (or take one from `S421RoutePlan.From`) and write it with
+`S421DatasetWriter`:
+
+```csharp
+using EncDotNet.S100.Datasets.S421;
+using EncDotNet.S100.Datasets.S421.DataModel;
+
+var plan = S421RoutePlan.From(S421Dataset.Open("path/to/route.gml"), out _);
+
+S421DatasetWriter.WriteToFile("path/to/copy.gml", plan.Route);
+```
+
+The writer produces S-421 Edition 1.0.0 GML (namespace
+`http://www.iho.int/S421/gml/cs0/1.0`) that `S421Dataset.Open` reads back:
+
+- One `Route` with its `RouteInfo`, a `RouteWaypoints` collection, a
+  `RouteWaypoint` per waypoint, a `RouteWaypointLeg` per leg, and the route's
+  schedules and action points, linked with `xlink:href` in both directions.
+- Each leg is referenced from the waypoint it ends at, as the S-421 samples do,
+  so the first waypoint has none. A leg's geometry is its `Coordinates`, or the
+  straight line between its waypoints.
+- Positions are latitude first (EPSG:4326, S-100 Part 10b), numbers round-trip
+  exactly, and times are written in UTC.
+- Attributes the typed model doesn't know (`ExtraAttributes`) are written after
+  the known ones.
+
+`ToBytes` and `Write(route, stream)` write to memory or a stream, and
+`S421WriteOptions.DatasetIdentifier` sets the dataset's `gml:id`. The same
+route always gives the same bytes. The writer needs at least two waypoints.
+
 ## Main types
 
 - **`S421Dataset`**: the parsed dataset, with its features, information types
@@ -89,6 +122,8 @@ foreach (var wp in dataset.Features.Where(f => f.FeatureType == "RouteWaypoint")
   package.
 - **`S421RoutePlan`**: the typed model. See
   [Typed data model](#typed-data-model).
+- **`S421DatasetWriter`**: writes an `S421Route` as S-421 GML. See
+  [Write a dataset](#write-a-dataset).
 - **`S421RoutePlanRules`**: the validation rule set. See [Validate](#validate).
 - **`S421FeatureXmlSource`**: an `IFeatureXmlSource` that converts an
   `S421Dataset` to S-100 Part 9 FeatureXML for the XSLT rules.
@@ -114,7 +149,9 @@ namespace projects it into typed objects:
 - **`S421Route`** has `Info`, `Waypoints`, `Legs`, `ActionPoints` and
   `Schedules`.
 - **`S421Waypoint`** has `OutgoingLeg` and `IncomingLeg`, so you can move along
-  the route in either direction.
+  the route in either direction. S-421 references each leg from the waypoint
+  it ends at; `From` also reads datasets that reference it from the waypoint it
+  starts at, which it recognizes by a leg on the first waypoint.
 - **`S421Leg`** has `StartWaypoint` and `EndWaypoint`, so from a leg you can
   reach both its waypoints without matching coordinates.
 - **`S421ActionPoint`**, **`S421Schedule`** (manual, calculated or

@@ -24,7 +24,9 @@ GeneratedScenario scenario = ScenarioGenerator.Generate(definition, "path/to/fol
 ```
 
 The folder is an exchange set: `CATALOG.XML` at the root, and each product's
-files under `S-101/DATASET_FILES/`, `S-102/DATASET_FILES/` and so on. Open it
+files under `S-101/DATASET_FILES/`, `S-102/DATASET_FILES/` and so on, for
+every product the scenario writes: S-101, S-102, S-104, S-111, S-124, S-129
+and S-421. Open it
 like any other exchange set:
 
 ```csharp
@@ -80,6 +82,11 @@ chart or for the IHO test area at 32° S 63° E.
   in "Synthetic Sound"), with amplitudes and phase lags that vary smoothly from
   west to east. Stations and grid nodes are samples of the same field.
   `TideModel.HeightAt` gives the height anywhere, at any time.
+- **Currents.** The tidal stream follows the tide: the Sound fills from the
+  west, so the stream floods east while the water rises and ebbs west while
+  it falls, at a speed proportional to the rate of rise or fall, and is slack
+  at high and low water. `SyntheticWorld.CurrentAt` gives the current
+  anywhere, at any time.
 - **Datums.** `WorldDatums` holds the chart datum and the water-level datum as
   S-100 vertical datum codes. Both are Lowest Astronomical Tide in "Synthetic
   Sound".
@@ -92,6 +99,11 @@ chart or for the IHO test area at 32° S 63° E.
 | S-102 | `CoverageWriters.WriteS102` | One depth and uncertainty grid. The depth at each node is the model's depth there. |
 | S-104 | `CoverageWriters.WriteS104Stations` | Station series (data coding format 8) at the world's tide stations. |
 | S-104 | `CoverageWriters.WriteS104Grid` | A regular grid (data coding format 2) with one step per record time. |
+| S-111 | `CoverageWriters.WriteS111Grid` | A regular grid of surface currents (data coding format 2), speed in knots and direction towards, one step per record time. |
+| S-111 | `CoverageWriters.WriteS111Stations` | Current station series (data coding format 8) at the world's tide stations. |
+| S-421 | `S421RouteBuilder` and the public `S421DatasetWriter` | A route through named places, with each leg's draft and required UKC (as the static UKC), 100 m cross-track limits, and a manual schedule with the planned speed, the departure and each waypoint's ETA. |
+| S-124 | `S124WarningWriter` | One navigational warning per dataset: a point, line or area, its validity, publication time, an optional cancellation date, and the warnings it cancels. Edition 2.0.0 by default; `S124Edition = 1` writes Edition 1.0.0. |
+| S-129 | `S129PlanWriter` | An Actual Plan for one of the scenario's routes: control points with passing times, distance above the UKC limit and time windows, the plan area, and the non-navigable and almost non-navigable areas, all computed from the model. |
 | Exchange set | `ExchangeCatalogueBuilder` | `CATALOG.XML` in the S-100 Edition 5.2 schema, with a bounding box for each dataset. Datasets aren't signed or encrypted. |
 
 Each S-101 cell samples the seabed on its own grid, with its own depth
@@ -105,7 +117,12 @@ Generated data says it's synthetic: the producer code is `ZZ00`, names end in
 "(fictitious)", and titles, abstracts and catalogue comments say "SYNTHETIC"
 and "not for navigation".
 
+S-421 has no attribute for squat, so a route's squat stays in the scenario's
+`PassageValues`; tests that check a passage read it from there.
+
 ## Built-in scenarios
+
+### Spit across scales
 
 `SyntheticScenarios.SpitAcrossScales` is a dredged channel running east–west
 past a drying spit:
@@ -124,12 +141,53 @@ The scenario also names places (`Places`) and a route (`Route`) for tests to
 use. The end-to-end tests check the passage under-keel clearance at those
 places against the model.
 
+### Approach with tide window
+
+`SyntheticScenarios.ApproachWithTideWindow` is an S-421 route from a sea buoy
+over the crest of a shoal (4 m) and into the channel, for a 6 m draft that can
+cross the crest only for an hour or so either side of high water:
+
+- An S-102 surface covers the whole route, and S-104 stations give the tide,
+  so every sample's depth and water level comes from one known node and one
+  known station.
+- S-111 grids and stations give the tidal streams over the Sound.
+
+The tests sweep two days of departures and check that the departures that
+meet the settings are exactly those for which every sample has water. In
+SoundCharts the same files give the departure window, Follow passage and the
+findings list.
+
+### Warnings on route
+
+`SyntheticScenarios.WarningsOnRoute` is an S-421 route along the channel and
+seven S-124 warnings: areas, lines and points that cross the route or lie
+near it, in force at different times, one cancelled by a later warning and one
+that cancels itself before the vessel arrives. `RouteWarnings.For` gives the
+expected answer for each warning: whether it crosses the route, comes within
+100 m of it, or neither; where along the route; and whether it's in force while
+the vessel is there. Pass `s124Edition: 1` to write the warnings in Edition
+1.0.0.
+
+### Port plan vs own route
+
+`SyntheticScenarios.PortPlanVsOwnRoute` is the approach route with an S-129
+plan that the port made for it, and the vessel's own route, which rounds the
+shoal instead of crossing it. `S129PlanWriter.ControlPoints` and
+`S129PlanWriter.Areas` give the plan's values from the model, so the tests can
+check what `EncDotNet.S100.Datasets.S129.Fusion` reads from the S-102 and
+S-104 files at each control point, and which control points lie on each
+route.
+
 ## Define a scenario
 
 A scenario is a `ScenarioDefinition` record: a world, the products to write
 and the times to write them for, and named places. Each product is a small
 specification record, such as `S101CellSpec`, `S102SurfaceSpec`,
-`S104StationsSpec` or `S104GridSpec`.
+`S104StationsSpec`, `S104GridSpec`, `S111GridSpec`, `S421RouteSpec`,
+`S124WarningSpec` or `S129PlanSpec`. The coverages are constructor
+parameters; the S-111 currents, routes, warnings and plans are properties
+(`CurrentGrids`, `CurrentStations`, `Routes`, `Warnings`, `UkcPlans`) that
+default to none.
 
 To vary an existing scenario, change the parts you need with `with`. This
 variant drops the S-102 surface, so every depth comes from S-101:
@@ -166,8 +224,8 @@ The same seed and definition give byte-identical files. The generator:
 - writes XML with fixed encoding, indentation and line endings, and numbers
   with the invariant culture.
 
-`DeterminismTests` generates the same scenario twice and compares the SHA-256
-hash of every file.
+`DeterminismTests` generates each scenario twice and compares the SHA-256
+hash of every file, product by product.
 
 The model uses floating-point functions such as `Math.Tanh` and `Math.Exp`,
 whose last bit may differ between platforms. Coordinates are rounded to

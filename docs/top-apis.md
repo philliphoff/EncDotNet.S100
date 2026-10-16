@@ -75,6 +75,8 @@ or more control over the pipeline.
 - A typed data model for each, built with
   `Sxxx{Root}.From(dataset, out diagnostics)`, for example `S421RoutePlan` and
   `S124NavigationalWarning`. See [Typed data models](typed-data-models.md).
+- `S421DatasetWriter`: write a typed S-421 route as GML. See the
+  [S-421 package README](../src/EncDotNet.S100.Datasets.S421/README.md#write-a-dataset).
 
 ## EncDotNet.S100.Datasets.S57
 
