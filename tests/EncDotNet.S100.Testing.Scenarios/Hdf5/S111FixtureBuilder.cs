@@ -167,6 +167,79 @@ public static class S111FixtureBuilder
             System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
 
+    /// <summary>A geographic regular grid's georeferencing (S-111 Ed 2.0.0 §10.2.2).</summary>
+    public readonly record struct GridGeoreference(
+        double OriginLatitude,
+        double OriginLongitude,
+        double SpacingLatitudinal,
+        double SpacingLongitudinal,
+        int NumPointsLatitudinal,
+        int NumPointsLongitudinal);
+
+    /// <summary>
+    /// Writes a dcf2 file with one <c>SurfaceCurrent.01</c> instance holding
+    /// a <c>Group_NNN</c> per time step, in the order given. Attributes are
+    /// written in dictionary order after the ones this method sets, so the
+    /// same arguments give the same bytes.
+    /// </summary>
+    /// <param name="path">The file to write.</param>
+    /// <param name="grid">The grid.</param>
+    /// <param name="steps">Each step's <c>timePoint</c> (for example <c>20260301T000000Z</c>) and row-major values, south row first.</param>
+    /// <param name="rootAttributes">Root attributes (product specification, CRS, extent, issue date, …).</param>
+    /// <param name="featureAttributes">Extra <c>/SurfaceCurrent</c> attributes after <c>dataCodingFormat</c>, or <c>null</c>.</param>
+    /// <param name="instanceAttributes">Extra <c>/SurfaceCurrent/SurfaceCurrent.01</c> attributes after the grid ones, or <c>null</c>.</param>
+    /// <returns><paramref name="path"/>.</returns>
+    public static string WriteTimeSeries<TRow>(
+        string path,
+        GridGeoreference grid,
+        IReadOnlyList<(string TimePoint, TRow[] Values)> steps,
+        IReadOnlyDictionary<string, object> rootAttributes,
+        IReadOnlyDictionary<string, object>? featureAttributes = null,
+        IReadOnlyDictionary<string, object>? instanceAttributes = null)
+        where TRow : struct
+    {
+        var instance = new H5Group
+        {
+            Attributes = new()
+            {
+                ["gridOriginLatitude"] = grid.OriginLatitude,
+                ["gridOriginLongitude"] = grid.OriginLongitude,
+                ["gridSpacingLatitudinal"] = grid.SpacingLatitudinal,
+                ["gridSpacingLongitudinal"] = grid.SpacingLongitudinal,
+                ["numPointsLatitudinal"] = grid.NumPointsLatitudinal,
+                ["numPointsLongitudinal"] = grid.NumPointsLongitudinal,
+                ["numberOfTimes"] = steps.Count,
+                ["numGRP"] = steps.Count,
+            },
+        };
+        foreach (var (name, value) in instanceAttributes ?? new Dictionary<string, object>())
+            instance.Attributes[name] = value;
+
+        for (int i = 0; i < steps.Count; i++)
+        {
+            instance[$"Group_{i + 1:000}"] = new H5Group
+            {
+                Attributes = new() { ["timePoint"] = steps[i].TimePoint },
+                ["values"] = steps[i].Values,
+            };
+        }
+
+        var feature = new H5Group
+        {
+            Attributes = new() { ["dataCodingFormat"] = (byte)2 },
+            ["SurfaceCurrent.01"] = instance,
+        };
+        foreach (var (name, value) in featureAttributes ?? new Dictionary<string, object>())
+            feature.Attributes[name] = value;
+
+        var file = new H5File { ["SurfaceCurrent"] = feature };
+        foreach (var (name, value) in rootAttributes)
+            file.Attributes[name] = value;
+
+        file.Write(path, new H5WriteOptions(FieldNameMapper: f => f.GetCustomAttribute<H5NameAttribute>()?.Name));
+        return path;
+    }
+
     /// <summary>
     /// Projected (e.g. UTM) georeferencing for <c>WriteFile</c>: the grid
     /// origin and spacing are native metres and the root CRS attribute is

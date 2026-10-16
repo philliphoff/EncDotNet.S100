@@ -52,6 +52,19 @@ public sealed record SyntheticWorld(
         return Tide.HeightAt(x, y, utc);
     }
 
+    /// <summary>The tidal streams, derived from <see cref="Tide"/>.</summary>
+    public CurrentModel Currents { get; init; } = CurrentModel.SyntheticSound;
+
+    /// <summary>The surface current at a geographic position and time (see <see cref="CurrentModel.At"/>).</summary>
+    /// <param name="position">The position.</param>
+    /// <param name="utc">The time (UTC).</param>
+    /// <returns>The current, or <c>null</c> on land.</returns>
+    public SurfaceCurrent? CurrentAt(GeoPosition position, DateTime utc)
+    {
+        var (x, y) = Frame.ToLocal(position.Latitude, position.Longitude);
+        return Currents.At(this, x, y, utc);
+    }
+
     /// <summary>
     /// "Synthetic Sound": an east–west shore with land to the south, a
     /// dredged channel along <c>y = 3000 m</c>, a drying spit running north at

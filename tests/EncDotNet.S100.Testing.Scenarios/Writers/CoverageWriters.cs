@@ -84,7 +84,27 @@ public sealed record S104GridSpec(string DatasetName, LocalRect Extent, double S
     public string FileName => DatasetName + ".h5";
 }
 
-/// <summary>Samples the world into S-102 and S-104 HDF5 files.</summary>
+/// <summary>An S-111 regular grid (dcf2) of surface currents.</summary>
+/// <param name="DatasetName">The file name without extension.</param>
+/// <param name="Extent">The rectangle the grid covers.</param>
+/// <param name="Spacing">The node spacing in metres.</param>
+/// <param name="Interval">The time between steps.</param>
+public sealed record S111GridSpec(string DatasetName, LocalRect Extent, double Spacing, TimeSpan Interval)
+{
+    /// <summary>The file name, with the <c>.h5</c> extension.</summary>
+    public string FileName => DatasetName + ".h5";
+}
+
+/// <summary>S-111 station series (dcf8) of surface currents at the world's tide stations.</summary>
+/// <param name="DatasetName">The file name without extension.</param>
+/// <param name="Interval">The time between records.</param>
+public sealed record S111StationsSpec(string DatasetName, TimeSpan Interval)
+{
+    /// <summary>The file name, with the <c>.h5</c> extension.</summary>
+    public string FileName => DatasetName + ".h5";
+}
+
+/// <summary>Samples the world into S-102, S-104 and S-111 HDF5 files.</summary>
 /// <remarks>
 /// <para>
 /// S-102 node values are the true depth at the node (as <c>float</c>), with an
@@ -94,6 +114,11 @@ public sealed record S104GridSpec(string DatasetName, LocalRect Extent, double S
 /// S-104 values are the true water level at the station or node at each
 /// record time (as <c>float</c>), with the trend from the tide's rate of
 /// change against the dataset's <c>waterLevelTrendThreshold</c>.
+/// </para>
+/// <para>
+/// S-111 values are the world's current (<see cref="SyntheticWorld.Currents"/>)
+/// at the station or node at each record time, speed in knots and direction
+/// towards in degrees (as <c>float</c>); nodes on land are the fill value.
 /// </para>
 /// </remarks>
 public static class CoverageWriters
@@ -280,6 +305,133 @@ public static class CoverageWriters
                 ["timeRecordInterval"] = (long)spec.Interval.TotalSeconds,
             });
     }
+
+    /// <summary>The S-111 grid for a current grid.</summary>
+    /// <param name="world">The world.</param>
+    /// <param name="spec">The current grid.</param>
+    /// <returns>The grid.</returns>
+    public static GeoGrid Grid(SyntheticWorld world, S111GridSpec spec) => GeoGrid.Over(world.Frame, spec.Extent, spec.Spacing);
+
+    /// <summary>The value written at an S-111 node or station: the model's current, or the fill value on land.</summary>
+    /// <param name="world">The world.</param>
+    /// <param name="x">Metres east.</param>
+    /// <param name="y">Metres north.</param>
+    /// <param name="utc">The time (UTC).</param>
+    /// <returns>Speed (knots) and direction (degrees), as written.</returns>
+    public static (float Speed, float Direction) S111Value(SyntheticWorld world, double x, double y, DateTime utc) =>
+        world.Currents.At(world, x, y, utc) is { } current
+            ? ((float)Math.Round(current.SpeedKnots, 3), (float)current.DirectionDegrees)
+            : (S111FillValue, S111FillValue);
+
+    /// <summary>The S-111 fill value for speed and direction.</summary>
+    public const float S111FillValue = -9999f;
+
+    /// <summary>Writes an S-111 grid of surface currents.</summary>
+    /// <param name="world">The world.</param>
+    /// <param name="spec">The grid dataset.</param>
+    /// <param name="path">The file to write.</param>
+    /// <param name="issued">The issue time (UTC).</param>
+    /// <param name="start">The first step (UTC).</param>
+    /// <param name="end">The last step (UTC).</param>
+    public static void WriteS111Grid(SyntheticWorld world, S111GridSpec spec, string path, DateTime issued, DateTime start, DateTime end)
+    {
+        var grid = Grid(world, spec);
+        var steps = new List<(string, S111FixtureBuilder.SpecRow[])>();
+        foreach (var t in Times(start, end, spec.Interval))
+        {
+            var values = new S111FixtureBuilder.SpecRow[grid.Rows * grid.Columns];
+            for (var row = 0; row < grid.Rows; row++)
+            {
+                for (var col = 0; col < grid.Columns; col++)
+                {
+                    var node = grid.Node(row, col);
+                    var (x, y) = world.Frame.ToLocal(node.Latitude, node.Longitude);
+                    var (speed, direction) = S111Value(world, x, y, t);
+                    values[row * grid.Columns + col] = new S111FixtureBuilder.SpecRow
+                    {
+                        SurfaceCurrentSpeed = speed,
+                        SurfaceCurrentDirection = direction,
+                    };
+                }
+            }
+
+            steps.Add((TimePoint(t), values));
+        }
+
+        S111FixtureBuilder.WriteTimeSeries(
+            path,
+            new S111FixtureBuilder.GridGeoreference(grid.OriginLatitude, grid.OriginLongitude, grid.SpacingLatitudinal, grid.SpacingLongitudinal, grid.Rows, grid.Columns),
+            steps,
+            S111Root(world, issued, grid.OriginLongitude, grid.OriginLatitude, grid.EastLongitude, grid.NorthLatitude),
+            featureAttributes: new Dictionary<string, object>
+            {
+                ["typeOfCurrentData"] = (byte)3,
+                ["methodCurrentsProduct"] = "Synthetic tidal streams from the harmonic prediction (M2, S2)",
+            },
+            instanceAttributes: new Dictionary<string, object>
+            {
+                ["dateTimeOfFirstRecord"] = TimePoint(start),
+                ["dateTimeOfLastRecord"] = TimePoint(end),
+                ["timeRecordInterval"] = (long)spec.Interval.TotalSeconds,
+            });
+    }
+
+    /// <summary>Writes S-111 station series of surface currents at the world's tide stations.</summary>
+    /// <param name="world">The world.</param>
+    /// <param name="spec">The station dataset.</param>
+    /// <param name="path">The file to write.</param>
+    /// <param name="issued">The issue time (UTC).</param>
+    /// <param name="start">The first record (UTC).</param>
+    /// <param name="end">The last record (UTC).</param>
+    public static void WriteS111Stations(SyntheticWorld world, S111StationsSpec spec, string path, DateTime issued, DateTime start, DateTime end)
+    {
+        var times = Times(start, end, spec.Interval);
+        var stations = new List<S111Dcf8FixtureBuilder.Station<S111Dcf8FixtureBuilder.SpecValueRow>>();
+        double south = double.MaxValue, west = double.MaxValue, north = double.MinValue, east = double.MinValue;
+        foreach (var station in world.Tide.Stations)
+        {
+            var position = world.Frame.ToGeo(station.X, station.Y);
+            south = Math.Min(south, position.Latitude);
+            north = Math.Max(north, position.Latitude);
+            west = Math.Min(west, position.Longitude);
+            east = Math.Max(east, position.Longitude);
+            stations.Add(new S111Dcf8FixtureBuilder.Station<S111Dcf8FixtureBuilder.SpecValueRow>
+            {
+                Identifier = station.Identifier,
+                Latitude = (float)position.Latitude,
+                Longitude = (float)position.Longitude,
+                StartDateTime = TimePoint(start),
+                EndDateTime = TimePoint(end),
+                TimeRecordInterval = (long)spec.Interval.TotalSeconds,
+                Values = times.Select(t =>
+                {
+                    var (speed, direction) = S111Value(world, station.X, station.Y, t);
+                    return new S111Dcf8FixtureBuilder.SpecValueRow { SurfaceCurrentSpeed = speed, SurfaceCurrentDirection = direction };
+                }).ToArray(),
+            });
+        }
+
+        const double pad = 1e-4;
+        S111Dcf8FixtureBuilder.WriteFile(
+            path,
+            stations,
+            extraRootAttributes: S111Root(world, issued, west - pad, south - pad, east + pad, north + pad));
+    }
+
+    private static Dictionary<string, object> S111Root(SyntheticWorld world, DateTime issued, double west, double south, double east, double north) => new()
+    {
+        ["productSpecification"] = "INT.IHO.S-111.2.0",
+        ["issueDate"] = issued.ToString("yyyyMMdd", CultureInfo.InvariantCulture),
+        ["issueTime"] = issued.ToString("HHmmss'Z'", CultureInfo.InvariantCulture),
+        ["horizontalCRS"] = 4326,
+        ["westBoundLongitude"] = west,
+        ["eastBoundLongitude"] = east,
+        ["southBoundLatitude"] = south,
+        ["northBoundLatitude"] = north,
+        ["geographicIdentifier"] = $"{world.Name} (fictitious, synthetic test data)",
+        ["depthTypeIndex"] = (byte)2,
+        ["surfaceCurrentDepth"] = 0.0,
+    };
 
     /// <summary>The S-104 time format, such as <c>20260301T000000Z</c>.</summary>
     /// <param name="utc">The time (UTC).</param>
