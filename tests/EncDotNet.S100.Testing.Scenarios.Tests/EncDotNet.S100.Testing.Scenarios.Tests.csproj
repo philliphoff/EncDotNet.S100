@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Crs.ProjNet\EncDotNet.S100.Crs.ProjNet.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Navigation\EncDotNet.S100.Navigation.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S129.Fusion\EncDotNet.S100.Datasets.S129.Fusion.csproj" />
   </ItemGroup>
 
 </Project>

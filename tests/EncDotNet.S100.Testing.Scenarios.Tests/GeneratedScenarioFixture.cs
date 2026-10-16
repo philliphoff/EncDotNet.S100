@@ -42,6 +42,18 @@ public sealed class SpitAcrossScalesFixture() : GeneratedScenarioFixture(Synthet
 /// <summary>"Spit across scales" with an S-102 surface that declares no vertical datum (#939).</summary>
 public sealed class SpitWithoutS102DatumFixture() : GeneratedScenarioFixture(SyntheticScenarios.SpitAcrossScales(declareS102VerticalDatum: false));
 
+/// <summary>"Approach with tide window" with the default seed.</summary>
+public sealed class ApproachWithTideWindowFixture() : GeneratedScenarioFixture(SyntheticScenarios.ApproachWithTideWindow());
+
+/// <summary>"Warnings on route" in S-124 Edition 2.0.0.</summary>
+public sealed class WarningsOnRouteFixture() : GeneratedScenarioFixture(SyntheticScenarios.WarningsOnRoute());
+
+/// <summary>"Warnings on route" in S-124 Edition 1.0.0.</summary>
+public sealed class WarningsOnRouteEdition1Fixture() : GeneratedScenarioFixture(SyntheticScenarios.WarningsOnRoute(s124Edition: 1));
+
+/// <summary>"Port plan vs own route" with the default seed.</summary>
+public sealed class PortPlanVsOwnRouteFixture() : GeneratedScenarioFixture(SyntheticScenarios.PortPlanVsOwnRoute());
+
 /// <summary>Loads a generated exchange set the way the hosts do.</summary>
 public static class ScenarioLoading
 {
@@ -64,6 +76,10 @@ public static class ScenarioLoading
         Assert.Equal(inputs.Count, catalog.Datasets.Count);
         return catalog;
     }
+
+    /// <summary>The loaded dataset whose catalog id is <paramref name="id"/>.</summary>
+    public static LoadedDataset Dataset(FileDatasetCatalog catalog, string id) =>
+        catalog.Datasets.Single(d => d.Id.Value == id);
 
     /// <summary>The passage-check sources over the scenario's datasets.</summary>
     public static PassageDataSources Sources(GeneratedScenario scenario) =>

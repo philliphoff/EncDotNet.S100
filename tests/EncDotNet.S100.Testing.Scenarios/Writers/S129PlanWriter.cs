@@ -195,7 +195,7 @@ public static class S129PlanWriter
         return lowest;
     }
 
-    /// <summary>The (almost) non-navigable areas.</summary>
+    /// <summary>The (almost) non-navigable areas, with positions rounded to 10⁻⁷ degrees as written.</summary>
     /// <param name="definition">The scenario.</param>
     /// <param name="spec">The plan.</param>
     /// <returns>The non-navigable and almost non-navigable polygons.</returns>
@@ -209,7 +209,13 @@ public static class S129PlanWriter
             SampleGrid.Lattice(area.West, area.East, spec.AreaSpacing),
             SampleGrid.Lattice(area.South, area.North, spec.AreaSpacing),
             (x, y) => AboveLimitAtLowestTide(definition, spec, x, y));
-        return (Contouring.Regions(grid, double.NegativeInfinity, 0), Contouring.Regions(grid, 0, spec.AlmostMarginMeters));
+        return (Rounded(Contouring.Regions(grid, double.NegativeInfinity, 0)), Rounded(Contouring.Regions(grid, 0, spec.AlmostMarginMeters)));
+
+        // Positions as written: 10⁻⁷ degrees.
+        static IReadOnlyList<GeoPolygon> Rounded(IReadOnlyList<GeoPolygon> polygons) =>
+            polygons.Select(p => new GeoPolygon(
+                p.Exterior.Select(GmlWriting.Round).ToList(),
+                p.Holes.Select(h => (IReadOnlyList<GeoPosition>)h.Select(GmlWriting.Round).ToList()).ToList())).ToList();
     }
 
     /// <summary>Writes the plan.</summary>

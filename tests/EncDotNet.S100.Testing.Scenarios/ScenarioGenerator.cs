@@ -161,8 +161,23 @@ public static class ScenarioGenerator
         return new GeneratedScenario(definition, directory, datasets);
     }
 
-    private static CatalogueDataset GmlEntry(string relativePath, string product, string name, string version, DateOnly issueDate, IReadOnlyCollection<DataModel.GeoPosition> positions, string comment) => new(
-        relativePath, product, name, version, "GML", issueDate,
-        positions.Min(p => p.Longitude), positions.Min(p => p.Latitude), positions.Max(p => p.Longitude), positions.Max(p => p.Latitude),
-        comment);
+    // A point's box is padded by 10⁻⁴ degrees (about 10 m) so it has an area,
+    // as the catalogue's bounding box needs.
+    private static CatalogueDataset GmlEntry(string relativePath, string product, string name, string version, DateOnly issueDate, IReadOnlyCollection<DataModel.GeoPosition> positions, string comment)
+    {
+        const double pad = 1e-4;
+        double west = positions.Min(p => p.Longitude), east = positions.Max(p => p.Longitude);
+        double south = positions.Min(p => p.Latitude), north = positions.Max(p => p.Latitude);
+        if (east - west < pad)
+        {
+            (west, east) = (west - pad, east + pad);
+        }
+
+        if (north - south < pad)
+        {
+            (south, north) = (south - pad, north + pad);
+        }
+
+        return new(relativePath, product, name, version, "GML", issueDate, west, south, east, north, comment);
+    }
 }
