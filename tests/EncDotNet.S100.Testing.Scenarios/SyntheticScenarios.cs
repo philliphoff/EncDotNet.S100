@@ -163,6 +163,13 @@ public static class SyntheticScenarios
     /// <paramref name="s124Edition"/> 1 writes the warnings in Edition 1.0.0,
     /// which has no cancellation date, so there warning 7 stays in force.
     /// </para>
+    /// <para>
+    /// The route also crosses an S-122 seal sanctuary at 3100–3700 m whose
+    /// seasonal speed restriction (1 March to 31 May) is in force for the
+    /// passage (<see cref="SealSanctuary"/>), and S-125 buoys mark the
+    /// channel (<see cref="ChannelBuoys"/>); buoy No 2 is the one warning 3
+    /// reports off station.
+    /// </para>
     /// </remarks>
     /// <param name="seed">The world's seed.</param>
     /// <param name="s124Edition">2 for S-124 Edition 2.0.0, 1 for Edition 1.0.0.</param>
@@ -198,6 +205,8 @@ public static class SyntheticScenarios
             Routes = [route],
             Warnings = RouteWarnings,
             S124Edition = s124Edition,
+            ProtectedAreas = [SealSanctuary],
+            Aids = ChannelBuoys,
         };
     }
 
@@ -378,6 +387,39 @@ public static class SyntheticScenarios
             CancellationDate = new DateTime(2026, 3, 1, 5, 30, 0, DateTimeKind.Utc),
         },
     ];
+
+    /// <summary>
+    /// A seal sanctuary across the channel east of the survey area, speed
+    /// restricted from 1 March to 31 May each year: in force for the
+    /// warnings-on-route transit on 1 March.
+    /// </summary>
+    public static S122ProtectedAreaSpec SealSanctuary { get; } = new(
+        "122ZZ00SEAL",
+        "Synthetic Sound Seal Sanctuary (fictitious)",
+        new LocalRect(3100, 2500, 3700, 3700),
+        Coverage: new LocalRect(0, 0, 6000, 6000),
+        Seasons: [new Season(new DayOfYear(3, 1), new DayOfYear(5, 31))],
+        Authority: "Synthetic Marine Conservation Agency (fictitious)");
+
+    /// <summary>
+    /// IALA A buoys along the approach channel (buoyage eastward, so port
+    /// hand on the north edge, y = 3150 m): a fairway buoy at the west
+    /// entrance, three gates of lateral buoys, and a north cardinal off the
+    /// spit. Buoy 0002 is the one warning 0003/2026 reports off station.
+    /// </summary>
+    public static S125AidsSpec ChannelBuoys { get; } = new(
+        "125ZZ00CHAN",
+        "Synthetic Sound approach channel buoyage",
+        [
+            new BuoySpec("ZZ00-0001", "Sound Fairway (fictitious)", BuoyMark.SafeWater, 100, 3000, new BuoyLight(Colour: 1, Character: 3, "(1)", 10, 6)),
+            new BuoySpec("ZZ00-0002", "No 2 (fictitious)", BuoyMark.PortHand, 1500, 3150, new BuoyLight(Colour: 3, Character: 2, "(1)", 4, 3)),
+            new BuoySpec("ZZ00-0003", "No 1 (fictitious)", BuoyMark.StarboardHand, 1500, 2850, new BuoyLight(Colour: 4, Character: 2, "(1)", 4, 3)),
+            new BuoySpec("ZZ00-0004", "No 4 (fictitious)", BuoyMark.PortHand, 3000, 3150),
+            new BuoySpec("ZZ00-0005", "No 3 (fictitious)", BuoyMark.StarboardHand, 3000, 2850),
+            new BuoySpec("ZZ00-0006", "No 6 (fictitious)", BuoyMark.PortHand, 4500, 3150, new BuoyLight(Colour: 3, Character: 2, "(2)", 6, 3)),
+            new BuoySpec("ZZ00-0007", "No 5 (fictitious)", BuoyMark.StarboardHand, 4500, 2850, new BuoyLight(Colour: 4, Character: 2, "(2)", 6, 3)),
+            new BuoySpec("ZZ00-0008", "Spit North (fictitious)", BuoyMark.NorthCardinal, 2900, 2700, new BuoyLight(Colour: 1, Character: 4, null, null, 5)),
+        ]);
 
     /// <summary>
     /// The S-101 cells every Synthetic Sound scenario charts: a harbour-band

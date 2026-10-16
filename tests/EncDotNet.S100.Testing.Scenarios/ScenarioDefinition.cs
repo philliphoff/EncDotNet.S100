@@ -52,6 +52,12 @@ public sealed record ScenarioDefinition(
     /// <summary>The S-129 under-keel clearance plans.</summary>
     public IReadOnlyList<S129PlanSpec> UkcPlans { get; init; } = [];
 
+    /// <summary>The S-122 marine protected areas, one dataset each.</summary>
+    public IReadOnlyList<S122ProtectedAreaSpec> ProtectedAreas { get; init; } = [];
+
+    /// <summary>The S-125 aids to navigation, or <c>null</c> for none.</summary>
+    public S125AidsSpec? Aids { get; init; }
+
     /// <summary>The geographic position of a named place.</summary>
     /// <param name="name">The place's name.</param>
     /// <returns>The position.</returns>

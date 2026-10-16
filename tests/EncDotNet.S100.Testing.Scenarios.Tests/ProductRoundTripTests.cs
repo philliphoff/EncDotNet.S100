@@ -1,6 +1,7 @@
-using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.S122.DataModel;
 using EncDotNet.S100.Datasets.S124.DataModel;
+using EncDotNet.S100.Datasets.S125.DataModel;
 using EncDotNet.S100.Datasets.S129.DataModel;
 using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.Testing.Scenarios.Writers;
@@ -298,5 +299,150 @@ public sealed class S129RoundTripTests(PortPlanVsOwnRouteFixture fixture) : ICla
         var plan = S129UnderKeelClearancePlan.From(dataset, out var diagnostics);
         Assert.Empty(diagnostics);
         return plan;
+    }
+}
+
+/// <summary>The S-122 sanctuary reads back as the area the scenario defines.</summary>
+public sealed class S122RoundTripTests(WarningsOnRouteFixture fixture) : IClassFixture<WarningsOnRouteFixture>
+{
+    private readonly FileDatasetCatalog _catalog = ScenarioLoading.Catalog(fixture.Scenario);
+
+    private S122ProtectedAreaSpec Spec => fixture.Definition.ProtectedAreas[0];
+
+    [Fact]
+    public void The_area_reads_back_with_its_name_season_and_restriction()
+    {
+        var dataset = Read();
+        var area = Assert.Single(dataset.MarineProtectedAreas);
+
+        Assert.Equal([new S122FeatureName("eng", Spec.Name, 1)], area.FeatureNames);
+        Assert.Equal(Spec.Name, area.FeatureName);
+        Assert.Equal(S122GeometryKind.Surface, area.GeometryKind);
+        Assert.Equal(S122ProtectedAreaWriter.Polygon(fixture.Definition.World, Spec).Exterior, area.Coordinates);
+        Assert.Null(area.FixedDateRange);
+        Assert.Equal(Spec.Seasons.Select(s => new S122DateRange(s.Start.Text, s.End.Text)), area.PeriodicDateRanges);
+        Assert.Equal(
+            (Spec.CategoryOfMarineProtectedArea, Spec.CategoryOfRestrictedArea, Spec.Restriction, Spec.Status),
+            (area.CategoryOfMarineProtectedArea, area.CategoryOfRestrictedArea, area.Restriction, area.Status));
+        Assert.Equal(5, area.Status);
+    }
+
+    [Fact]
+    public void The_area_names_its_authority()
+    {
+        var area = Assert.Single(Read().MarineProtectedAreas);
+
+        var binding = Assert.Single(area.InformationReferences);
+        Assert.Equal("responsibleAuthority", binding.Role);
+        var authority = Assert.IsType<S122Authority>(binding.Target);
+        Assert.Equal(Spec.Authority, authority.FeatureName);
+        Assert.Equal(Spec.CategoryOfAuthority, authority.CategoryOfAuthority);
+    }
+
+    [Fact]
+    public void The_coverage_carries_the_display_scales()
+    {
+        var coverage = Assert.Single(Read().Features.OfType<S122DataCoverage>());
+
+        Assert.Equal((Spec.DisplayScales.Maximum, Spec.DisplayScales.Minimum), (coverage.MaximumDisplayScale, coverage.MinimumDisplayScale));
+        Assert.Equal(S122ProtectedAreaWriter.CoveragePolygon(fixture.Definition.World, Spec).Exterior, coverage.Coordinates);
+    }
+
+    // The scenario's truth: the transit crosses the sanctuary while the
+    // seasonal restriction is in force, and would not in high summer.
+    [Fact]
+    public void The_route_crosses_the_sanctuary_in_season()
+    {
+        var definition = fixture.Definition;
+        var route = definition.Routes[0];
+        var path = route.Waypoints.Select(name => definition.Places[name]).ToList();
+
+        var (relation, start, end) = RouteWarnings.Relate(path, WarningGeometryKind.Area, WarningShape.Area(Spec.Area).Points);
+
+        Assert.Equal(WarningRouteRelation.Crosses, relation);
+        Assert.Equal(Spec.Area.East - Spec.Area.West, end - start, 6);
+        Assert.True(Spec.InForce(S421RouteBuilder.TimeAt(route, start)));
+        Assert.True(Spec.InForce(S421RouteBuilder.TimeAt(route, end)));
+        Assert.False(Spec.InForce(new DateTime(2026, 7, 1, 6, 0, 0, DateTimeKind.Utc)));
+    }
+
+    private S122MarineProtectedAreaDataset Read()
+    {
+        var dataset = Assert.IsType<S122DatasetData>(ScenarioLoading.Dataset(_catalog, Spec.DatasetName).Data).Model;
+        Assert.Equal("2.0.0", dataset.DeclaredEdition);
+        var typed = S122MarineProtectedAreaDataset.From(dataset, out var diagnostics);
+        Assert.Empty(diagnostics);
+        return typed;
+    }
+}
+
+/// <summary>The S-125 buoys and lights read back as the aids the scenario defines.</summary>
+public sealed class S125RoundTripTests(WarningsOnRouteFixture fixture) : IClassFixture<WarningsOnRouteFixture>
+{
+    private readonly FileDatasetCatalog _catalog = ScenarioLoading.Catalog(fixture.Scenario);
+
+    private S125AidsSpec Spec => fixture.Definition.Aids!;
+
+    [Fact]
+    public void Every_buoy_reads_back_at_its_position_and_kind()
+    {
+        var dataset = Read();
+        var buoys = dataset.Aids.OfType<S125Buoy>().ToList();
+
+        Assert.Equal(Spec.Buoys.Count, buoys.Count);
+        for (var i = 0; i < Spec.Buoys.Count; i++)
+        {
+            var spec = Spec.Buoys[i];
+            var buoy = buoys.Single(b => b.Id == Spec.BuoyId(i));
+            Assert.Equal(S125AidsWriter.FeatureType(spec.Mark), buoy.FeatureType);
+            Assert.Equal(
+                spec.Mark switch
+                {
+                    BuoyMark.PortHand or BuoyMark.StarboardHand => S125BuoyKind.Lateral,
+                    BuoyMark.SafeWater => S125BuoyKind.SafeWater,
+                    _ => S125BuoyKind.Cardinal,
+                },
+                buoy.Kind);
+            Assert.Equal(S125AidsWriter.Position(fixture.Definition.World, spec), buoy.Position);
+            Assert.Equal(spec.Number, buoy.ExtraAttributes["atoNNumber"]);
+            Assert.Null(buoy.HostStructure);
+        }
+    }
+
+    [Fact]
+    public void Every_light_is_hosted_by_its_buoy()
+    {
+        var dataset = Read();
+        var lights = dataset.Aids.OfType<S125Light>().ToList();
+
+        var lit = Enumerable.Range(0, Spec.Buoys.Count).Where(i => Spec.Buoys[i].Light is not null).ToList();
+        Assert.Equal(lit.Count, lights.Count);
+        foreach (var i in lit)
+        {
+            var light = lights.Single(l => l.Id == Spec.LightId(i));
+            Assert.Equal(S125LightKind.AllAround, light.Kind);
+            Assert.Equal(Spec.BuoyId(i), light.HostStructure?.Id);
+            Assert.Equal(S125AidsWriter.Position(fixture.Definition.World, Spec.Buoys[i]), light.Position);
+        }
+    }
+
+    // The lateral buoys gate the dredged channel: port hand on its north
+    // edge, starboard hand on its south edge (buoyage eastward, IALA A).
+    [Fact]
+    public void The_lateral_buoys_mark_the_channel_edges()
+    {
+        var channel = fixture.Definition.DredgedChannels[0].Area;
+
+        Assert.All(Spec.Buoys.Where(b => b.Mark == BuoyMark.PortHand), b => Assert.Equal(channel.North, b.Y));
+        Assert.All(Spec.Buoys.Where(b => b.Mark == BuoyMark.StarboardHand), b => Assert.Equal(channel.South, b.Y));
+    }
+
+    private S125AtonDataset Read()
+    {
+        var dataset = Assert.IsType<S125DatasetData>(ScenarioLoading.Dataset(_catalog, Spec.DatasetName).Data).Model;
+        Assert.Equal("1.0.0", dataset.DeclaredEdition);
+        var typed = S125AtonDataset.From(dataset, out var diagnostics);
+        Assert.Empty(diagnostics);
+        return typed;
     }
 }
