@@ -17,7 +17,9 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// <para>
 /// S-102 cells are found the same way as the pick report and
 /// <c>sample_coverage</c> (<see cref="CoveragePickHelper"/>): reproject into
-/// the grid CRS and floor to the containing cell. NoData cells (S-102 fill
+/// the grid CRS and floor to the containing cell. Swapped axis order, other
+/// geographic CRSs and the 0…360° longitude frame are absorbed at lookup by
+/// <see cref="PassageGrid"/>. NoData cells (S-102 fill
 /// value 1 000 000) fall through to S-101. Where S-102 surfaces overlap, the
 /// finest grid wins.
 /// </para>
@@ -80,7 +82,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
     {
         foreach (var grid in _grids)
         {
-            if (Intersects(grid.Bounds, south, west, north, east))
+            if (grid.Intersects(south, west, north, east))
             {
                 return grid.SpacingMeters;
             }
@@ -131,22 +133,19 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
         lat >= b.SouthLatitude - padDegrees && lat <= b.NorthLatitude + padDegrees
         && lon >= b.WestLongitude - padDegrees && lon <= b.EastLongitude + padDegrees;
 
-    private static bool Intersects(BoundingBox b, double south, double west, double north, double east) =>
-        b.NorthLatitude >= south && b.SouthLatitude <= north && b.EastLongitude >= west && b.WestLongitude <= east;
-
     /// <summary>One S-102 coverage, sampled directly from its value array.</summary>
     private sealed class S102Grid
     {
         private readonly BathymetryCoverage _coverage;
-        private readonly ICrsTransform _toNative;
+        private readonly PassageGrid _grid;
         private readonly int? _datum;
 
-        private S102Grid(string datasetId, BoundingBox bounds, BathymetryCoverage coverage, ICrsTransform toNative, int? datum, double spacingMeters)
+        private S102Grid(string datasetId, BoundingBox bounds, BathymetryCoverage coverage, PassageGrid grid, int? datum, double spacingMeters)
         {
             DatasetId = datasetId;
             Bounds = bounds;
             _coverage = coverage;
-            _toNative = toNative;
+            _grid = grid;
             _datum = datum;
             SpacingMeters = spacingMeters;
         }
@@ -162,11 +161,16 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             try
             {
                 var coverage = source.Coverage;
-                var crs = source.Metadata.HorizontalCRS;
-                var toNative = transforms.Create("EPSG:4326", crs);
-                var spacing = SpacingInMeters(coverage, toNative.IsIdentity ? null : transforms.Create(crs, "EPSG:4326"));
+                var grid = PassageGrid.Create(
+                    coverage.OriginLatitude, coverage.OriginLongitude,
+                    coverage.SpacingLatitudinal, coverage.SpacingLongitudinal,
+                    coverage.NumPointsLatitudinal, coverage.NumPointsLongitudinal,
+                    source.Dataset.HorizontalCRS,
+                    source.Dataset.AxisOrder,
+                    transforms);
+                var spacing = SpacingInMeters(grid);
                 return spacing > 0
-                    ? new S102Grid(dataset.Id.Value, dataset.Bounds, coverage, toNative, source.Dataset.VerticalDatum, spacing)
+                    ? new S102Grid(dataset.Id.Value, dataset.Bounds, coverage, grid, source.Dataset.VerticalDatum, spacing)
                     : null;
             }
             catch (Exception ex) when (ex is NotSupportedException or FormatException or OverflowException or ArgumentException or ObjectDisposedException)
@@ -177,22 +181,28 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             }
         }
 
+        public bool Intersects(double south, double west, double north, double east) =>
+            _grid.Intersects(Bounds, south, west, north, east);
+
         public ChartedDepth? Sample(double latitude, double longitude)
         {
-            if (!Contains(Bounds, latitude, longitude))
+            // A geographic grid's own extent is checked by the row and column
+            // range below; the declared bounds are a cheap early out before a
+            // projected grid's reprojection.
+            if (!_grid.IsGeographic && !Contains(Bounds, latitude, longitude))
             {
                 return null;
             }
 
-            var (x, y) = _toNative.IsIdentity ? (longitude, latitude) : _toNative.Transform(longitude, latitude);
-            var row = (int)Math.Floor((y - _coverage.OriginLatitude) / _coverage.SpacingLatitudinal);
-            var col = (int)Math.Floor((x - _coverage.OriginLongitude) / _coverage.SpacingLongitudinal);
-            if (row < 0 || row >= _coverage.NumPointsLatitudinal || col < 0 || col >= _coverage.NumPointsLongitudinal)
+            var (x, y) = _grid.ToGrid(latitude, longitude);
+            var row = (int)Math.Floor((y - _grid.OriginY) / _grid.SpacingY);
+            var col = (int)Math.Floor((x - _grid.OriginX) / _grid.SpacingX);
+            if (row < 0 || row >= _grid.Rows || col < 0 || col >= _grid.Columns)
             {
                 return null;
             }
 
-            var value = _coverage.Values[row * _coverage.NumPointsLongitudinal + col];
+            var value = _coverage.Values[row * _grid.Columns + col];
             if (value.Depth == S102CoverageSource.FillValue || !float.IsFinite(value.Depth))
             {
                 return null;
@@ -205,21 +215,13 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
         }
 
         // Measures a cell in metres by converting two neighbouring grid nodes to WGS-84.
-        private static double SpacingInMeters(BathymetryCoverage coverage, ICrsTransform? toWgs84)
+        private static double SpacingInMeters(PassageGrid grid)
         {
-            double Measure(double x0, double y0, double x1, double y1)
-            {
-                var (lon0, lat0) = toWgs84 is null ? (x0, y0) : toWgs84.Transform(x0, y0);
-                var (lon1, lat1) = toWgs84 is null ? (x1, y1) : toWgs84.Transform(x1, y1);
-                return PassageGeodesy.GreatCircleDistanceMeters(new GeoPosition(lat0, lon0), new GeoPosition(lat1, lon1));
-            }
-
-            var midRow = coverage.NumPointsLatitudinal / 2;
-            var midCol = coverage.NumPointsLongitudinal / 2;
-            var x = coverage.OriginLongitude + midCol * coverage.SpacingLongitudinal;
-            var y = coverage.OriginLatitude + midRow * coverage.SpacingLatitudinal;
-            var alongX = Measure(x, y, x + coverage.SpacingLongitudinal, y);
-            var alongY = Measure(x, y, x, y + coverage.SpacingLatitudinal);
+            var x = grid.OriginX + (grid.Columns / 2 * grid.SpacingX);
+            var y = grid.OriginY + (grid.Rows / 2 * grid.SpacingY);
+            var origin = grid.ToWgs84(x, y);
+            var alongX = PassageGeodesy.GreatCircleDistanceMeters(origin, grid.ToWgs84(x + grid.SpacingX, y));
+            var alongY = PassageGeodesy.GreatCircleDistanceMeters(origin, grid.ToWgs84(x, y + grid.SpacingY));
             return Math.Min(alongX, alongY);
         }
     }

@@ -18,7 +18,7 @@ public sealed record PassageDataSources(IChartedDepthSource Depth, IWaterLevelSo
     /// series are used; other products are ignored.
     /// </summary>
     /// <param name="datasets">The loaded datasets, such as <see cref="IDatasetCatalog.Datasets"/>.</param>
-    /// <param name="transforms">Reprojects WGS-84 into each S-102 grid's native CRS.</param>
+    /// <param name="transforms">Reprojects WGS-84 into a projected S-102 or S-104 grid's native CRS.</param>
     /// <param name="options">Tuning, or <c>null</c> for the defaults.</param>
     /// <returns>The sources.</returns>
     public static PassageDataSources FromDatasets(
@@ -33,7 +33,7 @@ public sealed record PassageDataSources(IChartedDepthSource Depth, IWaterLevelSo
         var snapshot = datasets.ToList();
         return new PassageDataSources(
             new CatalogChartedDepthSource(snapshot, transforms, options),
-            new CatalogWaterLevelSource(snapshot, options));
+            new CatalogWaterLevelSource(snapshot, transforms, options));
     }
 }
 
