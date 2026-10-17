@@ -95,12 +95,13 @@ internal static class ViewerStateMcpAdapters
             [Description("Dataset id, as list_datasets reports it.")] string datasetId,
             [Description("True shows the dataset on the map, false hides it; omit to leave it.")] bool? visible = null,
             [Description("Opacity in 0..1; omit to leave it.")] double? opacity = null,
+            [Description("Move in the draw order: 'up', 'down', 'front' or 'back'; omit to leave it.")] string? order = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetDatasetStateRequest(datasetId, visible, opacity), ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetDatasetStateRequest(datasetId, visible, opacity, order), ct));
         return Tool(del, SetDatasetStateTool.Name,
-            "Shows or hides a loaded dataset and sets its opacity, as the eye icon and opacity control in the Datasets "
-            + "list do. Some datasets load hidden (e.g. gridded S-104 water-level surfaces, or duplicate variants in an "
-            + "exchange set); use this to switch them on. With neither 'visible' nor 'opacity' it only reports the "
+            "Shows or hides a loaded dataset, sets its opacity and moves it in the draw order, as the eye icon, opacity "
+            + "control and move buttons in the Datasets list do. Some datasets load hidden (e.g. gridded S-104 water-level surfaces, or duplicate variants in an "
+            + "exchange set); use this to switch them on. With no change given it only reports the "
             + "current state. Returns the state before and after. Mutating; viewer-injected tool.");
     }
 

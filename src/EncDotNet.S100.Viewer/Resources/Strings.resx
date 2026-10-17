@@ -3663,6 +3663,15 @@
   <data name="TimelinePanel_BandReveal" xml:space="preserve">
     <value>Reveal in Library</value>
   </data>
+  <data name="Label_TimelineLaneJump" xml:space="preserve">
+    <value>Go to nearest data</value>
+  </data>
+  <data name="Tooltip_TimelineLaneJump" xml:space="preserve">
+    <value>No data at this time: go to this layer's nearest data</value>
+  </data>
+  <data name="Tooltip_TimelineLaneBand" xml:space="preserve">
+    <value>Show this layer's Library actions: Get, Load, Reveal in Library</value>
+  </data>
   <data name="TimelinePanel_BandDownloadingFormat" xml:space="preserve">
     <value>Downloading · {0:P0}</value>
   </data>

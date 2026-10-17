@@ -88,7 +88,36 @@
             <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
             <Setter Property="FontSize" Value="10.5" />
         </Style>
-        <Style Selector="Panel.LaneTrack.actions">
+        <!-- A lane's track and its layer time are buttons with an empty
+             template, so the keyboard, screen readers and the ui_* tools
+             reach their actions as well as the pointer (#733). -->
+        <Style Selector="Button.LaneTrack, Button.LaneTime">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      Background="Transparent"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.LaneTrack">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.LaneTrack.actions">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.LaneTime">
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Button.LaneTime.warning">
             <Setter Property="Cursor" Value="Hand" />
         </Style>
         <Style Selector="TextBlock.LaneTime">
@@ -96,7 +125,6 @@
         </Style>
         <Style Selector="TextBlock.LaneTime.warning">
             <Setter Property="Opacity" Value="1" />
-            <Setter Property="Cursor" Value="Hand" />
         </Style>
         <!-- #904: the min-UKC tick on the passage lane takes the verdict colour. -->
         <Style Selector="views|PassageLaneControl.success">
@@ -156,64 +184,83 @@
                                        VerticalAlignment="Center" />
                         </DockPanel>
                         <!-- The layer time; with no data, a click jumps to the nearest data (D3). -->
-                        <TextBlock Classes="LaneTime"
-                                   Classes.warning="{Binding IsHidden}"
-                                   Text="{Binding LayerTime}"
-                                   FontFamily="Menlo, Consolas, monospace"
-                                   FontSize="10.5"
-                                   TextTrimming="CharacterEllipsis" />
+                        <Button Classes="LaneTime"
+                                Classes.warning="{Binding IsHidden}"
+                                IsTabStop="{Binding IsHidden}"
+                                Click="OnLaneTimeClick"
+                                AutomationProperties.AutomationId="Timeline.Lane.Time"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_TimelineLaneJump}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelineLaneJump}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineLaneJump}">
+                            <TextBlock Classes="LaneTime"
+                                       Classes.warning="{Binding IsHidden}"
+                                       Text="{Binding LayerTime}"
+                                       FontFamily="Menlo, Consolas, monospace"
+                                       FontSize="10.5"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Button>
                     </StackPanel>
                 </DockPanel>
                 <!-- The lane's data: Library windows (dashed online, outlined on
-                     disk) behind the loaded band; a click opens its actions (E5). -->
-                <Panel Grid.Column="1"
-                       Classes="LaneTrack"
-                       Classes.actions="{Binding HasActions}"
-                       Background="Transparent"
-                       Margin="2,0,2,0">
-                    <FlyoutBase.AttachedFlyout>
-                        <Flyout Placement="Top">
-                            <StackPanel Spacing="6" MinWidth="220" x:DataType="vm:TimelineLaneViewModel">
-                                <TextBlock Text="{Binding ActionTitle}" FontWeight="SemiBold" FontSize="13" />
-                                <TextBlock Text="{Binding ActionDetail}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" MaxWidth="320" />
-                                <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
-                                    <Button Classes="Primary"
-                                            AutomationProperties.AutomationId="Timeline.Lane.Get"
-                                            Height="28" MinHeight="0" Padding="12,0" FontSize="12"
-                                            IsVisible="{Binding CanGet}"
-                                            Content="{Binding GetText}"
-                                            Command="{Binding GetCommand}" />
-                                    <Button Classes="Outline"
-                                            AutomationProperties.AutomationId="Timeline.Lane.Load"
-                                            Height="28" MinHeight="0" Padding="12,0" FontSize="12"
-                                            IsVisible="{Binding CanLoad}"
-                                            Content="{x:Static loc:Strings.TimelinePanel_BandLoad}"
-                                            Command="{Binding LoadCommand}" />
-                                    <Button Classes="Ghost"
-                                            AutomationProperties.AutomationId="Timeline.Lane.Reveal"
-                                            Height="28" MinHeight="0" Padding="8,0" FontSize="12"
-                                            Content="{x:Static loc:Strings.TimelinePanel_BandReveal}"
-                                            Command="{Binding RevealCommand}" />
+                     disk) behind the loaded band; a click opens its actions (E5).
+                     Focusing it outlines the lane's footprint, as hovering does. -->
+                <Button Grid.Column="1"
+                        Classes="LaneTrack"
+                        Classes.actions="{Binding HasActions}"
+                        IsTabStop="{Binding HasActions}"
+                        Click="OnLaneTrackClick"
+                        GotFocus="OnLaneTrackFocused"
+                        LostFocus="OnLaneTrackUnfocused"
+                        AutomationProperties.AutomationId="Timeline.Lane.Band"
+                        AutomationProperties.Name="{Binding Code}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelineLaneBand}"
+                        ToolTip.Tip="{Binding Tooltip}"
+                        Margin="2,0,2,0">
+                    <Panel Background="Transparent">
+                        <FlyoutBase.AttachedFlyout>
+                            <Flyout Placement="Top">
+                                <StackPanel Spacing="6" MinWidth="220" x:DataType="vm:TimelineLaneViewModel">
+                                    <TextBlock Text="{Binding ActionTitle}" FontWeight="SemiBold" FontSize="13" />
+                                    <TextBlock Text="{Binding ActionDetail}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" MaxWidth="320" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,4,0,0">
+                                        <Button Classes="Primary"
+                                                AutomationProperties.AutomationId="Timeline.Lane.Get"
+                                                Height="28" MinHeight="0" Padding="12,0" FontSize="12"
+                                                IsVisible="{Binding CanGet}"
+                                                Content="{Binding GetText}"
+                                                Command="{Binding GetCommand}" />
+                                        <Button Classes="Outline"
+                                                AutomationProperties.AutomationId="Timeline.Lane.Load"
+                                                Height="28" MinHeight="0" Padding="12,0" FontSize="12"
+                                                IsVisible="{Binding CanLoad}"
+                                                Content="{x:Static loc:Strings.TimelinePanel_BandLoad}"
+                                                Command="{Binding LoadCommand}" />
+                                        <Button Classes="Ghost"
+                                                AutomationProperties.AutomationId="Timeline.Lane.Reveal"
+                                                Height="28" MinHeight="0" Padding="8,0" FontSize="12"
+                                                Content="{x:Static loc:Strings.TimelinePanel_BandReveal}"
+                                                Command="{Binding RevealCommand}" />
+                                    </StackPanel>
                                 </StackPanel>
-                            </StackPanel>
-                        </Flyout>
-                    </FlyoutBase.AttachedFlyout>
-                    <views:KnownBandControl Height="18"
-                                            VerticalAlignment="Center"
-                                            Stroke="{Binding Swatch}"
-                                            OnlineBands="{Binding OnlineBands}"
-                                            OnDiskBands="{Binding OnDiskBands}"
-                                            Progress="{Binding Progress}" />
-                    <views:CoverageBandControl Height="12"
-                                               VerticalAlignment="Center"
-                                               Fill="{Binding Swatch}"
-                                               TrackBrush="#14808080"
-                                               HatchBrush="#59A1A1AA"
-                                               TickRise="0"
-                                               BandCornerRadius="3"
-                                               Bands="{Binding Bands}"
-                                               Gaps="{Binding Gaps}" />
-                </Panel>
+                            </Flyout>
+                        </FlyoutBase.AttachedFlyout>
+                        <views:KnownBandControl Height="18"
+                                                VerticalAlignment="Center"
+                                                Stroke="{Binding Swatch}"
+                                                OnlineBands="{Binding OnlineBands}"
+                                                OnDiskBands="{Binding OnDiskBands}"
+                                                Progress="{Binding Progress}" />
+                        <views:CoverageBandControl Height="12"
+                                                   VerticalAlignment="Center"
+                                                   Fill="{Binding Swatch}"
+                                                   TrackBrush="#14808080"
+                                                   HatchBrush="#59A1A1AA"
+                                                   TickRise="0"
+                                                   BandCornerRadius="3"
+                                                   Bands="{Binding Bands}"
+                                                   Gaps="{Binding Gaps}" />
+                    </Panel>
+                </Button>
             </Grid>
         </DataTemplate>
     </UserControl.Resources>

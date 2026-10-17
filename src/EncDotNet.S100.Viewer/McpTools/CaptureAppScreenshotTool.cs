@@ -45,32 +45,68 @@ internal sealed class CaptureAppScreenshotTool
     /// <summary>Largest accepted <c>scale</c>; higher values are clamped down.</summary>
     public const double MaxScale = 3.0;
 
+    /// <summary>The <c>panel</c> value that crops to the map.</summary>
+    public const string MapPanel = "map";
+
     private readonly IAppScreenshotProvider _provider;
+    private readonly IViewerUiControllerAccessor? _panels;
 
     /// <summary>Creates a new <see cref="CaptureAppScreenshotTool"/>.</summary>
-    public CaptureAppScreenshotTool(IAppScreenshotProvider provider)
+    /// <param name="provider">Renders the window, or one region of it.</param>
+    /// <param name="panels">Resolves a panel id to its dock for the <c>panel</c> crop; null accepts only 'map'.</param>
+    public CaptureAppScreenshotTool(IAppScreenshotProvider provider, IViewerUiControllerAccessor? panels = null)
     {
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;
+        _panels = panels;
     }
+
+    /// <summary>Executes the tool for the whole window.</summary>
+    /// <param name="scale">
+    /// Device pixels per logical pixel (2 = Retina-sharp). Null captures at 1;
+    /// other values are clamped to [<see cref="MinScale"/>, <see cref="MaxScale"/>].
+    /// </param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public Task<ToolResult<CaptureAppScreenshotResult>> InvokeAsync(
+        double? scale = null,
+        CancellationToken cancellationToken = default) =>
+        InvokeAsync(scale, panel: null, cancellationToken);
 
     /// <summary>Executes the tool.</summary>
     /// <param name="scale">
     /// Device pixels per logical pixel (2 = Retina-sharp). Null captures at 1;
     /// other values are clamped to [<see cref="MinScale"/>, <see cref="MaxScale"/>].
     /// </param>
+    /// <param name="panel">
+    /// Crops to one panel: a panel id from <c>list_panels</c> (its dock, while it
+    /// is showing) or <see cref="MapPanel"/>; null captures the whole window.
+    /// </param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
     public async Task<ToolResult<CaptureAppScreenshotResult>> InvokeAsync(
-        double? scale = null,
+        double? scale,
+        string? panel,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        var region = AppScreenshotRegion.Window;
+        if (!string.IsNullOrWhiteSpace(panel))
+        {
+            var resolved = await ResolveRegionAsync(panel.Trim(), cancellationToken).ConfigureAwait(false);
+            if (!resolved.TryGetValue(out region))
+            {
+                resolved.TryGetError(out var error);
+                return ToolResult<CaptureAppScreenshotResult>.Err(error!);
+            }
+        }
 
         var effectiveScale = scale is { } s && double.IsFinite(s) ? Math.Clamp(s, MinScale, MaxScale) : 1.0;
         byte[]? bytes;
         try
         {
-            bytes = await _provider.CapturePngAsync(effectiveScale, cancellationToken).ConfigureAwait(false);
+            bytes = region == AppScreenshotRegion.Window
+                ? await _provider.CapturePngAsync(effectiveScale, cancellationToken).ConfigureAwait(false)
+                : await _provider.CapturePngAsync(effectiveScale, region, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -82,6 +118,11 @@ internal sealed class CaptureAppScreenshotTool
                 new WindowNotReady($"capture failed: {ex.GetType().Name}: {ex.Message}"));
         }
 
+        if ((bytes is null || bytes.Length == 0) && region != AppScreenshotRegion.Window && region != AppScreenshotRegion.Map)
+        {
+            return ToolResult<CaptureAppScreenshotResult>.Err(new PanelNotShowing(panel!.Trim()));
+        }
+
         if (bytes is null || bytes.Length == 0)
         {
             return ToolResult<CaptureAppScreenshotResult>.Err(
@@ -91,6 +132,30 @@ internal sealed class CaptureAppScreenshotTool
         var (width, height) = TryReadPngSize(bytes);
         return ToolResult<CaptureAppScreenshotResult>.Ok(
             new CaptureAppScreenshotResult(width, height, "png", bytes));
+    }
+
+    /// <summary>Maps a <c>panel</c> value to the region that shows it.</summary>
+    private async Task<ToolResult<AppScreenshotRegion>> ResolveRegionAsync(string panel, CancellationToken ct)
+    {
+        if (string.Equals(panel, MapPanel, StringComparison.OrdinalIgnoreCase))
+            return ToolResult<AppScreenshotRegion>.Ok(AppScreenshotRegion.Map);
+        if (_panels?.Current is not { } controller)
+            return ToolResult<AppScreenshotRegion>.Err(new UiNotReady("the viewer's UI controller has not been initialised yet"));
+
+        var panels = await controller.GetPanelsAsync(ct).ConfigureAwait(false);
+        var index = panels.ToList().FindIndex(p => string.Equals(p.Id, panel, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+            return ToolResult<AppScreenshotRegion>.Err(new PanelNotFound(panel));
+        var state = panels[index];
+        if (!state.Showing)
+            return ToolResult<AppScreenshotRegion>.Err(new PanelNotShowing(state.Id));
+        return state.Dock switch
+        {
+            "Left" => ToolResult<AppScreenshotRegion>.Ok(AppScreenshotRegion.LeftDock),
+            "Right" => ToolResult<AppScreenshotRegion>.Ok(AppScreenshotRegion.RightDock),
+            "Bottom" => ToolResult<AppScreenshotRegion>.Ok(AppScreenshotRegion.BottomDock),
+            _ => ToolResult<AppScreenshotRegion>.Err(new PanelNotShowing(state.Id)),
+        };
     }
 
     /// <summary>

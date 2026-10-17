@@ -128,7 +128,9 @@ internal sealed record DatasetStateDto(
     [property: Description("Dataset opacity in 0..1, after the call.")] double Opacity,
     [property: Description("Whether the dataset drew, before the call.")] bool PreviousVisible,
     [property: Description("Dataset opacity in 0..1, before the call.")] double PreviousOpacity,
-    [property: Description("True when the call changed anything.")] bool Changed);
+    [property: Description("True when the call changed anything.")] bool Changed,
+    [property: Description("Row in the draw order after the call; 0 paints on top.")] int Position = 0,
+    [property: Description("Row in the draw order before the call.")] int PreviousPosition = 0);
 
 /// <summary>A dataset's validation findings, as its Validation tab shows them.</summary>
 [Description("A dataset's validation findings, as the inspector's Validation tab shows them.")]
@@ -357,7 +359,7 @@ internal sealed partial class SetViewTimeTool(IViewerTimelineController timeline
 // ---------------------------------------------------------------------------
 
 /// <summary>Request for <see cref="SetDatasetStateTool"/>.</summary>
-internal sealed record SetDatasetStateRequest(string DatasetId, bool? Visible, double? Opacity);
+internal sealed record SetDatasetStateRequest(string DatasetId, bool? Visible, double? Opacity, string? Order = null);
 
 /// <summary>
 /// Shows or hides a loaded dataset and sets its opacity (MCP
@@ -380,8 +382,17 @@ internal sealed class SetDatasetStateTool(IViewerDatasetStateController datasets
         if (request.Opacity is { } opacity && (double.IsNaN(opacity) || opacity < 0 || opacity > 1))
             return ToolResult<DatasetStateDto>.Err(new InvalidArgument("opacity", "must be between 0 and 1"));
 
+        DatasetOrderMove? order = null;
+        if (!string.IsNullOrWhiteSpace(request.Order))
+        {
+            var name = request.Order.Trim();
+            if (!char.IsLetter(name[0]) || name.Contains(',') || !Enum.TryParse<DatasetOrderMove>(name, ignoreCase: true, out var move))
+                return ToolResult<DatasetStateDto>.Err(new InvalidArgument("order", "must be 'up', 'down', 'front' or 'back'"));
+            order = move;
+        }
+
         var id = request.DatasetId.Trim();
-        var outcome = await _datasets.SetStateAsync(id, request.Visible, request.Opacity, ct).ConfigureAwait(false);
+        var outcome = await _datasets.SetStateAsync(id, request.Visible, request.Opacity, order, ct).ConfigureAwait(false);
         if (outcome is null)
             return ToolResult<DatasetStateDto>.Err(new DatasetNotFound(new DatasetId(id)));
         return ToolResult<DatasetStateDto>.Ok(new DatasetStateDto(
@@ -391,7 +402,10 @@ internal sealed class SetDatasetStateTool(IViewerDatasetStateController datasets
             outcome.Opacity,
             outcome.PreviousVisible,
             outcome.PreviousOpacity,
-            outcome.Visible != outcome.PreviousVisible || outcome.Opacity != outcome.PreviousOpacity));
+            outcome.Visible != outcome.PreviousVisible || outcome.Opacity != outcome.PreviousOpacity
+                || outcome.Position != outcome.PreviousPosition,
+            outcome.Position,
+            outcome.PreviousPosition));
     }
 }
 

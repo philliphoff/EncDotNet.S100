@@ -13,15 +13,17 @@ namespace EncDotNet.S100.Viewer.Services;
 internal interface IViewerDatasetStateController
 {
     /// <summary>
-    /// Applies <paramref name="visible"/> and <paramref name="opacity"/> (each
-    /// left unchanged when null) to the dataset with <paramref name="id"/>.
+    /// Applies <paramref name="visible"/>, <paramref name="opacity"/> and
+    /// <paramref name="order"/> (each left unchanged when null) to the dataset
+    /// with <paramref name="id"/>.
     /// </summary>
     /// <param name="id">The dataset id, as <c>list_datasets</c> reports it.</param>
     /// <param name="visible">Whether the dataset draws, or null to leave it.</param>
     /// <param name="opacity">Opacity in 0..1, or null to leave it.</param>
+    /// <param name="order">A move in the draw order, as the Datasets list's move buttons and menu do, or null to leave it.</param>
     /// <param name="ct">A cancellation token.</param>
     /// <returns>The state before and after, or null when no dataset has that id.</returns>
-    Task<DatasetStateOutcome?> SetStateAsync(string id, bool? visible, double? opacity, CancellationToken ct = default);
+    Task<DatasetStateOutcome?> SetStateAsync(string id, bool? visible, double? opacity, DatasetOrderMove? order = null, CancellationToken ct = default);
 
     /// <summary>
     /// Selects the dataset with <paramref name="id"/> in the Datasets panel as
@@ -36,6 +38,22 @@ internal interface IViewerDatasetStateController
     /// <param name="ct">A cancellation token.</param>
     /// <returns>The selection and its validation summary, or null when no dataset has that id.</returns>
     Task<DatasetSelectionOutcome?> SelectAsync(string id, DatasetInspectorTab? tab, TimeSpan validationTimeout, CancellationToken ct = default);
+}
+
+/// <summary>A move in the Datasets list's draw order: the top row paints over the rest.</summary>
+internal enum DatasetOrderMove
+{
+    /// <summary>One row up (Move up).</summary>
+    Up,
+
+    /// <summary>One row down (Move down).</summary>
+    Down,
+
+    /// <summary>To the top row (Bring to front).</summary>
+    Front,
+
+    /// <summary>To the bottom row (Send to back).</summary>
+    Back,
 }
 
 /// <summary>Whether a dataset's validation has run.</summary>
@@ -83,13 +101,17 @@ internal sealed record DatasetSelectionOutcome(
 /// <param name="Opacity">The dataset's opacity, afterwards.</param>
 /// <param name="PreviousVisible">Whether the dataset drew, before.</param>
 /// <param name="PreviousOpacity">The dataset's opacity, before.</param>
+/// <param name="Position">The dataset's row in the draw order, afterwards (0 paints on top).</param>
+/// <param name="PreviousPosition">The dataset's row in the draw order, before.</param>
 internal sealed record DatasetStateOutcome(
     string Id,
     string Spec,
     bool Visible,
     double Opacity,
     bool PreviousVisible,
-    double PreviousOpacity);
+    double PreviousOpacity,
+    int Position = 0,
+    int PreviousPosition = 0);
 
 /// <summary>Default <see cref="IViewerDatasetStateController"/> over <see cref="DatasetsViewModel"/>.</summary>
 internal sealed class ViewerDatasetStateController : IViewerDatasetStateController
@@ -105,7 +127,8 @@ internal sealed class ViewerDatasetStateController : IViewerDatasetStateControll
     }
 
     /// <inheritdoc />
-    public async Task<DatasetStateOutcome?> SetStateAsync(string id, bool? visible, double? opacity, CancellationToken ct = default)
+    public async Task<DatasetStateOutcome?> SetStateAsync(
+        string id, bool? visible, double? opacity, DatasetOrderMove? order = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(id);
         ct.ThrowIfCancellationRequested();
@@ -118,12 +141,23 @@ internal sealed class ViewerDatasetStateController : IViewerDatasetStateControll
 
             var previousVisible = entry.IsVisible;
             var previousOpacity = entry.Opacity;
+            var previousPosition = _datasets.Entries.IndexOf(entry);
             if (visible is { } show)
                 entry.IsVisible = show;
             if (opacity is { } alpha)
                 entry.Opacity = alpha;
+            var move = order switch
+            {
+                DatasetOrderMove.Up => _datasets.MoveUpCommand,
+                DatasetOrderMove.Down => _datasets.MoveDownCommand,
+                DatasetOrderMove.Front => _datasets.BringToFrontCommand,
+                DatasetOrderMove.Back => _datasets.SendToBackCommand,
+                _ => null,
+            };
+            move?.Execute(entry);
             outcome = new DatasetStateOutcome(
-                entry.DisplayName, entry.ProductSpec, entry.IsVisible, entry.Opacity, previousVisible, previousOpacity);
+                entry.DisplayName, entry.ProductSpec, entry.IsVisible, entry.Opacity, previousVisible, previousOpacity,
+                _datasets.Entries.IndexOf(entry), previousPosition);
         }).ConfigureAwait(false);
         return outcome;
     }

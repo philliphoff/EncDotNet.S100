@@ -52,4 +52,37 @@ internal interface IAppScreenshotProvider
     /// target is attached or it has no on-screen size yet.
     /// </returns>
     Task<byte[]?> CapturePngAsync(double scale, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Renders one <paramref name="region"/> of <see cref="Target"/> (a dock or
+    /// the map) to PNG-encoded bytes at <paramref name="scale"/> device pixels
+    /// per logical pixel, marshalling to the UI thread as needed.
+    /// </summary>
+    /// <param name="scale">Device pixels per logical pixel; must be positive.</param>
+    /// <param name="region">The part of the window to capture.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>
+    /// PNG bytes of the region, or <see langword="null"/> when no target is
+    /// attached or the region is not showing.
+    /// </returns>
+    Task<byte[]?> CapturePngAsync(double scale, AppScreenshotRegion region, CancellationToken cancellationToken = default);
+}
+
+/// <summary>A part of the main window that <see cref="IAppScreenshotProvider"/> can capture on its own.</summary>
+internal enum AppScreenshotRegion
+{
+    /// <summary>The whole window.</summary>
+    Window,
+
+    /// <summary>The map, with its overlays (Time HUD, chips, scale bar).</summary>
+    Map,
+
+    /// <summary>The left dock, or the full-content panel (Settings) while it is open.</summary>
+    LeftDock,
+
+    /// <summary>The right dock.</summary>
+    RightDock,
+
+    /// <summary>The bottom dock (Timeline).</summary>
+    BottomDock,
 }

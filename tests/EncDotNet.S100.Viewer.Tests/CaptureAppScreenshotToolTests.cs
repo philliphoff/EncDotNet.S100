@@ -30,16 +30,25 @@ internal sealed class FakeAppScreenshotProvider : IAppScreenshotProvider
     public Task<byte[]?> CapturePngAsync(CancellationToken cancellationToken = default) =>
         CapturePngAsync(1.0, cancellationToken);
 
-    public Task<byte[]?> CapturePngAsync(double scale, CancellationToken cancellationToken = default)
+    public AppScreenshotRegion? LastRegion { get; private set; }
+
+    /// <summary>Regions the fake reports as not showing (it returns null for them).</summary>
+    public HashSet<AppScreenshotRegion> Hidden { get; } = [];
+
+    public Task<byte[]?> CapturePngAsync(double scale, CancellationToken cancellationToken = default) =>
+        CapturePngAsync(scale, AppScreenshotRegion.Window, cancellationToken);
+
+    public Task<byte[]?> CapturePngAsync(double scale, AppScreenshotRegion region, CancellationToken cancellationToken = default)
     {
         Calls++;
         LastScale = scale;
+        LastRegion = region;
         if (_throw is not null)
         {
             throw _throw;
         }
 
-        return Task.FromResult(_png);
+        return Task.FromResult(Hidden.Contains(region) ? null : _png);
     }
 
     /// <summary>Builds a minimal but valid PNG header carrying the given dimensions.</summary>
@@ -168,6 +177,69 @@ public class CaptureAppScreenshotToolTests
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => tool.InvokeAsync(cancellationToken: cts.Token));
+    }
+
+    private static FakeUiControllerAccessor Panels(params ViewerPanelState[] panels) =>
+        new() { Current = new FakeViewerUiController(panels) };
+
+    private static ViewerPanelState Panel(string id, string dock, bool showing) =>
+        new(id, id, dock, Available: true, Selected: showing, DockOpen: showing, Showing: showing);
+
+    [Theory]
+    [InlineData("Datasets", "LeftDock")]
+    [InlineData("pickreport", "RightDock")]
+    [InlineData("Timeline", "BottomDock")]
+    [InlineData("MAP", "Map")]
+    public async Task Panel_crops_to_the_dock_showing_it(string panel, string region)
+    {
+        var expected = Enum.Parse<AppScreenshotRegion>(region);
+        var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(320, 700));
+        var tool = new CaptureAppScreenshotTool(provider, Panels(
+            Panel("Datasets", "Left", showing: true),
+            Panel("PickReport", "Right", showing: true),
+            Panel("Timeline", "Bottom", showing: true)));
+
+        var result = await tool.InvokeAsync(2, panel, TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(320, value!.Width);
+        Assert.Equal(expected, provider.LastRegion);
+        Assert.Equal(2, provider.LastScale);
+    }
+
+    [Fact]
+    public async Task Panel_reports_unknown_and_hidden_panels()
+    {
+        var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(10, 10));
+        var tool = new CaptureAppScreenshotTool(provider, Panels(Panel("Library", "Left", showing: false)));
+
+        Assert.True((await tool.InvokeAsync(null, "Nope", TestContext.Current.CancellationToken)).TryGetError(out var unknown));
+        Assert.Equal("panel_not_found", unknown!.Code);
+        Assert.True((await tool.InvokeAsync(null, "Library", TestContext.Current.CancellationToken)).TryGetError(out var hidden));
+        Assert.Equal("panel_not_showing", hidden!.Code);
+        Assert.Equal(0, provider.Calls);
+    }
+
+    [Fact]
+    public async Task Panel_reports_a_dock_the_window_does_not_show_as_not_showing()
+    {
+        var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(10, 10));
+        provider.Hidden.Add(AppScreenshotRegion.RightDock);
+        var tool = new CaptureAppScreenshotTool(provider, Panels(Panel("PickReport", "Right", showing: true)));
+
+        Assert.True((await tool.InvokeAsync(null, "PickReport", TestContext.Current.CancellationToken)).TryGetError(out var err));
+        Assert.Equal("panel_not_showing", err!.Code);
+    }
+
+    [Fact]
+    public async Task Map_needs_no_panel_controller_but_other_panels_do()
+    {
+        var provider = new FakeAppScreenshotProvider(FakeAppScreenshotProvider.MakePng(10, 10));
+        var tool = new CaptureAppScreenshotTool(provider);
+
+        Assert.True((await tool.InvokeAsync(null, "map", TestContext.Current.CancellationToken)).TryGetValue(out _));
+        Assert.True((await tool.InvokeAsync(null, "Datasets", TestContext.Current.CancellationToken)).TryGetError(out var err));
+        Assert.Equal("ui_not_ready", err!.Code);
     }
 
     [Fact]

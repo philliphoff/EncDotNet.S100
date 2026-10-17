@@ -368,7 +368,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         }
         if (_appScreenshot is not null)
         {
-            tools.Add(CaptureAppScreenshotMcpAdapter.Create(new CaptureAppScreenshotTool(_appScreenshot)));
+            tools.Add(CaptureAppScreenshotMcpAdapter.Create(new CaptureAppScreenshotTool(_appScreenshot, _uiControllerAccessor)));
         }
         if (_timeline is not null)
         {
