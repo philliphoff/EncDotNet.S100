@@ -6,9 +6,10 @@ using EncDotNet.S100.Validation;
 namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 
 /// <summary>
-/// A regular S-102 or S-104 grid's georeferencing as latitude rows and
-/// longitude columns, so the passage sources can find the cell or node under
-/// a WGS-84 position whatever quirks the producer wrote (#943).
+/// A regular S-102, S-104 or S-111 grid's georeferencing as latitude rows and
+/// longitude columns, so the passage sources, the pick report and
+/// <c>sample_coverage</c> find the cell or node under a WGS-84 position
+/// whatever quirks the producer wrote (#943).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -130,6 +131,90 @@ internal sealed class PassageGrid
             originLatitude, originLongitude, spacingLatitudinal, spacingLongitudinal, numPointsLatitudinal, numPointsLongitudinal,
             transforms.Create("EPSG:4326", crs),
             transforms.Create(crs, "EPSG:4326"));
+    }
+
+    /// <summary>
+    /// Builds the lookup for one grid from a coverage source's CRS string
+    /// (<c>EPSG:4258</c>, <c>4258</c>, or anything else the transform factory
+    /// understands).
+    /// </summary>
+    /// <param name="originLatitude">The encoded origin latitude.</param>
+    /// <param name="originLongitude">The encoded origin longitude.</param>
+    /// <param name="spacingLatitudinal">The encoded latitudinal spacing.</param>
+    /// <param name="spacingLongitudinal">The encoded longitudinal spacing.</param>
+    /// <param name="numPointsLatitudinal">The encoded number of latitudinal points.</param>
+    /// <param name="numPointsLongitudinal">The encoded number of longitudinal points.</param>
+    /// <param name="horizontalCrs">The declared CRS; an EPSG code is classified as in <see cref="Create"/>.</param>
+    /// <param name="axisOrder">The reader's axis-order assessment, if any.</param>
+    /// <param name="transforms">Reprojects WGS-84 into a projected grid's CRS.</param>
+    /// <returns>The lookup.</returns>
+    /// <exception cref="NotSupportedException">The factory cannot reproject the grid's CRS.</exception>
+    public static PassageGrid CreateForCrsName(
+        double originLatitude, double originLongitude,
+        double spacingLatitudinal, double spacingLongitudinal,
+        int numPointsLatitudinal, int numPointsLongitudinal,
+        string horizontalCrs,
+        AxisOrderAssessment? axisOrder,
+        ICrsTransformFactory transforms)
+    {
+        var code = horizontalCrs.StartsWith("EPSG:", StringComparison.OrdinalIgnoreCase) ? horizontalCrs[5..] : horizontalCrs;
+        if (int.TryParse(code, NumberStyles.None, CultureInfo.InvariantCulture, out var epsg))
+        {
+            return Create(originLatitude, originLongitude, spacingLatitudinal, spacingLongitudinal, numPointsLatitudinal, numPointsLongitudinal, epsg, axisOrder, transforms);
+        }
+
+        return new PassageGrid(
+            originLatitude, originLongitude, spacingLatitudinal, spacingLongitudinal, numPointsLatitudinal, numPointsLongitudinal,
+            transforms.Create("EPSG:4326", horizontalCrs),
+            transforms.Create(horizontalCrs, "EPSG:4326"));
+    }
+
+    /// <summary>
+    /// The cell containing a WGS-84 position, flooring from the origin as
+    /// S-102 cells do; <c>null</c> outside the grid.
+    /// </summary>
+    /// <param name="latitude">The latitude.</param>
+    /// <param name="longitude">The longitude, in any frame.</param>
+    /// <returns>The row and column, or <c>null</c>.</returns>
+    public (int Row, int Column)? FindCell(double latitude, double longitude)
+    {
+        var (x, y) = ToGrid(latitude, longitude);
+        var row = (int)Math.Floor((y - OriginY) / SpacingY);
+        var column = (int)Math.Floor((x - OriginX) / SpacingX);
+        return row >= 0 && row < Rows && column >= 0 && column < Columns ? (row, column) : null;
+    }
+
+    /// <summary>
+    /// The node nearest a WGS-84 position inside the grid's node extent, as
+    /// S-104 and S-111 grids are read; <c>null</c> outside it.
+    /// </summary>
+    /// <param name="latitude">The latitude.</param>
+    /// <param name="longitude">The longitude, in any frame.</param>
+    /// <returns>The row and column, or <c>null</c>.</returns>
+    public (int Row, int Column)? FindNearestNode(double latitude, double longitude)
+    {
+        var (x, y) = ToGrid(latitude, longitude);
+        var maxY = OriginY + ((Rows - 1) * SpacingY);
+        var maxX = OriginX + ((Columns - 1) * SpacingX);
+        if (y < Math.Min(OriginY, maxY) || y > Math.Max(OriginY, maxY)
+            || x < Math.Min(OriginX, maxX) || x > Math.Max(OriginX, maxX))
+        {
+            return null;
+        }
+
+        return (
+            Math.Clamp((int)Math.Round((y - OriginY) / SpacingY), 0, Rows - 1),
+            Math.Clamp((int)Math.Round((x - OriginX) / SpacingX), 0, Columns - 1));
+    }
+
+    /// <summary>A node's position in WGS-84, with its longitude in −180…180.</summary>
+    /// <param name="row">The node's row.</param>
+    /// <param name="column">The node's column.</param>
+    /// <returns>The position.</returns>
+    public GeoPosition NodeToWgs84(int row, int column)
+    {
+        var position = ToWgs84(OriginX + (column * SpacingX), OriginY + (row * SpacingY));
+        return new GeoPosition(position.Latitude, WrapNear(position.Longitude, 0));
     }
 
     /// <summary>A WGS-84 position in the grid's axes.</summary>

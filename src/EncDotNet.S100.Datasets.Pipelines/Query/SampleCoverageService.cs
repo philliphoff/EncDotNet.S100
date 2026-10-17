@@ -1,10 +1,13 @@
 using System.ComponentModel;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Time;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Query;
 
@@ -359,7 +362,13 @@ public sealed class SampleCoverageService
         foreach (var dataset in snapshot)
         {
             if (dataset.Data is not S102CoverageData data) continue;
-            if (!Contains(dataset.Bounds, request.Latitude, request.Longitude)) continue;
+
+            // The declared bounds are a cheap early out before a projected
+            // tile's reprojection. A geographic grid's own extent is checked
+            // by the pick itself, which also reads swapped axis order and
+            // 0…360° longitudes that the declared bounds don't (#943).
+            if (GridGeoreferencing.Classify(data.Source.Dataset.HorizontalCRS) != HorizontalCrsKind.Geographic
+                && !Contains(dataset.Bounds, request.Latitude, request.Longitude)) continue;
 
             try
             {
@@ -448,7 +457,7 @@ public sealed class SampleCoverageService
             : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
     }
 
-    private static List<Candidate<S104Dataset>> S104GridCandidates(
+    private List<Candidate<S104Dataset>> S104GridCandidates(
         IReadOnlyList<LoadedDataset> snapshot,
         SampleCoverageRequest request,
         out bool anyGridded)
@@ -462,7 +471,7 @@ public sealed class SampleCoverageService
             var model = s104.Source.Dataset;
             if (model.Coverages.Count == 0) continue;
             var probe = model.Coverages[0];
-            if (!CoverageContains(probe, request.Latitude, request.Longitude)) continue;
+            if (FindNode(model.HorizontalCRS, model.AxisOrder, probe, request.Latitude, request.Longitude) is null) continue;
             candidates.Add(new Candidate<S104Dataset>(
                 dataset,
                 model,
@@ -473,7 +482,7 @@ public sealed class SampleCoverageService
         return candidates;
     }
 
-    private static ToolResult<SampleCoverageResult> SampleS104Gridded(
+    private ToolResult<SampleCoverageResult> SampleS104Gridded(
         SampleCoverageRequest request,
         LoadedDataset bestDataset,
         S104Dataset bestModel,
@@ -492,8 +501,12 @@ public sealed class SampleCoverageService
         var stepIndex = SelectTimeStep(bestModel.Coverages, request.Time);
         var step = bestModel.Coverages[stepIndex];
 
-        var (row, col) = NearestCellInCoverage(step, request.Latitude, request.Longitude);
-        var idx = row * step.NumPointsLongitudinal + col;
+        if (FindNode(bestModel.HorizontalCRS, bestModel.AxisOrder, step, request.Latitude, request.Longitude) is not { } node)
+        {
+            return ToolResult<SampleCoverageResult>.Err(new OutOfBounds(request.Spec, request.Latitude, request.Longitude));
+        }
+
+        var (row, col, idx) = (node.Row, node.Col, node.Index);
         try
         {
             var value = step.Values[idx];
@@ -503,8 +516,7 @@ public sealed class SampleCoverageService
                     bestDataset.Id, row, col, step.TimePoint));
             }
 
-            var cellLat = step.OriginLatitude + row * step.SpacingLatitudinal;
-            var cellLon = step.OriginLongitude + col * step.SpacingLongitudinal;
+            var (cellLat, cellLon) = (node.Latitude, node.Longitude);
 
             return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
                 bestDataset.Id,
@@ -635,7 +647,7 @@ public sealed class SampleCoverageService
             : new NoDatasetCoversPoint(request.Latitude, request.Longitude));
     }
 
-    private static List<Candidate<S111Dataset>> S111GridCandidates(
+    private List<Candidate<S111Dataset>> S111GridCandidates(
         IReadOnlyList<LoadedDataset> snapshot,
         SampleCoverageRequest request,
         out bool anyGridded)
@@ -649,7 +661,7 @@ public sealed class SampleCoverageService
             var model = s111.Source.Dataset;
             if (model.Coverages.Count == 0) continue;
             var probe = model.Coverages[0];
-            if (!CoverageContains(probe, request.Latitude, request.Longitude)) continue;
+            if (FindNode(model.HorizontalCRS, model.AxisOrder, probe, request.Latitude, request.Longitude) is null) continue;
             candidates.Add(new Candidate<S111Dataset>(
                 dataset,
                 model,
@@ -660,7 +672,7 @@ public sealed class SampleCoverageService
         return candidates;
     }
 
-    private static ToolResult<SampleCoverageResult> SampleS111Gridded(
+    private ToolResult<SampleCoverageResult> SampleS111Gridded(
         SampleCoverageRequest request,
         LoadedDataset bestDataset,
         S111Dataset bestModel,
@@ -677,8 +689,12 @@ public sealed class SampleCoverageService
         var stepIndex = SelectTimeStep(bestModel.Coverages, request.Time);
         var step = bestModel.Coverages[stepIndex];
 
-        var (row, col) = NearestCellInCoverage(step, request.Latitude, request.Longitude);
-        var idx = row * step.NumPointsLongitudinal + col;
+        if (FindNode(bestModel.HorizontalCRS, bestModel.AxisOrder, step, request.Latitude, request.Longitude) is not { } node)
+        {
+            return ToolResult<SampleCoverageResult>.Err(new OutOfBounds(request.Spec, request.Latitude, request.Longitude));
+        }
+
+        var (row, col, idx) = (node.Row, node.Col, node.Index);
         try
         {
             var value = step.Values[idx];
@@ -689,8 +705,7 @@ public sealed class SampleCoverageService
                     bestDataset.Id, row, col, step.TimePoint));
             }
 
-            var cellLat = step.OriginLatitude + row * step.SpacingLatitudinal;
-            var cellLon = step.OriginLongitude + col * step.SpacingLongitudinal;
+            var (cellLat, cellLon) = (node.Latitude, node.Longitude);
 
             return ToolResult<SampleCoverageResult>.Ok(new SampleCoverageResult(
                 bestDataset.Id,
@@ -814,9 +829,13 @@ public sealed class SampleCoverageService
         var bestCoverage = bestModel.Coverages[0];
         try
         {
-            var (row, col) = NearestCellInCoverage(bestCoverage, request.Latitude, request.Longitude);
-            var cellLat = bestCoverage.OriginLatitude + row * bestCoverage.SpacingLatitudinal;
-            var cellLon = bestCoverage.OriginLongitude + col * bestCoverage.SpacingLongitudinal;
+            if (FindNode(bestModel.HorizontalCRS, bestModel.AxisOrder, bestCoverage, request.Latitude, request.Longitude) is not { } node)
+            {
+                return ToolResult<SampleCoverageResult>.Err(new OutOfBounds(request.Spec, request.Latitude, request.Longitude));
+            }
+
+            var (row, col, idx) = (node.Row, node.Col, node.Index);
+            var (cellLat, cellLon) = (node.Latitude, node.Longitude);
 
             var series = new List<TimedSampledValue>(instants.Count);
             SampledValue? firstValue = null;
@@ -824,7 +843,6 @@ public sealed class SampleCoverageService
             foreach (var (requestedInstant, stepIndex) in instants)
             {
                 var step = bestModel.Coverages[stepIndex];
-                var idx = row * step.NumPointsLongitudinal + col;
                 var value = step.Values[idx];
                 SampledValue? sampled;
                 if (value.Height == S104CoverageSource.FillValue)
@@ -908,9 +926,13 @@ public sealed class SampleCoverageService
         var bestCoverage = bestModel.Coverages[0];
         try
         {
-            var (row, col) = NearestCellInCoverage(bestCoverage, request.Latitude, request.Longitude);
-            var cellLat = bestCoverage.OriginLatitude + row * bestCoverage.SpacingLatitudinal;
-            var cellLon = bestCoverage.OriginLongitude + col * bestCoverage.SpacingLongitudinal;
+            if (FindNode(bestModel.HorizontalCRS, bestModel.AxisOrder, bestCoverage, request.Latitude, request.Longitude) is not { } node)
+            {
+                return ToolResult<SampleCoverageResult>.Err(new OutOfBounds(request.Spec, request.Latitude, request.Longitude));
+            }
+
+            var (row, col, idx) = (node.Row, node.Col, node.Index);
+            var (cellLat, cellLon) = (node.Latitude, node.Longitude);
 
             var series = new List<TimedSampledValue>(instants.Count);
             SampledValue? firstValue = null;
@@ -918,7 +940,6 @@ public sealed class SampleCoverageService
             foreach (var (requestedInstant, stepIndex) in instants)
             {
                 var step = bestModel.Coverages[stepIndex];
-                var idx = row * step.NumPointsLongitudinal + col;
                 var value = step.Values[idx];
                 SampledValue? sampled;
                 if (value.Speed == S111CoverageSource.FillValue)
@@ -1284,53 +1305,54 @@ public sealed class SampleCoverageService
         && lon >= b.WestLongitude
         && lon <= b.EastLongitude;
 
-    private static bool CoverageContains(WaterLevelCoverage cov, double lat, double lon) =>
-        CoverageContains(
+    private GridNode? FindNode(int? crs, AxisOrderAssessment? axisOrder, WaterLevelCoverage cov, double lat, double lon) =>
+        FindNode(
             cov.OriginLatitude, cov.OriginLongitude,
             cov.SpacingLatitudinal, cov.SpacingLongitudinal,
             cov.NumPointsLatitudinal, cov.NumPointsLongitudinal,
-            lat, lon);
+            crs, axisOrder, lat, lon);
 
-    private static bool CoverageContains(SurfaceCurrentCoverage cov, double lat, double lon) =>
-        CoverageContains(
+    private GridNode? FindNode(int? crs, AxisOrderAssessment? axisOrder, SurfaceCurrentCoverage cov, double lat, double lon) =>
+        FindNode(
             cov.OriginLatitude, cov.OriginLongitude,
             cov.SpacingLatitudinal, cov.SpacingLongitudinal,
             cov.NumPointsLatitudinal, cov.NumPointsLongitudinal,
-            lat, lon);
+            crs, axisOrder, lat, lon);
 
-    private static bool CoverageContains(
+    // The grid node nearest the point, inside the node extent (S-104/S-111
+    // Ed 2.0.0 §10.2). Found through the passage checks' lookup, so swapped
+    // axis order, other geographic CRSs, projected CRSs and 0…360°
+    // longitudes are read as if written without the quirk (#943). A CRS the
+    // factory can't reproject finds nothing.
+    private GridNode? FindNode(
         double originLat, double originLon,
         double spacingLat, double spacingLon,
         int numLat, int numLon,
+        int? crs, AxisOrderAssessment? axisOrder,
         double lat, double lon)
     {
-        var minLat = originLat;
-        var maxLat = originLat + (numLat - 1) * spacingLat;
-        var minLon = originLon;
-        var maxLon = originLon + (numLon - 1) * spacingLon;
-        if (spacingLat < 0) (minLat, maxLat) = (maxLat, minLat);
-        if (spacingLon < 0) (minLon, maxLon) = (maxLon, minLon);
-        return lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon;
+        PassageGrid grid;
+        try
+        {
+            grid = PassageGrid.Create(originLat, originLon, spacingLat, spacingLon, numLat, numLon, crs, axisOrder, _transforms);
+        }
+        catch (Exception ex) when (ex is NotSupportedException or FormatException or OverflowException or ArgumentException)
+        {
+            return null;
+        }
+
+        if (grid.FindNearestNode(lat, lon) is not (var row, var col))
+        {
+            return null;
+        }
+
+        var position = grid.NodeToWgs84(row, col);
+        return new GridNode(row, col, (row * grid.Columns) + col, position.Latitude, position.Longitude);
     }
 
-    private static (int Row, int Col) NearestCellInCoverage(WaterLevelCoverage cov, double lat, double lon)
-    {
-        var row = (int)Math.Round((lat - cov.OriginLatitude) / cov.SpacingLatitudinal);
-        var col = (int)Math.Round((lon - cov.OriginLongitude) / cov.SpacingLongitudinal);
-        row = Math.Clamp(row, 0, cov.NumPointsLatitudinal - 1);
-        col = Math.Clamp(col, 0, cov.NumPointsLongitudinal - 1);
-        return (row, col);
-    }
-
-    private static (int Row, int Col) NearestCellInCoverage(SurfaceCurrentCoverage cov, double lat, double lon)
-    {
-        var row = (int)Math.Round((lat - cov.OriginLatitude) / cov.SpacingLatitudinal);
-        var col = (int)Math.Round((lon - cov.OriginLongitude) / cov.SpacingLongitudinal);
-        row = Math.Clamp(row, 0, cov.NumPointsLatitudinal - 1);
-        col = Math.Clamp(col, 0, cov.NumPointsLongitudinal - 1);
-        return (row, col);
-    }
-
+    // A grid node: its row along latitude, column along longitude, index in
+    // the value array, and WGS-84 position.
+    private readonly record struct GridNode(int Row, int Col, int Index, double Latitude, double Longitude);
 
     /// <summary>
     /// Decodes the S-104 waterLevelTrend enumeration (S-104 Edition 2.0.0

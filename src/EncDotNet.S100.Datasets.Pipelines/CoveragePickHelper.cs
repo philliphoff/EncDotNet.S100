@@ -1,3 +1,7 @@
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
+using EncDotNet.S100.Datasets.S102;
+using EncDotNet.S100.Datasets.S104;
+using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 
@@ -10,6 +14,12 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// containing grid cell, and samples a single-cell <see cref="GridRegion"/>
 /// from the supplied <see cref="ICoverageSource"/>.
 /// </summary>
+/// <remarks>
+/// The cell is found by the same lookup as the passage checks
+/// (<see cref="PassageGrid"/>), so S-102, S-104 and S-111 grids with swapped
+/// axis order, a geographic CRS other than WGS-84, or longitudes in 0…360°
+/// are read as if written without the quirk (#943).
+/// </remarks>
 public static class CoveragePickHelper
 {
     /// <summary>
@@ -17,11 +27,15 @@ public static class CoveragePickHelper
     /// </summary>
     public sealed class SamplePoint
     {
-        /// <summary>Zero-based grid row of the sampled cell (row 0 is the southernmost).</summary>
+        /// <summary>Zero-based grid row of the sampled cell (row 0 is the southernmost; rows run along latitude even when the grid's axis order is swapped).</summary>
         public required int Row { get; init; }
         /// <summary>Zero-based grid column of the sampled cell (column 0 is the westernmost).</summary>
         public required int Col { get; init; }
-        /// <summary>The native-CRS coordinates of the sampled cell origin.</summary>
+        /// <summary>
+        /// The click in the grid's own axes: easting and northing for a
+        /// projected grid, longitude (in the grid's longitude frame) and
+        /// latitude for a geographic one.
+        /// </summary>
         public required (double X, double Y) Native { get; init; }
         /// <summary>Per-field sampled values keyed by <see cref="CoverageValueField.Name"/>.</summary>
         public required IReadOnlyDictionary<string, float> Values { get; init; }
@@ -44,21 +58,19 @@ public static class CoveragePickHelper
         ArgumentNullException.ThrowIfNull(transformFactory);
 
         var metadata = source.Metadata;
-        var grid = metadata.GridMetadata;
-
-        // Convert WGS84 → native. ProjNet's lon-first / lat-second convention
-        // matches the inverse transform used by MapsuiCoverageRenderer
-        // (native → WGS84 returns (lon, lat)).
-        var transform = transformFactory.Create("EPSG:4326", metadata.HorizontalCRS);
-        var (nativeX, nativeY) = transform.IsIdentity
-            ? (longitude, latitude)
-            : transform.Transform(longitude, latitude);
-
-        var (row, col) = ToGrid(grid, nativeX, nativeY);
-        if (row < 0 || row >= grid.NumRows || col < 0 || col >= grid.NumColumns)
+        var encoded = metadata.GridMetadata;
+        var grid = Grid(source, transformFactory);
+        if (grid.FindCell(latitude, longitude) is not (var row, var col))
             return null;
 
-        var sampled = source.Sample(new GridRegion(row, row + 1, col, col + 1, 1, 1));
+        // The values keep the encoded layout: a swapped grid's georeferencing
+        // is read back to latitude rows, but its array is still rows of
+        // latitude written under the encoded (swapped) counts. Read the cell
+        // by its flat index.
+        var index = (row * grid.Columns) + col;
+        var encodedRow = index / encoded.NumColumns;
+        var encodedCol = index % encoded.NumColumns;
+        var sampled = source.Sample(new GridRegion(encodedRow, encodedRow + 1, encodedCol, encodedCol + 1, 1, 1));
         var values = new Dictionary<string, float>(StringComparer.Ordinal);
         foreach (var (name, array) in sampled.Values)
             values[name] = array[0];
@@ -67,23 +79,30 @@ public static class CoveragePickHelper
         {
             Row = row,
             Col = col,
-            Native = (nativeX, nativeY),
+            Native = grid.ToGrid(latitude, longitude),
             Values = values,
             NoDataValue = metadata.NoDataValue,
         };
     }
 
-    /// <summary>
-    /// Inverse grid-georeferencing using <see cref="Math.Floor(double)"/>
-    /// so that negative row/col indices fall outside the grid (rather than
-    /// truncating toward zero, which would map clicks just north of the
-    /// origin to row 0). Spacing values in S-100 grids are positive — the
-    /// origin is the south-west corner.
-    /// </summary>
-    private static (int Row, int Col) ToGrid(GridMetadata grid, double x, double y)
+    // The S-102, S-104 and S-111 sources carry the declared EPSG code and the
+    // reader's axis-order assessment; any other source is taken as encoded.
+    private static PassageGrid Grid(ICoverageSource source, ICrsTransformFactory transforms)
     {
-        var fr = (y - grid.OriginLatitude) / grid.SpacingLatitudinal;
-        var fc = (x - grid.OriginLongitude) / grid.SpacingLongitudinal;
-        return ((int)Math.Floor(fr), (int)Math.Floor(fc));
+        var g = source.Metadata.GridMetadata;
+        var axisOrder = source switch
+        {
+            S102CoverageSource s102 => s102.Dataset.AxisOrder,
+            S104CoverageSource s104 => s104.Dataset.AxisOrder,
+            S111CoverageSource s111 => s111.Dataset.AxisOrder,
+            _ => null,
+        };
+        return PassageGrid.CreateForCrsName(
+            g.OriginLatitude, g.OriginLongitude,
+            g.SpacingLatitudinal, g.SpacingLongitudinal,
+            g.NumRows, g.NumColumns,
+            source.Metadata.HorizontalCRS,
+            axisOrder,
+            transforms);
     }
 }

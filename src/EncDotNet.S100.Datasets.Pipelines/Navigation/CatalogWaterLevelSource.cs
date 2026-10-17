@@ -142,19 +142,9 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
 
         public static GridSeries? TryCreate(GridCandidate candidate, double lat, double lon)
         {
-            var grid = candidate.Grid;
-            var (x, y) = grid.ToGrid(lat, lon);
-            var maxY = grid.OriginY + (grid.Rows - 1) * grid.SpacingY;
-            var maxX = grid.OriginX + (grid.Columns - 1) * grid.SpacingX;
-            if (y < Math.Min(grid.OriginY, maxY) || y > Math.Max(grid.OriginY, maxY)
-                || x < Math.Min(grid.OriginX, maxX) || x > Math.Max(grid.OriginX, maxX))
-            {
-                return null;
-            }
-
-            var row = Math.Clamp((int)Math.Round((y - grid.OriginY) / grid.SpacingY), 0, grid.Rows - 1);
-            var col = Math.Clamp((int)Math.Round((x - grid.OriginX) / grid.SpacingX), 0, grid.Columns - 1);
-            return new GridSeries(candidate, row, col, row * grid.Columns + col);
+            return candidate.Grid.FindNearestNode(lat, lon) is (var row, var col)
+                ? new GridSeries(candidate, row, col, row * candidate.Grid.Columns + col)
+                : null;
         }
 
         public WaterLevelReading? ValueAt(DateTime utc) =>

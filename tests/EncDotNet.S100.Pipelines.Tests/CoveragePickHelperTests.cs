@@ -128,6 +128,28 @@ public class CoveragePickHelperTests
         Assert.Null(CoveragePickHelper.Sample(source, factory, latitude: lat, longitude: lon));
     }
 
+    /// <summary>
+    /// A grid declared in another geographic CRS (ETRS89) with longitudes in
+    /// 0…360° is read as degrees and found from −180…180 (#943).
+    /// </summary>
+    [Fact]
+    public void Sample_OtherGeographicCrsIn0To360Frame_FindsCellFromMinus180To180()
+    {
+        var source = BuildStubSource(originLat: 10.0, originLon: 200.0, spacing: 1.0,
+            depths: new[,]
+            {
+                { 1f, 2f, 3f },
+                { 4f, 5f, 6f },
+            },
+            horizontalCrs: "4258");
+
+        var result = CoveragePickHelper.Sample(source, IdentityFactory.Instance, latitude: 11.5, longitude: -158.5);
+
+        Assert.NotNull(result);
+        Assert.Equal((1, 1), (result!.Row, result.Col));
+        Assert.Equal(5f, result.Values["depth"]);
+    }
+
     private static StubCoverageSource BuildStubSource(
         double originLat,
         double originLon,

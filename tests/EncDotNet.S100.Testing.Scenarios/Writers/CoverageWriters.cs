@@ -356,8 +356,10 @@ public static class CoverageWriters
     /// <param name="issued">The issue time (UTC).</param>
     /// <param name="start">The first step (UTC).</param>
     /// <param name="end">The last step (UTC).</param>
-    public static void WriteS111Grid(SyntheticWorld world, S111GridSpec spec, string path, DateTime issued, DateTime start, DateTime end)
+    /// <param name="quirks">The dataset's producer quirks, or <c>null</c> for none.</param>
+    public static void WriteS111Grid(SyntheticWorld world, S111GridSpec spec, string path, DateTime issued, DateTime start, DateTime end, DatasetQuirks? quirks = null)
     {
+        quirks ??= DatasetQuirks.None;
         var grid = Grid(world, spec);
         var steps = new List<(string, S111FixtureBuilder.SpecRow[])>();
         foreach (var t in Times(start, end, spec.Interval))
@@ -381,11 +383,14 @@ public static class CoverageWriters
             steps.Add((TimePoint(t), values));
         }
 
+        var root = S111Root(world, issued, grid.OriginLongitude, grid.OriginLatitude, grid.EastLongitude, grid.NorthLatitude);
+        quirks.ApplyToHdf5Root(root);
+        var written = quirks.Grid((grid.OriginLatitude, grid.OriginLongitude, grid.SpacingLatitudinal, grid.SpacingLongitudinal, grid.Rows, grid.Columns));
         S111FixtureBuilder.WriteTimeSeries(
             path,
-            new S111FixtureBuilder.GridGeoreference(grid.OriginLatitude, grid.OriginLongitude, grid.SpacingLatitudinal, grid.SpacingLongitudinal, grid.Rows, grid.Columns),
+            new S111FixtureBuilder.GridGeoreference(written.OriginLatitude, written.OriginLongitude, written.SpacingLatitudinal, written.SpacingLongitudinal, written.Rows, written.Columns),
             steps,
-            S111Root(world, issued, grid.OriginLongitude, grid.OriginLatitude, grid.EastLongitude, grid.NorthLatitude),
+            root,
             featureAttributes: new Dictionary<string, object>
             {
                 ["typeOfCurrentData"] = (byte)3,

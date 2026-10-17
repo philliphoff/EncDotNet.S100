@@ -238,8 +238,10 @@ through the hooks that apply to its product.
 each one today, including the validation findings it reports. Some of that
 behaviour is a gap rather than a decision: for example, a quirk that a rule
 pack doesn't notice. When you change that behaviour, update the test in the
-same change. Passage depth and water level read swapped, ETRS89 and 0…360°
-grids exactly as the grids without the quirk.
+same change. Passage depth and water level, the pick report and
+`sample_coverage` read swapped, ETRS89 and 0…360° grids exactly as the grids
+without the quirk. The S-111 grid writer takes quirks too, though no quirk
+scenario has an S-111 grid; the tests add one.
 
 ## Protected exchange sets
 
