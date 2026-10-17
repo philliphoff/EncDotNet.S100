@@ -37,7 +37,10 @@ You need three things from outside the exchange set:
   server
 
 If you don't have protected data, [create a test exchange
-set](#create-a-test-exchange-set) that provides all three.
+set](#create-a-test-exchange-set) that provides all three, or use one of the
+synthetic sets in `tests/datasets/ExchangeSets/Protected-*`, whose
+`TEST-ONLY/` folder holds the hardware ID and Scheme Administrator
+certificate (see the [test scenario generator](scenario-generator.md#protected-exchange-sets)).
 
 ```csharp
 using System.Security.Cryptography.X509Certificates;
@@ -350,6 +353,8 @@ File.WriteAllBytes("scheme-administrator.crt", saRoot.Export(X509ContentType.Cer
 
 To see each failure described in this guide, change the permit's
 `editionNumber` or `expiry`, or trust a different root.
+The [test scenario generator](scenario-generator.md#protected-exchange-sets)
+produces a set for each of these failures, deterministically.
 
 ## See also
 

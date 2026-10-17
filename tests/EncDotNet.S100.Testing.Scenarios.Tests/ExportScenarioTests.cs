@@ -1,3 +1,6 @@
+using EncDotNet.S100.Testing.Scenarios.Protection;
+using EncDotNet.S100.Testing.Scenarios.Quirks;
+
 namespace EncDotNet.S100.Testing.Scenarios.Tests;
 
 /// <summary>
@@ -23,10 +26,38 @@ public sealed class ExportScenarioTests
             SyntheticScenarios.WarningsOnRoute(s124Edition: 1),
             SyntheticScenarios.PortPlanVsOwnRoute(),
         };
-        foreach (var definition in definitions)
+        foreach (var definition in definitions.Concat(QuirkScenarios.All()))
         {
             var scenario = ScenarioGenerator.Generate(definition, Path.Combine(root!, definition.Name));
             Assert.True(File.Exists(scenario.CataloguePath));
+        }
+
+        foreach (var (data, protection) in ProtectedScenarios.CheckedIn())
+        {
+            using var protectedSet = ProtectedScenarioGenerator.Generate(data, protection, Path.Combine(root!, "protected", protection.Name));
+            Assert.True(File.Exists(protectedSet.PermitPath));
+        }
+    }
+
+    // Regenerates the checked-in Protected-* sets (#768): set the variable to
+    // tests/datasets/ExchangeSets and run this test.
+    [Fact]
+    public void Writes_the_checked_in_protected_sets_when_asked()
+    {
+        const string fixtures = "S100_PROTECTED_FIXTURES_OUT";
+        var root = Environment.GetEnvironmentVariable(fixtures);
+        Assert.SkipWhen(string.IsNullOrEmpty(root), $"Set {fixtures} to tests/datasets/ExchangeSets to regenerate the Protected-* sets.");
+
+        foreach (var (data, protection) in ProtectedScenarios.CheckedIn())
+        {
+            var folder = Path.Combine(root!, protection.Name);
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+
+            using var protectedSet = ProtectedScenarioGenerator.Generate(data, protection, folder);
+            Assert.True(File.Exists(protectedSet.PermitPath));
         }
     }
 }

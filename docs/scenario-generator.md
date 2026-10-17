@@ -35,8 +35,10 @@ using EncDotNet.S100;
 await using var exchangeSet = await S100ExchangeSet.OpenAsync(scenario.Root);
 ```
 
-Nothing is committed to the repository: tests generate the files they need
-into a temporary folder.
+Tests generate the files they need into a temporary folder. The only
+generated data committed to the repository is the five Part 15 sets in
+`tests/datasets/ExchangeSets/Protected-*`, for the viewer's protected-data
+work (see [Protected exchange sets](#protected-exchange-sets)).
 
 ## Look at a scenario
 
@@ -106,7 +108,7 @@ chart or for the IHO test area at 32° S 63° E.
 | S-124 | `S124WarningWriter` | One navigational warning per dataset: a point, line or area, its validity, publication time, an optional cancellation date, and the warnings it cancels. Edition 2.0.0 by default; `S124Edition = 1` writes Edition 1.0.0. |
 | S-125 | `S125AidsWriter` | Edition 1.0.0 buoys (lateral, safe water and cardinal, IALA A) with their number, shape, colours and name, and an all-round light on each lit buoy, linked to it as parent and child. |
 | S-129 | `S129PlanWriter` | An Actual Plan for one of the scenario's routes: control points with passing times, distance above the UKC limit and time windows, the plan area, and the non-navigable and almost non-navigable areas, all computed from the model. |
-| Exchange set | `ExchangeCatalogueBuilder` | `CATALOG.XML` in the S-100 Edition 5.2 schema, with a bounding box for each dataset. Datasets aren't signed or encrypted. |
+| Exchange set | `ExchangeCatalogueBuilder` | `CATALOG.XML` in the S-100 Edition 5.2 schema, with a bounding box for each dataset. Plain scenarios aren't signed or encrypted; `ProtectedScenarioGenerator` adds the Part 15 certificates, signatures and permits. |
 
 Each S-101 cell samples the seabed on its own grid, with its own depth
 contours. A coarser cell can generalise towards the shoal side: each grid
@@ -186,6 +188,123 @@ check what `EncDotNet.S100.Datasets.S129.Fusion` reads from the S-102 and
 S-104 files at each control point, and which control points lie on each
 route.
 
+## Producer quirks
+
+Real producers' data departs from the specifications in ways we've had to
+handle: swapped axes, missing datums, odd CRS declarations and so on. A
+scenario can reproduce these per dataset. `ScenarioDefinition.Quirks` maps a
+dataset name (the file name without extension) to a list of `ProducerQuirk`
+records:
+
+```csharp
+using EncDotNet.S100.Testing.Scenarios.Quirks;
+
+var definition = SyntheticScenarios.SpitAcrossScales() with
+{
+    Name = "spit-swapped-s102",
+    Quirks = new Dictionary<string, IReadOnlyList<ProducerQuirk>>
+    {
+        ["102ZZ00SPIT"] = [new SwappedAxisOrder(), new DeclaredVerticalDatum(null)],
+    },
+};
+```
+
+| Quirk | What the writer does | Products |
+|---|---|---|
+| `SwappedAxisOrder` | Exchanges latitude and longitude: grid origin, spacing and node counts, or station positions (#650). | S-102, S-104 |
+| `DeclaredVerticalDatum` | Leaves `verticalDatum` out (`null`), or declares another datum (#939). | S-102, S-104 |
+| `DeclaredHorizontalCrs` | Declares another `horizontalCRS` while the coordinates stay WGS 84 degrees. | S-102, S-104 |
+| `LongitudeFrame0To360` | Writes longitudes in the 0…360° frame, in the file and the catalogue (#773). | S-102, S-104 |
+| `DeclaredDisplayScales` | Writes the `DataCoverage` display scales inverted, or leaves them out. | S-101 |
+| `NoDataHoles` | Writes the fill value at every grid node inside the given rectangles. | S-102 |
+| `RecordGap` | Leaves grid steps out, or writes the fill value at stations, for a span of time. | S-104 |
+| `ForecastRunEnds` | Stops the records at a time, so later times are past the run. | S-104 |
+| `ShoalBias` | Charts every depth shoaler by a fixed amount, as a cell from an older survey (#947). | S-101 |
+| `SpikedArea` | Adds a pattern-filled area whose ring has a zero-width spike, which overlays turn into mixed-dimension geometry (#891). | S-101 |
+
+Signatures without `dataStatus` (#754) are a Part 15 option: see
+`DatasetProtection.OmitSignatureDataStatus` below. S-101 can't carry 0…360°
+longitudes: at the writer's coordinate factor of 10⁷, 225° overflows a 32-bit
+coordinate.
+
+`DatasetQuirks` turns a dataset's quirks into hooks the writers call, such as
+`ApplyToHdf5Root`, `Position`, `Grid`, `IsNoData` and `IsInGap`. With no
+quirks every hook returns its input, so the output is unchanged. To support
+quirks in another writer, take a `DatasetQuirks` and pass what it writes
+through the hooks that apply to its product.
+
+`QuirkScenarios` has one scenario for each class of quirk, all variants of
+"Spit across scales". `QuirkScenarioTests` pins what the library does with
+each one today, including the validation findings it reports. Some of that
+behaviour is a gap rather than a decision: for example, a swapped S-102 grid
+is reported but not used, so passage depths fall back to S-101. When you
+change that behaviour, update the test in the same change.
+
+## Protected exchange sets
+
+`ProtectedScenarioGenerator.Generate` writes a scenario as an S-100 Part 15
+protected exchange set, playing the data server. A `ProtectionSpec` lists the
+datasets to sign, and for each one, whether to encrypt it and what its permit
+says. Datasets not in the list stay plain and unsigned.
+
+```csharp
+using EncDotNet.S100.Testing.Scenarios.Protection;
+
+using ProtectedScenario protectedSet = ProtectedScenarioGenerator.Generate(
+    ProtectedScenarios.Small(),
+    new ProtectionSpec("my-protected-set",
+    [
+        new DatasetProtection("101ZZ00SPIT3"),
+        new DatasetProtection("102ZZ00SPIT") { Permit = PermitKind.WrongEdition },
+    ]),
+    "path/to/folder");
+```
+
+The generator signs each dataset's plain bytes with `Part15Signer`, encrypts
+it with `S100Cipher`, issues permits with `DataPermit.Create` and writes them
+with `PermitFileWriter`. It also writes `TEST-ONLY/` beside the data: the
+Scheme Administrator certificate, the hardware ID, the user permit, the test
+manufacturer's ID and key, and the expected outcome for each dataset. Read
+the set as [Reading protected exchange sets](protected-exchange-sets.md)
+describes.
+
+| Option | Result when read |
+|---|---|
+| `PermitKind.Valid` | `Allowed` |
+| `PermitKind.Omitted` | `PermitNotFound` |
+| `PermitKind.WrongEdition` | `EditionMismatch` |
+| `PermitKind.WrongIssueDate` | `IssueDateMismatch` |
+| `PermitKind.ExpiredBeforeIssue` | `IssuedAfterExpiry` |
+| `PermitKind.ExpiringSoon` | `Allowed`, with an expiry 30 days after the issue date |
+| `PermitKind.WrongHardwareId` | `Allowed`, then `DatasetDecryptionException` when the dataset is read |
+| `DatasetProtection.AsUpdateWithoutBase` | `BaseDatasetMissing` |
+| `DatasetProtection.Encrypt = false` | `NotProtected`, but signed |
+| `DatasetProtection.OmitSignatureDataStatus` | The signature verifies on plain data and is malformed on protected data (#754) |
+| `PermitSigning.UntrustedSchemeAdministrator` | `CertificateUntrusted` |
+| `PermitSigning.ExpiredCertificate` | `CertificateExpired` |
+| `PermitSigning.Unsigned` | `NotSigned` |
+| `PermitSigning.Tampered` | `SignatureInvalid` |
+| `ProtectionSpec.PermitOnly` | The permit is written to `TEST-ONLY/separate-permit/` |
+
+`ProtectedScenarios` has the sets #768 asks for. The five checked-in sets
+under `tests/datasets/ExchangeSets/Protected-*` come from
+`ProtectedScenarios.CheckedIn()`; their
+[README](https://github.com/philliphoff/EncDotNet.S100/tree/main/tests/datasets/ExchangeSets/README.md)
+says what each holds and how to regenerate them.
+
+> [!CAUTION]
+> The keys and certificates are TEST ONLY. `SyntheticScheme` derives every
+> private key from the seed, so anyone can recompute it. The certificates
+> say "TEST ONLY" and "not real" in their names.
+
+Protected output is deterministic too. Keys are derived from the seed, and
+`DeterministicEcdsa` signs with RFC 6979 nonces, so certificates, permit
+signatures and catalogue signatures repeat byte for byte. Certificates have
+fixed dates and serial numbers. Each dataset's cell key, and the prefix block
+and IV that `S100Cipher.EncryptDataset` normally draws at random, are derived
+from the seed and the dataset's name. Part 15 requires those to be random:
+fixing them is only for test data.
+
 ## Define a scenario
 
 A scenario is a `ScenarioDefinition` record: a world, the products to write
@@ -234,7 +353,8 @@ The same seed and definition give byte-identical files. The generator:
   with the invariant culture.
 
 `DeterminismTests` generates each scenario twice and compares the SHA-256
-hash of every file, product by product.
+hash of every file, product by product. `QuirkScenarioTests` and
+`ProtectedScenarioTests` do the same for the quirk and protected scenarios.
 
 The model uses floating-point functions such as `Math.Tanh` and `Math.Exp`,
 whose last bit may differ between platforms. Coordinates are rounded to

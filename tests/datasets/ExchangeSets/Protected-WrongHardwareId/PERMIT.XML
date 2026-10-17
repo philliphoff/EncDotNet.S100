@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Permit xmlns="http://www.iho.int/s100/se/5.1">
+  <header>
+    <issueDate>2026-02-28</issueDate>
+    <dataServerName>ZZ00 TEST ONLY data server (fictitious)</dataServerName>
+    <dataServerIdentifier>ZZ</dataServerIdentifier>
+    <version>1.0.0</version>
+    <userpermit>B86A4D39945CFF7601B0252E3C19AFFBCE67450DZZTEST</userpermit>
+  </header>
+  <products>
+    <product id="S-101">
+      <datasetPermit>
+        <filename>101ZZ00SPIT3</filename>
+        <editionNumber>1</editionNumber>
+        <expiry>2099-12-31</expiry>
+        <encryptedKey>DFF625735050B82A1B69E4B2F3F7436B</encryptedKey>
+      </datasetPermit>
+    </product>
+  </products>
+</Permit>

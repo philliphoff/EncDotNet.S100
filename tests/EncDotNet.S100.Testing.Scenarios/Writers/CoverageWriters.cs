@@ -1,6 +1,7 @@
 using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Testing.Scenarios.Hdf5;
+using EncDotNet.S100.Testing.Scenarios.Quirks;
 using EncDotNet.S100.Testing.Scenarios.World;
 
 namespace EncDotNet.S100.Testing.Scenarios.Writers;
@@ -153,15 +154,19 @@ public static class CoverageWriters
     /// <param name="spec">The surface.</param>
     /// <param name="path">The file to write.</param>
     /// <param name="issued">The issue time (UTC).</param>
-    public static void WriteS102(SyntheticWorld world, S102SurfaceSpec spec, string path, DateTime issued)
+    /// <param name="quirks">The dataset's producer quirks, or <c>null</c> for none.</param>
+    public static void WriteS102(SyntheticWorld world, S102SurfaceSpec spec, string path, DateTime issued, DatasetQuirks? quirks = null)
     {
+        quirks ??= DatasetQuirks.None;
         var grid = Grid(world, spec);
         var values = new S102FileBuilder.BathymetryRow[grid.Rows * grid.Columns];
         for (var row = 0; row < grid.Rows; row++)
         {
             for (var col = 0; col < grid.Columns; col++)
             {
-                var depth = S102Depth(world, grid.Node(row, col));
+                var node = grid.Node(row, col);
+                var (x, y) = world.Frame.ToLocal(node.Latitude, node.Longitude);
+                var depth = quirks.IsNoData(x, y) ? S102FileBuilder.FillValue : S102Depth(world, node);
                 values[row * grid.Columns + col] = new S102FileBuilder.BathymetryRow
                 {
                     Depth = depth,
@@ -190,9 +195,11 @@ public static class CoverageWriters
             root["verticalDatum"] = world.Datums.ChartDatum;
         }
 
+        quirks.ApplyToHdf5Root(root);
+        var written = quirks.Grid((grid.OriginLatitude, grid.OriginLongitude, grid.SpacingLatitudinal, grid.SpacingLongitudinal, grid.Rows, grid.Columns));
         S102FileBuilder.Write(
             path,
-            new S102FileBuilder.GridGeoreference(grid.OriginLatitude, grid.OriginLongitude, grid.SpacingLatitudinal, grid.SpacingLongitudinal, grid.Rows, grid.Columns),
+            new S102FileBuilder.GridGeoreference(written.OriginLatitude, written.OriginLongitude, written.SpacingLatitudinal, written.SpacingLongitudinal, written.Rows, written.Columns),
             values,
             root);
     }
@@ -220,8 +227,11 @@ public static class CoverageWriters
     /// <param name="issued">The issue time (UTC).</param>
     /// <param name="start">The first record (UTC).</param>
     /// <param name="end">The last record (UTC).</param>
-    public static void WriteS104Stations(SyntheticWorld world, S104StationsSpec spec, string path, DateTime issued, DateTime start, DateTime end)
+    /// <param name="quirks">The dataset's producer quirks, or <c>null</c> for none.</param>
+    public static void WriteS104Stations(SyntheticWorld world, S104StationsSpec spec, string path, DateTime issued, DateTime start, DateTime end, DatasetQuirks? quirks = null)
     {
+        quirks ??= DatasetQuirks.None;
+        end = quirks.LastRecord(end);
         var times = Times(start, end, spec.Interval);
         var stations = new List<S104Dcf8FixtureBuilder.Station<S104Dcf8FixtureBuilder.SpecValueRow>>();
         double south = double.MaxValue, west = double.MaxValue, north = double.MinValue, east = double.MinValue;
@@ -232,19 +242,22 @@ public static class CoverageWriters
             north = Math.Max(north, position.Latitude);
             west = Math.Min(west, position.Longitude);
             east = Math.Max(east, position.Longitude);
+            var (latitude, longitude) = quirks.Position(position.Latitude, position.Longitude);
             stations.Add(new S104Dcf8FixtureBuilder.Station<S104Dcf8FixtureBuilder.SpecValueRow>
             {
                 Identifier = station.Identifier,
-                Latitude = (float)position.Latitude,
-                Longitude = (float)position.Longitude,
+                Latitude = (float)latitude,
+                Longitude = (float)longitude,
                 StartDateTime = TimePoint(start),
                 EndDateTime = TimePoint(end),
                 TimeRecordInterval = (long)spec.Interval.TotalSeconds,
-                Values = times.Select(t => new S104Dcf8FixtureBuilder.SpecValueRow
-                {
-                    WaterLevelHeight = (float)world.Tide.HeightAt(station.X, station.Y, t),
-                    WaterLevelTrend = Trend(world.Tide.RateAt(station.X, station.Y, t)),
-                }).ToArray(),
+                Values = times.Select(t => quirks.IsInGap(t)
+                    ? new S104Dcf8FixtureBuilder.SpecValueRow { WaterLevelHeight = S104FillValue }
+                    : new S104Dcf8FixtureBuilder.SpecValueRow
+                    {
+                        WaterLevelHeight = (float)world.Tide.HeightAt(station.X, station.Y, t),
+                        WaterLevelTrend = Trend(world.Tide.RateAt(station.X, station.Y, t)),
+                    }).ToArray(),
             });
         }
 
@@ -252,6 +265,7 @@ public static class CoverageWriters
         // single-precision positions stay inside it.
         const double pad = 1e-4;
         var root = S104Root(world, issued, west - pad, south - pad, east + pad, north + pad);
+        quirks.ApplyToHdf5Root(root);
         S104Dcf8FixtureBuilder.WriteFile(
             path,
             stations,
@@ -265,11 +279,14 @@ public static class CoverageWriters
     /// <param name="issued">The issue time (UTC).</param>
     /// <param name="start">The first step (UTC).</param>
     /// <param name="end">The last step (UTC).</param>
-    public static void WriteS104Grid(SyntheticWorld world, S104GridSpec spec, string path, DateTime issued, DateTime start, DateTime end)
+    /// <param name="quirks">The dataset's producer quirks, or <c>null</c> for none.</param>
+    public static void WriteS104Grid(SyntheticWorld world, S104GridSpec spec, string path, DateTime issued, DateTime start, DateTime end, DatasetQuirks? quirks = null)
     {
+        quirks ??= DatasetQuirks.None;
+        end = quirks.LastRecord(end);
         var grid = Grid(world, spec);
         var steps = new List<(string, S104FixtureBuilder.SpecRow[])>();
-        foreach (var t in Times(start, end, spec.Interval))
+        foreach (var t in Times(start, end, spec.Interval).Where(t => !quirks.IsInGap(t)))
         {
             var values = new S104FixtureBuilder.SpecRow[grid.Rows * grid.Columns];
             for (var row = 0; row < grid.Rows; row++)
@@ -289,11 +306,14 @@ public static class CoverageWriters
             steps.Add((TimePoint(t), values));
         }
 
+        var root = S104Root(world, issued, grid.OriginLongitude, grid.OriginLatitude, grid.EastLongitude, grid.NorthLatitude);
+        quirks.ApplyToHdf5Root(root);
+        var written = quirks.Grid((grid.OriginLatitude, grid.OriginLongitude, grid.SpacingLatitudinal, grid.SpacingLongitudinal, grid.Rows, grid.Columns));
         S104FixtureBuilder.WriteTimeSeries(
             path,
-            new S104FixtureBuilder.GridGeoreference(grid.OriginLatitude, grid.OriginLongitude, grid.SpacingLatitudinal, grid.SpacingLongitudinal, grid.Rows, grid.Columns),
+            new S104FixtureBuilder.GridGeoreference(written.OriginLatitude, written.OriginLongitude, written.SpacingLatitudinal, written.SpacingLongitudinal, written.Rows, written.Columns),
             steps,
-            S104Root(world, issued, grid.OriginLongitude, grid.OriginLatitude, grid.EastLongitude, grid.NorthLatitude),
+            root,
             featureAttributes: new Dictionary<string, object>
             {
                 ["methodWaterLevelProduct"] = "Synthetic harmonic prediction (M2, S2)",
@@ -322,6 +342,9 @@ public static class CoverageWriters
         world.Currents.At(world, x, y, utc) is { } current
             ? ((float)Math.Round(current.SpeedKnots, 3), (float)current.DirectionDegrees)
             : (S111FillValue, S111FillValue);
+
+    /// <summary>The S-104 fill value for water level height.</summary>
+    public const float S104FillValue = -9999f;
 
     /// <summary>The S-111 fill value for speed and direction.</summary>
     public const float S111FillValue = -9999f;

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<S100XC:S100_ExchangeCatalogue xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0" xmlns:gex="http://standards.iso.org/iso/19115/-3/gex/1.0" xmlns:cit="http://standards.iso.org/iso/19115/-3/cit/2.0" xmlns:S100SE="http://www.iho.int/s100/se/5.2" xmlns:S100XC="http://www.iho.int/s100/xc/5.2">
+  <S100XC:identifier>
+    <S100XC:identifier>SYNTHETIC Protected-WrongHardwareId seed 941</S100XC:identifier>
+    <S100XC:dateTime>2026-02-28T12:00:00Z</S100XC:dateTime>
+  </S100XC:identifier>
+  <S100XC:contact>
+    <S100XC:organization>
+      <gco:CharacterString>Synthetic Hydrographic Office (fictitious; generated test data)</gco:CharacterString>
+    </S100XC:organization>
+  </S100XC:contact>
+  <S100XC:exchangeCatalogueComment>
+    <gco:CharacterString>SYNTHETIC PROTECTED test data: scenario 'Protected-WrongHardwareId', seed 941, in Synthetic Sound, a fictitious area. Keys and certificates are TEST ONLY and not real. Not for navigation.</gco:CharacterString>
+  </S100XC:exchangeCatalogueComment>
+  <S100XC:certificates>
+    <S100SE:schemeAdministrator id="ZZ00-TEST-SA" />
+    <S100SE:certificate id="ZZ00-TEST-DATA-SERVER" issuer="ZZ00-TEST-SA">MIICZjCCAeygAwIBAgIIWloAAAAAAAMwCgYIKoZIzj0EAwMwbjE3MDUGA1UEAwwuWlowMCBURVNUIE9OTFkgU2NoZW1lIEFkbWluaXN0cmF0b3IgKG5vdCByZWFsKTEzMDEGA1UECgwqU3ludGhldGljIEh5ZHJvZ3JhcGhpYyBPZmZpY2UgKGZpY3RpdGlvdXMpMB4XDTI2MDEwMTAwMDEwMFoXDTQ5MTIzMTIzNTk1OVowZTEuMCwGA1UEAwwlWlowMCBURVNUIE9OTFkgRGF0YSBTZXJ2ZXIgKG5vdCByZWFsKTEzMDEGA1UECgwqU3ludGhldGljIEh5ZHJvZ3JhcGhpYyBPZmZpY2UgKGZpY3RpdGlvdXMpMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEPKQJU65Pjg+pYfuPFLGd2KLMBT5nM5SnHIzUnCGX+J/JkGjJaJIBIVjXEcHxSGuD6MzysrF2Wuit4CX/WsMh+7zlfr5rmBjOTyL9aob1MMpNi0SCWXvlEJ3F0GUEsa6uo2AwXjAMBgNVHRMBAf8EAjAAMA4GA1UdDwEB/wQEAwIHgDAdBgNVHQ4EFgQUEE2zY0Sf6Djgn4KqN4pSzUFmV00wHwYDVR0jBBgwFoAU9bY2D+Tsg5L8QiG0YEjPctPoakUwCgYIKoZIzj0EAwMDaAAwZQIxAKr7Wu8XDSMl63xWw5WXW0c1yMT/VkI4eH7YiS38fKgK2m06C01EpxXxG9HAMQZ1QgIwSjrZwssuBNzENlPgM1EIwtRTcUHagIYY7ubPedEbUzOLRBB/g1hPcfRXILTRuID8</S100SE:certificate>
+  </S100XC:certificates>
+  <S100XC:datasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S-101/DATASET_FILES/101ZZ00SPIT3.000</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>true</S100XC:dataProtection>
+      <S100XC:protectionScheme>S100p15</S100XC:protectionScheme>
+      <S100XC:digitalSignatureReference>ECDSA-384-SHA2</S100XC:digitalSignatureReference>
+      <S100XC:digitalSignatureValue>
+        <S100SE:S100_SE_SignatureOnData id="sig-101ZZ00SPIT3" certificateRef="ZZ00-TEST-DATA-SERVER" dataStatus="unencrypted">MGYCMQDLNOXmd0LDXB3T9cqItXJRSQgc1KYRYWUXjOe2YG+JcCklOZQtpi2mL9nwhRmQJv4CMQCkJnXmL2Mpb4w13s90ihsvbYuPiKE+4U0CEMd+oES08DCFnIfWrYvF5ruqYN/e44E=</S100SE:S100_SE_SignatureOnData>
+      </S100XC:digitalSignatureValue>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:issueDate>2026-02-28</S100XC:issueDate>
+      <S100XC:boundingBox>
+        <gex:westBoundLongitude>
+          <gco:Decimal>-135.14283288</gco:Decimal>
+        </gex:westBoundLongitude>
+        <gex:eastBoundLongitude>
+          <gco:Decimal>-134.78575068</gco:Decimal>
+        </gex:eastBoundLongitude>
+        <gex:southBoundLatitude>
+          <gco:Decimal>-41.10779734</gco:Decimal>
+        </gex:southBoundLatitude>
+        <gex:northBoundLatitude>
+          <gco:Decimal>-40.83830399</gco:Decimal>
+        </gex:northBoundLatitude>
+      </S100XC:boundingBox>
+      <S100XC:productSpecification>
+        <S100XC:name>
+          <gco:CharacterString>Electronic Navigational Chart</gco:CharacterString>
+        </S100XC:name>
+        <S100XC:version>
+          <gco:CharacterString>2.0.0</gco:CharacterString>
+        </S100XC:version>
+        <S100XC:productIdentifier>S-101</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+      <S100XC:producingAgency>
+        <cit:CI_Responsibility>
+          <cit:role>
+            <cit:CI_RoleCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_RoleCode" codeListValue="producer" />
+          </cit:role>
+          <cit:party>
+            <cit:CI_Organisation>
+              <cit:name>
+                <gco:CharacterString>Synthetic Hydrographic Office (fictitious; generated test data)</gco:CharacterString>
+              </cit:name>
+            </cit:CI_Organisation>
+          </cit:party>
+        </cit:CI_Responsibility>
+      </S100XC:producingAgency>
+      <S100XC:producerCode>ZZ00</S100XC:producerCode>
+      <S100XC:encodingFormat>ISO/IEC 8211</S100XC:encodingFormat>
+      <S100XC:comment>
+        <gco:CharacterString>Synthetic Sound coastal (SYNTHETIC, fictitious; not for navigation)</gco:CharacterString>
+      </S100XC:comment>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S-102/DATASET_FILES/102ZZ00SPIT.h5</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:issueDate>2026-02-28</S100XC:issueDate>
+      <S100XC:boundingBox>
+        <gex:westBoundLongitude>
+          <gco:Decimal>-135.0</gco:Decimal>
+        </gex:westBoundLongitude>
+        <gex:eastBoundLongitude>
+          <gco:Decimal>-134.92858356</gco:Decimal>
+        </gex:eastBoundLongitude>
+        <gex:southBoundLatitude>
+          <gco:Decimal>-40.97484729</gco:Decimal>
+        </gex:southBoundLatitude>
+        <gex:northBoundLatitude>
+          <gco:Decimal>-40.96855911</gco:Decimal>
+        </gex:northBoundLatitude>
+      </S100XC:boundingBox>
+      <S100XC:productSpecification>
+        <S100XC:name>
+          <gco:CharacterString>Bathymetric Surface</gco:CharacterString>
+        </S100XC:name>
+        <S100XC:version>
+          <gco:CharacterString>3.0.0</gco:CharacterString>
+        </S100XC:version>
+        <S100XC:productIdentifier>S-102</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+      <S100XC:producingAgency>
+        <cit:CI_Responsibility>
+          <cit:role>
+            <cit:CI_RoleCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_RoleCode" codeListValue="producer" />
+          </cit:role>
+          <cit:party>
+            <cit:CI_Organisation>
+              <cit:name>
+                <gco:CharacterString>Synthetic Hydrographic Office (fictitious; generated test data)</gco:CharacterString>
+              </cit:name>
+            </cit:CI_Organisation>
+          </cit:party>
+        </cit:CI_Responsibility>
+      </S100XC:producingAgency>
+      <S100XC:producerCode>ZZ00</S100XC:producerCode>
+      <S100XC:encodingFormat>HDF5</S100XC:encodingFormat>
+      <S100XC:comment>
+        <gco:CharacterString>SYNTHETIC bathymetric surface of Synthetic Sound (fictitious).</gco:CharacterString>
+      </S100XC:comment>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+  </S100XC:datasetDiscoveryMetadata>
+</S100XC:S100_ExchangeCatalogue>
