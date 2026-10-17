@@ -33,7 +33,7 @@ namespace EncDotNet.S100.VisualRegression;
 /// <list type="number">
 ///   <item>The harness picks the right <see cref="IDatasetProcessor"/> via
 ///         <see cref="DatasetPipelineFactory"/> (same code path as the viewer).</item>
-///   <item>It invokes <see cref="MapsuiDatasetRenderer.RenderAsync"/> with a spec-specific
+///   <item>It invokes <see cref="MapsuiDatasetRenderer.RenderAsync(IDatasetProcessor, RenderContext?, CancellationToken)"/> with a spec-specific
 ///         <see cref="RenderContext"/> derived from <see cref="HarnessOptions"/>.</item>
 ///   <item>The resulting Mapsui <see cref="ILayer"/>s are dropped into a
 ///         <see cref="Map"/>, the viewport is zoomed to the dataset extent, and

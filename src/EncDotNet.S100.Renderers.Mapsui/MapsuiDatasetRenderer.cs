@@ -126,10 +126,28 @@ public sealed class MapsuiDatasetRenderer
     /// <exception cref="NotSupportedException">
     /// Thrown when the processor exposes neither portrayal-output capability.
     /// </exception>
-    public async Task<MapsuiDatasetResult> RenderAsync(
+    public Task<MapsuiDatasetResult> RenderAsync(
         IDatasetProcessor processor,
         RenderContext? context = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        RenderAsync(processor, context, coverageLayoutCache: null, cancellationToken);
+
+    /// <summary>
+    /// Renders the supplied processor's portrayal into Mapsui layers, reusing
+    /// <paramref name="coverageLayoutCache"/> for gridded coverage layers so a
+    /// re-render of the same grid skips the reprojection pass (issue #855).
+    /// </summary>
+    /// <param name="processor">The dataset processor.</param>
+    /// <param name="context">Optional render context.</param>
+    /// <param name="coverageLayoutCache">
+    /// The dataset's layout cache, or <see langword="null"/> for a throwaway one.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    internal async Task<MapsuiDatasetResult> RenderAsync(
+        IDatasetProcessor processor,
+        RenderContext? context,
+        CoverageLayoutCache? coverageLayoutCache,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(processor);
         cancellationToken.ThrowIfCancellationRequested();
@@ -147,7 +165,7 @@ public sealed class MapsuiDatasetRenderer
             if (processor is ICoveragePortrayalSource coverageSource)
             {
                 var result = await coverageSource.BuildCoveragePortrayalAsync(context, cancellationToken).ConfigureAwait(false);
-                return ConvertCoverage(processor, result);
+                return ConvertCoverage(processor, result, coverageLayoutCache);
             }
 
             throw new NotSupportedException(
@@ -262,7 +280,10 @@ public sealed class MapsuiDatasetRenderer
         };
     }
 
-    private MapsuiDatasetResult ConvertCoverage(IDatasetProcessor processor, CoveragePortrayalResult result)
+    private MapsuiDatasetResult ConvertCoverage(
+        IDatasetProcessor processor,
+        CoveragePortrayalResult result,
+        CoverageLayoutCache? coverageLayoutCache)
     {
         var layers = new List<ILayer>(result.SubLayers.Count);
         var stackEntries = new List<LayerStackEntry>(result.SubLayers.Count);
@@ -278,7 +299,7 @@ public sealed class MapsuiDatasetRenderer
             {
                 case GridCoverageSubLayer grid:
                     {
-                        layer = BuildGridCoverageLayer(grid);
+                        layer = BuildGridCoverageLayer(grid, coverageLayoutCache);
                         break;
                     }
 
@@ -371,7 +392,21 @@ public sealed class MapsuiDatasetRenderer
     /// </summary>
     /// <param name="grid">The gridded coverage sub-layer to rasterise.</param>
     /// <returns>The rasterised layer, or <see langword="null"/> if none was produced.</returns>
-    public ILayer? BuildGridCoverageLayer(GridCoverageSubLayer grid)
+    public ILayer? BuildGridCoverageLayer(GridCoverageSubLayer grid) =>
+        BuildGridCoverageLayer(grid, coverageLayoutCache: null);
+
+    /// <summary>
+    /// Builds the Mapsui raster layer for a gridded coverage surface, reusing
+    /// <paramref name="coverageLayoutCache"/> when it holds this grid's layout.
+    /// </summary>
+    /// <param name="grid">The gridded coverage sub-layer to rasterise.</param>
+    /// <param name="coverageLayoutCache">
+    /// The dataset's layout cache, or <see langword="null"/> for a throwaway one.
+    /// </param>
+    /// <returns>The rasterised layer, or <see langword="null"/> if none was produced.</returns>
+    internal ILayer? BuildGridCoverageLayer(
+        GridCoverageSubLayer grid,
+        CoverageLayoutCache? coverageLayoutCache)
     {
         ArgumentNullException.ThrowIfNull(grid);
 
@@ -380,6 +415,7 @@ public sealed class MapsuiDatasetRenderer
             LayerName = grid.LayerName,
             LandAreas = grid.LandAreaMask,
             Opacity = grid.Opacity,
+            LayoutCache = coverageLayoutCache ?? new CoverageLayoutCache(),
         };
         return renderer.Render(grid.Coverage, grid.Viewport);
     }
@@ -391,12 +427,26 @@ public sealed class MapsuiDatasetRenderer
     /// </summary>
     /// <param name="subLayer">The replaced sub-layer.</param>
     /// <returns>The rebuilt layer, or <see langword="null"/>.</returns>
-    public ILayer? BuildCoverageLayer(CoverageSubLayerBase subLayer) => subLayer switch
-    {
-        GridCoverageSubLayer grid => BuildGridCoverageLayer(grid),
-        IsolineCoverageSubLayer isolines => BuildIsolineLayer(isolines),
-        _ => null,
-    };
+    public ILayer? BuildCoverageLayer(CoverageSubLayerBase subLayer) =>
+        BuildCoverageLayer(subLayer, coverageLayoutCache: null);
+
+    /// <summary>
+    /// Builds the Mapsui layer for a replaced coverage sub-layer, reusing
+    /// <paramref name="coverageLayoutCache"/> for a gridded surface.
+    /// </summary>
+    /// <param name="subLayer">The replaced sub-layer.</param>
+    /// <param name="coverageLayoutCache">
+    /// The source dataset's layout cache, or <see langword="null"/> for a throwaway one.
+    /// </param>
+    /// <returns>The rebuilt layer, or <see langword="null"/>.</returns>
+    internal ILayer? BuildCoverageLayer(
+        CoverageSubLayerBase subLayer,
+        CoverageLayoutCache? coverageLayoutCache) => subLayer switch
+        {
+            GridCoverageSubLayer grid => BuildGridCoverageLayer(grid, coverageLayoutCache),
+            IsolineCoverageSubLayer isolines => BuildIsolineLayer(isolines),
+            _ => null,
+        };
 
     /// <summary>
     /// Builds the layer for labelled isolines (the S-104 surface): one feature

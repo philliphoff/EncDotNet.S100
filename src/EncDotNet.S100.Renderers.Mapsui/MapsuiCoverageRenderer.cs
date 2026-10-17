@@ -26,21 +26,20 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     private readonly ICrsTransformFactory _transformFactory;
 
     /// <summary>
-    /// Cached palette- and value-independent projection layout. The grid-node
-    /// reprojection (native CRS → Web Mercator) and the resulting node→pixel
-    /// mapping depend only on the grid geometry, so they can be reused across
-    /// renders that change only the colour palette, ECDIS display mode, or
-    /// coverage time-step. Published atomically via <see cref="Volatile"/>.
+    /// Cache of the palette- and value-independent projection layout. The
+    /// grid-node reprojection (native CRS → Web Mercator) and the resulting
+    /// node→pixel mapping depend only on the grid geometry, so they can be
+    /// reused across renders that change only the colour palette, ECDIS display
+    /// mode, or coverage time-step. Defaults to a cache owned by this renderer;
+    /// a dataset session supplies its own so the layout outlives the renderer.
     /// </summary>
-    private LayoutCacheEntry? _layoutCache;
+    internal CoverageLayoutCache LayoutCache { get; init; } = new();
 
     /// <summary>Number of times the projection layout was reused from cache.</summary>
-    internal long LayoutCacheHits { get; private set; }
+    internal long LayoutCacheHits => LayoutCache.Hits;
 
     /// <summary>Number of times the projection layout was (re)built.</summary>
-    internal long LayoutCacheMisses { get; private set; }
-
-    private readonly object _cacheLock = new();
+    internal long LayoutCacheMisses => LayoutCache.Misses;
 
     /// <summary>Name assigned to the generated Mapsui layer.</summary>
     public string LayerName { get; set; } = "S-102 Coverage";
@@ -295,19 +294,12 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     private LayoutCacheEntry GetOrBuildLayout(GridGeoreferencer georeferencer, int srcRows, int srcCols)
     {
         var meta = georeferencer.Metadata;
-        var cached = Volatile.Read(ref _layoutCache);
-        if (cached is not null && cached.Matches(georeferencer.CRS, srcRows, srcCols, meta))
-        {
-            lock (_cacheLock) { LayoutCacheHits++; }
-            return cached;
-        }
-
-        var built = BuildLayout(georeferencer, srcRows, srcCols, meta);
-
-        // Build immutable entry locally, then publish atomically.
-        Volatile.Write(ref _layoutCache, built);
-        lock (_cacheLock) { LayoutCacheMisses++; }
-        return built;
+        return LayoutCache.GetOrBuild(
+            georeferencer.CRS,
+            srcRows,
+            srcCols,
+            meta,
+            () => BuildLayout(georeferencer, srcRows, srcCols, meta));
     }
 
     /// <summary>
@@ -400,7 +392,7 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
     /// <summary>
     /// Stable, palette-independent projection layout for one grid geometry.
     /// </summary>
-    private sealed class LayoutCacheEntry
+    internal sealed class LayoutCacheEntry
     {
         public LayoutCacheEntry(
             string crs, int srcRows, int srcCols,

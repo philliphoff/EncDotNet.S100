@@ -13,7 +13,7 @@ using NetTopologySuite.Geometries;
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Pins <see cref="LayerStackProjector.Project"/>'s coverage-rebuild branch:
+/// Pins <see cref="LayerStackProjector.Project(IReadOnlyList{SubLayerStackItem}, IReadOnlyDictionary{ValueTuple{string, string}, LayerStackEntry}, Func{CoverageSubLayerBase, Mapsui.Layers.ILayer})"/>'s coverage-rebuild branch:
 /// when an S-98 rule replaces a grid sub-layer (e.g. R-101-104-B attaching a
 /// land mask so the S-104 surface is clipped to water, issue #483) the rebuilt
 /// <see cref="ILayer"/> must inherit the prebuilt layer's display state so a
@@ -67,6 +67,43 @@ public class LayerStackProjectorTests
         Assert.Equal(0.5, layer.Opacity);
         Assert.Equal(100.0, layer.MinVisible);
         Assert.Equal(200.0, layer.MaxVisible);
+    }
+
+    [Fact]
+    public void Project_item_aware_rebuild_receives_the_ruled_item()
+    {
+        // The session keys its per-dataset coverage layout cache by the ruled
+        // item's SourceDatasetId (issue #855), so the rebuild must see the item.
+        const string datasetId = "s104.h5";
+        var original = BuildCoverageGridItem(datasetId);
+        var originalGrid = (GridCoverageSubLayer)((CoverageStackPayload)original.Payload).SubLayer;
+        var ruledGrid = originalGrid.WithLandAreaMask(null);
+        var ruled = new SubLayerStackItem(
+            ((CoverageStackPayload)original.Payload).WithSubLayer(ruledGrid),
+            S98DisplayPlane.OnDemandSurface,
+            0,
+            datasetId);
+        var prebuilt = new Dictionary<(string, string), LayerStackEntry>
+        {
+            [LayerStackProjector.KeyOf(original)] = new LayerStackEntry(new MemoryLayer(), original),
+        };
+        var rebuiltLayer = new MemoryLayer();
+        SubLayerStackItem? seenItem = null;
+        CoverageSubLayerBase? seenSubLayer = null;
+
+        var projected = LayerStackProjector.Project(
+            new[] { ruled },
+            prebuilt,
+            (item, subLayer) =>
+            {
+                seenItem = item;
+                seenSubLayer = subLayer;
+                return rebuiltLayer;
+            });
+
+        Assert.Same(rebuiltLayer, Assert.Single(projected).Layer);
+        Assert.Same(ruled, seenItem);
+        Assert.Same(ruledGrid, seenSubLayer);
     }
 
     [Fact]
