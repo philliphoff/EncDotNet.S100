@@ -19,6 +19,7 @@ public sealed class HeadlessLibraryLoadTests : IDisposable
     private readonly CollectionLibrary _library;
     private readonly LibraryOperations _operations;
     private readonly CatalogLibraryOpener _opener;
+    private readonly TaskCompletionSource _serverGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public HeadlessLibraryLoadTests()
     {
@@ -27,7 +28,7 @@ public sealed class HeadlessLibraryLoadTests : IDisposable
             CollectionIndexer.CreateDefault(),
             new CollectionLibraryOptions(Path.Combine(_root, "collections.json"), Path.Combine(_root, "index-cache")));
         _library.Initialize();
-        var http = new HttpClient(new ZipServer(File.ReadAllBytes(TestData("US4OH1MK.zip"))));
+        var http = new HttpClient(new ZipServer(File.ReadAllBytes(TestData("US4OH1MK.zip")), _serverGate.Task));
         _operations = new LibraryOperations(
             _library,
             new LibraryDownloads(LibraryDownloads.ManagedFolders(http, Path.Combine(_root, "downloads"))),
@@ -139,8 +140,10 @@ public sealed class HeadlessLibraryLoadTests : IDisposable
         };
 
         // Started as library_action download does: not awaited, yet already tracked.
+        // The fake server holds its response until released, so the download is genuinely in flight.
         var download = _operations.DownloadAsync([(cell, source)], load: true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(_operations.GetActivity().IsIdle);
+        _serverGate.SetResult();
         var idle = await _operations.AwaitIdleAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
         var outcome = await download;
 
@@ -153,9 +156,12 @@ public sealed class HeadlessLibraryLoadTests : IDisposable
         Assert.Equal(LibraryAvailability.Loaded, _operations.StateOf(cell, source).Availability);
     }
 
-    private sealed class ZipServer(byte[] zip) : HttpMessageHandler
+    private sealed class ZipServer(byte[] zip, Task gate) : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(zip) });
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await gate.WaitAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(zip) };
+        }
     }
 }
