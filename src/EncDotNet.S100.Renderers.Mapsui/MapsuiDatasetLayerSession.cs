@@ -2265,13 +2265,27 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         {
             Layers = result.Layers.ToArray();
             LayerKeys = result.LayerNames?.ToArray();
-            StackEntries = result.StackEntries?.ToArray();
+            StackEntries = result.StackEntries?.Select(StampDatasetId).ToArray();
             Extent = result.Extent;
             Info = result.Info;
             CoverageGeometry = result.CoverageGeometry;
             CellMinimumDisplayScale = result.CellMinimumDisplayScale;
             CellCompilationScale = result.CellCompilationScale;
         }
+
+        /// <summary>
+        /// Processors name their stack items after their source file, but the
+        /// session joins the stack, the S-98 rules and picking by its own
+        /// dataset id. Restamp each item so one file opened under two ids (or
+        /// under any id other than its file name) keeps its own entries.
+        /// </summary>
+        private LayerStackEntry StampDatasetId(LayerStackEntry stackEntry) =>
+            string.Equals(stackEntry.Item.SourceDatasetId, Dataset.Id.Value, StringComparison.Ordinal)
+                ? stackEntry
+                : stackEntry with
+                {
+                    Item = stackEntry.Item with { SourceDatasetId = Dataset.Id.Value },
+                };
 
         public void ClearRendering()
         {
