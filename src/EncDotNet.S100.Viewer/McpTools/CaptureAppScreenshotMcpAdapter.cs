@@ -25,7 +25,8 @@ internal static class CaptureAppScreenshotMcpAdapter
         + "alongside a JSON metadata block. Primary use case: agent-driven verification of non-rendering UX "
         + "changes, e.g. confirming that set_panel actually opened a panel. Complements render_to_image, which "
         + "captures only the map surface. Pass scale (e.g. 2) for a sharper image: the window is rendered at "
-        + "that many pixels per logical pixel, clamped to [0.5, 3]; the default is 1. "
+        + "that many pixels per logical pixel, clamped to [0.5, 3]; the default is 1. Pass panel to crop to one panel "
+        + "(a smaller image). "
         + "Read-only and side-effect free; the window is not mutated. "
         + "Viewer-injected tool — not available from a headless MCP host until that host supplies its own "
         + "equivalent.";
@@ -37,7 +38,8 @@ internal static class CaptureAppScreenshotMcpAdapter
 
         var del = (
             [System.ComponentModel.Description("Device pixels per logical pixel (2 = Retina-sharp). Clamped to [0.5, 3]; omit for 1.")] double? scale = null,
-            CancellationToken ct = default) => DispatchAsync(() => inner.InvokeAsync(scale, ct));
+            [System.ComponentModel.Description("Crop to a showing panel: an id from list_panels, or 'map'. Omit for the whole window.")] string? panel = null,
+            CancellationToken ct = default) => DispatchAsync(() => inner.InvokeAsync(scale, panel, ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {

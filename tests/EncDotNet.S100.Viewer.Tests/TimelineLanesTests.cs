@@ -445,6 +445,33 @@ public sealed class TimelineLanesTests
         Assert.Single(off.Lanes);
     }
 
+    // ── the lane's actions without a pointer (#733) ───────────────────
+
+    [AvaloniaFact]
+    public async Task Automation_opens_a_lanes_band_actions_and_runs_them()
+    {
+        var (_, timeline, scope, library) = Chesapeake18Z();
+        using var host = Headless.ViewHost.Show(new Views.TimelineView { DataContext = timeline }, width: 1100, height: 360);
+        var automation = new ViewerUiAutomation(() => [host.Window]);
+        static IEnumerable<UiElementSnapshot> Flatten(UiElementSnapshot e) => new[] { e }.Concat((e.Children ?? []).SelectMany(Flatten));
+        async Task<List<UiElementSnapshot>> Tree() =>
+            [.. (await automation.GetTreeAsync(new UiTreeQuery(null, 40, true, 2000))).Roots.SelectMany(r => Flatten(r.Element))];
+
+        // Each lane's band is a button named after the lane, as ui_tree lists it.
+        var bands = (await Tree()).Where(e => e.Id == "Timeline.Lane.Band").ToList();
+        Assert.Equal(["cbofs", "dbofs"], bands.Select(b => b.Name));
+
+        // Focusing it outlines the lane's footprint, as hovering does.
+        await automation.ActAsync(new UiTarget(null, bands[1].Ref), UiAction.Focus, null);
+        Assert.Equal(2, scope.HighlightedAreas.Count);
+
+        // Invoking it opens the popover; its Get downloads the lane's online data.
+        await automation.ActAsync(new UiTarget(null, bands[1].Ref), UiAction.Invoke, null);
+        host.Settle();
+        await automation.ActAsync(new UiTarget("Timeline.Lane.Get", null), UiAction.Invoke, null);
+        Assert.Equal(["111US00_DBOFS_US4DE1AD", "111US00_DBOFS_US4NJ1AC"], library.Got.Select(e => e.Name));
+    }
+
     private sealed class FakeLibrary : ILibraryTimeSource
     {
         public IReadOnlyList<LibraryTimedEntry> Entries { get; set; } = [];

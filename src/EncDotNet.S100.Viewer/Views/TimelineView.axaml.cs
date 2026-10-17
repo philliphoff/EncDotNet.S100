@@ -2,8 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using Avalonia.VisualTree;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -40,7 +40,6 @@ public partial class TimelineView : UserControl
             // Hovering a lane outlines its footprint on the map (#710 E4).
             lanes.PointerMoved += (_, e) => Timeline?.HoverLane(LaneOf(e.Source));
             lanes.PointerExited += (_, _) => Timeline?.HoverLane(null);
-            lanes.Tapped += OnLaneTapped;
         }
     }
 
@@ -49,30 +48,29 @@ public partial class TimelineView : UserControl
 
     /// <summary>
     /// Clicking a lane's "no data" layer time jumps to its nearest data
-    /// (handoff D3); clicking its bands opens their Library actions (E5).
+    /// (handoff D3). It is a button, so Enter, Space and automation clients
+    /// (the ui_* tools) reach it too.
     /// </summary>
-    private static void OnLaneTapped(object? sender, TappedEventArgs e)
+    private void OnLaneTimeClick(object? sender, RoutedEventArgs e)
     {
-        if (e.Source is TextBlock { Classes: var classes } text && classes.Contains("LaneTime")
-            && LaneOf(text) is { } lane && lane.JumpCommand.CanExecute(null))
-        {
+        if (LaneOf(sender) is { } lane && lane.JumpCommand.CanExecute(null))
             lane.JumpCommand.Execute(null);
-            e.Handled = true;
-            return;
-        }
-        for (var visual = e.Source as Visual; visual is not null; visual = visual.GetVisualParent())
-        {
-            if (visual is Panel track && track.Classes.Contains("LaneTrack"))
-            {
-                if (LaneOf(track) is { HasActions: true })
-                {
-                    FlyoutBase.ShowAttachedFlyout(track);
-                    e.Handled = true;
-                }
-                return;
-            }
-        }
     }
+
+    /// <summary>
+    /// Clicking a lane's bands opens their Library actions (E5). The track is a
+    /// button, so Enter, Space and automation clients reach the popover too.
+    /// </summary>
+    private void OnLaneTrackClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Content: Control track } && LaneOf(sender) is { HasActions: true })
+            FlyoutBase.ShowAttachedFlyout(track);
+    }
+
+    // Focusing a lane's track outlines its footprint on the map, as hovering does (E4).
+    private void OnLaneTrackFocused(object? sender, RoutedEventArgs e) => Timeline?.HoverLane(LaneOf(sender));
+
+    private void OnLaneTrackUnfocused(object? sender, RoutedEventArgs e) => Timeline?.HoverLane(null);
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 

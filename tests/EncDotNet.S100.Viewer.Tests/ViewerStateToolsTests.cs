@@ -216,6 +216,37 @@ public sealed class ViewerStateToolsTests
         Assert.Equal("opacity", Assert.IsType<InvalidArgument>(opacity).Parameter);
     }
 
+    [Fact]
+    public async Task Dataset_state_moves_a_dataset_in_the_draw_order()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var top = new DatasetEntry("/data/101US00ABCDEF.000", "S-101");
+        var middle = new DatasetEntry("/data/102US00_SURFACE.h5", "S-102");
+        var bottom = new DatasetEntry("/data/104US004SC1BO_20251217T12Z.h5", "S-104");
+        datasets.Entries.Add(top);
+        datasets.Entries.Add(middle);
+        datasets.Entries.Add(bottom);
+        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(bottom.DisplayName, null, null, "Front"), TestContext.Current.CancellationToken)).TryGetValue(out var front));
+        Assert.Equal((0, 2, true), (front!.Position, front.PreviousPosition, front.Changed));
+        Assert.Equal([bottom, top, middle], datasets.Entries);
+
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(bottom.DisplayName, null, null, "down"), TestContext.Current.CancellationToken)).TryGetValue(out var down));
+        Assert.Equal((1, 0), (down!.Position, down.PreviousPosition));
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(top.DisplayName, null, null, "back"), TestContext.Current.CancellationToken)).TryGetValue(out _));
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(middle.DisplayName, null, null, "up"), TestContext.Current.CancellationToken)).TryGetValue(out _));
+        Assert.Equal([middle, bottom, top], datasets.Entries);
+
+        // Already on top: reported, not changed.
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(middle.DisplayName, null, null, "up"), TestContext.Current.CancellationToken)).TryGetValue(out var noop));
+        Assert.False(noop!.Changed);
+
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(middle.DisplayName, null, null, "sideways"), TestContext.Current.CancellationToken)).TryGetError(out var bad));
+        Assert.Equal("order", Assert.IsType<InvalidArgument>(bad).Parameter);
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(middle.DisplayName, null, null, "2"), TestContext.Current.CancellationToken)).TryGetError(out _));
+    }
+
     // ── select_dataset ────────────────────────────────────────────────
 
     private static ValidationReport ReportOf(params ValidationFinding[] findings) =>

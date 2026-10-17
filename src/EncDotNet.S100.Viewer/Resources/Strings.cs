@@ -559,6 +559,9 @@ internal static class Strings
     public static string TimelinePanel_BandGet => Get(nameof(TimelinePanel_BandGet));
     public static string TimelinePanel_BandLoad => Get(nameof(TimelinePanel_BandLoad));
     public static string TimelinePanel_BandReveal => Get(nameof(TimelinePanel_BandReveal));
+    public static string Label_TimelineLaneJump => Get(nameof(Label_TimelineLaneJump));
+    public static string Tooltip_TimelineLaneJump => Get(nameof(Tooltip_TimelineLaneJump));
+    public static string Tooltip_TimelineLaneBand => Get(nameof(Tooltip_TimelineLaneBand));
     public static string TimelinePanel_BandDownloadingFormat => Get(nameof(TimelinePanel_BandDownloadingFormat));
     public static string TimelinePanel_PresetInView => Get(nameof(TimelinePanel_PresetInView));
     public static string TimelinePanel_InMapView => Get(nameof(TimelinePanel_InMapView));

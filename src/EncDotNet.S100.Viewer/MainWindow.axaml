@@ -543,6 +543,7 @@
             <!-- Left dock pane (activity tabs: Datasets, FCs, PCs, etc.).
                  No close button — content swaps via the activity bar. -->
             <views:ApplicationPanel Grid.Column="0"
+                                    x:Name="LeftDockPanel"
                                     Title="{Binding LeftDockTitle}"
                                     Content="{Binding LeftDockContent}"
                                     IsVisible="{Binding IsLeftDockShown}" />
@@ -1142,6 +1143,7 @@
                 no active pick.
             -->
             <views:ApplicationPanel Grid.Column="4"
+                                    x:Name="RightDockPanel"
                                     Title="{Binding RightDockTitle}"
                                     Content="{Binding SelectedRightTab}"
                                     ShowCloseButton="True"
@@ -1189,6 +1191,7 @@
                 covered.
             -->
             <Border Grid.Column="0"
+                    x:Name="ContentPanelHost"
                     Grid.ColumnSpan="6"
                     ZIndex="10"
                     IsVisible="{Binding IsContentPanelOpen}">
