@@ -22,8 +22,9 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// </summary>
 /// <remarks>
 /// <para>
-/// S-131 Edition 1.0.0 (FC) / 2.0.0 (PC). Application namespace
-/// <c>http://www.iho.int/S131/1.0</c> over the S-100 GML 5.0 profile.
+/// S-131 Edition 2.0.0 (feature and portrayal catalogues). Application
+/// namespace <c>http://www.iho.int/S131/2.0</c> (<c>http://www.iho.int/S131/1.0</c>
+/// in Edition 1.0.0) over the S-100 GML 5.0 profile.
 /// </para>
 /// <para>
 /// Unlike the other GML-encoded products (S-122, S-124, S-125, S-127, S-128,

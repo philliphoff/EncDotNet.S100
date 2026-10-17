@@ -9,7 +9,7 @@ namespace EncDotNet.S100.Datasets.S131.Validation;
 /// for an S-131 <see cref="S131HarbourInfrastructureDataset"/>. Rule
 /// identifiers follow the convention <c>S131-R-{clause}</c>, where
 /// <c>{clause}</c> traces to the relevant section of the S-131
-/// Product Specification (FC Edition 1.0.0 / PC Edition 2.0.0) or the
+/// Product Specification (Edition 2.0.0 feature and portrayal catalogues) or the
 /// S-100 framework (Part 10b §6.2 for coordinate encoding).
 /// </summary>
 /// <remarks>
@@ -89,7 +89,7 @@ public static class S131HarbourInfrastructureRules
     /// non-empty geometry.
     /// </summary>
     /// <remarks>
-    /// Spec reference: S-131 FC Edition 1.0.0 §B.2 — features such as
+    /// Spec reference: S-131 FC Edition 2.0.0 §B.2 — features such as
     /// <c>Bollard</c>, <c>Dolphin</c>, <c>DryDock</c>, <c>MooringBuoy</c>,
     /// <c>LockBasin</c>, etc. describe fixed physical installations and
     /// require a spatial anchor. Container-style kinds (currently only
@@ -130,7 +130,7 @@ public static class S131HarbourInfrastructureRules
     /// non-empty geometry.
     /// </summary>
     /// <remarks>
-    /// Spec reference: S-131 FC Edition 1.0.0 §B.2 — every
+    /// Spec reference: S-131 FC Edition 2.0.0 §B.2 — every
     /// <c>Layout</c>-derived feature is intrinsically spatial; a berth
     /// without coordinates cannot be drawn or routed to. Unlike the
     /// <c>HarbourPhysicalInfrastructure</c> branch there are no
@@ -168,7 +168,7 @@ public static class S131HarbourInfrastructureRules
     /// non-negative number expressed in metres.
     /// </summary>
     /// <remarks>
-    /// Spec reference: S-131 FC Edition 1.0.0 — the
+    /// Spec reference: S-131 FC Edition 2.0.0 — the
     /// <c>availableBerthingLength</c> simple attribute is bound to
     /// <c>Berth</c>, <c>BerthPosition</c>, and related layout features;
     /// the FC declares the quantity specification as <c>length</c>
@@ -413,7 +413,7 @@ public static class S131HarbourInfrastructureRules
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Spec reference: S-131 FC Edition 1.0.0 §B.3 — feature/info-type
+    /// Spec reference: S-131 FC Edition 2.0.0 §B.3 — feature/info-type
     /// associations are encoded as <c>xlink:href</c> attributes on
     /// role-bearing child elements; the target must exist within the
     /// dataset's id space.
@@ -481,12 +481,12 @@ public static class S131HarbourInfrastructureRules
     /// <summary>
     /// <c>S131-R-6.1</c> — Every feature and information type in the
     /// dataset must use a code declared in the S-131 Feature Catalogue
-    /// (Edition 1.0.0). Unknown codes — i.e. projections that surface
+    /// (Edition 2.0.0). Unknown codes — i.e. projections that surface
     /// as <see cref="S131OtherFeature"/> or
     /// <see cref="S131OtherInformationType"/> — are surfaced as Warnings.
     /// </summary>
     /// <remarks>
-    /// Spec reference: S-131 FC Edition 1.0.0 §B.1, §B.2 — the FC
+    /// Spec reference: S-131 FC Edition 2.0.0 §B.1, §B.2 — the FC
     /// closes over the legal feature- and information-type code lists.
     /// A warning (rather than an error) is used so that forward-compat
     /// extensions in future FC editions remain consumable while still

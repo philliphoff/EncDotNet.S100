@@ -34,7 +34,7 @@ public interface IS131InformationType
 
 /// <summary>
 /// Typed projection of an S-131 <c>Authority</c> information type
-/// (FC Ed 1.0.0 §B.1). A container-style record that aggregates
+/// (FC Ed 2.0.0 §B.1). A container-style record that aggregates
 /// contact, applicability, and service-hours bindings for a port,
 /// terminal, pilotage, or other operating authority.
 /// </summary>
@@ -69,7 +69,7 @@ public sealed class S131Authority : IS131InformationType
 
 /// <summary>
 /// Typed projection of an S-131 <c>ContactDetails</c> information type
-/// (FC Ed 1.0.0 §B.1).
+/// (FC Ed 2.0.0 §B.1).
 /// </summary>
 public sealed class S131ContactDetails : IS131InformationType
 {
@@ -89,7 +89,7 @@ public sealed class S131ContactDetails : IS131InformationType
 
 /// <summary>
 /// Typed projection of an S-131 <c>Applicability</c> information type
-/// (FC Ed 1.0.0 §B.1).
+/// (FC Ed 2.0.0 §B.1).
 /// </summary>
 public sealed class S131Applicability : IS131InformationType
 {
@@ -109,7 +109,7 @@ public sealed class S131Applicability : IS131InformationType
 
 /// <summary>
 /// Typed projection of an S-131 <c>AvailablePortServices</c>
-/// information type (FC Ed 1.0.0 §B.1).
+/// information type (FC Ed 2.0.0 §B.1).
 /// </summary>
 public sealed class S131AvailablePortServices : IS131InformationType
 {
@@ -129,7 +129,7 @@ public sealed class S131AvailablePortServices : IS131InformationType
 
 /// <summary>
 /// Typed projection of an S-131 <c>Entrance</c> information type
-/// (FC Ed 1.0.0 §B.1).
+/// (FC Ed 2.0.0 §B.1).
 /// </summary>
 public sealed class S131Entrance : IS131InformationType
 {
@@ -149,7 +149,7 @@ public sealed class S131Entrance : IS131InformationType
 
 /// <summary>
 /// Typed projection of an S-131 <c>ServiceHours</c> information type
-/// (FC Ed 1.0.0 §B.1).
+/// (FC Ed 2.0.0 §B.1).
 /// </summary>
 public sealed class S131ServiceHours : IS131InformationType
 {
@@ -169,7 +169,7 @@ public sealed class S131ServiceHours : IS131InformationType
 
 /// <summary>
 /// Typed projection of an S-131 <c>NonStandardWorkingDay</c>
-/// information type (FC Ed 1.0.0 §B.1).
+/// information type (FC Ed 2.0.0 §B.1).
 /// </summary>
 public sealed class S131NonStandardWorkingDay : IS131InformationType
 {
@@ -191,7 +191,7 @@ public sealed class S131NonStandardWorkingDay : IS131InformationType
 /// Typed projection of an S-131 information type derived from
 /// <c>AbstractRxN</c> — i.e. <c>NauticalInformation</c>,
 /// <c>Recommendations</c>, <c>Regulations</c>, or <c>Restrictions</c>
-/// (FC Ed 1.0.0 §B.1). These types share a common attribute footprint
+/// (FC Ed 2.0.0 §B.1). These types share a common attribute footprint
 /// (textual <c>information</c>, <c>language</c>, optional file
 /// locator) so they are projected into a single record discriminated by
 /// <see cref="Kind"/>.
@@ -216,7 +216,7 @@ public sealed class S131RxNInformation : IS131InformationType
 
 /// <summary>
 /// Typed projection of an S-131 <c>SpatialQuality</c> information type
-/// (FC Ed 1.0.0 §B.1).
+/// (FC Ed 2.0.0 §B.1).
 /// </summary>
 public sealed class S131SpatialQuality : IS131InformationType
 {

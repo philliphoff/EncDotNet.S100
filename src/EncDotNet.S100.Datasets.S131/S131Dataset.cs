@@ -10,8 +10,9 @@ namespace EncDotNet.S100.Datasets.S131;
 /// parsed from S-100 Part 10b GML encoding via <see cref="S131DatasetReader"/>.
 /// </summary>
 /// <remarks>
-/// S-131 Edition 1.0.0 (FC) / 2.0.0 (PC) application schema namespace is
-/// <c>http://www.iho.int/S131/1.0</c>; geometry uses the S-100 GML 5.0
+/// The S-131 Edition 2.0.0 application schema namespace is
+/// <c>http://www.iho.int/S131/2.0</c> (Edition 1.0.0 used
+/// <c>http://www.iho.int/S131/1.0</c>); geometry uses the S-100 GML 5.0
 /// profile namespace <c>http://www.iho.int/s100gml/5.0</c>. See the
 /// S-131 Product Specification and its Data Classification and Encoding
 /// Guide for the full feature and attribute model.
@@ -93,9 +94,8 @@ public sealed class S131Dataset
 /// A geographic feature parsed from an S-131 GML dataset. Concrete feature
 /// types include harbour infrastructure such as <c>Berth</c>, <c>Bollard</c>,
 /// <c>Terminal</c>, <c>DryDock</c>, <c>AnchorageArea</c>,
-/// <c>HarbourAreaAdministrative</c>, and container features such as
-/// <c>Authority</c>. See the S-131 Edition 1.0.0 Feature Catalogue for the
-/// full set of 31 feature types.
+/// and <c>HarbourAreaAdministrative</c>. See the S-131 Edition 2.0.0
+/// Feature Catalogue for the full set of 35 concrete feature types.
 /// </summary>
 public sealed class S131Feature : IS100Feature
 {

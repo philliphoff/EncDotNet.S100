@@ -8,8 +8,8 @@ namespace EncDotNet.S100.Datasets.S124.Validation;
 /// The default <see cref="ValidationRuleSet{TModel}"/> of normative rules
 /// for an S-124 <see cref="S124NavigationalWarning"/>. Rule identifiers
 /// follow the convention <c>S124-R-{clause}</c>, where <c>{clause}</c>
-/// traces to the relevant section of the S-124 (Edition 1.0.0) Feature
-/// Catalogue or to S-100 Part 10b for shared encoding constraints.
+/// traces to the relevant section of the S-124 Edition 1.0.0 or 2.0.0
+/// Feature Catalogue or to S-100 Part 10b for shared encoding constraints.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -48,9 +48,10 @@ public static class S124NavigationalWarningRules
     /// one <c>NavwarnPart</c> feature.
     /// </summary>
     /// <remarks>
-    /// Spec reference: S-124 Edition 1.0.0 Feature Catalogue — a
-    /// <c>NavwarnPreamble</c> aggregates one or more <c>NavwarnPart</c>
-    /// features via the <c>header</c> association. A dataset that
+    /// Spec reference: S-124 Editions 1.0.0 and 2.0.0 Feature Catalogues —
+    /// a <c>NavwarnPreamble</c> aggregates one or more <c>NavwarnPart</c>
+    /// features, which reach it through the <c>header</c> role (the
+    /// <c>navwarnPreambleContent</c> association in Edition 2.0.0). A dataset that
     /// projects with zero parts has no substantive warning content.
     /// </remarks>
     public static IValidationRule<S124NavigationalWarning> MinimumPartCount { get; } =
@@ -80,7 +81,7 @@ public static class S124NavigationalWarningRules
     /// <c>NavwarnPreamble</c> information type.
     /// </summary>
     /// <remarks>
-    /// Spec reference: S-124 Edition 1.0.0 Feature Catalogue —
+    /// Spec reference: S-124 Editions 1.0.0 and 2.0.0 Feature Catalogues —
     /// <c>NavwarnPreamble</c> is mandatory; it carries the
     /// identification, classification, locality, and promulgating
     /// authority of the warning.
@@ -169,7 +170,10 @@ public static class S124NavigationalWarningRules
     /// <remarks>
     /// Spec reference: S-124 Edition 1.0.0 Feature Catalogue, attribute
     /// <c>NAVAREA</c> on <c>NavwarnPreamble</c>; codelist matches the
-    /// IMO World Wide Navigational Warning Service NAVAREA scheme.
+    /// IMO World Wide Navigational Warning Service NAVAREA scheme. The
+    /// Edition 2.0.0 Feature Catalogue has no <c>NAVAREA</c> attribute (the
+    /// series name goes in <c>messageSeriesIdentifier/nameOfSeries</c>), so
+    /// this rule only applies to datasets that carry the attribute.
     /// </remarks>
     public static IValidationRule<S124NavigationalWarning> NavareaCodeValid { get; } =
         ValidationRuleBuilder.RuleFor<S124NavigationalWarning>("S124-R-3.1")
