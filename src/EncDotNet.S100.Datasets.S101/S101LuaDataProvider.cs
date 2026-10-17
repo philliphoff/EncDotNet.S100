@@ -22,6 +22,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     private readonly S101Document _doc;
     private readonly FeatureCatalogue _fc;
     private readonly Action<string> _trace;
+    private S101SpatialRelate? _spatialRelate;
 
     // Lookup indices built lazily
     private Dictionary<uint, S101FeatureRecord>? _featureById;
@@ -65,9 +66,15 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
 
     /// <inheritdoc/>
     public IReadOnlyList<string> PostLoadScripts =>
+        string.Equals(_fc.ProductId, S401PortrayalPatches.ProductId, StringComparison.Ordinal)
+            ? [.. CommonPostLoadScripts, .. S401PortrayalPatches.Scripts]
+            : CommonPostLoadScripts;
+
+    private static readonly IReadOnlyList<string> CommonPostLoadScripts =
     [
         SpatialAssociationShim,
         HostGetSpatialShim,
+        HostSpatialRelateShim,
         ContainsGuard,
         FeatureNamePatch,
     ];
@@ -149,14 +156,50 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
         """;
 
     /// <summary>
+    /// Lua shim that implements <c>HostSpatialRelate</c> (S-100 Part 13
+    /// §13-8.2.3.1) over the C# <c>HostSpatialRelateCore</c>, which returns
+    /// either the relation or an error message. The message is raised as a
+    /// Lua error so an unsupported relation fails the calling rule (Default
+    /// symbology plus a trace naming the feature) instead of reading as
+    /// <c>false</c>.
+    /// </summary>
+    internal const string HostSpatialRelateShim = """
+        local _rawHostSpatialRelate = HostSpatialRelateCore
+        function HostSpatialRelate(spatialID1, spatialID2, intersectionPatternMatrix)
+            local result = _rawHostSpatialRelate(spatialID1, spatialID2, intersectionPatternMatrix)
+            if type(result) == 'string' then
+                error(result, 2)
+            end
+            return result
+        end
+        """;
+
+    /// <summary>
     /// Patches <c>contains</c> to handle nil/void gracefully. MoonSharp may
     /// return <c>DynValue.Void</c> (rather than nil) from <c>__index</c> when an
     /// attribute is missing, causing <c>type()</c> to error.
     /// </summary>
+    /// <remarks>
+    /// It also accepts a single value where a rule expects an array. The rules
+    /// pass attributes straight to <c>contains</c>, and the scripting framework
+    /// delivers a single-valued attribute as a scalar, so a rule written for an
+    /// S-101 <c>0..*</c> attribute fails at <c>#array</c> on a catalogue that
+    /// binds it <c>1..1</c>. The S-401 <c>Dolphin</c> rule does this with
+    /// <c>contains(2, categoryOfDolphin)</c>.
+    /// </remarks>
     internal const string ContainsGuard = """
         local _orig_contains = contains
         function contains(value, array)
             if value == nil then return false end
+            if array ~= nil and type(array) ~= 'table' then
+                if type(value) == 'table' then
+                    for i = 1, #value do
+                        if value[i] == array then return true end
+                    end
+                    return false
+                end
+                return value == array
+            end
             return _orig_contains(value, array)
         end
         """;
@@ -297,6 +340,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
             (Func<string, List<object>>)HostSpatialGetAssociatedFeatureIDs);
         lua.SetGlobal("HostSpatialGetAssociatedInformationIDs",
             (Func<string, string, string?, List<object>>)HostSpatialGetAssociatedInformationIDs);
+        lua.SetGlobal("HostSpatialRelateCore", (Func<string, string, string, object>)HostSpatialRelateCore);
 
         // Type system (Feature catalogue)
         lua.SetGlobal("HostGetFeatureTypeCodes", (Func<List<object>>)HostGetFeatureTypeCodes);
@@ -1007,6 +1051,15 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
         }
 
         return null;
+    }
+
+    private object HostSpatialRelateCore(string spatialId1, string spatialId2, string intersectionPatternMatrix)
+    {
+        _spatialRelate ??= new S101SpatialRelate(_doc);
+        var result = _spatialRelate.Relate(spatialId1, spatialId2, intersectionPatternMatrix);
+        if (result is string error)
+            _trace(error);
+        return result;
     }
 
     private List<object> HostSpatialGetAssociatedFeatureIDs(string spatialId)

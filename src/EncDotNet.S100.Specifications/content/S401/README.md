@@ -94,5 +94,20 @@ At the commits above:
 - The IEHG Portrayal-Catalogue repository has open issues about unregistered
   or pending notice mark symbols and others.
 
+## Host-side corrections
+
+These rule defects make every affected feature fall back to Default (question
+mark) symbology. Rather than edit the files here, the S-101 Lua data provider
+corrects them at load time (`S401PortrayalPatches` and the `contains` guard in
+`EncDotNet.S100.Datasets.S101`). Each correction does nothing once the defect
+is gone, and `S401PortrayalPatchTests` fails when a refreshed catalogue fixes
+one, as the cue to delete it.
+
+| Rule | Defect | Correction |
+|---|---|---|
+| `WaterwayProfile.lua` | Defines `WaterwayAxis` instead of `WaterwayProfile` ([IEHG #40](https://github.com/IEHG/Portrayal-Catalogue/issues/40)) | The function the file defines is bound to `WaterwayProfile` |
+| `CommunicationArea.lua` | Returns a viewing group it never assigns ([IEHG #41](https://github.com/IEHG/Portrayal-Catalogue/issues/41)) | Viewing group 38010, the value the issue proposes, when the rule returns none |
+| `Dolphin.lua` | Calls `contains(2, categoryOfDolphin)`, but the feature catalogue binds `categoryOfDolphin` `1..1`, so the value isn't a list (not yet reported upstream) | `contains` compares a single value directly |
+
 Refresh these files when the IEHG publishes an official portrayal catalogue or
 a new S-401 edition.
