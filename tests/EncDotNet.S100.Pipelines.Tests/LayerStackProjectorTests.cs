@@ -13,7 +13,7 @@ using NetTopologySuite.Geometries;
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Pins <see cref="LayerStackProjector.Project"/>'s coverage-rebuild branch:
+/// Pins <see cref="LayerStackProjector.Project(IReadOnlyList{SubLayerStackItem}, IReadOnlyDictionary{ValueTuple{string, string}, LayerStackEntry}, Func{CoverageSubLayerBase, Mapsui.Layers.ILayer})"/>'s coverage-rebuild branch:
 /// when an S-98 rule replaces a grid sub-layer (e.g. R-101-104-B attaching a
 /// land mask so the S-104 surface is clipped to water, issue #483) the rebuilt
 /// <see cref="ILayer"/> must inherit the prebuilt layer's display state so a
