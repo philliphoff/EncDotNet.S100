@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Datasets.S131.DataModel;
 /// <summary>
 /// Strongly-typed "Pass 2" projection of an <see cref="S131Dataset"/>
 /// as a graph of typed harbour-infrastructure features and information
-/// types (S-131 FC Edition 1.0.0 / PC Edition 2.0.0).
+/// types (S-131 Edition 2.0.0 feature and portrayal catalogues).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -702,7 +702,7 @@ public sealed class S131HarbourInfrastructureDataset
         }
     }
 
-    // ── Family classifiers (FC Ed 1.0.0 §B.2) ─────────────────────────
+    // ── Family classifiers (FC Ed 2.0.0 §B.2) ─────────────────────────
 
     private static bool TryClassifyHarbourInfrastructure(string code, out S131HarbourInfrastructureKind kind)
     {

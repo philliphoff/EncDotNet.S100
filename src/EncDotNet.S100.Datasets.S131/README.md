@@ -69,7 +69,7 @@ Lua pipeline reads the `S131Dataset` features directly.
 ### Feature families
 
 Concrete feature types are grouped into four families, taken from the feature
-catalogue's supertypes (FC Edition 1.0.0 §B.2 and §B.5). The projection doesn't
+catalogue's supertypes (FC Edition 2.0.0 §B.2 and §B.5). The projection doesn't
 read the feature catalogue at run time.
 
 | Family | Typed record | Enum | Feature catalogue supertype and members |
@@ -126,8 +126,8 @@ only when the dataset has no features and no information types.
 | `s131.id.duplicate` | Warning | Two objects share a `gml:id`. |
 | `attribute.parse.{int,double,bool,datetime}` | Warning | From `AttributeParser`; not currently raised. |
 
-The typed enums follow the S-131 Edition 1.0.0 feature catalogue. The bundled
-feature catalogue is Edition 2.0.0. Types it adds are reported as
+The typed enums cover every concrete feature and information type in the
+bundled S-131 Edition 2.0.0 feature catalogue. Types outside it are reported as
 `s131.feature.unknown` or `s131.information.unknown` and still project as
 `S131OtherFeature` or `S131OtherInformationType`.
 
@@ -223,7 +223,7 @@ A dataset puts every feature and information type in one container:
 |---|---|---|
 | Feature catalogue | 2.0.0 | |
 | Portrayal catalogue | 2.0.0 | 41 Lua rule files, 6 SVG symbols |
-| GML application schema | 1.0.0 | Namespace `http://www.iho.int/S131/1.0` |
+| GML application schema | 2.0.0 | Not bundled. Namespace `http://www.iho.int/S131/2.0` (`http://www.iho.int/S131/1.0` in Edition 1.0.0); the reader takes it from the root element |
 
 ## Dependencies
 

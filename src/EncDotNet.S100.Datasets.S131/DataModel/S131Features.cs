@@ -54,7 +54,7 @@ public interface IS131Feature
 /// <c>HarbourPhysicalInfrastructure</c> in the FC supertype graph —
 /// bollards, dolphins, dry docks, mooring buoys, lock basins, ship
 /// lifts, and other fixed harbour-side installations
-/// (S-131 FC Edition 1.0.0 §B.2).
+/// (S-131 FC Edition 2.0.0 §B.2).
 /// </summary>
 public sealed class S131HarbourInfrastructure : IS131Feature
 {
@@ -83,7 +83,7 @@ public sealed class S131HarbourInfrastructure : IS131Feature
 /// the FC supertype graph — area- and berth-style features such as
 /// berths, anchorage areas, terminals, harbour basins, pilot boarding
 /// places, dumping grounds, and fender lines
-/// (S-131 FC Edition 1.0.0 §B.2).
+/// (S-131 FC Edition 2.0.0 §B.2).
 /// </summary>
 public sealed class S131LayoutFeature : IS131Feature
 {
@@ -111,7 +111,7 @@ public sealed class S131LayoutFeature : IS131Feature
 /// Typed projection of an S-131 standalone-metadata feature —
 /// <c>DataCoverage</c>, <c>QualityOfNonBathymetricData</c>,
 /// <c>SoundingDatum</c>, <c>VerticalDatumOfData</c>, or
-/// <c>TextPlacement</c> (S-131 FC Edition 1.0.0 §B.2; no shared
+/// <c>TextPlacement</c> (S-131 FC Edition 2.0.0 §B.2; no shared
 /// supertype).
 /// </summary>
 public sealed class S131MetadataFeature : IS131Feature

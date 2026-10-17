@@ -11,9 +11,12 @@ namespace EncDotNet.S100.Datasets.S131;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The S-131 1.0.0 application schema declares its target namespace as
-/// <c>http://www.iho.int/S131/1.0</c> and imports geometry from the S-100
-/// GML 5.0 profile (<c>http://www.iho.int/s100gml/5.0</c>). This reader
+/// The S-131 Edition 2.0.0 application schema declares its target namespace
+/// as <c>http://www.iho.int/S131/2.0</c> (Edition 1.0.0 used
+/// <c>http://www.iho.int/S131/1.0</c>) and imports geometry from the S-100
+/// GML 5.0 profile (<c>http://www.iho.int/s100gml/5.0</c>). The reader takes
+/// the application namespace from the root element, so it reads either
+/// edition's namespace. This reader
 /// also accepts the older S-100 GML 1.0 profile namespace
 /// (<c>http://www.iho.int/S100/profile/s100gml/1.0</c>) for compatibility.
 /// </para>
@@ -38,7 +41,7 @@ internal static class S131DatasetReader
     private static readonly XNamespace S100Ns5 = "http://www.iho.int/s100gml/5.0";
     private static readonly XNamespace S100Ns1 = "http://www.iho.int/S100/profile/s100gml/1.0";
 
-    // S-131 Feature Catalogue Edition 1.0.0 — concrete information type codes.
+    // S-131 Feature Catalogue Edition 2.0.0 — concrete information type codes.
     // Information types lack geometry and are referenced via xlink:href from features.
     // Abstract base types (InformationType, AbstractRxN) are included for completeness
     // but will not appear in real GML datasets.

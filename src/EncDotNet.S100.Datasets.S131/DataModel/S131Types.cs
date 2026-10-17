@@ -5,7 +5,7 @@ namespace EncDotNet.S100.Datasets.S131.DataModel;
 
 /// <summary>
 /// Family of an S-131 feature, statically derived from the FC supertype
-/// chain (S-131 FC Edition 1.0.0). The family enum lets callers dispatch
+/// chain (S-131 FC Edition 2.0.0). The family enum lets callers dispatch
 /// on the high-level kind of harbour infrastructure without enumerating
 /// 36 concrete feature codes.
 /// </summary>
@@ -40,7 +40,7 @@ public enum S131FeatureFamily
 
 /// <summary>
 /// Concrete S-131 harbour-physical-infrastructure feature kind
-/// (S-131 FC Edition 1.0.0 §B.2). One entry per feature type whose
+/// (S-131 FC Edition 2.0.0 §B.2). One entry per feature type whose
 /// supertype chain rises to <c>HarbourPhysicalInfrastructure</c>.
 /// </summary>
 public enum S131HarbourInfrastructureKind
@@ -76,7 +76,7 @@ public enum S131HarbourInfrastructureKind
 }
 
 /// <summary>
-/// Concrete S-131 layout feature kind (S-131 FC Edition 1.0.0 §B.2).
+/// Concrete S-131 layout feature kind (S-131 FC Edition 2.0.0 §B.2).
 /// One entry per feature type whose supertype chain rises to
 /// <c>Layout</c>.
 /// </summary>
@@ -122,7 +122,7 @@ public enum S131LayoutKind
 
 /// <summary>
 /// Concrete S-131 standalone-metadata feature kind
-/// (S-131 FC Edition 1.0.0 §B.2). One entry per feature type that
+/// (S-131 FC Edition 2.0.0 §B.2). One entry per feature type that
 /// has no shared supertype in the FC.
 /// </summary>
 public enum S131MetadataKind
@@ -143,7 +143,7 @@ public enum S131MetadataKind
 
 /// <summary>
 /// Concrete kind of an <c>AbstractRxN</c>-derived S-131 information
-/// type (S-131 FC Edition 1.0.0 §B.1).
+/// type (S-131 FC Edition 2.0.0 §B.1).
 /// </summary>
 public enum S131RxNKind
 {

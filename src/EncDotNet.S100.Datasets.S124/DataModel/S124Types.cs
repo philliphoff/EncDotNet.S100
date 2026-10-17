@@ -170,7 +170,7 @@ public sealed class S124NavwarnPart
 }
 
 /// <summary>
-/// Typed projection of a <c>NavwarnAreaAffected</c> feature (S-124 § Edition 1.0.0).
+/// Typed projection of a <c>NavwarnAreaAffected</c> feature (S-124 Editions 1.0.0 and 2.0.0).
 /// </summary>
 public sealed class S124AffectedArea
 {
@@ -192,7 +192,7 @@ public sealed class S124AffectedArea
 }
 
 /// <summary>
-/// Typed projection of a <c>TextPlacement</c> feature (S-124 § Edition 1.0.0).
+/// Typed projection of a <c>TextPlacement</c> feature (S-124 Editions 1.0.0 and 2.0.0).
 /// </summary>
 public sealed class S124TextPlacement
 {
@@ -245,7 +245,7 @@ public sealed class S124WarningReference
 
 /// <summary>
 /// Typed projection of a <c>SpatialQuality</c> information type
-/// (S-124 § Edition 1.0.0).
+/// (S-124 Editions 1.0.0 and 2.0.0).
 /// </summary>
 public sealed class S124SpatialQuality
 {
