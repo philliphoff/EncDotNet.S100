@@ -1,14 +1,18 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Pipelines.Time;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Testing.Scenarios.Quirks;
 using EncDotNet.S100.Testing.Scenarios.Writers;
@@ -260,6 +264,130 @@ public sealed class QuirkScenarioTests : IDisposable
 
         // The finest-grid lookup finds the surface from −180…180 too.
         Assert.NotNull(Sources(scenario).Depth.FinestGridSpacingMeters(place.Latitude - 0.001, place.Longitude - 0.001, place.Latitude + 0.001, place.Longitude + 0.001));
+    }
+
+    public static TheoryData<string> GridQuirkNames() => new("quirk-swapped-axis-order", "quirk-unusual-crs", "quirk-longitude-0-360");
+
+    // The pick report (CoveragePickHelper) and sample_coverage read S-102,
+    // S-104 and S-111 grids with each georeferencing quirk exactly as the same
+    // grids without it: same value, same cell. The quirk scenarios have no
+    // S-111, so an S-111 grid is added here, and the S-102 surface's quirks
+    // are put on every grid.
+    [Theory]
+    [MemberData(nameof(GridQuirkNames))]
+    public async Task Pick_and_sample_coverage_read_quirky_grids_as_without_quirks(string name)
+    {
+        var quirky = Generate(WithCurrentGrid(QuirkScenarios.All().Single(d => d.Name == name)));
+        var plain = Generate(WithCurrentGrid(SyntheticScenarios.SpitAcrossScales()) with { Name = "spit-across-scales-with-currents" });
+        var transforms = new ProjNetCrsTransformFactory();
+        var expectedCatalog = Catalog(plain);
+        var actualCatalog = Catalog(quirky);
+
+        foreach (var (place, spec, dataset) in new[]
+        {
+            ("channel-west", "S-102", QuirkScenarios.Surface),
+            ("channel-east", "S-102", QuirkScenarios.Surface),
+            ("channel-east", "S-104", QuirkScenarios.WaterLevelGrid),
+            ("channel-east", "S-111", CurrentGrid),
+        })
+        {
+            var position = quirky.Definition.Place(place);
+
+            // The pick report.
+            var expectedPick = Pick(expectedCatalog, dataset, position, transforms);
+            var actualPick = Pick(actualCatalog, dataset, position, transforms);
+            Assert.NotNull(expectedPick);
+            Assert.NotNull(actualPick);
+            Assert.Equal((expectedPick.Row, expectedPick.Col), (actualPick.Row, actualPick.Col));
+            Assert.Equal(expectedPick.Values, actualPick.Values);
+
+            // sample_coverage, at the place and on a time window.
+            var request = new SampleCoverageRequest(new SpecRef(spec, default), position.Latitude, position.Longitude, spec == "S-102" ? null : new DateTimeOffset(Morning));
+            AssertSameSample(await Sample(expectedCatalog, request, transforms), await Sample(actualCatalog, request, transforms));
+            if (spec != "S-102")
+            {
+                var window = request with { Time = null, Times = new TimeQuery.Range(Morning, Morning.AddHours(2)) };
+                var expected = await Sample(expectedCatalog, window, transforms);
+                var actual = await Sample(actualCatalog, window, transforms);
+                AssertSameSample(expected, actual);
+                Assert.Equal(expected.Series!.Count, actual.Series!.Count);
+                Assert.All(expected.Series.Zip(actual.Series), pair => AssertSameValue(pair.First.Value!, pair.Second.Value!));
+            }
+        }
+
+        static CoveragePickHelper.SamplePoint? Pick(FileDatasetCatalog catalog, string dataset, GeoPosition position, ProjNetCrsTransformFactory transforms)
+        {
+            ICoverageSource source = catalog.Datasets.Single(d => d.Id.Value == dataset).Data switch
+            {
+                S102CoverageData s102 => s102.Source,
+                S104CoverageData s104 => s104.Source,
+                S111CoverageData s111 => s111.Source,
+                var other => throw new InvalidOperationException($"{dataset} is {other}"),
+            };
+            if (source.AvailableTimes.Count > 0)
+            {
+                source.SelectTime(Morning);
+            }
+
+            return CoveragePickHelper.Sample(source, transforms, position.Latitude, position.Longitude);
+        }
+
+        static async Task<SampleCoverageResult> Sample(FileDatasetCatalog catalog, SampleCoverageRequest request, ProjNetCrsTransformFactory transforms)
+        {
+            var result = await new SampleCoverageService(catalog, transforms).InvokeAsync(request, TestContext.Current.CancellationToken);
+            Assert.True(result.TryGetValue(out var value), result.TryGetError(out var error) ? error.ToString() : null);
+            return value;
+        }
+
+        static void AssertSameSample(SampleCoverageResult expected, SampleCoverageResult actual)
+        {
+            Assert.Equal(expected.DatasetId, actual.DatasetId);
+            AssertSameValue(expected.Value, actual.Value);
+        }
+
+        // The node position is computed from differently encoded origins, so
+        // compare it to well under a metre.
+        static void AssertSameValue(SampledValue expected, SampledValue actual)
+        {
+            switch (expected)
+            {
+                case WaterLevelSample e:
+                    var a = Assert.IsType<WaterLevelSample>(actual);
+                    Assert.Equal(e with { CellCentreLatitude = 0, CellCentreLongitude = 0 }, a with { CellCentreLatitude = 0, CellCentreLongitude = 0 });
+                    Assert.Equal(e.CellCentreLatitude, a.CellCentreLatitude, 6);
+                    Assert.Equal(e.CellCentreLongitude, a.CellCentreLongitude, 6);
+                    break;
+                case SurfaceCurrentSample e:
+                    var c = Assert.IsType<SurfaceCurrentSample>(actual);
+                    Assert.Equal(e with { CellCentreLatitude = 0, CellCentreLongitude = 0 }, c with { CellCentreLatitude = 0, CellCentreLongitude = 0 });
+                    Assert.Equal(e.CellCentreLatitude, c.CellCentreLatitude, 6);
+                    Assert.Equal(e.CellCentreLongitude, c.CellCentreLongitude, 6);
+                    break;
+                default:
+                    Assert.Equal(expected, actual);
+                    break;
+            }
+        }
+    }
+
+    private const string CurrentGrid = "111ZZ00SPIT_GRD";
+
+    // Adds an S-111 grid over the S-104 grid's area, and gives the S-104 and
+    // S-111 grids the S-102 surface's quirks.
+    private static ScenarioDefinition WithCurrentGrid(ScenarioDefinition definition)
+    {
+        var quirks = new Dictionary<string, IReadOnlyList<ProducerQuirk>>(definition.Quirks, StringComparer.Ordinal);
+        if (quirks.TryGetValue(QuirkScenarios.Surface, out var surface))
+        {
+            quirks[QuirkScenarios.WaterLevelGrid] = surface;
+            quirks[CurrentGrid] = surface;
+        }
+
+        return definition with
+        {
+            CurrentGrids = [new S111GridSpec(CurrentGrid, new World.LocalRect(3600, 2000, 6000, 4400), Spacing: 300, TimeSpan.FromHours(1))],
+            Quirks = quirks,
+        };
     }
 
     [Fact]

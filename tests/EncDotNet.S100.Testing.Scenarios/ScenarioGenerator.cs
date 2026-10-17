@@ -112,11 +112,12 @@ public static class ScenarioGenerator
         foreach (var currents in definition.CurrentGrids)
         {
             var path = Prepare("S-111", currents.FileName);
-            CoverageWriters.WriteS111Grid(world, currents, path, definition.Issued, definition.WaterLevelStart, definition.WaterLevelEnd);
+            var quirks = definition.QuirksFor(currents.DatasetName);
+            CoverageWriters.WriteS111Grid(world, currents, path, definition.Issued, definition.WaterLevelStart, definition.WaterLevelEnd, quirks);
             var grid = CoverageWriters.Grid(world, currents);
             entries.Add(new CatalogueDataset(
                 datasets[^1].RelativePath, "S-111", "Surface Currents", "2.0.0", "HDF5", issueDate,
-                grid.OriginLongitude, grid.OriginLatitude, grid.EastLongitude, grid.NorthLatitude,
+                quirks.Longitude(grid.OriginLongitude), grid.OriginLatitude, quirks.Longitude(grid.EastLongitude), grid.NorthLatitude,
                 $"SYNTHETIC tidal stream prediction grid over {world.Name} (fictitious)."));
         }
 

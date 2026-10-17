@@ -13,6 +13,13 @@ month. For package versions and release assets, see
   S-101 depths. The S-102, S-104 and S-111 readers now check the axis order
   of a grid in any geographic CRS. `PassageDataSources.FromDatasets` uses its
   transform factory for projected S-104 grids too.
+- **The pick report and `sample_coverage` read quirky grids.** They now find
+  the cell in S-102, S-104 and S-111 grids that are longitude first, declare
+  another geographic CRS, or use the 0…360° frame, using the same lookup as
+  passage checks. `sample_coverage` also reprojects projected S-104 and S-111
+  grids. For a swapped grid, `CoveragePickHelper.SamplePoint.Row` and `Col`
+  run along latitude and longitude, and `Native` is the click in the grid's
+  own axes.
 - **Producer quirks and protected sets in the scenario generator.** The test
   scenario generator can now reproduce producer quirks per dataset (swapped
   axes, missing or different datums, unusual CRS declarations, 0…360°

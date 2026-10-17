@@ -194,10 +194,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
                 return null;
             }
 
-            var (x, y) = _grid.ToGrid(latitude, longitude);
-            var row = (int)Math.Floor((y - _grid.OriginY) / _grid.SpacingY);
-            var col = (int)Math.Floor((x - _grid.OriginX) / _grid.SpacingX);
-            if (row < 0 || row >= _grid.Rows || col < 0 || col >= _grid.Columns)
+            if (_grid.FindCell(latitude, longitude) is not (var row, var col))
             {
                 return null;
             }
