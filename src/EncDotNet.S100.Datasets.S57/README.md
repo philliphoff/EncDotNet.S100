@@ -137,8 +137,8 @@ S-57 cells come as a base cell (`.000`) and update files (`.001`, `.002`, …).
 |---|---|
 | Object/attribute codes | Looked up via the embedded `S57S101Mapping` rules (S-57 numeric code → S-101 acronym/code). Unknown S-57 attribute codes pass through; unknown enumerated values are dropped if the S-101 FC declares an allowable list. |
 | Multi-point soundings (`SOUNDG`) | Exploded into S-101 `MultiPoint` spatial records and a `Sounding` feature so each depth value is independently portrayable. |
-| `INFORM` / `TXTDSC` (English) | Carried on a shared `NauticalInformation` **information type** (not on the feature) as a single `information` complex instance with `text` and/or `fileReference` and `language = "eng"`; the feature binds it via an `AdditionalInformation` / `theInformation` information association. |
-| `NINFOM` / `NTXTDS` (national language) | Carried as a second `information` instance on the same `NauticalInformation` record with empty `language` (S-57 has no language tag; Data Producers can populate it post-conversion). |
+| `INFORM` / `TXTDSC` (English) | S-101: carried on a shared `NauticalInformation` **information type** (not on the feature) as a single `information` complex instance with `text` and/or `fileReference` and `language = "eng"`; the feature binds it via an `AdditionalInformation` / `theInformation` information association. S-401: an `information` instance on the feature itself, one for `INFORM` (`text`) and one for `TXTDSC` (`fileReference`), where the class binds `information`; otherwise as for S-101. |
+| `NINFOM` / `NTXTDS` (national language) | S-101: carried as a second `information` instance on the same `NauticalInformation` record with empty `language` (S-57 has no language tag; Data Producers can populate it post-conversion). S-401: further inline instances, with the same empty `language`. |
 | `OBJNAM` (English) | Carried as an S-101 `featureName` complex attribute instance with `name` and `language = "eng"`. |
 | `NOBJNM` (national language) | Carried as a separate `featureName` instance with empty `language`. |
 | `LITCHR` / `SIGGRP` / `SIGPER` (light features) | On feature classes that bind it (`LightAllAround`, `LightFogDetector`, `LightAirObstruction`), assembled into a single `rhythmOfLight` complex attribute instance: `lightCharacteristic` (mandatory), plus `signalGroup` / `signalPeriod` when present, and any `SIGSEQ`-derived `signalSequence` phases nested inside (see the `C_AGGR` rows). An out-of-range `LITCHR` code drops the instance (its mandatory sub-attribute would be missing). On non-light features (`FogSignal`, `RadarTransponderBeacon`) `SIGGRP` / `SIGPER` remain directly-bound simple attributes. |
@@ -157,7 +157,7 @@ S-57 cells come as a base cell (`.000`) and update files (`.001`, `.002`, …).
 | `HORCLR` (horizontal clearance) | Assembled into the mandatory `horizontalClearanceValue` [1..1] sub-attribute of a horizontal-clearance complex, selected per feature by the S-101 FC binding: `horizontalClearanceOpen` on `Gate` (`GATCON`) or `horizontalClearanceFixed` on the fixed-span classes that bind it (`SpanFixed`, `SpanOpening`, `Tunnel`, `ShorelineConstruction`, `StructureOverNavigableWater`, `Canal`, `DockArea`, `LockBasin`). The value is a real carried verbatim; the optional `horizontalDistanceUncertainty` has no S-57 source and is left unpopulated. On a feature binding neither complex `HORCLR` has no conformant home and stays unmapped — except on `BRIDGE`, where it moves to the bridge's span (see the `BRIDGE` row). |
 | `VERCLR` / `VERCCL` / `VERCOP` / `VERCSA` (vertical clearances) | The rules target the complexes `verticalClearanceFixed` / `Closed` / `Open` / `Safe`. The translator assembles one where the resolved class binds it (e.g. `CableOverhead`, `PipelineOverhead`, `Conveyor`, `Crane`, `Tunnel`). The S-57 value goes to `verticalClearanceValue`; an empty (unknown) value stays empty, except on `verticalClearanceOpen`, whose value is optional. `verticalClearanceOpen` also gets `verticalClearanceUnlimited = false`. `VERACC` nests in each instance with a known value as `verticalUncertainty`/`uncertaintyFixed` (S-65 Annex B §2.2.4.3). A clearance whose complex the class doesn't bind is rule-dropped. S-401 sends a gate's `VERCLR` to `verticalClearanceOpen` (IEHG conversion guidance clause 3.55). S-65 has no such rule, so the S-101 translation drops it. Bridges are handled separately (see the `BRIDGE` row). |
 | `ORIENT` (orientation) | On directional lights it goes into `directionalCharacter` (see the directional lights row). Otherwise it stays the top-level `orientationValue` on the classes that bind it directly (e.g. `RecommendedTrack`, `RadarLine`). On `NavigationLine`, `CurrentNonGravitational`, `TidalStreamFloodEbb` and `Crane` (and S-401 `Daymark`) it is assembled into the `orientation` complex, the only place those classes bind it. That lets the portrayal rotate current arrows and label navigation-line bearings (S-65 Annex B §3.3.1, §3.4, §10.1.1; IEHG conversion guidance clauses 3.27, 3.28, 3.32). |
-| `SORDAT` (source date) | Mapped to the top-level `reportedDate` simple attribute (an `S100_TruncatedDate`), the S-57 `YYYYMMDD` value carried verbatim (matching the fidelity of `dateStart`/`dateEnd`). Because `SORDAT` is a near-universal S-57 attribute but the FC binds `reportedDate` on only ~50 feature classes, the mapping is gated on the resolved feature actually binding `reportedDate`; on a feature that does not (e.g. `Coastline`, `SeabedArea`, `LandRegion`, `DepthContour`, the light classes) `SORDAT` has no conformant home and stays unmapped. `SORIND` (source indication) has no general S-101 equivalent (the FC's `source` attribute binds only `UpdateInformation`) and is intentionally not mapped. |
+| `SORDAT` (source date) | Mapped to the top-level `reportedDate` simple attribute (an `S100_TruncatedDate`), the S-57 `YYYYMMDD` value carried verbatim (matching the fidelity of `dateStart`/`dateEnd`). Because `SORDAT` is a near-universal S-57 attribute but the FC binds `reportedDate` on only ~50 feature classes, the mapping is gated on the resolved feature actually binding `reportedDate`; on a feature that does not (e.g. `Coastline`, `SeabedArea`, `LandRegion`, `DepthContour`, the light classes) `SORDAT` has no conformant home and stays unmapped. `SORIND` (source indication) has no general S-101 equivalent (the FC's `source` attribute binds only `UpdateInformation`) and is intentionally not mapped. On S-401, which binds a `sourceIndication` complex on most classes, `SORIND` goes verbatim into its `source` sub-attribute (IEHG conversion guidance). |
 | `VALLMA` (value of local magnetic anomaly) | Assembled into the `valueOfLocalMagneticAnomaly` complex on `LocalMagneticAnomaly` (`LOCMAG`, the only feature that binds it). The value feeds the mandatory `magneticAnomalyValue` [1..1] real sub-attribute verbatim; the optional `referenceDirection` enum has no S-57 source and is left unpopulated. |
 | `RADWAL` (radar wave length) | Assembled into the `radarWaveLength` complex on `RadarTransponderBeacon` (`RTPBCN`, binding it [0..2]). The list-typed S-57 value is a set of `value-band` pairs (e.g. `0.03-X` or `0.03-X,0.10-S`); each pair yields one complex instance carrying the mandatory `waveLengthValue` (real) and `radarBand` (text). A pair that does not split into both parts is dropped. |
 | `CURVEL` (current velocity) | Assembled into the `speed` complex on `CurrentNonGravitational` (`CURENT`) and `TidalStreamFloodEbb` (`TS_FEB`). The value feeds the mandatory `speedMaximum` [1..1] real sub-attribute verbatim; the optional `speedMinimum` has no S-57 source and is left unpopulated. |
@@ -290,7 +290,7 @@ The anchorage rules:
   pipeline. Sub-attributes of the other S-101 complex attributes are left
   unmapped. `SORDAT` → `reportedDate` applies only on the 50 or so classes
   that bind `reportedDate`. `SORIND` has no general S-101 equivalent and isn't
-  mapped.
+  mapped; S-401 carries it in `sourceIndication` > `source`.
 - **Enumerated values.** Some S-57 enumerated values have different codes in
   S-101. Values the destination feature catalogue doesn't permit are dropped
   and reported in the diagnostics. List values are split into separate S-101
@@ -309,15 +309,21 @@ The anchorage rules:
   `verticalUncertainty`) are filled in for zones A1–C from the IHO CATZOC
   accuracy table. Zones D and U have no quantified accuracy and carry only the
   category.
-- **Textual information.** `INFORM`, `TXTDSC`, `NINFOM` and `NTXTDS` become a
-  `NauticalInformation` information type linked to the feature by an
-  `AdditionalInformation` / `theInformation` association (the "fuller path" in
-  the conversion guidance), not an inline `information` complex. A feature with
-  any of the four attributes gets one `NauticalInformation` record, with an
-  English instance, a national-language instance, or both.
-  `NauticalInformationTypesEmitted` counts the records. The S-101 portrayal
-  reads the linked record (`ProcessNauticalInformation`), so text and picture
-  notes render as they did with the inline form.
+- **Textual information.** For S-101, `INFORM`, `TXTDSC`, `NINFOM` and
+  `NTXTDS` become a `NauticalInformation` information type linked to the
+  feature by an `AdditionalInformation` / `theInformation` association (the
+  "fuller path" in the conversion guidance), not an inline `information`
+  complex. A feature with any of the four attributes gets one
+  `NauticalInformation` record, with an English instance, a national-language
+  instance, or both. `NauticalInformationTypesEmitted` counts the records. The
+  S-101 portrayal reads the linked record (`ProcessNauticalInformation`), so
+  text and picture notes render as they did with the inline form. For S-401
+  (`S57TranslationTarget.InlineTextualInformation`), each of the four becomes
+  its own `information` instance on the feature, the IEHG conversion
+  guidance's default. Some S-401 rules read the text from there, such as the
+  `NoticeMark` text panel, and some classes, `NoticeMark` among them, bind no
+  `AdditionalInformation` association. A class that doesn't bind
+  `information` still gets the `NauticalInformation` record.
 - **Area rings.** An S-57 area's boundary edges (`FSPT`) are chained into
   rings by shared begin and end nodes, reversing edges where needed, not by
   their order in `FSPT`. S-57 lists all interior edges together (`USAG` =

@@ -606,12 +606,19 @@ public sealed class S57ToS101Translator
     // appears on features which do not carry `reportedDate` in S-101, where it
     // has no conformant home and is left unmapped. The S-57 date value
     // ("YYYYMMDD", possibly truncated) is carried verbatim, matching the
-    // fidelity of the dateStart / dateEnd sub-attributes. (S-57 SORIND, ATTL
-    // 148, carries a comma-separated source-indication string with no general
-    // S-101 equivalent — the FC's `source` attribute binds only
-    // UpdateInformation — and is intentionally left unmapped.)
+    // fidelity of the dateStart / dateEnd sub-attributes.
     private const ushort S57AttrSordat = 147;  // SORDAT — source date
     private const string S101AttrReportedDate = "reportedDate";
+
+    // S-57 SORIND (Source indication, ATTL 148) carries a comma-separated
+    // source-indication string. S-101 has no general equivalent (its `source`
+    // attribute binds only UpdateInformation), so there it stays unmapped. S-401
+    // binds the `sourceIndication` complex on most feature types, and the IEHG
+    // S-57 to S-401 conversion guidance puts SORIND in its `source`
+    // sub-attribute, verbatim. Gated on the resolved class binding the complex.
+    private const ushort S57AttrSorind = 148;  // SORIND — source indication
+    private const string S101AttrSourceIndication = "sourceIndication";
+    private const string S101AttrSource = "source";
 
     // S-57 VALLMA (Value of local magnetic anomaly, ATTL 175) maps to the S-101
     // `valueOfLocalMagneticAnomaly` complex attribute, which the bundled FC
@@ -815,7 +822,8 @@ public sealed class S57ToS101Translator
     {
         ArgumentNullException.ThrowIfNull(s57);
 
-        var ctx = new TranslationContext(s57, _mapping, _allowedEnumValues, _featureBindings, diagnostics);
+        var ctx = new TranslationContext(
+            s57, _mapping, _allowedEnumValues, _featureBindings, diagnostics, _target.InlineTextualInformation);
         ctx.IndexVectorRecords();
         ctx.TranslateNodes();
         ctx.TranslateEdges();
@@ -871,6 +879,7 @@ public sealed class S57ToS101Translator
         private readonly S57S101Mapping _mapping;
         private readonly S101AllowedEnumValues? _allowedEnumValues;
         private readonly S101FeatureAttributeBindings _featureBindings;
+        private readonly bool _inlineTextualInformation;
         private readonly S57TranslationDiagnostics? _diagnostics;
 
         // Index of the document's flat VectorRecords list, keyed by
@@ -936,13 +945,15 @@ public sealed class S57ToS101Translator
             S57S101Mapping mapping,
             S101AllowedEnumValues? allowedEnumValues,
             S101FeatureAttributeBindings featureBindings,
-            S57TranslationDiagnostics? diagnostics)
+            S57TranslationDiagnostics? diagnostics,
+            bool inlineTextualInformation)
         {
             _s57 = s57;
             _mapping = mapping;
             _allowedEnumValues = allowedEnumValues;
             _featureBindings = featureBindings;
             _diagnostics = diagnostics;
+            _inlineTextualInformation = inlineTextualInformation;
         }
 
         public void IndexVectorRecords()
@@ -2843,6 +2854,7 @@ public sealed class S57ToS101Translator
             // reportedDate source — SORDAT, emitted inline as a top-level simple
             // attribute on the (many) feature classes that bind `reportedDate`.
             bool bindsReportedDate = _featureBindings.Binds(feature.S101Code, S101AttrReportedDate);
+            bool bindsSourceIndication = _featureBindings.Binds(feature.S101Code, S101AttrSourceIndication);
             // valueOfLocalMagneticAnomaly source — VALLMA, assembled into the
             // complex on LocalMagneticAnomaly (the only feature that binds it).
             bool bindsValueOfLocalMagneticAnomaly = _featureBindings.Binds(feature.S101Code, S101AttrValueOfLocalMagneticAnomaly);
@@ -3082,6 +3094,19 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
+                // SORIND → sourceIndication.source where the class binds the
+                // complex (S-401); elsewhere it falls through and is recorded
+                // unmapped.
+                if (bindsSourceIndication && a.AttributeCode is S57AttrSorind)
+                {
+                    if (!string.IsNullOrEmpty(a.Value))
+                    {
+                        builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSourceIndication), 1, string.Empty));
+                        builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrSource), 1, a.Value));
+                    }
+                    continue;
+                }
+
                 var attl = (ushort)a.AttributeCode;
                 if (!_mapping.AttributeRules.ContainsKey(attl))
                 {
@@ -3205,17 +3230,35 @@ public sealed class S57ToS101Translator
                 builder.Add(new S101Attribute(numeric, 1, resolved.Value));
             }
 
-            // Emit the textual attributes via the "fuller path" (IHO S-57→S-101
-            // Conversion Guidance §2.3): rather than an inline `information`
-            // complex on the feature, build a standalone `NauticalInformation`
-            // information type carrying the `information` complex instance(s) and
-            // bind it to the feature with an `AdditionalInformation` association.
-            // English (INFORM/TXTDSC) and national (NINFOM/NTXTDS) text share one
-            // NauticalInformation record (the FC binds `information` [0..*]).
-            var infoAssociation = BuildNauticalInformationAssociation(
-                informText, txtdscFile, ninfomText, ntxtdsFile);
-            if (infoAssociation is not null)
-                informationAssociations = [infoAssociation.Value];
+            // Emit the textual attributes. For a target that inlines them (S-401:
+            // the IEHG conversion guidance's default), each S-57 attribute becomes
+            // its own `information` instance on a feature whose class binds the
+            // complex; INFORM and TXTDSC aren't combined. Otherwise, or where the
+            // class doesn't bind `information`, take the "fuller path" (IHO
+            // S-57→S-101 Conversion Guidance §2.3): a standalone
+            // `NauticalInformation` information type carrying the `information`
+            // instance(s), bound to the feature with an `AdditionalInformation`
+            // association. English (INFORM/TXTDSC) and national (NINFOM/NTXTDS)
+            // text share one NauticalInformation record (the FC binds
+            // `information` [0..*]).
+            if (_inlineTextualInformation && _featureBindings.Binds(feature.S101Code, S101AttrInformation))
+            {
+                if (informText is not null)
+                    AppendInformationInstance(builder, text: informText, fileReference: null, language: LanguageEng);
+                if (txtdscFile is not null)
+                    AppendInformationInstance(builder, text: null, fileReference: txtdscFile, language: LanguageEng);
+                if (ninfomText is not null)
+                    AppendInformationInstance(builder, text: ninfomText, fileReference: null, language: string.Empty);
+                if (ntxtdsFile is not null)
+                    AppendInformationInstance(builder, text: null, fileReference: ntxtdsFile, language: string.Empty);
+            }
+            else
+            {
+                var infoAssociation = BuildNauticalInformationAssociation(
+                    informText, txtdscFile, ninfomText, ntxtdsFile);
+                if (infoAssociation is not null)
+                    informationAssociations = [infoAssociation.Value];
+            }
 
             // Append `featureName` complex-attribute instances only on feature
             // classes that bind the complex. OBJNAM carries the English name;
