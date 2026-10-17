@@ -1145,6 +1145,71 @@ public class S57ToS101TranslatorTests
         Assert.Equal("Smith, Jones and Co.", GetSubAttribute(s101, instance, "name"));
     }
 
+    [Fact]
+    public void Translate_S401Target_TextualAttributesBecomeInlineInformationInstances()
+    {
+        // IEHG S-57 to S-401 conversion guidance, textual information: INFORM
+        // and NINFOM convert to `information` > text on the feature, TXTDSC and
+        // NTXTDS to `information` > fileReference, each in its own instance.
+        // The S-401 NoticeMark rule reads information[1].text, and NoticeMark
+        // binds no AdditionalInformation association.
+        var n1 = Node(1, 1000, 2000);
+        var notmrk = Feat(recordId: 1, primitive: 1, objectClass: 17050,
+            attributes: new[]
+            {
+                Attr(17052, "99"),
+                Attr(102, "Durchfahrtshoehe 5,20 m"),
+                Attr(158, "DE_TEXT.TXT"),
+                Attr(300, "Durchfahrtshöhe 5,20 m"),
+            },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { notmrk });
+        var diag = new S57TranslationDiagnostics();
+
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc, diag);
+
+        var feature = Assert.Single(inland.Features);
+        Assert.Empty(feature.InformationAssociations);
+        Assert.Empty(inland.InformationTypes);
+        Assert.Equal(0, diag.NauticalInformationTypesEmitted);
+
+        var inform = InformationInstance(inland, feature.Attributes, 1).ToList();
+        Assert.Equal("Durchfahrtshoehe 5,20 m", GetSubAttribute(inland, inform, "text"));
+        Assert.Null(GetSubAttribute(inland, inform, "fileReference"));
+        Assert.Equal("eng", GetSubAttribute(inland, inform, "language"));
+
+        var txtdsc = InformationInstance(inland, feature.Attributes, 2).ToList();
+        Assert.Equal("DE_TEXT.TXT", GetSubAttribute(inland, txtdsc, "fileReference"));
+        Assert.Null(GetSubAttribute(inland, txtdsc, "text"));
+
+        var ninfom = InformationInstance(inland, feature.Attributes, 3).ToList();
+        Assert.Equal("Durchfahrtshöhe 5,20 m", GetSubAttribute(inland, ninfom, "text"));
+        Assert.Equal(string.Empty, GetSubAttribute(inland, ninfom, "language"));
+    }
+
+    [Fact]
+    public void Translate_SorindBecomesSourceIndicationForS401_StaysUnmappedForS101()
+    {
+        // S-401 binds the sourceIndication complex (S-101 has none); the IEHG
+        // guidance carries SORIND verbatim in its `source` sub-attribute.
+        const string sorind = "DE,DE,reprt,WSA Elbe 2024";
+        var doc = LandRegionWithS57Attributes(Attr(148, sorind));
+        var maritimeDiag = new S57TranslationDiagnostics();
+
+        var maritime = new S57ToS101Translator().Translate(doc, maritimeDiag);
+        var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
+
+        Assert.Equal(1, maritimeDiag.UnmappedAttributes[new S57AttributeDrop(73, 148)]);
+        Assert.DoesNotContain("sourceIndication", maritime.AttributeTypeCatalogue.Values);
+
+        var attributes = Assert.Single(inland.Features).Attributes
+            .Select(a => (Name: inland.AttributeTypeCatalogue[a.NumericCode], a.Value))
+            .ToList();
+        var marker = attributes.FindIndex(a => a.Name == "sourceIndication");
+        Assert.True(marker >= 0, "Expected a sourceIndication instance.");
+        Assert.Equal(("source", sorind), attributes[marker + 1]);
+    }
+
     // ── v3.4 → #452 #4: INFORM/NINFOM/TXTDSC/NTXTDS → NauticalInformation ──
     //
     // The textual attributes now travel via the "fuller path" (Conversion
@@ -2546,8 +2611,9 @@ public class S57ToS101TranslatorTests
     public void Translate_S401Target_EveryLinkedScheduleIsAssociated()
     {
         // Two schedules (one per ship type) linked by pointers in both
-        // directions, plus INFORM: three AdditionalInformation associations,
-        // beyond S-401's [0..1], so that no schedule is lost.
+        // directions: two AdditionalInformation associations, beyond S-401's
+        // [0..1], so that no schedule is lost. INFORM stays on the berth as an
+        // inline `information` instance rather than a third association.
         var berth = PointAt(1, ObjlBerth, 10,
             attributes: new[] { Attr(102, "Call ahead") },
             featurePointers: new[] { Ffpt(540, 20) });
@@ -2558,11 +2624,13 @@ public class S57ToS101TranslatorTests
         var s401 = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(
             BuildDocument(new[] { Node(1, 0, 0) }, new[] { berth, cargo, leisure }), diag);
 
-        var linked = LinkedInformation(s401, Assert.Single(s401.Features));
+        var feature = Assert.Single(s401.Features);
+        var linked = LinkedInformation(s401, feature);
         Assert.Equal(
-            ["NauticalInformation", "TimeScheduleInGeneral", "TimeScheduleInGeneral"],
+            ["TimeScheduleInGeneral", "TimeScheduleInGeneral"],
             linked.Select(r => s401.InformationTypeCatalogue[r.InformationTypeCode]));
-        Assert.Equal(["1", "4"], linked.Skip(1).Select(r => InfoAttributes(s401, r).Single(a => a.Code == "typeOfShip").Value));
+        Assert.Equal(["1", "4"], linked.Select(r => InfoAttributes(s401, r).Single(a => a.Code == "typeOfShip").Value));
+        Assert.Equal("Call ahead", GetSubAttribute(s401, InformationInstance(s401, feature.Attributes, 1), "text"));
         Assert.Equal(2, diag.TimeSchedulesEmitted);
     }
 

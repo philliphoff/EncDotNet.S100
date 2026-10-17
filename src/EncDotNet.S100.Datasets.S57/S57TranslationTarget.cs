@@ -35,6 +35,7 @@ public sealed record S57TranslationTarget
     {
         Spec = "S-401",
         Edition = "1.3.0",
+        InlineTextualInformation = true,
     };
 
     /// <summary>
@@ -49,4 +50,19 @@ public sealed record S57TranslationTarget
     /// <c>DSID</c> product specification edition).
     /// </summary>
     public required string Edition { get; init; }
+
+    /// <summary>
+    /// Whether the S-57 textual attributes (<c>INFORM</c>, <c>NINFOM</c>,
+    /// <c>TXTDSC</c>, <c>NTXTDS</c>) become <c>information</c> complex attributes
+    /// on the feature itself, one instance per attribute, where its class binds
+    /// <c>information</c>. When <see langword="false"/>, or where the class
+    /// doesn't bind it, they go into a <c>NauticalInformation</c> record
+    /// associated with the feature.
+    /// </summary>
+    /// <remarks>
+    /// The IEHG S-57 to S-401 conversion guidance makes the inline attribute the
+    /// default automated conversion, and the S-401 portrayal rules read it from
+    /// the feature (for example the <c>NoticeMark</c> text panel).
+    /// </remarks>
+    public bool InlineTextualInformation { get; init; }
 }
