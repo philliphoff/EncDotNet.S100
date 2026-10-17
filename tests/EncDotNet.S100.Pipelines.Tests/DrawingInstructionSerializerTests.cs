@@ -89,6 +89,10 @@ public class DrawingInstructionSerializerTests
         LineEndOffset = 0.9,
         LineOffsetMode = LinePlacementMode.Absolute,
         CoordinateOverride = new GeoPosition(51.0, 1.0),
+        FontWeight = TextFontWeight.Bold,
+        FontProportion = TextFontProportion.MonoSpaced,
+        HaloColor = "S104HALO",
+        HaloWidth = 0.96,
     };
 
     // Minimal variants: every optional / nullable left at its default so the
@@ -224,6 +228,10 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.LineEndOffset, at.LineEndOffset);
                 Assert.Equal(e.LineOffsetMode, at.LineOffsetMode);
                 Assert.Equal(e.CoordinateOverride, at.CoordinateOverride);
+                Assert.Equal(e.FontWeight, at.FontWeight);
+                Assert.Equal(e.FontProportion, at.FontProportion);
+                Assert.Equal(e.HaloColor, at.HaloColor);
+                Assert.Equal(e.HaloWidth, at.HaloWidth);
                 break;
 
             default:
@@ -254,5 +262,12 @@ public class DrawingInstructionSerializerTests
 
         Assert.Equal(0, (int)LinePlacementMode.Relative);
         Assert.Equal(1, (int)LinePlacementMode.Absolute);
+
+        Assert.Equal(0, (int)TextFontWeight.Light);
+        Assert.Equal(1, (int)TextFontWeight.Medium);
+        Assert.Equal(2, (int)TextFontWeight.Bold);
+
+        Assert.Equal(0, (int)TextFontProportion.Proportional);
+        Assert.Equal(1, (int)TextFontProportion.MonoSpaced);
     }
 }

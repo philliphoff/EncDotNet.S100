@@ -216,6 +216,11 @@ public sealed class RenderHarness : IDisposable
             }
         }
 
+        if (options.Rotation != 0)
+        {
+            map.Navigator.RotateTo(options.Rotation);
+        }
+
         return RasterizeSettled(map, options);
     }
 

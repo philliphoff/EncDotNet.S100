@@ -214,7 +214,7 @@ back):
 |---|---|---|---|
 | `BaseChartUnder` | 0 | MSC.530 layer 5 + S-98 Main §9.2.1 layer 5 | S-101 area / colour-fill features; S-57 fallback |
 | `Bathymetry` | 10 | S-98 Annex A §8.4.1 / A-6.9.1 ("gridded bathymetry replaces depth area and depth contours") | S-102 |
-| `OnDemandSurface` | 20 | MSC.530 layer 6, S-98 Main §9.2.1 | S-104, S-111 (the colour-band coverage) |
+| `OnDemandSurface` | 20 | MSC.530 layer 6, S-98 Main §9.2.1 | S-104 (the surface isolines) |
 | `BaseChartOver` | 30 | MSC.530 layer 2 + S-98 §9.2.1 layer 2 | S-101 curves/points/text |
 | `OtherChartOverlays` | 40 | MSC.530 layer 6 (catch-all) | S-122 (MPAs), S-125 / S-201 (AtoN), S-127, S-128, S-131, S-411, S-421, S-129 UKC areas |
 | `CautionsAndWarnings` | 50 | MSC.530 layer 3-4 + S-98 Main §9.2.1 layers 3-4 | S-124 navigational warnings |
@@ -366,7 +366,7 @@ are deferred (§3.5) and gated on the IHO finishing the spec.
   clearance)"*.
 - **Level:** Level 1.
 - **Semantics:**
-  - S-104 colour band → plane `OnDemandSurface` (20).
+  - S-104 surface isolines → plane `OnDemandSurface` (20).
   - S-111 colour band → plane `OnDemandSurface` (20). S-111 arrows
     → plane `DynamicArrows` (60).
   - S-101 line/point work on `BaseChartOver` (30) sits *above* the
@@ -392,7 +392,7 @@ are deferred (§3.5) and gated on the IHO finishing the spec.
 | R-101-102-A | 1 | S-101, S-102 | S-102 coverage on plane `Bathymetry`, between S-101 areas and S-101 line work | Annex A §A-6.9.1 |
 | R-101-102-B | 2 | S-101, S-102 | Suppress S-101 `DepthArea`, `DepthContour` when S-102 covers same area | Annex A §8.4.1 + Part B §B-3.1.2 |
 | R-101-124-A | 0 | S-101, S-124 | S-124 warnings on plane `CautionsAndWarnings` | S-98 Main §9.2.1 + MSC.530(106)/Rev.1 §Appendix 2 (S-124 not in IC) |
-| R-104-A | 1 | S-101, S-104 | S-104 colour band on `OnDemandSurface`, below S-101 line work | Annex A §A-6.9.1 + S-98 Main §9.2.1 layer 6 |
+| R-104-A | 1 | S-101, S-104 | S-104 surface on `OnDemandSurface`, below S-101 line work | Annex A §A-6.9.1 + S-98 Main §9.2.1 layer 6 |
 | R-111-A | 1 | S-101, S-111 | S-111 arrows for every DCF (grid, station series, mesh) on `DynamicArrows`, priority 10 | Main §9.2.1 layer 6 + Part A §A-6.9.1; the `DynamicArrows` plane itself is a library choice — S-98 names no arrow plane, and the S-111 PC marks the arrows `UnderRadar` (#728) |
 
 That's **five proposed v1 rules** spanning four product pairs.
@@ -478,7 +478,7 @@ Per-processor plane defaults (PR-L1 fills these in):
 | `S101DatasetProcessor` *(post-split, see below)* | areas | `BaseChartUnder` | 0 |
 | `S101DatasetProcessor` *(post-split)* | lines + points + text | `BaseChartOver` | 0 |
 | `S102DatasetProcessor` | coverage | `Bathymetry` | 0 |
-| `S104DatasetProcessor` | colour band | `OnDemandSurface` | 0 |
+| `S104DatasetProcessor` | surface isolines | `OnDemandSurface` | 0 |
 | `S111DatasetProcessor` | colour band *(not emitted — the bundled S-111 Ed 2.0.0 PC defines arrows only; reserved plane if one returns)* | `OnDemandSurface` | 0 |
 | `S111DatasetProcessor` | arrow overlay | `DynamicArrows` | 10 |
 | `S122DatasetProcessor` | vector | `OtherChartOverlays` | 0 |
@@ -964,16 +964,17 @@ item is actionable as a focused follow-up session.
   relevant clause, so it stays. Putting the band over the ENC fills
   follows the Part A/B model. Read literally, Main §9.2.1 would
   forbid fully obscuring the fills. Annex A §4.4.1 makes
-  transparency the tool for this, so the S-104 band is **partly
-  transparent by default**: `GridCoverageSubLayer.Opacity` is
-  `S104DatasetProcessor.ColorBandOpacity` (0.8). The viewer's map
-  session multiplies that portrayal opacity by the mariner's dataset
-  and sub-layer opacity rather than replacing it, including when
-  R-101-104-B rebuilds the band's layer with a land mask. The headless
-  compositor composites the band at the same opacity. S-102 stays
+  transparency the tool for this, so the S-104 band was **partly
+  transparent by default** (0.8). Since #483 the S-104 surface draws
+  dashed isolines with no fill at all, which leaves every ENC fill
+  readable; `GridCoverageSubLayer.Opacity` remains for grid surfaces.
+  The viewer's map session multiplies a portrayal opacity by the
+  mariner's dataset and sub-layer opacity rather than replacing it,
+  including when R-101-104-B rebuilds a surface layer with a land
+  mask. S-102 stays
   opaque (1.0) because Part A §A-6.9.1 has it replace the ENC depth
   areas. Two related points: S-98 Main §6.1.1 requires
-  S-104 only for water-level adjustment, so the band is an optional
+  S-104 only for water-level adjustment, so the surface is an optional
   graphical display (gridded S-104 loads hidden). S-98 never calls
   for an S-111 colour band; the bundled S-111 portrayal catalogue
   defines arrows only, and they sit on `DynamicArrows` above the ENC.

@@ -380,7 +380,7 @@ public sealed class HeadlessCompositor
 
                 case CoverageStackPayload coverage:
                     {
-                        if (TryLowerCoverage(coverage, out var layer, out var west, out var east, out var south, out var north))
+                        if (TryLowerCoverage(coverage, options, out var layer, out var west, out var east, out var south, out var north))
                         {
                             lowered.Add(layer);
                             bounds.AddLonLatBox(west, east, south, north);
@@ -515,6 +515,7 @@ public sealed class HeadlessCompositor
 
     private bool TryLowerCoverage(
         CoverageStackPayload payload,
+        HeadlessCompositeOptions options,
         out CompositeLayer layer,
         out double west, out double east, out double south, out double north)
     {
@@ -565,6 +566,34 @@ public sealed class HeadlessCompositor
                         return false;
 
                     layer = PointGlyphHeadlessAdapter.CreateLayer(glyph);
+                    var (w, s) = WebMercator.ToLonLat(extent.MinX, extent.MinY, clampLatitude: false);
+                    var (e, n) = WebMercator.ToLonLat(extent.MaxX, extent.MaxY, clampLatitude: false);
+                    west = w; east = e; south = s; north = n;
+                    return true;
+                }
+
+            case VectorCoverageSubLayer vector:
+                {
+                    if (vector.Extent is not { } extent)
+                        return false;
+
+                    layer = new VectorCompositeLayer(
+                        PointGlyphHeadlessAdapter.BuildScene(vector, options.HiddenCategories), options.HonorScaleVisibility)
+                    {
+                        EnableSeamWrap = options.EnableSeamWrap,
+                    };
+                    var (w, s) = WebMercator.ToLonLat(extent.MinX, extent.MinY, clampLatitude: false);
+                    var (e, n) = WebMercator.ToLonLat(extent.MaxX, extent.MaxY, clampLatitude: false);
+                    west = w; east = e; south = s; north = n;
+                    return true;
+                }
+
+            case IsolineCoverageSubLayer isolines:
+                {
+                    if (isolines.Extent is not { } extent)
+                        return false;
+
+                    layer = new IsolineCompositeLayer(IsolineHeadlessAdapter.CreateScene(isolines));
                     var (w, s) = WebMercator.ToLonLat(extent.MinX, extent.MinY, clampLatitude: false);
                     var (e, n) = WebMercator.ToLonLat(extent.MaxX, extent.MaxY, clampLatitude: false);
                     west = w; east = e; south = s; north = n;

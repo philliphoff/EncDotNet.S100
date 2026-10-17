@@ -6,6 +6,7 @@ using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Testing.Scenarios.Hdf5;
@@ -172,8 +173,18 @@ public class ProjectedCoverageExtentTests
         {
             var result = await processor.BuildCoveragePortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-            var grid = result.SubLayers.OfType<GridCoverageSubLayer>().Single();
-            AssertViewportNearLakeErie(grid.Viewport);
+            // The isolines and their extent are reprojected from UTM metres.
+            var isolines = result.SubLayers.OfType<IsolineCoverageSubLayer>().Single();
+            var extent = Assert.NotNull(isolines.Extent);
+            var (west, south) = WebMercator.ToLonLat(extent.MinX, extent.MinY, clampLatitude: false);
+            var (east, north) = WebMercator.ToLonLat(extent.MaxX, extent.MaxY, clampLatitude: false);
+            AssertNearLakeErie(new BoundingBox(south, west, north, east));
+            Assert.All(isolines.Isolines, line =>
+            {
+                var (lon, lat) = WebMercator.ToLonLat(line.MercatorCoordinates[0], line.MercatorCoordinates[1], clampLatitude: false);
+                Assert.InRange(lat, south, north);
+                Assert.InRange(lon, west, east);
+            });
         }
         finally
         {

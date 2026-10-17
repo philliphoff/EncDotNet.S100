@@ -13,17 +13,18 @@ using Mapsui.Layers;
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// The S-104 water-level band is partly transparent by default
-/// (<see cref="S104DatasetProcessor.ColorBandOpacity"/>) so the ENC colour
-/// fills under it stay readable (S-98 Main §9.2.1; Annex A §4.4.1). The map
-/// session must multiply the mariner's dataset opacity with that portrayal
-/// opacity — never replace it, and never compound it across repeated
-/// display-state updates, including when the S-98 land-mask rule
-/// (R-101-104-B) rebuilds the band's layer.
+/// A gridded colour band can carry a portrayal opacity
+/// (<see cref="GridCoverageSubLayer.Opacity"/>) so the ENC colour fills under it
+/// stay readable (S-98 Main §9.2.1; Annex A §4.4.1). The map session must
+/// multiply the mariner's dataset opacity with that portrayal opacity — never
+/// replace it, and never compound it across repeated display-state updates,
+/// including when the S-98 land-mask rule (R-101-104-B) rebuilds the band's
+/// layer. (The SoundCharts S-104 portrayal draws isolines rather than a band;
+/// the band here is synthetic.)
 /// </summary>
 public sealed class S104BandOpacitySessionTests
 {
-    private const double BandOpacity = S104DatasetProcessor.ColorBandOpacity;
+    private const double BandOpacity = 0.8;
 
     [Fact]
     public async Task Band_draws_at_its_portrayal_opacity_times_the_dataset_opacity()
@@ -89,6 +90,31 @@ public sealed class S104BandOpacitySessionTests
             session.SetDataset(Dataset(band, "S-104", opacity: 0.5));
             Assert.Equal(BandOpacity * 0.5, Band(session).Opacity, precision: 10);
         }
+    }
+
+    [Fact]
+    public async Task Land_masked_isolines_are_rebuilt_and_keep_the_dataset_opacity()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var enc = new MapDatasetId("s101-cell.000");
+        var surface = new MapDatasetId("s104.h5");
+        Assert.True(owner.TryRegister(enc, new LandProcessor()));
+        Assert.True(owner.TryRegister(surface, new IsolineProcessor()));
+        session.SetDataset(Dataset(enc, "S-101"));
+        session.SetDataset(Dataset(surface, "S-104", opacity: 0.5));
+        await session.RenderAsync(enc, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        await session.RenderAsync(surface, MapPresentationState.Default, TestContext.Current.CancellationToken);
+
+        // R-101-104-B attached the ENC land to the isolines, so the stack holds
+        // a rebuilt layer with the dataset's display state carried over.
+        var original = Assert.Single(session.GetDataset(surface)!.Layers);
+        var stacked = Band(session);
+        Assert.NotSame(original, stacked);
+        Assert.Equal(0.5, stacked.Opacity, precision: 10);
+        var feature = Assert.Single(((MemoryLayer)stacked).Features);
+        Assert.IsType<IsolineStyle>(Assert.Single(feature.Styles));
     }
 
     private static ILayer Band(MapsuiDatasetLayerSession session)
@@ -175,6 +201,41 @@ public sealed class S104BandOpacitySessionTests
                 ],
                 Spec = Spec,
                 SourceDatasetId = productSpec == "S-102" ? "s102.h5" : "s104.h5",
+                Info = "test",
+            });
+        }
+    }
+
+    /// <summary>One S-104 isoline across the band's 8×4 degree frame.</summary>
+    private sealed class IsolineProcessor : IDatasetProcessor, ICoveragePortrayalSource
+    {
+        public SpecRef Spec => new("S-104", new SpecVersion(2, 0, 0));
+
+        public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+        public Task<CoveragePortrayalResult> BuildCoveragePortrayalAsync(
+            RenderContext? context = null,
+            CancellationToken cancellationToken = default)
+        {
+            var (minX, minY) = Rendering.Scene.WebMercator.FromLonLat(0, 0);
+            var (maxX, maxY) = Rendering.Scene.WebMercator.FromLonLat(8, 4);
+            return Task.FromResult(new CoveragePortrayalResult
+            {
+                SubLayers =
+                [
+                    new IsolineCoverageSubLayer
+                    {
+                        LayerKey = "s104.isolines",
+                        LayerName = "isolines",
+                        Plane = S98DisplayPlane.OnDemandSurface,
+                        Isolines = [new Isoline { Level = 0.5, Label = "0.5", MercatorCoordinates = [minX, minY, maxX, maxY] }],
+                        Extent = new MercatorBounds(minX, minY, maxX, maxY),
+                        Ink = new RgbaColor(15, 94, 115),
+                        LabelHalo = new RgbaColor(255, 255, 255),
+                    },
+                ],
+                Spec = Spec,
+                SourceDatasetId = "s104.h5",
                 Info = "test",
             });
         }

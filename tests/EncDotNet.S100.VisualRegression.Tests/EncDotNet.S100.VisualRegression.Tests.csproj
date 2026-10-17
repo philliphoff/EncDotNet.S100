@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EncDotNet.S100.VisualRegression\EncDotNet.S100.VisualRegression.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Testing.Scenarios\EncDotNet.S100.Testing.Scenarios.csproj" />
   </ItemGroup>
 
   <ItemGroup>

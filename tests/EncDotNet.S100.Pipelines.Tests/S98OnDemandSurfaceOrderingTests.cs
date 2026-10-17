@@ -53,39 +53,40 @@ public class S98OnDemandSurfaceOrderingTests
     }
 
     [Fact]
-    public async Task S104_band_paints_between_S57_fills_and_S57_linework_in_any_load_order()
+    public async Task S104_isolines_paint_between_S57_fills_and_S57_linework_in_any_load_order()
     {
         var s57 = VectorItems(await PortrayS57Async(), "s57");
         var s104 = CoverageItems(await PortrayS104Async(), "s104");
 
         AssertOrderInEveryLoadOrder(
             [s57, s104],
-            ["s57/s57.areas", "s104/s104.color-band", "s57/s57.linework"]);
+            ["s57/s57.areas", "s104/s104.isolines", "s57/s57.linework"]);
     }
 
     [Fact]
-    public async Task S104_band_is_partly_transparent_so_ENC_fills_show_through()
+    public async Task S104_surface_draws_isolines_and_no_fill_so_ENC_fills_show_through()
     {
         // Main §9.2.1: on-demand data must not obscure official colour fills.
-        var band = Assert.IsType<GridCoverageSubLayer>(Assert.Single((await PortrayS104Async()).SubLayers));
+        var surface = Assert.Single((await PortrayS104Async()).SubLayers);
 
-        Assert.Equal(S104DatasetProcessor.ColorBandOpacity, band.Opacity);
-        Assert.InRange(band.Opacity, 0.5, 0.95);
+        var isolines = Assert.IsType<IsolineCoverageSubLayer>(surface);
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, isolines.Plane);
+        Assert.NotEmpty(isolines.Isolines);
     }
 
     [Fact]
-    public async Task S104_band_paints_between_S101_fills_and_S101_linework_in_any_load_order()
+    public async Task S104_isolines_paint_between_S101_fills_and_S101_linework_in_any_load_order()
     {
         var s101 = VectorItems(await PortrayS101Async(), "s101");
         var s104 = CoverageItems(await PortrayS104Async(), "s104");
 
         AssertOrderInEveryLoadOrder(
             [s101, s104],
-            ["s101/s101.areas", "s104/s104.color-band", "s101/s101.linework"]);
+            ["s101/s101.areas", "s104/s104.isolines", "s101/s101.linework"]);
     }
 
     [Fact]
-    public async Task S111_arrows_paint_above_ENC_linework_and_S104_band_in_any_load_order()
+    public async Task S111_arrows_paint_above_ENC_linework_and_S104_isolines_in_any_load_order()
     {
         var s57 = VectorItems(await PortrayS57Async(), "s57");
         var s101 = VectorItems(await PortrayS101Async(), "s101");
@@ -96,11 +97,11 @@ public class S98OnDemandSurfaceOrderingTests
         {
             var keys = Keys(LayerStackBuilder.Build(_authority, permutation));
 
-            // Planes: fills (0) < S-104 band (20) < line work (30) < arrows (60).
-            Assert.True(keys.IndexOf("s57/s57.areas") < keys.IndexOf("s104/s104.color-band"));
-            Assert.True(keys.IndexOf("s101/s101.areas") < keys.IndexOf("s104/s104.color-band"));
-            Assert.True(keys.IndexOf("s104/s104.color-band") < keys.IndexOf("s57/s57.linework"));
-            Assert.True(keys.IndexOf("s104/s104.color-band") < keys.IndexOf("s101/s101.linework"));
+            // Planes: fills (0) < S-104 isolines (20) < line work (30) < arrows (60).
+            Assert.True(keys.IndexOf("s57/s57.areas") < keys.IndexOf("s104/s104.isolines"));
+            Assert.True(keys.IndexOf("s101/s101.areas") < keys.IndexOf("s104/s104.isolines"));
+            Assert.True(keys.IndexOf("s104/s104.isolines") < keys.IndexOf("s57/s57.linework"));
+            Assert.True(keys.IndexOf("s104/s104.isolines") < keys.IndexOf("s101/s101.linework"));
             Assert.Equal("s111/s111.arrows", keys[^1]);
         }
     }

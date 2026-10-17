@@ -87,6 +87,97 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
 }
 
 /// <summary>
+/// A sub-layer of labelled isolines over a gridded coverage (the S-104
+/// water-level surface). The renderers draw <see cref="Isolines"/> in screen
+/// space: dashed lines of constant pixel width, with labels spaced along them.
+/// </summary>
+/// <remarks>
+/// S-104 Ed 2.0.0 §9 defines no portrayal; the S-104 isolines are SoundCharts'
+/// own (see <c>S104PortrayalCatalogue</c>).
+/// </remarks>
+public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
+{
+    /// <summary>The isolines, in EPSG:3857 metres.</summary>
+    public required IReadOnlyList<Isoline> Isolines { get; init; }
+
+    /// <summary>
+    /// The EPSG:3857 extent of the coverage the isolines were traced from, or
+    /// <see langword="null"/> when it is unknown. Covers the whole grid even
+    /// when there are no isolines, so the dataset still has an extent.
+    /// </summary>
+    public MercatorBounds? Extent { get; init; }
+
+    /// <summary>Line and label colour.</summary>
+    public required RgbaColor Ink { get; init; }
+
+    /// <summary>Label halo colour.</summary>
+    public required RgbaColor LabelHalo { get; init; }
+
+    /// <summary>Line width in device-independent pixels.</summary>
+    public double LineWidth { get; init; } = 1.1;
+
+    /// <summary>Dash pattern (dash, gap) in device-independent pixels; empty for solid.</summary>
+    public IReadOnlyList<double> DashPattern { get; init; } = [6, 3];
+
+    /// <summary>Label font size in device-independent pixels, with the text scale applied.</summary>
+    public double LabelFontSize { get; init; } = 10;
+
+    /// <summary>Width of the halo under each label in device-independent pixels, with the text scale applied.</summary>
+    public double LabelHaloWidth { get; init; } = 3;
+
+    /// <summary>Line length between labels, in device-independent pixels.</summary>
+    public double LabelSpacing { get; init; } = 250;
+
+    /// <summary>
+    /// Optional land-area surface geometries (WGS84 <c>(latitude, longitude)</c>)
+    /// the isolines are clipped <em>out of</em> so they only cross water. Set by
+    /// the S-98 rule that clips S-104 to water when an S-101 ENC is loaded
+    /// (issue #483; R-101-104-B). <see langword="null"/> or empty draws them everywhere.
+    /// </summary>
+    public IReadOnlyList<FeatureGeometry>? LandAreaMask { get; init; }
+
+    /// <summary>
+    /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.
+    /// </summary>
+    /// <param name="landAreaMask">The land-area surfaces to clip out, or null.</param>
+    public IsolineCoverageSubLayer WithLandAreaMask(IReadOnlyList<FeatureGeometry>? landAreaMask) =>
+        new()
+        {
+            LayerKey = LayerKey,
+            LayerName = LayerName,
+            Plane = Plane,
+            WithinPlanePriority = WithinPlanePriority,
+            SourceFeatureType = SourceFeatureType,
+            Isolines = Isolines,
+            Extent = Extent,
+            Ink = Ink,
+            LabelHalo = LabelHalo,
+            LineWidth = LineWidth,
+            DashPattern = DashPattern,
+            LabelFontSize = LabelFontSize,
+            LabelHaloWidth = LabelHaloWidth,
+            LabelSpacing = LabelSpacing,
+            LandAreaMask = landAreaMask,
+        };
+}
+
+/// <summary>
+/// One isoline of an <see cref="IsolineCoverageSubLayer"/>: a polyline at a
+/// single coverage value.
+/// </summary>
+public sealed class Isoline
+{
+    /// <summary>The coverage value the line follows (metres, for S-104).</summary>
+    public required double Level { get; init; }
+
+    /// <summary>The label drawn along the line, e.g. <c>"0.5"</c>.</summary>
+    public required string Label { get; init; }
+
+    /// <summary>Interleaved EPSG:3857 vertices <c>x0, y0, x1, y1, …</c>.</summary>
+    public required double[] MercatorCoordinates { get; init; }
+}
+
+/// <summary>
 /// An arrow-overlay coverage sub-layer (S-111 surface currents): the Mapsui
 /// renderer rasterises <see cref="Coverage"/> through
 /// <c>MapsuiCoverageArrowRenderer</c>. The arrow renderer may legitimately
@@ -139,6 +230,40 @@ public sealed class GlyphCoverageSubLayer : CoverageSubLayerBase
     /// <see langword="null"/>, every glyph is drawn.
     /// </summary>
     public GlyphThinning? Thinning { get; init; }
+}
+
+/// <summary>
+/// A coverage sub-layer portrayed with ordinary S-100 Part 9 drawing
+/// instructions (point symbols and text), so its symbols and labels follow the
+/// same rules as a vector product's: symbol and text scale, scale minimum
+/// (SCAMIN), label declutter, upright symbols and text on a rotated display,
+/// and picking. Used for the S-104 station gauges.
+/// </summary>
+public sealed class VectorCoverageSubLayer : CoverageSubLayerBase
+{
+    /// <summary>The drawing instructions, in any order (renderers sort them by priority).</summary>
+    public required IReadOnlyList<DrawingInstruction> Instructions { get; init; }
+
+    /// <summary>Resolves each instruction's feature reference to its geometry.</summary>
+    public required IFeatureGeometryProvider GeometryProvider { get; init; }
+
+    /// <summary>The palette the instructions' colour tokens resolve against.</summary>
+    public required ColorPalette Palette { get; init; }
+
+    /// <summary>Resolves a symbol reference to its S-100 SVG.</summary>
+    public required Func<string, string?> SymbolProvider { get; init; }
+
+    /// <summary>The mariner's symbol scale.</summary>
+    public double SymbolScale { get; init; } = 1.0;
+
+    /// <summary>The mariner's text scale.</summary>
+    public double TextScale { get; init; } = 1.0;
+
+    /// <summary>The product name used for telemetry and tile cache keys, e.g. <c>"S-104"</c>.</summary>
+    public required string Product { get; init; }
+
+    /// <summary>The EPSG:3857 extent of the features, or null when there are none.</summary>
+    public MercatorBounds? Extent { get; init; }
 }
 
 /// <summary>

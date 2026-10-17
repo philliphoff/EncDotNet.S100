@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
@@ -146,7 +147,7 @@ public sealed class MapsuiDatasetRenderer
             if (processor is ICoveragePortrayalSource coverageSource)
             {
                 var result = await coverageSource.BuildCoveragePortrayalAsync(context, cancellationToken).ConfigureAwait(false);
-                return ConvertCoverage(result);
+                return ConvertCoverage(processor, result);
             }
 
             throw new NotSupportedException(
@@ -261,7 +262,7 @@ public sealed class MapsuiDatasetRenderer
         };
     }
 
-    private MapsuiDatasetResult ConvertCoverage(CoveragePortrayalResult result)
+    private MapsuiDatasetResult ConvertCoverage(IDatasetProcessor processor, CoveragePortrayalResult result)
     {
         var layers = new List<ILayer>(result.SubLayers.Count);
         var stackEntries = new List<LayerStackEntry>(result.SubLayers.Count);
@@ -299,6 +300,33 @@ public sealed class MapsuiDatasetRenderer
                     {
                         layer = BuildGlyphLayer(glyph);
                         fallback = Union(fallback, ToMercator(glyph.Extent));
+                        break;
+                    }
+
+                case IsolineCoverageSubLayer isolines:
+                    {
+                        layer = BuildIsolineLayer(isolines);
+                        fallback = Union(fallback, ToMercator(isolines.Extent));
+                        break;
+                    }
+
+                case VectorCoverageSubLayer vector:
+                    {
+                        // Same display-list renderer as a vector product, so the
+                        // symbols and labels follow the same rules (scale, SCAMIN,
+                        // declutter, rotation, picking).
+                        layer = new MapsuiDisplayListRenderer
+                        {
+                            LayerName = vector.LayerName,
+                            Product = vector.Product,
+                            Palette = vector.Palette,
+                            AssetCache = AssetCaches.GetValue(processor, static _ => new MapsuiRenderAssetCache()),
+                            SymbolScale = vector.SymbolScale,
+                            TextScale = vector.TextScale,
+                            SymbolProvider = vector.SymbolProvider,
+                            Options = _options,
+                        }.Render(vector.Instructions, vector.GeometryProvider);
+                        fallback = Union(fallback, ToMercator(vector.Extent));
                         break;
                     }
             }
@@ -354,6 +382,63 @@ public sealed class MapsuiDatasetRenderer
             Opacity = grid.Opacity,
         };
         return renderer.Render(grid.Coverage, grid.Viewport);
+    }
+
+    /// <summary>
+    /// Builds the Mapsui layer for a coverage sub-layer that an S-98 rule
+    /// replaced (for example R-101-104-B attaching a land-area mask to the S-104
+    /// surface), or <see langword="null"/> for a sub-layer kind that is not rebuilt.
+    /// </summary>
+    /// <param name="subLayer">The replaced sub-layer.</param>
+    /// <returns>The rebuilt layer, or <see langword="null"/>.</returns>
+    public ILayer? BuildCoverageLayer(CoverageSubLayerBase subLayer) => subLayer switch
+    {
+        GridCoverageSubLayer grid => BuildGridCoverageLayer(grid),
+        IsolineCoverageSubLayer isolines => BuildIsolineLayer(isolines),
+        _ => null,
+    };
+
+    /// <summary>
+    /// Builds the layer for labelled isolines (the S-104 surface): one feature
+    /// covering the coverage extent, styled with an <see cref="IsolineStyle"/>
+    /// that draws the lines in screen space each frame. Returns
+    /// <see langword="null"/> when the sub-layer has no extent.
+    /// </summary>
+    /// <param name="sub">The isoline sub-layer.</param>
+    /// <returns>The layer, or <see langword="null"/>.</returns>
+    public static ILayer? BuildIsolineLayer(IsolineCoverageSubLayer sub)
+    {
+        ArgumentNullException.ThrowIfNull(sub);
+        if (sub.Extent is not { } extent)
+            return null;
+
+        var scene = new IsolineScene(
+            sub.Isolines.Select(line => new IsolinePolyline(line.Label, line.MercatorCoordinates)).ToArray(),
+            new IsolineAppearance
+            {
+                Ink = sub.Ink.ToSkia(),
+                LabelHalo = sub.LabelHalo.ToSkia(),
+                LineWidth = (float)sub.LineWidth,
+                DashPattern = sub.DashPattern.Select(d => (float)d).ToArray(),
+                LabelFontSize = (float)sub.LabelFontSize,
+                LabelHaloWidth = (float)sub.LabelHaloWidth,
+                LabelSpacing = (float)sub.LabelSpacing,
+            },
+            sub.LandAreaMask);
+
+        var feature = new GeometryFeature
+        {
+            Geometry = new GeometryFactory().ToGeometry(
+                new Envelope(extent.MinX, extent.MaxX, extent.MinY, extent.MaxY)),
+        };
+        feature.Styles.Add(new IsolineStyle { Scene = scene });
+
+        return new MemoryLayer
+        {
+            Name = sub.LayerName,
+            Features = [feature],
+            Style = null,
+        };
     }
 
     private static ILayer BuildGlyphLayer(GlyphCoverageSubLayer sub)

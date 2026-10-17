@@ -1632,7 +1632,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         var stackEntries = LayerStackProjector.Project(
             ruled,
             prebuilt,
-            _renderer.BuildGridCoverageLayer);
+            _renderer.BuildCoverageLayer);
 
         var activeById = snapshots.ToDictionary(
             snapshot => snapshot.Dataset.Id.Value,

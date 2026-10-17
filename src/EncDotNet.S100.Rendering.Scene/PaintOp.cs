@@ -251,6 +251,18 @@ public sealed class TextPaintOp : PaintOp
 
     /// <summary>Vertical offset from the anchor, in display pixels (screen-space +Y = down).</summary>
     public double OffsetYpx { get; init; }
+
+    /// <summary>Font weight (S-100 Part 9 <c>FontCharacteristics.weight</c>).</summary>
+    public TextFontWeight FontWeight { get; init; } = TextFontWeight.Medium;
+
+    /// <summary>Font proportion (S-100 Part 9 <c>FontCharacteristics.proportion</c>).</summary>
+    public TextFontProportion FontProportion { get; init; } = TextFontProportion.Proportional;
+
+    /// <summary>Resolved halo colour stroked around the glyphs, or null for no halo.</summary>
+    public RgbaColor? HaloColor { get; init; }
+
+    /// <summary>Halo stroke width in display pixels (already folds in the text scale).</summary>
+    public double HaloWidthPx { get; init; }
 }
 
 /// <summary>

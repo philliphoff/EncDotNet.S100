@@ -2,7 +2,7 @@
 
 This package reads S-104 Water Level Information for Surface Navigation
 datasets from HDF5 files: water-level grids per time step, and time series at
-fixed stations. It also draws them as a colour-banded surface and validates
+fixed stations. It also draws them, as station gauges and surface isolines, and validates
 them against the S-104 Edition 2.0.0 checklist. Reference it when you need the
 water levels directly, for example to sample a tide curve at a position. To
 open and render a dataset without wiring catalogues yourself, use the
@@ -76,54 +76,93 @@ see [Reading product data](../../docs/reading-product-data.md).
   `null` height. The MCP server's `sample_coverage` tool uses it for time
   windows.
 - **`S104CoverageSource`**: the `ICoverageSource` for the coverage pipeline.
-- **`S104PortrayalCatalogue`**: the colour bands for the water-level surface.
-  See [Portrayal](#portrayal).
+- **`S104PortrayalCatalogue`**: the SoundCharts portrayal of water level: the
+  ink colours, isoline interval and label formats. See [Portrayal](#portrayal).
 
 The `S104DatasetProcessor` that renders, samples and validates a dataset is in
 [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md).
 
 ## Portrayal
 
-S-104 Edition 2.0.0 has no portrayal catalogue. The specification treats water
-levels as input for ECDIS depth adjustment rather than as a layer to draw. So
-that S-104 can be shown like the other coverage products (S-102, S-111),
-`S104PortrayalCatalogue` defines its own Day, Dusk and Night colour bands:
+S-104 Edition 2.0.0 has no portrayal. Clause 9 says the data is used to adjust
+depths in the ENC or bathymetry (S-98 Annex C), and the edition removed the
+earlier portrayal catalogue. The `content/S104/pc/` folder in
+`EncDotNet.S100.Specifications` is empty.
 
-| Palette | Bands | No-data fill |
-|---------|-------|--------------|
-| Day | A diverging scale from blue (below datum) to green (above datum), in the style of ColorBrewer | Transparent (`#00000000`) |
-| Dusk | Day, with saturation × 0.70 and lightness × 0.85 | Dim grey (`#4A4A4AFF`) |
-| Night | Dark navy to olive, in the ECDIS night style, all with luminance below 0.2 | Darker grey (`#1A1A1AFF`) |
+Both renderings below are SoundCharts' own, not IHO symbology.
+`S104PortrayalCatalogue` describes them and `S104DatasetProcessor` builds them.
+They use one ink colour per palette, draw no colour fill over the ENC, and
+avoid magenta (mariner information), red and amber (danger) and blue and green
+(depth). Colour doesn't encode the trend or the height.
 
-`SwitchPaletteAsync(PaletteType)` switches the active band table. `ResolveColorScheme`
-sets `CoverageColorScheme.NoDataColor`, so the renderer paints fill-value cells
-(`S104CoverageSource.FillValue`, `-9999`) in the active palette's no-data
-colour.
+| Palette | Ink | Square fill and value halo | Isoline label halo |
+|---------|-----|----------------------------|--------------------|
+| Day | `#0F5E73` | `#FFFFFF` | `#F6FBFE` |
+| Dusk | `#9FD3DE` | `#3B4650` | `#3B4650` |
+| Night | `#3E7C88` | `#0B0F14` | `#0B0F14` |
 
-The `content/S104/pc/` folder in `EncDotNet.S100.Specifications` is empty. If
-the IHO publishes an S-104 portrayal catalogue, it goes there and this
-catalogue will use it.
+Night colours stay under luminance 0.2. `S104PortrayalCatalogue.GetInk(PaletteType)`
+returns a palette's colours.
+
+### Stations
+
+Fixed-station series (data coding formats 1 and 8) are drawn as a gauge at
+each station, on the `s104.stations` sub-layer:
+
+- A 16 px rounded square. The mark inside shows `waterLevelTrend` at the
+  selected time step: a chevron up for increasing, a chevron down for
+  decreasing, a dash for steady and "?" for unknown. Steady means the change
+  is under the dataset's `waterLevelTrendThreshold`.
+- The height at the selected step, to the right of the square, in metres above
+  the dataset's vertical datum: sign always shown, two decimals, no unit, for
+  example `+1.42` or `−0.12` (`FormatStationValue`). It's drawn at
+  1:100 000 and larger scales (`StationLabelMaxScaleDenominator`); at smaller
+  scales only the square is drawn.
+- A station whose height at the step is the fill value (`-9999`) draws "—" in
+  the square and no value.
+
+The gauges are ordinary S-100 symbols (`S104PortrayalCatalogue.GetSymbol`, with
+colours from `GetColorPalette`) and text instructions, carried on a
+`VectorCoverageSubLayer` and drawn by the same renderer as S-101. So they follow
+the same rules as S-101 symbols and labels: the mariner's symbol and text
+scale, the label's scale minimum (SCAMIN), label decluttering (a label that
+overlaps a higher-priority one is dropped; symbols always draw), upright
+symbols and text on a rotated display, and picking. The value label uses the
+S-100 Part 9 font characteristics `MonoSpaced` and `Bold`, with a halo
+(`TextInstruction.HaloColor`).
+
+### Surface
+
+A regular grid (data coding format 2) is drawn as dashed water-level isolines
+for the selected step, on the `s104.isolines` sub-layer, with no fill:
+
+- The interval is 0.5 m, or 0.25 m when the dataset's whole range (all steps,
+  fill values excluded) is under 1 m (`SelectIsolineInterval`). It's chosen
+  once per dataset, so the line density doesn't change while you scrub through
+  time.
+- Each line is labelled with its level in metres, about every 250 px of line:
+  one decimal (two for 0.25 m steps), "−" for negatives and no "+", for example
+  `1.0`, `0.5`, `0` or `−0.5` (`FormatIsolineLabel`).
+- Lines stop at fill-value nodes. A coarse grid is subdivided bilinearly before
+  tracing (`IsolineTracer`) so the lines aren't angular.
+- Labels are drawn upright on a rotated display, scale with the mariner's text
+  scale, and are dropped where they would overlap another isoline label.
+
+`s100 render` draws the same stations and isolines.
 
 ### Visibility and clipping to water
 
-The colour bands aren't defined by the specification, so SoundCharts loads the
-gridded surface (data coding format 2) hidden. You can show it from the layer
-controls. Station glyphs (formats 1 and 8) are point features and are shown by
-default. `S104DatasetProcessor.IsGriddedSurface` tells the two apart.
+SoundCharts loads a gridded surface hidden; you can show it from the layer
+controls. Station gauges are shown by default. `S104DatasetProcessor.IsGriddedSurface`
+tells the two apart.
 
 When the surface is shown with an S-101 ENC, the S-98 interoperability rule
 `R-101-104-B` (`S98DefaultRules.R_101_104_B_ClipSurfaceToWater`) attaches the
-ENC's `LandArea` geometry to the surface sub-layer
-(`GridCoverageSubLayer.LandAreaMask`). The coverage renderers
-(`MapsuiCoverageRenderer` and the headless `CoverageHeadlessRenderer`) then
-clip the surface to water at output-pixel resolution.
-`CoverageLandClip.BuildLandPath` projects the land polygons into pixel space,
-keeping interior water rings with even-odd fill, and the surface is drawn under
-an antialiased `SKClipOperation.Difference` clip. Clipping per pixel rather
-than per grid cell matters because S-104 grids are often coarse: the Rotterdam
-sample is 5×6 cells of about 1 km each. The surface is layered like S-102
-bathymetry, under the ENC's line work and clipped to water, so it doesn't cover
-land.
+ENC's `LandArea` geometry to the isoline sub-layer
+(`IsolineCoverageSubLayer.LandAreaMask`). The isolines are then clipped to
+water at output-pixel resolution, in the viewer and in headless renders, so
+they never cross land however coarse the grid is. The surface is layered like
+S-102 bathymetry, under the ENC's line work.
 
 ## Validation
 

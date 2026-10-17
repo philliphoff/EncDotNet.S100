@@ -11,8 +11,8 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// <summary>
 /// Pipeline-level tests for the S-104 dcf8 station-series branch of
 /// <see cref="S104DatasetProcessor"/>. Verifies that the processor
-/// emits a <see cref="MemoryLayer"/> tagged with one feature per
-/// station and that each feature carries the
+/// emits a <see cref="MemoryLayer"/> of station features and that each
+/// feature carries the
 /// <c>"station:&lt;id&gt;"</c> ref recognised by the pick router.
 /// </summary>
 public class S104Dcf8ProcessorTests
@@ -76,18 +76,49 @@ public class S104Dcf8ProcessorTests
             var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Single(result.Layers);
-            var memoryLayer = Assert.IsType<MemoryLayer>(result.Layers[0]);
+            var memoryLayer = Assert.IsAssignableFrom<MemoryLayer>(result.Layers[0]);
 
             var features = memoryLayer.Features?.ToList()
                 ?? throw new InvalidOperationException("MemoryLayer must expose features.");
-            Assert.Equal(2, features.Count);
 
+            // Each station is a symbol and a value label, both tagged with the
+            // station's ref so either picks it.
             var refs = features
-                .Select(f => f[MapsuiDisplayListRenderer.FeatureRefKey] as string)
+                .Select(f => f[MapsuiDisplayListRenderer.FeatureRefKey] as string ?? "")
+                .Distinct()
+                .Order(StringComparer.Ordinal)
                 .ToArray();
 
-            Assert.Contains("station:Alpha", refs);
-            Assert.Contains("station:Bravo", refs);
+            Assert.Equal(new[] { "station:Alpha", "station:Bravo" }, refs);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(45.0)]
+    public async Task Click_on_a_station_resolves_it_at_any_rotation(double rotation)
+    {
+        var path = WriteFixture();
+        try
+        {
+            S100MapsuiRendering.Register();
+            var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
+            var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
+            var layer = Assert.Single(result.Layers);
+
+            // Alpha is at (51.5 N, 0.1 W); centre a 256 px view on it at ~1:35 000.
+            var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(-0.1, 51.5);
+            var viewport = new Mapsui.Viewport(x, y, 10, rotation, 256, 256);
+            var mapInfo = new Mapsui.Rendering.Skia.MapRenderer().GetMapInfo(
+                new Mapsui.Manipulations.ScreenPosition(128, 128), viewport, [layer], new Mapsui.Rendering.RenderService(), margin: 0);
+
+            Assert.Contains(
+                mapInfo.MapInfoRecords,
+                record => (string?)record.Feature[MapsuiDisplayListRenderer.FeatureRefKey] == "station:Alpha");
         }
         finally
         {

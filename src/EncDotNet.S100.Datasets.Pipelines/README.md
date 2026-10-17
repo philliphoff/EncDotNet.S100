@@ -88,7 +88,7 @@ namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 |---|---|---|
 | `S101DatasetProcessor` | S-101, S-401 | Vector, Lua |
 | `S102DatasetProcessor` | S-102 | Coverage, Lua |
-| `S104DatasetProcessor` | S-104 | Coverage, built-in colour bands |
+| `S104DatasetProcessor` | S-104 | Coverage: SoundCharts station gauges and isolines |
 | `S111DatasetProcessor` | S-111 | Coverage, arrow symbols |
 | `S122DatasetProcessor` | S-122 | Vector, XSLT |
 | `S124DatasetProcessor` | S-124 | Vector, XSLT |

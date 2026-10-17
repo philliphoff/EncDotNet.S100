@@ -1,4 +1,5 @@
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
@@ -39,6 +40,38 @@ internal static class PointGlyphHeadlessAdapter
             : new PointGlyphCompositeLayer(glyphs);
     }
 
+    /// <summary>
+    /// Lowers a <see cref="VectorCoverageSubLayer"/> to a scene with the same
+    /// builder a vector product uses, so its symbols and labels draw by the
+    /// same rules.
+    /// </summary>
+    public static VectorScene BuildScene(VectorCoverageSubLayer subLayer, DrawingInstructionCategory hiddenCategories) =>
+        HeadlessVectorRenderer.BuildScene(
+            subLayer.Instructions,
+            subLayer.GeometryProvider,
+            subLayer.Palette,
+            subLayer.SymbolProvider,
+            lineStyleProvider: null,
+            subLayer.SymbolScale,
+            subLayer.TextScale,
+            hiddenCategories: hiddenCategories);
+
+    /// <summary>
+    /// Renders a <see cref="VectorCoverageSubLayer"/> framed on
+    /// <paramref name="extent"/>, honouring scale visibility at the framed scale.
+    /// </summary>
+    public static SKBitmap Render(
+        VectorCoverageSubLayer subLayer,
+        MercatorBounds extent,
+        int widthPixels,
+        int heightPixels,
+        RgbaColor background,
+        BasemapKind basemap,
+        DrawingInstructionCategory hiddenCategories) =>
+        RenderFitted(
+            new VectorCompositeLayer(BuildScene(subLayer, hiddenCategories)),
+            extent, widthPixels, heightPixels, background, basemap, padding: 0.1);
+
     public static SKBitmap Render(
         GlyphCoverageSubLayer subLayer,
         MercatorBounds extent,
@@ -47,22 +80,39 @@ internal static class PointGlyphHeadlessAdapter
         RgbaColor background,
         BasemapKind basemap = BasemapKind.None)
     {
-        var viewport = FitViewport(extent, widthPixels, heightPixels);
+        return RenderFitted(CreateLayer(subLayer), extent, widthPixels, heightPixels, background, basemap, padding: 0.1);
+    }
+
+    /// <summary>
+    /// Renders <paramref name="layer"/> into a new bitmap framed on
+    /// <paramref name="extent"/> (grown by <paramref name="padding"/> of its span
+    /// on each side and to the bitmap's aspect), over an optional land basemap.
+    /// </summary>
+    internal static SKBitmap RenderFitted(
+        CompositeLayer layer,
+        MercatorBounds extent,
+        int widthPixels,
+        int heightPixels,
+        RgbaColor background,
+        BasemapKind basemap,
+        double padding)
+    {
+        var viewport = FitViewport(extent, widthPixels, heightPixels, padding);
         CompositeLayer[] layers = basemap == BasemapKind.Offline
             ?
             [
-                // The land basemap goes under the glyphs, against the same viewport.
+                // The land basemap goes under the layer, against the same viewport.
                 new VectorCompositeLayer(NaturalEarthBasemap.GetLandScene(viewport), honorScaleVisibility: false),
-                CreateLayer(subLayer),
+                layer,
             ]
-            : [CreateLayer(subLayer)];
+            : [layer];
         return new HeadlessCompositeRenderer
         {
             Background = background,
         }.Render(viewport, layers);
     }
 
-    private static Viewport FitViewport(MercatorBounds extent, int widthPixels, int heightPixels)
+    private static Viewport FitViewport(MercatorBounds extent, int widthPixels, int heightPixels, double padding)
     {
         double minX = extent.MinX;
         double minY = extent.MinY;
@@ -71,8 +121,8 @@ internal static class PointGlyphHeadlessAdapter
         double spanX = maxX - minX;
         double spanY = maxY - minY;
 
-        double padX = spanX > 0 ? spanX * 0.1 : 1000;
-        double padY = spanY > 0 ? spanY * 0.1 : 1000;
+        double padX = spanX > 0 ? spanX * padding : 1000;
+        double padY = spanY > 0 ? spanY * padding : 1000;
         minX -= padX;
         maxX += padX;
         minY -= padY;

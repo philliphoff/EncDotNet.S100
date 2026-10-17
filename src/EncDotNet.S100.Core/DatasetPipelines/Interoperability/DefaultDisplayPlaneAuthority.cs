@@ -41,7 +41,7 @@ public sealed class DefaultDisplayPlaneAuthority : IDisplayPlaneAuthority
             // S-102 Bathymetric Surface (S-98 Annex A §A-6.9.1).
             "S-102" => S98DisplayPlane.Bathymetry,
 
-            // S-104 Water Level. Coverage band on the on-demand surface
+            // S-104 Water Level. Surface isolines on the on-demand surface
             // plane; station glyphs are point overlays.
             "S-104" => kind switch
             {
