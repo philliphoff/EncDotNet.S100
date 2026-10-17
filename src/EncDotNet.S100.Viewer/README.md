@@ -71,7 +71,7 @@ dotnet run --project src/EncDotNet.S100.Viewer
 |---|---|---|---|---|
 | **S-101** | Electronic Navigational Charts | ISO 8211 | Lua (S-100 Part 9A) | Yes |
 | **S-102** | Bathymetric Surfaces | HDF5 | Coverage | Yes |
-| **S-104** | Water Level Information | HDF5 | Coverage | Yes |
+| **S-104** | Water Level Information | HDF5 | SoundCharts' own: S-104 defines none ([details](../EncDotNet.S100.Datasets.S104/README.md#portrayal)) | Yes |
 | **S-111** | Surface Currents | HDF5 | Arrow symbols | Yes |
 | **S-122** | Marine Protected Areas | GML | XSLT | Yes |
 | **S-124** | Navigational Warnings | GML | XSLT | Yes |
@@ -663,6 +663,13 @@ Linux), or press and hold for about half a second.
 Coverage products (S-102, S-104, S-111) can be picked too. A pick that misses
 every vector feature reports the grid value at that point: depth and
 uncertainty, water level and trend, or current speed and direction.
+
+S-104 Edition 2.0.0 defines no portrayal, so the S-104 station gauges and
+surface isolines are SoundCharts' own symbology, not IHO's. The panel says
+"SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology" under an S-104
+station or grid cell, and so does the dataset's **Dataset** tab in the
+Datasets panel. [S-104 portrayal](../EncDotNet.S100.Datasets.S104/README.md#portrayal) explains what the gauges and isolines
+show.
 
 The pick is highlighted on the map so you can find it after you pan or zoom
 away. A ring with a center dot marks the point. When the feature has geometry,

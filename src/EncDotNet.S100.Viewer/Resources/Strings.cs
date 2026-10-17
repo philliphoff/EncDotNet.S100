@@ -292,6 +292,7 @@ internal static class Strings
     public static string PickReport_EmptyTitle => Get(nameof(PickReport_EmptyTitle));
     public static string PickReport_EmptyDescription => Get(nameof(PickReport_EmptyDescription));
     public static string Pick_IdLabel => Get(nameof(Pick_IdLabel));
+    public static string Portrayal_ApplicationNote => Get(nameof(Portrayal_ApplicationNote));
     public static string Pick_IdCaption => Get(nameof(Pick_IdCaption));
     public static string Pick_SpecFormat => Get(nameof(Pick_SpecFormat));
     public static string Pick_SourceFormat => Get(nameof(Pick_SourceFormat));

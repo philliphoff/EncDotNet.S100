@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 
@@ -16,10 +17,16 @@ public sealed record ListSpecsRequest();
 /// Capability flags advertising which tools the agent can productively
 /// invoke against this spec in the current session.
 /// </param>
+/// <param name="PortrayalNote">
+/// For a product whose specification defines no portrayal (S-104), says the
+/// portrayal is SoundCharts' own (<see cref="ApplicationPortrayal.Note"/>);
+/// <c>null</c> for products drawn from an official portrayal catalogue.
+/// </param>
 public sealed record SpecSummary(
     [property: Description("Canonical spec name, e.g. \"S-101\", \"S-124\".")] string Name,
     [property: Description("Number of datasets of this spec currently loaded in the host catalog.")] int LoadedDatasetCount,
-    [property: Description("Capability flags advertising which MCP tools the agent can productively invoke against this spec in the current session.")] SpecCapabilities Capabilities);
+    [property: Description("Capability flags advertising which MCP tools the agent can productively invoke against this spec in the current session.")] SpecCapabilities Capabilities,
+    [property: Description("Set when the specification defines no portrayal, so what render_to_image draws is SoundCharts' own symbology, not IHO's (S-104: \"SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology\"). Null for products drawn from an official portrayal catalogue.")] string? PortrayalNote = null);
 
 /// <summary>
 /// Per-spec capability flags. All flags are conservative — they reflect
@@ -163,7 +170,7 @@ public sealed class ListSpecsTool
                 CanDescribeFeature: DescribableSpecs.Contains(name),
                 CanSampleCoverage: CoverageSpecs.Contains(name),
                 CanListTimeSteps: TimeVaryingCoverageSpecs.Contains(name));
-            summaries.Add(new SpecSummary(name, loaded, caps));
+            summaries.Add(new SpecSummary(name, loaded, caps, SpecConventions.ApplicationPortrayalFor(name)?.Note));
         }
 
         return Task.FromResult(ToolResult<ListSpecsResult>.Ok(

@@ -24,7 +24,8 @@ public sealed record S104Ink(RgbaColor Ink, RgbaColor SymbolFill, RgbaColor Labe
 /// S-104 Ed 2.0.0 §9 defines <b>no</b> portrayal: the data exists to adjust
 /// depths in the ENC or bathymetry (S-98 Annex C), and the edition removed the
 /// earlier portrayal catalogue. Everything this catalogue describes is
-/// SoundCharts' own symbology, and the viewer, CLI and MCP tools label it so.
+/// SoundCharts' own symbology, and the viewer, CLI and MCP tools label it so
+/// (<see cref="EncDotNet.S100.Datasets.Pipelines.SpecConventions.S104Portrayal"/>).
 /// Replace it with an official IHO portrayal catalogue if one is published.
 /// </para>
 /// <para>

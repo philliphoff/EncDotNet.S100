@@ -69,6 +69,7 @@ public class DescribeFeatureToolTests
         Assert.True(result.TryGetValue(out var value));
         Assert.Equal("NavwarnPart", value.FeatureTypeName);
         Assert.Equal("S-124", value.Spec.Name);
+        Assert.Null(value.PortrayalNote);
 
         var attrs = value.Attributes.GetProperty("attributes");
         Assert.Equal("in force", attrs.GetProperty("status").GetString());

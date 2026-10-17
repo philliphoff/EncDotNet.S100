@@ -91,4 +91,17 @@ public class ListSpecsToolTests
         Assert.True(s104.Capabilities.CanListTimeSteps);
         Assert.True(s111.Capabilities.CanListTimeSteps);
     }
+
+    [Fact]
+    public async Task PortrayalNote_marks_S104_as_SoundCharts_portrayal_only()
+    {
+        var tool = new ListSpecsTool(new FakeDatasetCatalog());
+
+        var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        var s104 = value.Specs.Single(s => s.Name == "S-104");
+        Assert.Equal("SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology", s104.PortrayalNote);
+        Assert.All(value.Specs.Where(s => s.Name != "S-104"), s => Assert.Null(s.PortrayalNote));
+    }
 }

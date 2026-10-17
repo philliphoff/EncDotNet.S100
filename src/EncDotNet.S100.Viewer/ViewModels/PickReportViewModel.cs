@@ -300,6 +300,17 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         }
     }
 
+    /// <summary>
+    /// "SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology" when the
+    /// selected hit's product specification defines no portrayal, so the symbol
+    /// the user clicked isn't IHO symbology; <see langword="null"/> otherwise
+    /// (issue #937).
+    /// </summary>
+    public string? PortrayalNote => _selectedHit is null ? null : PortrayalNoteText.For(ProductSpec);
+
+    /// <summary>True when <see cref="PortrayalNote"/> has a value to show.</summary>
+    public bool HasPortrayalNote => PortrayalNote is not null;
+
     /// <summary>Clipboard text for the copy-identity action: heading plus caption.</summary>
     private string? IdentityClipboardText
     {
@@ -806,6 +817,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasSecondaryLabel));
         OnPropertyChanged(nameof(Glyph));
         OnPropertyChanged(nameof(IdentityCaption));
+        OnPropertyChanged(nameof(PortrayalNote));
+        OnPropertyChanged(nameof(HasPortrayalNote));
         OnPropertyChanged(nameof(IsExaminerAvailable));
         (CopyIdentityCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();

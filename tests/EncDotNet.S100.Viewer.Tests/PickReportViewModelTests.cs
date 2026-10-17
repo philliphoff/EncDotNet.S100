@@ -879,6 +879,23 @@ public class PickReportViewModelTests
     }
 
     [Fact]
+    public void PortrayalNote_LabelsS104AsSoundChartsPortrayal()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("WaterLevel", "Water Level (Station)", "station:8665530", "104US00_ST.h5", "S-104",
+            new[] { Leaf("waterLevelHeight", "1.42") });
+
+        Assert.True(vm.HasPortrayalNote);
+        Assert.Equal("SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology", vm.PortrayalNote);
+
+        vm.SetPick("DepthArea", "Depth Area", "300", "test.000", "S-101",
+            new[] { Leaf("DRVAL1", "10.0") });
+
+        Assert.False(vm.HasPortrayalNote);
+        Assert.Null(vm.PortrayalNote);
+    }
+
+    [Fact]
     public void IdentityCaption_OmitsMissingSegments()
     {
         var vm = new PickReportViewModel();
