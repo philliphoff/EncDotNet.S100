@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<StandaloneDigitalSignature xmlns="http://www.iho.int/s100/se/5.1">
+  <filename>PERMIT.XML</filename>
+  <certificates>
+    <schemeAdministrator id="ZZ00-TEST-SA" />
+    <certificate id="ZZ00-TEST-DATA-SERVER" issuer="ZZ00-TEST-SA">MIICeDCCAf2gAwIBAgIIWloAAAAAAAQwCgYIKoZIzj0EAwMwfzFIMEYGA1UEAww/WlowMCBURVNUIE9OTFkgT3RoZXIgU2NoZW1lIEFkbWluaXN0cmF0b3IgKG5vdCByZWFsOyB1bnRydXN0ZWQpMTMwMQYDVQQKDCpTeW50aGV0aWMgSHlkcm9ncmFwaGljIE9mZmljZSAoZmljdGl0aW91cykwHhcNMjYwMTAxMDAwMTAwWhcNNDkxMjMxMjM1OTU5WjBlMS4wLAYDVQQDDCVaWjAwIFRFU1QgT05MWSBEYXRhIFNlcnZlciAobm90IHJlYWwpMTMwMQYDVQQKDCpTeW50aGV0aWMgSHlkcm9ncmFwaGljIE9mZmljZSAoZmljdGl0aW91cykwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAAQ8pAlTrk+OD6lh+48UsZ3YoswFPmczlKccjNScIZf4n8mQaMlokgEhWNcRwfFIa4PozPKysXZa6K3gJf9awyH7vOV+vmuYGM5PIv1qhvUwyk2LRIJZe+UQncXQZQSxrq6jYDBeMAwGA1UdEwEB/wQCMAAwDgYDVR0PAQH/BAQDAgeAMB0GA1UdDgQWBBQQTbNjRJ/oOOCfgqo3ilLNQWZXTTAfBgNVHSMEGDAWgBTv6C4DmsOF2n5aAMf6QEzviE5oGDAKBggqhkjOPQQDAwNpADBmAjEAqjHpoXTCtzpiwiFb07Jde2RFtO3CYqbVaPg4otoNrNIeck6iLywSoUVoUy/Z1B02AjEAi7B8/tyeqxmbOKYQ0uCzQDkPyDhoropYUvQegQfb0BftgC/Y1E4MFYkC4FpDlkaX</certificate>
+  </certificates>
+  <digitalSignature id="permit-signature" certificateRef="ZZ00-TEST-DATA-SERVER">MGUCMQDFbyF/sdq5aCcpMuCUDJVHlhinF/RIw4BIJGFlqllj+k9iq1OYGPUrU6Vw46C9tgMCMG6RHDv+rZAiRLsAK63MIkntTW8/gq/Df6J1I27GbZsPWxtRWe7WK9jiPnsUiMqk7Q==</digitalSignature>
+</StandaloneDigitalSignature>

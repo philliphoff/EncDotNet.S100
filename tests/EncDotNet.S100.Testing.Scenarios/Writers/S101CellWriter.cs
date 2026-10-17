@@ -2,6 +2,7 @@ using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Testing.Scenarios.Geometry;
+using EncDotNet.S100.Testing.Scenarios.Quirks;
 using EncDotNet.S100.Testing.Scenarios.World;
 using static EncDotNet.S100.Testing.Scenarios.Writers.S101DocumentBuilder;
 
@@ -80,9 +81,15 @@ public static class S101CellWriter
     /// <param name="cell">The cell.</param>
     /// <param name="dredged">Dredged channels to chart where they overlap the cell.</param>
     /// <param name="issueDate">The dataset reference date.</param>
+    /// <param name="quirks">
+    /// The cell's producer quirks, or <c>null</c> for none: declared display
+    /// scales, a shoal bias, and spiked areas.
+    /// </param>
     /// <returns>The document.</returns>
-    public static S101Document Build(SyntheticWorld world, S101CellSpec cell, IReadOnlyList<DredgedChannel> dredged, DateOnly issueDate)
+    public static S101Document Build(SyntheticWorld world, S101CellSpec cell, IReadOnlyList<DredgedChannel> dredged, DateOnly issueDate, DatasetQuirks? quirks = null)
     {
+        quirks ??= DatasetQuirks.None;
+        var bias = quirks.ShoalBias;
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(cell);
         ArgumentNullException.ThrowIfNull(dredged);
@@ -101,7 +108,7 @@ public static class S101CellWriter
             frame,
             SampleGrid.Lattice(extent.West, extent.East, cell.GridSpacing, channels.SelectMany(c => new[] { c.Area.West, c.Area.East })),
             SampleGrid.Lattice(extent.South, extent.North, cell.GridSpacing, channels.SelectMany(c => new[] { c.Area.South, c.Area.North })),
-            (x, y) => GeneralisedDepth(world, x, y, cell.GeneralisationRadius));
+            (x, y) => GeneralisedDepth(world, x, y, cell.GeneralisationRadius) - bias);
 
         // Depth areas and land are traced piece by piece over the cell minus
         // its dredged areas, so the skin of the earth tiles the cell exactly.
@@ -109,13 +116,20 @@ public static class S101CellWriter
 
         var builder = new S101DocumentBuilder(ProducingAgency, cell.FoidSubdivision);
         var coverage = Rectangle(frame, extent);
-        builder.AddSurface(
-            "DataCoverage",
-            coverage,
-            [],
-            FeatureAttribute.Number("maximumDisplayScale", cell.MaximumDisplayScale),
-            FeatureAttribute.Number("minimumDisplayScale", cell.MinimumDisplayScale),
-            FeatureAttribute.Number("optimumDisplayScale", cell.OptimumDisplayScale));
+        var (minimumScale, maximumScale) = quirks.DisplayScales(cell.MinimumDisplayScale, cell.MaximumDisplayScale);
+        var coverageAttributes = new List<FeatureAttribute>();
+        if (maximumScale is { } maximum)
+        {
+            coverageAttributes.Add(FeatureAttribute.Number("maximumDisplayScale", maximum));
+        }
+
+        if (minimumScale is { } minimum)
+        {
+            coverageAttributes.Add(FeatureAttribute.Number("minimumDisplayScale", minimum));
+        }
+
+        coverageAttributes.Add(FeatureAttribute.Number("optimumDisplayScale", cell.OptimumDisplayScale));
+        builder.AddSurface("DataCoverage", coverage, [], [.. coverageAttributes]);
         builder.AddSurface("SoundingDatum", coverage, [], FeatureAttribute.Number("verticalDatum", world.Datums.ChartDatum));
 
         foreach (var piece in pieces)
@@ -175,7 +189,12 @@ public static class S101CellWriter
             }
         }
 
-        var soundings = Soundings(world, cell, highWater);
+        foreach (var spiked in quirks.SpikedAreas)
+        {
+            builder.AddSurface(spiked.FeatureType, DatasetQuirks.SpikedRing(frame, spiked), []);
+        }
+
+        var soundings = Soundings(world, cell, highWater, bias);
         if (soundings.Count > 0)
         {
             builder.AddSoundings(soundings);
@@ -229,7 +248,7 @@ public static class S101CellWriter
         return shoalest;
     }
 
-    private static List<(GeoPosition Position, double Depth)> Soundings(SyntheticWorld world, S101CellSpec cell, double highWater)
+    private static List<(GeoPosition Position, double Depth)> Soundings(SyntheticWorld world, S101CellSpec cell, double highWater, double bias)
     {
         var random = ScenarioRandom.For(world.Seed, "soundings:" + cell.DatasetName);
         var extent = cell.Extent;
@@ -241,7 +260,7 @@ public static class S101CellWriter
             {
                 var sx = x + random.NextDouble(-0.3, 0.3) * spacing;
                 var sy = y + random.NextDouble(-0.3, 0.3) * spacing;
-                var depth = world.DepthAt(sx, sy);
+                var depth = world.DepthAt(sx, sy) - bias;
                 if (depth <= -highWater)
                 {
                     continue;

@@ -1,0 +1,4 @@
+TEST ONLY - NOT REAL. Synthetic Part 15 scheme for generated test data; the keys are derived from public inputs.
+Scenario Protected-PermitOnly; PERMIT.SIGN: Ok
+S-101/DATASET_FILES/101ZZ00SPIT3.000	Allowed
+S-102/DATASET_FILES/102ZZ00SPIT.h5	NotProtected (unsigned)

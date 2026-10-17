@@ -17,6 +17,9 @@ public sealed record GeneratedDataset(string ProductIdentifier, string RelativeP
 /// <param name="Datasets">The datasets, in catalogue order.</param>
 public sealed record GeneratedScenario(ScenarioDefinition Definition, string Root, IReadOnlyList<GeneratedDataset> Datasets)
 {
+    /// <summary>The catalogue entries, in the order of <see cref="Datasets"/>.</summary>
+    public IReadOnlyList<CatalogueDataset> CatalogueEntries { get; init; } = [];
+
     /// <summary>The <c>CATALOG.XML</c> path.</summary>
     public string CataloguePath => Path.Combine(Root, "CATALOG.XML");
 }
@@ -62,7 +65,7 @@ public static class ScenarioGenerator
         foreach (var cell in definition.Cells)
         {
             var path = Prepare("S-101", cell.FileName);
-            S101DocumentWriter.WriteToFile(path, S101CellWriter.Build(world, cell, definition.DredgedChannels, issueDate));
+            S101DocumentWriter.WriteToFile(path, S101CellWriter.Build(world, cell, definition.DredgedChannels, issueDate, definition.QuirksFor(cell.DatasetName)));
             var sw = frame.ToGeo(cell.Extent.West, cell.Extent.South);
             var ne = frame.ToGeo(cell.Extent.East, cell.Extent.North);
             entries.Add(new CatalogueDataset(
@@ -73,33 +76,36 @@ public static class ScenarioGenerator
         foreach (var surface in definition.Surfaces)
         {
             var path = Prepare("S-102", surface.FileName);
-            CoverageWriters.WriteS102(world, surface, path, definition.Issued);
+            var quirks = definition.QuirksFor(surface.DatasetName);
+            CoverageWriters.WriteS102(world, surface, path, definition.Issued, quirks);
             var grid = CoverageWriters.Grid(world, surface);
             entries.Add(new CatalogueDataset(
                 datasets[^1].RelativePath, "S-102", "Bathymetric Surface", "3.0.0", "HDF5", issueDate,
-                grid.OriginLongitude, grid.OriginLatitude, grid.EastLongitude, grid.NorthLatitude,
+                quirks.Longitude(grid.OriginLongitude), grid.OriginLatitude, quirks.Longitude(grid.EastLongitude), grid.NorthLatitude,
                 $"SYNTHETIC bathymetric surface of {world.Name} (fictitious)."));
         }
 
         if (definition.Stations is { } stations)
         {
             var path = Prepare("S-104", stations.FileName);
-            CoverageWriters.WriteS104Stations(world, stations, path, definition.Issued, definition.WaterLevelStart, definition.WaterLevelEnd);
+            var quirks = definition.QuirksFor(stations.DatasetName);
+            CoverageWriters.WriteS104Stations(world, stations, path, definition.Issued, definition.WaterLevelStart, definition.WaterLevelEnd, quirks);
             var positions = world.Tide.Stations.Select(s => frame.ToGeo(s.X, s.Y)).ToList();
             entries.Add(new CatalogueDataset(
                 datasets[^1].RelativePath, "S-104", "Water Level Information for Surface Navigation", "2.0.0", "HDF5", issueDate,
-                positions.Min(p => p.Longitude), positions.Min(p => p.Latitude), positions.Max(p => p.Longitude), positions.Max(p => p.Latitude),
+                quirks.Longitude(positions.Min(p => p.Longitude)), positions.Min(p => p.Latitude), quirks.Longitude(positions.Max(p => p.Longitude)), positions.Max(p => p.Latitude),
                 $"SYNTHETIC tide predictions at {world.Name} stations (fictitious)."));
         }
 
         foreach (var waterLevel in definition.WaterLevelGrids)
         {
             var path = Prepare("S-104", waterLevel.FileName);
-            CoverageWriters.WriteS104Grid(world, waterLevel, path, definition.Issued, definition.WaterLevelStart, definition.WaterLevelEnd);
+            var quirks = definition.QuirksFor(waterLevel.DatasetName);
+            CoverageWriters.WriteS104Grid(world, waterLevel, path, definition.Issued, definition.WaterLevelStart, definition.WaterLevelEnd, quirks);
             var grid = CoverageWriters.Grid(world, waterLevel);
             entries.Add(new CatalogueDataset(
                 datasets[^1].RelativePath, "S-104", "Water Level Information for Surface Navigation", "2.0.0", "HDF5", issueDate,
-                grid.OriginLongitude, grid.OriginLatitude, grid.EastLongitude, grid.NorthLatitude,
+                quirks.Longitude(grid.OriginLongitude), grid.OriginLatitude, quirks.Longitude(grid.EastLongitude), grid.NorthLatitude,
                 $"SYNTHETIC tide prediction grid over {world.Name} (fictitious)."));
         }
 
@@ -174,7 +180,7 @@ public static class ScenarioGenerator
                 $"SYNTHETIC test data: scenario '{definition.Name}', seed {seed}, in {world.Name}, a fictitious area. Not for navigation.",
                 entries));
 
-        return new GeneratedScenario(definition, directory, datasets);
+        return new GeneratedScenario(definition, directory, datasets) { CatalogueEntries = entries };
     }
 
     // A point's box is padded by 10⁻⁴ degrees (about 10 m) so it has an area,

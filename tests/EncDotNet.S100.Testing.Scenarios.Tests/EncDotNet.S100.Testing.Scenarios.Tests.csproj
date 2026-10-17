@@ -17,12 +17,18 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- The checked-in Part 15 sets (#768), opened by CheckedInProtectedSetTests. -->
+  <ItemGroup>
+    <Content Include="..\datasets\ExchangeSets\Protected-*\**" CopyToOutputDirectory="PreserveNewest" Link="TestData\ExchangeSets\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\EncDotNet.S100.Testing.Scenarios\EncDotNet.S100.Testing.Scenarios.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100\EncDotNet.S100.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Crs.ProjNet\EncDotNet.S100.Crs.ProjNet.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Navigation\EncDotNet.S100.Navigation.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Rendering.Scene\EncDotNet.S100.Rendering.Scene.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S129.Fusion\EncDotNet.S100.Datasets.S129.Fusion.csproj" />
   </ItemGroup>
 

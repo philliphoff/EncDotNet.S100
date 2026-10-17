@@ -1,0 +1,9 @@
+TEST ONLY - NOT REAL. Synthetic Part 15 scheme for generated test data; the keys are derived from public inputs.
+Scenario Protected-Mixed; PERMIT.SIGN: Ok
+S-101/DATASET_FILES/101ZZ00MIXSW.000	Allowed
+S-101/DATASET_FILES/101ZZ00MIXSE.000	PermitNotFound
+S-101/DATASET_FILES/101ZZ00MIXNW.000	EditionMismatch
+S-101/DATASET_FILES/101ZZ00MIXNE.000	IssuedAfterExpiry
+S-101/DATASET_FILES/101ZZ00SPIT3.000	Allowed (expires 30 days after issue)
+S-102/DATASET_FILES/102ZZ00SPIT.h5	IssueDateMismatch
+S-104/DATASET_FILES/104ZZ00SPIT_STN.h5	NotProtected (unsigned)

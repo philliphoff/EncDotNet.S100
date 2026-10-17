@@ -144,6 +144,52 @@ public static class S100Cipher
         }
     }
 
+    /// <summary>
+    /// Encrypts bytes with the S-100 Part 15 modified CBC mode using the given
+    /// prefix block and initialization vector instead of random ones, so the
+    /// output is reproducible. For synthetic test fixtures only.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// S-100 Edition 5.2.1 Part 15 §15-6.2.4 requires the prefix block and the
+    /// IV to be random; a data server must use <see cref="EncryptDataset(ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>.
+    /// Fixed values here let generated fixtures diff cleanly between runs.
+    /// </para>
+    /// <para>
+    /// The output decrypts with <see cref="DecryptDataset"/> like any other,
+    /// because decryption discards the first block whatever the IV.
+    /// </para>
+    /// </remarks>
+    /// <param name="plaintext">The bytes to encrypt (already compressed, if applicable).</param>
+    /// <param name="cellKey">The 16-byte cell (product) key.</param>
+    /// <param name="prefixBlock">The 16-byte block prepended to the plaintext.</param>
+    /// <param name="iv">The 16-byte initialization vector, which is not transmitted.</param>
+    /// <returns>The encrypted file content.</returns>
+    public static byte[] EncryptDataset(
+        ReadOnlySpan<byte> plaintext,
+        ReadOnlySpan<byte> cellKey,
+        ReadOnlySpan<byte> prefixBlock,
+        ReadOnlySpan<byte> iv)
+    {
+        ValidateKey(cellKey);
+        ValidateBlock(prefixBlock, nameof(prefixBlock));
+        ValidateBlock(iv, nameof(iv));
+
+        byte[] prefixed = new byte[BlockSize + plaintext.Length];
+        prefixBlock.CopyTo(prefixed);
+        plaintext.CopyTo(prefixed.AsSpan(BlockSize));
+
+        using var aes = CreateAes(cellKey);
+        try
+        {
+            return aes.EncryptCbc(prefixed, iv, PaddingMode.PKCS7);
+        }
+        finally
+        {
+            Array.Clear(prefixed);
+        }
+    }
+
     private static Aes CreateAes(ReadOnlySpan<byte> key)
     {
         var aes = Aes.Create();

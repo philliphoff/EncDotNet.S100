@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Xml;
+using EncDotNet.S100.ExchangeSets;
 
 namespace EncDotNet.S100.Testing.Scenarios.Writers;
 
@@ -27,7 +28,24 @@ public sealed record CatalogueDataset(
     double South,
     double East,
     double North,
-    string? Comment = null);
+    string? Comment = null)
+{
+    /// <summary>The edition number.</summary>
+    public int EditionNumber { get; init; } = 1;
+
+    /// <summary>The update number; above zero, the dataset is an update (<c>purpose</c> <c>update</c>).</summary>
+    public int UpdateNumber { get; init; }
+
+    /// <summary>Whether the dataset is encrypted (Part 15 <c>dataProtection</c>).</summary>
+    public bool DataProtection { get; init; }
+
+    /// <summary>
+    /// The dataset's Part 15 signatures. A signature on data with no
+    /// <see cref="DigitalSignatureValue.DataStatus"/> is written without the
+    /// <c>dataStatus</c> attribute, as some producers do (#754).
+    /// </summary>
+    public IReadOnlyList<DigitalSignatureValue> Signatures { get; init; } = [];
+}
 
 /// <summary>
 /// Writes an S-100 Part 17 exchange catalogue (<c>CATALOG.XML</c>, S-100
@@ -36,8 +54,10 @@ public sealed record CatalogueDataset(
 /// <remarks>
 /// Elements follow the Part 17 §17-4.5 order. The output is a pure function
 /// of the arguments: no wall-clock time, UTF-8 without a byte-order mark,
-/// <c>\n</c> line endings, and invariant number formatting. Part 15
-/// protection (signatures, permits) is not written; that is Phase 3 (#943).
+/// <c>\n</c> line endings, and invariant number formatting. With a
+/// certificate block and per-dataset signatures it also writes the Part 15
+/// security elements (§15-8.11); permits are written separately
+/// (<see cref="Protection.ProtectedScenarioGenerator"/>).
 /// </remarks>
 public static class ExchangeCatalogueBuilder
 {
@@ -45,6 +65,7 @@ public static class ExchangeCatalogueBuilder
     private const string Gco = "http://standards.iso.org/iso/19115/-3/gco/1.0";
     private const string Gex = "http://standards.iso.org/iso/19115/-3/gex/1.0";
     private const string Cit = "http://standards.iso.org/iso/19115/-3/cit/2.0";
+    private const string Se = "http://www.iho.int/s100/se/5.2";
 
     /// <summary>The producer code written for every generated dataset; it marks the data as synthetic.</summary>
     public const string ProducerCode = "ZZ00";
@@ -57,8 +78,9 @@ public static class ExchangeCatalogueBuilder
     /// <param name="dateTime">The catalogue's issue time (UTC).</param>
     /// <param name="comment">The exchange catalogue comment.</param>
     /// <param name="datasets">The datasets, in the order to list them.</param>
+    /// <param name="certificates">The Part 15 certificate block for the datasets' signatures, or <c>null</c>.</param>
     /// <returns>The UTF-8 encoded catalogue.</returns>
-    public static byte[] Build(string identifier, DateTime dateTime, string comment, IReadOnlyList<CatalogueDataset> datasets)
+    public static byte[] Build(string identifier, DateTime dateTime, string comment, IReadOnlyList<CatalogueDataset> datasets, CertificateBlock? certificates = null)
     {
         ArgumentNullException.ThrowIfNull(identifier);
         ArgumentNullException.ThrowIfNull(comment);
@@ -81,6 +103,10 @@ public static class ExchangeCatalogueBuilder
             xml.WriteAttributeString("xmlns", "gco", null, Gco);
             xml.WriteAttributeString("xmlns", "gex", null, Gex);
             xml.WriteAttributeString("xmlns", "cit", null, Cit);
+            if (certificates is not null)
+            {
+                xml.WriteAttributeString("xmlns", "S100SE", null, Se);
+            }
 
             xml.WriteStartElement("identifier", Xc);
             xml.WriteElementString("identifier", Xc, identifier);
@@ -92,6 +118,10 @@ public static class ExchangeCatalogueBuilder
             xml.WriteEndElement();
 
             CharacterString(xml, "exchangeCatalogueComment", Xc, comment);
+            if (certificates is not null)
+            {
+                WriteCertificates(xml, certificates);
+            }
 
             xml.WriteStartElement("datasetDiscoveryMetadata", Xc);
             foreach (var dataset in datasets)
@@ -112,12 +142,26 @@ public static class ExchangeCatalogueBuilder
         xml.WriteStartElement("S100_DatasetDiscoveryMetadata", Xc);
         xml.WriteElementString("fileName", Xc, dataset.FileName);
         xml.WriteElementString("compressionFlag", Xc, "false");
-        xml.WriteElementString("dataProtection", Xc, "false");
+        xml.WriteElementString("dataProtection", Xc, dataset.DataProtection ? "true" : "false");
+        if (dataset.DataProtection)
+        {
+            xml.WriteElementString("protectionScheme", Xc, "S100p15");
+        }
+
+        if (dataset.Signatures.Count > 0)
+        {
+            xml.WriteElementString("digitalSignatureReference", Xc, "ECDSA-384-SHA2");
+            foreach (var signature in dataset.Signatures)
+            {
+                WriteSignature(xml, signature);
+            }
+        }
+
         xml.WriteElementString("copyright", Xc, "false");
-        xml.WriteElementString("purpose", Xc, "newDataset");
+        xml.WriteElementString("purpose", Xc, dataset.UpdateNumber > 0 ? "update" : "newDataset");
         xml.WriteElementString("notForNavigation", Xc, "true");
-        xml.WriteElementString("editionNumber", Xc, "1");
-        xml.WriteElementString("updateNumber", Xc, "0");
+        xml.WriteElementString("editionNumber", Xc, dataset.EditionNumber.ToString(CultureInfo.InvariantCulture));
+        xml.WriteElementString("updateNumber", Xc, dataset.UpdateNumber.ToString(CultureInfo.InvariantCulture));
         xml.WriteElementString("issueDate", Xc, dataset.IssueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 
         xml.WriteStartElement("boundingBox", Xc);
@@ -156,6 +200,58 @@ public static class ExchangeCatalogueBuilder
             CharacterString(xml, "comment", Xc, comment);
         }
 
+        xml.WriteEndElement();
+    }
+
+    private static void WriteCertificates(XmlWriter xml, CertificateBlock certificates)
+    {
+        xml.WriteStartElement("certificates", Xc);
+        if (certificates.SchemeAdministratorId is { } schemeAdministrator)
+        {
+            xml.WriteStartElement("schemeAdministrator", Se);
+            xml.WriteAttributeString("id", schemeAdministrator);
+            xml.WriteEndElement();
+        }
+
+        foreach (var certificate in certificates.Certificates)
+        {
+            xml.WriteStartElement("certificate", Se);
+            xml.WriteAttributeString("id", certificate.Id);
+            if (certificate.Issuer is { } issuer)
+            {
+                xml.WriteAttributeString("issuer", issuer);
+            }
+
+            xml.WriteString(Convert.ToBase64String(certificate.Value));
+            xml.WriteEndElement();
+        }
+
+        xml.WriteEndElement();
+    }
+
+    private static void WriteSignature(XmlWriter xml, DigitalSignatureValue signature)
+    {
+        xml.WriteStartElement("digitalSignatureValue", Xc);
+        xml.WriteStartElement(signature.Kind == DigitalSignatureKind.SignatureOnSignature ? "S100_SE_SignatureOnSignature" : "S100_SE_SignatureOnData", Se);
+        xml.WriteAttributeString("id", signature.Id);
+        xml.WriteAttributeString("certificateRef", signature.CertificateRef);
+        if (signature.SignatureRef is { } signatureRef)
+        {
+            xml.WriteAttributeString("signatureRef", signatureRef);
+        }
+
+        if (signature.DataStatus is { } status)
+        {
+            xml.WriteAttributeString("dataStatus", status switch
+            {
+                SignatureDataStatus.Compressed => "compressed",
+                SignatureDataStatus.Encrypted => "encrypted",
+                _ => "unencrypted",
+            });
+        }
+
+        xml.WriteString(Convert.ToBase64String(signature.Value));
+        xml.WriteEndElement();
         xml.WriteEndElement();
     }
 

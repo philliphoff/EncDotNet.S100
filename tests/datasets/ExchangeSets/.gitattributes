@@ -1,0 +1,4 @@
+# The Protected-* sets are Part 15 fixtures (#768): PERMIT.SIGN signs the exact
+# bytes of PERMIT.XML and the catalogue signs each dataset, so never convert
+# their line endings.
+Protected-*/** -text

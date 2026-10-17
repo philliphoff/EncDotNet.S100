@@ -18,6 +18,10 @@ internal static class Part15Xml
         {
             Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             Indent = true,
+            // The same bytes on every platform, so a signed PERMIT.XML or
+            // PERMIT.SIGN doesn't depend on where it was written.
+            NewLineChars = "\n",
+            NewLineHandling = NewLineHandling.Replace,
             CloseOutput = false,
         });
 
