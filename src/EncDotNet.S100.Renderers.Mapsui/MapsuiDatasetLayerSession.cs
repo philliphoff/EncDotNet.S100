@@ -854,6 +854,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 () => _renderer.RenderAsync(
                     lease.Processor,
                     context,
+                    renderEntry.CoverageLayout,
                     cancellationToken),
                 cancellationToken).ConfigureAwait(true);
         }
@@ -1590,6 +1591,11 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         var authority = _authorityProvider.Current;
         var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(snapshots.Count);
         var prebuilt = new Dictionary<(string DatasetId, string LayerKey), LayerStackEntry>();
+
+        // Stack items carry the processor's own SourceDatasetId, not the
+        // session key, so map it back to the entry whose layout cache an S-98
+        // coverage rebuild should reuse (issue #855).
+        var layoutCaches = new Dictionary<string, CoverageLayoutCache>(StringComparer.Ordinal);
         foreach (var snapshot in snapshots)
         {
             var layers = snapshot.Layers;
@@ -1598,10 +1604,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             if (snapshot.StackEntries is { Count: > 0 } stack)
             {
                 var items = new List<SubLayerStackItem>(stack.Count);
+                var layoutCache = _entries.GetValueOrDefault(snapshot.Dataset.Id)?.CoverageLayout;
                 foreach (var stackEntry in stack)
                 {
                     items.Add(stackEntry.Item);
                     prebuilt[LayerStackProjector.KeyOf(stackEntry.Item)] = stackEntry;
+                    if (layoutCache is not null)
+                        layoutCaches[stackEntry.Item.SourceDatasetId] = layoutCache;
                 }
                 perDataset.Add(items);
                 continue;
@@ -1632,7 +1641,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         var stackEntries = LayerStackProjector.Project(
             ruled,
             prebuilt,
-            _renderer.BuildCoverageLayer);
+            (item, subLayer) => _renderer.BuildCoverageLayer(
+                subLayer,
+                layoutCaches.GetValueOrDefault(item.SourceDatasetId)));
 
         var activeById = snapshots.ToDictionary(
             snapshot => snapshot.Dataset.Id.Value,
@@ -2082,6 +2093,20 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         LayersChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Returns the dataset's coverage layout cache, or <see langword="null"/>
+    /// when the dataset is not in the session. Test seam for issue #855.
+    /// </summary>
+    internal CoverageLayoutCache? GetCoverageLayoutCache(MapDatasetId datasetId)
+    {
+        lock (_sync)
+        {
+            return _entries.TryGetValue(datasetId, out var entry)
+                ? entry.CoverageLayout
+                : null;
+        }
+    }
+
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
     /// <summary>
@@ -2260,6 +2285,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         public double? ContentMaxVisibleResolution { get; set; }
 
         public long Generation { get; set; }
+
+        /// <summary>
+        /// The dataset's gridded-coverage projection layout, reused across
+        /// re-renders (time step, palette, display mode) and S-98 rebuilds of
+        /// the same grid, and released with the entry (issue #855).
+        /// </summary>
+        public CoverageLayoutCache CoverageLayout { get; } = new();
 
         public void Apply(MapsuiDatasetResult result)
         {

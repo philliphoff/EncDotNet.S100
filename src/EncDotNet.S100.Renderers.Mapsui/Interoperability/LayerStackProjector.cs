@@ -79,7 +79,22 @@ public static class LayerStackProjector
     public static IReadOnlyList<LayerStackEntry> Project(
         IReadOnlyList<SubLayerStackItem> ruledItems,
         IReadOnlyDictionary<(string DatasetId, string LayerKey), LayerStackEntry> prebuilt,
-        Func<CoverageSubLayerBase, ILayer?>? rebuildCoverage = null)
+        Func<CoverageSubLayerBase, ILayer?>? rebuildCoverage = null) =>
+        Project(
+            ruledItems,
+            prebuilt,
+            rebuildCoverage is null ? null : (_, subLayer) => rebuildCoverage(subLayer));
+
+    /// <summary>
+    /// Projects the S-98-ruled item list onto prebuilt Mapsui layers, passing
+    /// the ruled item to <paramref name="rebuildCoverage"/> so the caller can
+    /// rebuild with per-dataset state (the item's
+    /// <see cref="SubLayerStackItem.SourceDatasetId"/>).
+    /// </summary>
+    internal static IReadOnlyList<LayerStackEntry> Project(
+        IReadOnlyList<SubLayerStackItem> ruledItems,
+        IReadOnlyDictionary<(string DatasetId, string LayerKey), LayerStackEntry> prebuilt,
+        Func<SubLayerStackItem, CoverageSubLayerBase, ILayer?>? rebuildCoverage)
     {
         System.ArgumentNullException.ThrowIfNull(ruledItems);
         System.ArgumentNullException.ThrowIfNull(prebuilt);
@@ -99,7 +114,7 @@ public static class LayerStackProjector
     private static ILayer ProjectOne(
         SubLayerStackItem ruled,
         LayerStackEntry prebuilt,
-        Func<CoverageSubLayerBase, ILayer?>? rebuildCoverage)
+        Func<SubLayerStackItem, CoverageSubLayerBase, ILayer?>? rebuildCoverage)
     {
         // Coverage payloads are re-rasterised (not feature-filtered) when the
         // engine replaced the sub-layer — e.g. R-101-104-B attaches a land-area
@@ -110,7 +125,7 @@ public static class LayerStackProjector
             && ruledCoverage.SubLayer is GridCoverageSubLayer or IsolineCoverageSubLayer
             && rebuildCoverage is not null)
         {
-            var rebuilt = rebuildCoverage(ruledCoverage.SubLayer);
+            var rebuilt = rebuildCoverage(ruled, ruledCoverage.SubLayer);
             if (rebuilt is null)
                 return prebuilt.Layer;
 
