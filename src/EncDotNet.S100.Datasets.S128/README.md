@@ -234,6 +234,7 @@ others), and a reliable axis order for longitude-first datasets that have no
 | Property | Value |
 |---|---|
 | Edition | 2.0.0 |
+| Portrayal catalogue version | 1.1.0, as the upstream `portrayal_catalogue.xml` declares at tag `ed2.0.0`. The portrayal catalogue is versioned separately from the product specification. |
 | Application namespace | `http://www.iho.int/S128/2.0` |
 | Upstream repository | [`iho-ohi/S-128-Product-Specification-Development`](https://github.com/iho-ohi/S-128-Product-Specification-Development) |
 | Pinned commit | `c266c43820ceadcf5b71ceb2a084c279c3a51801` |

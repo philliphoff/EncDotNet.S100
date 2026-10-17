@@ -117,8 +117,10 @@ information types.
 `EncDotNet.S100.Datasets.S124.Validation` namespace, is the default rule set for
 the typed model. It's built on the validation types in the
 `EncDotNet.S100.Validation` namespace. Rule IDs have the form `S124-R-{clause}`
-and trace to the S-124 Edition 1.0.0 Feature Catalogue, or to S-100 Part 10b for
-shared encoding rules. `S124-R-2.2` accepts a `messageSeriesIdentifier` year of
+and trace to the S-124 Edition 1.0.0 or 2.0.0 Feature Catalogue, or to S-100
+Part 10b for shared encoding rules. `S124-R-3.1` checks the Edition 1.0.0
+`NAVAREA` attribute, which Edition 2.0.0 drops, so it only fires on datasets
+that carry it. `S124-R-2.2` accepts a `messageSeriesIdentifier` year of
 two digits (`26`, as AMSA writes it) or four (`2026`). The `EncDotNet.S100` package's `dataset.Validate()` runs
 the same rule set.
 
