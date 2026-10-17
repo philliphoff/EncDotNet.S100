@@ -20,7 +20,7 @@ public class ViewerPassageRouteProviderTests
         public Task<T> InvokeAsync<T>(Func<T> action) => Task.FromResult(action());
     }
 
-    private sealed class FixedViewTime(DateTimeOffset now) : IRouteViewTime
+    private sealed class FixedViewTime(DateTimeOffset now) : IViewTime
     {
         public DateTimeOffset Current => now;
 

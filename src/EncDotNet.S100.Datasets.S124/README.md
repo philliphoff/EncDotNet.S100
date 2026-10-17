@@ -53,7 +53,10 @@ foreach (var diagnostic in diagnostics)
   geometry.
 - **`S124Feature`**: a feature with its type code, geometry, simple attributes,
   complex attributes and `xlink:href` references (`GmlReference`).
-  **`S124ComplexAttribute`** holds a complex attribute's sub-attributes. The
+  **`S124ComplexAttribute`** holds a complex attribute's sub-attributes.
+  Edition 2.0.0 nests complex attributes: `SubAttributes` keys their leaves as
+  `"information.text"`, keeping the first of a repeated one, and `Groups`
+  keeps each nested one, in order, with its own leaves. The
   geometry kind is the shared `S100GeometryType` enum from
   `EncDotNet.S100.Core`.
 - **`S124InformationType`**: an information type without geometry, such as
@@ -81,14 +84,17 @@ namespace projects it into typed objects:
   number, year, production agency, country and, in Edition 2.0.0, warning type
   and interoperability identifier), the general area, locality, title,
   NAVAREA and NAVTEX values, and promulgating authority. Edition 2.0.0 adds
-  `PublicationTime`, `CancellationDate` (the warning is valid before it) and
-  `NavwarnTypeGeneral`.
+  `PublicationTime`, `CancellationDate` (the warning is valid before it),
+  `NavwarnTypeGeneral` and its label, `NavwarnTypeGeneralName`.
 - **`S124NavwarnPart`** has the restriction code, the warning text, geometry,
   and the resolved `AffectedAreas` and `TextPlacements`. The text is
   `warningInformation/information` in Edition 1.0.0 and
   `warningInformation/information/text` in 2.0.0, which also gives the
   warning type (`NavwarnType` and `NavwarnTypeCode`, from
-  `navwarnTypeDetails`). `ValidityRanges` holds one `S124DateRange` per
+  `navwarnTypeDetails`). A 2.0.0 part can give the text in several
+  languages, one `information` each: `Information` holds every one as an
+  `S124WarningText` (language code and text), and `WarningInformation` is the
+  first. `ValidityRanges` holds one `S124DateRange` per
   `fixedDateRange`: in Edition 2.0.0 each end is a date with an optional UTC
   time of day.
 - **`S124AffectedArea`** and **`S124TextPlacement`** are the features reached

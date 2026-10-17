@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Read a navigational warning's whole message in Object Information.**
+  Picking an S-124 warning part in SoundCharts now shows a Warning card: the
+  series and number, the warning type, whether it is in force at the view
+  time, its validity, area and issue time, and the full message text in a
+  monospaced block. A part with text in several languages has a tab per
+  language, the UI language first. Messages over 22 lines stop at 20 behind
+  **Show all**, and the attribute rows fold beneath the card. In the
+  libraries, `S124NavwarnPart.Information` keeps every language,
+  `S124ComplexAttribute.Groups` keeps each repeated nested attribute, and
+  `FeatureInfo.NavigationalWarning` carries the message for any pick report.
+
 - **Passage checks read quirky S-102 and S-104 grids.** Passage depth and
   water level now read grids whose georeferencing is longitude first, grids
   declaring a geographic CRS other than WGS 84 (such as ETRS89), and grids in

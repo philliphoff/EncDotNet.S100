@@ -65,6 +65,12 @@ internal sealed class S124FeatureDescriber : ISpecFeatureDescriber
             {
                 ["code"] = c.Code,
                 ["subAttributes"] = c.SubAttributes,
+                // Every nested occurrence, e.g. one information per language (#932).
+                ["groups"] = (c as S124ComplexAttribute)?.Groups.Select(g => new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["code"] = g.Code,
+                    ["subAttributes"] = g.SubAttributes,
+                }).ToArray() ?? [],
             }).ToArray(),
         };
 

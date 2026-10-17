@@ -456,6 +456,11 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   into their own section.
 - `GmlDatasetProcessorBase`: the base class for the GML processors (S-122,
   S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421).
+  `S124DatasetProcessor` fills `FeatureInfo.NavigationalWarning` for a
+  `NavwarnPart`: a `NavigationalWarningInfo` with the series and number, type,
+  validity, area, issuer and the message text in each language, read through
+  the warning's preamble. `NavigationalWarningInfo.StatusAt` tells whether the
+  warning is in force at a time.
 - `AssetSourceHelpers`: set-up helpers for exchange sets and loose datasets.
 - `Diagnostics/`: the `ActivitySource` and `Meter` instrumentation that the
   OpenTelemetry exporter uses. See [Observability](../../docs/observability.md).

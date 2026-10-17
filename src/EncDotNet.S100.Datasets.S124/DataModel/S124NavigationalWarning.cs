@@ -160,6 +160,10 @@ public sealed class S124NavigationalWarning
             PublicationTime = AttributeParser.TryParseDateTimeOffset(p.Attributes.GetValueOrDefault("publicationTime"), ctx, p.Id, "publicationTime"),
             CancellationDate = AttributeParser.TryParseDateTimeOffset(p.Attributes.GetValueOrDefault("cancellationDate"), ctx, p.Id, "cancellationDate"),
             NavwarnTypeGeneral = Code(p.Attributes, "navwarnTypeGeneral", ctx, p.Id),
+            NavwarnTypeGeneralName = p.Attributes.GetValueOrDefault("navwarnTypeGeneral") is { Length: > 0 } general
+                && !int.TryParse(general, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)
+                    ? general.Trim()
+                    : null,
             ExtraAttributes = ExtraAttributes.ExcludeKnown(p.Attributes,
                 "generalArea", "locality", "title", "NAVAREA", "navarea",
                 "NAVTEX", "navtex", "promulgatingAuthority", "publicationTime",
@@ -245,12 +249,25 @@ public sealed class S124NavigationalWarning
         string? warningText = null;
         string? navwarnType = null;
         int? navwarnTypeCode = null;
+        var information = new List<S124WarningText>();
         var winfo = f.ComplexAttributes.FirstOrDefault(c =>
             string.Equals(c.Code, "warningInformation", StringComparison.OrdinalIgnoreCase));
         if (winfo is not null)
         {
             warningText = winfo.SubAttributes.GetValueOrDefault("information.text")
                 ?? winfo.SubAttributes.GetValueOrDefault("information");
+            foreach (var group in (winfo as S124ComplexAttribute)?.Groups ?? [])
+            {
+                if (string.Equals(group.Code, "information", StringComparison.OrdinalIgnoreCase)
+                    && group.SubAttributes.GetValueOrDefault("text") is { } text)
+                {
+                    information.Add(new S124WarningText(
+                        group.SubAttributes.GetValueOrDefault("language") is { Length: > 0 } language ? language.Trim() : null,
+                        text));
+                }
+            }
+            if (information.Count == 0 && warningText is not null)
+                information.Add(new S124WarningText(null, warningText));
             navwarnType = winfo.SubAttributes.GetValueOrDefault("navwarnTypeDetails") is { Length: > 0 } type ? type.Trim() : null;
             navwarnTypeCode = int.TryParse(winfo.SubAttributes.GetValueOrDefault("navwarnTypeDetails.code"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var code)
                 ? code
@@ -287,6 +304,7 @@ public sealed class S124NavigationalWarning
             Category = AttributeParser.TryParseInt(f.Attributes.GetValueOrDefault("category"), ctx, f.Id, "category"),
             ValidityRanges = ProjectValidity(f, ctx),
             WarningInformation = warningText,
+            Information = information,
             AffectedAreas = areas,
             TextPlacements = texts,
             GeometryKind = kind,

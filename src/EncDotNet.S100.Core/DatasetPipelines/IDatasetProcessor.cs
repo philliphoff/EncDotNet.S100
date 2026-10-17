@@ -302,6 +302,14 @@ public sealed class FeatureInfo
     /// in the pick report (S-411 Edition 1.2.1 Annex A).
     /// </summary>
     public IceEggCode? EggCode { get; init; }
+
+    /// <summary>
+    /// The warning message when the feature is part of a navigational warning
+    /// (an S-124 <c>NavwarnPart</c>): its identification, type, validity and
+    /// full text in every language; <c>null</c> for every other feature.
+    /// Object-information UIs show it as one card in place of attribute rows.
+    /// </summary>
+    public NavigationalWarningInfo? NavigationalWarning { get; init; }
 }
 
 /// <summary>

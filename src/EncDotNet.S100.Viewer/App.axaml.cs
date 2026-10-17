@@ -804,7 +804,7 @@ public partial class App : Application
         services.AddSingleton<IApplicationControlService, ApplicationControlService>();
         services.AddSingleton<PortrayalCatalogueSeeder>();
         services.AddSingleton<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider, MeasureOverlayAppearanceProvider>();
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.IRouteViewTime>(sp => new EncDotNet.S100.Viewer.Services.TimelineRouteViewTime(
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.IViewTime>(sp => new EncDotNet.S100.Viewer.Services.TimelineViewTime(
             sp.GetRequiredService<GlobalTimeService>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutesService>();
         // Check passage (#901): recomputes the active route's UKC off the UI
@@ -1232,7 +1232,8 @@ public partial class App : Application
             sp.GetService<ITimeFormatProvider>(),
             sp.GetService<IMarinerSettingsProvider>(),
             sp.GetService<IUrlOpener>(),
-            sp.GetService<IS100ExaminerLinkBuilder>()));
+            sp.GetService<IS100ExaminerLinkBuilder>(),
+            sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>()));
         services.AddSingleton<IForecastRunRefresher>(sp => new LibraryForecastRunRefresher(sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>()));
         services.AddSingleton<TimelineMapScope>(sp => new TimelineMapScope(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),

@@ -297,6 +297,27 @@ internal static class Strings
     public static string Pick_SourceFormat => Get(nameof(Pick_SourceFormat));
     public static string Pick_AttributesHeading => Get(nameof(Pick_AttributesHeading));
     public static string Pick_ReferencedTextHeader => Get(nameof(Pick_ReferencedTextHeader));
+
+    // Navigational warning card (#932)
+    public static string Pick_Warning_NoNumber => Get(nameof(Pick_Warning_NoNumber));
+    public static string Pick_Warning_StatusInForce => Get(nameof(Pick_Warning_StatusInForce));
+    public static string Pick_Warning_StatusNotYet => Get(nameof(Pick_Warning_StatusNotYet));
+    public static string Pick_Warning_StatusEnded => Get(nameof(Pick_Warning_StatusEnded));
+    public static string Pick_Warning_ValidLabel => Get(nameof(Pick_Warning_ValidLabel));
+    public static string Pick_Warning_AreaLabel => Get(nameof(Pick_Warning_AreaLabel));
+    public static string Pick_Warning_IssuedLabel => Get(nameof(Pick_Warning_IssuedLabel));
+    public static string Pick_Warning_ValidFrom => Get(nameof(Pick_Warning_ValidFrom));
+    public static string Pick_Warning_ValidUntil => Get(nameof(Pick_Warning_ValidUntil));
+    public static string Pick_Warning_ValidUntilCancelled => Get(nameof(Pick_Warning_ValidUntilCancelled));
+    public static string Pick_Warning_NoLocation => Get(nameof(Pick_Warning_NoLocation));
+    public static string Pick_Warning_ShowAllLines => Get(nameof(Pick_Warning_ShowAllLines));
+    public static string Pick_Warning_NoText => Get(nameof(Pick_Warning_NoText));
+    public static string Pick_Warning_Copy => Get(nameof(Pick_Warning_Copy));
+    public static string Tooltip_CopyWarningText => Get(nameof(Tooltip_CopyWarningText));
+    public static string Pick_Warning_Examiner => Get(nameof(Pick_Warning_Examiner));
+    public static string Pick_Warning_Languages => Get(nameof(Pick_Warning_Languages));
+    public static string Pick_Warning_Text => Get(nameof(Pick_Warning_Text));
+    public static string Pick_AttributesFold => Get(nameof(Pick_AttributesFold));
     public static string Pick_NoAttributes => Get(nameof(Pick_NoAttributes));
     public static string Pick_HitListHeader => Get(nameof(Pick_HitListHeader));
     public static string Pick_HitListItemFormat => Get(nameof(Pick_HitListItemFormat));

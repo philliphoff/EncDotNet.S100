@@ -103,6 +103,43 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
         new GmlFeatureXmlSource<S124Feature>(_dataset.Features);
 
     /// <inheritdoc />
+    protected override NavigationalWarningInfo? BuildNavigationalWarning(S124Feature feature)
+    {
+        if (!string.Equals(feature.FeatureType, "NavwarnPart", StringComparison.Ordinal))
+            return null;
+        var warning = TypedWarning;
+        var part = warning?.Parts.FirstOrDefault(p => string.Equals(p.Id, feature.Id, StringComparison.Ordinal));
+        return part is null ? null : S124WarningInfo.From(warning!, part);
+    }
+
+    /// <summary>
+    /// The typed warning, projected once; <c>null</c> when the dataset is
+    /// empty and cannot be projected.
+    /// </summary>
+    private S124NavigationalWarning? TypedWarning
+    {
+        get
+        {
+            if (!_typedWarningProjected)
+            {
+                try
+                {
+                    _typedWarning = S124NavigationalWarning.From(_dataset, out _);
+                }
+                catch (InvalidOperationException)
+                {
+                    _typedWarning = null;
+                }
+                _typedWarningProjected = true;
+            }
+            return _typedWarning;
+        }
+    }
+
+    private S124NavigationalWarning? _typedWarning;
+    private bool _typedWarningProjected;
+
+    /// <inheritdoc />
     protected override ValidationReport? ValidateDataset()
     {
         if (!_validationCached)

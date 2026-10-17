@@ -52,6 +52,7 @@
     <Content Include="..\datasets\S411\display_modes.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S411\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S411\display_modes_list.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S411\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S411\empty_iceact_total_concentration.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S411\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S124\navwarn_ccg_ed2*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
   </ItemGroup>
 
 

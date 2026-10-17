@@ -303,6 +303,7 @@ internal sealed class PickService : IPickService
             OwningProcessor = processor,
             StationSeries = BuildStationSeriesViewModel(info, processor),
             EggCode = info.EggCode,
+            NavigationalWarning = info.NavigationalWarning,
         };
     }
 

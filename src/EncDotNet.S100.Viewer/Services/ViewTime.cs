@@ -1,10 +1,11 @@
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// The time a route's ETAs run from when the route has no departure
-/// (handoff decision 2): the Timeline's view time.
+/// The Timeline's view time: what a route's ETAs run from when the route has
+/// no departure (handoff decision 2), and the time a navigational warning's
+/// status is read at (#932).
 /// </summary>
-internal interface IRouteViewTime
+internal interface IViewTime
 {
     /// <summary>The current view time.</summary>
     DateTimeOffset Current { get; }
@@ -14,10 +15,10 @@ internal interface IRouteViewTime
 }
 
 /// <summary>
-/// An <see cref="IRouteViewTime"/> that is always now. Used where there is no
+/// An <see cref="IViewTime"/> that is always now. Used where there is no
 /// Timeline, such as in tests and headless hosts.
 /// </summary>
-internal sealed class ClockRouteViewTime(TimeProvider clock) : IRouteViewTime
+internal sealed class ClockViewTime(TimeProvider clock) : IViewTime
 {
     /// <inheritdoc />
     public DateTimeOffset Current => clock.GetUtcNow();
@@ -30,12 +31,12 @@ internal sealed class ClockRouteViewTime(TimeProvider clock) : IRouteViewTime
 /// The Timeline's view time, from <see cref="GlobalTimeService"/>. With no
 /// time-aware data loaded the Timeline has no view time, so this is now.
 /// </summary>
-internal sealed class TimelineRouteViewTime : IRouteViewTime
+internal sealed class TimelineViewTime : IViewTime
 {
     private readonly GlobalTimeService _time;
     private readonly TimeProvider _clock;
 
-    public TimelineRouteViewTime(GlobalTimeService time, TimeProvider clock)
+    public TimelineViewTime(GlobalTimeService time, TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(clock);

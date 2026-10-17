@@ -27,7 +27,7 @@ internal sealed class RoutesService
     /// (<see cref="Routing.RouteEtas"/>), shared by the Routes panel, the map
     /// labels and <c>get_route</c>.
     /// </summary>
-    public IRouteViewTime ViewTime { get; }
+    public IViewTime ViewTime { get; }
 
     private int? _selectedWaypointIndex;
 
@@ -185,9 +185,9 @@ internal sealed class RoutesService
     /// <summary>Creates the service.</summary>
     /// <param name="viewTime">Where ETAs run from on a route with no departure;
     /// now when omitted.</param>
-    public RoutesService(IRouteViewTime? viewTime = null)
+    public RoutesService(IViewTime? viewTime = null)
     {
-        ViewTime = viewTime ?? new ClockRouteViewTime(TimeProvider.System);
+        ViewTime = viewTime ?? new ClockViewTime(TimeProvider.System);
         Routes.Changed += (_, _) =>
         {
             // Keep the selection valid as routes/waypoints change.

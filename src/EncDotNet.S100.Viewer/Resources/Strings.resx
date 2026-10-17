@@ -548,6 +548,82 @@
   <data name="Pick_AttributesHeading" xml:space="preserve">
     <value>ATTRIBUTES</value>
   </data>
+  <data name="Pick_Warning_NoNumber" xml:space="preserve">
+    <value>Navigational warning</value>
+    <comment>Warning card heading when the warning's preamble gives no series number and the dataset has no file name.</comment>
+  </data>
+  <data name="Pick_Warning_StatusInForce" xml:space="preserve">
+    <value>In force</value>
+    <comment>Warning card status pill: the warning applies at the view time.</comment>
+  </data>
+  <data name="Pick_Warning_StatusNotYet" xml:space="preserve">
+    <value>Not yet in force</value>
+    <comment>Warning card status pill: the warning starts after the view time.</comment>
+  </data>
+  <data name="Pick_Warning_StatusEnded" xml:space="preserve">
+    <value>Ended</value>
+    <comment>Warning card status pill: the warning ended or was cancelled before the view time.</comment>
+  </data>
+  <data name="Pick_Warning_ValidLabel" xml:space="preserve">
+    <value>Valid</value>
+    <comment>Warning card row label for the validity period.</comment>
+  </data>
+  <data name="Pick_Warning_AreaLabel" xml:space="preserve">
+    <value>Area</value>
+    <comment>Warning card row label for the series and general area.</comment>
+  </data>
+  <data name="Pick_Warning_IssuedLabel" xml:space="preserve">
+    <value>Issued</value>
+    <comment>Warning card row label for the issue date-time group and issuer.</comment>
+  </data>
+  <data name="Pick_Warning_ValidFrom" xml:space="preserve">
+    <value>From {0}, until cancelled</value>
+    <comment>Warning card validity with an open end. {0} is the start time.</comment>
+  </data>
+  <data name="Pick_Warning_ValidUntil" xml:space="preserve">
+    <value>Until {0}</value>
+    <comment>Warning card validity with an open start. {0} is the end time.</comment>
+  </data>
+  <data name="Pick_Warning_ValidUntilCancelled" xml:space="preserve">
+    <value>Until cancelled</value>
+    <comment>Warning card validity when the warning gives no period.</comment>
+  </data>
+  <data name="Pick_Warning_NoLocation" xml:space="preserve">
+    <value>no location</value>
+    <comment>Warning card area suffix for a warning without geometry, so nothing is drawn for it.</comment>
+  </data>
+  <data name="Pick_Warning_ShowAllLines" xml:space="preserve">
+    <value>Show all {0} lines</value>
+    <comment>Warning card button that shows a clipped message in full. {0} is the line count.</comment>
+  </data>
+  <data name="Pick_Warning_NoText" xml:space="preserve">
+    <value>This part has no message text. Its attributes are listed below.</value>
+    <comment>Warning card body when the part has no information text.</comment>
+  </data>
+  <data name="Pick_Warning_Copy" xml:space="preserve">
+    <value>Copy</value>
+    <comment>Warning card button that copies the message text.</comment>
+  </data>
+  <data name="Tooltip_CopyWarningText" xml:space="preserve">
+    <value>Copy the message text in the language shown</value>
+    <comment>Tooltip on the Warning card's copy button.</comment>
+  </data>
+  <data name="Pick_Warning_Examiner" xml:space="preserve">
+    <value>Examiner</value>
+    <comment>Warning card button that opens the feature in the S-100 Feature Catalogue eXaminer.</comment>
+  </data>
+  <data name="Pick_Warning_Languages" xml:space="preserve">
+    <value>Message language</value>
+    <comment>Accessible name of the Warning card's language tabs.</comment>
+  </data>
+  <data name="Pick_Warning_Text" xml:space="preserve">
+    <value>Message text</value>
+    <comment>Accessible name of the Warning card's message text block.</comment>
+  </data>
+  <data name="Pick_AttributesFold" xml:space="preserve">
+    <value>Attributes</value>
+    <comment>Header of the attribute fold beneath a Warning card.</comment>
+  </data>
   <data name="Pick_ReferencedTextHeader" xml:space="preserve">
     <value>REFERENCED TEXT</value>
     <comment>Header above the referenced-text cards (resolved fileReference content) in the Object Information panel.</comment>
