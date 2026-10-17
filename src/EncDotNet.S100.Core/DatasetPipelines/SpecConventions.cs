@@ -60,4 +60,43 @@ public static class SpecConventions
             ? S101
             : productSpecName;
     }
+
+    /// <summary>
+    /// The S-104 portrayal: S-104 Edition 2.0.0 §9 defines none, so the station
+    /// gauges and surface isolines are SoundCharts' own (see
+    /// <c>S104PortrayalCatalogue</c>).
+    /// </summary>
+    public static ApplicationPortrayal S104Portrayal { get; } = new("S-104", "2.0.0");
+
+    /// <summary>
+    /// Returns the <see cref="ApplicationPortrayal"/> for a product whose
+    /// specification defines no portrayal, or <see langword="null"/> when the
+    /// product is drawn from its official portrayal catalogue (or isn't drawn).
+    /// Hosts use it to label the portrayal wherever they describe it: the
+    /// viewer's pick report and dataset inspector, the CLI's <c>info</c> and
+    /// the MCP tools.
+    /// </summary>
+    /// <param name="productSpecName">The canonical product-spec code, e.g. <c>"S-104"</c>.</param>
+    public static ApplicationPortrayal? ApplicationPortrayalFor(string? productSpecName)
+        => string.Equals(productSpecName, S104Portrayal.ProductSpec, StringComparison.OrdinalIgnoreCase)
+            ? S104Portrayal
+            : null;
+}
+
+/// <summary>
+/// A portrayal that SoundCharts defines itself because the product
+/// specification defines none, so it isn't IHO symbology.
+/// </summary>
+/// <param name="ProductSpec">The product-spec code, e.g. <c>"S-104"</c>.</param>
+/// <param name="Edition">The edition that defines no portrayal, e.g. <c>"2.0.0"</c>.</param>
+public sealed record ApplicationPortrayal(string ProductSpec, string Edition)
+{
+    /// <summary>The specification and edition, e.g. <c>"S-104 Ed 2.0.0"</c>.</summary>
+    public string Basis => $"{ProductSpec} Ed {Edition}";
+
+    /// <summary>
+    /// The English label, e.g. <c>"SoundCharts portrayal: S-104 Ed 2.0.0
+    /// defines no symbology"</c>. The viewer localises its own copy.
+    /// </summary>
+    public string Note => $"SoundCharts portrayal: {Basis} defines no symbology";
 }

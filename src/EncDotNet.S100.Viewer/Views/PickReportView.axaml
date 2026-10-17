@@ -730,6 +730,13 @@
                                          FontFamily="Menlo,Consolas,Courier New,monospace"
                                          Opacity="0.6"
                                          TextWrapping="Wrap" />
+                    <!-- The product defines no portrayal, so these symbols are ours (issue #937). -->
+                    <TextBlock Text="{Binding PortrayalNote}"
+                               IsVisible="{Binding HasPortrayalNote}"
+                               FontSize="11"
+                               FontStyle="Italic"
+                               Opacity="0.7"
+                               TextWrapping="Wrap" />
                 </StackPanel>
                 <StackPanel Grid.Column="2"
                             Orientation="Horizontal"

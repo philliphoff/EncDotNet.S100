@@ -21,7 +21,16 @@ public sealed record DescribeFeatureResult(
     [property: Description("Product specification and edition the feature was parsed from.")] Core.SpecRef Spec,
     [property: Description("Spec-defined feature type code (e.g. \"NavwarnPart\").")] string FeatureTypeName,
     [property: Description("Serialised attribute payload as a JSON object; structure follows the spec's Feature Catalogue.")] JsonElement Attributes,
-    [property: Description("xlink-style cross references projected against the catalog snapshot.")] IReadOnlyList<FeatureReference> References);
+    [property: Description("xlink-style cross references projected against the catalog snapshot.")] IReadOnlyList<FeatureReference> References)
+{
+    /// <summary>
+    /// For a product whose specification defines no portrayal (S-104), says the
+    /// portrayal is SoundCharts' own (<see cref="ApplicationPortrayal.Note"/>);
+    /// <c>null</c> otherwise.
+    /// </summary>
+    [Description("Set when the specification defines no portrayal, so the feature's on-map symbol is SoundCharts' own, not IHO symbology (S-104: \"SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology\"). Null otherwise.")]
+    public string? PortrayalNote { get; init; }
+}
 
 /// <summary>
 /// A cross-reference from one feature to another, projected from the
@@ -104,6 +113,12 @@ public sealed class DescribeFeatureService
         }
 
         var context = new FeatureDescriberContext(target, request.FeatureId, snapshot, _units);
-        return Task.FromResult(describer.Describe(context));
+        var result = describer.Describe(context);
+        if (SpecConventions.ApplicationPortrayalFor(target.Spec.Name) is { } portrayal
+            && result.TryGetValue(out var described))
+        {
+            result = ToolResult<DescribeFeatureResult>.Ok(described with { PortrayalNote = portrayal.Note });
+        }
+        return Task.FromResult(result);
     }
 }

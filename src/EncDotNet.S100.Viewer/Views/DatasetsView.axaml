@@ -866,6 +866,14 @@
                                                    IsVisible="{Binding SelectedEntry.HasTimeSteps, FallbackValue=False}" />
                                     </Grid>
 
+                                    <!-- The product defines no portrayal, so its symbols are ours (issue #937). -->
+                                    <TextBlock Text="{Binding SelectedEntry.PortrayalNote}"
+                                               FontSize="12"
+                                               FontStyle="Italic"
+                                               Opacity="0.7"
+                                               IsVisible="{Binding SelectedEntry.HasPortrayalNote, FallbackValue=False}"
+                                               TextWrapping="Wrap" />
+
                                     <!-- Loader status text (e.g. feature counts). -->
                                     <TextBlock Text="{Binding SelectedEntry.Info}"
                                                FontSize="12"

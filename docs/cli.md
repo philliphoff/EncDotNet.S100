@@ -129,7 +129,10 @@ s100 render <exchange-set> <output> [options]
 ```
 
 `render` detects each input's product specification, runs its portrayal, and
-writes an image. It has three forms:
+writes an image. S-104 defines no portrayal, so S-104 is drawn with
+SoundCharts' own gauges and isolines; see
+[S-104 portrayal](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal).
+It has three forms:
 
 - **Single dataset.** Pass a dataset file and an output path.
 - **Composite.** Pass `--layer` once per dataset. The datasets are drawn into
@@ -581,8 +584,10 @@ printed on stderr. [Check the axis order](reading-product-data.md#check-the-axis
 explains the check. For a time-series dataset it lists the
 time steps with the indexes `render --time-step` takes. For a product with
 display modes, such as S-411, it lists the values `render --display-mode`
-takes. For an S-101 base cell, it applies the [update files](#s-101-updates)
-first.
+takes. For S-104, a **Portrayal** row says "SoundCharts portrayal: S-104 Ed
+2.0.0 defines no symbology", because what `render` draws for it is
+[SoundCharts' own](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal).
+For an S-101 base cell, it applies the [update files](#s-101-updates) first.
 
 ```bash
 s100 info currents.h5
