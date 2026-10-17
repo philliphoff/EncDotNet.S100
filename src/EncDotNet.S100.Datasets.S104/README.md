@@ -91,6 +91,12 @@ earlier portrayal catalogue. The `content/S104/pc/` folder in
 
 Both renderings below are SoundCharts' own, not IHO symbology.
 `S104PortrayalCatalogue` describes them and `S104DatasetProcessor` builds them.
+Wherever a user meets them, they're labelled "SoundCharts portrayal: S-104 Ed
+2.0.0 defines no symbology" (`SpecConventions.S104Portrayal`): in SoundCharts'
+Object information panel for a station or grid cell and its dataset inspector,
+on the **Portrayal** row of `s100 info`, and as `portrayalNote` in the MCP
+`list_specs` and `describe_feature` results. `s100 render` and
+`render_to_image` draw them unlabelled.
 They use one ink colour per palette, draw no colour fill over the ENC, and
 avoid magenta (mariner information), red and amber (danger) and blue and green
 (depth). Colour doesn't encode the trend or the height.

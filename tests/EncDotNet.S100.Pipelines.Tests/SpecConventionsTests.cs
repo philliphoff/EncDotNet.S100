@@ -59,6 +59,28 @@ public class SpecConventionsTests
         Assert.Equal("S-102", processor.PortrayalSpec.Name);
     }
 
+    [Fact]
+    public void ApplicationPortrayalFor_S104_LabelsSoundChartsPortrayal()
+    {
+        var portrayal = SpecConventions.ApplicationPortrayalFor("S-104");
+
+        Assert.NotNull(portrayal);
+        Assert.Same(SpecConventions.S104Portrayal, portrayal);
+        Assert.Equal("S-104 Ed 2.0.0", portrayal.Basis);
+        Assert.Equal("SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology", portrayal.Note);
+    }
+
+    [Theory]
+    [InlineData("S-101")]
+    [InlineData("S-102")]
+    [InlineData("S-111")]
+    [InlineData("S-57")]
+    [InlineData(null)]
+    public void ApplicationPortrayalFor_CatalogueProducts_IsNull(string? product)
+    {
+        Assert.Null(SpecConventions.ApplicationPortrayalFor(product));
+    }
+
     private sealed class StubProcessor(SpecRef spec) : IDatasetProcessor
     {
         public SpecRef Spec { get; } = spec;

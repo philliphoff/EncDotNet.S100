@@ -584,6 +584,10 @@
   <data name="Tooltip_CopyLocation" xml:space="preserve">
     <value>Copy this location (decimal degrees) to the clipboard</value>
   </data>
+  <data name="Portrayal_ApplicationNote" xml:space="preserve">
+    <value>SoundCharts portrayal: {0} defines no symbology</value>
+    <comment>Note in the Object Information panel and the dataset inspector for a product whose specification defines no portrayal, so the symbols are SoundCharts' own, not IHO symbology; {0} is the specification and edition, e.g. "S-104 Ed 2.0.0".</comment>
+  </data>
   <data name="Pick_IdCaption" xml:space="preserve">
     <value>ID {0}</value>
     <comment>Leading segment of the demoted identity caption in the Object Information panel; {0} is the feature identifier.</comment>

@@ -63,6 +63,12 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
                 table.AddRow("Version match", $"[{colour}]{Markup.Escape(label)}[/]");
             }
 
+            // S-104 defines no portrayal, so say whose symbology render draws (issue #937).
+            if (SpecConventions.ApplicationPortrayalFor(processor.Spec.Name) is { } portrayal)
+            {
+                table.AddRow("Portrayal", Markup.Escape(portrayal.Note));
+            }
+
             var axisOrder = processor.AxisOrder;
             if (axisOrder is not null)
             {

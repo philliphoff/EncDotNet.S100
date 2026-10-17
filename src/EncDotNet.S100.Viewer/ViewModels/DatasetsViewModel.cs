@@ -35,6 +35,16 @@ internal sealed class DatasetEntry : ViewModelBase
     public string ProductSpec { get; }
 
     /// <summary>
+    /// "SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology" when the
+    /// product's specification defines no portrayal; <see langword="null"/>
+    /// otherwise. Shown in the inspector's Dataset tab (issue #937).
+    /// </summary>
+    public string? PortrayalNote => PortrayalNoteText.For(ProductSpec);
+
+    /// <summary>True when <see cref="PortrayalNote"/> has a value to show.</summary>
+    public bool HasPortrayalNote => PortrayalNote is not null;
+
+    /// <summary>
     /// The specification whose catalogues portray this dataset. Until the
     /// dataset loads this is the conventional mapping of
     /// <see cref="ProductSpec"/> (<see cref="SpecConventions.PortrayalSpecName"/>);

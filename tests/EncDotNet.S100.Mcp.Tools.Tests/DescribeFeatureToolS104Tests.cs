@@ -18,6 +18,7 @@ public class DescribeFeatureToolS104Tests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
+        Assert.Equal("SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology", value.PortrayalNote);
         Assert.Equal("WaterLevel", value.FeatureTypeName);
         Assert.Equal("S-104", value.Spec.Name);
         var attrs = value.Attributes;
@@ -113,6 +114,7 @@ public class DescribeFeatureToolS104Tests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value));
+        Assert.Equal("SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology", value.PortrayalNote);
         Assert.Equal("WaterLevelStation", value.FeatureTypeName);
         Assert.Equal("STN_003", value.Attributes.GetProperty("stationId").GetString());
     }
