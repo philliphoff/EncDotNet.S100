@@ -66,6 +66,11 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
 
     /// <inheritdoc/>
     public IReadOnlyList<string> PostLoadScripts =>
+        string.Equals(_fc.ProductId, S401PortrayalPatches.ProductId, StringComparison.Ordinal)
+            ? [.. CommonPostLoadScripts, .. S401PortrayalPatches.Scripts]
+            : CommonPostLoadScripts;
+
+    private static readonly IReadOnlyList<string> CommonPostLoadScripts =
     [
         SpatialAssociationShim,
         HostGetSpatialShim,
@@ -174,10 +179,27 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     /// return <c>DynValue.Void</c> (rather than nil) from <c>__index</c> when an
     /// attribute is missing, causing <c>type()</c> to error.
     /// </summary>
+    /// <remarks>
+    /// It also accepts a single value where a rule expects an array. The rules
+    /// pass attributes straight to <c>contains</c>, and the scripting framework
+    /// delivers a single-valued attribute as a scalar, so a rule written for an
+    /// S-101 <c>0..*</c> attribute fails at <c>#array</c> on a catalogue that
+    /// binds it <c>1..1</c>. The S-401 <c>Dolphin</c> rule does this with
+    /// <c>contains(2, categoryOfDolphin)</c>.
+    /// </remarks>
     internal const string ContainsGuard = """
         local _orig_contains = contains
         function contains(value, array)
             if value == nil then return false end
+            if array ~= nil and type(array) ~= 'table' then
+                if type(value) == 'table' then
+                    for i = 1, #value do
+                        if value[i] == array then return true end
+                    end
+                    return false
+                end
+                return value == array
+            end
             return _orig_contains(value, array)
         end
         """;
