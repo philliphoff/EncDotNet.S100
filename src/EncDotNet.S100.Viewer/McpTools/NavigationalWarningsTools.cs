@@ -58,6 +58,35 @@ internal sealed record NavigationalWarningBoundsDto(
     [property: Description("Northern latitude.")] double MaxLatitude,
     [property: Description("Eastern longitude.")] double MaxLongitude);
 
+/// <summary>The Warning cards in Object Information.</summary>
+[Description("The Warning cards Object Information shows for the current pick: one lone card, or one per warning part when a pick hits several, in display order.")]
+internal sealed record WarningCardsDto(
+    [property: Description("Every card, in display order (points before lines before areas, then by number). Empty when no warning is open.")] IReadOnlyList<WarningCardDto> Cards,
+    [property: Description("True when several cards replace the hit list (only one is open at a time).")] bool IsList,
+    [property: Description("The other features of the pick, listed as rows below the cards, by their row label.")] IReadOnlyList<string> OtherHits);
+
+/// <summary>One Warning card.</summary>
+[Description("One Warning card.")]
+internal sealed record WarningCardDto(
+    [property: Description("Catalog id of the dataset that holds the part.")] string? DatasetId,
+    [property: Description("The part's feature id.")] string? FeatureId,
+    [property: Description("Series and number, e.g. \"NAVAREA X 110/26\" (the file name without a number).")] string Label,
+    [property: Description("The warning type shown in the header, or null.")] string? Type,
+    [property: Description("Status at the view time: \"in_force\", \"not_yet_in_force\" or \"ended\".")] string Status,
+    [property: Description("True when the card's body shows.")] bool Open,
+    [property: Description("True when the card is one of several, so its header opens it.")] bool Collapsible,
+    [property: Description("True while the card's part is previewed on the map (hovered).")] bool Previewed,
+    [property: Description("True when the card offers Zoom to (the part has a location).")] bool CanZoom,
+    [property: Description("Warning numbers in the displayed text that link to another listed warning, in text order.")] IReadOnlyList<WarningLinkDto> Links);
+
+/// <summary>A link in a card's text.</summary>
+[Description("A warning number in a card's message that opens another listed warning.")]
+internal sealed record WarningLinkDto(
+    [property: Description("The number as the text writes it, e.g. \"106/26\"; pass it to follow_warning_link.")] string Text,
+    [property: Description("Catalog id of the dataset that holds the linked part.")] string DatasetId,
+    [property: Description("The linked part's feature id.")] string FeatureId,
+    [property: Description("The linked warning's series and number, or null.")] string? Label);
+
 /// <summary>Shared plumbing for the warnings tools.</summary>
 internal abstract class NavigationalWarningsToolBase
 {
@@ -183,6 +212,136 @@ internal sealed class SelectNavigationalWarningTool : NavigationalWarningsToolBa
     }
 }
 
+/// <summary>Shared plumbing for the Warning card tools.</summary>
+internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
+{
+    protected WarningCardsToolBase(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
+        : base(panel, service, invoker) { }
+
+    internal static WarningCardsDto ToDto(PickReportViewModel? pick)
+    {
+        if (pick is null)
+            return new WarningCardsDto([], false, []);
+        IReadOnlyList<NavigationalWarningCardViewModel> cards = pick.HasWarningCardList
+            ? pick.WarningCards
+            : pick.WarningCard is { } lone ? [lone] : [];
+        return new WarningCardsDto(
+            cards.Select(c => ToDto(c, pick)).ToList(),
+            pick.HasWarningCardList,
+            pick.OtherHits.Select(h => h.HitListLabel).ToList());
+    }
+
+    private static WarningCardDto ToDto(NavigationalWarningCardViewModel card, PickReportViewModel pick) => new(
+        card.DatasetId,
+        card.Hit?.FeatureRef,
+        card.Label,
+        card.TypeText,
+        card.Status switch
+        {
+            NavigationalWarningStatus.InForce => "in_force",
+            NavigationalWarningStatus.NotYetInForce => "not_yet_in_force",
+            _ => "ended",
+        },
+        card.IsOpen,
+        card.IsCollapsible,
+        card.Hit is not null && ReferenceEquals(pick.PreviewHit, card.Hit),
+        card.CanZoom,
+        card.Links.Select(l => new WarningLinkDto(l.Text, l.Target!.DatasetId, l.Target.FeatureRef, l.Target.Warning.Label)).ToList());
+
+    /// <summary>The card for a part, or the open card when no part is named.</summary>
+    protected static NavigationalWarningCardViewModel? FindCard(PickReportViewModel pick, string? datasetId, string? featureId)
+    {
+        IEnumerable<NavigationalWarningCardViewModel> cards = pick.HasWarningCardList
+            ? pick.WarningCards
+            : pick.WarningCard is { } lone ? [lone] : [];
+        return string.IsNullOrWhiteSpace(featureId)
+            ? cards.FirstOrDefault(c => c.IsOpen)
+            : cards.FirstOrDefault(c =>
+                string.Equals(c.Hit?.FeatureRef, featureId, StringComparison.Ordinal)
+                && (string.IsNullOrWhiteSpace(datasetId) || string.Equals(c.DatasetId, datasetId, StringComparison.Ordinal)));
+    }
+}
+
+/// <summary>Lists the Warning cards in Object Information.</summary>
+internal sealed class GetWarningCardsTool : WarningCardsToolBase
+{
+    public const string Name = "get_warning_cards";
+
+    public GetWarningCardsTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
+        : base(panel, service, invoker) { }
+
+    public Task<ToolResult<WarningCardsDto>> InvokeAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Invoker.InvokeAsync(() => ToolResult<WarningCardsDto>.Ok(ToDto(Panel.PickReport)));
+    }
+}
+
+/// <summary>Follows a warning-number link in a card's text, as clicking it does.</summary>
+internal sealed class FollowWarningLinkTool : WarningCardsToolBase
+{
+    public const string Name = "follow_warning_link";
+
+    public FollowWarningLinkTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
+        : base(panel, service, invoker) { }
+
+    public Task<ToolResult<WarningCardsDto>> InvokeAsync(
+        string text, int? occurrence = null, string? datasetId = null, string? featureId = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Invoker.InvokeAsync(() =>
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return ToolResult<WarningCardsDto>.Err(new InvalidArgument("text", "required; read the links with get_warning_cards"));
+            if (Panel.PickReport is not { } pick || FindCard(pick, datasetId, featureId) is not { } card)
+                return ToolResult<WarningCardsDto>.Err(new InvalidArgument("featureId", "no Warning card is open; open one with select_navigational_warning or pick_features"));
+            var matches = card.Links.Where(l => string.Equals(l.Text, text.Trim(), StringComparison.Ordinal)).ToList();
+            var n = occurrence ?? 1;
+            if (n < 1 || n > matches.Count)
+            {
+                return ToolResult<WarningCardsDto>.Err(new InvalidArgument(
+                    "text", $"the card '{card.Label}' has {matches.Count} link(s) '{text}'; read the links with get_warning_cards"));
+            }
+
+            card.OpenLinkCommand.Execute(matches[n - 1].Target);
+            return ToolResult<WarningCardsDto>.Ok(ToDto(Panel.PickReport));
+        });
+    }
+}
+
+/// <summary>Previews a card's part on the map, as hovering the card does.</summary>
+internal sealed class PreviewWarningCardTool : WarningCardsToolBase
+{
+    public const string Name = "preview_warning_card";
+
+    public PreviewWarningCardTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
+        : base(panel, service, invoker) { }
+
+    public Task<ToolResult<WarningCardsDto>> InvokeAsync(string? datasetId = null, string? featureId = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Invoker.InvokeAsync(() =>
+        {
+            if (Panel.PickReport is not { } pick)
+                return ToolResult<WarningCardsDto>.Ok(ToDto(null));
+            if (string.IsNullOrWhiteSpace(featureId))
+            {
+                pick.SetWarningPreview(null);
+                return ToolResult<WarningCardsDto>.Ok(ToDto(pick));
+            }
+
+            if (!pick.HasWarningCardList || FindCard(pick, datasetId, featureId) is not { } card)
+            {
+                return ToolResult<WarningCardsDto>.Err(new InvalidArgument(
+                    "featureId", $"no Warning card for '{featureId}' in a pick of several warnings; read the cards with get_warning_cards"));
+            }
+
+            pick.SetWarningPreview(card);
+            return ToolResult<WarningCardsDto>.Ok(ToDto(pick));
+        });
+    }
+}
+
 /// <summary>Wraps the warnings tools as <see cref="McpServerTool"/>s.</summary>
 internal static class NavigationalWarningsMcpAdapters
 {
@@ -222,6 +381,68 @@ internal static class NavigationalWarningsMcpAdapters
                 "opens on its Warning card and, when the part has a location and is in force, the map frames and " +
                 "highlights it. A part not in force leaves the map where it is; a text-only part shows the in-map note " +
                 "\"… has no location, so nothing is drawn for it.\" Returns what list_navigational_warnings returns. " +
+                "Viewer-injected tool — mutates live state.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    public static McpServerTool Create(GetWarningCardsTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = GetWarningCardsTool.Name,
+            Description =
+                "Lists the Warning cards Object Information shows: one card for a lone navigational warning, or one per " +
+                "warning part when a pick hits several (points before lines before areas, then by number; only one open " +
+                "at a time; other features follow as rows). Each card has its dataset and feature id, label, type, status " +
+                "at the view time, whether it is open, collapsible, previewed on the map and can Zoom to, and the warning " +
+                "numbers in its text that link to other listed warnings.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    public static McpServerTool Create(FollowWarningLinkTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("The link's text, e.g. \"106/26\" (from get_warning_cards).")] string text,
+            [Description("Which link with that text, 1-based (default 1).")] int? occurrence = null,
+            [Description("Dataset of the card whose text holds the link; omit for the open card.")] string? datasetId = null,
+            [Description("Feature id of the card whose text holds the link; omit for the open card.")] string? featureId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(text, occurrence, datasetId, featureId, ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = FollowWarningLinkTool.Name,
+            Description =
+                "Follows a warning-number link in a Warning card's message, as clicking it does: the linked warning is " +
+                "selected in the Navigational warnings panel and its card opens in Object Information (framed on the map " +
+                "when it has a location and is in force). Returns what get_warning_cards returns afterwards. " +
+                "Viewer-injected tool — mutates live state.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    public static McpServerTool Create(PreviewWarningCardTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("Dataset of the card to preview.")] string? datasetId = null,
+            [Description("Feature id of the card to preview; omit to end the preview.")] string? featureId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(datasetId, featureId, ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = PreviewWarningCardTool.Name,
+            Description =
+                "Previews one of several Warning cards' parts on the map with the pick highlight, as hovering the card " +
+                "does, without opening it; omit featureId to end the preview. Returns what get_warning_cards returns. " +
                 "Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });

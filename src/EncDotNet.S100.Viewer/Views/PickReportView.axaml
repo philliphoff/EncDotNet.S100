@@ -199,6 +199,277 @@
                            MinWidth="16" />
             </Border>
         </DataTemplate>
+
+        <DataTemplate x:Key="HitRowTemplate" x:DataType="vm:PickHit">
+            <Grid ColumnDefinitions="Auto,*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_SelectHit}">
+                <!-- Feature category glyph -->
+                <Border Grid.Column="0"
+                        Width="26" Height="26"
+                        CornerRadius="5"
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        Background="{DynamicResource MutedBackgroundColor}">
+                    <ic:FluentIcon Icon="{Binding Glyph}"
+                                   IconVariant="Regular"
+                                   FontSize="16"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                </Border>
+                <!-- Name (primary) + class (subtitle) -->
+                <StackPanel Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Spacing="0">
+                    <TextBlock Classes="accentListTitle"
+                               Text="{Binding HitListLabel}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding HitListSecondaryLabel}"
+                               FontSize="11"
+                               Opacity="0.7"
+                               IsVisible="{Binding HasHitListSecondaryLabel}"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <!-- Identifier, demoted to the trailing edge -->
+                <TextBlock Grid.Column="2"
+                           Text="{Binding FeatureRef}"
+                           FontSize="11"
+                           Opacity="0.55"
+                           VerticalAlignment="Center"
+                           Margin="8,0,0,0"
+                           TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </DataTemplate>
+
+        <!--
+            Warning card header (#932): number, status and type. A collapsed
+            card shows only this, which is enough to tell two warnings apart.
+        -->
+        <DataTemplate x:Key="WarningCardHeaderTemplate" x:DataType="vm:NavigationalWarningCardViewModel">
+            <StackPanel Spacing="4">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                    <SelectableTextBlock Grid.Column="0"
+                                         AutomationProperties.AutomationId="PickReport.WarningCard.Label"
+                                     IsHitTestVisible="{Binding !IsCollapsible}"
+                                         Text="{Binding Label}"
+                                         FontFamily="{StaticResource WarningMonoFont}"
+                                         FontSize="13"
+                                         FontWeight="SemiBold"
+                                         TextWrapping="Wrap"
+                                         VerticalAlignment="Center" />
+                    <Panel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
+                        <Border IsVisible="{Binding IsInForce}"
+                                Background="{StaticResource DepthSuccessSubtleBrush}"
+                                CornerRadius="10" Padding="7,2">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <Ellipse Width="6" Height="6" Fill="{StaticResource DepthSuccessBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource DepthSuccessBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border IsVisible="{Binding IsNotYetInForce}"
+                                Background="{StaticResource DepthWarningSubtleBrush}"
+                                CornerRadius="10" Padding="7,2">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <Ellipse Width="7" Height="7" Stroke="{StaticResource DepthWarningBrush}" StrokeThickness="1.5" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource DepthWarningBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border IsVisible="{Binding IsEnded}"
+                                Background="{DynamicResource MutedBackgroundColor}"
+                                CornerRadius="10" Padding="7,2">
+                            <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                       Opacity="0.75" VerticalAlignment="Center" />
+                        </Border>
+                    </Panel>
+                    <ic:FluentIcon Grid.Column="2"
+                                   IsVisible="{Binding IsCollapsible}"
+                                   Icon="{Binding IsOpen, Converter={x:Static views:WarningCardChevron.Instance}}"
+                                   IconVariant="Regular"
+                                   FontSize="14"
+                                   Opacity="0.65"
+                                   Margin="6,0,0,0"
+                                   VerticalAlignment="Center" />
+                </Grid>
+                <TextBlock IsVisible="{Binding HasTypeText}"
+                           FontSize="13.5"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap">
+                    <Run Text="{Binding TypeText}" />
+                    <Run Text="{Binding GeneralTypeSuffix}"
+                         FontWeight="Normal"
+                         Foreground="{DynamicResource MutedColor}" />
+                </TextBlock>
+            </StackPanel>
+        </DataTemplate>
+
+        <!--
+            Warning card (#932): the message of a picked navigational
+            warning part. Header = number, type, status (at the view
+            time), then validity, area and issue time. Body = the full
+            text, monospaced so telex columns line up, wrapped at the
+            panel edge, selectable; warning numbers that name another
+            listed warning link to it. Long messages stop at 20 lines
+            behind "Show all". When a pick hits several warnings, each is
+            a card whose header opens it; only one is open at a time.
+        -->
+        <DataTemplate x:Key="WarningCardTemplate" x:DataType="vm:NavigationalWarningCardViewModel">
+            <Border AutomationProperties.AutomationId="PickReport.WarningCard"
+                    AutomationProperties.Name="{Binding Label}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    ClipToBounds="True"
+                    PointerEntered="OnWarningCardPointerEntered"
+                    PointerExited="OnWarningCardPointerExited">
+                <StackPanel>
+                    <StackPanel Margin="12,10,12,10" Spacing="4">
+                        <Button IsVisible="{Binding IsCollapsible}"
+                                Classes="warningHeader"
+                                AutomationProperties.AutomationId="PickReport.WarningCard.Header"
+                                AutomationProperties.Name="{Binding Label}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenWarningCard}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenWarningCard}"
+                                Command="{Binding ToggleCommand}"
+                                Content="{Binding}"
+                                ContentTemplate="{StaticResource WarningCardHeaderTemplate}" />
+                        <ContentControl IsVisible="{Binding !IsCollapsible}"
+                                        Content="{Binding}"
+                                        ContentTemplate="{StaticResource WarningCardHeaderTemplate}" />
+                        <Grid ColumnDefinitions="Auto,8,*"
+                          IsVisible="{Binding IsOpen}"
+                              RowDefinitions="Auto,Auto,Auto"
+                              Margin="0,4,0,0">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_ValidLabel}"
+                                       FontSize="11.5" Opacity="0.65" Margin="0,1" />
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding ValidityText}"
+                                       FontSize="11.5" TextWrapping="Wrap" Margin="0,1" />
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_AreaLabel}"
+                                       FontSize="11.5" Opacity="0.65" Margin="0,1"
+                                       IsVisible="{Binding HasAreaText}" />
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding AreaText}"
+                                       FontSize="11.5" TextWrapping="Wrap" Margin="0,1"
+                                       IsVisible="{Binding HasAreaText}" />
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_IssuedLabel}"
+                                       FontSize="11.5" Opacity="0.65" Margin="0,1"
+                                       IsVisible="{Binding HasIssued}" />
+                            <TextBlock Grid.Row="2" Grid.Column="2" FontSize="11.5" TextWrapping="Wrap" Margin="0,1"
+                                       IsVisible="{Binding HasIssued}">
+                                <Run Text="{Binding IssuedText}" FontFamily="{StaticResource WarningMonoFont}" FontSize="11" />
+                                <Run Text="{Binding IssuerSuffix}" Foreground="{DynamicResource MutedColor}" />
+                            </TextBlock>
+                        </Grid>
+                    </StackPanel>
+                    <StackPanel IsVisible="{Binding IsOpen}">
+
+                        <!-- Language tabs, only when the part has more than one. -->
+                        <Border IsVisible="{Binding HasLanguageTabs}"
+                                HorizontalAlignment="Left"
+                                Margin="12,0,12,8"
+                                Padding="2"
+                                CornerRadius="6"
+                                Background="{DynamicResource MutedBackgroundColor}">
+                            <ItemsControl ItemsSource="{Binding Languages}"
+                                          AutomationProperties.AutomationId="PickReport.WarningCard.Languages"
+                                          AutomationProperties.Name="{x:Static loc:Strings.Pick_Warning_Languages}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:NavigationalWarningCardViewModel+LanguageTab">
+                                        <Button Classes="langTab"
+                                                Classes.selected="{Binding IsSelected}"
+                                                AutomationProperties.AutomationId="PickReport.WarningCard.Language"
+                                                AutomationProperties.Name="{Binding Name}"
+                                                Command="{Binding SelectCommand}"
+                                                Content="{Binding Name}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+
+                        <!-- The message: one step darker than the card. -->
+                        <Border Background="{DynamicResource MutedBackgroundColor}"
+                                BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="0,1">
+                            <StackPanel>
+                                <TextBlock IsVisible="{Binding !HasText}"
+                                           Text="{x:Static loc:Strings.Pick_Warning_NoText}"
+                                           FontSize="11.5"
+                                           Opacity="0.65"
+                                           TextWrapping="Wrap"
+                                           Margin="12" />
+                                <views:WarningMessageTextBlock IsVisible="{Binding HasText}"
+                                                     AutomationProperties.AutomationId="PickReport.WarningCard.Text"
+                                                     AutomationProperties.Name="{x:Static loc:Strings.Pick_Warning_Text}"
+                                                     Segments="{Binding Segments}"
+                                                     LinkCommand="{Binding OpenLinkCommand}"
+                                                     LinkForeground="{DynamicResource AccentBrush}"
+                                                     FontFamily="{StaticResource WarningMonoFont}"
+                                                     FontSize="11.5"
+                                                     LineHeight="18"
+                                                     TextWrapping="Wrap"
+                                                     Margin="12,10,12,12" />
+                                <Button IsVisible="{Binding IsClipped}"
+                                        AutomationProperties.AutomationId="PickReport.WarningCard.ShowAll"
+                                        HorizontalAlignment="Center"
+                                        Margin="0,0,0,10"
+                                        Padding="10,3"
+                                        FontSize="11"
+                                        Command="{Binding ShowAllCommand}"
+                                        Content="{Binding ShowAllText}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Footer actions. -->
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,*" Margin="6,5">
+                            <Button Grid.Column="0"
+                                    Classes="cardAction"
+                                    AutomationProperties.AutomationId="PickReport.WarningCard.Copy"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_CopyText}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyWarningText}"
+                                    Command="{Binding CopyCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyWarningText}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Copy}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="1"
+                                    Classes="cardAction"
+                                    AutomationProperties.AutomationId="PickReport.WarningCard.ZoomTo"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_ZoomToWarning}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ZoomToWarning}"
+                                    Command="{Binding ZoomToCommand}"
+                                    IsVisible="{Binding CanZoom}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToWarning}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_ZoomTo}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Column="2"
+                                    Classes="cardAction"
+                                    AutomationProperties.AutomationId="PickReport.WarningCard.OpenInExaminer"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
+                                    Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenFeatureInExaminerCommand}"
+                                    IsVisible="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).IsExaminerAvailable}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Examiner}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
     </UserControl.Resources>
 
     <UserControl.Styles>
@@ -245,6 +516,24 @@
         <Style Selector="Button.langTab.selected">
             <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
             <Setter Property="Opacity" Value="1" />
+        </Style>
+        <!-- A collapsible Warning card's header: the whole header is the
+             button, flat, laid out like a lone card's header. -->
+        <Style Selector="Button.warningHeader">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalContentAlignment="Stretch" />
+                </ControlTemplate>
+            </Setter>
         </Style>
         <!-- Warning card footer actions: flat, tinted on hover. -->
         <Style Selector="Button.cardAction">
@@ -574,7 +863,7 @@
             <Border BorderBrush="{DynamicResource BorderColor}"
                     BorderThickness="0,0,0,1"
                     Padding="0,0,0,8"
-                    IsVisible="{Binding HasMultipleHits}">
+                    IsVisible="{Binding ShowHitList}">
                 <StackPanel Spacing="4">
                     <TextBlock FontSize="10"
                                FontWeight="Normal"
@@ -583,6 +872,7 @@
                                Text="{Binding Hits.Count, StringFormat={x:Static loc:Strings.Pick_HitListHeader}}" />
                     <ListBox ItemsSource="{Binding Hits}"
                              AutomationProperties.AutomationId="PickReport.Hits"
+                             ItemTemplate="{StaticResource HitRowTemplate}"
                              SelectedItem="{Binding SelectedHit, Mode=TwoWay}"
                              Classes="accentList"
                              Background="Transparent"
@@ -596,49 +886,6 @@
                                 <Setter Property="AutomationProperties.Name" Value="{Binding HitListLabel}" />
                             </Style>
                         </ListBox.Styles>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:PickHit">
-                                <Grid ColumnDefinitions="Auto,*,Auto"
-                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_SelectHit}">
-                                    <!-- Feature category glyph -->
-                                    <Border Grid.Column="0"
-                                            Width="26" Height="26"
-                                            CornerRadius="5"
-                                            Margin="0,0,8,0"
-                                            VerticalAlignment="Center"
-                                            Background="{DynamicResource MutedBackgroundColor}">
-                                        <ic:FluentIcon Icon="{Binding Glyph}"
-                                                       IconVariant="Regular"
-                                                       FontSize="16"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center" />
-                                    </Border>
-                                    <!-- Name (primary) + class (subtitle) -->
-                                    <StackPanel Grid.Column="1"
-                                                VerticalAlignment="Center"
-                                                Spacing="0">
-                                        <TextBlock Classes="accentListTitle"
-                                                   Text="{Binding HitListLabel}"
-                                                   FontSize="13"
-                                                   FontWeight="SemiBold"
-                                                   TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding HitListSecondaryLabel}"
-                                                   FontSize="11"
-                                                   Opacity="0.7"
-                                                   IsVisible="{Binding HasHitListSecondaryLabel}"
-                                                   TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                    <!-- Identifier, demoted to the trailing edge -->
-                                    <TextBlock Grid.Column="2"
-                                               Text="{Binding FeatureRef}"
-                                               FontSize="11"
-                                               Opacity="0.55"
-                                               VerticalAlignment="Center"
-                                               Margin="8,0,0,0"
-                                               TextTrimming="CharacterEllipsis" />
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
                     </ListBox>
                 </StackPanel>
             </Border>
@@ -843,182 +1090,53 @@
             <StackPanel Spacing="8"
                         MaxWidth="{Binding #PickRoot.Bounds.Width, Converter={x:Static conv:WidthInsetConverter.Instance}, ConverterParameter=24}"
                         HorizontalAlignment="Stretch">
+                <!-- A lone warning's card (#932); see WarningCardTemplate. -->
+                <ContentControl IsVisible="{Binding HasSingleWarningCard}"
+                                Margin="0,8,0,0"
+                                Content="{Binding WarningCard}"
+                                ContentTemplate="{StaticResource WarningCardTemplate}" />
+
                 <!--
-                    Warning card (#932): the message of a picked navigational
-                    warning part. Header = number, type, status (at the view
-                    time), then validity, area and issue time. Body = the full
-                    text, monospaced so telex columns line up, wrapped at the
-                    panel edge, selectable. Long messages stop at 20 lines
-                    behind "Show all". The attribute rows fold beneath it.
+                    Several warnings under the pick (#932, design 1c): the
+                    cards are the pick list. Hovering one previews its part
+                    on the map; the other features follow as rows.
                 -->
-                <Border IsVisible="{Binding HasWarningCard}"
-                        AutomationProperties.AutomationId="PickReport.WarningCard"
-                        Margin="0,8,0,0"
-                        BorderBrush="{DynamicResource BorderColor}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        ClipToBounds="True">
-                    <StackPanel DataContext="{Binding WarningCard}"
-                                x:DataType="vm:NavigationalWarningCardViewModel">
-                        <StackPanel Margin="12,10,12,10" Spacing="4">
-                            <Grid ColumnDefinitions="*,Auto">
-                                <SelectableTextBlock Grid.Column="0"
-                                                     AutomationProperties.AutomationId="PickReport.WarningCard.Label"
-                                                     Text="{Binding Label}"
-                                                     FontFamily="{StaticResource WarningMonoFont}"
-                                                     FontSize="13"
-                                                     FontWeight="SemiBold"
-                                                     TextWrapping="Wrap"
-                                                     VerticalAlignment="Center" />
-                                <Panel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
-                                    <Border IsVisible="{Binding IsInForce}"
-                                            Background="{StaticResource DepthSuccessSubtleBrush}"
-                                            CornerRadius="10" Padding="7,2">
-                                        <StackPanel Orientation="Horizontal" Spacing="5">
-                                            <Ellipse Width="6" Height="6" Fill="{StaticResource DepthSuccessBrush}" VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource DepthSuccessBrush}" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </Border>
-                                    <Border IsVisible="{Binding IsNotYetInForce}"
-                                            Background="{StaticResource DepthWarningSubtleBrush}"
-                                            CornerRadius="10" Padding="7,2">
-                                        <StackPanel Orientation="Horizontal" Spacing="5">
-                                            <Ellipse Width="7" Height="7" Stroke="{StaticResource DepthWarningBrush}" StrokeThickness="1.5" VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource DepthWarningBrush}" VerticalAlignment="Center" />
-                                        </StackPanel>
-                                    </Border>
-                                    <Border IsVisible="{Binding IsEnded}"
-                                            Background="{DynamicResource MutedBackgroundColor}"
-                                            CornerRadius="10" Padding="7,2">
-                                        <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
-                                                   Opacity="0.75" VerticalAlignment="Center" />
-                                    </Border>
-                                </Panel>
-                            </Grid>
-                            <TextBlock IsVisible="{Binding HasTypeText}"
-                                       FontSize="13.5"
-                                       FontWeight="SemiBold"
-                                       TextWrapping="Wrap">
-                                <Run Text="{Binding TypeText}" />
-                                <Run Text="{Binding GeneralTypeSuffix}"
-                                     FontWeight="Normal"
-                                     Foreground="{DynamicResource MutedColor}" />
-                            </TextBlock>
-                            <Grid ColumnDefinitions="Auto,8,*"
-                                  RowDefinitions="Auto,Auto,Auto"
-                                  Margin="0,4,0,0">
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_ValidLabel}"
-                                           FontSize="11.5" Opacity="0.65" Margin="0,1" />
-                                <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding ValidityText}"
-                                           FontSize="11.5" TextWrapping="Wrap" Margin="0,1" />
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_AreaLabel}"
-                                           FontSize="11.5" Opacity="0.65" Margin="0,1"
-                                           IsVisible="{Binding HasAreaText}" />
-                                <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding AreaText}"
-                                           FontSize="11.5" TextWrapping="Wrap" Margin="0,1"
-                                           IsVisible="{Binding HasAreaText}" />
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_IssuedLabel}"
-                                           FontSize="11.5" Opacity="0.65" Margin="0,1"
-                                           IsVisible="{Binding HasIssued}" />
-                                <TextBlock Grid.Row="2" Grid.Column="2" FontSize="11.5" TextWrapping="Wrap" Margin="0,1"
-                                           IsVisible="{Binding HasIssued}">
-                                    <Run Text="{Binding IssuedText}" FontFamily="{StaticResource WarningMonoFont}" FontSize="11" />
-                                    <Run Text="{Binding IssuerSuffix}" Foreground="{DynamicResource MutedColor}" />
-                                </TextBlock>
-                            </Grid>
-                        </StackPanel>
-
-                        <!-- Language tabs, only when the part has more than one. -->
-                        <Border IsVisible="{Binding HasLanguageTabs}"
-                                HorizontalAlignment="Left"
-                                Margin="12,0,12,8"
-                                Padding="2"
-                                CornerRadius="6"
-                                Background="{DynamicResource MutedBackgroundColor}">
-                            <ItemsControl ItemsSource="{Binding Languages}"
-                                          AutomationProperties.AutomationId="PickReport.WarningCard.Languages"
-                                          AutomationProperties.Name="{x:Static loc:Strings.Pick_Warning_Languages}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="2" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:NavigationalWarningCardViewModel+LanguageTab">
-                                        <Button Classes="langTab"
-                                                Classes.selected="{Binding IsSelected}"
-                                                AutomationProperties.AutomationId="PickReport.WarningCard.Language"
-                                                AutomationProperties.Name="{Binding Name}"
-                                                Command="{Binding SelectCommand}"
-                                                Content="{Binding Name}" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </Border>
-
-                        <!-- The message: one step darker than the card. -->
-                        <Border Background="{DynamicResource MutedBackgroundColor}"
-                                BorderBrush="{DynamicResource BorderColor}"
-                                BorderThickness="0,1">
-                            <StackPanel>
-                                <TextBlock IsVisible="{Binding !HasText}"
-                                           Text="{x:Static loc:Strings.Pick_Warning_NoText}"
-                                           FontSize="11.5"
-                                           Opacity="0.65"
-                                           TextWrapping="Wrap"
-                                           Margin="12" />
-                                <SelectableTextBlock IsVisible="{Binding HasText}"
-                                                     AutomationProperties.AutomationId="PickReport.WarningCard.Text"
-                                                     AutomationProperties.Name="{x:Static loc:Strings.Pick_Warning_Text}"
-                                                     Text="{Binding DisplayedText}"
-                                                     FontFamily="{StaticResource WarningMonoFont}"
-                                                     FontSize="11.5"
-                                                     LineHeight="18"
-                                                     TextWrapping="Wrap"
-                                                     Margin="12,10,12,12" />
-                                <Button IsVisible="{Binding IsClipped}"
-                                        AutomationProperties.AutomationId="PickReport.WarningCard.ShowAll"
-                                        HorizontalAlignment="Center"
-                                        Margin="0,0,0,10"
-                                        Padding="10,3"
-                                        FontSize="11"
-                                        Command="{Binding ShowAllCommand}"
-                                        Content="{Binding ShowAllText}" />
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Footer actions. -->
-                        <Grid ColumnDefinitions="Auto,Auto,*" Margin="6,5">
-                            <Button Grid.Column="0"
-                                    Classes="cardAction"
-                                    AutomationProperties.AutomationId="PickReport.WarningCard.Copy"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Label_CopyText}"
-                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyWarningText}"
-                                    Command="{Binding CopyCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyWarningText}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Copy}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="1"
-                                    Classes="cardAction"
-                                    AutomationProperties.AutomationId="PickReport.WarningCard.OpenInExaminer"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
-                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
-                                    Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenFeatureInExaminerCommand}"
-                                    IsVisible="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).IsExaminerAvailable}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Examiner}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                        </Grid>
-                    </StackPanel>
-                </Border>
+                <StackPanel IsVisible="{Binding HasWarningCardList}"
+                            Margin="0,8,0,0"
+                            Spacing="8">
+                    <TextBlock FontSize="10"
+                               FontWeight="Normal"
+                               LetterSpacing="1"
+                               Opacity="0.7"
+                               Text="{Binding WarningCards.Count, StringFormat={x:Static loc:Strings.Pick_WarningCardsHeader}}" />
+                    <ItemsControl ItemsSource="{Binding WarningCards}"
+                                  AutomationProperties.AutomationId="PickReport.WarningCards"
+                                  AutomationProperties.Name="{x:Static loc:Strings.Pick_WarningCards}"
+                                  ItemTemplate="{StaticResource WarningCardTemplate}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="8" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <ListBox ItemsSource="{Binding OtherHits}"
+                             IsVisible="{Binding HasOtherHits}"
+                             AutomationProperties.AutomationId="PickReport.OtherHits"
+                             AutomationProperties.Name="{x:Static loc:Strings.Pick_OtherHits}"
+                             SelectedItem="{Binding SelectedOtherHit, Mode=TwoWay}"
+                             Classes="accentList"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ItemTemplate="{StaticResource HitRowTemplate}">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem" x:DataType="vm:PickHit">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding HitListLabel}" />
+                            </Style>
+                        </ListBox.Styles>
+                    </ListBox>
+                </StackPanel>
 
                 <!--
                     Station time-series chart, shown only when the

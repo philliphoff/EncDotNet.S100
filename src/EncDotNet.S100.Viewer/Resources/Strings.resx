@@ -631,6 +631,34 @@
   <data name="Pick_NoAttributes" xml:space="preserve">
     <value>(no attributes)</value>
   </data>
+  <data name="Pick_Warning_ZoomTo" xml:space="preserve">
+    <value>Zoom to</value>
+    <comment>Warning card button that centres the map on the warning.</comment>
+  </data>
+  <data name="Label_ZoomToWarning" xml:space="preserve">
+    <value>Zoom to</value>
+    <comment>Accessible name of the Warning card's Zoom to button.</comment>
+  </data>
+  <data name="Tooltip_ZoomToWarning" xml:space="preserve">
+    <value>Zoom to warning</value>
+    <comment>Tooltip of the Warning card's Zoom to button.</comment>
+  </data>
+  <data name="Tooltip_OpenWarningCard" xml:space="preserve">
+    <value>Open this warning</value>
+    <comment>Tooltip of a collapsed Warning card's header, which opens it.</comment>
+  </data>
+  <data name="Pick_WarningCardsHeader" xml:space="preserve">
+    <value>{0} WARNINGS AT THIS POINT</value>
+    <comment>Header above the Warning cards when a pick hits several navigational warnings; {0} is the count.</comment>
+  </data>
+  <data name="Pick_WarningCards" xml:space="preserve">
+    <value>Warnings</value>
+    <comment>Accessible name of the list of Warning cards in Object Information.</comment>
+  </data>
+  <data name="Pick_OtherHits" xml:space="preserve">
+    <value>Other features</value>
+    <comment>Accessible name of the rows below the Warning cards for the other features in the pick.</comment>
+  </data>
   <data name="Pick_HitListHeader" xml:space="preserve">
     <value>{0} FEATURES AT THIS POINT</value>
     <comment>Header above the multi-hit list in the Object Information panel; {0} is the hit count.</comment>

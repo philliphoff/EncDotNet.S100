@@ -316,6 +316,13 @@ internal static class Strings
     public static string Pick_Warning_Copy => Get(nameof(Pick_Warning_Copy));
     public static string Tooltip_CopyWarningText => Get(nameof(Tooltip_CopyWarningText));
     public static string Pick_Warning_Examiner => Get(nameof(Pick_Warning_Examiner));
+    public static string Pick_Warning_ZoomTo => Get(nameof(Pick_Warning_ZoomTo));
+    public static string Label_ZoomToWarning => Get(nameof(Label_ZoomToWarning));
+    public static string Tooltip_ZoomToWarning => Get(nameof(Tooltip_ZoomToWarning));
+    public static string Tooltip_OpenWarningCard => Get(nameof(Tooltip_OpenWarningCard));
+    public static string Pick_WarningCardsHeader => Get(nameof(Pick_WarningCardsHeader));
+    public static string Pick_WarningCards => Get(nameof(Pick_WarningCards));
+    public static string Pick_OtherHits => Get(nameof(Pick_OtherHits));
     public static string Pick_Warning_Languages => Get(nameof(Pick_Warning_Languages));
     public static string Pick_Warning_Text => Get(nameof(Pick_Warning_Text));
     public static string Pick_AttributesFold => Get(nameof(Pick_AttributesFold));
