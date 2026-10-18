@@ -93,6 +93,7 @@ internal sealed record WarningCardDto(
     [property: Description("True while the card's part is previewed on the map (hovered).")] bool Previewed,
     [property: Description("True when the card offers Zoom to (the part has a location).")] bool CanZoom,
     [property: Description("True when the header shows NEW: the warning was new when the card was made (opening it marks it seen).")] bool New,
+    [property: Description("True when the footer shows NOT FOR NAVIGATION: the dataset's exchange-set metadata marks it not for navigation.")] bool NotForNavigation,
     [property: Description("Warning numbers in the displayed text that link to another listed warning, in text order.")] IReadOnlyList<WarningLinkDto> Links);
 
 /// <summary>A link in a card's text.</summary>
@@ -300,6 +301,7 @@ internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
         card.Hit is not null && ReferenceEquals(pick.PreviewHit, card.Hit),
         card.CanZoom,
         card.IsNew,
+        card.NotForNavigation,
         card.Links.Select(l => new WarningLinkDto(l.Text, l.Target!.DatasetId, l.Target.FeatureRef, l.Target.Warning.Label)).ToList());
 
     /// <summary>The card for a part, or the open card when no part is named.</summary>

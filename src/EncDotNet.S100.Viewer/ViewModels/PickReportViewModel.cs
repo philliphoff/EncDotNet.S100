@@ -89,9 +89,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         CopyIdentityCommand = new RelayCommand(
             () => { var text = IdentityClipboardText; if (!string.IsNullOrEmpty(text)) CopyIdentityRequested?.Invoke(this, text); },
             () => _selectedHit is not null);
-        CopyReferencedTextCommand = new RelayCommand<PickReferencedText>(
-            t => { if (t is not null && !string.IsNullOrEmpty(t.ClipboardText)) CopyIdentityRequested?.Invoke(this, t.ClipboardText); },
-            t => t is not null && !string.IsNullOrEmpty(t.ClipboardText));
         NavigateCommand = new RelayCommand<FeatureReference>(
             r => { if (r is not null) NavigateRequested?.Invoke(this, r); },
             r => r is not null);
@@ -146,11 +143,11 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
     /// <summary>
     /// Splits the reformatted attribute tree into the key/value
-    /// <see cref="Attributes"/> table and the standalone
-    /// <see cref="ReferencedTexts"/> cards, then publishes both. Resolved
-    /// <c>fileReference</c> rows (S-101 FC; alias TXTDSC / NTXTDS) are lifted
-    /// out of the table so their text is read as its own block rather than a
-    /// monospace dump inside the table.
+    /// <see cref="Attributes"/> table and the <see cref="TextCards"/>, then
+    /// publishes both. Resolved <c>fileReference</c> rows (S-101 FC; alias
+    /// TXTDSC / NTXTDS) and long text values (see
+    /// <see cref="PickTextCardViewModel.IsLongValue"/>) are lifted out of the
+    /// table so their text is read as a block rather than a truncated cell.
     /// </summary>
     private void PopulateAttributeSections(IReadOnlyList<PickAttribute> reformatted)
     {
@@ -158,15 +155,74 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         var rows = FeatureInfoBuilder.WithoutResolvedFileReferences(reformatted);
         if (_selectedHit?.NavigationalWarning is not null)
             rows = WithoutWarningText(rows);
+        var longValues = new List<(PickAttribute Attribute, PickAttribute? Parent)>();
+        rows = WithoutLongValues(rows, longValues);
         foreach (var a in rows)
             Attributes.Add(a);
         OnPropertyChanged(nameof(HasAttributes));
         OnPropertyChanged(nameof(AttributeCount));
 
-        ReferencedTexts.Clear();
+        ClearTextCards();
+        var notForNavigation = _selectedHit?.NotForNavigation == true;
         foreach (var fileRef in FeatureInfoBuilder.CollectResolvedFileReferences(reformatted))
-            ReferencedTexts.Add(PickReferencedText.FromAttribute(fileRef));
-        OnPropertyChanged(nameof(HasReferencedText));
+            AddTextCard(PickTextCardViewModel.FromReferencedText(fileRef, notForNavigation));
+        foreach (var (attribute, parent) in longValues)
+            AddTextCard(PickTextCardViewModel.FromLongValue(attribute, parent, notForNavigation));
+        OnPropertyChanged(nameof(HasTextCards));
+    }
+
+    private void AddTextCard(PickTextCardViewModel card)
+    {
+        card.CopyRequested += OnCardCopyRequested;
+        TextCards.Add(card);
+    }
+
+    private void ClearTextCards()
+    {
+        foreach (var card in TextCards)
+            card.CopyRequested -= OnCardCopyRequested;
+        TextCards.Clear();
+    }
+
+    /// <summary>
+    /// Drops the long text values (see
+    /// <see cref="PickTextCardViewModel.IsLongValue"/>) from the table rows,
+    /// adding each to <paramref name="lifted"/> with its complex parent. A
+    /// complex row left with no children is dropped.
+    /// </summary>
+    internal static IReadOnlyList<PickAttribute> WithoutLongValues(
+        IReadOnlyList<PickAttribute> rows, List<(PickAttribute Attribute, PickAttribute? Parent)> lifted)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(lifted);
+
+        var result = new List<PickAttribute>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (row.Children.Count == 0)
+            {
+                if (PickTextCardViewModel.IsLongValue(row))
+                    lifted.Add((row, null));
+                else
+                    result.Add(row);
+                continue;
+            }
+
+            var kept = new List<PickAttribute>(row.Children.Count);
+            foreach (var child in row.Children)
+            {
+                if (PickTextCardViewModel.IsLongValue(child))
+                    lifted.Add((child, row));
+                else
+                    kept.Add(child);
+            }
+
+            if (kept.Count == row.Children.Count)
+                result.Add(row);
+            else if (kept.Count > 0)
+                result.Add(WithChildren(row, kept));
+        }
+        return result;
     }
 
     /// <summary>
@@ -192,21 +248,23 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             var kept = row.Children.Where(c => !IsText(c)).ToList();
             if (kept.Count == 0)
                 continue;
-            result.Add(new PickAttribute
-            {
-                Code = row.Code,
-                Name = row.Name,
-                RawValue = row.RawValue,
-                DisplayValue = row.DisplayValue,
-                DateTimeValue = row.DateTimeValue,
-                DateTimeRangeValue = row.DateTimeRangeValue,
-                DepthMetresValue = row.DepthMetresValue,
-                ExternalText = row.ExternalText,
-                Children = kept,
-            });
+            result.Add(WithChildren(row, kept));
         }
         return result;
     }
+
+    private static PickAttribute WithChildren(PickAttribute row, IReadOnlyList<PickAttribute> children) => new()
+    {
+        Code = row.Code,
+        Name = row.Name,
+        RawValue = row.RawValue,
+        DisplayValue = row.DisplayValue,
+        DateTimeValue = row.DateTimeValue,
+        DateTimeRangeValue = row.DateTimeRangeValue,
+        DepthMetresValue = row.DepthMetresValue,
+        ExternalText = row.ExternalText,
+        Children = children,
+    };
 
     private IReadOnlyList<PickAttribute> ReformatTypedAttributes(IReadOnlyList<PickAttribute> source)
     {
@@ -626,11 +684,12 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             Hit = hit,
             IsCollapsible = collapsible,
             IsOpen = !collapsible,
+            NotForNavigation = hit.NotForNavigation,
             // As the card is made: opening it marks the warning seen, and the card keeps saying it was new.
             IsNew = FindEntry(hit) is { } entry && _warningNavigator!.IsNew(entry),
         };
         UpdateTargets(card);
-        card.CopyRequested += OnWarningCopyRequested;
+        card.CopyRequested += OnCardCopyRequested;
         card.OpenRequested += OnWarningOpenRequested;
         card.ZoomRequested += OnWarningZoomRequested;
         card.LinkRequested += OnWarningLinkRequested;
@@ -639,7 +698,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
     private void DetachWarningCard(NavigationalWarningCardViewModel card)
     {
-        card.CopyRequested -= OnWarningCopyRequested;
+        card.CopyRequested -= OnCardCopyRequested;
         card.OpenRequested -= OnWarningOpenRequested;
         card.ZoomRequested -= OnWarningZoomRequested;
         card.LinkRequested -= OnWarningLinkRequested;
@@ -765,21 +824,20 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         set => SetProperty(ref _warningAttributesExpanded, value);
     }
 
-    private void OnWarningCopyRequested(object? sender, string text) =>
+    private void OnCardCopyRequested(object? sender, string text) =>
         CopyIdentityRequested?.Invoke(this, text);
 
     /// <summary>
-    /// Externally referenced text blocks for the picked feature, lifted out
-    /// of <see cref="Attributes"/> from resolved <c>fileReference</c>
-    /// attributes (S-101 Feature Catalogue; aliases <c>TXTDSC</c> /
-    /// <c>NTXTDS</c>). Rendered in the panel as labelled cards with the full
-    /// text always visible, mirroring an ECDIS "show textual description"
-    /// affordance.
+    /// Long-text cards for the picked feature, lifted out of
+    /// <see cref="Attributes"/>: resolved <c>fileReference</c> text (S-101
+    /// Feature Catalogue; aliases <c>TXTDSC</c> / <c>NTXTDS</c>) first, then
+    /// long text values in attribute order. Each shows its whole text in the
+    /// shared long-text body (#932).
     /// </summary>
-    public ObservableCollection<PickReferencedText> ReferencedTexts { get; } = new();
+    public ObservableCollection<PickTextCardViewModel> TextCards { get; } = new();
 
-    /// <summary>True when the current pick carries at least one referenced text block.</summary>
-    public bool HasReferencedText => ReferencedTexts.Count > 0;
+    /// <summary>True when the current pick has at least one long-text card.</summary>
+    public bool HasTextCards => TextCards.Count > 0;
 
     /// <summary>
     /// xlink-style references the currently selected hit points to.
@@ -821,14 +879,6 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// the actual clipboard access.
     /// </summary>
     public ICommand CopyIdentityCommand { get; }
-
-    /// <summary>
-    /// Copies a <see cref="PickReferencedText"/> card's full text to the
-    /// clipboard. The command parameter is the card to copy; raises
-    /// <see cref="CopyIdentityRequested"/> with the text so the view owns the
-    /// actual clipboard access.
-    /// </summary>
-    public ICommand CopyReferencedTextCommand { get; }
 
     /// <summary>
     /// Raised when the user invokes <see cref="CopyLocationCommand"/>. The
@@ -1020,7 +1070,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             // ApplyHitToDetailFields(null) cleared the detail fields;
             // re-raise the attribute panels so the view collapses them.
             OnPropertyChanged(nameof(HasAttributes));
-            OnPropertyChanged(nameof(HasReferencedText));
+            OnPropertyChanged(nameof(HasTextCards));
             OnPropertyChanged(nameof(HasReferences));
         }
     }
@@ -1079,7 +1129,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         DatasetFileName = null;
         ProductSpec = null;
         Attributes.Clear();
-        ReferencedTexts.Clear();
+        ClearTextCards();
         References.Clear();
         _eggCode = null;
         WarningCard = null;
@@ -1087,7 +1137,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         LocationDepthSeries = null;
         HasPick = false;
         OnPropertyChanged(nameof(HasAttributes));
-        OnPropertyChanged(nameof(HasReferencedText));
+        OnPropertyChanged(nameof(HasTextCards));
         OnPropertyChanged(nameof(HasReferences));
         OnPropertyChanged(nameof(SelectedEggCode));
         OnPropertyChanged(nameof(HasEggCode));
@@ -1133,12 +1183,12 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             DatasetFileName = null;
             ProductSpec = null;
             Attributes.Clear();
-            ReferencedTexts.Clear();
+            ClearTextCards();
             References.Clear();
             _eggCode = null;
             WarningCard = null;
             OnPropertyChanged(nameof(HasAttributes));
-            OnPropertyChanged(nameof(HasReferencedText));
+            OnPropertyChanged(nameof(HasTextCards));
             OnPropertyChanged(nameof(HasReferences));
             OnPropertyChanged(nameof(SelectedStationSeries));
             OnPropertyChanged(nameof(HasStationSeries));

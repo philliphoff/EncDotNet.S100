@@ -332,7 +332,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                     displayName: Path.GetFileName(relativePath),
                     updateRelativePaths: updateRelativePaths,
                     minimumDisplayScale: metadata.ResolveMinimumDisplayScale(),
-                    maximumDisplayScale: metadata.ResolveMaximumDisplayScale());
+                    maximumDisplayScale: metadata.ResolveMaximumDisplayScale(),
+                    notForNavigation: metadata.NotForNavigation);
                 tracked.Entries.Add(entry);
                 loadTasks.Add(LoadEntryAsync(entry, loadGate));
                 dispatched++;
@@ -1088,7 +1089,8 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 item.UpdateRelativePaths.Select(u => ToSourcePath(u, isZip)).ToArray(),
                 item.MinimumDisplayScale,
                 item.MaximumDisplayScale,
-                item.GeographicBounds)));
+                item.GeographicBounds,
+                item.NotForNavigation)));
         }
 
         if (registrations.Count > 0)

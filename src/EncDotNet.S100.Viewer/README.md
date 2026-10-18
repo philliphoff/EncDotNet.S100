@@ -668,6 +668,19 @@ Turn on **Pick Mode** (the cross-hair button on the map toolbar, **View** >
   card's own number, stay plain text. **Zoom to** centres the map on a part
   with a location at a scale that fits it. The attribute rows fold into
   **Attributes** beneath the card, closed until you open them.
+- **TEXT**: long text lifted out of the attribute table into cards with the
+  same body as the Warning card, so it isn't cut off at the value column. An
+  S-101 referenced text file (`TXTDSC` / `NTXTDS`) shows its first line and
+  file name as the header. Any other text value with a line break or over 120
+  characters, such as S-122 or S-127 regulation text, shows the attribute's
+  name, and its row leaves the table. The text is set proportional, as prose,
+  unless it is laid out in columns with runs of spaces. Texts over 22 lines
+  stop at 20 until you select **Show all**; **Copy** copies the whole text,
+  and **Examiner** opens the attribute in the eXaminer.
+- **NOT FOR NAVIGATION** in the footer of each Warning card and text card
+  whose dataset's exchange-set catalogue marks it `notForNavigation`. Hover
+  over it for "The data provider marks this data as not for navigation". A
+  file opened without a catalogue shows no label.
 - When several warnings are at the point, each gets a Warning card in place
   of the hit list: points first, then lines, then areas, each by number. A
   closed card still shows the number, type and status. One card is open at a
