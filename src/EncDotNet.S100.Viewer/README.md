@@ -658,10 +658,23 @@ Turn on **Pick Mode** (the cross-hair button on the map toolbar, **View** >
   monospaced block, so telex columns line up. You can select the text, and
   **Copy** copies it. A part with text in several languages has a tab per
   language, with your UI language first; your choice holds for the session.
-  Messages over 22 lines stop at 20 until you select **Show all**. The
-  attribute rows fold into **Attributes** beneath the card, closed until you
-  open them. With several warnings at the point, the hit list names each by
-  its number.
+  Messages over 22 lines stop at 20 until you select **Show all**. A warning
+  number in the text, such as "106/26" in a weekly "warnings in force"
+  bulletin, is a link when that warning is in the **Navigational warnings**
+  list: select it to open that warning, as selecting its row does. A series
+  name just before the number ("AUSCOAST 314/26"), or the nearest one above
+  it, says which series it belongs to; otherwise the card's own series, or
+  the only listed warning with that number. Numbers not in the list, and the
+  card's own number, stay plain text. **Zoom to** centres the map on a part
+  with a location at a scale that fits it. The attribute rows fold into
+  **Attributes** beneath the card, closed until you open them.
+- When several warnings are at the point, each gets a Warning card in place
+  of the hit list: points first, then lines, then areas, each by number. A
+  closed card still shows the number, type and status. One card is open at a
+  time, and its warning is highlighted on the map; select another card's
+  header to open it instead. Pointing at a card previews its warning on the
+  map with the same highlight. Other features at the point follow as rows
+  below the cards.
 - An **EGG CODE** diagram for an S-411 sea-ice or lake-ice area. The WMO /
   SIGRID-3 egg shows the total concentration at the top of the oval, with the
   partial concentration, stage of development and form of ice rows beneath it.

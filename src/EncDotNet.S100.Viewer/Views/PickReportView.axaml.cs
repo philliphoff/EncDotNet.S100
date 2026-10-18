@@ -68,6 +68,21 @@ public partial class PickReportView : UserControl
         }
     }
 
+    // Hovering a card in a pick's list of Warning cards previews its part on
+    // the map with the pick highlight (#932); leaving it ends the preview.
+    private void OnWarningCardPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: NavigationalWarningCardViewModel { IsCollapsible: true } card })
+            _subscribed?.SetWarningPreview(card);
+    }
+
+    private void OnWarningCardPointerExited(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: NavigationalWarningCardViewModel card }
+            && ReferenceEquals(_subscribed?.PreviewHit, card.Hit))
+            _subscribed?.SetWarningPreview(null);
+    }
+
     // Depth-card header tap: toggle the collapsible detail region. Using a
     // plain Border (rather than a ToggleButton) keeps the header flat with a
     // hover-only background; the expand state lives on the card view-model.

@@ -5,6 +5,7 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -20,6 +21,12 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// lines stop at <see cref="ClipLines"/> until "Show all" is chosen, which
 /// holds for the card's lifetime, that is until the pick changes. The
 /// language choice holds for the session.
+/// <para>
+/// Warning numbers in the text that name another listed warning link to it
+/// (see <see cref="NavigationalWarningLinks"/>). When a pick hits several
+/// warnings, each gets a card and only one is open at a time
+/// (<see cref="IsCollapsible"/>, <see cref="IsOpen"/>).
+/// </para>
 /// </remarks>
 internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
 {
@@ -38,6 +45,10 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
     private DateTimeOffset _viewTime;
     private NavigationalWarningText? _selectedText;
     private bool _showAll;
+    private bool _isOpen = true;
+    private bool _canZoom;
+    private IReadOnlyList<NavigationalWarningEntry> _linkTargets = [];
+    private IReadOnlyList<WarningTextSegment> _segments = [];
 
     public NavigationalWarningCardViewModel(
         NavigationalWarningInfo info,
@@ -47,6 +58,7 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(info);
         _info = info;
+        DatasetId = datasetFileName;
         _timeFormat = timeFormat;
         _viewTime = viewTime;
         Label = info.Label ?? datasetFileName ?? Strings.Pick_Warning_NoNumber;
@@ -58,6 +70,87 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
         CopyCommand = new RelayCommand(
             () => { if (_selectedText is { } t) CopyRequested?.Invoke(this, t.Text); },
             () => HasText);
+        ToggleCommand = new RelayCommand(() => OpenRequested?.Invoke(this, EventArgs.Empty));
+        ZoomToCommand = new RelayCommand(() => ZoomRequested?.Invoke(this, EventArgs.Empty), () => _canZoom);
+        OpenLinkCommand = new RelayCommand<NavigationalWarningEntry>(
+            target => { if (target is not null) LinkRequested?.Invoke(this, target); },
+            target => target is not null);
+        _segments = BuildSegments();
+    }
+
+    /// <summary>The hit the card describes, when it came from a pick.</summary>
+    public PickHit? Hit { get; init; }
+
+    /// <summary>The dataset that holds the part (its display name, which is its catalog id).</summary>
+    public string? DatasetId { get; }
+
+    /// <summary>
+    /// Whether the card is one of several from one pick, so its header opens
+    /// it and its body folds while another is open.
+    /// </summary>
+    public bool IsCollapsible { get; init; }
+
+    /// <summary>Whether the card's body shows. Always true for a lone card.</summary>
+    public bool IsOpen
+    {
+        get => _isOpen;
+        set
+        {
+            if (SetProperty(ref _isOpen, value))
+                OnPropertyChanged(nameof(IsCollapsed));
+        }
+    }
+
+    /// <summary>Whether the card shows its header only.</summary>
+    public bool IsCollapsed => !_isOpen;
+
+    /// <summary>Opens a collapsed card (its header), raising <see cref="OpenRequested"/>.</summary>
+    public ICommand ToggleCommand { get; }
+
+    /// <summary>Raised by <see cref="ToggleCommand"/>.</summary>
+    public event EventHandler? OpenRequested;
+
+    /// <summary>
+    /// Whether the part has a location the map can frame, which shows the
+    /// "Zoom to" action.
+    /// </summary>
+    public bool CanZoom
+    {
+        get => _canZoom;
+        set
+        {
+            if (SetProperty(ref _canZoom, value))
+                (ZoomToCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        }
+    }
+
+    /// <summary>Centres the map on the part at a scale that fits it, raising <see cref="ZoomRequested"/>.</summary>
+    public ICommand ZoomToCommand { get; }
+
+    /// <summary>Raised by <see cref="ZoomToCommand"/>.</summary>
+    public event EventHandler? ZoomRequested;
+
+    /// <summary>Opens the warning a link in the text names; the parameter is its <see cref="WarningTextSegment.Target"/>.</summary>
+    public ICommand OpenLinkCommand { get; }
+
+    /// <summary>Raised by <see cref="OpenLinkCommand"/> with the warning to open.</summary>
+    public event EventHandler<NavigationalWarningEntry>? LinkRequested;
+
+    /// <summary>
+    /// The displayed text as runs: plain text, and warning numbers that link
+    /// to other listed warnings.
+    /// </summary>
+    public IReadOnlyList<WarningTextSegment> Segments => _segments;
+
+    /// <summary>The links in the displayed text, in order.</summary>
+    public IEnumerable<WarningTextSegment> Links => _segments.Where(s => s.IsLink);
+
+    /// <summary>Sets the listed warnings that numbers in the text may link to.</summary>
+    public void SetLinkTargets(IReadOnlyList<NavigationalWarningEntry> warnings)
+    {
+        ArgumentNullException.ThrowIfNull(warnings);
+        _linkTargets = warnings;
+        RefreshSegments();
     }
 
     /// <summary>The underlying warning message.</summary>
@@ -307,7 +400,18 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowAllText));
         OnPropertyChanged(nameof(CopyText));
         (CopyCommand as RelayCommand)?.NotifyCanExecuteChanged();
+        RefreshSegments();
     }
+
+    private void RefreshSegments()
+    {
+        _segments = BuildSegments();
+        OnPropertyChanged(nameof(Segments));
+        OnPropertyChanged(nameof(Links));
+    }
+
+    private IReadOnlyList<WarningTextSegment> BuildSegments() =>
+        NavigationalWarningLinks.Split(DisplayedText, _info, DatasetId, _linkTargets);
 
     private string FormatRange(NavigationalWarningValidity range) => (range.Start, range.End) switch
     {

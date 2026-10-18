@@ -111,8 +111,10 @@ internal sealed class PickHighlightController : IDisposable
     {
         // Location and SelectedHit drive the two halves of the overlay;
         // HasPick covers the Clear() transition (which nulls both).
+        // PreviewHit (a hovered Warning card, #932) outlines in its place.
         if (e.PropertyName is nameof(PickReportViewModel.Location)
             or nameof(PickReportViewModel.SelectedHit)
+            or nameof(PickReportViewModel.PreviewHit)
             or nameof(PickReportViewModel.HasPick))
         {
             _marshal(Rebuild);
@@ -131,7 +133,7 @@ internal sealed class PickHighlightController : IDisposable
             _pickReport.Location is { } loc ? new GeoPosition(loc.Latitude, loc.Longitude) : null;
 
         PickHighlightGeometry? geometry =
-            _pickReport.SelectedHit is { } hit ? TryResolveGeometry(hit) : null;
+            (_pickReport.PreviewHit ?? _pickReport.SelectedHit) is { } hit ? TryResolveGeometry(hit) : null;
 
         var state = new PickHighlightState(location, geometry);
 
