@@ -60,6 +60,43 @@ internal sealed class RouteDocument
     /// <c>max(0, Waypoints.Count - 1)</c> legs.
     /// </summary>
     public List<RouteLegDocument> Legs { get; set; } = new();
+
+    /// <summary>The received route a copy was made from (<see cref="Route.Origin"/>), or <c>null</c>.</summary>
+    public RouteSourceDocument? Origin { get; set; }
+
+    /// <summary>The format of <see cref="Preserved"/>, e.g. <c>S-421</c>.</summary>
+    public string? PreservedFormat { get; set; }
+
+    /// <summary>The source's content the viewer's model can't hold, as the format writes it (<see cref="Route.Preserved"/>).</summary>
+    public string? Preserved { get; set; }
+
+    /// <summary>How many preserved schedules can go stale; 0 after "Drop them".</summary>
+    public int? PreservedScheduleCount { get; set; }
+
+    /// <summary>Whether stale preserved schedules are kept on export.</summary>
+    public bool? KeepStalePreservedSchedules { get; set; }
+}
+
+/// <summary>Persisted form of a <see cref="RouteSource"/>.</summary>
+internal sealed class RouteSourceDocument
+{
+    /// <summary>The format name.</summary>
+    public string? Format { get; set; }
+
+    /// <summary>The format version.</summary>
+    public string? FormatVersion { get; set; }
+
+    /// <summary>The source file.</summary>
+    public string? FilePath { get; set; }
+
+    /// <summary>The source's route ID.</summary>
+    public string? RouteId { get; set; }
+
+    /// <summary>The source's edition.</summary>
+    public int? Edition { get; set; }
+
+    /// <summary>The source's status code.</summary>
+    public int? Status { get; set; }
 }
 
 /// <summary>Persisted form of a <see cref="RouteInfo"/>.</summary>

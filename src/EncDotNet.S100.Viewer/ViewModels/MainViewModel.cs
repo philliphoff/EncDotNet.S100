@@ -1468,6 +1468,13 @@ internal sealed class MainViewModel : ViewModelBase
             ((RelayCommand)ToolBackstepCommand).NotifyCanExecuteChanged();
             ((RelayCommand)PromoteMeasurementToRouteCommand).NotifyCanExecuteChanged();
             _routes.IsEditModeActive = IsRouteEditModeActive;
+            // A received route can't be edited: the tool turns back off and
+            // the Routes panel offers Copy to edit instead (#960).
+            if (IsRouteEditModeActive && !_routes.IsEditModeActive)
+            {
+                Tools.Activate(null);
+                _routes.RequestEdit();
+            }
         };
 
         // Route edit mode is shared state on RoutesService: the Routes panel's

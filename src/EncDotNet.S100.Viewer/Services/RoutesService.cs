@@ -103,6 +103,24 @@ internal sealed class RoutesService
     /// <summary>Raised when <see cref="IsEditModeActive"/> changes.</summary>
     public event EventHandler? EditModeChanged;
 
+    /// <summary>
+    /// Raised when editing was asked for on a received, read-only route
+    /// (Ctrl+E, the Edit tool): the Routes panel offers Copy to edit (#960, A8).
+    /// </summary>
+    public event EventHandler? CopyToEditRequested;
+
+    /// <summary>
+    /// Asks to edit the active route: turns Edit mode on for an owned route,
+    /// or raises <see cref="CopyToEditRequested"/> for a received one.
+    /// </summary>
+    public void RequestEdit()
+    {
+        if (Routes.ActiveRoute is { IsReadOnly: true })
+            CopyToEditRequested?.Invoke(this, EventArgs.Empty);
+        else
+            IsEditModeActive = true;
+    }
+
     private bool _isCheckModeActive;
 
     /// <summary>

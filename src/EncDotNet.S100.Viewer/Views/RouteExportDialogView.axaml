@@ -1,0 +1,110 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.RouteExportDialogView"
+             x:DataType="vm:RouteExportDialogViewModel"
+             AutomationProperties.AutomationId="RouteExport.Dialog"
+             Width="500">
+
+    <!-- Export route (#960, F7): format and version, the identity line,
+         "Also write my check settings" (off), and what the format can't hold. -->
+    <UserControl.Styles>
+        <Style Selector="RadioButton.formatCard">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="Card" CornerRadius="8" BorderThickness="1" Padding="{TemplateBinding Padding}"
+                            BorderBrush="{DynamicResource BorderColor}" Background="Transparent">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                            <Panel Width="14" Height="14" VerticalAlignment="Top" Margin="0,2,0,0">
+                                <Ellipse Stroke="{DynamicResource MutedColor}" StrokeThickness="1.5" />
+                                <Ellipse Name="Dot" Width="7" Height="7" Fill="{DynamicResource AccentBrush}" IsVisible="False" />
+                            </Panel>
+                            <ContentPresenter Grid.Column="1" Content="{TemplateBinding Content}" />
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="RadioButton.formatCard:checked /template/ Border#Card">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="RadioButton.formatCard:checked /template/ Ellipse#Dot">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" Margin="18,14,18,14" RowSpacing="12">
+        <StackPanel Spacing="3" Margin="0,0,28,0">
+            <TextBlock Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Summary}" FontSize="12.5" Opacity="0.65" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Spacing="6">
+            <TextBlock Text="{Binding FormatHeading}" FontSize="10.5" FontWeight="SemiBold" Opacity="0.6" />
+            <ItemsControl ItemsSource="{Binding Formats}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="6" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RouteExportFormatOption">
+                        <RadioButton Classes="formatCard"
+                                     GroupName="RouteExportFormat"
+                                     AutomationProperties.AutomationId="{Binding AutomationId}"
+                                     AutomationProperties.Name="{Binding Name}"
+                                     IsChecked="{Binding IsSelected, Mode=TwoWay}">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <StackPanel Spacing="2">
+                                    <TextBlock FontSize="12.5" TextWrapping="Wrap">
+                                        <Run Text="{Binding Name}" FontWeight="SemiBold" />
+                                        <Run Text="{Binding Description}" />
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding Audience}" FontSize="11.5" Opacity="0.65" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ComboBox Grid.Column="1"
+                                          AutomationProperties.AutomationId="RouteExport.Version"
+                                          AutomationProperties.Name="{x:Static loc:Strings.ExportDialog_Version}"
+                                          ItemsSource="{Binding Versions}"
+                                          SelectedItem="{Binding SelectedVersion, Mode=TwoWay}"
+                                          IsVisible="{Binding HasVersionChoice}"
+                                          VerticalAlignment="Top" />
+                            </Grid>
+                        </RadioButton>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <TextBlock Grid.Row="2" AutomationProperties.AutomationId="RouteExport.Identity" FontSize="11.5" TextWrapping="Wrap">
+            <Run Text="{Binding IdentityLabel}" FontWeight="SemiBold" />
+            <Run Text=" · " />
+            <Run Text="{Binding IdentityText}" />
+        </TextBlock>
+
+        <StackPanel Grid.Row="3" Spacing="2">
+            <CheckBox AutomationProperties.AutomationId="RouteExport.IncludeCheckSettings"
+                      IsChecked="{Binding IncludeCheckSettings, Mode=TwoWay}"
+                      Content="{Binding IncludeCheckSettingsLabel}" />
+            <TextBlock Text="{Binding IncludeCheckSettingsNote}" FontSize="11.5" Opacity="0.65" TextWrapping="Wrap" Margin="28,0,0,0" />
+        </StackPanel>
+
+        <Grid Grid.Row="4" ColumnDefinitions="Auto,*" ColumnSpacing="8" IsVisible="{Binding HasCannotHold}">
+            <ic:FluentIcon Icon="Info" FontSize="13" Opacity="0.65" VerticalAlignment="Top" />
+            <TextBlock Grid.Column="1" AutomationProperties.AutomationId="RouteExport.CannotHold"
+                       Text="{Binding CannotHoldText}" FontSize="11.5" Opacity="0.75" TextWrapping="Wrap" />
+        </Grid>
+
+        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}"
+                    AutomationProperties.AutomationId="RouteExport.Cancel" />
+            <Button Classes="Primary" Content="{Binding ExportLabel}" Command="{Binding ExportCommand}"
+                    AutomationProperties.AutomationId="RouteExport.Confirm" />
+        </StackPanel>
+    </Grid>
+</UserControl>

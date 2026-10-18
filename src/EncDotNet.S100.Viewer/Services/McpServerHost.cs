@@ -46,6 +46,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel? _clearance;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? _routeFindings;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? _followPassage;
+    private readonly RouteExchangeService? _routeExchange;
     private readonly IViewerDatasetStateController? _datasetState;
     private readonly IViewerNotificationController? _notifications;
     private readonly AdjustableTimeProvider? _testClock;
@@ -95,8 +96,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? routeFindings = null,
         EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? followPassage = null,
         EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel? navigationalWarnings = null,
-        NavigationalWarningsService? navigationalWarningsService = null)
+        NavigationalWarningsService? navigationalWarningsService = null,
+        RouteExchangeService? routeExchange = null)
     {
+        _routeExchange = routeExchange;
         _navigationalWarnings = navigationalWarnings;
         _navigationalWarningsService = navigationalWarningsService;
         _followPassage = followPassage;
@@ -463,6 +466,12 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(RedoRouteEditMcpAdapter.Create(new RedoRouteEditTool(_routesService, invoker)));
             tools.Add(SetRouteEditModeMcpAdapter.Create(new SetRouteEditModeTool(_routesService, invoker)));
             tools.Add(ReceivedRouteMcpAdapters.Create(new SetRouteDisplayModeTool(_routesService, invoker)));
+            if (_routeExchange is not null)
+            {
+                tools.Add(ReceivedRouteMcpAdapters.Create(new ImportRouteTool(_routesService, invoker, _routeExchange)));
+                tools.Add(ReceivedRouteMcpAdapters.Create(new CopyRouteTool(_routesService, invoker, _routeExchange)));
+                tools.Add(ReceivedRouteMcpAdapters.Create(new ExportRouteTool(_routesService, invoker, _routeExchange)));
+            }
             tools.Add(SelectRouteItemMcpAdapter.Create(new SelectRouteItemTool(_routesService, invoker)));
             tools.Add(SetPassageCardMcpAdapter.Create(new SetPassageCardTool(_routesService, invoker)));
             tools.Add(GetPassageMcpAdapter.Create(new GetPassageTool(_routesService, invoker)));

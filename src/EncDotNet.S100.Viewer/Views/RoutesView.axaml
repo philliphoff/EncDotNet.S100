@@ -539,8 +539,19 @@
         <!-- Route-collection header actions (the host pane supplies the
              "ROUTES" title above this row). -->
         <Border DockPanel.Dock="Top" Padding="8,4,6,4">
-            <Grid ColumnDefinitions="*,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <!-- #960 (F1): Import route… opens a file as a received route. -->
                 <Button Grid.Column="1"
+                        AutomationProperties.AutomationId="Routes.Import"
+                        AutomationProperties.Name="{x:Static loc:Strings.Routes_ImportRoute}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ImportRoute}"
+                        Classes="Icon"
+                        IsVisible="{Binding CanExchange}"
+                        Command="{Binding ImportRouteCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ImportRoute}">
+                    <ic:FluentIcon Icon="ArrowDownload" IconVariant="Regular" FontSize="16" />
+                </Button>
+                <Button Grid.Column="2"
                         AutomationProperties.AutomationId="Routes.PromoteMeasurement"
                         AutomationProperties.Name="{x:Static loc:Strings.Label_PromoteMeasurement}"
                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PromoteMeasurement}"
@@ -549,7 +560,7 @@
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_PromoteMeasurement}">
                     <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
                 </Button>
-                <Button Grid.Column="2"
+                <Button Grid.Column="3"
                         AutomationProperties.AutomationId="Routes.Add"
                         AutomationProperties.Name="{x:Static loc:Strings.Label_AddRoute}"
                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_AddRoute}"
@@ -625,6 +636,17 @@
                                                   IsVisible="{Binding IsOwned}"
                                                   AutomationProperties.AutomationId="Routes.RowMenu.Reverse"
                                                   Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).ReverseRouteCommand}"
+                                                  CommandParameter="{Binding}" />
+                                        <!-- #960 (F1): Copy to edit (received) and Export… (both). -->
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_CopyToEdit}"
+                                                  IsVisible="{Binding IsReceived}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.CopyToEdit"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).CopyToEditCommand}"
+                                                  CommandParameter="{Binding}" />
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_ExportRoute}"
+                                                  IsVisible="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).CanExchange}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.Export"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).ExportRouteCommand}"
                                                   CommandParameter="{Binding}" />
                                         <Separator />
                                         <MenuItem Header="{x:Static loc:Strings.Menu_RemoveRoute}"
@@ -728,6 +750,30 @@
                                       AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayModePlanning}"
                                       Content="{x:Static loc:Strings.Routes_DisplayModePlanning}"
                                       IsChecked="{Binding IsPlanningMode, Mode=TwoWay}" />
+                    </StackPanel>
+                    <!-- #960 (F4, F6): a copy's source has a newer edition; preserved schedules went stale. -->
+                    <TextBlock AutomationProperties.AutomationId="Routes.Active.NewerEdition"
+                               Text="{Binding NewerEditionText}"
+                               FontSize="11"
+                               Foreground="{DynamicResource AccentBrush}"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding HasNewerEdition}" />
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="6"
+                                AutomationProperties.AutomationId="Routes.Active.StaleSchedules"
+                                IsVisible="{Binding HasStaleSchedules}">
+                        <TextBlock Text="{Binding StaleSchedulesText}" FontSize="11" Opacity="0.8" VerticalAlignment="Center" />
+                        <Button Classes="linkButton"
+                                AutomationProperties.AutomationId="Routes.Active.StaleSchedules.Drop"
+                                Content="{x:Static loc:Strings.Routes_StaleSchedulesDrop}"
+                                Command="{Binding DropStaleSchedulesCommand}" />
+                        <Button Classes="linkButton"
+                                AutomationProperties.AutomationId="Routes.Active.StaleSchedules.Keep"
+                                Content="{x:Static loc:Strings.Routes_StaleSchedulesKeep}"
+                                Command="{Binding KeepStaleSchedulesCommand}"
+                                IsVisible="{Binding !IsKeepingStaleSchedules}" />
+                        <TextBlock Text="{x:Static loc:Strings.Routes_StaleSchedulesKept}" FontSize="11" Opacity="0.6"
+                                   VerticalAlignment="Center" IsVisible="{Binding IsKeepingStaleSchedules}" />
                     </StackPanel>
                     <!-- Check passage header (C2): vessel · draft · dep · arr. -->
                     <TextBlock AutomationProperties.AutomationId="Routes.Check.HeaderMeta"
@@ -1296,6 +1342,7 @@
                                                                  AutomationProperties.AutomationId="Routes.Waypoint.Name"
                                                                  AutomationProperties.Name="{x:Static loc:Strings.Label_WaypointName}"
                                                                  Text="{Binding NameText, Mode=TwoWay}"
+                                                                 IsReadOnly="{Binding IsReadOnly}"
                                                                  PlaceholderText="{Binding FallbackName}">
                                                             <TextBox.KeyBindings>
                                                                 <KeyBinding Gesture="Enter" Command="{Binding CommitNameCommand}" />
@@ -1317,7 +1364,8 @@
                                                              Classes.invalid="{Binding HasCoordsError}"
                                                              AutomationProperties.AutomationId="Routes.Waypoint.Position"
                                                              AutomationProperties.Name="{x:Static loc:Strings.Label_WaypointPosition}"
-                                                             Text="{Binding CoordsText, Mode=TwoWay}">
+                                                             Text="{Binding CoordsText, Mode=TwoWay}"
+                                                             IsReadOnly="{Binding IsReadOnly}">
                                                         <TextBox.KeyBindings>
                                                             <KeyBinding Gesture="Enter" Command="{Binding CommitCoordsCommand}" />
                                                             <KeyBinding Gesture="Escape" Command="{Binding RevertCoordsCommand}" />
@@ -1346,11 +1394,18 @@
                                                 <ic:FluentIcon Icon="MoreHorizontal" IconVariant="Regular" FontSize="16" />
                                                 <Button.Flyout>
                                                     <MenuFlyout>
+                                                        <!-- #960 (A8): a received route offers Copy to edit instead. -->
+                                                        <MenuItem Header="{x:Static loc:Strings.Menu_CopyToEdit}"
+                                                                  IsVisible="{Binding IsReadOnly}"
+                                                                  AutomationProperties.AutomationId="Routes.WaypointMenu.CopyToEdit"
+                                                                  Command="{Binding CopyToEditCommand}" />
                                                         <MenuItem Header="{x:Static loc:Strings.Menu_InsertWaypointAfter}"
+                                                                  IsVisible="{Binding !IsReadOnly}"
                                                                   AutomationProperties.AutomationId="Routes.WaypointMenu.InsertAfter"
                                                                   Command="{Binding InsertAfterCommand}"
                                                                   CommandParameter="{Binding}" />
                                                         <MenuItem Header="{x:Static loc:Strings.Menu_DeleteWaypoint}"
+                                                                  IsVisible="{Binding !IsReadOnly}"
                                                                   AutomationProperties.AutomationId="Routes.WaypointMenu.Delete"
                                                                   Command="{Binding DeleteCommand}"
                                                                   CommandParameter="{Binding}" />
@@ -1496,8 +1551,24 @@
                         BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="0,1,0,0">
                     <Grid ColumnDefinitions="Auto,*,Auto">
+                        <!-- #960 (A8): on a received route Copy to edit takes Edit's place. -->
+                        <Button Grid.Column="0"
+                                Classes="Outline"
+                                Height="32"
+                                AutomationProperties.AutomationId="Routes.CopyToEdit"
+                                AutomationProperties.Name="{x:Static loc:Strings.Routes_CopyToEdit}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyToEdit}"
+                                IsVisible="{Binding ShowCopyToEdit}"
+                                Command="{Binding CopyToEditCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyToEdit}">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Routes_CopyToEdit}" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <ToggleButton Grid.Column="0"
                                       Classes="modeToggle"
+                                      IsVisible="{Binding !ShowCopyToEdit}"
                                       AutomationProperties.AutomationId="Routes.EditToggle"
                                       AutomationProperties.Name="{x:Static loc:Strings.Button_EditRoute}"
                                       AutomationProperties.HelpText="{Binding EditToggleTooltipText}"

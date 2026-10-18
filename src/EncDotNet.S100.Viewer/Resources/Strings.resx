@@ -5630,4 +5630,217 @@
   <data name="Routes_PassageRouteValuesFromFile" xml:space="preserve">
     <value>Route · from file</value>
   </data>
+  <data name="Copy_KeepsWaypointsFormat" xml:space="preserve">
+    <value>{0} waypoints with names and turn radii</value>
+  </data>
+  <data name="Copy_KeepsGeometry" xml:space="preserve">
+    <value>Leg geometry (rhumb line or great circle)</value>
+  </data>
+  <data name="Copy_KeepsLegEnvelope" xml:space="preserve">
+    <value>Channel limits, safety contour and depth, speed limits and notes on legs</value>
+  </data>
+  <data name="Copy_KeepsPassageFormat" xml:space="preserve">
+    <value>{0} → Passage {1}</value>
+  </data>
+  <data name="Copy_KeepsPassageOverridesFormat" xml:space="preserve">
+    <value>{0} → Passage {1}, {2} leg overrides</value>
+  </data>
+  <data name="Copy_KeepsOverridesFormat" xml:space="preserve">
+    <value>{0} → {1} leg overrides</value>
+  </data>
+  <data name="Copy_FieldCrossTrack" xml:space="preserve">
+    <value>Cross-track limits</value>
+  </data>
+  <data name="Copy_FieldSpeeds" xml:space="preserve">
+    <value>Speeds</value>
+  </data>
+  <data name="Copy_FieldDraft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Copy_FieldUkc" xml:space="preserve">
+    <value>Required UKC</value>
+  </data>
+  <data name="Copy_KeepsDepartureFormat" xml:space="preserve">
+    <value>Departure → {0}</value>
+  </data>
+  <data name="Copy_KeepsVesselFormat" xml:space="preserve">
+    <value>Vessel {0} → route info</value>
+  </data>
+  <data name="Copy_KeepsInfo" xml:space="preserve">
+    <value>Name, author, description, ports and validity → route info</value>
+  </data>
+  <data name="Copy_NotKeptActionPointsFormat" xml:space="preserve">
+    <value>{0} action points (kept and written back on export)</value>
+  </data>
+  <data name="Copy_NotKeptScheduleFormat" xml:space="preserve">
+    <value>Schedule "{0}": the copy uses the schedule "{1}" (kept and written back on export)</value>
+  </data>
+  <data name="Copy_NotKeptVariantsFormat" xml:space="preserve">
+    <value>Other variants of the schedule "{0}": the copy writes its own schedule in their place</value>
+  </data>
+  <data name="Copy_NotKeptPorts" xml:space="preserve">
+    <value>Second port IDs and port calls (kept and written back on export)</value>
+  </data>
+  <data name="Copy_NotKeptVesselExtras" xml:space="preserve">
+    <value>Vessel type, height and voyage (kept and written back on export)</value>
+  </data>
+  <data name="Copy_NotKeptExtensionsFormat" xml:space="preserve">
+    <value>Extension attributes on {0} objects (kept and written back on export)</value>
+  </data>
+  <data name="Copy_NotKeptNextRoute" xml:space="preserve">
+    <value>The next-route reference: a copy is a new route</value>
+  </data>
+  <data name="Copy_ScheduleUnnamedFormat" xml:space="preserve">
+    <value>no. {0}</value>
+  </data>
+  <data name="Export_S421Description" xml:space="preserve">
+    <value>IHO route plan, edition 1.0</value>
+  </data>
+  <data name="Export_S421Audience" xml:space="preserve">
+    <value>For S-100 systems. Written as an S-421 GML dataset.</value>
+  </data>
+  <data name="Export_S421NoSquat" xml:space="preserve">
+    <value>S-421 has no field for squat. It stays in SoundCharts.</value>
+  </data>
+  <data name="Export_StaleSchedulesDroppedFormat" xml:space="preserve">
+    <value>{0} schedules no longer match the route and are left out.</value>
+  </data>
+  <data name="Import_NotARoute" xml:space="preserve">
+    <value>This file isn't an RTZ or S-421 route.</value>
+  </data>
+  <data name="Import_UnsupportedVersionFormat" xml:space="preserve">
+    <value>{0} {1} isn't supported yet.</value>
+  </data>
+  <data name="Import_TooFewWaypoints" xml:space="preserve">
+    <value>The route has fewer than two waypoints.</value>
+  </data>
+  <data name="Copy_NameFormat" xml:space="preserve">
+    <value>{0} (copy)</value>
+  </data>
+  <data name="Copy_KeepsPassageOverrideFormat" xml:space="preserve">
+    <value>{0} → Passage {1}, 1 leg override</value>
+  </data>
+  <data name="Copy_KeepsOverrideFormat" xml:space="preserve">
+    <value>{0} → 1 leg override</value>
+  </data>
+  <data name="Copy_NotKeptActionPoint" xml:space="preserve">
+    <value>1 action point (kept and written back on export)</value>
+  </data>
+  <data name="Export_StaleScheduleDropped" xml:space="preserve">
+    <value>1 schedule no longer matches the route and is left out.</value>
+  </data>
+  <data name="FilePicker_RouteTitle" xml:space="preserve">
+    <value>Import route</value>
+  </data>
+  <data name="FilePicker_RouteType" xml:space="preserve">
+    <value>Routes</value>
+  </data>
+  <data name="FilePicker_ExportRouteTitle" xml:space="preserve">
+    <value>Export route</value>
+  </data>
+  <data name="FilePicker_ExportRouteTypeFormat" xml:space="preserve">
+    <value>{0} route</value>
+  </data>
+  <data name="CopyDialog_Title" xml:space="preserve">
+    <value>Copy to edit</value>
+  </data>
+  <data name="CopyDialog_Subtitle" xml:space="preserve">
+    <value>Makes an editable copy. The received route stays as it is.</value>
+  </data>
+  <data name="CopyDialog_KeepsHeading" xml:space="preserve">
+    <value>THE COPY KEEPS</value>
+  </data>
+  <data name="CopyDialog_NotKeptHeading" xml:space="preserve">
+    <value>NOT IN THE COPY</value>
+  </data>
+  <data name="CopyDialog_IdentityLabel" xml:space="preserve">
+    <value>Identity</value>
+  </data>
+  <data name="CopyDialog_IdentityFormat" xml:space="preserve">
+    <value>New route ID · references {0} ed. {1} · status Planned</value>
+  </data>
+  <data name="CopyDialog_IdentityNoEditionFormat" xml:space="preserve">
+    <value>New route ID · references {0} · status Planned</value>
+  </data>
+  <data name="CopyDialog_NamedFormat" xml:space="preserve">
+    <value>Named "{0}" and opened in Edit mode. Undo removes it.</value>
+  </data>
+  <data name="CopyDialog_SourceFileFormat" xml:space="preserve">
+    <value>{0} · {1} {2}</value>
+  </data>
+  <data name="CopyDialog_Confirm" xml:space="preserve">
+    <value>Make copy</value>
+  </data>
+  <data name="ExportDialog_Title" xml:space="preserve">
+    <value>Export route</value>
+  </data>
+  <data name="ExportDialog_SummaryFormat" xml:space="preserve">
+    <value>{0} · {1} WP · {2:0.0} NM</value>
+  </data>
+  <data name="ExportDialog_FormatHeading" xml:space="preserve">
+    <value>FORMAT</value>
+  </data>
+  <data name="ExportDialog_IdentityKeptFormat" xml:space="preserve">
+    <value>Route ID {0} ed. {1} kept</value>
+  </data>
+  <data name="ExportDialog_IdentityCopyFormat" xml:space="preserve">
+    <value>New route · references {0} ed. {1} · status Planned</value>
+  </data>
+  <data name="ExportDialog_IdentityNewFormat" xml:space="preserve">
+    <value>Route ID {0} · edition 1</value>
+  </data>
+  <data name="ExportDialog_IncludeCheckSettings" xml:space="preserve">
+    <value>Also write my check settings</value>
+  </data>
+  <data name="ExportDialog_IncludeCheckSettingsNote" xml:space="preserve">
+    <value>Draft, required UKC and departure. They're yours, not the route's, so they stay out unless you ask.</value>
+  </data>
+  <data name="ExportDialog_Confirm" xml:space="preserve">
+    <value>Export…</value>
+  </data>
+  <data name="ExportDialog_FailedFormat" xml:space="preserve">
+    <value>The route couldn't be written: {0}</value>
+  </data>
+  <data name="ImportError_Title" xml:space="preserve">
+    <value>Import route</value>
+  </data>
+  <data name="Routes_ImportRoute" xml:space="preserve">
+    <value>Import route…</value>
+  </data>
+  <data name="Tooltip_ImportRoute" xml:space="preserve">
+    <value>Open an S-421 route file as a received, read-only route</value>
+  </data>
+  <data name="Routes_CopyToEdit" xml:space="preserve">
+    <value>Copy to edit</value>
+  </data>
+  <data name="Tooltip_CopyToEdit" xml:space="preserve">
+    <value>Make an editable copy of this received route</value>
+  </data>
+  <data name="Menu_CopyToEdit" xml:space="preserve">
+    <value>Copy to edit</value>
+  </data>
+  <data name="Menu_ExportRoute" xml:space="preserve">
+    <value>Export…</value>
+  </data>
+  <data name="Routes_NewerEditionFormat" xml:space="preserve">
+    <value>Source has a newer edition (ed. {0})</value>
+  </data>
+  <data name="Routes_StaleSchedulesFormat" xml:space="preserve">
+    <value>{0} schedules no longer match the route</value>
+  </data>
+  <data name="Routes_StaleSchedule" xml:space="preserve">
+    <value>1 schedule no longer matches the route</value>
+  </data>
+  <data name="Routes_StaleSchedulesDrop" xml:space="preserve">
+    <value>Drop them</value>
+  </data>
+  <data name="Routes_StaleSchedulesKeep" xml:space="preserve">
+    <value>Keep and export as they are</value>
+  </data>
+  <data name="Routes_StaleSchedulesKept" xml:space="preserve">
+    <value>Kept for export</value>
+  </data>
+  <data name="ExportDialog_Version" xml:space="preserve">
+    <value>Version</value>
+  </data>
 </root>

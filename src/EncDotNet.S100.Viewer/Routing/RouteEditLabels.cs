@@ -36,4 +36,7 @@ public static class RouteEditLabels
 
     /// <summary>The route's metadata or vessel changed.</summary>
     public const string EditRouteInfo = "edit route info";
+
+    /// <summary>Copy to edit: making an owned copy of a received route (#960).</summary>
+    public const string CopyRoute = "copy route";
 }

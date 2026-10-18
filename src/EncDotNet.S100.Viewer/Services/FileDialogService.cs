@@ -180,6 +180,32 @@ internal sealed class FileDialogService : IFileDialogService
     public Task<string?> OpenCertificateAsync(TopLevel? topLevel) =>
         OpenOneAsync(topLevel, Strings.FilePicker_CertificateTitle, Strings.FilePicker_CertificateType, ["*.pem", "*.crt", "*.cer"]);
 
+    public Task<string?> OpenRouteAsync(TopLevel? topLevel, IReadOnlyList<string> patterns) =>
+        OpenOneAsync(topLevel, Strings.FilePicker_RouteTitle, Strings.FilePicker_RouteType, patterns.ToArray());
+
+    public async Task<string?> SaveRouteAsync(TopLevel? topLevel, string suggestedName, string formatName, string extension)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var file = await picker.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = Strings.FilePicker_ExportRouteTitle,
+            SuggestedFileName = suggestedName,
+            DefaultExtension = extension.TrimStart('.'),
+            ShowOverwritePrompt = true,
+            FileTypeChoices =
+            [
+                new FilePickerFileType(string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.FilePicker_ExportRouteTypeFormat, formatName))
+                {
+                    Patterns = ["*" + extension],
+                },
+            ],
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
     private static async Task<string?> OpenOneAsync(TopLevel? topLevel, string title, string typeName, string[] patterns)
     {
         if (topLevel?.StorageProvider is not { } picker)

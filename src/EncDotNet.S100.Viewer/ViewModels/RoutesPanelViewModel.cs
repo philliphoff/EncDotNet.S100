@@ -39,6 +39,8 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     private readonly IMarinerSettingsProvider? _marinerSettings;
     private readonly ITimeFormatProvider? _timeFormat;
     private readonly PassageCheckService? _check;
+    private readonly RouteExchangeService? _exchange;
+    private readonly IRouteDialogs? _dialogs;
     private bool _suppressSync;
     private Route? _shownRoute;
     private int? _openLegIndex;
@@ -49,10 +51,14 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         IMarinerSettingsProvider? marinerSettings = null,
         ITimeFormatProvider? timeFormat = null,
         PassageCheckService? check = null,
-        RouteFindingsService? findings = null)
+        RouteFindingsService? findings = null,
+        RouteExchangeService? exchange = null,
+        IRouteDialogs? dialogs = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
         _routes = routes;
+        _exchange = exchange;
+        _dialogs = dialogs;
         _viewport = viewport;
         _marinerSettings = marinerSettings;
         _timeFormat = timeFormat;
@@ -94,6 +100,18 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         DeleteWaypointAtCommand = new RelayCommand<RouteWaypointRowViewModel>(DeleteWaypointAt);
         ToggleLegGeometryAtCommand = new RelayCommand<RouteLegRowViewModel>(ToggleLegGeometryAt);
         ToggleLegDetailCommand = new RelayCommand<RouteLegRowViewModel>(ToggleLegDetail);
+
+        // #960: Import route…, Copy to edit and Export….
+        ImportRouteCommand = new AsyncRelayCommand(ImportRouteAsync, () => _exchange is not null && _dialogs is not null);
+        CopyToEditCommand = new RelayCommand<RouteRowViewModel>(
+            row => CopyToEdit(row?.Route ?? _routes.Routes.ActiveRoute),
+            row => _exchange is not null && (row?.Route ?? _routes.Routes.ActiveRoute) is { IsReadOnly: true });
+        ExportRouteCommand = new RelayCommand<RouteRowViewModel>(
+            row => Export(row?.Route ?? _routes.Routes.ActiveRoute),
+            row => _exchange is not null && (row?.Route ?? _routes.Routes.ActiveRoute) is { Waypoints.Count: >= 2 });
+        DropStaleSchedulesCommand = new RelayCommand(() => _routes.Routes.ActiveRoute?.DropStalePreservedSchedules());
+        KeepStaleSchedulesCommand = new RelayCommand(() => _routes.Routes.ActiveRoute?.SetKeepStalePreservedSchedules(true));
+        _routes.CopyToEditRequested += (_, _) => CopyToEdit(_routes.Routes.ActiveRoute);
 
         DeleteWaypointCommand = new RelayCommand(
             () => _routes.DeleteSelectedWaypoint(),
@@ -316,6 +334,14 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsPlanningMode));
         OnPropertyChanged(nameof(DisplayModeTooltip));
         OnPropertyChanged(nameof(EditToggleTooltipText));
+        OnPropertyChanged(nameof(ShowCopyToEdit));
+        OnPropertyChanged(nameof(NewerEditionText));
+        OnPropertyChanged(nameof(HasNewerEdition));
+        OnPropertyChanged(nameof(StaleSchedulesText));
+        OnPropertyChanged(nameof(HasStaleSchedules));
+        OnPropertyChanged(nameof(IsKeepingStaleSchedules));
+        ((RelayCommand<RouteRowViewModel>)CopyToEditCommand).NotifyCanExecuteChanged();
+        ((RelayCommand<RouteRowViewModel>)ExportRouteCommand).NotifyCanExecuteChanged();
     }
 
     /// <summary>The toolbar hint, e.g. "Ctrl+E edit · Esc done".</summary>
@@ -397,6 +423,88 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     /// <summary>Opens a leg's inline detail, closing any other; on the open leg, closes it.</summary>
     public ICommand ToggleLegDetailCommand { get; }
     public ICommand DeleteWaypointCommand { get; }
+
+    /// <summary>Import route…: picks a file and opens it as a received route (F2).</summary>
+    public IAsyncRelayCommand ImportRouteCommand { get; }
+
+    /// <summary>Copy to edit: the footer, the ⋯ menu, Ctrl+E and the waypoint menu (F5, A8).</summary>
+    public ICommand CopyToEditCommand { get; }
+
+    /// <summary>Export…: the route ⋯ menu (F7).</summary>
+    public ICommand ExportRouteCommand { get; }
+
+    /// <summary>"Drop them": drops preserved schedules that no longer match (F6).</summary>
+    public ICommand DropStaleSchedulesCommand { get; }
+
+    /// <summary>"Keep and export as they are" (F6).</summary>
+    public ICommand KeepStaleSchedulesCommand { get; }
+
+    /// <summary>Whether the panel can import, copy and export (absent in some tests).</summary>
+    public bool CanExchange => _exchange is not null;
+
+    /// <summary>Whether the footer shows Copy to edit in Edit's place (A8).</summary>
+    public bool ShowCopyToEdit => IsActiveReadOnly && _exchange is not null;
+
+    /// <summary>"Source has a newer edition (ed. 4)" on a copy whose source has one open (F4), else <c>null</c>.</summary>
+    public string? NewerEditionText
+        => _exchange is not null && _routes.Routes.ActiveRoute is { IsReadOnly: false } route && _exchange.NewerSourceEdition(route) is { } edition
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Routes_NewerEditionFormat, edition)
+            : null;
+
+    /// <summary>Whether <see cref="NewerEditionText"/> shows.</summary>
+    public bool HasNewerEdition => NewerEditionText is not null;
+
+    /// <summary>"2 schedules no longer match the route" (F6), else <c>null</c>.</summary>
+    public string? StaleSchedulesText
+        => _routes.Routes.ActiveRoute is { HasStalePreservedSchedules: true, Preserved: { } preserved }
+            ? preserved.ScheduleCount == 1
+                ? Strings.Routes_StaleSchedule
+                : string.Format(CultureInfo.CurrentCulture, Strings.Routes_StaleSchedulesFormat, preserved.ScheduleCount)
+            : null;
+
+    /// <summary>Whether the stale-schedules notice shows.</summary>
+    public bool HasStaleSchedules => StaleSchedulesText is not null;
+
+    /// <summary>Whether the mariner chose to keep the stale schedules.</summary>
+    public bool IsKeepingStaleSchedules => _routes.Routes.ActiveRoute?.KeepStalePreservedSchedules ?? false;
+
+    private async Task ImportRouteAsync()
+    {
+        if (_exchange is null || _dialogs is null)
+            return;
+        if (await _dialogs.PickImportFileAsync(_exchange.Formats.FilePatterns) is not { } path)
+            return;
+        var result = await _exchange.ImportAsync(path);
+        if (result.Route is null)
+        {
+            ShowError(Strings.ImportError_Title, result.Error ?? Strings.Import_NotARoute);
+            return;
+        }
+        ZoomToActiveRoute();
+    }
+
+    private void CopyToEdit(Route? route)
+    {
+        if (_exchange is null || route is not { IsReadOnly: true })
+            return;
+        var preview = _exchange.PreviewCopy(route);
+        if (_dialogs is null)
+        {
+            _exchange.Copy(route);
+            return;
+        }
+        _dialogs.Show(new RouteCopyDialogViewModel(preview, () => _exchange.Copy(route), d => _dialogs.Close(d)), 520);
+    }
+
+    private void Export(Route? route)
+    {
+        if (_exchange is null || route is not { Waypoints.Count: >= 2 } || _dialogs is null)
+            return;
+        _dialogs.Show(new RouteExportDialogViewModel(_exchange, route, _dialogs, d => _dialogs.Close(d)), 500);
+    }
+
+    private void ShowError(string title, string message)
+        => _dialogs?.Show(new RouteImportErrorDialogViewModel(title, message, d => _dialogs.Close(d)), 420);
 
     private void AddRoute()
     {
@@ -763,6 +871,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
             var waypointRow = new RouteWaypointRowViewModel(this, i, wp.Name, fallbackName, coords)
             {
                 IsSelected = selected == i,
+                IsReadOnly = route.IsReadOnly,
                 IsFirst = i == 0,
                 IsLast = i == route.Waypoints.Count - 1,
             };
@@ -1026,6 +1135,12 @@ internal sealed class RouteWaypointRowViewModel : RouteTimelineRowViewModel
     /// flyout-binding reason as <see cref="InsertAfterCommand"/>.
     /// </summary>
     public ICommand DeleteCommand => _panel.DeleteWaypointAtCommand;
+
+    /// <summary>Copy to edit, offered by a received route's waypoint menu (#960, A8).</summary>
+    public ICommand CopyToEditCommand => _panel.CopyToEditCommand;
+
+    /// <summary>Whether the route is a received, read-only route: the row can't be edited.</summary>
+    public bool IsReadOnly { get; init; }
 
     /// <summary>Commits <see cref="NameText"/> as the waypoint's name (Enter or focus loss).</summary>
     public ICommand CommitNameCommand { get; }
