@@ -1172,12 +1172,39 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not DatasetEntry entry) return;
+        if (e.PropertyName == nameof(DatasetEntry.ViewingGroups))
+        {
+            ApplyEntryState(entry);
+            _ = RenderViewingGroupsAsync(entry);
+            return;
+        }
         if (e.PropertyName is not (
             nameof(DatasetEntry.IsVisible)
             or nameof(DatasetEntry.IsActive)
             or nameof(DatasetEntry.Opacity)))
             return;
         ApplyEntryState(entry);
+    }
+
+    // A dataset's own viewing groups change what its portrayal draws (Check
+    // route keeps only a received route's action points), so unlike the eye
+    // or opacity the dataset re-renders. A failed render keeps the old
+    // layers.
+    private async Task RenderViewingGroupsAsync(DatasetEntry entry)
+    {
+        if (_mapSession is null || !_processorOwner.TryAcquire(entry.Id, out var lease))
+            return;
+        IDatasetProcessor processor;
+        using (lease)
+            processor = lease.Processor;
+        try
+        {
+            await RenderAndReplaceAsync(entry, processor, presentation: null, CancellationToken.None).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            System.Diagnostics.Debug.WriteLine($"[viewing groups] {entry.DisplayName}: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private void OnSubLayerPropertyChanged(object? sender, PropertyChangedEventArgs e)

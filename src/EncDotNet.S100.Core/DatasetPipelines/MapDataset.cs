@@ -1,5 +1,6 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -43,6 +44,9 @@ public sealed class MapDataset
     /// <param name="versionAssessment">
     /// Assessment of the declared product edition against implemented editions.
     /// </param>
+    /// <param name="viewingGroups">
+    /// This dataset's own narrowing of viewing-group visibility, or <c>null</c>.
+    /// </param>
     /// <exception cref="ArgumentException">
     /// <paramref name="id"/> is the default value, or <paramref name="name"/>
     /// is empty or consists only of white-space characters.
@@ -64,7 +68,8 @@ public sealed class MapDataset
         DateTime? currentTime = null,
         IReadOnlyList<MapDatasetSubLayer>? subLayers = null,
         ValidationReport? validation = null,
-        SpecVersionAssessment? versionAssessment = null)
+        SpecVersionAssessment? versionAssessment = null,
+        ViewingGroupFilter? viewingGroups = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id.Value, nameof(id));
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -84,6 +89,7 @@ public sealed class MapDataset
         SubLayers = subLayers?.ToArray() ?? [];
         Validation = validation;
         VersionAssessment = versionAssessment;
+        ViewingGroups = viewingGroups;
     }
 
     /// <summary>Stable identity assigned by the host.</summary>
@@ -127,6 +133,14 @@ public sealed class MapDataset
 
     /// <summary>Renderer-neutral sub-layer display state.</summary>
     public IReadOnlyList<MapDatasetSubLayer> SubLayers { get; }
+
+    /// <summary>
+    /// This dataset's own narrowing of viewing-group visibility, on top of the
+    /// map-wide ECDIS display settings, or <c>null</c> for none. Unlike
+    /// <see cref="IsVisible"/> and <see cref="Opacity"/>, changing it needs a
+    /// re-render of the dataset (see <see cref="RenderContext.ViewingGroups"/>).
+    /// </summary>
+    public ViewingGroupFilter? ViewingGroups { get; }
 
     /// <summary>
     /// Validation report, or <c>null</c> when no rule pack exists for the

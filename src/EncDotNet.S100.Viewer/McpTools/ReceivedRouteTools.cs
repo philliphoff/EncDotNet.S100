@@ -24,7 +24,8 @@ internal sealed record SetRouteDisplayModeRequest(
 /// Sets a route's display mode, as the Native / Planning control under a
 /// received route's header does. The route's mode decides its dataset's
 /// visibility. While Check route is on for the route it's drawn in Planning
-/// mode whatever its mode, and its dataset stays on for the action points.
+/// mode whatever its mode, and its dataset stays on with only its action
+/// points.
 /// </summary>
 internal sealed class SetRouteDisplayModeTool : RouteToolBase
 {
@@ -74,7 +75,8 @@ internal static class ReceivedRouteMcpAdapters
         "dataset's own portrayal (waypoints, legs, action points) and the route renderer draws nothing; " +
         "\"planning\" hides the dataset and the route renderer draws the route (without editing handles on " +
         "a received route). The dataset's visibility follows the mode. While Check route is on for the " +
-        "route it is drawn in Planning mode and its dataset stays on for the action points. Only received " +
+        "route it is drawn in Planning mode and its dataset stays on with only its action points (S-421 viewing " +
+        "group 52270). Only received " +
         "S-421 routes have a Native mode. Returns the route (displayMode, readOnly, source). " +
         "Viewer-injected tool — mutates live state.";
 

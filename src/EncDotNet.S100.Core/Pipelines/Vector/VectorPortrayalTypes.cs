@@ -129,6 +129,7 @@ public sealed class ViewingGroupController
 {
     private readonly Dictionary<int, bool> _userOverrides = new();
     private IReadOnlySet<int>? _modeMembership;
+    private ViewingGroupFilter? _datasetFilter;
 
     /// <summary>
     /// Raised whenever effective visibility changes — either because
@@ -233,12 +234,37 @@ public sealed class ViewingGroupController
         _modeMembership is null ? null : new ReadOnlySetView<int>(_modeMembership);
 
     /// <summary>
+    /// The per-dataset filter applied after the mode membership and user
+    /// overrides, or <c>null</c>. See <see cref="SetDatasetFilter"/>.
+    /// </summary>
+    public ViewingGroupFilter? DatasetFilter => _datasetFilter;
+
+    /// <summary>
+    /// Sets or clears the per-dataset filter. A group the filter doesn't
+    /// allow is hidden whatever its mode membership or user override says;
+    /// the filter never shows a group those hide.
+    /// </summary>
+    /// <param name="filter">The filter, or <c>null</c> to clear it.</param>
+    public void SetDatasetFilter(ViewingGroupFilter? filter)
+    {
+        if (Equals(_datasetFilter, filter)) return;
+        _datasetFilter = filter;
+        Changed?.Invoke();
+    }
+
+    /// <summary>
     /// Returns the effective visibility for <paramref name="viewingGroup"/>.
     /// User overrides win over base mode membership; with no override and
-    /// no active mode, the group is visible.
+    /// no active mode, the group is visible. A <see cref="DatasetFilter"/>
+    /// then hides any group it doesn't allow.
     /// </summary>
     public bool IsVisible(int viewingGroup)
     {
+        if (_datasetFilter is not null && !_datasetFilter.Allows(viewingGroup))
+        {
+            return false;
+        }
+
         if (_userOverrides.TryGetValue(viewingGroup, out var overrideValue))
         {
             return overrideValue;

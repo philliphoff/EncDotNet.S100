@@ -207,7 +207,7 @@ SoundCharts only.
 
 | Tool | Changes state | What it does |
 |---|---|---|
-| `set_dataset_state` | Yes | Shows or hides a loaded dataset (`visible`), sets its `opacity` (0 to 1) and moves it in the draw order (`order`: `up`, `down`, `front` or `back`), as the Datasets list's eye icon, opacity control and move buttons do. With none of them, it only reports the state. Use it to show datasets that load hidden, such as gridded S-104 surfaces or duplicate exchange-set variants. Returns the state before and after (`position` and `previousPosition` are rows in the draw order, 0 on top) and `changed`, or `dataset_not_found`. |
+| `set_dataset_state` | Yes | Shows or hides a loaded dataset (`visible`), sets its `opacity` (0 to 1) and moves it in the draw order (`order`: `up`, `down`, `front` or `back`), as the Datasets list's eye icon, opacity control and move buttons do. With none of them, it only reports the state. Use it to show datasets that load hidden, such as gridded S-104 surfaces or duplicate exchange-set variants. Returns the state before and after (`position` and `previousPosition` are rows in the draw order, 0 on top), `changed`, and `viewingGroups`: the dataset's own viewing-group filter (`shownOnly`, `hidden`), or null. Check route sets `shownOnly: [52270]` on a received S-421 route's dataset so only its action points draw. Returns `dataset_not_found` for an unknown id. |
 | `select_dataset` | Yes | Selects a loaded dataset in the Datasets panel, as clicking its row does, so the inspector and the map's validation overlay follow it. `tab` (`dataset`, `layers` or `validation`) switches the inspector tab; otherwise the tab is kept. It doesn't open the panel; call `set_panel Datasets` first to see it. Returns `id`, `spec`, `previousId`, the `tab` shown, `deferred`, and a `validation` summary: `state` (`ready`, `no_rule_pack` or `not_loaded`), `total`, `errors`, `warnings`, `infos`, `located` (findings with a location, which the overlay draws) and `message` (the Validation tab's summary or empty-state text). Validation runs when a dataset loads, and `open_dataset` returns after it. For a dataset still loading, the tool waits up to `timeoutMs` (default 10000). An exchange-set cell that isn't loaded until it's in view reports `not_loaded`. Call `await_render_idle` before `capture_app_screenshot` so the overlay has painted. Returns `dataset_not_found` for an unknown id. |
 | `list_notifications` | No | Lists the notifications on screen, oldest first: `id`, `severity`, `title`, `message`, `createdUtc`, `persistent` and their action labels. |
 | `dismiss_notification` | Yes | Dismisses the notification with `id`, or all of them (`all`, the default), as the close button does. Returns the ids dismissed, or `notification_not_found`. Useful before a screenshot. |
@@ -297,7 +297,8 @@ with the S-421 portrayal, and the route overlay draws nothing.
 `set_route_display_mode` switches it to **Planning**, which hides the dataset
 and draws the route on the overlay, without editing handles. While Check
 passage is on for the route, it's drawn in Planning mode, and the dataset stays
-on for its action points.
+on with only its action points (S-421 viewing group 52270); `set_dataset_state`
+reports this as the dataset's `viewingGroups`.
 
 | Tool | Changes state | What it does |
 |---|---|---|

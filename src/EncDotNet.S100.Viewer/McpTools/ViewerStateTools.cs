@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -130,7 +131,19 @@ internal sealed record DatasetStateDto(
     [property: Description("Dataset opacity in 0..1, before the call.")] double PreviousOpacity,
     [property: Description("True when the call changed anything.")] bool Changed,
     [property: Description("Row in the draw order after the call; 0 paints on top.")] int Position = 0,
-    [property: Description("Row in the draw order before the call.")] int PreviousPosition = 0);
+    [property: Description("Row in the draw order before the call.")] int PreviousPosition = 0,
+    [property: Description("The dataset's own viewing-group filter on top of the display settings, or null for none. Check route sets it on a received S-421 route's dataset to keep only its action points.")] DatasetViewingGroupsDto? ViewingGroups = null);
+
+/// <summary>A dataset's own viewing-group filter (see <see cref="ViewingGroupFilter"/>).</summary>
+[Description("A dataset's own viewing-group filter, applied on top of the map-wide display settings.")]
+internal sealed record DatasetViewingGroupsDto(
+    [property: Description("The only viewing groups the dataset draws, or null when not restricted to a set.")] IReadOnlyList<int>? ShownOnly,
+    [property: Description("Viewing groups the dataset doesn't draw.")] IReadOnlyList<int> Hidden)
+{
+    /// <summary>The DTO for <paramref name="filter"/>, or <c>null</c>.</summary>
+    public static DatasetViewingGroupsDto? From(ViewingGroupFilter? filter)
+        => filter is null ? null : new(filter.ShownOnly?.Order().ToArray(), [.. filter.Hidden.Order()]);
+}
 
 /// <summary>A dataset's validation findings, as its Validation tab shows them.</summary>
 [Description("A dataset's validation findings, as the inspector's Validation tab shows them.")]
@@ -405,7 +418,8 @@ internal sealed class SetDatasetStateTool(IViewerDatasetStateController datasets
             outcome.Visible != outcome.PreviousVisible || outcome.Opacity != outcome.PreviousOpacity
                 || outcome.Position != outcome.PreviousPosition,
             outcome.Position,
-            outcome.PreviousPosition));
+            outcome.PreviousPosition,
+            DatasetViewingGroupsDto.From(outcome.ViewingGroups)));
     }
 }
 

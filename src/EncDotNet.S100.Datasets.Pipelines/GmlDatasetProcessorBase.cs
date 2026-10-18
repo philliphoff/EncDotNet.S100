@@ -239,6 +239,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     {
         var catalogue = _catalogue;
         context?.EcdisDisplay?.ApplyTo(catalogue);
+        catalogue.ViewingGroups.SetDatasetFilter(context?.ViewingGroups);
         ApplyDisplayMode(catalogue, context);
         await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
