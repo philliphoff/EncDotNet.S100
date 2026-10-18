@@ -149,18 +149,26 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         var result = engine.Check(legs, TestContext.Current.CancellationToken);
         first.Stop();
 
-        const int runs = 5;
-        var again = Stopwatch.StartNew();
-        for (var i = 0; i < runs; i++)
+        // The first checks run on tier-0 JIT code (about ten times slower);
+        // a drag re-checks dozens of times, so the steady state is what
+        // matters. Check until it settles (30 runs, or 20 s on a slow
+        // machine) and take the fastest of the last five.
+        var times = new List<double>();
+        var budget = Stopwatch.StartNew();
+        while (times.Count < 30 && (times.Count < 5 || budget.Elapsed < TimeSpan.FromSeconds(20)))
         {
+            var run = Stopwatch.StartNew();
             engine.Check(legs, TestContext.Current.CancellationToken);
+            times.Add(run.Elapsed.TotalMilliseconds);
         }
 
-        again.Stop();
-        var each = again.Elapsed.TotalMilliseconds / runs;
+        var settled = times.TakeLast(5).ToList();
+        var each = settled.Min();
         TestContext.Current.TestOutputHelper?.WriteLine(
             $"Route check, {result.LengthMeters / PassageGeodesy.MetersPerNauticalMile:0.0} NM in {legs.Count} legs: " +
-            $"first {first.Elapsed.TotalMilliseconds:0} ms (builds the cells' indexes), then {each:0.0} ms per check; {result.Findings.Count} findings.");
+            $"first {first.Elapsed.TotalMilliseconds:0} ms (builds the cells' indexes), settled {each:0.0}–{settled.Max():0.0} ms per check " +
+            $"after {times.Count} checks (the second took {times[0]:0} ms); {result.Findings.Count} findings: " +
+            string.Join(", ", result.Findings.GroupBy(f => f.Code).Select(g => $"{g.Key} ×{g.Count()}")) + ".");
 
         Assert.InRange(result.LengthMeters / PassageGeodesy.MetersPerNauticalMile, 20, 35);
         Assert.Contains(result.Findings, f => f.Code == RouteCheckCodes.CrossesDrying);
