@@ -214,6 +214,19 @@ internal sealed class DatasetEntry : ViewModelBase
         set => SetProperty(ref _isLoaded, value);
     }
 
+    private bool _isLoading;
+
+    /// <summary>
+    /// Whether a load of this dataset is in progress: set when the loader
+    /// starts and cleared when it finishes, whether it succeeded, failed or
+    /// was cancelled.
+    /// </summary>
+    public bool IsLoading
+    {
+        get => _isLoading;
+        set => SetProperty(ref _isLoading, value);
+    }
+
     /// <summary>
     /// True when the dataset's declared product-spec edition diverges from
     /// the edition this build implements in a way that may degrade rendering

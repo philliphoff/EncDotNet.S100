@@ -448,6 +448,10 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.GlobalTimeService>(),
             _viewModel);
 
+        // Navigational warnings (#932): the no-sources state's Open Library.
+        if (_viewModel.NavigationalWarnings is { } warnings)
+            warnings.OpenLibraryRequested += (_, _) => _viewModel.SelectTab(LibraryImportCoordinator.LibraryPanelId);
+
         // Library coverage (issue #655): outline the datasets listed in the
         // Library panel — without loading them — while that panel is showing.
         _libraryCoverageController = new LibraryCoverageOverlayController(

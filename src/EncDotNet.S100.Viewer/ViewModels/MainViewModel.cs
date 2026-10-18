@@ -42,6 +42,12 @@ internal sealed class MainViewModel : ViewModelBase
     public EcdisDisplayPanelViewModel EcdisDisplayPanel { get; }
 
     /// <summary>
+    /// The Navigational warnings panel (#932), whose in-map note the window
+    /// shows over the map; <c>null</c> in hosts without it.
+    /// </summary>
+    public NavigationalWarningsViewModel? NavigationalWarnings { get; }
+
+    /// <summary>
     /// Identifier of the default tab selected on a fresh launch (and the
     /// fallback when a persisted <see cref="ViewerSettings.LastSelectedActivity"/>
     /// no longer resolves to a registered tab).
@@ -1225,7 +1231,8 @@ internal sealed class MainViewModel : ViewModelBase
         Func<AboutDialogViewModel>? aboutDialogFactory = null,
         IEnumerable<IActivityTab>? activityTabs = null,
         McpServerHost? mcpServerHost = null,
-        RoutesService? routes = null)
+        RoutesService? routes = null,
+        NavigationalWarningsViewModel? navigationalWarnings = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -1288,6 +1295,7 @@ internal sealed class MainViewModel : ViewModelBase
         Settings = settingsViewModel;
         PickReport = pickReport;
         Timeline = timeline;
+        NavigationalWarnings = navigationalWarnings;
         DisplayToolbar = displayToolbar;
         TextToolbar = textToolbar;
         DisplayModeToolbar = displayModeToolbar;

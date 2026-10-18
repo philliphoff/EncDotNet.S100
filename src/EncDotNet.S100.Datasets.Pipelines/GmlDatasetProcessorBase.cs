@@ -495,6 +495,19 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     }
 
     /// <inheritdoc/>
+    public IReadOnlyList<NavigationalWarningFeature> GetNavigationalWarnings()
+    {
+        List<NavigationalWarningFeature>? warnings = null;
+        for (int i = 0; i < Features.Count; i++)
+        {
+            var feature = Features[i];
+            if (BuildNavigationalWarning(feature) is { } warning)
+                (warnings ??= []).Add(new NavigationalWarningFeature(feature.Id, i, warning));
+        }
+        return warnings ?? [];
+    }
+
+    /// <inheritdoc/>
     public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
         double latitude, double longitude, double radiusMeters) =>
         FeatureHitTester.HitTest(Features, latitude, longitude, radiusMeters);

@@ -56,6 +56,8 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly ISecomIdentityReferences? _secomIdentities;
     private readonly IViewerUiAutomation? _uiAutomation;
     private readonly ILoggerFactory? _loggers;
+    private readonly EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel? _navigationalWarnings;
+    private readonly NavigationalWarningsService? _navigationalWarningsService;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private S100McpServer? _server;
@@ -91,8 +93,12 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? passageCheck = null,
         EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel? clearance = null,
         EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? routeFindings = null,
-        EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? followPassage = null)
+        EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? followPassage = null,
+        EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel? navigationalWarnings = null,
+        NavigationalWarningsService? navigationalWarningsService = null)
     {
+        _navigationalWarnings = navigationalWarnings;
+        _navigationalWarningsService = navigationalWarningsService;
         _followPassage = followPassage;
         _passageCheck = passageCheck;
         _clearance = clearance;
@@ -403,6 +409,14 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(UiAutomationMcpAdapters.Create(new UiTreeTool(_uiAutomation)));
             foreach (var action in Enum.GetValues<UiAction>())
                 tools.Add(UiAutomationMcpAdapters.Create(new UiActionTool(_uiAutomation, action)));
+        }
+        if (_navigationalWarnings is not null && _navigationalWarningsService is not null)
+        {
+            var warningsInvoker = new DispatcherRouteEditInvoker();
+            tools.Add(NavigationalWarningsMcpAdapters.Create(
+                new ListNavigationalWarningsTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
+            tools.Add(NavigationalWarningsMcpAdapters.Create(
+                new SelectNavigationalWarningTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
         }
         if (_routesService is not null)
         {

@@ -211,6 +211,15 @@ SoundCharts only.
 | `list_notifications` | No | Lists the notifications on screen, oldest first: `id`, `severity`, `title`, `message`, `createdUtc`, `persistent` and their action labels. |
 | `dismiss_notification` | Yes | Dismisses the notification with `id`, or all of them (`all`, the default), as the close button does. Returns the ids dismissed, or `notification_not_found`. Useful before a screenshot. |
 
+### Navigational warning tools
+
+SoundCharts only.
+
+| Tool | Changes state | What it does |
+|---|---|---|
+| `list_navigational_warnings` | No | Lists every navigational warning part in the loaded S-124 datasets, as the **Navigational warnings** panel does, including text-only parts that have no location and draw nothing on the map. Returns the panel's `time` (`view_time` or `now`) and `statusTime`, the counts `inForce`, `notInForce` and `textOnly`, `hasSources`, `loading`, the panel's in-map `mapNote`, and `warnings` in dataset order. Each has its `datasetId` and `featureId`, `label` (series and number), `series`, `number`, `type`, `generalType`, `area`, `locality`, `issuer`, `published`, `status` at `statusTime` (`in_force`, `not_yet_in_force` or `ended`), `geometry` (`point`, `curve`, `surface` or `none`), `textOnly`, `bounds`, `validity` ranges, message `languages`, and `selected`. |
+| `select_navigational_warning` | Yes | Selects the part `featureId` of dataset `datasetId` in the **Navigational warnings** panel, as clicking its row does: **Object Information** opens on its Warning card and, when the part has a location and is in force, the map frames and highlights it. A part that isn't in force leaves the map where it is, and a text-only part shows the in-map note "… has no location, so nothing is drawn for it." Clears a search or filter that hides the row. Returns what `list_navigational_warnings` returns. |
+
 ### Library tools
 
 SoundCharts only.
@@ -532,7 +541,7 @@ previous one.
 ### Tools only SoundCharts has
 
 `pick_features`, `capture_app_screenshot`, `set_own_ship`, the panel, Timeline,
-dataset-state, notification, Library, SECOM and route tools, and the render
+dataset-state, notification, navigational warning, Library, SECOM and route tools, and the render
 statistics tools need the app's UI, so `s100 mcp serve` doesn't provide them.
 
 ## Example prompts

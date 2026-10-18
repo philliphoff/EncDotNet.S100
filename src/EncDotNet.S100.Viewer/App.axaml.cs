@@ -1168,7 +1168,9 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
             sp.GetRequiredService<ClearanceViewModel>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>(),
+            sp.GetRequiredService<NavigationalWarningsViewModel>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));
@@ -1255,6 +1257,18 @@ public partial class App : Application
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
         services.AddSingleton<RoutesPanelViewModel>();
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.NavigationalWarningsService(
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetRequiredService<DatasetsViewModel>()));
+        services.AddSingleton(sp => new NavigationalWarningsViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
+            sp.GetRequiredService<IPickService>(),
+            sp.GetRequiredService<PickReportViewModel>(),
+            sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+            sp.GetService<ITimeFormatProvider>(),
+            sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetService<TimeProvider>()));
         services.AddSingleton<MainViewModel>();
 
         // Activity-tab registry. Adding a new tab is a single AddActivityTab
@@ -1283,6 +1297,15 @@ public partial class App : Application
             name: Strings.Label_Activity_Library,
             tooltip: Strings.Tooltip_Library,
             iconFactory: static () => new FluentIcon { Icon = Icon.Library, IconVariant = IconVariant.Regular, FontSize = 22 });
+        // Navigational warnings (#932): every loaded S-124 warning, including
+        // the ones with no location, which only this list can reach.
+        services.AddActivityTab<NavigationalWarningsViewModel, NavigationalWarningsView>(
+            id: "NavigationalWarnings",
+            order: 25,
+            title: Strings.Pane_NavigationalWarnings,
+            name: Strings.Label_Activity_NavigationalWarnings,
+            tooltip: Strings.Tooltip_NavigationalWarnings,
+            iconFactory: static () => new FluentIcon { Icon = Icon.Warning, IconVariant = IconVariant.Regular, FontSize = 22 });
         services.AddActivityTab<EcdisDisplayPanelViewModel, EcdisDisplayPanelView>(
             id: "EcdisDisplay",
             order: 30,
