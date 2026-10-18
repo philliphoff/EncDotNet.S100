@@ -1,6 +1,4 @@
-using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
-using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Routing;
@@ -10,14 +8,26 @@ using Mapsui.Projections;
 namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 
 /// <summary>
-/// The findings list for the checked route (#905, handoff F1–F5): built
-/// from each <see cref="PassageCheckService"/> result, plus the selected
+/// The findings list for the checked route (#905, handoff F1–F5): what every
+/// <see cref="IRouteFindingProducer"/> finds on it (#953), plus the selected
 /// finding, which the map outlines and the profile cursor points at.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Clearance findings come from <see cref="PassageFindings"/>. #888's route
-/// checks will add theirs to the same list as <see cref="RouteFinding"/>s.
+/// The clearance findings (<see cref="ClearanceFindingProducer"/>, from
+/// <see cref="PassageFindings"/>) are the first producer; #888's route checks
+/// add theirs as further producers. Each producer's findings are kept apart,
+/// so a producer that is recomputing (stale), cancelled or failed never
+/// drops another's, and the list is their merge sorted by
+/// <see cref="PassageFindings.Sort"/>.
+/// </para>
+/// <para>
+/// Producers follow <see cref="PassageCheckService.Input"/>: a route,
+/// departure or dataset change re-runs them on the thread pool after the
+/// check's <see cref="PassageCheckService.Debounce"/> (none when only the
+/// departure moved), each newer run cancelling the last. A clearance producer
+/// re-runs when the clearance check lands instead. They run with or without a
+/// draft; only the clearance check needs one.
 /// </para>
 /// <para>
 /// <see cref="Select"/> follows the Validation tab's click-to-zoom pattern
@@ -37,11 +47,11 @@ internal sealed class RouteFindingsService : IDisposable
     private readonly IMarinerSettingsProvider? _mariner;
     private readonly ITimeFormatProvider? _timeFormat;
     private readonly TimeProvider _clock;
-    private readonly ICrsTransformFactory _transforms;
-    private readonly object _engineGate = new();
+    private readonly Action<Action> _post;
+    private readonly Slot[] _slots;
+    private readonly object _gate = new();
+    private PassageCheckService.CheckInput? _builtInput;
     private PassageCheckSnapshot? _built;
-    private IReadOnlyList<LoadedDataset>? _engineSnapshot;
-    private PassageCheckEngine? _engine;
     private bool _disposed;
 
     public RouteFindingsService(
@@ -52,7 +62,9 @@ internal sealed class RouteFindingsService : IDisposable
         IMarinerSettingsProvider? mariner = null,
         ITimeFormatProvider? timeFormat = null,
         TimeProvider? clock = null,
-        ICrsTransformFactory? transforms = null)
+        ICrsTransformFactory? transforms = null,
+        IEnumerable<IRouteFindingProducer>? producers = null,
+        Action<Action>? post = null)
     {
         ArgumentNullException.ThrowIfNull(check);
         ArgumentNullException.ThrowIfNull(routes);
@@ -64,7 +76,9 @@ internal sealed class RouteFindingsService : IDisposable
         _mariner = mariner;
         _timeFormat = timeFormat;
         _clock = clock ?? TimeProvider.System;
-        _transforms = transforms ?? new ProjNetCrsTransformFactory();
+        _post = post ?? (action => action());
+        IRouteFindingProducer[] all = [new ClearanceFindingProducer(transforms), .. producers ?? []];
+        _slots = all.Select(p => new Slot(p)).ToArray();
 
         _check.Changed += OnCheckChanged;
         if (_mariner is not null)
@@ -80,8 +94,38 @@ internal sealed class RouteFindingsService : IDisposable
     /// <summary>The selected finding, or <c>null</c>.</summary>
     public RouteFinding? Selected { get; private set; }
 
-    /// <summary>Raised when <see cref="Findings"/> or <see cref="Selected"/> changes.</summary>
+    /// <summary>Raised when <see cref="Findings"/>, <see cref="IsStale"/> or <see cref="Selected"/> changes.</summary>
     public event EventHandler? Changed;
+
+    /// <summary>The producers, the clearance findings first.</summary>
+    internal IReadOnlyList<IRouteFindingProducer> Producers => _slots.Select(s => s.Producer).ToList();
+
+    /// <summary>True while a producer is recomputing and its part of <see cref="Findings"/> is out of date.</summary>
+    public bool IsStale => _slots.Any(s => s.IsStale);
+
+    /// <summary>Why producers failed on their last run, in producer order; empty when none did.</summary>
+    public IReadOnlyList<string> Errors => _slots.Where(s => s.Error is not null).Select(s => s.Error!).ToList();
+
+    /// <summary>Completes when the check and every producer run scheduled so far have finished (or been cancelled).</summary>
+    internal async Task WhenIdle()
+    {
+        while (true)
+        {
+            await _check.WhenIdle().ConfigureAwait(false);
+            Task[] runs;
+            lock (_gate)
+            {
+                runs = _slots.Select(s => s.Idle).ToArray();
+            }
+
+            await Task.WhenAll(runs).ConfigureAwait(false);
+            lock (_gate)
+            {
+                if (runs.SequenceEqual(_slots.Select(s => s.Idle)))
+                    return;
+            }
+        }
+    }
 
     private DepthUnit DepthUnit => _mariner?.Current.DepthUnit ?? DepthUnit.Metres;
 
@@ -135,10 +179,10 @@ internal sealed class RouteFindingsService : IDisposable
     }
 
     /// <summary>
-    /// The findings for any route with a draft: the checked route's current
+    /// The findings for any route with legs: the checked route's current
     /// list, or a one-off check of another route (or of the active route
-    /// while Check passage is off). Returns <c>null</c> when the route can't
-    /// be checked (no legs, or a leg without a draft).
+    /// while Check passage is off) by every producer. Without a draft only the
+    /// route checks run. Returns <c>null</c> when the route has no legs.
     /// </summary>
     /// <param name="route">The route.</param>
     /// <param name="cancellationToken">Cancels the one-off check.</param>
@@ -146,48 +190,19 @@ internal sealed class RouteFindingsService : IDisposable
     internal async Task<IReadOnlyList<RouteFinding>?> FindingsForAsync(Route route, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(route);
-        if (_check.IsActive && _check.Current is { } current && current.RouteId == route.Id
-            && ReferenceEquals(route, _routes.Routes.ActiveRoute))
+        if (_check.Input is { } live && live.RouteId == route.Id && ReferenceEquals(route, _routes.Routes.ActiveRoute))
         {
             Rebuild(force: false);
             return Findings;
         }
 
-        if (route.Legs.Count == 0)
+        if (PassageCheckService.CheckInput.For(route, _routes.ViewTime.Current) is not { } input)
             return null;
-        var legs = RouteEtas.ToPassageLegs(route);
-        var named = new PassageLeg[legs.Count];
-        for (var i = 0; i < legs.Count; i++)
-        {
-            if (route.GetEffectiveLegValue(i, RoutePassageField.Draft) is null)
-                return null;
-            named[i] = legs[i] with { Name = $"{i + 1} → {i + 2}" };
-        }
 
-        var plan = new PassagePlan(named, route.Passage.Departure ?? _routes.ViewTime.Current);
-        var datasets = _catalog.Datasets;
-        var depthUnit = DepthUnit;
-        var timeFormat = TimeFormat;
-        var routeId = route.Id;
-        return await Task.Run(() =>
-        {
-            PassageCheckResult result;
-            lock (_engineGate)
-            {
-                if (!ReferenceEquals(datasets, _engineSnapshot) || _engine is null)
-                {
-                    var sources = PassageDataSources.FromDatasets(datasets, _transforms);
-                    _engine = new PassageCheckEngine(sources.Depth, sources.WaterLevel);
-                    _engineSnapshot = datasets;
-                }
-
-                var profile = _engine.SampleDepths(plan.Legs, null, cancellationToken);
-                result = _engine.Evaluate(profile, plan, cancellationToken);
-            }
-
-            var snapshot = new PassageCheckSnapshot(routeId, named, result, new string?[named.Length], null);
-            return PassageFindings.Build(snapshot, ExpiredForecasts(datasets, named, _clock.GetUtcNow()), depthUnit, timeFormat);
-        }, cancellationToken).ConfigureAwait(true);
+        var request = Request(input, clearance: null);
+        var runs = _slots.Select(s => Task.Run(() => s.Producer.ProduceAsync(request, cancellationToken), cancellationToken));
+        var found = await Task.WhenAll(runs).ConfigureAwait(true);
+        return PassageFindings.Sort(found.SelectMany(f => f));
     }
 
     /// <summary>
@@ -235,28 +250,228 @@ internal sealed class RouteFindingsService : IDisposable
             _mariner.Changed -= OnFormatChanged;
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged -= OnFormatChanged;
+        foreach (var slot in _slots)
+            slot.Pending?.Cancel();
     }
 
     private void OnCheckChanged(object? sender, EventArgs e) => Rebuild(force: false);
 
     private void OnFormatChanged<T>(T _) => Rebuild(force: true);
 
-    // The check service raises Changed for cursor moves too; the list is
-    // rebuilt only when the result itself changes (or a format does).
+    private RouteFindingRequest Request(PassageCheckService.CheckInput input, PassageCheckSnapshot? clearance) => new(
+        input.RouteId,
+        input.Legs,
+        input.Departure,
+        input.HasDraft,
+        _catalog.Datasets,
+        clearance,
+        DepthUnit,
+        TimeFormat,
+        _clock.GetUtcNow());
+
+    // The check service raises Changed for cursor moves too; producers re-run
+    // only when their inputs change (or a format does).
     private void Rebuild(bool force)
     {
-        var current = _check.IsActive ? _check.Current : null;
-        if (!force && ReferenceEquals(current, _built))
+        if (_disposed)
             return;
+
+        var input = _check.Input;
+        var current = input is null ? null : _check.Current;
+        var inputChanged = !ReferenceEquals(input, _builtInput);
+        var clearanceChanged = !ReferenceEquals(current, _built);
+        if (!force && !inputChanged && !clearanceChanged)
+            return;
+        var previous = _builtInput;
+        _builtInput = input;
         _built = current;
 
-        Findings = current is null
-            ? []
-            : PassageFindings.Build(current, ExpiredForecasts(_catalog.Datasets, current.Legs, _clock.GetUtcNow()), DepthUnit, TimeFormat);
+        if (input is null)
+        {
+            foreach (var slot in _slots)
+                slot.Reset();
+            Merge();
+            return;
+        }
+
+        // Only the departure (or view time) moved: no debounce, as the check.
+        var delay = previous is not null && previous.SameLegs(input) ? TimeSpan.Zero : _check.Debounce;
+        foreach (var slot in _slots)
+        {
+            if (slot.Producer.UsesClearance)
+            {
+                if (force || clearanceChanged)
+                    RunClearance(slot, input, current);
+            }
+            else if (force || inputChanged)
+            {
+                Schedule(slot, Request(input, clearance: null), delay);
+            }
+        }
+
+        Merge();
+    }
+
+    // A clearance producer runs as soon as the check lands; the check already
+    // debounced. A stale check keeps the findings of the one before.
+    private void RunClearance(Slot slot, PassageCheckService.CheckInput input, PassageCheckSnapshot? current)
+    {
+        slot.Pending?.Cancel();
+        slot.Pending = null;
+        if (current is null || current.RouteId != input.RouteId)
+        {
+            slot.Show(input.RouteId, []);
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        Task<IReadOnlyList<RouteFinding>> task;
+        try
+        {
+            task = slot.Producer.ProduceAsync(Request(input, current), cts.Token);
+        }
+        catch (Exception ex)
+        {
+            slot.Fail(input.RouteId, ex.Message);
+            return;
+        }
+
+        if (task.IsCompletedSuccessfully)
+        {
+            slot.Show(input.RouteId, task.Result);
+            return;
+        }
+
+        slot.Pending = cts;
+        slot.MarkStale(input.RouteId);
+        Track(slot, AwaitAsync(slot, input.RouteId, task, cts.Token));
+    }
+
+    private void Schedule(Slot slot, RouteFindingRequest request, TimeSpan delay)
+    {
+        slot.Pending?.Cancel();
+        var cts = new CancellationTokenSource();
+        slot.Pending = cts;
+        slot.MarkStale(request.RouteId);
+        Track(slot, RunAsync(slot, request, delay, cts.Token));
+    }
+
+    private void Track(Slot slot, Task run)
+    {
+        lock (_gate)
+        {
+            slot.Idle = run;
+        }
+    }
+
+    private async Task RunAsync(Slot slot, RouteFindingRequest request, TimeSpan delay, CancellationToken token)
+    {
+        try
+        {
+            if (delay > TimeSpan.Zero)
+                await Task.Delay(delay, token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            var task = Task.Run(() => slot.Producer.ProduceAsync(request, token), token);
+            await AwaitAsync(slot, request.RouteId, task, token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer request, or check mode turned off.
+        }
+    }
+
+    private async Task AwaitAsync(Slot slot, string routeId, Task<IReadOnlyList<RouteFinding>> task, CancellationToken token)
+    {
+        try
+        {
+            var found = await task.ConfigureAwait(false);
+            _post(() =>
+            {
+                if (token.IsCancellationRequested || _disposed)
+                    return;
+                slot.Pending = null;
+                slot.Show(routeId, found);
+                Merge();
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer request, or check mode turned off.
+        }
+        catch (Exception ex)
+        {
+            _post(() =>
+            {
+                if (token.IsCancellationRequested || _disposed)
+                    return;
+                slot.Pending = null;
+                slot.Fail(routeId, ex.Message);
+                Merge();
+            });
+        }
+    }
+
+    private void Merge()
+    {
+        Findings = PassageFindings.Sort(_slots.SelectMany(s => s.Findings));
 
         // Keep the selection when the recompute found the same thing.
         if (Selected is { } selected)
             Selected = Findings.FirstOrDefault(f => f.Id == selected.Id);
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>One producer's latest findings and its pending run.</summary>
+    private sealed class Slot(IRouteFindingProducer producer)
+    {
+        public IRouteFindingProducer Producer { get; } = producer;
+
+        /// <summary>The latest findings, for <see cref="RouteId"/>; kept while a newer run is pending.</summary>
+        public IReadOnlyList<RouteFinding> Findings { get; private set; } = [];
+
+        public string? RouteId { get; private set; }
+
+        public bool IsStale { get; private set; }
+
+        public string? Error { get; private set; }
+
+        public CancellationTokenSource? Pending { get; set; }
+
+        public Task Idle { get; set; } = Task.CompletedTask;
+
+        public void Show(string routeId, IReadOnlyList<RouteFinding> findings)
+        {
+            RouteId = routeId;
+            Findings = findings;
+            IsStale = false;
+            Error = null;
+        }
+
+        public void Fail(string routeId, string error)
+        {
+            RouteId = routeId;
+            Findings = [];
+            IsStale = false;
+            Error = error;
+        }
+
+        /// <summary>A run is pending: another route's findings go now; this route's stay until it lands.</summary>
+        public void MarkStale(string routeId)
+        {
+            if (RouteId != routeId)
+                Findings = [];
+            RouteId = routeId;
+            IsStale = true;
+        }
+
+        public void Reset()
+        {
+            Pending?.Cancel();
+            Pending = null;
+            Findings = [];
+            RouteId = null;
+            IsStale = false;
+            Error = null;
+        }
     }
 }

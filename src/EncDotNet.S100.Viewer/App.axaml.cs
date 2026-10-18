@@ -825,8 +825,9 @@ public partial class App : Application
             new EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
                 sp.GetRequiredService<GlobalTimeService>()));
-        // Findings list (#905): built from each check result; selecting one
-        // zooms the map to it and moves the profile cursor there.
+        // Findings list (#905): merged from the findings producers (#953), the
+        // clearance check first; selecting one zooms the map to it and moves
+        // the profile cursor there.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(sp =>
             new EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
@@ -835,7 +836,14 @@ public partial class App : Application
                 sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
                 sp.GetService<IMarinerSettingsProvider>(),
                 sp.GetService<ITimeFormatProvider>(),
-                sp.GetService<TimeProvider>()));
+                sp.GetService<TimeProvider>(),
+                post: action =>
+                {
+                    if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+                        action();
+                    else
+                        Avalonia.Threading.Dispatcher.UIThread.Post(action);
+                }));
         // Loads persisted routes at startup and writes them back (debounced)
         // on change, so user/agent routes survive a restart. Eagerly
         // initialized in OnFrameworkInitializationCompleted and flushed on

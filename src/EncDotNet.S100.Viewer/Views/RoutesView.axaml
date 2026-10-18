@@ -936,7 +936,14 @@
                                                TextWrapping="Wrap"
                                                VerticalAlignment="Center" />
                                 </StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                <!-- #953: without a draft the clearance parts give way to a hint. -->
+                                <TextBlock AutomationProperties.AutomationId="Routes.Check.NeedsDraft"
+                                           Text="{x:Static loc:Strings.Check_AddDraft}"
+                                           IsVisible="{Binding NeedsDraft}"
+                                           FontSize="11.5"
+                                           Opacity="0.75"
+                                           TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowClearance}">
                                     <TextBlock Classes="toneInk"
                                                AutomationProperties.AutomationId="Routes.Check.MinUkc"
                                                Text="{Binding MinUkcText}"
@@ -1103,6 +1110,13 @@
 
                         <!-- C5: one 34 px row per leg with its min-UKC chip.
                              Hovering a row moves the cursor and ghost there. -->
+                        <TextBlock AutomationProperties.AutomationId="Routes.Check.Legs.NeedsDraft"
+                                   Text="{x:Static loc:Strings.Check_AddDraft}"
+                                   IsVisible="{Binding ShowLegsNeedsDraft}"
+                                   FontSize="11"
+                                   Opacity="0.55"
+                                   TextWrapping="Wrap"
+                                   Margin="4,2" />
                         <ItemsControl AutomationProperties.AutomationId="Routes.Check.Legs"
                                       ItemsSource="{Binding Legs}"
                                       IsVisible="{Binding ShowLegs}">

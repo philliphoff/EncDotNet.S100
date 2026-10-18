@@ -153,6 +153,21 @@ internal sealed class PassageCheckService : IDisposable
     /// <summary>Whether Check passage is on.</summary>
     public bool IsActive => _routes.IsCheckModeActive;
 
+    /// <summary>
+    /// The route being checked: its legs, departure and whether it has a
+    /// draft; <c>null</c> when Check passage is off or the active route has
+    /// no legs. A new instance means the inputs changed (#953: the findings
+    /// producers re-run on it).
+    /// </summary>
+    internal CheckInput? Input => IsActive ? _lastInput : null;
+
+    /// <summary>
+    /// Whether the checked route has a draft. Without one the clearance
+    /// check doesn't run (<see cref="Current"/> stays <c>null</c>) and only
+    /// the route checks do (#953).
+    /// </summary>
+    public bool HasDraft => Input?.HasDraft ?? false;
+
     /// <summary>The latest completed check for the active route, or <c>null</c>.</summary>
     public PassageCheckSnapshot? Current { get; private set; }
 
@@ -280,7 +295,7 @@ internal sealed class PassageCheckService : IDisposable
         if (!IsActive)
         {
             CancelPending();
-            var had = Current is not null || IsComputing || Error is not null || Cursor is not null || Window is not null;
+            var had = _lastInput is not null || Current is not null || IsComputing || Error is not null || Cursor is not null || Window is not null;
             ClearWindow();
             Current = null;
             Cursor = null;
@@ -303,6 +318,27 @@ internal sealed class PassageCheckService : IDisposable
             Error = null;
             _lastInput = null;
             Changed?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        if (!input.HasDraft)
+        {
+            // #953: no draft, no clearance check; the route checks still run
+            // on Input, so it changes only when the route does.
+            var changed = Current is not null || IsComputing || Error is not null || Cursor is not null || Window is not null
+                || _lastInput is not { } previousInput || !previousInput.SameAs(input);
+            CancelPending();
+            ClearWindow();
+            Current = null;
+            Cursor = null;
+            IsStale = IsComputing = false;
+            Error = null;
+            if (changed)
+            {
+                _lastInput = input;
+                Changed?.Invoke(this, EventArgs.Empty);
+            }
+
             return;
         }
 
@@ -512,23 +548,31 @@ internal sealed class PassageCheckService : IDisposable
     }
 
     /// <summary>The route values a check depends on, read on the UI thread.</summary>
-    private sealed record CheckInput(string RouteId, IReadOnlyList<PassageLeg> Legs, DateTimeOffset Departure)
+    /// <param name="RouteId">The route.</param>
+    /// <param name="Legs">The effective legs, named "1 → 2"; a leg without a draft has <see cref="PassageLeg.DraftMeters"/> 0.</param>
+    /// <param name="Departure">The route's departure, or the view time when it has none.</param>
+    /// <param name="HasDraft">Whether every leg has a draft, which the clearance check needs.</param>
+    internal sealed record CheckInput(string RouteId, IReadOnlyList<PassageLeg> Legs, DateTimeOffset Departure, bool HasDraft)
     {
-        public static CheckInput? From(RoutesService routes)
+        public static CheckInput? From(RoutesService routes) =>
+            routes.Routes.ActiveRoute is { } route ? For(route, routes.ViewTime.Current) : null;
+
+        /// <summary>The inputs for <paramref name="route"/>, or <c>null</c> when it has no legs.</summary>
+        public static CheckInput? For(Route route, DateTimeOffset viewTime)
         {
-            if (routes.Routes.ActiveRoute is not { Legs.Count: > 0 } route)
+            if (route.Legs.Count == 0)
                 return null;
 
             var legs = RouteEtas.ToPassageLegs(route);
             var named = new PassageLeg[legs.Count];
+            var hasDraft = true;
             for (var i = 0; i < legs.Count; i++)
             {
-                if (route.GetEffectiveLegValue(i, RoutePassageField.Draft) is null)
-                    return null;
+                hasDraft &= route.GetEffectiveLegValue(i, RoutePassageField.Draft) is not null;
                 named[i] = legs[i] with { Name = $"{i + 1} → {i + 2}" };
             }
 
-            return new CheckInput(route.Id, named, route.Passage.Departure ?? routes.ViewTime.Current);
+            return new CheckInput(route.Id, named, route.Passage.Departure ?? viewTime, hasDraft);
         }
 
         public bool SameAs(CheckInput other) => Departure == other.Departure && SameLegs(other);
@@ -536,7 +580,7 @@ internal sealed class PassageCheckService : IDisposable
         /// <summary>Same route, legs and vessel values; the departure may differ.</summary>
         public bool SameLegs(CheckInput other)
         {
-            if (RouteId != other.RouteId || Legs.Count != other.Legs.Count)
+            if (RouteId != other.RouteId || HasDraft != other.HasDraft || Legs.Count != other.Legs.Count)
                 return false;
             for (var i = 0; i < Legs.Count; i++)
             {

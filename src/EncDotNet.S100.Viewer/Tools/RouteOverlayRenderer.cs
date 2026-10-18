@@ -109,8 +109,11 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             DrawActive(canvas, active, scene, ToScreen, opacity);
             if (scene.Check is { } check)
             {
+                DrawFindingMarkers(canvas, check, ToScreen, opacity);
                 DrawCheckMarkers(canvas, check, ToScreen, (float)viewport.Rotation, opacity);
-                var legendTop = DrawLegend(canvas, check, (float)viewport.Height, opacity);
+                var legendTop = check.HasClearance
+                    ? DrawLegend(canvas, check, (float)viewport.Height, opacity)
+                    : (float)viewport.Height - LegendBottomMargin;
                 if (check.Finding is { } finding)
                 {
                     DrawFindingOutline(canvas, finding, check.Colors, ToScreen, opacity);
@@ -302,6 +305,25 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             }
             foreach (var part in Geodesy.MarineGeodesy.SplitAtAntimeridian(segment.Path))
                 DrawPath(canvas, Project(part, toScreen), paint);
+        }
+    }
+
+    /// <summary>Radius of a finding's marker dot, in pixels (#953).</summary>
+    internal const float FindingMarkerRadius = 4.5f;
+
+    private static void DrawFindingMarkers(SKCanvas canvas, RouteCheckOverlay check, Func<GeoPosition, Point?> toScreen, float opacity)
+    {
+        // #953: a dot per finding in its group's tone, on a casing ring. The
+        // selected one is also outlined (F3), so it's drawn a little larger.
+        using var casing = Stroke(check.Colors.Casing.WithAlpha(Alpha(opacity)), 2f);
+        foreach (var marker in check.Markers)
+        {
+            if (toScreen(marker.Position) is not { } p)
+                continue;
+            var r = marker.IsSelected ? FindingMarkerRadius + 1.5f : FindingMarkerRadius;
+            using var fill = Fill(marker.Tone.WithAlpha(Alpha(opacity)));
+            canvas.DrawCircle((float)p.X, (float)p.Y, r, fill);
+            canvas.DrawCircle((float)p.X, (float)p.Y, r, casing);
         }
     }
 

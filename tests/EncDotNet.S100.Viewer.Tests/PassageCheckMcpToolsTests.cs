@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Routing;
@@ -74,13 +75,32 @@ public sealed class PassageCheckMcpToolsTests
     }
 
     [Fact]
-    public async Task Set_check_mode_needs_a_draft()
+    public async Task Set_check_mode_without_a_draft_runs_the_route_checks_only()
     {
         var f = new PassageCheckFixture();
         f.Route.SetPassageValue(RoutePassageField.Draft, null);
         var tool = new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check);
 
         var result = await tool.InvokeAsync(new SetCheckModeRequest(true), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var state));
+        Assert.True(state!.On);
+        Assert.False(state.HasDraft);
+        Assert.Null(state.Verdict);
+        Assert.Null(state.MinUkcMeters);
+        Assert.Null(state.Window);
+        Assert.True(f.Routes.IsCheckModeActive);
+    }
+
+    [Fact]
+    public async Task Set_check_mode_needs_two_waypoints()
+    {
+        var f = new PassageCheckFixture();
+        var empty = f.Routes.Routes.CreateRoute("Empty");
+        empty.AppendWaypoint(new GeoPosition(0, 0));
+        var tool = new SetCheckModeTool(f.Routes, new InlineInvoker(), f.Check);
+
+        var result = await tool.InvokeAsync(new SetCheckModeRequest(true, empty.Id), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetError(out var error));
         Assert.IsType<InvalidArgument>(error);
