@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Check route on a received route shows only its action points.** While
+  Check route is on for a received S-421 route, its dataset now draws only
+  its action points (viewing group 52270) under the Planning-mode route line,
+  not its own waypoints and legs as well. `set_dataset_state` reports this as
+  the dataset's `viewingGroups`. In the libraries, `ViewingGroupFilter` on
+  `MapDataset.ViewingGroups` and `RenderContext.ViewingGroups` narrows the
+  viewing groups of one dataset; the XSLT (GML) vector products honour it.
+  The `MapDataset` constructor has a new optional `viewingGroups` parameter.
+
 - **Read long attribute text in full.** In SoundCharts' Object Information,
   S-101 referenced text files (`TXTDSC` / `NTXTDS`) and any other text value
   with a line break or over 120 characters, such as S-122 and S-127

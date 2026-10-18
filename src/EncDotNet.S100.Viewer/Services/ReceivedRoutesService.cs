@@ -3,6 +3,7 @@ using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Routing.Persistence;
@@ -30,8 +31,9 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <item>The route's display mode is the source of truth for its dataset's
 /// visibility: Native shows the dataset, Planning hides it, except while the
 /// route is checked, when Check route draws it in Planning mode and the
-/// dataset stays on for its action points. Toggling the dataset's eye
-/// switches the mode.</item>
+/// dataset stays on with only its action points
+/// (<see cref="CheckedViewingGroups"/>). Toggling the dataset's eye switches
+/// the mode.</item>
 /// <item>Closing the dataset removes the route; if it was being checked,
 /// Check route and Follow passage end and a toast says why. Closing the
 /// route closes its dataset.</item>
@@ -49,6 +51,20 @@ internal sealed class ReceivedRoutesService
     private readonly INotificationService? _notifications;
     private readonly FollowPassageService? _follow;
     private readonly Func<DatasetEntry, S421Dataset?> _read;
+    /// <summary>
+    /// S-421 viewing group 52270, "Planned route - Action point", the only
+    /// group the S-421 portrayal catalogue draws action points in
+    /// (<c>RouteActionPoint.xsl</c>).
+    /// </summary>
+    public const int ActionPointViewingGroup = 52270;
+
+    /// <summary>
+    /// What a received route's dataset draws while Check route is on for it:
+    /// its action points only. The legs and waypoints (52240) and the leg
+    /// notes and fallback symbols (21010) are left to the route renderer.
+    /// </summary>
+    public static ViewingGroupFilter CheckedViewingGroups { get; } = ViewingGroupFilter.ShowOnly([ActionPointViewingGroup]);
+
     private readonly Dictionary<Route, DatasetEntry> _datasets = new();
     private readonly HashSet<Route> _fileRoutes = [];
     private bool _syncing;
@@ -202,7 +218,10 @@ internal sealed class ReceivedRoutesService
             // A newer edition replaces the older one's route; the older
             // dataset stays open as a dataset.
             if (_datasets.TryGetValue(existing, out var olderEntry))
+            {
                 olderEntry.PropertyChanged -= OnEntryPropertyChanged;
+                olderEntry.ViewingGroups = null;
+            }
             _datasets.Remove(existing);
             _fileRoutes.Remove(existing);
             EndCheckIfChecked(existing, announce: false);
@@ -280,12 +299,18 @@ internal sealed class ReceivedRoutesService
     {
         if (!_datasets.TryGetValue(route, out var entry))
             return;
-        var visible = route.DisplayMode == RouteDisplayMode.Native || IsChecked(_routes, route);
-        if (entry.IsVisible == visible)
+        var isChecked = IsChecked(_routes, route);
+        var visible = route.DisplayMode == RouteDisplayMode.Native || isChecked;
+
+        // Decision 15: while checked, the route renderer draws the legs and
+        // waypoints, so the dataset keeps only its action points.
+        var viewingGroups = isChecked ? CheckedViewingGroups : null;
+        if (entry.IsVisible == visible && Equals(entry.ViewingGroups, viewingGroups))
             return;
         _syncing = true;
         try
         {
+            entry.ViewingGroups = viewingGroups;
             entry.IsVisible = visible;
         }
         finally

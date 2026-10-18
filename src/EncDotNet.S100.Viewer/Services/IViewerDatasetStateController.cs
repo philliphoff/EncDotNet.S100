@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Avalonia.Threading;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -103,6 +104,7 @@ internal sealed record DatasetSelectionOutcome(
 /// <param name="PreviousOpacity">The dataset's opacity, before.</param>
 /// <param name="Position">The dataset's row in the draw order, afterwards (0 paints on top).</param>
 /// <param name="PreviousPosition">The dataset's row in the draw order, before.</param>
+/// <param name="ViewingGroups">The dataset's own viewing-group filter, or <c>null</c>.</param>
 internal sealed record DatasetStateOutcome(
     string Id,
     string Spec,
@@ -111,7 +113,8 @@ internal sealed record DatasetStateOutcome(
     bool PreviousVisible,
     double PreviousOpacity,
     int Position = 0,
-    int PreviousPosition = 0);
+    int PreviousPosition = 0,
+    ViewingGroupFilter? ViewingGroups = null);
 
 /// <summary>Default <see cref="IViewerDatasetStateController"/> over <see cref="DatasetsViewModel"/>.</summary>
 internal sealed class ViewerDatasetStateController : IViewerDatasetStateController
@@ -157,7 +160,7 @@ internal sealed class ViewerDatasetStateController : IViewerDatasetStateControll
             move?.Execute(entry);
             outcome = new DatasetStateOutcome(
                 entry.DisplayName, entry.ProductSpec, entry.IsVisible, entry.Opacity, previousVisible, previousOpacity,
-                _datasets.Entries.IndexOf(entry), previousPosition);
+                _datasets.Entries.IndexOf(entry), previousPosition, entry.ViewingGroups);
         }).ConfigureAwait(false);
         return outcome;
     }

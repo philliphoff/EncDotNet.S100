@@ -4,6 +4,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui;
 using Mapsui.Layers;
@@ -77,6 +78,31 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.Equal(0.75, context.TextScale);
         Assert.Same(presentation.EcdisDisplay, context.EcdisDisplay);
         Assert.Same(mariner, context.Mariner);
+    }
+
+    [Fact]
+    public async Task RenderPassesTheDatasetsOwnViewingGroupsAndSetDatasetKeepsThem()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var id = new MapDatasetId("route");
+        var processor = new StubProcessor(id.Value);
+        Assert.True(owner.TryRegister(id, processor));
+        var filter = ViewingGroupFilter.ShowOnly([52270]);
+        session.SetDataset(new MapDataset(
+            id,
+            id.Value,
+            new DatasetMetadata { Spec = new SpecRef("S-421", new SpecVersion(1, 0, 0)) },
+            viewingGroups: filter));
+
+        await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        Assert.Equal(filter, processor.LastContext!.ViewingGroups);
+        Assert.Equal(filter, session.GetDataset(id)!.Dataset.ViewingGroups);
+
+        session.SetDataset(Dataset(id, productSpec: "S-421"));
+        await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        Assert.Null(processor.LastContext!.ViewingGroups);
     }
 
     [Fact]

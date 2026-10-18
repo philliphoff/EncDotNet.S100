@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Validation;
 using EncDotNet.S100.Viewer.McpTools;
@@ -185,6 +186,24 @@ public sealed class ViewerStateToolsTests
     }
 
     // ── set_dataset_state ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Dataset_state_reports_the_dataset_s_own_viewing_groups()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var entry = new DatasetEntry("/data/route.gml", "S-421");
+        datasets.Entries.Add(entry);
+        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(entry.DisplayName, null, null), TestContext.Current.CancellationToken)).TryGetValue(out var none));
+        Assert.Null(none!.ViewingGroups);
+
+        entry.ViewingGroups = ViewingGroupFilter.ShowOnly([52270]);
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(entry.DisplayName, null, null), TestContext.Current.CancellationToken)).TryGetValue(out var only));
+        Assert.Equal([52270], only!.ViewingGroups!.ShownOnly);
+        Assert.Empty(only.ViewingGroups.Hidden);
+        Assert.False(only.Changed);
+    }
 
     [Fact]
     public async Task Dataset_state_shows_a_hidden_dataset_and_reports_the_change()
