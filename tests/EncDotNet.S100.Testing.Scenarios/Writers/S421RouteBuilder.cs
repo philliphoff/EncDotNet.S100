@@ -47,6 +47,9 @@ public static class S421RouteBuilder
     /// <summary>The edition written to every generated route.</summary>
     public const int Edition = 1;
 
+    /// <summary>The port and starboard cross-track limits written on every leg, in metres.</summary>
+    public const double CrossTrackLimitMeters = 100;
+
     /// <summary>The waypoints' positions, rounded to 10⁻⁷ degrees.</summary>
     /// <param name="definition">The scenario.</param>
     /// <param name="spec">The route.</param>
@@ -107,8 +110,8 @@ public static class S421RouteBuilder
             {
                 Id = $"RTE.LEG.{i}",
                 Coordinates = [positions[i - 1], positions[i]],
-                StarboardCrossTrackDistanceLimit = 100,
-                PortCrossTrackDistanceLimit = 100,
+                StarboardCrossTrackDistanceLimit = CrossTrackLimitMeters,
+                PortCrossTrackDistanceLimit = CrossTrackLimitMeters,
                 GeometryTypeCode = 1,
                 Draft = spec.Passage.DraftMeters,
                 StaticUnderKeelClearance = spec.Passage.RequiredUkcMeters,

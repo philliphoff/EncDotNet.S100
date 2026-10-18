@@ -1,3 +1,4 @@
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services.Depth;
@@ -9,7 +10,8 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// <remarks>
 /// The decision is driven by the S-101 skin-of-the-earth (group-1) area under
 /// the pick, read directly from the already-resolved pick hits — no extra
-/// dataset query. When no S-101 group-1 area is present, S-102 coverage over
+/// dataset query — and classified by the shared <see cref="SkinOfTheEarth"/>
+/// rules the route check uses too. When no S-101 group-1 area is present, S-102 coverage over
 /// the point is taken as a positive water signal (bathymetry is only
 /// collected over water); otherwise the result is
 /// <see cref="WaterLandClass.Unknown"/> and the card is suppressed (avoiding
@@ -19,27 +21,6 @@ internal sealed class WaterLandClassifier
 {
     /// <summary>Product specification code identifying S-101 pick hits.</summary>
     private const string S101Spec = "S-101";
-
-    /// <summary>
-    /// S-101 group-1 skin-of-the-earth feature types that denote water. A
-    /// drying/intertidal area is a <c>DepthArea</c> with a negative
-    /// <c>depthRangeMinimumValue</c>, so it classifies as water without
-    /// special-casing.
-    /// </summary>
-    private static readonly HashSet<string> WaterAreas = new(StringComparer.Ordinal)
-    {
-        "DepthArea",
-        "DredgedArea",
-        "UnsurveyedArea",
-    };
-
-    /// <summary>
-    /// S-101 group-1 skin-of-the-earth feature types that denote land.
-    /// </summary>
-    private static readonly HashSet<string> LandAreas = new(StringComparer.Ordinal)
-    {
-        "LandArea",
-    };
 
     /// <summary>
     /// Classifies the pick.
@@ -63,13 +44,14 @@ internal sealed class WaterLandClassifier
                 continue;
             }
 
-            if (WaterAreas.Contains(hit.FeatureType))
+            switch (SkinOfTheEarth.Classify(hit.FeatureType))
             {
-                hasWaterArea = true;
-            }
-            else if (LandAreas.Contains(hit.FeatureType))
-            {
-                hasLandArea = true;
+                case SkinOfTheEarthClass.Water:
+                    hasWaterArea = true;
+                    break;
+                case SkinOfTheEarthClass.Land:
+                    hasLandArea = true;
+                    break;
             }
         }
 

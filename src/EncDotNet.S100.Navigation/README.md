@@ -147,11 +147,61 @@ Every method takes a `CancellationToken`.
 duration and start and end ETA, and the arrival time. `EtaAt(leg, distance)`
 gives the ETA at any point along a leg.
 
+## Check a route against the chart
+
+`RouteCheckEngine` checks a route against charted land, drying ground and the
+extent of the loaded charts. It reads charted features through
+`IRouteChartSource`; `RouteCheckDataSources` in
+`EncDotNet.S100.Datasets.Pipelines` implements it over loaded S-101 cells:
+
+```csharp
+var charts = RouteCheckDataSources.FromDatasets(catalog.Datasets).Charts;
+var engine = new RouteCheckEngine(charts);
+
+var legs = new[]
+{
+    new RouteCheckLeg([a, b], PortCrossTrackMeters: 185, StarboardCrossTrackMeters: 185),
+    new RouteCheckLeg([b, c]), // both sides use RouteCheckOptions.DefaultHalfWidthMeters (50 m)
+};
+
+foreach (var finding in engine.Check(legs).Findings)
+{
+    Console.WriteLine($"{finding.Group} {finding.Code} at {finding.DistanceMeters:F0} m: {finding.Meta}");
+}
+```
+
+Each leg's corridor reaches `PortCrossTrackMeters` to port of the track and
+`StarboardCrossTrackMeters` to starboard. Both are **half-widths**, measured
+from the track to one edge, the same as S-421 and RTZ cross-track limits, so
+the full corridor is their sum.
+
+| Code | Group | When |
+| --- | --- | --- |
+| `route_check.crosses_land` | MustReview | The track crosses a `LandArea`, or a `Coastline` where no land area is charted |
+| `route_check.crosses_drying` | MustReview | The track crosses a `DepthArea` that dries (DRVAL1 below the datum) |
+| `route_check.land_in_corridor` | Check | Land reaches inside the cross-track limits, but the track doesn't cross it |
+| `route_check.drying_in_corridor` | Check | The same for drying ground |
+| `data.outside_chart_coverage` | Check | The track leaves the `DataCoverage` of every loaded cell |
+
+Crossings of the track are found exactly. Ground that only reaches into the
+corridor is found at cross-sections every
+`RouteCheckOptions.StationSpacingMeters` (default 10 m). Where cells overlap,
+only the finest cell at a place counts (`CellScaleRanking`), so a coarse cell's
+generalised land doesn't fire where a finer cell charts water.
+
+Once the cells' indexes are built (the first check), checking the 24 NM Solent
+route against 17 UKHO trial cells takes about 50 ms, and re-checking the two
+legs either side of a dragged waypoint about 11 ms. The wording comes from
+`RouteCheckOptions.Text`, so hosts can pass their own resources.
+
+`SkinOfTheEarth` holds the water, land and drying rules the route check and
+the viewer's pick report share.
+
 ## Findings
 
 `RouteFinding` is one entry in a route's findings list. Each check (under-keel
-clearance, and later charted dangers, land and S-124 warnings) produces these,
-so one list can show them all. A finding has:
+clearance, the route check, and later charted dangers and S-124 warnings)
+produces these, so one list can show them all. A finding has:
 
 - a `Group`: `MustReview`, `Check` or `Info`
 - a `Source`, which names the check: `Clearance`, `RouteCheck`, `S124`,
