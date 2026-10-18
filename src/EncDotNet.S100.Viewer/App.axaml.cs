@@ -1265,9 +1265,35 @@ public partial class App : Application
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
         services.AddSingleton<RoutesPanelViewModel>();
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(
+            sp.GetRequiredService<ViewerDataPaths>().NavigationalWarningsFilePath,
+            sp.GetRequiredService<ViewerSettings>().IsReadOnly,
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore>>()));
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.INavigationalWarningSources>(sp =>
+        {
+            // A warning's source and freshness: SECOM services and shared feeds report when they last answered (#932).
+            var secom = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.SecomSourceIndexer>();
+            var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>();
+            var catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
+            return new EncDotNet.S100.Viewer.Services.LibraryNavigationalWarningSources(
+                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+                sp.GetRequiredService<DatasetsViewModel>(),
+                sp.GetRequiredService<Library.ILibraryDownloader>(),
+                source => source switch
+                {
+                    EncDotNet.S100.Collections.SecomSource service => secom.HealthOf(service),
+                    EncDotNet.S100.Collections.S100FeedSource feed => feeds.HealthOf(feed.FeedUri),
+                    EncDotNet.S100.Collections.S100CatalogueFeedSource catalogue => catalogues.HealthOf(catalogue.CatalogUri),
+                    _ => null,
+                },
+                id => sp.GetRequiredService<LibraryPanelViewModel>().SourceDisplayName(id));
+        });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.NavigationalWarningsService(
             sp.GetRequiredService<IDatasetLoaderService>(),
-            sp.GetRequiredService<DatasetsViewModel>()));
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.INavigationalWarningSources>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore>(),
+            sp.GetService<TimeProvider>()));
         services.AddSingleton(sp => new NavigationalWarningsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
             sp.GetRequiredService<IPickService>(),

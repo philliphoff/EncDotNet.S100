@@ -129,6 +129,16 @@ internal sealed class ViewerDataPaths
             : Path.Combine(DefaultSettingsDirectory, "collections.json");
 
     /// <summary>
+    /// Absolute path of <c>navigational-warnings.json</c>: which navigational
+    /// warnings each Library source brought and which are still new (#932).
+    /// Placed like <see cref="CollectionsFilePath"/>.
+    /// </summary>
+    public string NavigationalWarningsFilePath =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "navigational-warnings.json")
+            : Path.Combine(DefaultSettingsDirectory, "navigational-warnings.json");
+
+    /// <summary>
     /// Absolute path of <c>catalogues.json</c>, the online catalogues the
     /// user added by URL (a known-sources document). Placed like
     /// <see cref="CollectionsFilePath"/>. Issue #670.

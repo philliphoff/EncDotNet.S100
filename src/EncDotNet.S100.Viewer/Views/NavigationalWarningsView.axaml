@@ -7,6 +7,12 @@
              x:Class="EncDotNet.S100.Viewer.Views.NavigationalWarningsView"
              x:DataType="vm:NavigationalWarningsViewModel">
 
+    <UserControl.Resources>
+        <!-- A source that didn't answer: the Warning card's amber. -->
+        <SolidColorBrush x:Key="DepthWarningSubtleBrush" Color="{DynamicResource WarningColor}" Opacity="0.12" />
+        <SolidColorBrush x:Key="DepthWarningBrush" Color="{DynamicResource WarningColor}" />
+    </UserControl.Resources>
+
     <UserControl.Styles>
         <!-- Now / View time: the Library's segment look. -->
         <Style Selector="Border.navwarnSegments">
@@ -71,8 +77,14 @@
                               IsChecked="{Binding IsTextOnlyFilter, Mode=TwoWay}">
                     <TextBlock Text="{Binding TextOnlyText}" FontSize="11" Opacity="0.85" />
                 </ToggleButton>
+                <TextBlock Text="·" FontSize="11" Opacity="0.7" VerticalAlignment="Center" IsVisible="{Binding HasNew}" />
+                <TextBlock Text="{Binding NewText}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                           Foreground="{DynamicResource AccentBrush}"
+                           IsVisible="{Binding HasNew}"
+                           AutomationProperties.AutomationId="NavigationalWarnings.NewCount"
+                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_New}" />
             </StackPanel>
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
                 <TextBox Grid.Column="0"
                          AutomationProperties.AutomationId="NavigationalWarnings.Search"
                          AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Search}"
@@ -107,6 +119,19 @@
                     <ComboBoxItem Content="{x:Static loc:Strings.NavWarnings_SortNumber}" />
                     <ComboBoxItem Content="{x:Static loc:Strings.NavWarnings_SortPublished}" />
                 </ComboBox>
+                <!-- Reads the SECOM services and feeds that supplied the warnings again (#932). -->
+                <Button Grid.Column="2"
+                        Classes="Icon"
+                        Padding="6"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="NavigationalWarnings.Refresh"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Refresh}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_Refresh}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_Refresh}"
+                        ToolTip.ShowOnDisabled="True"
+                        Command="{Binding RefreshCommand}">
+                    <ic:FluentIcon Icon="ArrowClockwise" FontSize="14" />
+                </Button>
             </Grid>
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Border Classes="navwarnSegments">
@@ -191,6 +216,7 @@
                 <ListBox ItemsSource="{Binding Items}"
                          IsVisible="{Binding HasList}"
                          AutomationProperties.AutomationId="NavigationalWarnings.List"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                          SelectionMode="Single"
                          Classes="accentList"
@@ -214,7 +240,12 @@
                                     <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="2" Text="{Binding Count}" FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="3" Text="{Binding Source}" FontSize="10.5" Opacity="0.6" VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" MaxWidth="140" />
+                                               TextTrimming="CharacterEllipsis" MaxWidth="160"
+                                               IsVisible="{Binding !IsStale}" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Source}" FontSize="10.5" VerticalAlignment="Center"
+                                               Foreground="{StaticResource DepthWarningBrush}"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="160"
+                                               IsVisible="{Binding IsStale}" />
                                 </Grid>
                                 <!-- The dimmed "Not in force" group opens and closes. -->
                                 <Button IsVisible="{Binding IsNotInForce}"
@@ -236,6 +267,27 @@
                                 </Button>
                             </Panel>
                         </DataTemplate>
+                        <!-- A source that didn't answer its latest refresh, with Retry. -->
+                        <DataTemplate DataType="vm:NavigationalWarningStaleItem">
+                            <Border Margin="-4,4,0,0"
+                                    Padding="8,6"
+                                    CornerRadius="6"
+                                    Background="{StaticResource DepthWarningSubtleBrush}">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                    <ic:FluentIcon Grid.Column="0" Icon="Warning" FontSize="14" VerticalAlignment="Top" Margin="0,1,0,0"
+                                                   Foreground="{StaticResource DepthWarningBrush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="11.5" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    <Button Grid.Column="2"
+                                            Classes="Outline"
+                                            Padding="8,2"
+                                            VerticalAlignment="Center"
+                                            AutomationProperties.AutomationId="NavigationalWarnings.Retry"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Retry}"
+                                            Content="{x:Static loc:Strings.Label_NavWarnings_Retry}"
+                                            Command="{Binding RetryCommand}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
                         <DataTemplate DataType="vm:NavigationalWarningRowItem">
                             <Grid ColumnDefinitions="16,*" ColumnSpacing="9" Background="Transparent" Opacity="{Binding RowOpacity}">
                                 <Panel Grid.Column="0" VerticalAlignment="Center" ToolTip.Tip="{Binding GlyphTip}">
@@ -253,6 +305,13 @@
                                                    FontSize="11.5" FontWeight="SemiBold" />
                                         <TextBlock Text="{Binding TypeText}" FontSize="12" FontWeight="Medium"
                                                    TextTrimming="CharacterEllipsis" />
+                                        <TextBlock IsVisible="{Binding IsNew}"
+                                                   Text="{x:Static loc:Strings.NavWarnings_New}"
+                                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_New}"
+                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   FontSize="10"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Center" />
                                     </StackPanel>
                                     <TextBlock Text="{Binding SubText}" FontSize="10.5" Opacity="0.65"
                                                TextTrimming="CharacterEllipsis" />

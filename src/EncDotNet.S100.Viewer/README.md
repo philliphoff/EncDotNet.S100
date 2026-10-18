@@ -738,6 +738,30 @@ part that isn't in force opens its card but leaves the map where it is, and a
 text-only part shows a note over the map saying nothing is drawn for it. With
 no S-124 datasets loaded, the panel offers **Open Library**.
 
+#### How fresh the list is
+
+Most warnings come from SECOM services (AMSA, KHRA and others) or online
+feeds that the Library syncs. For those, each group header names the source
+and when it last answered, such as "AMSA · 07:40", in your Local/UTC
+preference; with several sources, a series appears once per source. Warnings
+from a file you opened directly keep the issuing authority in the header.
+
+- **Refresh**, beside the sort menu, asks every source of the listed warnings
+  again, through the Library's refresh and sync. It is off when the warnings
+  only come from files.
+- When a source's latest refresh fails, its group starts with "AMSA hasn't
+  answered since 07:40. You're seeing the warnings received then." and
+  **Retry**, and the header reads "AMSA · 07:40, stale".
+- **NEW** marks a warning that first appeared in the latest refresh of its
+  source. It stays until you open the warning's card, or until a later
+  refresh brings it again unchanged. The summary adds "N new", and the
+  Warnings button in the activity bar shows the count. A source seen for the
+  first time sets the baseline, so nothing in it is new until it refreshes
+  again. A warning published well before the previous refresh isn't new, even
+  when its dataset loads later. Files opened directly are never new. Which
+  warnings you have seen is kept in `navigational-warnings.json` in the data
+  folder, so it survives a restart.
+
 ## Work with time-varying data
 
 S-104 water levels, S-111 surface currents and S-411 sea ice have timestamps.

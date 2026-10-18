@@ -2004,4 +2004,15 @@ internal static class Strings
     public static string NavWarnings_MapNoteNoLocation => Get(nameof(NavWarnings_MapNoteNoLocation));
     public static string NavWarnings_MapNoteNotInForceViewTime => Get(nameof(NavWarnings_MapNoteNotInForceViewTime));
     public static string NavWarnings_MapNoteNotInForceNow => Get(nameof(NavWarnings_MapNoteNotInForceNow));
+    public static string NavWarnings_New => Get(nameof(NavWarnings_New));
+    public static string Tooltip_NavWarnings_New => Get(nameof(Tooltip_NavWarnings_New));
+    public static string NavWarnings_NewFormat => Get(nameof(NavWarnings_NewFormat));
+    public static string Label_NavWarnings_Refresh => Get(nameof(Label_NavWarnings_Refresh));
+    public static string Tooltip_NavWarnings_Refresh => Get(nameof(Tooltip_NavWarnings_Refresh));
+    public static string Label_NavWarnings_Retry => Get(nameof(Label_NavWarnings_Retry));
+    public static string NavWarnings_SourceReceivedFormat => Get(nameof(NavWarnings_SourceReceivedFormat));
+    public static string NavWarnings_SourceStaleFormat => Get(nameof(NavWarnings_SourceStaleFormat));
+    public static string NavWarnings_SourceStaleNoTimeFormat => Get(nameof(NavWarnings_SourceStaleNoTimeFormat));
+    public static string NavWarnings_StaleFormat => Get(nameof(NavWarnings_StaleFormat));
+    public static string NavWarnings_StaleNoTimeFormat => Get(nameof(NavWarnings_StaleNoTimeFormat));
 }

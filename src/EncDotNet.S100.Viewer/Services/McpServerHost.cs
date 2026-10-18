@@ -418,6 +418,8 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(NavigationalWarningsMcpAdapters.Create(
                 new SelectNavigationalWarningTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
             tools.Add(NavigationalWarningsMcpAdapters.Create(
+                new RefreshNavigationalWarningsTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
+            tools.Add(NavigationalWarningsMcpAdapters.Create(
                 new GetWarningCardsTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
             tools.Add(NavigationalWarningsMcpAdapters.Create(
                 new FollowWarningLinkTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));

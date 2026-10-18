@@ -28,4 +28,10 @@ internal interface INavigationalWarningNavigator
     /// </summary>
     /// <returns>Whether the part has a location to frame.</returns>
     bool ZoomTo(NavigationalWarningEntry entry);
+
+    /// <summary>
+    /// Whether a listed part's warning is new since its source's latest
+    /// refresh (the card header's NEW); false by default.
+    /// </summary>
+    bool IsNew(NavigationalWarningEntry entry) => false;
 }

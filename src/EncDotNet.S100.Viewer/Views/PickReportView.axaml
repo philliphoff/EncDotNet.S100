@@ -248,7 +248,7 @@
         -->
         <DataTemplate x:Key="WarningCardHeaderTemplate" x:DataType="vm:NavigationalWarningCardViewModel">
             <StackPanel Spacing="4">
-                <Grid ColumnDefinitions="*,Auto,Auto">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                     <SelectableTextBlock Grid.Column="0"
                                          AutomationProperties.AutomationId="PickReport.WarningCard.Label"
                                      IsHitTestVisible="{Binding !IsCollapsible}"
@@ -258,7 +258,18 @@
                                          FontWeight="SemiBold"
                                          TextWrapping="Wrap"
                                          VerticalAlignment="Center" />
-                    <Panel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
+                    <!-- New since its source's latest refresh (#932). -->
+                    <TextBlock Grid.Column="1"
+                               IsVisible="{Binding IsNew}"
+                               AutomationProperties.AutomationId="PickReport.WarningCard.New"
+                               Text="{x:Static loc:Strings.NavWarnings_New}"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_New}"
+                               Foreground="{DynamicResource AccentBrush}"
+                               FontSize="10.5"
+                               FontWeight="Bold"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center" />
+                    <Panel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,0,0">
                         <Border IsVisible="{Binding IsInForce}"
                                 Background="{StaticResource DepthSuccessSubtleBrush}"
                                 CornerRadius="10" Padding="7,2">
@@ -284,7 +295,7 @@
                                        Opacity="0.75" VerticalAlignment="Center" />
                         </Border>
                     </Panel>
-                    <ic:FluentIcon Grid.Column="2"
+                    <ic:FluentIcon Grid.Column="3"
                                    IsVisible="{Binding IsCollapsible}"
                                    Icon="{Binding IsOpen, Converter={x:Static views:WarningCardChevron.Instance}}"
                                    IconVariant="Regular"

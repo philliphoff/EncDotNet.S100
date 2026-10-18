@@ -117,4 +117,16 @@ internal interface IActivityTab : System.ComponentModel.INotifyPropertyChanged
     /// Settings, whose categorised pages need the width (#845).
     /// </summary>
     bool FillsContent => false;
+
+    /// <summary>
+    /// The count on the tab button's badge (<see cref="IActivityTabBadge"/>);
+    /// 0, the default, shows none.
+    /// </summary>
+    int BadgeCount => 0;
+
+    /// <summary>Whether the tab button shows a badge.</summary>
+    bool HasBadge => BadgeCount > 0;
+
+    /// <summary>The badge's accessible name, e.g. "3 new".</summary>
+    string BadgeName => string.Empty;
 }

@@ -20,7 +20,20 @@ internal sealed record NavigationalWarningsDto(
     [property: Description("True when at least one S-124 dataset is loaded.")] bool HasSources,
     [property: Description("True while an S-124 dataset is still loading.")] bool Loading,
     [property: Description("The in-map note the panel shows for the open part, or null.")] string? MapNote,
+    [property: Description("Number of in-force parts whose warnings are new since their source's latest refresh (the summary's \"N new\" and the Warnings rail badge).")] int New,
+    [property: Description("True when the panel's Refresh can read a source again (a listed warning came from a Library SECOM service or online feed).")] bool CanRefresh,
+    [property: Description("The Library sources the listed warnings came from, by name; files opened directly have none.")] IReadOnlyList<NavigationalWarningSourceDto> Sources,
     [property: Description("Every part, in dataset order (the panel groups them by series and source).")] IReadOnlyList<NavigationalWarningDto> Warnings);
+
+/// <summary>A Library source of warnings.</summary>
+[Description("A Library source (SECOM service or online feed) that supplied loaded warnings, and how fresh they are.")]
+internal sealed record NavigationalWarningSourceDto(
+    [property: Description("The Library source id.")] Guid Id,
+    [property: Description("The source's name, e.g. \"AMSA\".")] string Name,
+    [property: Description("When the source last answered (UTC): the warnings shown are the ones received then. Null when unknown.")] DateTimeOffset? ReceivedAt,
+    [property: Description("True when the source's latest refresh failed; the panel shows \"<name> hasn't answered since <time>\" with Retry.")] bool Stale,
+    [property: Description("True while the source is being read again.")] bool Refreshing,
+    [property: Description("The group header's source text, e.g. \"AMSA · 07:40\" or \"AMSA · 07:40, stale\", in the Local/UTC preference.")] string Header);
 
 /// <summary>One warning part.</summary>
 [Description("One navigational warning part.")]
@@ -42,7 +55,9 @@ internal sealed record NavigationalWarningDto(
     [property: Description("The part's WGS-84 bounds, or null when it has no location.")] NavigationalWarningBoundsDto? Bounds,
     [property: Description("Validity ranges (UTC); either end may be null (open).")] IReadOnlyList<NavigationalWarningValidityDto> Validity,
     [property: Description("Message language codes in document order, e.g. [\"eng\", \"fra\"].")] IReadOnlyList<string?> Languages,
-    [property: Description("True when this part is the one open from the panel.")] bool Selected);
+    [property: Description("True when this part is the one open from the panel.")] bool Selected,
+    [property: Description("True when the warning is new: it first appeared in its source's latest refresh and its card hasn't been opened since. Always false for a file opened directly.")] bool New,
+    [property: Description("The Library source id the part came from, or null for a file opened directly.")] Guid? SourceId);
 
 /// <summary>A validity range.</summary>
 [Description("A period when a warning applies.")]
@@ -77,6 +92,7 @@ internal sealed record WarningCardDto(
     [property: Description("True when the card is one of several, so its header opens it.")] bool Collapsible,
     [property: Description("True while the card's part is previewed on the map (hovered).")] bool Previewed,
     [property: Description("True when the card offers Zoom to (the part has a location).")] bool CanZoom,
+    [property: Description("True when the header shows NEW: the warning was new when the card was made (opening it marks it seen).")] bool New,
     [property: Description("Warning numbers in the displayed text that link to another listed warning, in text order.")] IReadOnlyList<WarningLinkDto> Links);
 
 /// <summary>A link in a card's text.</summary>
@@ -119,10 +135,14 @@ internal abstract class NavigationalWarningsToolBase
             service.HasWarningDatasets,
             service.IsLoading,
             panel.MapNote,
-            service.Warnings.Select(w => ToDto(w, time, selected)).ToList());
+            panel.NewCount,
+            panel.CanRefresh,
+            service.Sources.Select(s => new NavigationalWarningSourceDto(
+                s.Id, s.Name, s.ReceivedAt, s.IsStale, s.IsRefreshing, panel.SourceHeader(s))).ToList(),
+            service.Warnings.Select(w => ToDto(w, time, selected, service.IsNew(w))).ToList());
     }
 
-    private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, DateTimeOffset time, NavigationalWarningEntry? selected)
+    private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, DateTimeOffset time, NavigationalWarningEntry? selected, bool isNew)
     {
         var w = entry.Warning;
         NavigationalWarningBoundsDto? bounds = null;
@@ -164,7 +184,9 @@ internal abstract class NavigationalWarningsToolBase
             w.Texts.Select(t => t.Language).ToList(),
             selected is not null
                 && ReferenceEquals(selected.Dataset, entry.Dataset)
-                && string.Equals(selected.FeatureRef, entry.FeatureRef, StringComparison.Ordinal));
+                && string.Equals(selected.FeatureRef, entry.FeatureRef, StringComparison.Ordinal),
+            isNew,
+            entry.Source?.Id);
     }
 }
 
@@ -212,6 +234,37 @@ internal sealed class SelectNavigationalWarningTool : NavigationalWarningsToolBa
     }
 }
 
+/// <summary>Reads the warnings' sources again, as the panel's Refresh (or a stale group's Retry) does.</summary>
+internal sealed class RefreshNavigationalWarningsTool : NavigationalWarningsToolBase
+{
+    public const string Name = "refresh_navigational_warnings";
+
+    public RefreshNavigationalWarningsTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
+        : base(panel, service, invoker) { }
+
+    public Task<ToolResult<NavigationalWarningsDto>> InvokeAsync(Guid? sourceId = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Invoker.InvokeAsync(() =>
+        {
+            if (!Panel.CanRefresh)
+                return ToolResult<NavigationalWarningsDto>.Err(new InvalidArgument("sourceId", "no listed warning comes from a Library SECOM service or online feed; files opened directly don't refresh"));
+            if (sourceId is { } id)
+            {
+                if (Service.Sources.All(s => s.Id != id))
+                    return ToolResult<NavigationalWarningsDto>.Err(new InvalidArgument("sourceId", $"no listed warning comes from source '{id}'; read the sources with list_navigational_warnings"));
+                Service.RefreshSources([id]);
+            }
+            else
+            {
+                Panel.RefreshSources();
+            }
+
+            return ToolResult<NavigationalWarningsDto>.Ok(ToDto(Panel, Service));
+        });
+    }
+}
+
 /// <summary>Shared plumbing for the Warning card tools.</summary>
 internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
 {
@@ -246,6 +299,7 @@ internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
         card.IsCollapsible,
         card.Hit is not null && ReferenceEquals(pick.PreviewHit, card.Hit),
         card.CanZoom,
+        card.IsNew,
         card.Links.Select(l => new WarningLinkDto(l.Text, l.Target!.DatasetId, l.Target.FeatureRef, l.Target.Warning.Label)).ToList());
 
     /// <summary>The card for a part, or the open card when no part is named.</summary>
@@ -359,7 +413,10 @@ internal static class NavigationalWarningsMcpAdapters
                 "does, including text-only parts that have no location and draw nothing on the map. Each part has its " +
                 "dataset and feature id, label (series and number), type, area, issuer, publication time, status at the " +
                 "panel's time (view time by default, or now), geometry kind and bounds, validity ranges and message " +
-                "languages. Counts in force, not in force and text-only match the panel's summary.",
+                "languages. Counts in force, not in force, text-only and new match the panel's summary. Each part says " +
+                "whether it is new (it first appeared in its source's latest refresh and its card hasn't been opened) " +
+                "and which Library source it came from; sources say when they last answered and whether they are stale " +
+                "(their latest refresh failed). Files opened directly have no source and are never new.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }
@@ -382,6 +439,26 @@ internal static class NavigationalWarningsMcpAdapters
                 "highlights it. A part not in force leaves the map where it is; a text-only part shows the in-map note " +
                 "\"… has no location, so nothing is drawn for it.\" Returns what list_navigational_warnings returns. " +
                 "Viewer-injected tool — mutates live state.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    public static McpServerTool Create(RefreshNavigationalWarningsTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("The Library source to read again (from list_navigational_warnings' sources), as a stale group's Retry does; omit for every source, as the panel's Refresh does.")] Guid? sourceId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(sourceId, ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = RefreshNavigationalWarningsTool.Name,
+            Description =
+                "Reads the SECOM services and online feeds that supplied the loaded navigational warnings again, as the " +
+                "Navigational warnings panel's Refresh does (or one source, as a stale group's Retry does), through the " +
+                "Library's refresh and sync. Returns at once with what list_navigational_warnings returns; the sources " +
+                "show refreshing until the read ends. Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }
