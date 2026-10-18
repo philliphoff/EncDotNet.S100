@@ -247,7 +247,11 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.Equal("1 to review · 1 to check", check.SummaryRows[1].Text);
         Assert.Null(check.ConfidenceText);
         Assert.StartsWith("Not for navigation · ", check.FooterText);
-        Assert.Empty(check.Legs);
+        // D4: without a draft each leg has a row with its route-check badge and no chip.
+        Assert.Equal(8, check.Legs.Count);
+        Assert.All(check.Legs, l => Assert.False(l.HasChip));
+        Assert.Equal((2, true), (check.Legs[1].BadgeCount, check.Legs[1].IsBadgeMustReview));
+        Assert.False(check.Legs[0].HasBadge);
         Assert.True(check.ShowLegsNeedsDraft);
         Assert.False(check.Window.IsVisible);
         Assert.Equal("Add a draft to check clearance", clearance.EmptyText);
@@ -478,7 +482,9 @@ public sealed class RouteFindingProducerTests : IDisposable
             Assert.True(host.IsShown("Routes.Check.Summary.AddDraft"));
             Assert.False(host.IsShown("Routes.Check.Window"));
             Assert.True(host.IsShown("Routes.Check.Legs.NeedsDraft"));
-            Assert.Empty(host.FindAll<Button>("Routes.Check.Leg"));
+            Assert.Equal(8, host.FindAll<Button>("Routes.Check.Leg").Count);
+            Assert.Equal("1", Avalonia.Automation.AutomationProperties.GetName(Assert.Single(host.FindAll<Panel>("Routes.Check.Leg.Badge"))));
+            Assert.Empty(host.FindAll<Panel>("Routes.Check.Leg.Chip"));
 
             host.Click(host.Find<Avalonia.Controls.Primitives.ToggleButton>("Routes.Check.FindingsTab"));
             Assert.False(host.IsShown("Routes.Check.Legs.NeedsDraft"));

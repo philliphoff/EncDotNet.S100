@@ -102,8 +102,41 @@ internal sealed class RouteFindingsService : IDisposable
     /// <summary>The selected finding, or <c>null</c>.</summary>
     public RouteFinding? Selected { get; private set; }
 
-    /// <summary>Raised when <see cref="Findings"/>, <see cref="IsStale"/> or <see cref="Selected"/> changes.</summary>
+    /// <summary>Raised when <see cref="Findings"/>, <see cref="IsStale"/>, <see cref="Selected"/> or the view (filter, Info fold, expanded row) changes.</summary>
     public event EventHandler? Changed;
+
+    private readonly Dictionary<string, bool> _infoOpen = new(StringComparer.Ordinal);
+
+    /// <summary>Which findings the list shows (#959, D1); the verdict card's summary rows set it too.</summary>
+    public ViewModels.FindingsFilter Filter { get; private set; }
+
+    /// <summary>Whether the INFO group is unfolded for the checked route (D3: folded by default, remembered per route).</summary>
+    public bool InfoOpen => _builtInput?.RouteId is { } id && _infoOpen.TryGetValue(id, out var open) && open;
+
+    /// <summary>The id of the expanded merged row (D2), or <c>null</c>.</summary>
+    public string? ExpandedId { get; private set; }
+
+    /// <summary>
+    /// Sets the list's view, as its chips, INFO header and merged rows do
+    /// (and <c>set_findings_view</c>). A <c>null</c> argument leaves that part
+    /// as it is; <paramref name="collapse"/> closes the expanded row.
+    /// </summary>
+    /// <param name="filter">The filter chip, or <c>null</c>.</param>
+    /// <param name="infoOpen">Whether INFO is unfolded for the checked route, or <c>null</c>.</param>
+    /// <param name="expandedId">The merged row to expand, or <c>null</c>.</param>
+    /// <param name="collapse">Close the expanded row (ignored when <paramref name="expandedId"/> is given).</param>
+    public void SetView(ViewModels.FindingsFilter? filter = null, bool? infoOpen = null, string? expandedId = null, bool collapse = false)
+    {
+        if (filter is { } f)
+            Filter = f;
+        if (infoOpen is { } open && _builtInput?.RouteId is { } id)
+            _infoOpen[id] = open;
+        if (expandedId is not null)
+            ExpandedId = expandedId;
+        else if (collapse)
+            ExpandedId = null;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>The producers, the clearance findings first.</summary>
     internal IReadOnlyList<IRouteFindingProducer> Producers => _slots.Select(s => s.Producer).ToList();
@@ -319,6 +352,12 @@ internal sealed class RouteFindingsService : IDisposable
         var previous = _builtInput;
         _builtInput = input;
         _built = current;
+        if (previous?.RouteId != input?.RouteId)
+        {
+            // Another route (or none): the list starts on All with nothing expanded.
+            Filter = ViewModels.FindingsFilter.All;
+            ExpandedId = null;
+        }
 
         if (input is null)
         {
