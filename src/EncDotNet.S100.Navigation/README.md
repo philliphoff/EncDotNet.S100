@@ -264,6 +264,60 @@ was judged at. `RouteWarningResult.Matches` also lists the warnings off the
 route. The meta line names the series and number, the locality, the validity
 and the status; the wording comes from `RouteWarningOptions.Text`.
 
+## Check a route against restricted and protected areas
+
+`RouteAreaCheck` checks a route against regulated areas: S-101 restricted,
+military practice, caution, anchorage and traffic areas, and S-122 marine
+protected and restricted areas. It finds which ones the track enters or which
+reach inside its cross-track limits, and whether each is in force while the
+vessel is there. It reads the areas through `IRouteAreaSource`;
+`RouteCheckDataSources.Areas` implements it over loaded S-101 cells and S-122
+datasets, and `CheckAreas` runs the check:
+
+```csharp
+var sources = RouteCheckDataSources.FromDatasets(catalog.Datasets);
+var schedule = PassageSchedule.Compute(passageLegs, departure);
+var result = sources.CheckAreas(legs, new RouteWarningTiming(schedule, viewTime));
+```
+
+The S-101 feature types it checks are `RestrictedArea` (and the 1.x
+`RestrictedAreaNavigational` and `RestrictedAreaRegulatory`),
+`MilitaryPracticeArea`, `CautionArea`, `AnchorageArea`, `SeparationZoneOrLine`
+surfaces, `PrecautionaryArea`, `InshoreTrafficZone` and
+`SubmarineTransitLane`. Cable and pipeline areas, dumping grounds, fairways
+and traffic lanes aren't checked: they restrict anchoring or fishing, or are
+where a route is meant to go.
+
+| Code | Group | When |
+| --- | --- | --- |
+| `route_check.enters_prohibited_area` | MustReview | The track enters an S-101 area whose `restriction` is entry prohibited (7) or entry restricted (8) |
+| `route_check.prohibited_area_in_corridor` | Check | Such an area reaches inside the limits, but the track doesn't enter it |
+| `route_check.restricted_area` | Check or Info | Another S-101 restricted or military practice area; Info when its restrictions don't bear on a passage (fishing, anchoring, dredging and the like) |
+| `route_check.caution_area` | Check | A `CautionArea` |
+| `route_check.traffic_area` | Check or Info | A separation zone, precautionary area or submarine transit lane; Info for an inshore traffic zone |
+| `route_check.anchorage_area` | Check | An `AnchorageArea` |
+| `route_check.protected_area` | Check or Info | An S-122 marine protected or restricted area; Info by restriction, as above. Never MustReview |
+| `route_check.area_not_in_force` | Info | The area's `fixedDateRange` or season doesn't cover the vessel's time there |
+
+An area that only reaches inside the limits is one group lighter (Check
+becomes Info). Findings have source `RouteCheck`, so the verdict ranks an
+entry-prohibited area with the chart checks, just after land and drying
+ground. The meta line names the leg, the product, the restrictions, the
+categories, the dates and the ETAs.
+
+Time works as for S-124 warnings: the ETAs over the stretch where the vessel
+is in the area, or the fallback time without speeds. A `periodicDateRange`
+repeats each year by month and day (`--03-01`, `----0301`) and may run over
+the new year; an area with both a fixed range and seasons must be in both. A
+date that can't be read counts as open. An area that isn't in force stays in
+the list as Info, like an S-124 warning that isn't, rather than being
+dropped, so the navigator still sees it on the route.
+
+Holes are outside the area, and where S-101 cells overlap only the finest
+cell at the place the route meets an area counts, so a coarse cell's copy of
+an area gives no second finding. The wording, and the labels of the
+restriction and category codes, come from `RouteAreaOptions.Text`.
+
 ## Findings
 
 `RouteFinding` is one entry in a route's findings list. Each check (under-keel

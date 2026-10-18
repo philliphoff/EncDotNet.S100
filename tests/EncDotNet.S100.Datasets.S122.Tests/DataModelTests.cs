@@ -71,6 +71,40 @@ public class DataModelTests
         """;
 
     [Fact]
+    public void From_KeepsTheHolesOfASurface()
+    {
+        var ds = Parse(Wrap("""
+            <S122:RestrictedArea gml:id="RA1">
+                <S122:restriction>7</S122:restriction>
+                <S122:geometry>
+                    <S100:surfaceProperty>
+                        <gml:Polygon srsName="EPSG:4326">
+                            <gml:exterior>
+                                <gml:LinearRing>
+                                    <gml:posList>0 0 0 4 4 4 4 0 0 0</gml:posList>
+                                </gml:LinearRing>
+                            </gml:exterior>
+                            <gml:interior>
+                                <gml:LinearRing>
+                                    <gml:posList>1 1 3 1 3 3 1 3 1 1</gml:posList>
+                                </gml:LinearRing>
+                            </gml:interior>
+                        </gml:Polygon>
+                    </S100:surfaceProperty>
+                </S122:geometry>
+            </S122:RestrictedArea>
+            """));
+
+        var area = Assert.IsType<S122RestrictedArea>(Assert.Single(S122MarineProtectedAreaDataset.From(ds, out _).Features));
+
+        Assert.Equal(5, area.Coordinates.Count);
+        var hole = Assert.Single(area.InteriorRings);
+        Assert.Equal(new GeoPosition(1, 1), hole[0]);
+        Assert.Equal(new GeoPosition(3, 1), hole[1]);
+        Assert.Equal(5, hole.Count);
+    }
+
+    [Fact]
     public void From_ProjectsMpaAttributes()
     {
         var ds = Parse(Wrap(MpaWithAuthorityRef));

@@ -560,7 +560,10 @@ internal static class S100McpServerToolFactory
             "area is charted) or drying ground (a DepthArea whose DRVAL1 is below the datum), both must_review; where either reaches " +
             "inside the corridor between the cross-track limits (check); and where the track leaves the DataCoverage of every loaded " +
             "cell (check, source data). With safetyContourMeters and safetyDepthMeters it also reports charted dangers and areas, " +
-            "soundings and S-102 cells shallower than the safety contour or depth. Where cells overlap only the finest cell counts, so a coarse cell's generalised land doesn't " +
+            "soundings and S-102 cells shallower than the safety contour or depth. It also reports regulated areas the corridor meets: S-101 restricted and military " +
+            "practice areas (entry prohibited or restricted: must_review when the track enters), caution, anchorage and traffic areas, and S-122 marine protected and " +
+            "restricted areas (check, or info when their restrictions don't bear on a passage or they only reach inside the limits); an area whose fixed date range or " +
+            "season doesn't cover the ETAs (or 'time') is info route_check.area_not_in_force. Where cells overlap only the finest cell counts, so a coarse cell's generalised land doesn't " +
             "fire where a finer cell charts water. Returns the findings (the same codes as get_findings), a summary and the corridor " +
             "of each leg. Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which uses each leg's port and " +
             "starboard XTD. Needs no draft. Not for navigation.";
@@ -572,6 +575,7 @@ internal static class S100McpServerToolFactory
                    [Description("Safety contour in metres; with safetyDepthMeters, turns on the depth checks (areas and S-102 shallower than it, charted dangers).")] double? safetyContourMeters = null,
                    [Description("Safety depth in metres, for charted dangers and soundings.")] double? safetyDepthMeters = null,
                    [Description("Draft in metres: dangers are also judged against draft + squat + required UKC. Overrides a route's draft.")] double? draftMeters = null,
+                   [Description("ISO-8601 time: a route's departure for its ETAs (default: the route's departure); where legs have no speed, and for a polyline, the time areas' date ranges are judged at (default: now).")] DateTimeOffset? time = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -582,7 +586,8 @@ internal static class S100McpServerToolFactory
                         greatCircle,
                         safetyContourMeters,
                         safetyDepthMeters,
-                        draftMeters),
+                        draftMeters,
+                        time),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions

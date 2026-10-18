@@ -6,7 +6,8 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 
 /// <summary>
 /// The charted features and bathymetry a <see cref="RouteCheckEngine"/>
-/// reads, built from loaded datasets.
+/// reads, and the regulated areas a <see cref="RouteAreaCheck"/> reads,
+/// built from loaded datasets.
 /// </summary>
 /// <param name="Charts">
 /// S-101 cells (and S-401, and translated S-57) with their land, coastlines,
@@ -19,6 +20,14 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// </param>
 public sealed record RouteCheckDataSources(IRouteChartSource Charts, IChartedDepthSource? Bathymetry = null)
 {
+    /// <summary>
+    /// The regulated areas for <see cref="RouteAreaCheck"/> (#956): S-101
+    /// restricted, military practice, caution, anchorage and traffic areas,
+    /// and S-122 marine protected and restricted areas. Empty unless built by
+    /// <see cref="FromDatasets"/>.
+    /// </summary>
+    public IRouteAreaSource Areas { get; init; } = NoAreas.Instance;
+
     /// <summary>
     /// Builds sources from a catalog snapshot. S-101 cells (and S-401, and
     /// translated S-57) are used, and S-102 surfaces when
@@ -47,11 +56,30 @@ public sealed record RouteCheckDataSources(IRouteChartSource Charts, IChartedDep
             }
         }
 
-        return new RouteCheckDataSources(new CatalogRouteChartSource(snapshot), bathymetry);
+        var charts = new CatalogRouteChartSource(snapshot);
+        return new RouteCheckDataSources(charts, bathymetry) { Areas = new CatalogRouteAreaSource(charts, snapshot) };
     }
 
     /// <summary>Creates an engine over these sources.</summary>
     /// <param name="options">Tuning, or <c>null</c> for <see cref="RouteCheckOptions.Default"/>.</param>
     /// <returns>The engine.</returns>
     public RouteCheckEngine CreateEngine(RouteCheckOptions? options = null) => new(Charts, options, Bathymetry);
+
+    /// <summary>Checks a route against <see cref="Areas"/>.</summary>
+    /// <param name="legs">The route's legs, with their cross-track limits.</param>
+    /// <param name="timing">The ETAs, or the time to judge at without them (usually the view time).</param>
+    /// <param name="options">Tuning, or <c>null</c> for <see cref="RouteAreaOptions.Default"/>.</param>
+    /// <param name="cancellationToken">Cancels the check.</param>
+    /// <returns>The matches and findings.</returns>
+    public RouteAreaResult CheckAreas(IReadOnlyList<RouteCheckLeg> legs, RouteWarningTiming timing, RouteAreaOptions? options = null, CancellationToken cancellationToken = default) =>
+        new RouteAreaCheck(options).Check(legs, Areas, timing, cancellationToken);
+
+    private sealed class NoAreas : IRouteAreaSource
+    {
+        public static NoAreas Instance { get; } = new();
+
+        public IReadOnlyList<RouteArea> AreasNear(BoundingBox extent) => [];
+
+        public IReadOnlyList<RouteChartCell> CellsNear(BoundingBox extent) => [];
+    }
 }

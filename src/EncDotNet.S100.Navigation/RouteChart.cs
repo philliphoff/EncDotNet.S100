@@ -5,8 +5,9 @@ using EncDotNet.S100.Pipelines;
 namespace EncDotNet.S100.Navigation;
 
 /// <summary>
-/// What a charted feature means to the route check. More kinds join as the
-/// checks grow (restricted areas and S-124 warnings, #956–#957).
+/// What a charted feature means to the route check. Restricted and protected
+/// areas (#956) and S-124 warnings (#957) have their own checks
+/// (<see cref="RouteAreaCheck"/>, <see cref="RouteWarningCheck"/>).
 /// </summary>
 public enum RouteChartFeatureKind
 {

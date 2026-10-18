@@ -5014,6 +5014,65 @@
   <data name="RouteCheck_Separator" xml:space="preserve">
     <value> · </value>
   </data>
+  <data name="RouteArea_EntersFormat" xml:space="preserve">
+    <value>Enters {0}</value>
+    <comment>Area finding title: the track enters an area where entry is prohibited or restricted. {0} the area's name or kind.</comment>
+  </data>
+  <data name="RouteArea_CrossesFormat" xml:space="preserve">
+    <value>Crosses {0}</value>
+    <comment>Area finding title: the track crosses a regulated or protected area. {0} the area's name or kind.</comment>
+  </data>
+  <data name="RouteArea_InCorridorFormat" xml:space="preserve">
+    <value>{0} inside the cross-track limits</value>
+    <comment>Area finding title: the area reaches inside the cross-track limits only. {0} the area's name or kind.</comment>
+  </data>
+  <data name="RouteArea_NotInForceFormat" xml:space="preserve">
+    <value>{0} not in force during the passage</value>
+    <comment>Area finding title: the area isn't in force at the ETAs. {0} the area's name or kind.</comment>
+  </data>
+  <data name="RouteArea_NotInForceAtFormat" xml:space="preserve">
+    <value>{0} not in force at {1}</value>
+    <comment>Area finding title without ETAs. {0} the area's name or kind, {1} the view time.</comment>
+  </data>
+  <data name="RouteArea_RestrictedArea" xml:space="preserve">
+    <value>restricted area</value>
+  </data>
+  <data name="RouteArea_MilitaryPracticeArea" xml:space="preserve">
+    <value>military practice area</value>
+  </data>
+  <data name="RouteArea_CautionArea" xml:space="preserve">
+    <value>caution area</value>
+  </data>
+  <data name="RouteArea_AnchorageArea" xml:space="preserve">
+    <value>anchorage area</value>
+  </data>
+  <data name="RouteArea_SeparationZone" xml:space="preserve">
+    <value>traffic separation zone</value>
+  </data>
+  <data name="RouteArea_PrecautionaryArea" xml:space="preserve">
+    <value>precautionary area</value>
+  </data>
+  <data name="RouteArea_InshoreTrafficZone" xml:space="preserve">
+    <value>inshore traffic zone</value>
+  </data>
+  <data name="RouteArea_SubmarineTransitLane" xml:space="preserve">
+    <value>submarine transit lane</value>
+  </data>
+  <data name="RouteArea_MarineProtectedArea" xml:space="preserve">
+    <value>marine protected area</value>
+  </data>
+  <data name="RouteArea_FromFormat" xml:space="preserve">
+    <value>from {0}</value>
+    <comment>Area finding meta: a date range with no end. {0} start.</comment>
+  </data>
+  <data name="RouteArea_UntilFormat" xml:space="preserve">
+    <value>until {0}</value>
+    <comment>Area finding meta: a date range with no start. {0} end.</comment>
+  </data>
+  <data name="RouteArea_RangeFormat" xml:space="preserve">
+    <value>{0}–{1}</value>
+    <comment>Area finding meta: a season, date range or ETA range. {0} start, {1} end.</comment>
+  </data>
   <data name="Findings_TagS124" xml:space="preserve">
     <value>S-124</value>
   </data>

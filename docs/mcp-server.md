@@ -158,7 +158,7 @@ Both hosts provide these tools.
 | `sample_coverage` | No | Samples a depth, water level or current at a point from an S-102, S-104 or S-111 dataset. For S-104 and S-111, `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). |
 | `sample_coverage_along` | No | Samples a coverage at each vertex of a polyline, with the same time handling as `sample_coverage`. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
 | `get_passage_result` | No | Checks under-keel clearance along a passage. See [Check a passage's clearance](#check-a-passages-clearance). |
-| `check_route` | No | Checks a route against the loaded charts: land, drying ground and chart coverage. Needs no draft. See [Check a route against the chart](#check-a-route-against-the-chart). |
+| `check_route` | No | Checks a route against the loaded charts: land, drying ground, chart coverage, and restricted and S-122 protected areas. Needs no draft. See [Check a route against the chart](#check-a-route-against-the-chart). |
 
 ### Session tools
 
@@ -342,7 +342,7 @@ reports this as the dataset's `viewingGroups`.
 | `set_passage_cursor` | Yes | Moves the Check passage cursor and the ghost vessel to `distanceNm` along the checked route, as hovering a leg row does, or hides them when `distanceNm` is omitted. Returns the state, including the cursor's position and ETA. |
 | `get_clearance_state` | No | Returns what the **Clearance** tab shows while Check passage is on: the profile's `axis` (`distance` or `time`), `canShowTime`, `sourcesOpen`, and the readout at the cursor (`readoutSample`, the sample index in `get_passage_result`; `readoutPosition`, `readoutLeg`, `depth` and `depthSource` with its cell, `waterLevel` and `waterLevelSource` with its station or grid and time step, `draftSquat`, `ukc` and `state`, such as "Meets your settings · lower confidence"). The readout's `band` (`meets_settings`, `tight`, `below_setting` or `no_data`) and `confidence` reasons are reported separately. It also returns the `sources` groups, and the `departureBand`: the `departure` beside it, the `knobFraction` (0 to 1 across the band), the `startLabel`, `middleLabel` and `endLabel` ("12:00 · S-104 ends"), `stale`, and the `segments`, each a run of departures with its `kind` (`meets_settings`, `below_setting`, `arrival_after_data_ends` or `no_data`). Without a cursor, the readout describes the minimum. Open the tab with `set_panel` `Clearance`. |
 | `set_clearance_view` | Yes | Sets the Clearance profile's `axis` (`distance` or `time`; time needs ETAs) and opens or closes Sources (`sourcesOpen`), as the tab's header controls do. The cursor stays on the same sample. Returns what `get_clearance_state` returns. |
-| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check passage mode: `count`, the counts per group (`mustReview`, `check`, `info`), the `summary` (such as "2 items to review", the verdict card's title without a draft), `stale` while a check is recomputing, `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, `data.s111_forecast_expired`, or the route checks' `route_check.crosses_land`, `route_check.crosses_drying`, `route_check.land_in_corridor`, `route_check.drying_in_corridor` and `data.outside_chart_coverage`; see `check_route`), its `group` (`must_review`, `check` or `info`), its `source` (`clearance`, `route_check`, `s124`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), and a `feature` reference (dataset and feature id) when one is behind it. Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs at least two waypoints; without a draft there are no clearance findings, but the route checks still run. |
+| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check passage mode: `count`, the counts per group (`mustReview`, `check`, `info`), the `summary` (such as "2 items to review", the verdict card's title without a draft), `stale` while a check is recomputing, `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, `data.s111_forecast_expired`, or the route checks' `route_check.crosses_land`, `route_check.crosses_drying`, `route_check.land_in_corridor`, `route_check.drying_in_corridor`, `route_check.enters_prohibited_area`, `route_check.protected_area` and `data.outside_chart_coverage`; see `check_route`), its `group` (`must_review`, `check` or `info`), its `source` (`clearance`, `route_check`, `s124`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), and a `feature` reference (dataset and feature id) when one is behind it. Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs at least two waypoints; without a draft there are no clearance findings, but the route checks still run. |
 | `select_finding` | Yes | Selects the finding `id` in the checked route's list, as clicking its row does: the map zooms to it (unless `zoom: false`) and outlines it dashed in its tone with the chip "Zoomed to finding · leg 6 → 7 · 1:31 300", and the profile cursor and ghost vessel move to it. Omit `id` to clear the selection. Needs Check passage on. Returns what `get_findings` returns. |
 
 A typical sequence:
@@ -416,6 +416,26 @@ draft + squat + required UKC; a route's own draft is used when you omit it.
 | `route_check.soundings_below_safety_depth` | `check` | Soundings shallower than the safety depth inside the limits. |
 | `route_check.crosses_s102_shoal` | `must_review` | The track crosses S-102 cells shallower than the safety contour. |
 | `route_check.s102_shoal_in_corridor` | `check` | Such S-102 cells inside the limits, off the track. |
+
+It also checks regulated areas, with or without the depth checks: S-101
+restricted, military practice, caution, anchorage and traffic areas, and S-122
+marine protected and restricted areas. For a route, the legs' speeds give ETAs
+from `time` (default: the route's departure) and each area's dates and seasons
+are judged at them; where a leg has no speed, and for a polyline, they're
+judged at `time` (default: now).
+
+| Code | Group | When |
+|---|---|---|
+| `route_check.enters_prohibited_area` | `must_review` | The track enters an S-101 area where entry is prohibited or restricted. |
+| `route_check.prohibited_area_in_corridor` | `check` | Such an area inside the limits, off the track. |
+| `route_check.restricted_area` | `check` or `info` | Another S-101 restricted or military practice area; `info` when its restrictions don't bear on a passage, such as fishing or anchoring prohibited. |
+| `route_check.caution_area` | `check` | A caution area. |
+| `route_check.traffic_area` | `check` or `info` | A separation zone, precautionary area or submarine transit lane; `info` for an inshore traffic zone. |
+| `route_check.anchorage_area` | `check` | An anchorage area. |
+| `route_check.protected_area` | `check` or `info` | An S-122 marine protected or restricted area (never `must_review`). |
+| `route_check.area_not_in_force` | `info` | The area's date range or season doesn't cover the ETAs (or `time`). |
+
+An area that only reaches inside the limits is one group lighter.
 
 Where cells overlap, only the finest cell at a place counts, so a coarse
 cell's generalised land doesn't fire where a finer cell charts water.

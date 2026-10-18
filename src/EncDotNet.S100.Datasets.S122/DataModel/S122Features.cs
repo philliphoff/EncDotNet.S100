@@ -24,6 +24,13 @@ public abstract class S122FeatureBase : IS122Feature
     /// <inheritdoc/>
     public IReadOnlyList<GeoPosition> Coordinates { get; init; } = [];
 
+    /// <summary>
+    /// A surface's interior rings (holes), each a closed sequence of
+    /// positions; empty for other geometry and for a surface without holes.
+    /// <see cref="Coordinates"/> holds the exterior ring only.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; internal set; } = [];
+
     /// <summary>The interoperability identifier (S-122 FC §interoperabilityIdentifier), when present.</summary>
     public string? InteroperabilityIdentifier { get; init; }
 

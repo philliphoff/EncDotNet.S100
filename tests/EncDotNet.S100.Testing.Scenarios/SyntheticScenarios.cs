@@ -350,6 +350,67 @@ public static class SyntheticScenarios
     }
 
     /// <summary>
+    /// "Restricted areas on route" (#956): the warnings-on-route transit
+    /// (1 March, 06:00, 8 kn, 100 m cross-track limits) through S-101
+    /// regulated areas and S-122 protected areas, each placed to give one
+    /// kind of area finding.
+    /// </summary>
+    /// <remarks>
+    /// <list type="table">
+    /// <listheader><term>Area</term><description>Where, and what the area check should find</description></listheader>
+    /// <item><term>Firing Range Alpha</term><description>Entry prohibited, military area, over the route at 600–900 m: enters a prohibited area.</description></item>
+    /// <item><term>Cable Landing Zone</term><description>Anchoring and fishing prohibited, over the route at 1800–2000 m: crossed, for information.</description></item>
+    /// <item><term>Range Danger Zone</term><description>Entry prohibited, 70 m north of the track at 2200–2400 m: inside the cross-track limits only.</description></item>
+    /// <item><term>Coastal Exercise Area</term><description>A military practice area at 2600–2800 m charted only in the coastal cell, where the harbour cell charts the place: doesn't count.</description></item>
+    /// <item><term>Spit Shoal Caution</term><description>A caution area over the route at 4300–4500 m: to check.</description></item>
+    /// <item><term>Summer Speed Zone</term><description>Speed restricted from 1 June to 31 August, over the route at 5000–5200 m: not in force on 1 March.</description></item>
+    /// <item><term>Seal Sanctuary (S-122)</term><description><see cref="SealSanctuary"/>, over the route at 3100–3700 m and in force: to check.</description></item>
+    /// <item><term>Berth Reserve (S-122)</term><description>Round the east berth (5500–6000 m) with a hole from 5550 m, where the route ends: crossed for 50 m only.</description></item>
+    /// </list>
+    /// <para>The S-101 areas are charted in both cells unless noted.</para>
+    /// </remarks>
+    /// <param name="seed">The world's seed.</param>
+    /// <returns>The scenario.</returns>
+    public static ScenarioDefinition RestrictedAreasOnRoute(ulong seed = DefaultSeed) =>
+        WarningsOnRoute(seed) with
+        {
+            Name = "restricted-areas-on-route",
+            Warnings = [],
+            Aids = null,
+            ProtectedAreas = [SealSanctuary, BerthReserve],
+            RegulatedAreas = RouteRegulatedAreas,
+        };
+
+    /// <summary>The S-101 regulated areas of <see cref="RestrictedAreasOnRoute"/>.</summary>
+    public static IReadOnlyList<RegulatedAreaSpec> RouteRegulatedAreas { get; } =
+    [
+        new("Firing Range Alpha (fictitious)", "RestrictedArea", new LocalRect(600, 2900, 900, 3300), Restrictions: [7], Categories: [9]),
+        new("Cable Landing Zone (fictitious)", "RestrictedArea", new LocalRect(1800, 2800, 2000, 3300), Restrictions: [1, 3], Categories: []),
+        new("Range Danger Zone (fictitious)", "RestrictedArea", new LocalRect(2200, 3120, 2400, 3400), Restrictions: [7], Categories: [9]),
+        new("Coastal Exercise Area (fictitious)", "MilitaryPracticeArea", new LocalRect(2600, 2950, 2800, 3150), Restrictions: [], Categories: [4], Cells: ["101ZZ00SPIT3"]),
+        new("Spit Shoal Caution (fictitious)", "CautionArea", new LocalRect(4300, 3000, 4500, 3400), Restrictions: [], Categories: []),
+        new("Summer Speed Zone (fictitious)", "RestrictedArea", new LocalRect(5000, 2900, 5200, 3200), Restrictions: [27], Categories: [])
+        {
+            Seasons = [new Season(new DayOfYear(6, 1), new DayOfYear(8, 31))],
+        },
+    ];
+
+    /// <summary>
+    /// A reserve round the east berth with a hole the route ends in: the
+    /// route enters it at 5500 m and is in the hole from 5550 m.
+    /// </summary>
+    public static S122ProtectedAreaSpec BerthReserve { get; } = new(
+        "122ZZ00BERTH",
+        "Synthetic Sound Berth Reserve (fictitious)",
+        new LocalRect(5500, 2700, 6000, 3400),
+        Coverage: new LocalRect(0, 0, 6000, 6000),
+        Seasons: [],
+        Authority: "Synthetic Marine Conservation Agency (fictitious)")
+    {
+        Holes = [new LocalRect(5550, 2900, 5950, 3200)],
+    };
+
+    /// <summary>
     /// "Port plan vs own route" (#942): the port's S-129 plan for the
     /// approach route, and the vessel's own S-421 route, which rounds the
     /// shoal to the west instead of crossing its crest.

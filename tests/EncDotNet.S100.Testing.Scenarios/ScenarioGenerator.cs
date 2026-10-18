@@ -65,7 +65,7 @@ public static class ScenarioGenerator
         foreach (var cell in definition.Cells)
         {
             var path = Prepare("S-101", cell.FileName);
-            S101DocumentWriter.WriteToFile(path, S101CellWriter.Build(world, cell, definition.DredgedChannels, issueDate, definition.QuirksFor(cell.DatasetName), definition.Hazards));
+            S101DocumentWriter.WriteToFile(path, S101CellWriter.Build(world, cell, definition.DredgedChannels, issueDate, definition.QuirksFor(cell.DatasetName), definition.Hazards, definition.RegulatedAreas));
             var sw = frame.ToGeo(cell.Extent.West, cell.Extent.South);
             var ne = frame.ToGeo(cell.Extent.East, cell.Extent.North);
             entries.Add(new CatalogueDataset(
