@@ -73,14 +73,14 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
         ReverseActiveRouteCommand = new RelayCommand(
             () => Reverse(_routes.Routes.ActiveRoute),
-            () => _routes.Routes.ActiveRoute is { Waypoints.Count: >= 2 });
+            () => _routes.Routes.ActiveRoute is { Waypoints.Count: >= 2, IsReadOnly: false });
         UndoCommand = new RelayCommand(() => _routes.UndoActiveRoute(), () => CanUndo);
         RedoCommand = new RelayCommand(() => _routes.RedoActiveRoute(), () => CanRedo);
         ZoomToRouteCommand = new RelayCommand(
             ZoomToActiveRoute,
             () => _routes.Routes.ActiveRoute is { Waypoints.Count: > 0 });
 
-        BeginRenameCommand = new RelayCommand(BeginRename, () => HasActiveRoute);
+        BeginRenameCommand = new RelayCommand(BeginRename, () => _routes.Routes.ActiveRoute is { IsReadOnly: false });
         CommitRenameCommand = new RelayCommand(CommitRename);
         CancelRenameCommand = new RelayCommand(CancelRename);
 
@@ -234,6 +234,90 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
     private TimeFormat TimeFormat => _timeFormat?.Current ?? TimeFormat.Local;
 
+    /// <summary>Whether the active route is a received, read-only route (#960, A6).</summary>
+    public bool IsActiveReadOnly => _routes.Routes.ActiveRoute is { IsReadOnly: true };
+
+    /// <summary>Whether the active route can be edited (the footer's Edit toggle).</summary>
+    public bool CanEditActiveRoute => _routes.Routes.ActiveRoute is { IsReadOnly: false };
+
+    /// <summary>The "Received · read-only" badge after a received route's name.</summary>
+    public string ReceivedBadgeText => Strings.Routes_ReceivedBadge;
+
+    /// <summary>
+    /// A received route's source on the header sub-line, e.g.
+    /// "S-421 · 421ZZ00WARN ed. 1"; <c>null</c> for an owned route.
+    /// </summary>
+    public string? ActiveSourceText => _routes.Routes.ActiveRoute?.Source is { } source ? SourceText(source) : null;
+
+    /// <summary>Whether to show the Native / Planning control: the active route came from an S-421 dataset (A7).</summary>
+    public bool ShowDisplayMode => _routes.Routes.ActiveRoute?.Source?.Format == RouteSourceFormats.S421;
+
+    /// <summary>
+    /// Whether the Native / Planning control can change the mode: not while
+    /// Check route is on, which draws the route in Planning mode.
+    /// </summary>
+    public bool CanChangeDisplayMode => !IsCheckingPassage;
+
+    /// <summary>
+    /// Whether the active route shows as Native. Bound two-way to the
+    /// Native segment; while Check route is on it reads false (Planning).
+    /// </summary>
+    public bool IsNativeMode
+    {
+        get => !IsCheckingPassage && _routes.Routes.ActiveRoute is { DisplayMode: RouteDisplayMode.Native };
+        set
+        {
+            if (value)
+                SetDisplayMode(RouteDisplayMode.Native);
+        }
+    }
+
+    /// <summary>Whether the active route shows as Planning. Bound two-way to the Planning segment.</summary>
+    public bool IsPlanningMode
+    {
+        get => !IsNativeMode;
+        set
+        {
+            if (value)
+                SetDisplayMode(RouteDisplayMode.Planning);
+        }
+    }
+
+    /// <summary>The Native / Planning control's tooltip.</summary>
+    public string DisplayModeTooltip => IsCheckingPassage ? Strings.Tooltip_DisplayModeChecking : Strings.Tooltip_DisplayModeNative;
+
+    /// <summary>The footer Edit toggle's tooltip: why a received route can't be edited, else the shortcut.</summary>
+    public string EditToggleTooltipText => IsActiveReadOnly ? Strings.Tooltip_EditReceivedRoute : EditToggleTooltip;
+
+    private void SetDisplayMode(RouteDisplayMode mode)
+    {
+        if (!IsCheckingPassage && _routes.Routes.ActiveRoute is { Source: not null } route)
+            route.SetDisplayMode(mode);
+        RaiseReceivedState();
+    }
+
+    /// <summary>A received route's source text, e.g. "S-421 · 421ZZ00WARN ed. 1".</summary>
+    internal static string SourceText(RouteSource source)
+    {
+        var name = source.RouteId ?? source.FileName;
+        return source.Edition is { } edition
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Routes_ReceivedSourceFormat, source.Format, name, edition)
+            : string.Format(CultureInfo.CurrentCulture, Strings.Routes_ReceivedSourceNoEditionFormat, source.Format, name);
+    }
+
+    private void RaiseReceivedState()
+    {
+        OnPropertyChanged(nameof(IsActiveReadOnly));
+        OnPropertyChanged(nameof(CanEditActiveRoute));
+        OnPropertyChanged(nameof(ActiveSourceText));
+        OnPropertyChanged(nameof(ShowDisplayMode));
+        OnPropertyChanged(nameof(CanChangeDisplayMode));
+        OnPropertyChanged(nameof(IsNativeMode));
+        OnPropertyChanged(nameof(IsPlanningMode));
+        OnPropertyChanged(nameof(DisplayModeTooltip));
+        OnPropertyChanged(nameof(EditToggleTooltipText));
+    }
+
     /// <summary>The toolbar hint, e.g. "Ctrl+E edit · Esc done".</summary>
     public string EditHint => string.Format(
         CultureInfo.CurrentCulture, Strings.Routes_EditHintFormat, ShortcutText.Command("E"));
@@ -332,7 +416,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
     private void RenameRoute(RouteRowViewModel? row)
     {
-        if (row?.Route is { } route)
+        if (row?.Route is { IsReadOnly: false } route)
         {
             _routes.Routes.SetActiveRoute(route);
             BeginRename();
@@ -340,7 +424,10 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     }
 
     private static void Reverse(Route? route)
-        => route?.History.Execute(RouteEditLabels.Reverse, route.Reverse);
+    {
+        if (route is { IsReadOnly: false })
+            route.History.Execute(RouteEditLabels.Reverse, route.Reverse);
+    }
 
     private void ZoomToActiveRoute()
     {
@@ -424,6 +511,8 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
     private void InsertAfter(int index)
     {
+        if (_routes.Routes.ActiveRoute is { IsReadOnly: true })
+            return;
         if (_routes.Routes.ActiveRoute is not { } route)
             return;
         if (index < 0 || index >= route.Waypoints.Count)
@@ -464,6 +553,8 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
     private void DeleteWaypointAt(RouteWaypointRowViewModel? row)
     {
+        if (_routes.Routes.ActiveRoute is { IsReadOnly: true })
+            return;
         if (row is not null &&
             _routes.Routes.ActiveRoute is { } route &&
             row.Index >= 0 && row.Index < route.Waypoints.Count)
@@ -475,6 +566,8 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
     private void ToggleLegGeometryAt(RouteLegRowViewModel? row)
     {
+        if (_routes.Routes.ActiveRoute is { IsReadOnly: true })
+            return;
         if (_routes.Routes.ActiveRoute is not { } route ||
             row is null ||
             row.LegIndex < 0 || row.LegIndex >= route.Legs.Count)
@@ -508,6 +601,8 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     /// </summary>
     internal void CommitWaypointName(int index, string? text)
     {
+        if (_routes.Routes.ActiveRoute is { IsReadOnly: true })
+            return;
         if (_routes.Routes.ActiveRoute is not { } route || index < 0 || index >= route.Waypoints.Count)
             return;
 
@@ -531,6 +626,8 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     /// is not a valid position.</returns>
     internal bool CommitWaypointPosition(int index, string? text)
     {
+        if (_routes.Routes.ActiveRoute is { IsReadOnly: true })
+            return false;
         if (!LatLonFormatter.TryParse(text, out var latitude, out var longitude))
             return false;
         if (_routes.Routes.ActiveRoute is not { } route || index < 0 || index >= route.Waypoints.Count)
@@ -552,6 +649,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(IsCheckingPassage));
         OnPropertyChanged(nameof(ShowCheckPanel));
+        RaiseReceivedState();
         Check?.Refresh();
     }
 
@@ -605,6 +703,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasDraft));
         OnPropertyChanged(nameof(CanCheckPassage));
         OnPropertyChanged(nameof(CheckPassageTooltip));
+        RaiseReceivedState();
 
         // Check passage needs a route with legs: losing them turns the mode off.
         if (_routes.IsCheckModeActive && !CanCheckPassage)
@@ -810,7 +909,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     private static string RouteMeta(Route route)
         => string.Format(
             CultureInfo.CurrentCulture,
-            Strings.Routes_RouteMetaFormat,
+            route.IsReadOnly ? Strings.Routes_RouteMetaReceivedFormat : Strings.Routes_RouteMetaFormat,
             route.Waypoints.Count,
             route.TotalDistanceNm());
 
@@ -845,6 +944,12 @@ internal sealed class RouteRowViewModel : ViewModelBase
 
     /// <summary>The underlying editable route.</summary>
     public Route Route { get; }
+
+    /// <summary>Whether the route is a received, read-only route: its menu offers Close instead of Rename, Reverse and Remove.</summary>
+    public bool IsReceived => Route.IsReadOnly;
+
+    /// <summary>Whether the route is owned (editable).</summary>
+    public bool IsOwned => !Route.IsReadOnly;
 
     /// <summary>Display name of the route.</summary>
     public string? Name => Route.Name;

@@ -62,6 +62,24 @@ internal sealed record PassageDto(
     [property: Description("Starboard cross-track distance limit in metres, or null.")] double? StarboardCrossTrackMeters,
     [property: Description("The vessel (from the route info; set it with set_route_info), or null.")] VesselDto? Vessel);
 
+/// <summary>What one passage value is (#960, decision 16).</summary>
+[Description("What one passage value is: a check setting or a route value, and where it comes from.")]
+internal sealed record PassageFieldDto(
+    [property: Description("The PassageDto property: draftMeters, squatMeters, requiredUkcMeters, departure, speedKnots, portCrossTrackMeters or starboardCrossTrackMeters.")] string Field,
+    [property: Description("\"checkSetting\" (your setting for checking the route, not route content; written on export only when asked) or \"route\" (route content).")] string Kind,
+    [property: Description("True when the value shown comes from the received route's file (a check setting you haven't set, or any route value of a received route).")] bool FromFile,
+    [property: Description("True when set_passage can't change it: a route value of a received route (copy the route to edit it).")] bool ReadOnly);
+
+/// <summary>Where a received route came from.</summary>
+[Description("Where a received (read-only) route came from: its exchange file and the identity the file gives it.")]
+internal sealed record RouteSourceDto(
+    [property: Description("Exchange format, e.g. \"S-421\".")] string Format,
+    [property: Description("The format version the file declares, e.g. \"1.0\", or null.")] string? FormatVersion,
+    [property: Description("Full path of the file the route was read from.")] string File,
+    [property: Description("The route identifier in the file (S-421 routeID), or null.")] string? RouteId,
+    [property: Description("The route edition in the file (S-421 routeEditionNo), or null.")] int? Edition,
+    [property: Description("The route status code in the file (S-421 routeInfoStatus: 1 Initial, 2 Planned, 3 Recommended, 4 Acknowledged, 5 Used for monitoring, 6 Terminated, 7 Errors, …), or null.")] int? Status);
+
 /// <summary>A route's timing: departure, arrival and where ETAs stop.</summary>
 [Description("A route's timing at each leg's effective speed over ground (S-111 currents aren't applied).")]
 internal sealed record RouteTimesDto(
@@ -75,7 +93,8 @@ internal sealed record RouteTimesDto(
 [Description("Result of get_passage: a route's passage values.")]
 internal sealed record GetPassageResult(
     [property: Description("Stable route identifier.")] string RouteId,
-    [property: Description("The route's passage values.")] PassageDto Passage);
+    [property: Description("The route's passage values.")] PassageDto Passage,
+    [property: Description("What each passage value is: a check setting (draft, squat, required UKC, departure: yours, kept locally, editable on any route) or a route value (speed, cross-track: route content, read-only on a received route), and whether it comes from the route's file.")] IReadOnlyList<PassageFieldDto>? Fields = null);
 
 /// <summary>Vessel metadata carried by a route's info block.</summary>
 [Description("Vessel metadata the route is planned for; all fields optional.")]
@@ -107,7 +126,10 @@ internal sealed record RouteSummary(
     [property: Description("Whether this is the collection's active (default-target) route.")] bool IsActive,
     [property: Description("Number of waypoints in the route.")] int WaypointCount,
     [property: Description("Number of legs (max(0, waypointCount - 1)).")] int LegCount,
-    [property: Description("Total route length in nautical miles.")] double TotalDistanceNm);
+    [property: Description("Total route length in nautical miles.")] double TotalDistanceNm,
+    [property: Description("True for a received route (from an opened S-421 dataset): read-only, not saved; edits fail with route_read_only. Copy it to edit.")] bool ReadOnly = false,
+    [property: Description("Where a received route came from, or null for an owned route.")] RouteSourceDto? Source = null,
+    [property: Description("How the map draws the route: \"planning\" (the route renderer) or \"native\" (its S-421 dataset's own portrayal). Set it with set_route_display_mode.")] string DisplayMode = "planning");
 
 /// <summary>The full projection of a single route.</summary>
 [Description("The full state of one route: identity, metadata, passage values, ordered waypoints and legs, and total distance.")]
@@ -126,7 +148,11 @@ internal sealed record RouteDetail(
     [property: Description("What redo_route_edit would replay, or null.")] string? RedoLabel,
     [property: Description("The selected waypoint's index on the active route (set with select_route_item), or null; always null for other routes.")] int? SelectedWaypointIndex,
     [property: Description("The selected leg's index on the active route (haloed on the map, set with select_route_item), or null; always null for other routes.")] int? SelectedLegIndex,
-    [property: Description("Departure, arrival and duration when at least one leg has a speed (set speedKnots with set_passage or set_leg_attributes), else null.")] RouteTimesDto? Times = null);
+    [property: Description("Departure, arrival and duration when at least one leg has a speed (set speedKnots with set_passage or set_leg_attributes), else null.")] RouteTimesDto? Times = null,
+    [property: Description("True for a received route (from an opened S-421 dataset): read-only, not saved; edits fail with route_read_only. Copy it to edit.")] bool ReadOnly = false,
+    [property: Description("Where a received route came from, or null for an owned route.")] RouteSourceDto? Source = null,
+    [property: Description("How the map draws the route: \"planning\" (the route renderer) or \"native\" (its S-421 dataset's own portrayal). Set it with set_route_display_mode.")] string DisplayMode = "planning",
+    [property: Description("What each passage value is: a check setting (draft, squat, required UKC, departure: yours, kept locally, editable on any route) or a route value (speed, cross-track: route content, read-only on a received route), and whether it comes from the route's file.")] IReadOnlyList<PassageFieldDto>? PassageFields = null);
 
 /// <summary>Result of list_routes.</summary>
 [Description("Result of list_routes: every route in the collection plus the active route id.")]
@@ -223,8 +249,21 @@ internal static class RouteProjection
             route.History.RedoLabel,
             isActive ? routes.SelectedWaypointIndex : null,
             isActive ? routes.SelectedLegIndex : null,
-            Times(etas));
+            Times(etas),
+            route.IsReadOnly,
+            SourceOf(route),
+            DisplayModeToken(route.DisplayMode),
+            PassageFields(route));
     }
+
+    /// <summary>The wire token of a display mode.</summary>
+    public static string DisplayModeToken(RouteDisplayMode mode)
+        => mode == RouteDisplayMode.Native ? "native" : "planning";
+
+    private static RouteSourceDto? SourceOf(Route route)
+        => route.Source is { } s
+            ? new RouteSourceDto(s.Format, s.FormatVersion, s.FilePath, s.RouteId, s.Edition, s.Status)
+            : null;
 
     private static RouteTimesDto? Times(RouteEtas etas)
         => etas.Schedule.Legs.Any(l => l.Duration is not null)
@@ -247,7 +286,10 @@ internal static class RouteProjection
             ReferenceEquals(route, routes.Routes.ActiveRoute),
             route.Waypoints.Count,
             route.Legs.Count,
-            route.TotalDistanceNm());
+            route.TotalDistanceNm(),
+            route.IsReadOnly,
+            SourceOf(route),
+            DisplayModeToken(route.DisplayMode));
     }
 
     /// <summary>Projects a route's passage values to a <see cref="PassageDto"/>.</summary>
@@ -264,6 +306,22 @@ internal static class RouteProjection
             p.PortCrossTrackMeters,
             p.StarboardCrossTrackMeters,
             Vessel(route.Info.Vessel));
+    }
+
+    /// <summary>What each of a route's passage values is (#960).</summary>
+    public static IReadOnlyList<PassageFieldDto> PassageFields(Route route)
+    {
+        var received = route.IsReadOnly;
+        return
+        [
+            new("draftMeters", "checkSetting", route.IsCheckSettingFromFile(RoutePassageField.Draft), false),
+            new("squatMeters", "checkSetting", route.IsCheckSettingFromFile(RoutePassageField.Squat), false),
+            new("requiredUkcMeters", "checkSetting", route.IsCheckSettingFromFile(RoutePassageField.RequiredUkc), false),
+            new("departure", "checkSetting", route.IsDepartureFromFile, false),
+            new("speedKnots", "route", received, received),
+            new("portCrossTrackMeters", "route", received, received),
+            new("starboardCrossTrackMeters", "route", received, received),
+        ];
     }
 
     private static LegPassageValuesDto LegValues(Func<RoutePassageField, double?> value)

@@ -80,6 +80,17 @@ internal sealed class ViewerDataPaths
             ? Path.Combine(b, "routes.json")
             : Path.Combine(DefaultSettingsDirectory, "routes.json");
 
+    /// <summary>
+    /// Absolute path of the persisted <c>check-settings.json</c> file holding
+    /// the mariner's check settings for received routes (draft, squat,
+    /// required UKC, departure), kept by route ID and edition (#960). Placed
+    /// like <see cref="RoutesFilePath"/>.
+    /// </summary>
+    public string CheckSettingsFilePath =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "check-settings.json")
+            : Path.Combine(DefaultSettingsDirectory, "check-settings.json");
+
     /// <summary>Directory holding unclean-shutdown crash markers.</summary>
     public string CrashMarkersDirectory =>
         _baseDirectory is { } b

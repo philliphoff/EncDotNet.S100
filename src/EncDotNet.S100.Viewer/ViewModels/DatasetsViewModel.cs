@@ -290,7 +290,27 @@ internal sealed class DatasetEntry : ViewModelBase
     /// spec-version divergence (<see cref="HasVersionWarning"/>) or an
     /// axis-order warning (<see cref="HasAxisOrderWarning"/>).
     /// </summary>
-    public bool HasDatasetWarning => HasVersionWarning || HasAxisOrderWarning;
+    public bool HasDatasetWarning => HasVersionWarning || HasAxisOrderWarning || RouteWarning is not null;
+
+    private string? _routeWarning;
+
+    /// <summary>
+    /// Why an S-421 dataset opened explicitly didn't become a received route
+    /// (for example "The route has fewer than two waypoints."), shown in the
+    /// warning badge's tooltip; <c>null</c> otherwise (#960, #391 concern 12).
+    /// </summary>
+    public string? RouteWarning
+    {
+        get => _routeWarning;
+        set
+        {
+            if (_routeWarning == value) return;
+            _routeWarning = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasDatasetWarning));
+            OnPropertyChanged(nameof(DatasetWarningTooltip));
+        }
+    }
 
     /// <summary>
     /// The badge tooltip: every active warning's message, one per line, or
@@ -303,6 +323,7 @@ internal sealed class DatasetEntry : ViewModelBase
             var messages = new List<string>(2);
             if (VersionWarningTooltip is { } version) messages.Add(version);
             if (HasAxisOrderWarning) messages.Add(_axisOrder!.BuildMessage());
+            if (RouteWarning is { } route) messages.Add(route);
             return messages.Count == 0 ? null : string.Join(Environment.NewLine + Environment.NewLine, messages);
         }
     }

@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Viewer.Resources;
 ///   <item>Add a matching property below.</item>
 /// </list>
 /// </remarks>
-internal static class Strings
+internal static partial class Strings
 {
     private static readonly ResourceManager ResourceManager =
         new("EncDotNet.S100.Viewer.Resources.Strings", typeof(Strings).Assembly);

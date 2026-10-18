@@ -78,7 +78,8 @@ internal sealed class RoutesService
     private bool _isEditModeActive;
 
     /// <summary>
-    /// Whether the interactive route editor is on. The single source of truth
+    /// Whether the interactive route editor is on (never on a received,
+    /// read-only active route). The single source of truth
     /// for edit mode: the map's route tool, the Routes panel's Edit toggle,
     /// the Ctrl+E (⌘E) shortcut and the MCP <c>set_route_edit_mode</c> tool all
     /// read and set it, and the host activates or deactivates the route edit
@@ -89,6 +90,9 @@ internal sealed class RoutesService
         get => _isEditModeActive;
         set
         {
+            // A received route is read-only: it can't be edited (#960).
+            if (value && Routes.ActiveRoute is { IsReadOnly: true })
+                value = false;
             if (_isEditModeActive == value)
                 return;
             _isEditModeActive = value;
@@ -164,7 +168,7 @@ internal sealed class RoutesService
     /// <returns><c>true</c> when a waypoint was deleted.</returns>
     public bool DeleteSelectedWaypoint()
     {
-        if (Routes.ActiveRoute is not { } route || SelectedWaypointIndex is not { } index)
+        if (Routes.ActiveRoute is not { IsReadOnly: false } route || SelectedWaypointIndex is not { } index)
             return false;
         route.History.Execute(RouteEditLabels.DeleteWaypoint, () => route.RemoveWaypoint(index));
         SelectedWaypointIndex = null;
@@ -199,6 +203,8 @@ internal sealed class RoutesService
                 _selectedLegIndex = leg;
                 SelectionChanged?.Invoke(this, EventArgs.Empty);
             }
+            if (_isEditModeActive && Routes.ActiveRoute is { IsReadOnly: true })
+                IsEditModeActive = false;
             Changed?.Invoke(this, EventArgs.Empty);
         };
 

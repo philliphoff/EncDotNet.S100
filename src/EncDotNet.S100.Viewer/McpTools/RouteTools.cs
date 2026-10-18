@@ -73,6 +73,21 @@ internal abstract class RouteToolBase
         return route;
     }
 
+    /// <summary>
+    /// Resolves a route to edit, as <see cref="Resolve"/>, failing with
+    /// <see cref="RouteReadOnly"/> when it's a received route (#960).
+    /// </summary>
+    protected Route? ResolveEditable(string? routeId, out ToolError? error)
+    {
+        var route = Resolve(routeId, out error);
+        if (route is { IsReadOnly: true })
+        {
+            error = new RouteReadOnly(route.Id);
+            return null;
+        }
+        return route;
+    }
+
     /// <summary>Validates a latitude/longitude pair against the WGS-84 range.</summary>
     protected static ToolError? ValidateLatLon(double lat, double lon)
     {
@@ -302,7 +317,7 @@ internal sealed class AppendWaypointTool : RouteToolBase
 
         return Invoker.InvokeAsync(() =>
         {
-            var route = Resolve(request.RouteId, out var error);
+            var route = ResolveEditable(request.RouteId, out var error);
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
@@ -358,7 +373,7 @@ internal sealed class InsertWaypointTool : RouteToolBase
 
         return Invoker.InvokeAsync(() =>
         {
-            var route = Resolve(request.RouteId, out var error);
+            var route = ResolveEditable(request.RouteId, out var error);
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
@@ -415,7 +430,7 @@ internal sealed class MoveWaypointTool : RouteToolBase
 
         return Invoker.InvokeAsync(() =>
         {
-            var route = Resolve(request.RouteId, out var error);
+            var route = ResolveEditable(request.RouteId, out var error);
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
@@ -461,7 +476,7 @@ internal sealed class DeleteWaypointTool : RouteToolBase
 
         return Invoker.InvokeAsync(() =>
         {
-            var route = Resolve(request.RouteId, out var error);
+            var route = ResolveEditable(request.RouteId, out var error);
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
@@ -612,7 +627,7 @@ internal sealed class SetLegAttributesTool : RouteToolBase
 
         return Invoker.InvokeAsync(() =>
         {
-            var route = Resolve(request.RouteId, out var error);
+            var route = ResolveEditable(request.RouteId, out var error);
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
@@ -724,7 +739,7 @@ internal sealed class SetRouteInfoTool : RouteToolBase
 
         return Invoker.InvokeAsync(() =>
         {
-            var route = Resolve(request.RouteId, out var error);
+            var route = ResolveEditable(request.RouteId, out var error);
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
@@ -865,6 +880,8 @@ internal sealed class SetRouteEditModeTool : RouteToolBase
 
         return Invoker.InvokeAsync(() =>
         {
+            if (request.Enabled && Routes.Routes.ActiveRoute is { IsReadOnly: true } readOnly)
+                return ToolResult<RouteEditModeResult>.Err(new RouteReadOnly(readOnly.Id));
             Routes.IsEditModeActive = request.Enabled;
             return ToolResult<RouteEditModeResult>.Ok(
                 new RouteEditModeResult(Routes.IsEditModeActive, Routes.Routes.ActiveRoute?.Id));
@@ -962,7 +979,7 @@ internal sealed class GetPassageTool : RouteToolBase
             var route = Resolve(request.RouteId, out var error);
             return route is null
                 ? ToolResult<GetPassageResult>.Err(error!)
-                : ToolResult<GetPassageResult>.Ok(new GetPassageResult(route.Id, RouteProjection.Passage(route)));
+                : ToolResult<GetPassageResult>.Ok(new GetPassageResult(route.Id, RouteProjection.Passage(route), RouteProjection.PassageFields(route)));
         });
     }
 }
@@ -978,7 +995,7 @@ internal sealed class GetPassageTool : RouteToolBase
 /// Legs inherit each value unless they override it, so a change reaches only
 /// the inheriting legs.
 /// </remarks>
-[Description("Request for set_passage: update a route's passage values, which legs inherit unless they override them. All values optional; supplied values overwrite, omitted values are left unchanged, names in 'clear' are unset.")]
+[Description("Request for set_passage: update a route's passage values, which legs inherit unless they override them. All values optional; supplied values overwrite, omitted values are left unchanged, names in 'clear' are unset. On a received (read-only) route only the check settings (draftMeters, squatMeters, requiredUkcMeters, departure) can be set: they apply to every leg and are kept locally by route ID and edition, and clearing one returns to the file's value; a route value fails with route_read_only.")]
 internal sealed record SetPassageRequest(
     [property: Description("Id of the route to edit; omit to use the active route.")] string? RouteId = null,
     [property: Description("Draft in metres (>= 0).")] double? DraftMeters = null,
@@ -1062,20 +1079,28 @@ internal sealed class SetPassageTool : RouteToolBase
             if (route is null)
                 return ToolResult<RouteDetail>.Err(error!);
 
-            route.History.Execute(RouteEditLabels.EditPassage, () =>
+            // A received route takes check settings only (#960, decision 16).
+            if (route.IsReadOnly && values.Any(v => !RoutePassageFields.IsCheckSetting(v.Field)
+                    && (v.Value.HasValue || clear.Contains(ClearName(v.Field)))))
+                return ToolResult<RouteDetail>.Err(new RouteReadOnly(route.Id));
+
+            route.EditCheckSettings(RouteEditLabels.EditPassage, () =>
             {
                 foreach (var (_, field, value) in values)
                 {
-                    if (clear.Contains(ClearName(field)))
-                        route.SetPassageValue(field, null);
-                    else if (value.HasValue)
-                        route.SetPassageValue(field, value);
+                    double? next = clear.Contains(ClearName(field)) ? null : value;
+                    if (next is null && !clear.Contains(ClearName(field)))
+                        continue;
+                    if (RoutePassageFields.IsCheckSetting(field))
+                        route.SetCheckSetting(field, next);
+                    else
+                        route.SetPassageValue(field, next);
                 }
 
                 if (clear.Contains("departure"))
-                    route.SetDeparture(null);
+                    route.SetCheckDeparture(null);
                 else if (request.Departure.HasValue)
-                    route.SetDeparture(request.Departure);
+                    route.SetCheckDeparture(request.Departure);
             });
 
             return Ok(route, Routes);
