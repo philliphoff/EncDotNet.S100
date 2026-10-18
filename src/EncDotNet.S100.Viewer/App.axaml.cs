@@ -373,6 +373,7 @@ public partial class App : Application
             var routePersistence =
                 _services.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutePersistenceService>();
             routePersistence.Initialize();
+            _ = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.ReceivedRoutesService>();
 
             // Load the dataset collections and start background re-indexing
             // (cached indexes appear immediately; nothing is loaded).
@@ -855,6 +856,22 @@ public partial class App : Application
         // initialized in OnFrameworkInitializationCompleted and flushed on
         // ShutdownRequested.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutePersistenceService>();
+        // Received routes (#960): S-421 datasets opened explicitly become
+        // read-only routes; their check settings are kept by route ID + edition.
+        services.AddSingleton(sp =>
+        {
+            var checkSettings = new EncDotNet.S100.Viewer.Routing.Persistence.CheckSettingsStore(
+                sp.GetRequiredService<ViewerSettings>().IsReadOnly ? null : sp.GetRequiredService<ViewerDataPaths>().CheckSettingsFilePath);
+            checkSettings.Load();
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            return new EncDotNet.S100.Viewer.Services.ReceivedRoutesService(
+                sp.GetRequiredService<IDatasetLoaderService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
+                checkSettings,
+                entry => datasets.Entries.Remove(entry),
+                sp.GetService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>());
+        });
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
         services.AddSingleton<GlobalTimeService>();

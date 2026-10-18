@@ -55,7 +55,7 @@ public sealed class S421RoutePlan
             ?? throw new InvalidOperationException("Dataset contains no Route feature.");
 
         var routeInfo = ResolveRouteInfo(routeFeature, ctx);
-        var (waypoints, legs) = ResolveWaypointsAndLegs(routeFeature, ctx);
+        var (waypoints, legs) = ResolveWaypointsAndLegs(routeFeature, dataset, ctx);
         var actionPoints = ResolveActionPoints(routeFeature, ctx);
         var schedules = ResolveSchedules(routeFeature, ctx);
 
@@ -189,7 +189,7 @@ public sealed class S421RoutePlan
     // ── Waypoints + legs ─────────────────────────────────────────
 
     private static (IReadOnlyList<S421Waypoint>, IReadOnlyList<S421Leg>) ResolveWaypointsAndLegs(
-        S421Feature route, ProjectionContext ctx)
+        S421Feature route, S421Dataset dataset, ProjectionContext ctx)
     {
         var wptsRef = route.References.FirstOrDefault(r => r.Role == "routeWaypoints");
         if (wptsRef is null)
@@ -204,10 +204,34 @@ public sealed class S421RoutePlan
 
         var waypointFeatures = new List<S421Feature>();
         var referencedLegs = new List<S421Leg?>();
-        foreach (var wptRef in container.Value.References.Where(r => r.Role == "routeWaypoint"))
+        var candidates = container.Value.References
+            .Where(r => r.Role == "routeWaypoint")
+            .Select(r => ctx.Xlinks.Resolve<S421Feature>(r.Href, "routeWaypoint", ctx, container.Value.Id))
+            .OfType<S421Feature>()
+            .ToList();
+
+        // Quirk: the IEC 63173-1 sample datasets (RTE-TEST-GBASIC, -GFULL)
+        // reference their waypoints by ids no RouteWaypoint carries. When
+        // fewer than two references resolve but the dataset has more
+        // waypoints, take its RouteWaypoint features in document order (the
+        // order the encoding lists them) and say so.
+        var references = container.Value.References.Count(r => r.Role == "routeWaypoint");
+        if (candidates.Count < 2 && references >= 2)
         {
-            var wptFeature = ctx.Xlinks.Resolve<S421Feature>(wptRef.Href, "routeWaypoint", ctx, container.Value.Id);
-            if (wptFeature is null) continue;
+            var all = dataset.Features.Where(f => f.FeatureType == "RouteWaypoint").ToList();
+            if (all.Count > candidates.Count)
+            {
+                candidates = all;
+                ctx.Warn(
+                    "Fewer than two routeWaypoint references resolve; the RouteWaypoint features are taken in document order.",
+                    "s421.waypoints.documentOrder",
+                    container.Value.Id,
+                    "routeWaypoint");
+            }
+        }
+
+        foreach (var wptFeature in candidates)
+        {
 
             S421Leg? leg = null;
             var legRef = wptFeature.References.FirstOrDefault(r => r.Role == "routeWaypointLeg");

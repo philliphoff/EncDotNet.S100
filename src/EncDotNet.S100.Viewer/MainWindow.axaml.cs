@@ -1107,7 +1107,9 @@ public partial class MainWindow : ShadUI.Window
                 _routeMariner?.Current.DepthUnit ?? EncDotNet.S100.Pipelines.DepthUnit.Metres,
                 _routeTimeFormat?.Current ?? TimeFormat.Local,
                 _routeFindings?.Selected,
-                _routeFindings?.Findings));
+                _routeFindings?.Findings),
+            // Native-mode received routes are drawn by their dataset (#960).
+            route => EncDotNet.S100.Viewer.Services.ReceivedRoutesService.DrawsWithRouteRenderer(_routeStore, route));
         _mapHost.RequestRedraw();
     }
 

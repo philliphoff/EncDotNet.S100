@@ -78,10 +78,12 @@ internal sealed record RouteOverlayScene(
         int? selectedLegIndex,
         bool isEditing,
         MeasureOverlayAppearance appearance,
-        RouteCheckOverlay? check = null)
+        RouteCheckOverlay? check = null,
+        Func<Route, bool>? draws = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
         var scene = routes.Routes
+            .Where(r => draws?.Invoke(r) ?? true)
             .Select(r => SceneRoute.From(r, ReferenceEquals(r, routes.ActiveRoute)))
             .ToArray();
         return new RouteOverlayScene(

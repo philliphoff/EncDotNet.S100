@@ -77,6 +77,7 @@ public sealed class RouteEditHistory
     /// <param name="label">A short description of the edit, e.g. <c>"move waypoint"</c>.</param>
     /// <param name="edit">The edit. It must change the route through the route's
     /// methods, or call <see cref="Route.NotifyChanged"/> after an in-place edit.</param>
+    /// <exception cref="RouteReadOnlyException">The route is a received, read-only route.</exception>
     public void Execute(string label, Action edit)
     {
         ArgumentNullException.ThrowIfNull(edit);
@@ -147,6 +148,8 @@ public sealed class RouteEditHistory
     private void Open(string label)
     {
         ArgumentNullException.ThrowIfNull(label);
+        if (_route.IsReadOnly)
+            throw new RouteReadOnlyException(_route.Id);
         if (_depth++ > 0)
             return;
         _dirty = false;

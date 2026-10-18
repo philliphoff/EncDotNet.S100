@@ -104,13 +104,17 @@ internal static partial class RouteStore
 
     private static RouteStoreDocument ToDocument(RouteCollection routes)
     {
+        // Received routes live while their file is open; they aren't saved (#960).
         var document = new RouteStoreDocument
         {
-            ActiveRouteId = routes.ActiveRoute?.Id,
+            ActiveRouteId = routes.ActiveRoute is { IsReadOnly: false } active ? active.Id : null,
         };
 
         foreach (var route in routes.Routes)
         {
+            if (route.IsReadOnly)
+                continue;
+
             var routeDocument = new RouteDocument
             {
                 Id = route.Id,

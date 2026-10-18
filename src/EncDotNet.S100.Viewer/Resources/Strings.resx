@@ -5470,4 +5470,68 @@
   <data name="NavWarnings_StaleNoTimeFormat" xml:space="preserve">
     <value>{0} isn't answering. You're seeing the warnings received earlier.</value>
   </data>
+  <!-- #960 received routes -->
+  <data name="Received_NotARoute" xml:space="preserve">
+    <value>This file isn't an RTZ or S-421 route.</value>
+  </data>
+  <data name="Received_TooFewWaypoints" xml:space="preserve">
+    <value>The route has fewer than two waypoints.</value>
+  </data>
+  <data name="Received_OlderEditionFormat" xml:space="preserve">
+    <value>Not shown as a route: edition {0} of this route is already open.</value>
+  </data>
+  <data name="Toast_CheckRouteEndedFormat" xml:space="preserve">
+    <value>Check route ended: {0} was closed with its dataset</value>
+  </data>
+  <data name="Received_RouteClosedFormat" xml:space="preserve">
+    <value>{0} was closed with its dataset</value>
+  </data>
+  <data name="Routes_ReceivedBadge" xml:space="preserve">
+    <value>Received · read-only</value>
+  </data>
+  <data name="Routes_ReceivedSourceFormat" xml:space="preserve">
+    <value>{0} · {1} ed. {2}</value>
+  </data>
+  <data name="Routes_ReceivedSourceNoEditionFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Routes_RouteMetaReceivedFormat" xml:space="preserve">
+    <value>{0} WP · {1:0.0} NM · received</value>
+  </data>
+  <data name="Routes_DisplayModeNative" xml:space="preserve">
+    <value>Native</value>
+  </data>
+  <data name="Routes_DisplayModePlanning" xml:space="preserve">
+    <value>Planning</value>
+  </data>
+  <data name="Tooltip_DisplayModeNative" xml:space="preserve">
+    <value>Draw the route with its S-421 portrayal</value>
+  </data>
+  <data name="Tooltip_DisplayModePlanning" xml:space="preserve">
+    <value>Draw the route with the route tools</value>
+  </data>
+  <data name="Tooltip_DisplayModeChecking" xml:space="preserve">
+    <value>Check route draws the route in Planning mode</value>
+  </data>
+  <data name="Tooltip_EditReceivedRoute" xml:space="preserve">
+    <value>A received route is read-only. Copy it to edit.</value>
+  </data>
+  <data name="Menu_CloseRoute" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Routes_PassageCheckSettings" xml:space="preserve">
+    <value>Your check settings</value>
+  </data>
+  <data name="Routes_PassageCheckSettingsNote" xml:space="preserve">
+    <value>Used to check the route. Not part of the route.</value>
+  </data>
+  <data name="Routes_PassageRouteValues" xml:space="preserve">
+    <value>Route</value>
+  </data>
+  <data name="Routes_PassageFromFile" xml:space="preserve">
+    <value>from file</value>
+  </data>
+  <data name="Routes_PassageRouteValuesFromFile" xml:space="preserve">
+    <value>Route · from file</value>
+  </data>
 </root>

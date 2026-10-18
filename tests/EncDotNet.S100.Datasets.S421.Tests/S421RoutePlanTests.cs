@@ -113,6 +113,19 @@ public class S421RoutePlanTests
         Assert.Empty(diagnostics);
     }
 
+    [Theory]
+    [InlineData("RTE-TEST-GBASIC.s421.gml")]
+    [InlineData("RTE-TEST-GFULL.s421.gml")]
+    public void Samples_with_dangling_waypoint_references_take_waypoints_in_document_order(string file)
+    {
+        // The IEC samples reference RTE.WPTS.WP(T).n; most waypoints are RTE.WPT.n.
+        var plan = Project(file, out var diagnostics);
+        Assert.Equal(10, plan.Route.Waypoints.Count);
+        Assert.Equal("RTE.WPT.1", plan.Route.Waypoints[0].Id);
+        Assert.Equal("RTE.WPT.10", plan.Route.Waypoints[^1].Id);
+        Assert.Contains(diagnostics, d => d.Code == "s421.waypoints.documentOrder");
+    }
+
     // ── Rich projection (GFULL) ──────────────────────────────────
 
     [Fact]

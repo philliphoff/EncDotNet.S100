@@ -104,12 +104,13 @@ internal static class RouteS421Mapping
     /// and info, with the values every leg shares lifted into the passage.
     /// </summary>
     /// <param name="s421">The S-421 route.</param>
-    /// <returns>The route; its id is the S-421 <c>routeID</c> (or a new id).</returns>
-    public static Route FromS421(S421Route s421)
+    /// <param name="id">The route's id; the S-421 <c>routeID</c> (or a new id) when omitted.</param>
+    /// <returns>The route.</returns>
+    public static Route FromS421(S421Route s421, string? id = null)
     {
         ArgumentNullException.ThrowIfNull(s421);
 
-        var route = new Route(s421.RouteId, s421.Info?.Name);
+        var route = new Route(id ?? s421.RouteId, s421.Info?.Name);
         if (s421.Info is { } info)
         {
             route.Info.Author = info.Author;
@@ -194,6 +195,28 @@ internal static class RouteS421Mapping
             route.SetDeparture(departure);
         }
 
+        return route;
+    }
+
+    /// <summary>
+    /// A received, read-only route from an S-421 route read from
+    /// <paramref name="filePath"/> (#960). It starts in Native mode, has a
+    /// new id, and keeps the file's identity as its <see cref="Route.Source"/>.
+    /// </summary>
+    /// <param name="s421">The S-421 route.</param>
+    /// <param name="filePath">The file it was read from.</param>
+    /// <returns>The received route.</returns>
+    public static Route ToReceived(S421Route s421, string filePath)
+    {
+        ArgumentNullException.ThrowIfNull(s421);
+        ArgumentException.ThrowIfNullOrEmpty(filePath);
+
+        var route = FromS421(s421, Guid.NewGuid().ToString("n"));
+        if (string.IsNullOrWhiteSpace(route.Name))
+            route.Info.Name = s421.RouteId ?? Path.GetFileNameWithoutExtension(filePath);
+        route.MarkReceived(
+            new RouteSource(RouteSourceFormats.S421, s421.FormatVersion, filePath, s421.RouteId, s421.EditionNumber, s421.Info?.Status),
+            RouteDisplayMode.Native);
         return route;
     }
 
