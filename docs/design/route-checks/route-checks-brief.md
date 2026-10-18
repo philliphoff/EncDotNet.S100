@@ -104,13 +104,19 @@ Not asked, but screenshot 5 forces it. Findings with the same code merge into on
 
 Selecting an S-124 finding expands its row into the #976 Warning card (text clipped at 5 lines, *Show all*), because Object Information is folded in this mode. A link opens it in the Navigational warnings panel. Severity (for #957): crosses the corridor and in force at ETA → Must review; within 0,5 NM (configurable) and in force → Check; not in force during the passage, or cancelled → Info, with the reason.
 
-### F. Import and export (#960, #961)
+### F. Import and export (#960, #961), in the #391 model
 
 *Question:* one Import / Export flow for RTZ and S-421; format choice; what's dropped on import.
 
+**Context.** The 2026-10-16 "Revised direction" comment on [#391](https://github.com/philliphoff/EncDotNet.S100/issues/391) (now superseded by #960) set the model: an S-421 dataset you open becomes a **read-only route** shown in **Native** mode (its own portrayal), which can switch to **Planning** mode (the route renderer, read-only but checkable); editing needs **Copy to edit**, which makes an owned route that keeps its source and the S-421 content the viewer can't edit. Round 1's first draft of this section imported files straight into editable routes, which is the approach #391 replaced. This version follows #391.
+
 **Answer.**
-- **Import route…** is an icon button in the Routes header. The picker accepts `.rtz`, `.gml`, `.xml`; the format and version are sniffed from the content, so there's no format question. A summary dialog lists **Imported** (what became what: schedule → Departure, leg values → Passage plus overrides) and **Not imported** (with the reason, including extensions kept for re-export) before anything changes. *Import* adds a new active route as one undoable step. A loaded S-421 dataset row offers *Open as route* (read-only until copied, per the #391 decision).
-- **Export…** sits in the route ⋯ menu (Rename, Reverse, Export…, Remove). The dialog picks RTZ (version 1.2 by default; 1.1 and 1.0 available) or S-421 (edition 1.0), with "Include passage settings" on by default, and a note listing only the fields this route has that the chosen format can't hold. Findings and verdicts are never exported.
+- **Import route…** is an icon button in the Routes header. It opens a file as a **received route**, read-only, with no dialog on success. The format and version are sniffed from the content. An S-421 file also loads as a dataset and starts in Native mode; RTZ has no native portrayal and opens in Planning mode. An S-421 dataset you open explicitly becomes a received route the same way; datasets loaded by panning a Library source don't (#391 concern 6).
+- **Copy to edit** (footer, ⋯ menu, Ctrl+E, waypoint menu) opens the summary that round 1 put on import: what the copy keeps, and what it can't hold (kept and written back on export), with the copy's identity. Nothing is lost by opening, so the summary belongs where the viewer's model starts dropping things.
+- **Export…** sits in the route ⋯ menu for both kinds of route. The dialog picks RTZ (1.2 by default; 1.1 and 1.0 available) or S-421 (edition 1.0), shows the route's identity in the file, and lists only the fields this route has that the chosen format can't hold. Findings and verdicts are never exported.
+- **Checking a received route** works like an owned one. Check route switches it to Planning mode while on and back afterwards, keeps the S-421 action-point layer on (the route renderer doesn't draw action points, #391 concern 4), and puts Copy to edit where Edit was. Closing the dataset ends the check cleanly.
+- **Check settings (#391 concern 2; to confirm).** Draft, squat, required UKC and departure are *your* settings, not the route's: a local per-route layer, editable on received routes, defaulting to values in the file, and not exported unless you tick *Also write my check settings*. The Passage card shows them as **Your check settings**, above the route's own speed and cross-track (read-only on a received route).
+- **Copy identity (#391 concern 9; to confirm).** A copy gets a new route ID, a previous-route reference to the source's ID and edition, edition 1 and status Planned. A received route exported unchanged (say RTZ → S-421) keeps its identity.
 
 ### G. Dusk and Night tones (#934)
 
@@ -137,5 +143,6 @@ Selecting an S-124 finding expands its row into the #976 Warning card (text clip
 - **2b** Draft set, UKHO Solent, combined verdict, Light/Day.
 - **2c** S-124 finding selected with the Warning card inline, Dark chrome, proposed Night tones.
 - **2d** The map treatment on Day, Dusk and Night, and the tone table with old values.
-- **2e** Import summary. **2f** Export dialog and the ⋯ menu.
+- **2e** Copy to edit (what the copy keeps). **2f** Export dialog and the ⋯ menu.
+- **2h** A received S-421 route checked without a draft: read-only badge, Planning while checking, check settings split from route values, Copy to edit.
 - **2g** Components: six verdict variants, leg rows with badges, a merged row, the warnings panel on a route, markers.

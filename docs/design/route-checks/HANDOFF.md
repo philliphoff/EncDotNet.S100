@@ -8,7 +8,8 @@ Mock: **Route Checks** artboard in the *SoundCharts S-100 Viewer* design canvas,
 - **2b** Draft set · clearance and route checks in one verdict. Light, Day. UKHO Solent, #887 route at 07:10.
 - **2c** A warning near the route, read in place. Dark, Night (proposed tones).
 - **2d** Map treatment on Day / Dusk / Night, and the tone table.
-- **2e** Import summary. **2f** Export dialog and ⋯ menu.
+- **2e** Copy to edit (what the copy keeps). **2f** Export dialog and ⋯ menu.
+- **2h** A received S-421 route checked without a draft: read-only badge, Planning while checking, check settings split from route values, Copy to edit.
 - **2g** Components: verdict variants, leg rows, merged row, warnings panel on a route, markers.
 
 The mock is a reference, not code to port. Build it with Avalonia + ShadUI, the theme resources, the existing `RouteOverlayRenderer` and the #976 `NavigationalWarningCardViewModel`. Findings, depths, times and warning texts are fixtures.
@@ -25,10 +26,14 @@ The mock is a reference, not code to port. Build it with Avalonia + ShadUI, the 
 8. **Warnings are a filter, not a view.** "Warnings affecting this route" = the *Warnings* chip. No viewport-scoped warnings list. The Navigational warnings panel gains an "On {route}" scope while Check route is on.
 9. **Warning text in place.** Selecting an S-124 finding expands its row into the #976 Warning card (clip at 5 lines, *Show all*), since Object Information is folded in this mode.
 10. **S-124 severity** (for #957): crosses the corridor and in force at ETA → Must review; within 0,5 NM (setting) and in force → Check; not in force during the passage, or cancelled → Info with the reason.
-11. **Import route…** is a Routes header button; the format comes from the file's content; a summary lists what's imported and what isn't before anything changes; the result is a new active route, one undoable step. A loaded S-421 dataset offers *Open as route* (read-only until copied, per #391).
-12. **Export…** is in the route ⋯ menu. One dialog chooses RTZ (1.2 default; 1.1, 1.0) or S-421 (1.0), with *Include passage settings*, and names any field the chosen format can't hold. Findings are never exported.
-13. **Tones** (with #934): findings reuse state tones (Must review = Below, Check = Tight, Info = Low confidence). Night drops to ~0,10 luminance, Day Tight darkens, Dusk keeps #933, No data becomes dotted, Night editing uses a fixed colour (table in Part G).
-14. **Deferred:** a route-check sweep over departures (route findings don't vary with departure except warnings and S-122 periods; the window line says so); S-411 ice; narrow windows (as in #887).
+11. **Received routes are read-only** (the #391 model, now #960). *Import route…* (a Routes header button) opens a file as a **received route**; the format comes from the file's content. An S-421 file also loads as a dataset and its route starts in **Native** mode; an RTZ file has no native portrayal and opens in **Planning** mode. An S-421 dataset you open explicitly (Datasets, Library, drag and drop) becomes a received route the same way, so there's no "Open as route" action. Datasets loaded by panning a Library source never become routes.
+12. **Copy to edit** makes an owned, editable route. Its dialog lists what the copy keeps and what it can't hold (kept for re-export) before anything changes, and the copy is one undoable step. The summary that round 1 put on import lives here, because nothing is lost by opening a received route.
+13. **Export…** is in the route ⋯ menu for both kinds of route. One dialog chooses RTZ (1.2 default; 1.1, 1.0) or S-421 (1.0), says how the route is identified in the file (decision 17), and names any field the chosen format can't hold. Your check settings are written only on request (decision 16). Findings are never exported.
+14. **Tones** (with #934): findings reuse state tones (Must review = Below, Check = Tight, Info = Low confidence). Night drops to ~0,10 luminance, Day Tight darkens, Dusk keeps #933, No data becomes dotted, Night editing uses a fixed colour (table in Part G).
+15. **Checking a received route** works as for an owned route. Turning Check route on switches a Native-mode route to Planning for as long as the mode is on, and back afterwards. The S-421 action-point layer stays on while checking, because the route renderer doesn't draw action points. The footer's Edit becomes **Copy to edit**. Closing the dataset ends Check route and Follow passage, clears the findings and says why.
+16. **Check settings are local** (#391 concern 2; **needs your confirmation**). Draft, squat, required UKC and departure are *your* settings for checking a route, not route content. They're stored per route in SoundCharts, editable on read-only routes, and not exported unless you ask. Values in the file (leg draft and UKC, a schedule's departure) are the defaults, marked "from file". The Passage card shows them as a group, **Your check settings**, above the route's own values (speed, cross-track), which are read-only on a received route.
+17. **A copy is a new route** (#391 concern 9; **needs your confirmation**). It gets a new route ID, a previous-route reference to the source's route ID and edition, edition 1, and status Planned. Exporting a received route unchanged (for example to convert RTZ to S-421) keeps its route ID, edition and status.
+18. **Deferred:** a route-check sweep over departures (route findings don't vary with departure except warnings and S-122 periods; the window line says so); S-411 ice; narrow windows (as in #887).
 
 ## Vocabulary
 
@@ -46,7 +51,12 @@ The mock is a reference, not code to port. Build it with Avalonia + ShadUI, the 
 - [ ] **A2.** No draft: hide the Clearance tab (it's not in the bottom dock's tab strip while this route is checked without a draft). The dock opens on Timeline if it was open.
 - [ ] **A3.** No draft: the line keeps the active-route accent at 4 px on the casing; wash and corridor as in C1/C3.
 - [ ] **A4.** Panel header sub-line without a draft: "No draft · {speed} · dep {HH:MM} · arr {HH:MM}" (parts drop when unset).
-- [ ] **A5.** "+ Add draft" expands the Passage card and focuses the Draft field; check results update when it's set.
+- [ ] **A5.** "+ Add draft" expands the Passage card and focuses the Draft field in **Your check settings**; check results update when it's set. On a received route this edits the local layer, never the route.
+- [ ] **A6. Received route header:** a "Received · read-only" badge after the name; the sub-line adds the source ("S-421 · 421ZZ00WARN ed. 1" or "RTZ 1.2 · file name"). In the route list, the row's meta line ends with "· received".
+- [ ] **A7. Display mode:** a Native / Planning segmented control under the header for S-421 routes (any route later, #391 concern 11). While Check route is on it shows Planning, disabled, with the tooltip "Check route draws the route in Planning mode".
+- [ ] **A8. Footer on a received route:** **Copy to edit** replaces Edit (same place, same size). The waypoint context menu and Ctrl+E also offer Copy to edit instead of editing.
+- [ ] **A9. Passage card on any route:** two groups. **Your check settings** (Draft · squat, Required UKC, Departure) with the note "Used to check the route. Not part of the route." and "from file" on values taken from the file; then **Route** (Speed, Cross-track), read-only and labelled "from file" on a received route.
+- [ ] **A10. Dataset closed while checking:** Check route turns off, Follow passage stops, the findings clear, and a toast says "Check route ended: {route} was closed with its dataset".
 
 ### Part B — Verdict card
 
@@ -87,13 +97,16 @@ The mock is a reference, not code to port. Build it with Avalonia + ShadUI, the 
 - [ ] **E3. Navigational warnings panel:** while Check route is on, a segmented "All N | On {route name} M" under the search; affected rows get a line "On route · {HH:MM}" or "Near route · {HH:MM}" in `--selected`. Off when the mode is off.
 - [ ] **E4. Provider "not for navigation" label** on the Warning card stays hidden inside the findings list (the verdict footer carries the app's disclaimer). Confirm with #932's remaining slice.
 
-### Part F — Import and export
+### Part F — Received routes, copy and export (for #960 and #961)
 
-- [ ] **F1. Entry points:** Routes header icon button **Import route…** (download icon, before +); route ⋯ menu **Export…** (between Reverse and Remove); S-421 dataset row **Open as route**.
-- [ ] **F2. Picker:** filter "Routes (*.rtz, *.gml, *.xml)". Sniff RTZ (namespace + version 1.0/1.1/1.2) or S-421 GML.
-- [ ] **F3. Import dialog** (520 px): title "Import route", sub "Nothing changes until you choose Import."; file card (route name, file name · format + version, "N WP · X NM"); **IMPORTED** list (check icons, "what → where"); **NOT IMPORTED** list (info icons, with reasons; extensions say "kept and written back on RTZ export"); note "Imported as a new route. Undo removes it."; Cancel / **Import**.
-- [ ] **F4. Import errors:** one line replacing both lists, Close only: "This file isn't an RTZ or S-421 route." / "RTZ {v} isn't supported yet." / "The route has fewer than two waypoints."
-- [ ] **F5. Export dialog** (500 px): title "Export route" + route summary; FORMAT radio cards — RTZ "IEC 61174 route exchange · For ECDIS and route planning tools." with a version select (1.2, 1.1, 1.0), and S-421 "IHO route plan, edition 1.0 · For S-100 systems."; checkbox "Include passage settings" (on); a muted note listing only the route's fields the format can't hold; Cancel / **Export…** (opens the save dialog with "{route name}.rtz|.gml"). Remember the last format and version.
+- [ ] **F1. Entry points:** a Routes header icon button **Import route…** (download icon, before +); route ⋯ menu **Copy to edit** (received routes) and **Export…** (both kinds), between Reverse and Remove; the footer's Copy to edit (A8). Received routes have no Rename, Reverse or Remove; **Close** in ⋯ (or closing the dataset) removes them.
+- [ ] **F2. Picker:** filter "Routes (*.rtz, *.gml, *.xml)". Sniff RTZ (namespace + version 1.0/1.1/1.2) or S-421 GML. No dialog on success: the received route appears in the list, becomes active, and the map fits it.
+- [ ] **F3. Open errors:** a dialog with one line and Close: "This file isn't an RTZ or S-421 route." / "RTZ {v} isn't supported yet." / "The route has fewer than two waypoints." An S-421 dataset that isn't a valid route stays a dataset, and its Datasets row says why (#391 concern 12).
+- [ ] **F4. Duplicates:** opening the same file again selects the existing received route. Two files with the same route ID and edition give one route; a newer edition replaces the older one's route and tells copies "Source has a newer edition (ed. 4)" on their header (#391 concern 5).
+- [ ] **F5. Copy to edit dialog** (520 px): title "Copy to edit", sub "Makes an editable copy. The received route stays as it is."; source card (route name, file name · format + version, "N WP · X NM"); **THE COPY KEEPS** list (check icons, "what → where"); **NOT IN THE COPY** list (info icons, with reasons; preserved content says "kept and written back on export"); identity line "New route ID · references {route ID} ed. {n} · status Planned" (decision 17); Cancel / **Make copy**. The copy is named "{name} (copy)", becomes active and opens in Edit mode; one undo removes it.
+- [ ] **F6. Preserved content that goes stale:** after a waypoint insert or delete, preserved schedules no longer line up. The copy's header shows "2 schedules no longer match the route" with a menu: Drop them / Keep and export as they are (#391 concern 8). Default on export: drop, and say so in the export note.
+- [ ] **F7. Export dialog** (500 px): title "Export route" + route summary; FORMAT radio cards — RTZ "IEC 61174 route exchange · For ECDIS and route planning tools." with a version select (1.2, 1.1, 1.0), and S-421 "IHO route plan, edition 1.0 · For S-100 systems."; identity line (owned copy: "New route · references {source} ed. {n} · status Planned"; received route: "Route ID {id} ed. {n} kept"); checkbox **Also write my check settings** (off; "Draft, required UKC and departure. RTZ writes them as a calculated schedule and the UKC extension."); a muted note listing only the route's fields the format can't hold; Cancel / **Export…** (save dialog with "{route name}.rtz|.gml"). Remember the last format and version.
+- [ ] **F8. Persistence:** received routes aren't written to `routes.json`. An S-421 received route returns after a restart only if its dataset does; an RTZ received route is remembered as an open file and reopened if the file still exists. Your check settings for a received route are kept by route ID + edition.
 
 ### Part G — Tones (folds in #934)
 
@@ -126,10 +139,12 @@ The mock is a reference, not code to port. Build it with Avalonia + ShadUI, the 
 | Legend fold | `Map.RouteCheckLegend.Toggle` |
 | Warnings scope | `NavigationalWarnings.Scope.All`, `NavigationalWarnings.Scope.Route` |
 | Import button | `Routes.Import` |
-| Import dialog | `RouteImport.Dialog`, `RouteImport.Confirm`, `RouteImport.Cancel`, lists `RouteImport.Imported`, `RouteImport.NotImported` |
+| Received badge, display mode | `Routes.Active.ReadOnlyBadge`, `Routes.DisplayMode.Native`, `Routes.DisplayMode.Planning` |
+| Copy to edit | `Routes.CopyToEdit` (footer), `Routes.Row.Menu.CopyToEdit`; dialog `RouteCopy.Dialog`, `RouteCopy.Confirm`, `RouteCopy.Cancel`, lists `RouteCopy.Keeps`, `RouteCopy.NotKept` |
+| Check settings group | `Routes.Passage.CheckSettings`, `Routes.Passage.RouteValues` |
+| Open error dialog | `RouteImport.Error`, `RouteImport.Close` |
 | Export menu item | `Routes.Row.Menu.Export` |
-| Export dialog | `RouteExport.Dialog`, `RouteExport.Format.Rtz`, `RouteExport.Format.S421`, `RouteExport.RtzVersion`, `RouteExport.IncludePassage`, `RouteExport.Confirm` |
-| S-421 dataset action | `Datasets.Row.OpenAsRoute` |
+| Export dialog | `RouteExport.Dialog`, `RouteExport.Format.Rtz`, `RouteExport.Format.S421`, `RouteExport.RtzVersion`, `RouteExport.IncludeCheckSettings`, `RouteExport.Confirm` |
 
 ## MCP parity
 
@@ -139,7 +154,8 @@ The mock is a reference, not code to port. Build it with Avalonia + ShadUI, the 
 - `select_finding` keeps its contract; the result says which marker or sleeve is highlighted.
 - `set_map_legend {open}` and `get_map_legend`.
 - Navigational warnings: `list_navigational_warnings` gains `scope` (`all`, `route`) and per-warning `route` (`on`, `near`, ETA).
-- Exchange (#960/#961): `import_route {path|content, dryRun?}` returns the summary lists (dry run = the dialog); `export_route {format, version?, includePassage?, path?}` returns the "can't hold" list.
+- Received routes (#960/#961, #391): `import_route {path|content}` opens a received route and returns it; `list_routes`/`get_route` report `readOnly`, `source` (format, version, file, route ID, edition, status) and `displayMode`; `set_route_display_mode {routeId, mode}`; `copy_route {routeId, dryRun?}` returns the keeps / not-kept lists and the new identity (dry run = the dialog); editing a read-only route fails with `route_read_only`, naming `copy_route`; `export_route {format, version?, includeCheckSettings?, path?}` returns the identity and the "can't hold" list.
+- Check settings: `get_passage`/`set_passage` mark each value `checkSetting` or `route`, and `fromFile`; `set_passage` on a received route accepts check settings only.
 
 ## Tests
 
@@ -148,7 +164,8 @@ The mock is a reference, not code to port. Build it with Avalonia + ShadUI, the 
 - **Filters and merging:** chips filter; same-code Check findings merge with the right count; Must review never merges; MCP returns every member id.
 - **Warnings:** selecting an S-124 finding expands the card with status at ETA; changing departure moves a warning between Must review and Info; the panel's "On route" scope lists exactly the warnings with findings.
 - **Map:** markers only for Must review and Check; Info shows when selected; clustering at 24 px; corridor fill follows the selected finding's leg.
-- **Import/export:** dry-run summary lists match the fixture RTZ/S-421 files; cancel changes nothing; import is one undo step; export notes list only fields present.
+- **Received routes:** opening the RTE-TEST S-421 fixtures and the generator's `421ZZ00WARN` gives read-only routes in Native mode; RTZ samples open in Planning mode; edits fail with `route_read_only`; Check route switches to Planning and back; closing the dataset ends the check cleanly (A10).
+- **Copy and export:** `copy_route` dry-run lists match the fixtures; cancel changes nothing; the copy is one undo step and gets a new route ID with a previous-route reference; check settings are exported only when asked; export notes list only fields present.
 - **Palettes:** `RoutePaletteTests` rules plus G2; goldens on Day/Dusk/Night.
 - **Strings:** "Safe" never appears; "Not for navigation" appears once in the visual tree in check mode.
 
@@ -160,7 +177,12 @@ The mock is a reference, not code to port. Build it with Avalonia + ShadUI, the 
 4. **Warnings in place** (E1–E4); needs #957.
 5. **Tones** (G1–G3), closing #934.
 
-Import/export (Part F) belongs to #960 (S-421 + shared dialogs) and #961 (RTZ version list and sniffing).
+Part F, A6–A10 and the check-settings split (decision 16) belong to #960 (S-421, received routes, Copy to edit, shared dialogs) and #961 (RTZ). #959's A1–A5 work on owned routes first; A7 and A8 need #960.
+
+## Decisions waiting for confirmation
+
+- **Decision 16** (#391 concern 2): check settings are a local, per-route layer, not exported by default, with file values as defaults.
+- **Decision 17** (#391 concern 9): a copy is a new route (new route ID, previous-route reference, edition 1, status Planned); an unchanged received route keeps its identity on export.
 
 ## Acceptance
 
