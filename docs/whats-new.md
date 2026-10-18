@@ -6,7 +6,7 @@ month. For package versions and release assets, see
 
 ## October 2026
 
-- **Routes are checked against the chart.** With **Check route** on,
+- **Routes are checked against the chart.** With **Check passage** on,
   SoundCharts' findings list shows where a route's track crosses land or
   drying ground (Must review), where either reaches inside the leg's
   cross-track limits, and where the route leaves the loaded charts (Check).
