@@ -61,13 +61,13 @@ public sealed class RoutePassageCardTests : IDisposable
 
         Assert.False(vm.HasDraft);
         Assert.False(vm.CanCheckPassage);
-        Assert.Equal("Check this route against your settings; add a draft to check clearance too", vm.CheckPassageTooltip);
+        Assert.Equal("Check the route against your settings; add a draft to check clearance too", vm.CheckPassageTooltip);
 
         Type(vm.Passage.Draft, "4.5");
 
         Assert.Equal(4.5, route.Passage.DraftMeters);
         Assert.True(vm.HasDraft);
-        Assert.Equal("Check this departure against your settings", vm.CheckPassageTooltip);
+        Assert.Equal("Check the route against your settings", vm.CheckPassageTooltip);
     }
 
     [Fact]

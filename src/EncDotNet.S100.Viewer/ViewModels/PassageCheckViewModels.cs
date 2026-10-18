@@ -28,14 +28,16 @@ internal enum CheckTone
 }
 
 /// <summary>
-/// The Routes panel in Check passage mode (#901, handoff C2–C5): the
-/// verdict card, the Legs / Findings switch and the check-mode leg rows,
-/// projected from <see cref="PassageCheckService"/>.
+/// The Routes panel in Check route mode (#901, #959): the verdict card with
+/// its summary rows, the Legs / Findings switch and the check-mode leg rows,
+/// projected from <see cref="PassageCheckService"/> and
+/// <see cref="RouteFindingsService"/>.
 /// </summary>
 /// <remarks>
-/// Without a draft (#953) the clearance parts are hidden: the verdict card is
-/// titled from the findings summary and says "Add a draft to check
-/// clearance", and there are no leg chips.
+/// One verdict covers the clearance check and every route check, worst
+/// group first (<see cref="RouteCheckVerdict"/>). Without a draft (#953) the
+/// clearance check doesn't run: the Clearance row reads "Not checked · +
+/// Add draft", and there are no leg chips.
 /// </remarks>
 internal sealed class PassageCheckViewModel : ViewModelBase
 {
@@ -50,7 +52,8 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         RoutesService routes,
         Func<DepthUnit> depthUnit,
         Func<TimeFormat> timeFormat,
-        RouteFindingsService? findings = null)
+        RouteFindingsService? findings = null,
+        Action? addDraft = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(routes);
@@ -60,6 +63,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         _timeFormat = timeFormat;
         _findings = findings;
         Legs = new ObservableCollection<PassageCheckLegRowViewModel>();
+        SummaryRows = new ObservableCollection<CheckSummaryRowViewModel>();
         Window = new DepartureWindowViewModel(service, timeFormat);
         ShowLegsCommand = new RelayCommand(() => ShowFindings = false);
         ShowFindingsCommand = new RelayCommand(() => ShowFindings = true);
@@ -68,17 +72,27 @@ internal sealed class PassageCheckViewModel : ViewModelBase
             if (row is not null)
                 _service.SetCursor(row.MidDistanceMeters);
         });
+        AddDraftCommand = new RelayCommand(() => addDraft?.Invoke(), () => addDraft is not null);
+        SelectSummaryCommand = new RelayCommand<CheckSummaryRowViewModel>(row =>
+        {
+            if (row is null)
+                return;
+            if (Findings is not null)
+                Findings.Filter = row.Filter;
+            ShowFindings = true;
+        });
         if (findings is not null)
         {
             Findings = new RouteFindingsViewModel(findings);
             Findings.CountChanged += (_, _) => OnPropertyChanged(nameof(FindingsLabel));
-            findings.Changed += (_, _) =>
-            {
-                if (NeedsDraft || _service.Input is { HasDraft: false })
-                    Refresh();
-            };
+            findings.Changed += (_, _) => Refresh();
         }
         _service.Changed += (_, _) => Refresh();
+        Window.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DepartureWindowViewModel.IsVisible))
+                OnPropertyChanged(nameof(ShowWindowNote));
+        };
         Refresh();
     }
 
@@ -91,6 +105,9 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     /// <summary>The check-mode leg rows (C5).</summary>
     public ObservableCollection<PassageCheckLegRowViewModel> Legs { get; }
 
+    /// <summary>The verdict card's summary rows (B3): Clearance, Route and, when warnings were checked, Warnings.</summary>
+    public ObservableCollection<CheckSummaryRowViewModel> SummaryRows { get; }
+
     public ICommand ShowLegsCommand { get; }
 
     public ICommand ShowFindingsCommand { get; }
@@ -98,8 +115,14 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     /// <summary>Moves the profile cursor and ghost to the middle of a leg (C5 hover).</summary>
     public ICommand HoverLegCommand { get; }
 
+    /// <summary>"+ Add draft" (A5): expands the Passage card and focuses Draft.</summary>
+    public ICommand AddDraftCommand { get; }
+
+    /// <summary>A summary row's click (B3): filters the findings list to that row's checks and shows it.</summary>
+    public ICommand SelectSummaryCommand { get; }
+
     private bool _isActive;
-    /// <summary>Whether Check passage is on.</summary>
+    /// <summary>Whether Check route is on.</summary>
     public bool IsActive
     {
         get => _isActive;
@@ -116,8 +139,8 @@ internal sealed class PassageCheckViewModel : ViewModelBase
 
     private bool _needsDraft;
     /// <summary>
-    /// Whether the checked route has no draft (#953): the verdict card shows
-    /// the no-draft variant and the clearance parts are hidden.
+    /// Whether the checked route has no draft (#953): the Clearance row says
+    /// "Not checked · + Add draft" and the legs have no clearance chips.
     /// </summary>
     public bool NeedsDraft
     {
@@ -126,19 +149,16 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         {
             if (!SetProperty(ref _needsDraft, value))
                 return;
-            OnPropertyChanged(nameof(ShowClearance));
             OnPropertyChanged(nameof(ShowLegsNeedsDraft));
+            OnPropertyChanged(nameof(ShowWindowNote));
         }
     }
-
-    /// <summary>Whether to show the clearance parts of the verdict card (min UKC); hidden without a draft.</summary>
-    public bool ShowClearance => !NeedsDraft;
 
     /// <summary>Whether the Legs tab shows "Add a draft to check clearance" in place of the leg chips.</summary>
     public bool ShowLegsNeedsDraft => NeedsDraft && ShowLegs;
 
     private bool _isStale;
-    /// <summary>Whether the shown verdict is being recomputed (C10: dimmed).</summary>
+    /// <summary>Whether the shown verdict is being recomputed (B6, #887 C10: the whole card dims).</summary>
     public bool IsStale
     {
         get => _isStale;
@@ -149,7 +169,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Opacity of the verdict card: dimmed while stale.</summary>
+    /// <summary>Opacity of the verdict card, rows included: dimmed while stale.</summary>
     public double VerdictOpacity => IsStale ? 0.45 : 1.0;
 
     private string? _statusText;
@@ -158,6 +178,14 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     {
         get => _statusText;
         private set => SetProperty(ref _statusText, value);
+    }
+
+    private RouteCheckVerdictKind _kind = RouteCheckVerdictKind.Clear;
+    /// <summary>The worst group (decision 3).</summary>
+    public RouteCheckVerdictKind Kind
+    {
+        get => _kind;
+        private set => SetProperty(ref _kind, value);
     }
 
     private CheckTone _tone = CheckTone.Neutral;
@@ -185,18 +213,26 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     public bool IsNeutral => Tone == CheckTone.Neutral;
 
     private string? _title;
-    /// <summary>The verdict title (C3 priority).</summary>
+    /// <summary>The verdict title, naming the worst item (B1).</summary>
     public string? Title
     {
         get => _title;
         private set => SetProperty(ref _title, value);
     }
 
+    private string? _subtitle;
+    /// <summary>The line under the title (B2), e.g. "Leg 6 → 7 · Calshot Spit · and 2 more to review".</summary>
+    public string? Subtitle
+    {
+        get => _subtitle;
+        private set => SetProperty(ref _subtitle, value);
+    }
+
     private string? _confidenceText;
     /// <summary>
     /// The verdict's secondary line on confidence (#939): "Charted depth from
     /// S-101 on 1,5 NM" and/or "Vertical datums unconfirmed: …", one per line;
-    /// <c>null</c> at full confidence. The title and tone follow the band.
+    /// <c>null</c> at full confidence or without a draft.
     /// </summary>
     public string? ConfidenceText
     {
@@ -204,32 +240,12 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         private set => SetProperty(ref _confidenceText, value);
     }
 
-    private string? _minUkcText;
-    /// <summary>The minimum UKC, e.g. "0,4 m".</summary>
-    public string? MinUkcText
-    {
-        get => _minUkcText;
-        private set => SetProperty(ref _minUkcText, value);
-    }
-
-    private string? _minUkcCaption;
-    /// <summary>"min UKC · required 1,0 m" or "min UKC · no margin set".</summary>
-    public string? MinUkcCaption
-    {
-        get => _minUkcCaption;
-        private set => SetProperty(ref _minUkcCaption, value);
-    }
-
-    private string? _whereText;
-    /// <summary>Where and when the minimum is: "Leg 6 → 7 · Thorn Channel · 07:52 · 12 min below".</summary>
-    public string? WhereText
-    {
-        get => _whereText;
-        private set => SetProperty(ref _whereText, value);
-    }
+    private bool _hasRouteFindings;
+    /// <summary>Whether to add "Route-check findings don't change with departure." under the window line (B4).</summary>
+    public bool ShowWindowNote => _hasRouteFindings && !NeedsDraft && Window.IsVisible;
 
     private string? _footerText;
-    /// <summary>The one "Not for navigation" line.</summary>
+    /// <summary>The one "Not for navigation" line (B5).</summary>
     public string? FooterText
     {
         get => _footerText;
@@ -237,7 +253,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     }
 
     private string? _headerMeta;
-    /// <summary>The panel header sub-line in check mode (C2).</summary>
+    /// <summary>The panel header sub-line in check mode (C2, A4).</summary>
     public string? HeaderMeta
     {
         get => _headerMeta;
@@ -267,21 +283,18 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     public void Refresh()
     {
         IsActive = _service.IsActive;
-        if (_service.IsActive && _service.Input is { HasDraft: false })
-        {
-            RefreshNeedsDraft();
-            return;
-        }
+        var input = _service.IsActive ? _service.Input : null;
+        NeedsDraft = input is { HasDraft: false };
+        var current = input is { HasDraft: true } ? _service.Current : null;
+        IsStale = (current is not null && _service.IsStale) || (input is not null && (_findings?.IsStale ?? false));
+        HeaderMeta = BuildHeaderMeta(input, current);
 
-        NeedsDraft = false;
-        var current = _service.IsActive ? _service.Current : null;
-        IsStale = current is not null && _service.IsStale;
-        HeaderMeta = BuildHeaderMeta(current);
-
-        if (current is null)
+        var verdict = RouteCheckVerdict.For(_service, _findings, _depthUnit(), _timeFormat());
+        if (verdict is null)
         {
             HasVerdict = false;
             Legs.Clear();
+            SummaryRows.Clear();
             StatusText = !_service.IsActive ? null
                 : _service.Error is { } error ? string.Format(CultureInfo.CurrentCulture, Strings.Check_ErrorFormat, error)
                 : _service.IsComputing ? Strings.Check_Computing
@@ -291,66 +304,41 @@ internal sealed class PassageCheckViewModel : ViewModelBase
 
         StatusText = null;
         HasVerdict = true;
-        var result = current.Result;
-        Tone = ToneOf(result.Verdict);
-        Title = VerdictTitle(result);
-        ConfidenceText = ConfidenceLine(result);
-        var depthUnit = _depthUnit();
-        if (result.Minimum is { } min)
-        {
-            MinUkcText = PassageFormatting.Format(min.ClearanceMeters, PassageQuantity.Depth, depthUnit);
-            MinUkcCaption = Strings.Check_MinUkcLabel + " · " + (result.NoMarginSet
-                ? Strings.Check_NoMarginSet
-                : string.Format(CultureInfo.CurrentCulture, Strings.Check_RequiredFormat,
-                    PassageFormatting.Format(min.RequiredUkcMeters, PassageQuantity.Depth, depthUnit)));
-            WhereText = Where(current, min);
-        }
+        Kind = verdict.Kind;
+        Tone = verdict.Tone;
+        Title = verdict.Title;
+        Subtitle = verdict.Subtitle;
+        ConfidenceText = current is null ? null : ConfidenceLine(current.Result);
+        FooterText = verdict.Footer;
+        _hasRouteFindings = verdict.HasRouteFindings;
+        OnPropertyChanged(nameof(ShowWindowNote));
+        UpdateRows(verdict.Rows);
+        if (current is null)
+            Legs.Clear();
         else
+            RebuildLegs(current);
+    }
+
+    private void UpdateRows(IReadOnlyList<RouteCheckSummaryRow> rows)
+    {
+        while (SummaryRows.Count > rows.Count)
+            SummaryRows.RemoveAt(SummaryRows.Count - 1);
+        for (var i = 0; i < rows.Count; i++)
         {
-            MinUkcText = "—";
-            MinUkcCaption = Strings.Check_NoClearance;
-            WhereText = null;
+            if (i < SummaryRows.Count && SummaryRows[i].Filter == rows[i].Filter)
+            {
+                SummaryRows[i].Update(rows[i]);
+                continue;
+            }
+
+            var row = new CheckSummaryRowViewModel(rows[i].Filter);
+            row.Update(rows[i]);
+            if (i < SummaryRows.Count)
+                SummaryRows[i] = row;
+            else
+                SummaryRows.Add(row);
         }
-
-        FooterText = Footer(result.Sources);
-        RebuildLegs(current);
     }
-
-    // #953: no draft, so no clearance; the title summarises the route checks.
-    private void RefreshNeedsDraft()
-    {
-        NeedsDraft = true;
-        HeaderMeta = BuildHeaderMeta(null);
-        IsStale = _findings?.IsStale ?? false;
-        StatusText = null;
-        HasVerdict = true;
-        Legs.Clear();
-        var findings = _findings?.Findings ?? [];
-        Tone = NeedsDraftTone(findings);
-        Title = NeedsDraftTitle(findings);
-        ConfidenceText = null;
-        MinUkcText = null;
-        MinUkcCaption = null;
-        WhereText = null;
-        FooterText = Strings.Check_FooterNoDraft;
-    }
-
-    /// <summary>
-    /// The no-draft verdict title (#953), from the findings summary: "2 items
-    /// to review", or "No findings for your settings".
-    /// </summary>
-    internal static string NeedsDraftTitle(IReadOnlyList<RouteFinding> findings) => findings.Count switch
-    {
-        0 => Strings.Check_NoDraftVerdictNone,
-        1 => Strings.Check_NoDraftVerdictOne,
-        var n => string.Format(CultureInfo.CurrentCulture, Strings.Check_NoDraftVerdictFormat, n),
-    };
-
-    /// <summary>The no-draft verdict tone: destructive only for must-review findings (F5).</summary>
-    internal static CheckTone NeedsDraftTone(IReadOnlyList<RouteFinding> findings) =>
-        findings.Any(f => f.Group == RouteFindingGroup.MustReview) ? CheckTone.Destructive
-        : findings.Any(f => f.Group == RouteFindingGroup.Check) ? CheckTone.Warning
-        : CheckTone.Neutral;
 
     private void RebuildLegs(PassageCheckSnapshot current)
     {
@@ -369,48 +357,47 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         }
     }
 
-    private string Where(PassageCheckSnapshot current, UkcMinimum min)
+    // C2 with a draft: vessel · draft · dep · arr. A4 without: "No draft" · speed · dep · arr,
+    // the times only where the route sets them (no departure, no speed: no times).
+    private string? BuildHeaderMeta(PassageCheckService.CheckInput? input, PassageCheckSnapshot? current)
     {
-        var parts = new List<string>
-        {
-            string.Format(CultureInfo.CurrentCulture, Strings.Check_LegFormat, min.LegIndex + 1, min.LegIndex + 2),
-        };
-        if (current.MinimumPlaceName is { } place)
-            parts.Add(place);
-        if (min.HasEta)
-            parts.Add(PassageFormatting.FormatEta(min.Time, current.Result.Departure, _timeFormat()));
-        var minutes = (int)Math.Round(current.Result.MinutesBelow);
-        if (minutes > 0)
-            parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_MinutesBelowFormat, minutes));
-        return string.Join(" · ", parts);
-    }
-
-    private string? BuildHeaderMeta(PassageCheckSnapshot? current)
-    {
-        if (!_service.IsActive || _routes.Routes.ActiveRoute is not { } route)
+        if (input is null || _routes.Routes.ActiveRoute is not { } route)
             return null;
 
         var parts = new List<string>();
-        if (route.Info.Vessel?.Name is { Length: > 0 } vessel)
-            parts.Add(vessel);
-        if (route.Passage.DraftMeters is { } draft)
-            parts.Add(PassageFormatting.Format(draft, PassageQuantity.Depth, _depthUnit()));
-        if (current is not null)
+        if (input.HasDraft)
         {
-            var departure = current.Result.Departure;
-            parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_DepartureFormat,
-                PassageFormatting.FormatEta(departure, departure, _timeFormat())));
-            if (current.Result.Arrival is { } arrival)
-            {
-                parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_ArrivalFormat,
-                    PassageFormatting.FormatEta(arrival, departure, _timeFormat())));
-            }
+            if (route.Info.Vessel?.Name is { Length: > 0 } vessel)
+                parts.Add(vessel);
+            if (route.Passage.DraftMeters is { } draft)
+                parts.Add(PassageFormatting.Format(draft, PassageQuantity.Depth, _depthUnit()));
+            if (current is not null)
+                AddTimes(parts, current.Result.Departure, current.Result.Arrival);
+        }
+        else
+        {
+            parts.Add(Strings.Check_NoDraftHeader);
+            if (route.Passage.SpeedKnots is { } speed)
+                parts.Add(PassageFormatting.Format(speed, PassageQuantity.Speed, _depthUnit()));
+            if (route.Passage.Departure is not null)
+                AddTimes(parts, input.Departure, PassageSchedule.Compute(input.Legs, input.Departure).Arrival);
         }
 
         return parts.Count == 0 ? null : string.Join(" · ", parts);
     }
 
-    /// <summary>The C3 title in the handoff's words.</summary>
+    private void AddTimes(List<string> parts, DateTimeOffset departure, DateTimeOffset? arrival)
+    {
+        parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_DepartureFormat,
+            PassageFormatting.FormatEta(departure, departure, _timeFormat())));
+        if (arrival is { } a)
+        {
+            parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_ArrivalFormat,
+                PassageFormatting.FormatEta(a, departure, _timeFormat())));
+        }
+    }
+
+    /// <summary>The clearance verdict's title in the #887 handoff's words (C3).</summary>
     internal static string VerdictTitle(PassageCheckResult result) => result.Verdict switch
     {
         PassageVerdict.WaterLevelEndsBeforeArrival => Strings.Check_VerdictWaterLevelEnds,
@@ -446,20 +433,98 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         PassageVerdict.BelowSetting => CheckTone.Destructive,
         _ => CheckTone.Neutral,
     };
+}
 
-    private static string Footer(PassageSources sources)
+/// <summary>
+/// A verdict-card summary row (B3): a 24 px button with a label column, the
+/// value and an optional chip. Clicking it filters the findings list.
+/// </summary>
+internal sealed class CheckSummaryRowViewModel : ViewModelBase
+{
+    public CheckSummaryRowViewModel(FindingsFilter filter)
     {
-        var products = new List<string>();
-        if (sources.BathymetryDatasets.Count > 0) products.Add("S-102");
-        if (sources.FallbackDatasets.Count > 0) products.Add("S-101");
-        if (sources.WaterLevelSources.Count > 0) products.Add("S-104");
-        return products.Count == 0
-            ? Strings.Check_FooterNoData
-            : string.Format(CultureInfo.CurrentCulture, Strings.Check_FooterFormat, string.Join(", ", products));
+        Filter = filter;
+    }
+
+    /// <summary>The filter the row sets.</summary>
+    public FindingsFilter Filter { get; }
+
+    /// <summary>A stable AutomationId suffix: Clearance, Route or Warnings.</summary>
+    public string Key => Filter.ToString();
+
+    private string _label = string.Empty;
+    /// <summary>"Clearance", "Route" or "Warnings".</summary>
+    public string Label
+    {
+        get => _label;
+        private set => SetProperty(ref _label, value);
+    }
+
+    private string _text = string.Empty;
+    /// <summary>The value, e.g. "min 0,4 m · required 1,0 m".</summary>
+    public string Text
+    {
+        get => _text;
+        private set => SetProperty(ref _text, value);
+    }
+
+    private string? _chip;
+    /// <summary>The chip text, or <c>null</c>.</summary>
+    public string? Chip
+    {
+        get => _chip;
+        private set
+        {
+            if (SetProperty(ref _chip, value))
+                OnPropertyChanged(nameof(HasChip));
+        }
+    }
+
+    public bool HasChip => Chip is not null;
+
+    private CheckTone _chipTone = CheckTone.Neutral;
+    /// <summary>The chip's tone.</summary>
+    public CheckTone ChipTone
+    {
+        get => _chipTone;
+        private set
+        {
+            if (!SetProperty(ref _chipTone, value))
+                return;
+            OnPropertyChanged(nameof(IsChipSuccess));
+            OnPropertyChanged(nameof(IsChipWarning));
+            OnPropertyChanged(nameof(IsChipDestructive));
+            OnPropertyChanged(nameof(IsChipNeutral));
+        }
+    }
+
+    public bool IsChipSuccess => ChipTone == CheckTone.Success;
+
+    public bool IsChipWarning => ChipTone == CheckTone.Warning;
+
+    public bool IsChipDestructive => ChipTone == CheckTone.Destructive;
+
+    public bool IsChipNeutral => ChipTone == CheckTone.Neutral;
+
+    private bool _addDraft;
+    /// <summary>Whether the row ends with "+ Add draft" (no draft).</summary>
+    public bool AddDraft
+    {
+        get => _addDraft;
+        private set => SetProperty(ref _addDraft, value);
+    }
+
+    internal void Update(RouteCheckSummaryRow row)
+    {
+        Label = row.Label;
+        Text = row.Text;
+        Chip = row.Chip;
+        ChipTone = row.ChipTone;
+        AddDraft = row.AddDraft;
     }
 }
 
-/// <summary>A leg row in Check passage mode (C5).</summary>
+/// <summary>A leg row in Check route mode (C5).</summary>
 internal sealed class PassageCheckLegRowViewModel : ViewModelBase
 {
     public PassageCheckLegRowViewModel(int legIndex)

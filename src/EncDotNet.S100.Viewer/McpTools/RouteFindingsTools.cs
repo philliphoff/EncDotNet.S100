@@ -12,12 +12,12 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [Description("A route's findings list: what every check found (clearance, route checks, S-124 warnings, confidence and data), grouped must_review, check and info.")]
 internal sealed record RouteFindingsDto(
     [property: Description("Id of the route the findings are for.")] string RouteId,
-    [property: Description("True when the findings are the live Check passage list shown in the Routes panel (the checked route); false for a one-off check of another route, or of the active route while Check passage is off.")] bool Live,
+    [property: Description("True when the findings are the live Check route list shown in the Routes panel (the checked route); false for a one-off check of another route, or of the active route while Check route is off.")] bool Live,
     [property: Description("Number of findings; the Findings segment shows it.")] int Count,
     [property: Description("Number of must_review findings.")] int MustReview,
     [property: Description("Number of check findings.")] int Check,
     [property: Description("Number of info findings.")] int Info,
-    [property: Description("The findings summary, e.g. \"2 items to review\" or \"No findings for your settings\"; the verdict card's title when the route has no draft.")] string Summary,
+    [property: Description("The findings summary, e.g. \"2 to review\", \"1 to check\" or \"No findings for your settings\"; the verdict card's title when the route has no draft.")] string Summary,
     [property: Description("True while a check is recomputing and part of the list is out of date (live list only).")] bool Stale,
     [property: Description("Id of the selected finding (outlined on the map), or null. Only the live list has a selection.")] string? SelectedId,
     [property: Description("The findings, in list order: by group, then by distance along the route.")] IReadOnlyList<RouteFindingDto> Findings);
@@ -96,7 +96,7 @@ internal sealed record SelectFindingRequest(
 internal abstract class RouteFindingsToolBase : PassageCheckToolBase
 {
     protected RouteFindingsToolBase(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService findings)
-        : base(routes, invoker, check)
+        : base(routes, invoker, check, findings)
     {
         ArgumentNullException.ThrowIfNull(findings);
         Findings = findings;
@@ -121,7 +121,7 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
         findings.Count(f => f.Group == RouteFindingGroup.MustReview),
         findings.Count(f => f.Group == RouteFindingGroup.Check),
         findings.Count(f => f.Group == RouteFindingGroup.Info),
-        PassageCheckViewModel.NeedsDraftTitle(findings),
+        RouteCheckVerdict.NoDraftTitle(findings),
         live && stale,
         live ? selected?.Id : null,
         findings.Select(f => ToDto(f, live && f.Id == selected?.Id)).ToList());
@@ -226,7 +226,7 @@ internal sealed class SelectFindingTool : RouteFindingsToolBase
         return await Invoker.InvokeAsync(() =>
         {
             if (Check.Input is not { } current)
-                return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("id", "Check passage is off; turn it on with set_check_mode"));
+                return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("id", "Check route is off; turn it on with set_check_mode"));
 
             RouteFinding? finding = null;
             if (request.Id is { } id)
@@ -250,7 +250,7 @@ internal static class RouteFindingsMcpAdapters
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
             [Description("Route to read; omit for the active route.")] string? routeId = null,
-            [Description("Wait for a pending Check passage recompute (and the route checks) first (default true).")] bool wait = true,
+            [Description("Wait for a pending Check route recompute (and the route checks) first (default true).")] bool wait = true,
             CancellationToken ct = default) =>
             McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(routeId, wait, ct));
 
@@ -258,13 +258,13 @@ internal static class RouteFindingsMcpAdapters
         {
             Name = GetFindingsTool.Name,
             Description =
-                "Returns a route's findings list, as the Routes panel's Findings tab shows it in Check passage mode: " +
+                "Returns a route's findings list, as the Routes panel's Findings tab shows it in Check route mode: " +
                 "each finding's group (must_review, check, info), source tag, title, meta line, leg, distance along the " +
                 "route, location (point or span) and feature reference. An s124 finding also gives its warning: number, " +
                 "relation (crosses or near), status at the ETA (in_force, not_in_force, cancelled; the view time without " +
                 "speeds), validity and full text; must_review = crosses and in force, check = within 0.5 NM and in force, " +
                 "info = not in force or cancelled. For the checked route it's the live list, with " +
-                "the selection; for another route (or with Check passage off) the route is checked once without changing " +
+                "the selection; for another route (or with Check route off) the route is checked once without changing " +
                 "the view. The route needs at least two waypoints; without a draft (set_passage) there are no clearance " +
                 "findings, only the route checks'. summary is the verdict card's title when the route has no draft.",
             SerializerOptions = McpAdapterShared.Options,
@@ -286,7 +286,7 @@ internal static class RouteFindingsMcpAdapters
             Description =
                 "Selects a finding in the checked route's findings list, as clicking its row does: the map zooms to it " +
                 "and outlines it dashed in its tone with a \"Zoomed to finding\" chip, and the profile cursor and ghost " +
-                "vessel move to it. Needs Check passage on (set_check_mode). Returns the list get_findings returns. " +
+                "vessel move to it. Needs Check route on (set_check_mode). Returns the list get_findings returns. " +
                 "Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });

@@ -10,16 +10,16 @@ using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.McpTools;
 
-/// <summary>What Check passage is showing (#901).</summary>
-[Description("Check passage state: whether it's on, whether a result is computing, and what the verdict card and cursor show.")]
+/// <summary>What Check route is showing (#901, #959).</summary>
+[Description("Check route state: whether it's on, whether a result is computing, and what the verdict card and cursor show.")]
 internal sealed record CheckStateDto(
-    [property: Description("True when Check passage is on.")] bool On,
+    [property: Description("True when Check route is on.")] bool On,
     [property: Description("Id of the checked (active) route, or null.")] string? RouteId,
-    [property: Description("True when the checked route has a draft. Without one only the route checks run: there is no verdict, minimum UKC, clearance profile or departure window, the verdict card says \"Add a draft to check clearance\" and is titled from the findings (get_findings' summary).")] bool HasDraft,
+    [property: Description("True when the checked route has a draft. Without one the clearance check doesn't run: there is no clearance verdict, minimum UKC, Clearance tab or departure window, and the summary's clearance row reads \"Not checked\" with the link \"+ Add draft\". The route checks and warnings run either way.")] bool HasDraft,
     [property: Description("True while a recompute is pending or running.")] bool Computing,
     [property: Description("True while the shown result is out of date (the route draws grey and dashed, the verdict is dimmed).")] bool Stale,
-    [property: Description("Verdict code, as get_passage_result: water_level_ends_before_arrival, below_setting, incomplete_data, meets_settings_tight or meets_settings; null without a result.")] string? Verdict,
-    [property: Description("The verdict card's title, e.g. \"Below your UKC setting in 1 place\"; null without a result. It follows the clearance band, whatever the confidence.")] string? VerdictTitle,
+    [property: Description("The clearance verdict code, as get_passage_result: water_level_ends_before_arrival, below_setting, incomplete_data, meets_settings_tight or meets_settings; null without a clearance result (no draft, or none yet). verdictKind is the card's overall verdict.")] string? Verdict,
+    [property: Description("The verdict card's title, naming the worst finding from any check, e.g. \"Crosses drying ground\", \"Below your UKC setting in 1 place\", \"Meets your settings · 2 to check\", or without a draft \"2 to review\", \"1 to check\" or \"No findings for your settings\"; null when there is nothing to show yet.")] string? VerdictTitle,
     [property: Description("Lower-confidence reasons anywhere on the passage, as get_passage_result: charted_depth_from_s101 and/or datum_unconfirmed; empty at full confidence or without a result.")] IReadOnlyList<string> Confidence,
     [property: Description("The verdict card's confidence line, e.g. \"Vertical datums unconfirmed: depth and water level may not share a reference\" (one line per reason); null at full confidence.")] string? ConfidenceText,
     [property: Description("The minimum UKC in metres; null when none could be computed.")] double? MinUkcMeters,
@@ -30,10 +30,45 @@ internal sealed record CheckStateDto(
     [property: Description("The cursor's longitude; null when hidden.")] double? CursorLongitude,
     [property: Description("The cursor's leg; null when hidden.")] int? CursorLeg,
     [property: Description("The ETA at the cursor (UTC); null when hidden or without ETAs.")] DateTimeOffset? CursorEta,
-    [property: Description("The departure being checked (UTC): the route's departure, or the view time when it has none; null when Check passage is off.")] DateTimeOffset? Departure,
+    [property: Description("The departure being checked (UTC): the route's departure, or the view time when it has none; null when Check route is off.")] DateTimeOffset? Departure,
     [property: Description("True when the route has no departure of its own, so the check uses the view time.")] bool DepartureIsViewTime,
-    [property: Description("The departure window swept across the S-104 range (the verdict card's window line and the Clearance tab's band); null when Check passage is off, before the first sweep, or when no S-104 covers the route.")] DepartureWindowDto? Window,
-    [property: Description("True while the departure window is being swept again (after a leg, vessel or dataset change); window, if present, is the previous sweep.")] bool WindowComputing);
+    [property: Description("The departure window swept across the S-104 range (the verdict card's window line and the Clearance tab's band); null when Check route is off, before the first sweep, or when no S-104 covers the route.")] DepartureWindowDto? Window,
+    [property: Description("True while the departure window is being swept again (after a leg, vessel or dataset change); window, if present, is the previous sweep.")] bool WindowComputing)
+{
+    /// <summary>Whether the clearance check ran and has a result.</summary>
+    [Description("True when the clearance check ran and has a result (a draft is set). False without a draft, or before the first result.")]
+    public bool ClearanceChecked { get; init; }
+
+    /// <summary>The overall verdict's kind.</summary>
+    [Description("The verdict card's overall verdict, worst group first: must_review (any check), data_ends (arrival after the water-level data ends, nothing to review), check, or clear; null when there is nothing to show yet.")]
+    public string? VerdictKind { get; init; }
+
+    /// <summary>The verdict's tone.</summary>
+    [Description("The verdict card's tone: destructive (must_review only), warning, success or neutral; null when there is nothing to show yet.")]
+    public string? VerdictTone { get; init; }
+
+    /// <summary>The line under the title.</summary>
+    [Description("The line under the verdict title, e.g. \"Leg 6 → 7 · Calshot Spit · and 2 more to review\" or, without a draft, the must-review findings named and \"2 to check\"; null when none.")]
+    public string? VerdictSubtitle { get; init; }
+
+    /// <summary>The summary rows.</summary>
+    [Description("The verdict card's summary rows, in order: clearance, route and (when S-124 warnings were checked) warnings. Clicking a row filters the findings list (set_findings_view does the same).")]
+    public IReadOnlyList<CheckSummaryRowDto> Summary { get; init; } = [];
+
+    /// <summary>The footer.</summary>
+    [Description("The verdict card's one footer, \"Not for navigation · computed from S-101, S-124 for your settings\" (every product the checks used).")]
+    public string? Footer { get; init; }
+}
+
+/// <summary>A verdict-card summary row (#959, B3).</summary>
+[Description("A verdict-card summary row: what one part of the check found.")]
+internal sealed record CheckSummaryRowDto(
+    [property: Description("Which row, and the findings filter clicking it sets: clearance, route or warnings.")] string Key,
+    [property: Description("The row's label, e.g. \"Clearance\".")] string Label,
+    [property: Description("The row's value, e.g. \"min 0.4 m · required 1.0 m\", \"2 to review · 1 to check\", \"2 in force on route · 1 near\", \"Nothing found\" or \"Not checked\".")] string Text,
+    [property: Description("The chip, e.g. \"2 below\", \"tight\", \"meets\", \"no tide\" or a count; null when none.")] string? Chip,
+    [property: Description("The chip's tone: destructive, warning, success or neutral; null without a chip.")] string? ChipTone,
+    [property: Description("The link at the end of the row, \"+ Add draft\" on the clearance row without a draft; null otherwise.")] string? Link);
 
 /// <summary>The departure window (#903).</summary>
 [Description("The departure window: departures swept across the S-104 range that covers the route, the runs that meet your settings, and the departures that arrive after the data ends.")]
@@ -59,14 +94,14 @@ internal sealed record DepartureRangeDto(
 [Description("Request for set_departure: set the checked route's departure, or jump to the nearest departure that meets your settings.")]
 internal sealed record SetDepartureRequest(
     [property: Description("The new departure (ISO-8601). Give this or nearestMeeting.")] DateTimeOffset? Departure = null,
-    [property: Description("True to jump to the meeting departure nearest the current one, as the verdict card's Depart {HH:MM} button does. Needs Check passage on.")] bool NearestMeeting = false,
+    [property: Description("True to jump to the meeting departure nearest the current one, as the verdict card's Depart {HH:MM} button does. Needs Check route on.")] bool NearestMeeting = false,
     [property: Description("Route to set; omit for the active route. nearestMeeting always uses the checked (active) route.")] string? RouteId = null,
     [property: Description("Wait for the recomputed check (and window) before returning (default true).")] bool Wait = true);
 
 /// <summary>Request for <see cref="SetCheckModeTool"/>.</summary>
-[Description("Request for set_check_mode: turn Check passage on or off.")]
+[Description("Request for set_check_mode: turn Check route on or off.")]
 internal sealed record SetCheckModeRequest(
-    [property: Description("True to turn Check passage on; false to turn it off.")] bool On,
+    [property: Description("True to turn Check route on; false to turn it off.")] bool On,
     [property: Description("Route to check, made active first; omit for the active route.")] string? RouteId = null,
     [property: Description("When turning on, wait for the result before returning (default true).")] bool Wait = true);
 
@@ -75,20 +110,24 @@ internal sealed record SetCheckModeRequest(
 internal sealed record SetPassageCursorRequest(
     [property: Description("Distance from departure in nautical miles (clamped to the route); null hides the cursor.")] double? DistanceNm);
 
-/// <summary>Shared plumbing for the Check passage tools.</summary>
+/// <summary>Shared plumbing for the Check route tools.</summary>
 internal abstract class PassageCheckToolBase : RouteToolBase
 {
     /// <summary>How long a waiting tool waits for a result.</summary>
     internal static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(60);
 
-    protected PassageCheckToolBase(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check)
+    protected PassageCheckToolBase(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings = null)
         : base(routes, invoker)
     {
         ArgumentNullException.ThrowIfNull(check);
         Check = check;
+        RouteFindings = findings;
     }
 
     protected PassageCheckService Check { get; }
+
+    /// <summary>The findings list, which the verdict and summary rows count; <c>null</c> without one.</summary>
+    protected RouteFindingsService? RouteFindings { get; }
 
     /// <summary>
     /// Waits for the scheduled recompute, then hops onto the UI thread so the
@@ -102,16 +141,25 @@ internal abstract class PassageCheckToolBase : RouteToolBase
             await idle.WaitAsync(WaitTimeout, cancellationToken).ConfigureAwait(false);
             var computing = await Invoker.InvokeAsync(() => Check.IsComputing).ConfigureAwait(false);
             if (!computing)
-                return;
+                break;
+        }
+
+        if (RouteFindings is { } findings)
+        {
+            var idle = await Invoker.InvokeAsync(() => findings.WhenIdle()).ConfigureAwait(false);
+            await idle.WaitAsync(WaitTimeout, cancellationToken).ConfigureAwait(false);
+            // Results are posted to the UI thread; hop there so they have landed.
+            await Invoker.InvokeAsync(() => true).ConfigureAwait(false);
         }
     }
 
     protected Task<ToolResult<CheckStateDto>> StateAsync() =>
-        Invoker.InvokeAsync(() => ToolResult<CheckStateDto>.Ok(State(Routes, Check)));
+        Invoker.InvokeAsync(() => ToolResult<CheckStateDto>.Ok(State(Routes, Check, RouteFindings)));
 
-    internal static CheckStateDto State(RoutesService routes, PassageCheckService check)
+    internal static CheckStateDto State(RoutesService routes, PassageCheckService check, RouteFindingsService? findings = null)
     {
-        var current = check.IsActive ? check.Current : null;
+        var current = check.IsActive && check.HasDraft ? check.Current : null;
+        var verdict = RouteCheckVerdict.For(check, findings, Pipelines.DepthUnit.Metres, TimeFormat.Utc);
         var result = current?.Result;
         var cursor = check.Cursor;
         var window = current is null ? null : check.Window;
@@ -122,7 +170,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
             check.IsComputing,
             check.IsStale,
             result is null ? null : Verdict(result.Verdict),
-            result is null ? null : PassageCheckViewModel.VerdictTitle(result),
+            verdict?.Title,
             result is null ? [] : Mcp.Tools.GetPassageResultTool.ConfidenceCodes(result.Confidence),
             result is null ? null : PassageCheckViewModel.ConfidenceLine(result),
             result?.Minimum is { } min ? Math.Round(min.ClearanceMeters, 2) : null,
@@ -136,8 +184,48 @@ internal abstract class PassageCheckToolBase : RouteToolBase
             check.Departure,
             check.IsActive && !check.HasRouteDeparture,
             window is null || current is null || window.RouteId != current.RouteId ? null : Window(window, check),
-            check.IsActive && check.IsWindowComputing);
+            check.IsActive && check.IsWindowComputing)
+        {
+            ClearanceChecked = result is not null,
+            VerdictKind = verdict is null ? null : VerdictKind(verdict.Kind),
+            VerdictTone = verdict is null ? null : Tone(verdict.Tone),
+            VerdictSubtitle = verdict?.Subtitle,
+            Summary = verdict?.Rows.Select(Row).ToList() ?? [],
+            Footer = verdict?.Footer,
+        };
     }
+
+    internal static string VerdictKind(RouteCheckVerdictKind kind) => kind switch
+    {
+        RouteCheckVerdictKind.MustReview => "must_review",
+        RouteCheckVerdictKind.DataEnds => "data_ends",
+        RouteCheckVerdictKind.Check => "check",
+        _ => "clear",
+    };
+
+    internal static string Tone(CheckTone tone) => tone switch
+    {
+        CheckTone.Success => "success",
+        CheckTone.Warning => "warning",
+        CheckTone.Destructive => "destructive",
+        _ => "neutral",
+    };
+
+    internal static string Filter(FindingsFilter filter) => filter switch
+    {
+        FindingsFilter.Clearance => "clearance",
+        FindingsFilter.Route => "route",
+        FindingsFilter.Warnings => "warnings",
+        _ => "all",
+    };
+
+    private static CheckSummaryRowDto Row(RouteCheckSummaryRow row) => new(
+        Filter(row.Filter),
+        row.Label,
+        row.Text,
+        row.Chip,
+        row.Chip is null ? null : Tone(row.ChipTone),
+        row.AddDraft ? Resources.Strings.Check_SummaryAddDraft : null);
 
     private static DepartureWindowDto Window(PassageDepartureWindow window, PassageCheckService check)
     {
@@ -166,15 +254,15 @@ internal abstract class PassageCheckToolBase : RouteToolBase
 }
 
 /// <summary>
-/// Turns Check passage on or off for the active (or a named) route, as the
-/// Routes panel's Check passage toggle does, and returns what it shows.
+/// Turns Check route on or off for the active (or a named) route, as the
+/// Routes panel's Check route toggle does, and returns what it shows.
 /// </summary>
 internal sealed class SetCheckModeTool : PassageCheckToolBase
 {
     public const string Name = "set_check_mode";
 
-    public SetCheckModeTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check)
-        : base(routes, invoker, check) { }
+    public SetCheckModeTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings = null)
+        : base(routes, invoker, check, findings) { }
 
     public async Task<ToolResult<CheckStateDto>> InvokeAsync(SetCheckModeRequest request, CancellationToken cancellationToken = default)
     {
@@ -209,13 +297,13 @@ internal sealed class SetCheckModeTool : PassageCheckToolBase
     }
 }
 
-/// <summary>Returns what Check passage is showing.</summary>
+/// <summary>Returns what Check route is showing.</summary>
 internal sealed class GetCheckStateTool : PassageCheckToolBase
 {
     public const string Name = "get_check_state";
 
-    public GetCheckStateTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check)
-        : base(routes, invoker, check) { }
+    public GetCheckStateTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings = null)
+        : base(routes, invoker, check, findings) { }
 
     public async Task<ToolResult<CheckStateDto>> InvokeAsync(bool wait, CancellationToken cancellationToken = default)
     {
@@ -231,8 +319,8 @@ internal sealed class SetPassageCursorTool : PassageCheckToolBase
 {
     public const string Name = "set_passage_cursor";
 
-    public SetPassageCursorTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check)
-        : base(routes, invoker, check) { }
+    public SetPassageCursorTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings = null)
+        : base(routes, invoker, check, findings) { }
 
     public async Task<ToolResult<CheckStateDto>> InvokeAsync(SetPassageCursorRequest request, CancellationToken cancellationToken = default)
     {
@@ -245,7 +333,7 @@ internal sealed class SetPassageCursorTool : PassageCheckToolBase
         var error = await Invoker.InvokeAsync<ToolError?>(() =>
         {
             if (request.DistanceNm is not null && Check.Current is null)
-                return new InvalidArgument("distanceNm", "Check passage is off or has no result; turn it on with set_check_mode");
+                return new InvalidArgument("distanceNm", "Check route is off or has no result; turn it on with set_check_mode");
             Check.SetCursor(request.DistanceNm * PassageGeodesy.MetersPerNauticalMile);
             return null;
         }).ConfigureAwait(false);
@@ -262,8 +350,8 @@ internal sealed class SetDepartureTool : PassageCheckToolBase
 {
     public const string Name = "set_departure";
 
-    public SetDepartureTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check)
-        : base(routes, invoker, check) { }
+    public SetDepartureTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings = null)
+        : base(routes, invoker, check, findings) { }
 
     public async Task<ToolResult<CheckStateDto>> InvokeAsync(SetDepartureRequest request, CancellationToken cancellationToken = default)
     {
@@ -291,7 +379,7 @@ internal sealed class SetDepartureTool : PassageCheckToolBase
             }
 
             if (!Check.IsActive || Check.Current is not { } current)
-                return new InvalidArgument("nearestMeeting", "Check passage is off or has no result; turn it on with set_check_mode");
+                return new InvalidArgument("nearestMeeting", "Check route is off or has no result; turn it on with set_check_mode");
             if (Check.Window is not { } window || window.RouteId != current.RouteId)
                 return new InvalidArgument("nearestMeeting", "there is no departure window: no S-104 covers the route");
             if (window.NearestMeeting(current.Result.Departure) is not { } nearest)
@@ -347,7 +435,7 @@ internal sealed class SetFollowPassageTool
         if (!applied)
         {
             return ToolResult<TimelineStateDto>.Err(new InvalidArgument(
-                "on", "Follow passage needs Check passage on (set_check_mode) with a speed on every leg, and time-aware data loaded"));
+                "on", "Follow passage needs Check route on (set_check_mode) with a speed on every leg, and time-aware data loaded"));
         }
 
         // Turning it on may set the departure, which recomputes the check.
@@ -363,7 +451,7 @@ internal sealed class SetFollowPassageTool
     }
 }
 
-/// <summary>Wraps the Check passage tools as <see cref="McpServerTool"/>s.</summary>
+/// <summary>Wraps the Check route tools as <see cref="McpServerTool"/>s.</summary>
 internal static class PassageCheckMcpAdapters
 {
     private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
@@ -372,7 +460,7 @@ internal static class PassageCheckMcpAdapters
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [Description("True to turn Check passage on; false to turn it off.")] bool on,
+            [Description("True to turn Check route on; false to turn it off.")] bool on,
             [Description("Route to check, made active first; omit for the active route.")] string? routeId = null,
             [Description("When turning on, wait for the result before returning (default true).")] bool wait = true,
             CancellationToken ct = default) =>
@@ -382,7 +470,7 @@ internal static class PassageCheckMcpAdapters
         {
             Name = SetCheckModeTool.Name,
             Description =
-                "Turns Check passage on or off, as the Routes panel's Check passage toggle does. While it's on, the " +
+                "Turns Check route on or off, as the Routes panel's Check route toggle does. While it's on, the " +
                 "map colours the active route by UKC state at ETA, folds Object Information to its edge tab and shows " +
                 "the verdict card. The route needs at least two waypoints; without a draft (set_passage) only the route " +
                 "checks run and the clearance parts are hidden (hasDraft false). Returns the state get_check_state returns; " +
@@ -403,8 +491,10 @@ internal static class PassageCheckMcpAdapters
         {
             Name = GetCheckStateTool.Name,
             Description =
-                "Returns what Check passage is showing: on or off, whether a result is computing or stale, the verdict " +
-                "card's verdict and title, the minimum UKC, the cursor (ghost vessel) position and ETA, the departure " +
+                "Returns what Check route is showing: on or off, whether a result is computing or stale, the verdict " +
+                "card (one verdict over the clearance check and every route check: verdictKind, title, subtitle, the " +
+                "clearance / route / warnings summary rows and the footer), the clearance verdict and minimum UKC when " +
+                "a draft is set, the cursor (ghost vessel) position and ETA, the departure " +
                 "being checked, and the departure window (the runs of departures that meet your settings, the departures " +
                 "that arrive after the S-104 data ends, the window line and the Depart button).",
             SerializerOptions = JsonOptions,
@@ -416,7 +506,7 @@ internal static class PassageCheckMcpAdapters
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
             [Description("The new departure (ISO-8601). Give this or nearestMeeting.")] DateTimeOffset? departure = null,
-            [Description("True to jump to the meeting departure nearest the current one, as the Depart {HH:MM} button does. Needs Check passage on.")] bool nearestMeeting = false,
+            [Description("True to jump to the meeting departure nearest the current one, as the Depart {HH:MM} button does. Needs Check route on.")] bool nearestMeeting = false,
             [Description("Route to set; omit for the active route. Not allowed with nearestMeeting.")] string? routeId = null,
             [Description("Wait for the recomputed check and window before returning (default true).")] bool wait = true,
             CancellationToken ct = default) =>
@@ -450,7 +540,7 @@ internal static class PassageCheckMcpAdapters
                 "pinned to the ETA at the Clearance cursor (set_passage_cursor), or at the minimum UKC without a cursor, " +
                 "so S-104 and S-111 show what the ship meets there. Turning it on pins the Timeline and, when the route " +
                 "has no departure, sets the departure to the one being checked (undoable). Choosing another time " +
-                "(set_view_time, step_time) or turning Check passage off stops it. Needs Check passage on with ETAs. " +
+                "(set_view_time, step_time) or turning Check route off stops it. Needs Check route on with ETAs. " +
                 "Returns the state get_timeline_state returns. Viewer-injected tool — mutates live state.",
             SerializerOptions = JsonOptions,
         });
@@ -468,7 +558,7 @@ internal static class PassageCheckMcpAdapters
         {
             Name = SetPassageCursorTool.Name,
             Description =
-                "Moves the Check passage cursor and the ghost vessel to a distance along the checked route, as hovering " +
+                "Moves the Check route cursor and the ghost vessel to a distance along the checked route, as hovering " +
                 "a leg row or the clearance profile does. Returns the state, including the cursor's position and ETA. " +
                 "Viewer-injected tool — mutates live state.",
             SerializerOptions = JsonOptions,
@@ -479,7 +569,7 @@ internal static class PassageCheckMcpAdapters
 /// <summary>What the Clearance tab shows (#902).</summary>
 [Description("Clearance tab state: the profile's x axis, whether Sources is open, the readout at the cursor and the Sources groups.")]
 internal sealed record ClearanceStateDto(
-    [property: Description("True when there is a profile (Check passage is on and has a result).")] bool HasProfile,
+    [property: Description("True when there is a profile (Check route is on and has a result).")] bool HasProfile,
     [property: Description("The profile's x axis: \"distance\" (NM) or \"time\" (ETA).")] string Axis,
     [property: Description("True when the Time axis is available (the passage has ETAs).")] bool CanShowTime,
     [property: Description("True when the Sources disclosure is open in place of the readout.")] bool SourcesOpen,
@@ -625,7 +715,7 @@ internal sealed class ClearanceTools
         {
             Name = GetName,
             Description =
-                "Returns what the Clearance tab (bottom dock, while Check passage is on) shows: the profile's axis " +
+                "Returns what the Clearance tab (bottom dock, while Check route is on) shows: the profile's axis " +
                 "(distance or time), whether Sources is open, the readout at the cursor (position, leg, charted depth " +
                 "and its source cell, water level and its station or grid and time step, draft + squat, UKC and state), " +
                 "the Sources groups, and the departure band (runs of departures across the S-104 range, the knob and " +

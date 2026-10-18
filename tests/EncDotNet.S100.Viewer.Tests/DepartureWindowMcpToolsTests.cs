@@ -84,7 +84,7 @@ public sealed class DepartureWindowMcpToolsTests : IDisposable
         Assert.IsType<InvalidArgument>(neither);
         Assert.True((await tool.InvokeAsync(new SetDepartureRequest(At(6, 0), NearestMeeting: true), ct)).TryGetError(out _));
 
-        // Check passage is off: there is no window to jump into.
+        // Check route is off: there is no window to jump into.
         Assert.True((await tool.InvokeAsync(new SetDepartureRequest(NearestMeeting: true), ct)).TryGetError(out var off));
         Assert.Contains("set_check_mode", off.Message, StringComparison.Ordinal);
 

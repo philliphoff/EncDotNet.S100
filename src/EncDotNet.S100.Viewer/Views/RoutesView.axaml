@@ -394,6 +394,19 @@
         <Style Selector="Panel.destructive ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
         <Style Selector="Panel.neutral TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource MutedColor}" /></Style>
         <Style Selector="Panel.neutral ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource MutedColor}" /></Style>
+        <!-- A chip's own tone wins over the card it sits in (#959 summary rows). -->
+        <Style Selector="Panel.chip.success > Border.toneFill"><Setter Property="Background" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.chip.warning > Border.toneFill"><Setter Property="Background" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.chip.destructive > Border.toneFill"><Setter Property="Background" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.chip.neutral > Border.toneFill"><Setter Property="Background" Value="{DynamicResource MutedColor}" /></Style>
+        <Style Selector="Panel.chip.success > Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.chip.warning > Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.chip.destructive > Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.chip.neutral > Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource MutedColor}" /></Style>
+        <Style Selector="Panel.chip.success > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.chip.warning > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.chip.destructive > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.chip.neutral > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource MutedColor}" /></Style>
         <!-- A chip is tinted more strongly than the card. -->
         <Style Selector="Panel.chip Border.toneFill">
             <Setter Property="Opacity" Value="0.16" />
@@ -465,6 +478,77 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
             <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <!-- #959 (B3): a verdict-card summary row is a 24 px button. Its own
+             template, as Button.finding, so the value and chip stretch. -->
+        <Style Selector="Button.summaryRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="-4,0" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      CornerRadius="{TemplateBinding CornerRadius}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalContentAlignment="Stretch"
+                                      VerticalContentAlignment="Center" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.summaryRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
+        </Style>
+        <Style Selector="Button.link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!-- #959 (D1): source filter chips, 22 px pills; the selected one is
+             filled with the foreground colour. -->
+        <Style Selector="Button.filterChip">
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="Padding" Value="9,0" />
+            <Setter Property="Margin" Value="0,0,4,4" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      CornerRadius="{TemplateBinding CornerRadius}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Content="{TemplateBinding Content}"
+                                      VerticalContentAlignment="Center" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.filterChip:pointerover">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="Button.filterChip.selected">
+            <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Button.filterChip.selected TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryForegroundColor}" />
         </Style>
         <Style Selector="Path.octagon">
             <Setter Property="Data" Value="M 4.7,0.5 L 10.3,0.5 L 14.5,4.7 L 14.5,10.3 L 10.3,14.5 L 4.7,14.5 L 0.5,10.3 L 0.5,4.7 Z M 6.8,3.6 L 8.2,3.6 L 8.0,8.9 L 7.0,8.9 Z M 7.5,10 A 0.95,0.95 0 1 1 7.49,10 Z" />
@@ -1049,31 +1133,77 @@
                                                TextWrapping="Wrap"
                                                VerticalAlignment="Center" />
                                 </StackPanel>
-                                <!-- #953: without a draft the clearance parts give way to a hint. -->
-                                <TextBlock AutomationProperties.AutomationId="Routes.Check.NeedsDraft"
-                                           Text="{x:Static loc:Strings.Check_AddDraft}"
-                                           IsVisible="{Binding NeedsDraft}"
+                                <!-- B2: where the worst item is, and what else there is. -->
+                                <TextBlock AutomationProperties.AutomationId="Routes.Check.Subtitle"
+                                           Text="{Binding Subtitle}"
+                                           IsVisible="{Binding Subtitle, Converter={x:Static ObjectConverters.IsNotNull}}"
                                            FontSize="11.5"
-                                           Opacity="0.75"
+                                           Opacity="0.7"
                                            TextWrapping="Wrap" />
-                                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowClearance}">
-                                    <TextBlock Classes="toneInk"
-                                               AutomationProperties.AutomationId="Routes.Check.MinUkc"
-                                               Text="{Binding MinUkcText}"
-                                               FontSize="26"
-                                               FontFamily="{DynamicResource LibraryMonoFont}"
-                                               VerticalAlignment="Bottom" />
-                                    <TextBlock Text="{Binding MinUkcCaption}"
-                                               FontSize="11"
-                                               Opacity="0.7"
-                                               Margin="0,0,0,6"
-                                               VerticalAlignment="Bottom" />
-                                </StackPanel>
-                                <TextBlock AutomationProperties.AutomationId="Routes.Check.Where"
-                                           Text="{Binding WhereText}"
-                                           IsVisible="{Binding WhereText, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                           FontSize="11.5"
-                                           TextWrapping="Wrap" />
+                                <!-- B3: Clearance / Route / Warnings. Each row filters the findings list. -->
+                                <ItemsControl AutomationProperties.AutomationId="Routes.Check.Summary"
+                                              ItemsSource="{Binding SummaryRows}"
+                                              Margin="0,4,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:CheckSummaryRowViewModel">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <Button Grid.ColumnSpan="2"
+                                                        Classes="summaryRow"
+                                                        AutomationProperties.AutomationId="{Binding Key, StringFormat='Routes.Check.Summary.{0}'}"
+                                                        AutomationProperties.Name="{Binding Label}"
+                                                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CheckSummaryRow}"
+                                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckSummaryRow}"
+                                                        Command="{Binding $parent[ItemsControl].((vm:PassageCheckViewModel)DataContext).SelectSummaryCommand}"
+                                                        CommandParameter="{Binding}">
+                                                    <Grid ColumnDefinitions="66,*,Auto" Margin="0,0,4,0">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Label}"
+                                                                   FontSize="11.5"
+                                                                   Opacity="0.6"
+                                                                   VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1"
+                                                                   AutomationProperties.AutomationId="Routes.Check.Summary.Text"
+                                                                   Text="{Binding Text}"
+                                                                   FontSize="11.5"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   VerticalAlignment="Center" />
+                                                        <Panel Grid.Column="2"
+                                                               Classes="chip"
+                                                               Classes.success="{Binding IsChipSuccess}"
+                                                               Classes.warning="{Binding IsChipWarning}"
+                                                               Classes.destructive="{Binding IsChipDestructive}"
+                                                               Classes.neutral="{Binding IsChipNeutral}"
+                                                               AutomationProperties.AutomationId="Routes.Check.Summary.Chip"
+                                                               AutomationProperties.Name="{Binding Chip}"
+                                                               IsVisible="{Binding HasChip}"
+                                                               MinWidth="26"
+                                                               Height="18"
+                                                               VerticalAlignment="Center">
+                                                            <Border Classes="toneFill" />
+                                                            <Border Classes="toneEdge" />
+                                                            <TextBlock Classes="toneInk"
+                                                                       Text="{Binding Chip}"
+                                                                       FontSize="10.5"
+                                                                       Margin="7,0"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center" />
+                                                        </Panel>
+                                                    </Grid>
+                                                </Button>
+                                                <!-- A5: "+ Add draft" sits over the row's right end. -->
+                                                <Button Grid.Column="1"
+                                                        Classes="link"
+                                                        AutomationProperties.AutomationId="Routes.Check.Summary.AddDraft"
+                                                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CheckAddDraft}"
+                                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckAddDraft}"
+                                                        Content="{x:Static loc:Strings.Check_SummaryAddDraft}"
+                                                        IsVisible="{Binding AddDraft}"
+                                                        Command="{Binding $parent[ItemsControl].((vm:PassageCheckViewModel)DataContext).AddDraftCommand}"
+                                                        VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                                 <!-- #939: confidence qualifies the band-led title, never replaces it. -->
                                 <StackPanel AutomationProperties.AutomationId="Routes.Check.Confidence"
                                             AutomationProperties.Name="{Binding ConfidenceText}"
@@ -1110,6 +1240,12 @@
                                             FontSize="12"
                                             Padding="12,0" />
                                 </StackPanel>
+                                <!-- B4: route findings don't move with departure. -->
+                                <TextBlock AutomationProperties.AutomationId="Routes.Check.WindowNote"
+                                           Text="{x:Static loc:Strings.Check_WindowRouteFindings}"
+                                           IsVisible="{Binding ShowWindowNote}"
+                                           FontSize="11.5"
+                                           TextWrapping="Wrap" />
                                 <TextBlock AutomationProperties.AutomationId="Routes.Check.Footer"
                                            Text="{Binding FooterText}"
                                            FontSize="10.5"
@@ -1140,9 +1276,40 @@
                                     x:DataType="vm:RouteFindingsViewModel"
                                     IsVisible="{Binding $parent[StackPanel].((vm:PassageCheckViewModel)DataContext).ShowFindings}"
                                     Spacing="2">
+                            <!-- D1: source filter chips; a chip shows only when it has findings. -->
+                            <ItemsControl AutomationProperties.AutomationId="Routes.Check.Filter"
+                                          ItemsSource="{Binding FilterChips}"
+                                          IsVisible="{Binding !IsEmpty}"
+                                          Margin="2,2,2,2">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FindingsFilterChipViewModel">
+                                        <Button Classes="filterChip"
+                                                Classes.selected="{Binding IsSelected}"
+                                                AutomationProperties.AutomationId="{Binding Key, StringFormat='Routes.Check.Filter.{0}'}"
+                                                AutomationProperties.Name="{Binding Label}"
+                                                IsVisible="{Binding IsVisible}"
+                                                Command="{Binding $parent[ItemsControl].((vm:RouteFindingsViewModel)DataContext).SetFilterCommand}"
+                                                CommandParameter="{Binding}">
+                                            <TextBlock Text="{Binding Label}" FontSize="11" />
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <TextBlock AutomationProperties.AutomationId="Routes.Check.Findings.Empty"
                                        Text="{x:Static loc:Strings.Findings_Empty}"
                                        IsVisible="{Binding IsEmpty}"
+                                       FontSize="11"
+                                       Opacity="0.55"
+                                       TextWrapping="Wrap"
+                                       Margin="4,2" />
+                            <TextBlock AutomationProperties.AutomationId="Routes.Check.Findings.FilterEmpty"
+                                       Text="{x:Static loc:Strings.Findings_FilterEmpty}"
+                                       IsVisible="{Binding IsFilteredEmpty}"
                                        FontSize="11"
                                        Opacity="0.55"
                                        TextWrapping="Wrap"
@@ -1583,8 +1750,8 @@
                         </ToggleButton>
                         <ToggleButton Grid.Column="2"
                                       Classes="modeToggle"
-                                      AutomationProperties.AutomationId="Routes.CheckPassageToggle"
-                                      AutomationProperties.Name="{x:Static loc:Strings.Button_CheckPassage}"
+                                      AutomationProperties.AutomationId="Routes.CheckRouteToggle"
+                                      AutomationProperties.Name="{x:Static loc:Strings.Button_CheckRoute}"
                                       AutomationProperties.HelpText="{Binding CheckPassageTooltip}"
                                       IsEnabled="{Binding CanCheckPassage}"
                                       IsChecked="{Binding IsCheckingPassage, Mode=TwoWay}"
@@ -1592,7 +1759,7 @@
                                       ToolTip.ShowOnDisabled="True">
                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                 <ic:FluentIcon Icon="Gauge" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
-                                <TextBlock Text="{x:Static loc:Strings.Button_CheckPassage}" FontSize="12" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Button_CheckRoute}" FontSize="12" VerticalAlignment="Center" />
                             </StackPanel>
                         </ToggleButton>
                     </Grid>
