@@ -4,7 +4,7 @@ Status: design round 1 (2026-10-17). This brief belongs to issue [#958](https://
 
 The mock is the **Route Checks** artboard in the *SoundCharts S-100 Viewer* design canvas: <https://claude.ai/artifact/2hWbgQ9wKM1gC2gM51mSCs> (page *Navigation & time*, file `project/Route-Checks.dc.html`). It's built with the *EncDotNet.S100* design system (<https://claude.ai/artifact/UywKszqyKDATtEERvBqWZT>). The handoff is [HANDOFF.md](HANDOFF.md).
 
-The screenshots in `screenshots/` come from main at `53ae46fc` (after #976 and #977), driven through the viewer's MCP server at the default 1100×700 window. Two data sets:
+Screenshots 1–7 in `screenshots/` come from main at `53ae46fc` (after #976 and #977), and screenshot 8 from `f3eba309` (after #953), driven through the viewer's MCP server at the default 1100×700 window. Two data sets:
 
 - **Generated:** the scenario generator's `warnings-on-route` scenario (`tests/EncDotNet.S100.Testing.Scenarios`, fictitious *Synthetic Sound* at 41°S 135°W): two S-101 cells, seven S-124 warnings, the S-122 seal sanctuary, S-125 channel buoys, and the S-421 route `421ZZ00WARN` re-entered as a viewer route (West entrance → East berth, 2,9 NM). The app clock is frozen at 1 Mar 2026 06:30Z. Passage values are the scenario's: 8 kn, departure 06:00Z, and, where a draft is used, 7,0 m + 0,4 m squat, 1,0 m required UKC, 150 m cross-track.
 - **UKHO:** the S-101 trial cells in `~/SynologyDrive/Charts/UKHO Trial Datasets/S-101`, the UKHO S-102 trial cells and the Solent S-104 astronomical predictions (dcf8), with #887's 9-waypoint Nab Tower → Southampton route, draft 11,5 m, 12 kn, 1,0 m required UKC, 150 m cross-track, departing 1 Apr 2021 07:10Z.
@@ -37,6 +37,7 @@ Times in the screenshots are in the machine's zone (US Pacific), per the app's t
 5. **`today-05-solent-32-findings.png`.** UKHO Solent at 07:10. "Below your UKC setting in 11 places", −14,7 m at Calshot Spit. The verdict card is 175 px tall, and 32 findings follow it, most of them fragments.
 6. **`today-06-night-finding-zoom.png`.** Night palette, zoomed to the Calshot finding. The red and green route is far brighter than anything on the Night chart. Restricted-area symbols sit beside the route; nothing reports them.
 7. **`today-07-warnings-panel-not-route-aware.png`.** The Navigational warnings panel (#977) on the generated scenario: four in force, three not. You can't tell which affect the route, or when you're there.
+8. **`today-08-no-draft-check-after-953.png`.** Main `f3eba309`, after #953 (PR #978) merged. The generated route checks without a draft: the card says "No findings for your settings · Add a draft to check clearance" (no route-check producers have landed yet). The route draws grey and dashed, the No-data style, which the handoff replaces with the normal accent (A3). The Clearance tab still opens, showing only "Add a draft to check clearance"; the handoff hides it (A2). The toggle still reads *Check passage*.
 
 ## 3. Vocabulary the design should settle
 
