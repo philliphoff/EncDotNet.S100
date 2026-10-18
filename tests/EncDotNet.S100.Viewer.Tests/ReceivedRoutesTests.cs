@@ -3,6 +3,7 @@ using Avalonia.Controls.Primitives;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.S421;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Testing.Scenarios;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Routing;
@@ -300,15 +301,69 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         Assert.Equal(RouteDisplayMode.Planning, route.DisplayMode);
 
         // Check route draws a Native route in Planning mode and keeps the
-        // dataset on for its action points; turning it off restores Native.
+        // dataset on with only its action points; turning it off restores Native.
         route.SetDisplayMode(RouteDisplayMode.Native);
         h.Routes.IsCheckModeActive = true;
         Assert.True(ReceivedRoutesService.DrawsWithRouteRenderer(h.Routes, route));
         Assert.True(entry.IsVisible);
+        Assert.Equal(ReceivedRoutesService.CheckedViewingGroups, entry.ViewingGroups);
         Assert.Equal(RouteDisplayMode.Native, route.DisplayMode);
         h.Routes.IsCheckModeActive = false;
         Assert.False(ReceivedRoutesService.DrawsWithRouteRenderer(h.Routes, route));
         Assert.True(entry.IsVisible);
+        Assert.Null(entry.ViewingGroups);
+    }
+
+    [Fact]
+    public void Check_route_keeps_only_the_action_points_of_the_checked_route_s_dataset()
+    {
+        var h = new Harness();
+        var basic = h.Open(Fixture("RTE-TEST-GBASIC.s421.gml"));
+        var basicRoute = h.Routes.Routes.ActiveRoute!;
+        var full = h.Open(Fixture("RTE-TEST-GFULL.s421.gml"));
+        var fullRoute = h.Routes.Routes.ActiveRoute!;
+        basicRoute.SetDisplayMode(RouteDisplayMode.Planning);
+        Assert.False(basic.IsVisible);
+
+        // A Planning route's hidden dataset comes back with its action points
+        // only; the other route's dataset is left alone.
+        h.Routes.Routes.SetActiveRoute(basicRoute);
+        h.Routes.IsCheckModeActive = true;
+        Assert.True(basic.IsVisible);
+        Assert.Equal(ViewingGroupFilter.ShowOnly([52270]), basic.ViewingGroups);
+        Assert.True(full.IsVisible);
+        Assert.Null(full.ViewingGroups);
+
+        // Checking another route moves the filter with it.
+        h.Routes.Routes.SetActiveRoute(fullRoute);
+        Assert.False(basic.IsVisible);
+        Assert.Null(basic.ViewingGroups);
+        Assert.Equal(ReceivedRoutesService.CheckedViewingGroups, full.ViewingGroups);
+
+        // Ending the check restores the whole dataset.
+        h.Routes.IsCheckModeActive = false;
+        Assert.True(full.IsVisible);
+        Assert.Null(full.ViewingGroups);
+        Assert.Equal(RouteDisplayMode.Native, fullRoute.DisplayMode);
+    }
+
+    [Fact]
+    public void A_newer_edition_replacing_a_checked_route_restores_the_older_dataset()
+    {
+        var h = new Harness();
+        var path = Fixture("RTE-TEST-GBASIC.s421.gml");
+        var older = h.Open(path);
+        h.Routes.IsCheckModeActive = true;
+        Assert.NotNull(older.ViewingGroups);
+
+        var edition2 = Path.Combine(_temp, "ed2.gml");
+        File.WriteAllText(edition2, File.ReadAllText(path).Replace("<routeEditionNo>1<", "<routeEditionNo>2<", StringComparison.Ordinal));
+        var newer = h.Open(edition2);
+
+        Assert.False(h.Routes.IsCheckModeActive);
+        Assert.Null(older.ViewingGroups);
+        Assert.Null(newer.ViewingGroups);
+        Assert.True(newer.IsVisible);
     }
 
     [Fact]

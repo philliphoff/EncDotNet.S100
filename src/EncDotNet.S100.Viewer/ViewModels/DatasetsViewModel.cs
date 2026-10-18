@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Validation;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -360,6 +361,26 @@ internal sealed class DatasetEntry : ViewModelBase
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(RowOpacity));
             }
+        }
+    }
+
+    private ViewingGroupFilter? _viewingGroups;
+    /// <summary>
+    /// This dataset's own narrowing of viewing-group visibility, on top of the
+    /// map-wide ECDIS display settings, or <c>null</c> for none. Unlike
+    /// <see cref="IsVisible"/> it isn't a user setting: services set it (Check
+    /// route keeps only a received S-421 route's action points). Changing it
+    /// re-renders the dataset.
+    /// </summary>
+    public ViewingGroupFilter? ViewingGroups
+    {
+        get => _mapDataset?.ViewingGroups ?? _viewingGroups;
+        set
+        {
+            if (Equals(ViewingGroups, value)) return;
+            _viewingGroups = value;
+            UpdateMapDataset();
+            OnPropertyChanged();
         }
     }
 
@@ -769,7 +790,8 @@ internal sealed class DatasetEntry : ViewModelBase
         _currentTime,
         _subLayers.Select(subLayer => subLayer.State).ToArray(),
         _validation,
-        _versionAssessment);
+        _versionAssessment,
+        _viewingGroups);
 
     private void ReconcileSubLayerProjectionSubscriptions()
     {
