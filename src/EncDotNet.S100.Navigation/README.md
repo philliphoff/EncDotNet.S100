@@ -110,7 +110,10 @@ confidence still meets them.
 5. `MeetsSettings`
 
 `Gaps` and `LowConfidence` list the affected stretches, with their distances
-and times. `Legs` summarises each leg, and `Sources` names the datasets,
+and times. Stretches of one kind less than 100 m apart are reported as one,
+and low-confidence stretches shorter than 100 m are left out (the samples
+still carry their confidence); `PassageCheckOptions.StretchMergeGapMeters`
+and `MinimumLowConfidenceStretchMeters` tune this. `Legs` summarises each leg, and `Sources` names the datasets,
 stations and datums that were used.
 
 ## Recompute cheaply

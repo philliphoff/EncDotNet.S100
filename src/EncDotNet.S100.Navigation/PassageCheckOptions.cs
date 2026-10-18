@@ -43,4 +43,22 @@ public sealed record PassageCheckOptions
     /// <c>false</c>: the uncertainty is reported, not applied.
     /// </summary>
     public bool SubtractDepthUncertainty { get; init; }
+
+    /// <summary>
+    /// Stretches of one kind (in <see cref="PassageCheckResult.Gaps"/> and
+    /// <see cref="PassageCheckResult.LowConfidence"/>) separated by less than
+    /// this, in metres, are reported as one, so a ragged S-102 edge reads as
+    /// one fallback stretch. Default 100 m.
+    /// </summary>
+    public double StretchMergeGapMeters { get; init; } = 100;
+
+    /// <summary>
+    /// Low-confidence stretches shorter than this, in metres, after merging,
+    /// are left out of <see cref="PassageCheckResult.LowConfidence"/>; the
+    /// samples still carry their <see cref="ConfidenceReasons"/>. A passage
+    /// shorter than this keeps its stretches. Gaps are
+    /// always reported, however short, since they explain an incomplete-data
+    /// verdict. Default 100 m.
+    /// </summary>
+    public double MinimumLowConfidenceStretchMeters { get; init; } = 100;
 }
