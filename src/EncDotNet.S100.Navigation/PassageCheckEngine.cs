@@ -576,8 +576,8 @@ public sealed class PassageCheckEngine
             tally.PlacesBelow,
             samples,
             legs,
-            Stretches(samples, GapKinds, _options.SampleSpacingMeters),
-            Stretches(samples, LowConfidenceKinds, _options.SampleSpacingMeters),
+            Stretches(samples, GapKinds, _options.StretchMergeGapMeters, minimumLength: 0),
+            Stretches(samples, LowConfidenceKinds, _options.StretchMergeGapMeters, _options.MinimumLowConfidenceStretchMeters),
             Sources(samples),
             tally.Confidence);
     }
@@ -613,11 +613,18 @@ public sealed class PassageCheckEngine
         s => s.Confidence.HasFlag(ConfidenceReasons.DatumUnconfirmed) ? PassageStretchKind.DatumUnconfirmed : null,
     ];
 
-    // Runs of one kind separated by less than a sample spacing are merged, so
-    // a ragged S-102 edge reads as one fallback stretch rather than dozens.
-    private static List<PassageStretch> Stretches(UkcSample[] samples, Func<UkcSample, PassageStretchKind?>[] classifiers, double mergeGap)
+    // Runs of one kind separated by less than the merge gap are merged, so a
+    // ragged S-102 edge reads as one fallback stretch rather than dozens; runs
+    // still shorter than the minimum length are then left out. The minimum is
+    // capped at the passage length, so a short passage keeps its stretches.
+    private static List<PassageStretch> Stretches(UkcSample[] samples, Func<UkcSample, PassageStretchKind?>[] classifiers, double mergeGap, double minimumLength)
     {
         var stretches = new List<PassageStretch>();
+        if (samples.Length > 0)
+        {
+            minimumLength = Math.Min(minimumLength, samples[^1].EndDistanceMeters - samples[0].StartDistanceMeters);
+        }
+
         foreach (var classify in classifiers)
         {
             var runs = new List<PassageStretch>();
@@ -650,7 +657,7 @@ public sealed class PassageCheckEngine
                 first = i;
             }
 
-            stretches.AddRange(runs);
+            stretches.AddRange(runs.Where(r => r.LengthMeters >= minimumLength));
         }
 
         stretches.Sort((x, y) => x.FirstSample != y.FirstSample

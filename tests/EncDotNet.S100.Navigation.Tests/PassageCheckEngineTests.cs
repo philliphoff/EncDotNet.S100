@@ -169,6 +169,47 @@ public class PassageCheckEngineTests
         Assert.Equal(["101TEST"], result.Sources.FallbackDatasets);
     }
 
+    // Regression for #888: a ragged S-102 edge (holes every 60–80 m, as on
+    // the UKHO Solent cells near Fawley) gave a dozen fallback stretches of a
+    // few metres each, every one its own finding.
+    [Fact]
+    public void A_ragged_s102_edge_reads_as_one_fallback_stretch_without_slivers()
+    {
+        // Between 0,02° and 0,04° E, S-102 has a ~22 m hole every ~111 m;
+        // past that, one isolated ~11 m hole at 0,07° E.
+        static bool Hole(double lon) =>
+            (lon is >= 0.02 and < 0.04 && (lon - 0.02) % 0.001 < 0.0002)
+            || lon is >= 0.07 and < 0.0701;
+        var result = Check(
+            (_, lon) => Hole(lon) ? FakeDepth.DepthArea(14) : FakeDepth.Bathymetry(16),
+            leg: Fixture.Leg(draft: 10, required: 2),
+            gridSpacing: 10);
+
+        var fallback = Assert.Single(result.LowConfidence);
+        Assert.Equal(PassageStretchKind.ChartedDepthFromS101, fallback.Kind);
+        var metersPerDegree = PassageGeodesy.MetersPerDegreeLatitude;
+        Assert.InRange(fallback.StartDistanceMeters, 0.02 * metersPerDegree - 30, 0.02 * metersPerDegree + 5);
+        Assert.InRange(fallback.EndDistanceMeters, 0.0392 * metersPerDegree - 5, 0.04 * metersPerDegree + 30);
+
+        // The samples still carry the fallback where it is used, sliver included.
+        Assert.Contains(result.Samples, s => s.DistanceMeters > 0.06 * metersPerDegree && s.IsLowConfidence);
+    }
+
+    // No-data slivers explain an IncompleteData verdict, so they are kept.
+    [Fact]
+    public void A_short_hole_in_charted_depth_is_still_a_gap()
+    {
+        var result = Check(
+            (_, lon) => lon is >= 0.05 and < 0.0501 ? null : FakeDepth.Bathymetry(16),
+            leg: Fixture.Leg(draft: 10, required: 2),
+            gridSpacing: 10);
+
+        var gap = Assert.Single(result.Gaps);
+        Assert.Equal(PassageStretchKind.NoChartedDepth, gap.Kind);
+        Assert.True(gap.LengthMeters < 50);
+        Assert.Equal(PassageVerdict.IncompleteData, result.Verdict);
+    }
+
     [Fact]
     public void A_low_confidence_sample_below_the_setting_is_below()
     {
