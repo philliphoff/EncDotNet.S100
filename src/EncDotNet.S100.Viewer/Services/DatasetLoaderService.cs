@@ -268,21 +268,31 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         EnsureInitialized();
 
         var loadGeneration = BeginLoad(entry);
-        var gate = _loadGates.GetValue(entry, static _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(true);
+        entry.IsLoading = true;
         try
         {
-            if (IsCurrentLoad(entry, loadGeneration))
+            var gate = _loadGates.GetValue(entry, static _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(true);
+            try
             {
-                await LoadCoreAsync(
-                    entry,
-                    loadGeneration,
-                    cancellationToken).ConfigureAwait(true);
+                if (IsCurrentLoad(entry, loadGeneration))
+                {
+                    await LoadCoreAsync(
+                        entry,
+                        loadGeneration,
+                        cancellationToken).ConfigureAwait(true);
+                }
+            }
+            finally
+            {
+                gate.Release();
             }
         }
         finally
         {
-            gate.Release();
+            // A newer load of the same entry keeps it loading.
+            if (IsCurrentLoad(entry, loadGeneration))
+                entry.IsLoading = false;
         }
     }
 
@@ -1225,7 +1235,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         => Interlocked.Increment(ref _loadGenerations.GetOrCreateValue(entry).Value);
 
     private void InvalidateLoad(DatasetEntry entry)
-        => Interlocked.Increment(ref _loadGenerations.GetOrCreateValue(entry).Value);
+    {
+        Interlocked.Increment(ref _loadGenerations.GetOrCreateValue(entry).Value);
+        // The superseded load no longer counts as in progress.
+        entry.IsLoading = false;
+    }
 
     private bool IsCurrentLoad(DatasetEntry entry, long generation)
         => Volatile.Read(ref _loadGenerations.GetOrCreateValue(entry).Value) == generation;

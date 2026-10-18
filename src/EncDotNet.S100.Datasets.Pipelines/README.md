@@ -460,7 +460,9 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   `NavwarnPart`: a `NavigationalWarningInfo` with the series and number, type,
   validity, area, issuer and the message text in each language, read through
   the warning's preamble. `NavigationalWarningInfo.StatusAt` tells whether the
-  warning is in force at a time.
+  warning is in force at a time. `GetNavigationalWarnings` lists every part
+  with its feature id and ordinal without picking, including parts with no
+  geometry, which a pick can never reach.
 - `AssetSourceHelpers`: set-up helpers for exchange sets and loose datasets.
 - `Diagnostics/`: the `ActivitySource` and `Meter` instrumentation that the
   OpenTelemetry exporter uses. See [Observability](../../docs/observability.md).

@@ -123,3 +123,17 @@ public sealed record NavigationalWarningInfo
         return anyLater ? NavigationalWarningStatus.NotYetInForce : NavigationalWarningStatus.Ended;
     }
 }
+
+/// <summary>
+/// A navigational warning part as a dataset lists it: the feature that carries
+/// it and its message. Returned by
+/// <see cref="IDatasetProcessor.GetNavigationalWarnings"/>.
+/// </summary>
+/// <param name="FeatureRef">The part's feature id within the dataset.</param>
+/// <param name="Ordinal">
+/// The part's position in <see cref="IDatasetProcessor.EnumerateFeatures"/>;
+/// pass it to <see cref="IDatasetProcessor.GetFeatureInfoAt"/> or
+/// <see cref="IDatasetProcessor.GetFeatureGeometryAt"/>.
+/// </param>
+/// <param name="Warning">The part's message.</param>
+public sealed record NavigationalWarningFeature(string FeatureRef, int Ordinal, NavigationalWarningInfo Warning);

@@ -60,6 +60,35 @@ public class S124NavigationalWarningProcessorTests
         Assert.Equal(["eng", "fra"], warning!.Texts.Select(t => t.Language));
     }
 
+    [Fact]
+    public void GetNavigationalWarnings_ListsEachPartWithItsOrdinal()
+    {
+        var processor = CreateProcessor("navwarn_ccg_ed2.gml");
+
+        var entry = Assert.Single(processor.GetNavigationalWarnings());
+
+        Assert.Equal("CCG.S124.CA01.P.0477.20.2", entry.FeatureRef);
+        Assert.Equal("P 477/20", entry.Warning.Label);
+        Assert.True(entry.Warning.HasLocation);
+        // The ordinal resolves the same part through the pick APIs.
+        Assert.Equal(entry.FeatureRef, processor.GetFeatureInfoAt(entry.Ordinal)?.FeatureRef);
+        Assert.True(processor.GetFeatureGeometryAt(entry.Ordinal)?.HasGeometry);
+    }
+
+    [Fact]
+    public void GetNavigationalWarnings_IncludesATextOnlyPart()
+    {
+        var processor = CreateProcessor("navwarn_ccg_ed2_text_only.gml");
+
+        var entry = Assert.Single(processor.GetNavigationalWarnings());
+
+        Assert.Equal("P 480/20", entry.Warning.Label);
+        Assert.Equal("Warnings in force", entry.Warning.WarningType);
+        Assert.False(entry.Warning.HasLocation);
+        Assert.False(processor.GetFeatureGeometryAt(entry.Ordinal)?.HasGeometry ?? false);
+        Assert.Contains("P 477/20", Assert.Single(entry.Warning.Texts).Text, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(106, 2026, "106/26")]
     [InlineData(98, 2026, "098/26")]

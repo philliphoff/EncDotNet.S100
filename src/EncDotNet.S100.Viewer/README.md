@@ -700,6 +700,31 @@ type or dataset. Select a result to show the feature in the **Object
 information** panel. This works even when datasets reuse `gml:id` values for
 different features.
 
+### Find navigational warnings
+
+The **Navigational warnings** panel, beside **Library** in the activity bar,
+lists every S-124 warning part in the loaded datasets, including parts with no
+location. Nothing is drawn for those, so this list is the only way to reach
+them. Parts are grouped by series and source, with the newest number first;
+choose **Published** in the sort menu to put the most recently published
+first. Rows show the number, the warning type, and the area and validity. A
+text-only part shows a document glyph and "No location".
+
+- The summary line counts the warnings in force and the text-only ones. Select
+  the text-only count to list only those; select it again to show all.
+- Search by number, type or area.
+- **View time** (the default) reads each warning's status at the Timeline's
+  view time, so the list matches the map; **Now** reads it at the current
+  time. Warnings not in force then fall into a dimmed **Not in force** group
+  at the bottom, closed until you open it, with "Ended" or "Starts" and the
+  date.
+
+Select a row to open its Warning card in **Object information**. When the part
+has a location and is in force, the map centres on it and highlights it. A
+part that isn't in force opens its card but leaves the map where it is, and a
+text-only part shows a note over the map saying nothing is drawn for it. With
+no S-124 datasets loaded, the panel offers **Open Library**.
+
 ## Work with time-varying data
 
 S-104 water levels, S-111 surface currents and S-411 sea ice have timestamps.

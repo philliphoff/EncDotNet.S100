@@ -23,7 +23,13 @@ a warnings file contains before you process it in code.
    **Attributes**, followed by its references and location. If several
    warnings are at that point, the panel lists them by number. If the panel is
    closed, choose **View** > **Appearance** > **Pick Report**.
-4. To check how the warnings read in other lighting conditions, select the
+4. To find a warning by number, or one with no location (such as a weekly
+   bulletin, which draws nothing on the map), open the **Navigational
+   warnings** panel from the activity bar. It lists every warning part grouped
+   by series, with the ones not in force at the view time in a group at the
+   bottom. Select a row to open its Warning card; the map centres on the
+   warning when it has a location and is in force.
+5. To check how the warnings read in other lighting conditions, select the
    **Display Settings** button at the top right of the map and choose **Day**,
    **Dusk** or **Night** under **Palette**.
 
