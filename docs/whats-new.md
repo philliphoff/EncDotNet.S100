@@ -17,6 +17,18 @@ month. For package versions and release assets, see
   `RouteCheckDataSources` (`EncDotNet.S100.Datasets.Pipelines`) do the
   check.
 
+- **Read long attribute text in full.** In SoundCharts' Object Information,
+  S-101 referenced text files (`TXTDSC` / `NTXTDS`) and any other text value
+  with a line break or over 120 characters, such as S-122 and S-127
+  regulation text, show as cards under **TEXT** instead of being cut off in
+  the attribute table. They share the Warning card's body: the whole text,
+  **Show all** past 22 lines, **Copy** and **Examiner**. Cards for data whose
+  exchange-set catalogue says `notForNavigation` show **NOT FOR NAVIGATION**
+  in the footer; `get_warning_cards` reports it as `notForNavigation`. The
+  card's text, Show all, Copy, Zoom to and Examiner controls now have
+  `PickReport.TextCard.*` automation ids (`PickReport.WarningCard.ZoomTo` is
+  now `PickReport.TextCard.ZoomTo`).
+
 - **See how fresh the navigational warnings are.** In SoundCharts'
   **Navigational warnings** panel, each group header names the SECOM service
   or feed the warnings came from and when it last answered ("AMSA · 07:40").

@@ -137,7 +137,7 @@ internal static class Strings
     public static string Tooltip_FollowReference => Get(nameof(Tooltip_FollowReference));
     public static string Tooltip_CopyLocation => Get(nameof(Tooltip_CopyLocation));
     public static string Tooltip_CopyIdentity => Get(nameof(Tooltip_CopyIdentity));
-    public static string Tooltip_CopyReferencedText => Get(nameof(Tooltip_CopyReferencedText));
+    public static string Tooltip_CopyTextCard => Get(nameof(Tooltip_CopyTextCard));
     public static string Tooltip_Search => Get(nameof(Tooltip_Search));
     public static string Tooltip_ClearSearch => Get(nameof(Tooltip_ClearSearch));
     public static string Tooltip_OpenSearchResult => Get(nameof(Tooltip_OpenSearchResult));
@@ -297,7 +297,9 @@ internal static class Strings
     public static string Pick_SpecFormat => Get(nameof(Pick_SpecFormat));
     public static string Pick_SourceFormat => Get(nameof(Pick_SourceFormat));
     public static string Pick_AttributesHeading => Get(nameof(Pick_AttributesHeading));
-    public static string Pick_ReferencedTextHeader => Get(nameof(Pick_ReferencedTextHeader));
+    public static string Pick_TextCardsHeader => Get(nameof(Pick_TextCardsHeader));
+    public static string Pick_NotForNavigation => Get(nameof(Pick_NotForNavigation));
+    public static string Tooltip_NotForNavigation => Get(nameof(Tooltip_NotForNavigation));
 
     // Navigational warning card (#932)
     public static string Pick_Warning_NoNumber => Get(nameof(Pick_Warning_NoNumber));

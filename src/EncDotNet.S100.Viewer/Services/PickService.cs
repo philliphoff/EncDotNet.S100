@@ -185,7 +185,7 @@ internal sealed class PickService : IPickService
             if (info is null)
                 continue;
 
-            hits.Add(BuildHit(info, entry.DisplayName, processor));
+            hits.Add(BuildHit(info, entry, processor));
         }
 
         if (hits.Count == 0)
@@ -278,7 +278,7 @@ internal sealed class PickService : IPickService
             if (info is null)
                 continue;
 
-            hits.Add(BuildHit(info, owningEntry.DisplayName, processor));
+            hits.Add(BuildHit(info, owningEntry, processor));
         }
 
         return hits;
@@ -289,7 +289,20 @@ internal sealed class PickService : IPickService
     /// including a viewer-side <see cref="StationTimeSeriesViewModel"/> when
     /// the underlying info carries a station snapshot.
     /// </summary>
-    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor)
+    private PickHit BuildHit(FeatureInfo info, DatasetEntry entry, IDatasetProcessor processor) =>
+        BuildHit(info, entry.DisplayName, processor, entry.NotForNavigation);
+
+    // A feature opened by dataset name (the warnings panel, reference
+    // navigation) finds its entry by name for the not-for-navigation flag.
+    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor) =>
+        BuildHit(
+            info,
+            datasetFileName,
+            processor,
+            _loader.EntryLayers.Keys.Any(e => e.NotForNavigation
+                && string.Equals(e.DisplayName, datasetFileName, StringComparison.Ordinal)));
+
+    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor, bool notForNavigation)
     {
         return new PickHit
         {
@@ -304,6 +317,7 @@ internal sealed class PickService : IPickService
             StationSeries = BuildStationSeriesViewModel(info, processor),
             EggCode = info.EggCode,
             NavigationalWarning = info.NavigationalWarning,
+            NotForNavigation = notForNavigation,
         };
     }
 
@@ -447,7 +461,7 @@ internal sealed class PickService : IPickService
             if (info is null)
                 continue;
 
-            hit = BuildHit(info, entry.DisplayName, processor);
+            hit = BuildHit(info, entry, processor);
             return true;
         }
 

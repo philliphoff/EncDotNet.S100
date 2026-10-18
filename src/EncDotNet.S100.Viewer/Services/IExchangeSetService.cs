@@ -218,6 +218,7 @@ internal sealed record ExchangeSetSubsetRequest(
 /// <param name="GeographicBounds">The footprint used for lazy-load culling.</param>
 /// <param name="MinimumDisplayScale">The coarsest display scale, if known.</param>
 /// <param name="MaximumDisplayScale">The finest display scale, if known.</param>
+/// <param name="NotForNavigation">Whether the source's catalogue marks the dataset not for navigation.</param>
 internal sealed record ExchangeSetSubsetItem(
     string RelativePath,
     IReadOnlyList<string> UpdateRelativePaths,
@@ -225,4 +226,5 @@ internal sealed record ExchangeSetSubsetItem(
     string DisplayName,
     BoundingBox? GeographicBounds = null,
     int? MinimumDisplayScale = null,
-    int? MaximumDisplayScale = null);
+    int? MaximumDisplayScale = null,
+    bool NotForNavigation = false);
