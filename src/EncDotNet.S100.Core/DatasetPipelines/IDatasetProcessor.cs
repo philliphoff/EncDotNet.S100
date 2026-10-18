@@ -119,6 +119,18 @@ public interface IDatasetProcessor
     S100FeatureGeometry? GetFeatureGeometryAt(int ordinal) => null;
 
     /// <summary>
+    /// Returns every navigational warning part in the dataset (each S-124
+    /// <c>NavwarnPart</c>) with its message, in dataset order, including parts
+    /// with no geometry. Lets a host list warnings without picking them: a
+    /// part with no location draws nothing, so a pick can never reach it.
+    /// </summary>
+    /// <returns>
+    /// One entry per warning part, or an empty list when the product carries
+    /// no warnings.
+    /// </returns>
+    IReadOnlyList<NavigationalWarningFeature> GetNavigationalWarnings() => [];
+
+    /// <summary>
     /// Samples this dataset at the supplied geographic position and
     /// returns a synthetic <see cref="FeatureInfo"/> describing the
     /// underlying coverage value(s) — used by the viewer to provide a

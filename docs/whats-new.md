@@ -6,6 +6,18 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Find every navigational warning in one list, even the ones with no
+  location.** SoundCharts has a **Navigational warnings** panel beside
+  **Library**. It lists each S-124 warning part in the loaded datasets,
+  grouped by series with the newest number first, and counts those in force
+  and those that are text-only. Search by number, type or area, and read
+  status at the view time or now; warnings not in force drop into a dimmed
+  group at the bottom. Selecting a row opens its Warning card and frames it on
+  the map, or, for a part with no location, says so over the map. The MCP
+  tools `list_navigational_warnings` and `select_navigational_warning` do the
+  same, and `IDatasetProcessor.GetNavigationalWarnings` lists the parts in the
+  libraries.
+
 - **Read a navigational warning's whole message in Object Information.**
   Picking an S-124 warning part in SoundCharts now shows a Warning card: the
   series and number, the warning type, whether it is in force at the view

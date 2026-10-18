@@ -1,0 +1,193 @@
+using System.Collections.Specialized;
+using System.ComponentModel;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Viewer.ViewModels;
+using Mapsui;
+using Mapsui.Projections;
+
+namespace EncDotNet.S100.Viewer.Services;
+
+/// <summary>
+/// One navigational warning part in a loaded dataset, as the Navigational
+/// warnings panel and <c>list_navigational_warnings</c> list it (#932).
+/// </summary>
+/// <param name="Dataset">The dataset entry that holds the part.</param>
+/// <param name="FeatureRef">The part's feature id within the dataset.</param>
+/// <param name="Ordinal">The part's feature ordinal, for <see cref="IDatasetProcessor.GetFeatureInfoAt"/>.</param>
+/// <param name="Warning">The part's message.</param>
+/// <param name="Geometry">The part's geometry primitive; <see cref="S100GeometryType.None"/> for a text-only part.</param>
+/// <param name="Extent">The part's EPSG:3857 bounding box, or <c>null</c> when it has no geometry.</param>
+internal sealed record NavigationalWarningEntry(
+    DatasetEntry Dataset,
+    string FeatureRef,
+    int Ordinal,
+    NavigationalWarningInfo Warning,
+    S100GeometryType Geometry,
+    MRect? Extent)
+{
+    /// <summary>The dataset's display name, which is its catalog id.</summary>
+    public string DatasetId => Dataset.DisplayName;
+
+    /// <summary>Whether nothing is drawn for the part, so it can only be found in the list.</summary>
+    public bool IsTextOnly => Extent is null;
+}
+
+/// <summary>
+/// Lists every navigational warning part in the loaded datasets, including
+/// parts with no geometry, which the map can't show (#932). Rebuilt when a
+/// dataset loads or is removed.
+/// </summary>
+internal sealed class NavigationalWarningsService
+{
+    /// <summary>The product whose datasets carry navigational warnings.</summary>
+    internal const string WarningProduct = "S-124";
+
+    private readonly IDatasetLoaderService _loader;
+    private readonly DatasetsViewModel? _datasets;
+    private readonly HashSet<DatasetEntry> _watched = [];
+
+    public NavigationalWarningsService(IDatasetLoaderService loader, DatasetsViewModel? datasets = null)
+    {
+        ArgumentNullException.ThrowIfNull(loader);
+        _loader = loader;
+        _datasets = datasets;
+        _loader.DatasetLoaded += _ => Refresh();
+        _loader.DatasetRemoved += _ => Refresh();
+        if (_datasets is not null)
+        {
+            _datasets.Entries.CollectionChanged += OnEntriesChanged;
+            WatchEntries();
+        }
+        Refresh();
+    }
+
+    /// <summary>Every warning part in the loaded datasets, in dataset order.</summary>
+    public IReadOnlyList<NavigationalWarningEntry> Warnings { get; private set; } = [];
+
+    /// <summary>Whether at least one S-124 dataset is loaded (it may hold no parts).</summary>
+    public bool HasWarningDatasets { get; private set; }
+
+    /// <summary>Whether an S-124 dataset is still loading.</summary>
+    public bool IsLoading { get; private set; }
+
+    /// <summary>Raised after <see cref="Warnings"/>, <see cref="HasWarningDatasets"/> or <see cref="IsLoading"/> changes.</summary>
+    public event EventHandler? Changed;
+
+    /// <summary>Finds a listed part by dataset id and feature id.</summary>
+    public NavigationalWarningEntry? Find(string datasetId, string featureRef) =>
+        Warnings.FirstOrDefault(w =>
+            string.Equals(w.DatasetId, datasetId, StringComparison.Ordinal)
+            && string.Equals(w.FeatureRef, featureRef, StringComparison.Ordinal));
+
+    /// <summary>Rebuilds the list from the loaded datasets.</summary>
+    public void Refresh()
+    {
+        var warnings = new List<NavigationalWarningEntry>();
+        var hasDatasets = false;
+        using (var processors = _loader.AcquireProcessors())
+        {
+            foreach (var (entry, processor) in processors)
+            {
+                var isWarningProduct = IsWarningProduct(processor.Spec.Name);
+                IReadOnlyList<NavigationalWarningFeature> parts;
+                try
+                {
+                    parts = processor.GetNavigationalWarnings();
+                }
+                catch (Exception)
+                {
+                    // A malformed dataset lists nothing rather than breaking the panel.
+                    parts = [];
+                }
+
+                hasDatasets |= isWarningProduct || parts.Count > 0;
+                foreach (var part in parts)
+                {
+                    var geometry = processor.GetFeatureGeometryAt(part.Ordinal);
+                    var extent = geometry is { HasGeometry: true } ? ExtentOf(geometry) : null;
+                    warnings.Add(new NavigationalWarningEntry(
+                        entry,
+                        part.FeatureRef,
+                        part.Ordinal,
+                        part.Warning,
+                        extent is null ? S100GeometryType.None : geometry!.Primitive,
+                        extent));
+                }
+            }
+        }
+
+        Warnings = warnings;
+        HasWarningDatasets = hasDatasets;
+        IsLoading = ComputeIsLoading();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static bool IsWarningProduct(string? spec) =>
+        string.Equals(spec, WarningProduct, StringComparison.OrdinalIgnoreCase);
+
+    private bool ComputeIsLoading() =>
+        _datasets?.Entries.Any(e => e.IsLoading && IsWarningProduct(e.ProductSpec)) == true;
+
+    private void OnEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        WatchEntries();
+        UpdateLoading();
+    }
+
+    private void WatchEntries()
+    {
+        var current = _datasets!.Entries.ToHashSet();
+        foreach (var gone in _watched.Where(e => !current.Contains(e)).ToList())
+        {
+            gone.PropertyChanged -= OnEntryPropertyChanged;
+            _watched.Remove(gone);
+        }
+        foreach (var entry in current)
+        {
+            if (_watched.Add(entry))
+                entry.PropertyChanged += OnEntryPropertyChanged;
+        }
+    }
+
+    private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DatasetEntry.IsLoading))
+            UpdateLoading();
+    }
+
+    private void UpdateLoading()
+    {
+        var loading = ComputeIsLoading();
+        if (loading == IsLoading)
+            return;
+        IsLoading = loading;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>The EPSG:3857 bounding box of a geometry's coordinates.</summary>
+    internal static MRect? ExtentOf(S100FeatureGeometry geometry)
+    {
+        double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
+        var any = false;
+
+        void Add(IEnumerable<EncDotNet.S100.DataModel.GeoPosition> positions)
+        {
+            foreach (var p in positions)
+            {
+                var (x, y) = SphericalMercator.FromLonLat(p.Longitude, p.Latitude);
+                minX = Math.Min(minX, x);
+                minY = Math.Min(minY, y);
+                maxX = Math.Max(maxX, x);
+                maxY = Math.Max(maxY, y);
+                any = true;
+            }
+        }
+
+        Add(geometry.Points);
+        foreach (var curve in geometry.Curves)
+            Add(curve);
+        Add(geometry.ExteriorRing);
+        return any ? new MRect(minX, minY, maxX, maxY) : null;
+    }
+}

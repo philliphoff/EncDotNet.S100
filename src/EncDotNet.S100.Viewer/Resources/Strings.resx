@@ -5218,4 +5218,133 @@
   <data name="Tooltip_TimelineWindowLane" xml:space="preserve">
     <value>Departures across the S-104 range: green meet your settings, red don't, hatched arrive after the data ends. Drag, or press Left and Right, to set the departure.</value>
   </data>
+  <data name="Pane_NavigationalWarnings" xml:space="preserve">
+    <value>Navigational warnings</value>
+  </data>
+  <data name="Label_Activity_NavigationalWarnings" xml:space="preserve">
+    <value>Navigational warnings</value>
+  </data>
+  <data name="Tooltip_NavigationalWarnings" xml:space="preserve">
+    <value>Navigational warnings — every loaded S-124 warning, including those with no location</value>
+  </data>
+  <data name="NavWarnings_InForceFormat" xml:space="preserve">
+    <value>{0} in force</value>
+  </data>
+  <data name="NavWarnings_TextOnlyFormat" xml:space="preserve">
+    <value>{0} text-only</value>
+  </data>
+  <data name="Label_NavWarnings_TextOnly" xml:space="preserve">
+    <value>Text-only warnings</value>
+  </data>
+  <data name="Tooltip_NavWarnings_TextOnly" xml:space="preserve">
+    <value>Show only the warnings with no location. Click again to show all.</value>
+  </data>
+  <data name="NavWarnings_SearchPlaceholder" xml:space="preserve">
+    <value>Number, type or area</value>
+  </data>
+  <data name="Label_NavWarnings_Search" xml:space="preserve">
+    <value>Search warnings</value>
+  </data>
+  <data name="Label_NavWarnings_ClearSearch" xml:space="preserve">
+    <value>Clear search</value>
+  </data>
+  <data name="Label_NavWarnings_Sort" xml:space="preserve">
+    <value>Sort warnings</value>
+  </data>
+  <data name="NavWarnings_SortNumber" xml:space="preserve">
+    <value>Number</value>
+  </data>
+  <data name="NavWarnings_SortPublished" xml:space="preserve">
+    <value>Published</value>
+  </data>
+  <data name="NavWarnings_FilterNow" xml:space="preserve">
+    <value>Now</value>
+  </data>
+  <data name="NavWarnings_FilterViewTime" xml:space="preserve">
+    <value>View time</value>
+  </data>
+  <data name="Tooltip_NavWarnings_FilterNow" xml:space="preserve">
+    <value>Show what's in force now</value>
+  </data>
+  <data name="Tooltip_NavWarnings_FilterViewTime" xml:space="preserve">
+    <value>Show what's in force at the map's view time</value>
+  </data>
+  <data name="NavWarnings_NotInForceGroupViewTime" xml:space="preserve">
+    <value>Not in force at view time</value>
+  </data>
+  <data name="NavWarnings_NotInForceGroupNow" xml:space="preserve">
+    <value>Not in force now</value>
+  </data>
+  <data name="Label_NavWarnings_NotInForce" xml:space="preserve">
+    <value>Not in force</value>
+  </data>
+  <data name="NavWarnings_NoSeries" xml:space="preserve">
+    <value>No series</value>
+  </data>
+  <data name="NavWarnings_NoLocation" xml:space="preserve">
+    <value>No location</value>
+  </data>
+  <data name="NavWarnings_GeometryPoint" xml:space="preserve">
+    <value>Point</value>
+  </data>
+  <data name="NavWarnings_GeometryLine" xml:space="preserve">
+    <value>Line</value>
+  </data>
+  <data name="NavWarnings_GeometryArea" xml:space="preserve">
+    <value>Area</value>
+  </data>
+  <data name="NavWarnings_EndedFormat" xml:space="preserve">
+    <value>Ended {0}</value>
+  </data>
+  <data name="NavWarnings_StartsFormat" xml:space="preserve">
+    <value>Starts {0}</value>
+  </data>
+  <data name="NavWarnings_ValidFromFormat" xml:space="preserve">
+    <value>from {0}</value>
+  </data>
+  <data name="NavWarnings_UntilCancelled" xml:space="preserve">
+    <value>until cancelled</value>
+  </data>
+  <data name="NavWarnings_Loading" xml:space="preserve">
+    <value>Loading warnings…</value>
+  </data>
+  <data name="NavWarnings_NoneInForceViewTime" xml:space="preserve">
+    <value>No warnings in force at view time.</value>
+  </data>
+  <data name="NavWarnings_NoneInForceNow" xml:space="preserve">
+    <value>No warnings in force now.</value>
+  </data>
+  <data name="NavWarnings_ShowNotInForceFormat" xml:space="preserve">
+    <value>Show {0} not in force</value>
+  </data>
+  <data name="Label_NavWarnings_ShowNotInForce" xml:space="preserve">
+    <value>Show not in force</value>
+  </data>
+  <data name="NavWarnings_NoSourcesTitle" xml:space="preserve">
+    <value>No warnings loaded</value>
+  </data>
+  <data name="NavWarnings_NoSourcesDescription" xml:space="preserve">
+    <value>Open S-124 datasets, or add a SECOM service in Library to receive S-124 warnings.</value>
+  </data>
+  <data name="NavWarnings_OpenLibrary" xml:space="preserve">
+    <value>Open Library</value>
+  </data>
+  <data name="NavWarnings_EmptyTitle" xml:space="preserve">
+    <value>No warnings in these datasets</value>
+  </data>
+  <data name="NavWarnings_EmptyDescription" xml:space="preserve">
+    <value>The loaded S-124 datasets hold no warning parts.</value>
+  </data>
+  <data name="NavWarnings_NoMatches" xml:space="preserve">
+    <value>No warnings match the search.</value>
+  </data>
+  <data name="NavWarnings_MapNoteNoLocation" xml:space="preserve">
+    <value>{0} has no location, so nothing is drawn for it.</value>
+  </data>
+  <data name="NavWarnings_MapNoteNotInForceViewTime" xml:space="preserve">
+    <value>{0} isn't in force at view time, so the map wasn't moved.</value>
+  </data>
+  <data name="NavWarnings_MapNoteNotInForceNow" xml:space="preserve">
+    <value>{0} isn't in force now, so the map wasn't moved.</value>
+  </data>
 </root>

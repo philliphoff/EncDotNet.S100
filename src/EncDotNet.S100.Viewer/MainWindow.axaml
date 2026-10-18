@@ -631,6 +631,37 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                 </Panel>
+                <!-- Navigational warning note (#932): while a warning opened from
+                     the panel draws nothing (no location) or isn't framed (not in
+                     force), say why. In the page, so captures include it. -->
+                <Border HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Margin="12,44,64,0"
+                        MaxWidth="300"
+                        IsHitTestVisible="False"
+                        AutomationProperties.AutomationId="Map.WarningNote"
+                        IsVisible="{Binding NavigationalWarnings.HasMapNote, FallbackValue=False}"
+                        Background="{DynamicResource MapOverlaySurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="11,7">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <ic:FluentIcon Grid.Column="0"
+                                       Icon="Document"
+                                       FontSize="15"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource MutedColor}"
+                                       IsVisible="{Binding NavigationalWarnings.IsMapNoteTextOnly, FallbackValue=False}" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding NavigationalWarnings.MapNote, FallbackValue={x:Null}}"
+                                   FontSize="11.5"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource ForegroundColor}"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
                 <!-- Route editing chip (#896, handoff A6), below the scale bar and
                      clear of the map buttons so it never covers them. -->
                 <Border HorizontalAlignment="Left"

@@ -34,6 +34,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(GetPassageResult))]
 [JsonSerializable(typeof(CheckStateDto))]
 [JsonSerializable(typeof(ClearanceStateDto))]
+[JsonSerializable(typeof(NavigationalWarningsDto))]
 // Errors, written by their concrete type.
 [JsonSerializable(typeof(MapNotReady))]
 [JsonSerializable(typeof(WindowNotReady))]

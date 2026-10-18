@@ -1,0 +1,268 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             x:Class="EncDotNet.S100.Viewer.Views.NavigationalWarningsView"
+             x:DataType="vm:NavigationalWarningsViewModel">
+
+    <UserControl.Styles>
+        <!-- Now / View time: the Library's segment look. -->
+        <Style Selector="Border.navwarnSegments">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="2" />
+        </Style>
+        <Style Selector="RadioButton.navwarnSegment">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Segment" CornerRadius="4" MinHeight="24" Padding="8,0" Background="Transparent">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="RadioButton.navwarnSegment:checked /template/ Border#PART_Segment">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
+        </Style>
+        <Style Selector="RadioButton.navwarnSegment:not(:checked)">
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <!-- The summary's text-only count reads as a link. -->
+        <Style Selector="ToggleButton.navwarnLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}" Background="Transparent" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.navwarnLink TextBlock">
+            <Setter Property="TextDecorations" Value="Underline" />
+        </Style>
+        <Style Selector="ToggleButton.navwarnLink:checked TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Summary, search, sort and time filter. -->
+        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="12,6,12,8">
+            <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding HasSummary}">
+                <TextBlock Text="{Binding InForceText}" FontSize="11" Opacity="0.7" VerticalAlignment="Center" />
+                <TextBlock Text="·" FontSize="11" Opacity="0.7" VerticalAlignment="Center" />
+                <ToggleButton Classes="navwarnLink"
+                              AutomationProperties.AutomationId="NavigationalWarnings.TextOnlyFilter"
+                              AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_TextOnly}"
+                              AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_TextOnly}"
+                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_TextOnly}"
+                              IsChecked="{Binding IsTextOnlyFilter, Mode=TwoWay}">
+                    <TextBlock Text="{Binding TextOnlyText}" FontSize="11" Opacity="0.85" />
+                </ToggleButton>
+            </StackPanel>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                <TextBox Grid.Column="0"
+                         AutomationProperties.AutomationId="NavigationalWarnings.Search"
+                         AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Search}"
+                         AutomationProperties.HelpText="{x:Static loc:Strings.NavWarnings_SearchPlaceholder}"
+                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         PlaceholderText="{x:Static loc:Strings.NavWarnings_SearchPlaceholder}"
+                         VerticalContentAlignment="Center"
+                         Padding="8,4">
+                    <TextBox.InnerLeftContent>
+                        <ic:FluentIcon Icon="Search" FontSize="13" Opacity="0.6" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </TextBox.InnerLeftContent>
+                    <TextBox.InnerRightContent>
+                        <Button Classes="Icon"
+                                Padding="4"
+                                Margin="0,0,4,0"
+                                AutomationProperties.AutomationId="NavigationalWarnings.ClearSearch"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_ClearSearch}"
+                                ToolTip.Tip="{x:Static loc:Strings.Label_NavWarnings_ClearSearch}"
+                                Command="{Binding ClearQueryCommand}"
+                                IsVisible="{Binding Query, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                            <ic:FluentIcon Icon="Dismiss" FontSize="12" />
+                        </Button>
+                    </TextBox.InnerRightContent>
+                </TextBox>
+                <ComboBox Grid.Column="1"
+                          AutomationProperties.AutomationId="NavigationalWarnings.Sort"
+                          AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Sort}"
+                          ToolTip.Tip="{x:Static loc:Strings.Label_NavWarnings_Sort}"
+                          SelectedIndex="{Binding SortIndex, Mode=TwoWay}"
+                          FontSize="12"
+                          MinWidth="96">
+                    <ComboBoxItem Content="{x:Static loc:Strings.NavWarnings_SortNumber}" />
+                    <ComboBoxItem Content="{x:Static loc:Strings.NavWarnings_SortPublished}" />
+                </ComboBox>
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Border Classes="navwarnSegments">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Classes="navwarnSegment" GroupName="NavWarningsTime"
+                                     AutomationProperties.AutomationId="NavigationalWarnings.Now"
+                                     AutomationProperties.Name="{x:Static loc:Strings.NavWarnings_FilterNow}"
+                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_FilterNow}"
+                                     Content="{x:Static loc:Strings.NavWarnings_FilterNow}"
+                                     IsChecked="{Binding IsNowFilter, Mode=TwoWay}" />
+                        <RadioButton Classes="navwarnSegment" GroupName="NavWarningsTime"
+                                     AutomationProperties.AutomationId="NavigationalWarnings.ViewTime"
+                                     AutomationProperties.Name="{x:Static loc:Strings.NavWarnings_FilterViewTime}"
+                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_FilterViewTime}"
+                                     Content="{x:Static loc:Strings.NavWarnings_FilterViewTime}"
+                                     IsChecked="{Binding IsViewTimeFilter, Mode=TwoWay}" />
+                    </StackPanel>
+                </Border>
+                <TextBlock Text="{Binding ViewTimeText}"
+                           FontFamily="Menlo, Consolas, monospace"
+                           FontSize="11"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </StackPanel>
+
+        <Grid>
+            <!-- Loading: skeleton rows. -->
+            <StackPanel IsVisible="{Binding IsLoadingState}" Margin="16,12" Spacing="10"
+                        AutomationProperties.AutomationId="NavigationalWarnings.Loading"
+                        AutomationProperties.Name="{x:Static loc:Strings.NavWarnings_Loading}">
+                <TextBlock Text="{x:Static loc:Strings.NavWarnings_Loading}" FontSize="11" Opacity="0.6" />
+                <Border Height="10" Width="190" HorizontalAlignment="Left" CornerRadius="4" Background="{DynamicResource MutedBackgroundColor}" />
+                <Border Height="10" Width="150" HorizontalAlignment="Left" CornerRadius="4" Background="{DynamicResource MutedBackgroundColor}" />
+                <Border Height="10" Width="210" HorizontalAlignment="Left" CornerRadius="4" Background="{DynamicResource MutedBackgroundColor}" />
+            </StackPanel>
+
+            <!-- No sources: nothing to list, point at the Library. -->
+            <StackPanel IsVisible="{Binding IsNoSourcesState}" VerticalAlignment="Center" Spacing="8" Margin="16,0">
+                <views:PlaceholderView Icon="Warning"
+                                       Header="{x:Static loc:Strings.NavWarnings_NoSourcesTitle}"
+                                       Description="{x:Static loc:Strings.NavWarnings_NoSourcesDescription}" />
+                <Button HorizontalAlignment="Center"
+                        Classes="Outline"
+                        AutomationProperties.AutomationId="NavigationalWarnings.OpenLibrary"
+                        Content="{x:Static loc:Strings.NavWarnings_OpenLibrary}"
+                        Command="{Binding OpenLibraryCommand}" />
+            </StackPanel>
+
+            <views:PlaceholderView IsVisible="{Binding IsEmptyState}"
+                                   Icon="Warning"
+                                   Header="{x:Static loc:Strings.NavWarnings_EmptyTitle}"
+                                   Description="{x:Static loc:Strings.NavWarnings_EmptyDescription}" />
+
+            <DockPanel LastChildFill="True">
+                <!-- None in force at the panel's time. -->
+                <Border DockPanel.Dock="Top"
+                        IsVisible="{Binding IsNoneInForceState}"
+                        Margin="12,4,12,4"
+                        Padding="10,8"
+                        CornerRadius="6"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource BorderColor}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{Binding NoneInForceText}" FontSize="12" TextWrapping="Wrap" />
+                        <Button HorizontalAlignment="Left"
+                                Classes="Outline"
+                                Padding="8,2"
+                                AutomationProperties.AutomationId="NavigationalWarnings.ShowNotInForce"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_ShowNotInForce}"
+                                Content="{Binding ShowNotInForceText}"
+                                Command="{Binding ShowNotInForceCommand}" />
+                    </StackPanel>
+                </Border>
+                <TextBlock DockPanel.Dock="Top"
+                           IsVisible="{Binding IsNoMatchesState}"
+                           Text="{x:Static loc:Strings.NavWarnings_NoMatches}"
+                           Margin="16,8"
+                           FontSize="12"
+                           Opacity="0.7"
+                           TextWrapping="Wrap" />
+
+                <ListBox ItemsSource="{Binding Items}"
+                         IsVisible="{Binding HasList}"
+                         AutomationProperties.AutomationId="NavigationalWarnings.List"
+                         SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                         SelectionMode="Single"
+                         Classes="accentList"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Padding="4,0,4,8">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem" x:DataType="vm:NavigationalWarningListItem">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}" />
+                            <Setter Property="MinHeight" Value="{Binding ContainerMinHeight}" />
+                            <Setter Property="Padding" Value="8,3" />
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.DataTemplates>
+                        <DataTemplate DataType="vm:NavigationalWarningGroupItem">
+                            <Panel Margin="-4,4,0,0">
+                                <!-- A series header: name, count, source. -->
+                                <Grid IsVisible="{Binding IsSeries}" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6"
+                                      Background="Transparent" IsHitTestVisible="False">
+                                    <ic:FluentIcon Grid.Column="0" Icon="ChevronDown" FontSize="12" Opacity="0.55" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Count}" FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="3" Text="{Binding Source}" FontSize="10.5" Opacity="0.6" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" MaxWidth="140" />
+                                </Grid>
+                                <!-- The dimmed "Not in force" group opens and closes. -->
+                                <Button IsVisible="{Binding IsNotInForce}"
+                                        Classes="Ghost"
+                                        Padding="0"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        AutomationProperties.AutomationId="NavigationalWarnings.NotInForceGroup"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_NotInForce}"
+                                        Command="{Binding ToggleCommand}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Opacity="0.7">
+                                        <Panel VerticalAlignment="Center">
+                                            <ic:FluentIcon Icon="ChevronDown" FontSize="12" IsVisible="{Binding IsExpanded}" />
+                                            <ic:FluentIcon Icon="ChevronRight" FontSize="12" IsVisible="{Binding !IsExpanded}" />
+                                        </Panel>
+                                        <TextBlock Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Count}" FontSize="11" Opacity="0.75" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </Panel>
+                        </DataTemplate>
+                        <DataTemplate DataType="vm:NavigationalWarningRowItem">
+                            <Grid ColumnDefinitions="16,*" ColumnSpacing="9" Background="Transparent" Opacity="{Binding RowOpacity}">
+                                <Panel Grid.Column="0" VerticalAlignment="Center" ToolTip.Tip="{Binding GlyphTip}">
+                                    <ic:FluentIcon Icon="{Binding Glyph}" FontSize="14"
+                                                   Foreground="{DynamicResource MutedColor}"
+                                                   IsVisible="{Binding IsTextOnly}" />
+                                    <ic:FluentIcon Icon="{Binding Glyph}" FontSize="14"
+                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   IsVisible="{Binding !IsTextOnly}" />
+                                </Panel>
+                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <TextBlock Text="{Binding Number}" Classes="accentListTitle"
+                                                   FontFamily="Menlo, Consolas, monospace"
+                                                   FontSize="11.5" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding TypeText}" FontSize="12" FontWeight="Medium"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding SubText}" FontSize="10.5" Opacity="0.65"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.DataTemplates>
+                </ListBox>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
+
+</UserControl>
