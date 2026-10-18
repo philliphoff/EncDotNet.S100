@@ -216,6 +216,7 @@
                 <ListBox ItemsSource="{Binding Items}"
                          IsVisible="{Binding HasList}"
                          AutomationProperties.AutomationId="NavigationalWarnings.List"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
                          SelectionMode="Single"
                          Classes="accentList"

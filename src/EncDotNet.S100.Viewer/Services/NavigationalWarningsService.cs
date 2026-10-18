@@ -207,7 +207,7 @@ internal sealed class NavigationalWarningsService
             var source = bySource.First().Source!;
             var listed = bySource.GroupBy(w => w.Key, StringComparer.Ordinal).Select(g => new NavigationalWarningSeenStore.Observed(
                 g.Key,
-                NavigationalWarningSeenStore.StampOf(g.Select(w => w.Warning)),
+                string.Concat(g.Select(w => _seen.StampOfPart(w.Warning))),
                 g.Max(w => w.Warning.PublicationTime)));
             // A stale source brought nothing; its refresh time is the old copy's.
             _seen.Observe(source.Key, source.IsStale ? null : source.ReceivedAt, listed, now);

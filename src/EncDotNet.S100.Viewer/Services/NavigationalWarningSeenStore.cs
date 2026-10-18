@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -30,7 +31,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// Files opened directly have no source and are never observed.
 /// </para>
 /// </remarks>
-internal sealed partial class NavigationalWarningSeenStore
+internal sealed partial class NavigationalWarningSeenStore : IDisposable
 {
     /// <summary>How much earlier than the previous refresh a newly listed warning may be published and still be new.</summary>
     internal static readonly TimeSpan PublishedTolerance = TimeSpan.FromHours(12);
@@ -43,15 +44,40 @@ internal sealed partial class NavigationalWarningSeenStore
     private readonly string? _path;
     private readonly bool _readOnly;
     private readonly ILogger? _logger;
+    private readonly object _gate = new();
+    private readonly DebouncedSettingsSaver _saver;
+    private readonly ConditionalWeakTable<NavigationalWarningInfo, string> _stamps = [];
     private Dictionary<string, SourceState>? _sources;
 
     /// <summary>Creates a store at <paramref name="path"/>; <see langword="null"/> keeps it in memory.</summary>
+    /// <remarks>
+    /// Writes are debounced: datasets load one by one, and each load is
+    /// observed. <see cref="Flush"/> (or disposing) writes what is pending.
+    /// </remarks>
     public NavigationalWarningSeenStore(string? path, bool readOnly = false, ILogger<NavigationalWarningSeenStore>? logger = null)
     {
         _path = path;
         _readOnly = readOnly;
         _logger = logger;
+        _saver = new DebouncedSettingsSaver(Save, delayMilliseconds: 2000);
     }
+
+    /// <summary>Writes pending changes now.</summary>
+    public void Flush() => _saver.Flush();
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _saver.Flush();
+        _saver.Dispose();
+    }
+
+    /// <summary>
+    /// <see cref="StampOf"/> of one part, cached per part: the same loaded part
+    /// is observed on every rebuild.
+    /// </summary>
+    internal string StampOfPart(NavigationalWarningInfo part) =>
+        _stamps.GetValue(part, static p => StampOf([p]));
 
     /// <summary>One listed warning: its key and a stamp of its content.</summary>
     internal readonly record struct Observed(string Key, string Stamp, DateTimeOffset? Published);
@@ -66,6 +92,12 @@ internal sealed partial class NavigationalWarningSeenStore
     {
         ArgumentException.ThrowIfNullOrEmpty(sourceKey);
         ArgumentNullException.ThrowIfNull(warnings);
+        lock (_gate)
+            return ObserveCore(sourceKey, refreshedAt, warnings, now);
+    }
+
+    private bool ObserveCore(string sourceKey, DateTimeOffset? refreshedAt, IEnumerable<Observed> warnings, DateTimeOffset now)
+    {
         var sources = Sources();
         var dirty = false;
         var changed = false;
@@ -111,21 +143,28 @@ internal sealed partial class NavigationalWarningSeenStore
         }
 
         if (dirty)
-            Save();
+            _saver.RequestSave();
         return changed;
     }
 
     /// <summary>True when the warning <paramref name="key"/> from <paramref name="sourceKey"/> is new.</summary>
-    public bool IsNew(string sourceKey, string key) =>
-        Sources().TryGetValue(sourceKey, out var state) && state.New.Contains(key);
+    public bool IsNew(string sourceKey, string key)
+    {
+        lock (_gate)
+            return Sources().TryGetValue(sourceKey, out var state) && state.New.Contains(key);
+    }
 
     /// <summary>Marks a warning seen (its card was opened): it is no longer new.</summary>
     /// <returns>True when it was new.</returns>
     public bool MarkSeen(string sourceKey, string key)
     {
-        if (!Sources().TryGetValue(sourceKey, out var state) || !state.New.Remove(key))
-            return false;
-        Save();
+        lock (_gate)
+        {
+            if (!Sources().TryGetValue(sourceKey, out var state) || !state.New.Remove(key))
+                return false;
+        }
+
+        _saver.RequestSave();
         return true;
     }
 
@@ -179,7 +218,15 @@ internal sealed partial class NavigationalWarningSeenStore
 
     private void Save()
     {
-        if (_path is null || _readOnly || _sources is null)
+        if (_path is null || _readOnly)
+            return;
+        lock (_gate)
+            SaveCore();
+    }
+
+    private void SaveCore()
+    {
+        if (_sources is null || _path is null)
             return;
         try
         {

@@ -334,6 +334,7 @@ public sealed class NavigationalWarningsFreshnessTests : IDisposable
         var first = new Fixture(path);
         first.Refresh(Oct(14, 10), Warning("NAVAREA X", "114/26", Oct(14, 9)), Warning("NAVAREA X", "113/26", Oct(14, 9)), Warning("NAVAREA X", "112/26", Oct(13, 6)));
         first.Panel.Open(first.Row("114/26"));
+        first.Seen.Flush();
 
         // A new session, before the source refreshes again.
         var second = new Fixture(path);
