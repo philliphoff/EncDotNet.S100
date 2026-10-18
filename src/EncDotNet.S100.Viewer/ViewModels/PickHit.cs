@@ -41,6 +41,13 @@ internal sealed class PickHit
     /// </summary>
     public IceEggCode? EggCode { get; init; }
 
+    /// <summary>
+    /// The warning message when the hit is part of a navigational warning
+    /// (S-124 <c>NavwarnPart</c>); <c>null</c> for every other feature. When
+    /// set, the pick panel shows a Warning card above the attributes (#932).
+    /// </summary>
+    public NavigationalWarningInfo? NavigationalWarning { get; init; }
+
     /// <summary>Attribute rows for the feature, decoded against the dataset's FC where available.</summary>
     public IReadOnlyList<PickAttribute> Attributes { get; init; } = [];
 
@@ -95,6 +102,22 @@ internal sealed class PickHit
 
     /// <summary>True when <see cref="SecondaryLabel"/> has a value to show.</summary>
     public bool HasSecondaryLabel => SecondaryLabel is not null;
+
+    /// <summary>
+    /// Title of the hit-list row: a navigational warning's series and number
+    /// (e.g. "NAVAREA X 106/26"), which tells two warnings apart where their
+    /// class name cannot (#932); <see cref="PrimaryLabel"/> otherwise. The
+    /// identity block keeps <see cref="PrimaryLabel"/>, since the Warning card
+    /// beneath it already leads with the number.
+    /// </summary>
+    public string HitListLabel => NavigationalWarning?.Label ?? PrimaryLabel;
+
+    /// <summary>Subtitle of the hit-list row: the class name when <see cref="HitListLabel"/> is not it.</summary>
+    public string? HitListSecondaryLabel =>
+        NavigationalWarning?.Label is not null ? DisplayLabel : SecondaryLabel;
+
+    /// <summary>True when <see cref="HitListSecondaryLabel"/> has a value to show.</summary>
+    public bool HasHitListSecondaryLabel => HitListSecondaryLabel is not null;
 
     /// <summary>
     /// Category glyph for the feature class, used as a fast visual scanning

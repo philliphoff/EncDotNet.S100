@@ -43,6 +43,16 @@ public sealed record S124MessageSeriesIdentifier
 }
 
 /// <summary>
+/// One language of a part's warning information text.
+/// </summary>
+/// <param name="Language">
+/// The language code as written (ISO 639-2, e.g. <c>"eng"</c>), or
+/// <c>null</c> when the dataset gives none.
+/// </param>
+/// <param name="Text">The message text, line breaks kept.</param>
+public sealed record S124WarningText(string? Language, string Text);
+
+/// <summary>
 /// A validity range from a <c>fixedDateRange</c> complex attribute. Either
 /// end may be open.
 /// </summary>
@@ -109,6 +119,12 @@ public sealed class S124NavwarnPreamble
     /// <summary>The general warning type code (Edition 2.0.0 <c>navwarnTypeGeneral</c>), when supplied.</summary>
     public int? NavwarnTypeGeneral { get; init; }
 
+    /// <summary>
+    /// The general warning type label (Edition 2.0.0 <c>navwarnTypeGeneral</c>,
+    /// e.g. "Scientific Instruments Change"), when the dataset writes one.
+    /// </summary>
+    public string? NavwarnTypeGeneralName { get; init; }
+
     /// <summary>Source attributes that the typed model did not consume.</summary>
     public IReadOnlyDictionary<string, string> ExtraAttributes { get; init; } =
         ReadOnlyDictionary<string, string>.Empty;
@@ -133,6 +149,14 @@ public sealed class S124NavwarnPart
     /// first, when there is one per language).
     /// </summary>
     public string? WarningInformation { get; init; }
+
+    /// <summary>
+    /// Every warning information text, one per language in document order:
+    /// each <c>warningInformation/information</c> in Edition 2.0.0, or the
+    /// single Edition 1.0.0 text (with no language). Empty when the part
+    /// gives none. <see cref="WarningInformation"/> is the first.
+    /// </summary>
+    public IReadOnlyList<S124WarningText> Information { get; init; } = [];
 
     /// <summary>
     /// The warning type label from <c>warningInformation/navwarnTypeDetails</c>

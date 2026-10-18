@@ -257,7 +257,9 @@ internal static class S124DatasetReader
                 // complex attributes (warningInformation/information/text): their
                 // leaves are kept as "information.text", the first of a repeated
                 // one winning. A code list value's code is kept as "<name>.code".
+                // Each nested one is also kept whole, in order, in Groups.
                 var subAttrs = new Dictionary<string, string>();
+                List<S124ComplexAttribute>? groups = null;
                 foreach (var sub in child.Elements())
                 {
                     if (sub.Attribute(XLinkNs + "href") is not null)
@@ -270,8 +272,14 @@ internal static class S124DatasetReader
                         continue;
                     }
 
+                    var groupAttrs = new Dictionary<string, string>();
                     foreach (var leaf in sub.Elements().Where(l => !l.HasElements && l.Attribute(XLinkNs + "href") is null))
+                    {
                         subAttrs.TryAdd(sub.Name.LocalName + "." + leaf.Name.LocalName, leaf.Value);
+                        groupAttrs.TryAdd(leaf.Name.LocalName, leaf.Value);
+                    }
+                    if (groupAttrs.Count > 0)
+                        (groups ??= []).Add(new S124ComplexAttribute { Code = sub.Name.LocalName, SubAttributes = groupAttrs });
                 }
                 if (subAttrs.Count > 0)
                 {
@@ -279,6 +287,7 @@ internal static class S124DatasetReader
                     {
                         Code = localName,
                         SubAttributes = subAttrs,
+                        Groups = (IReadOnlyList<S124ComplexAttribute>?)groups ?? [],
                     });
                 }
             }

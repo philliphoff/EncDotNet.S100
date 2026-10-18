@@ -170,6 +170,13 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     protected virtual IceEggCode? BuildEggCode(TFeature feature) => null;
 
     /// <summary>
+    /// Builds the navigational warning message for a feature, when the
+    /// product carries warnings. Returns <c>null</c> by default; S-124
+    /// overrides this for <c>NavwarnPart</c> features.
+    /// </summary>
+    protected virtual NavigationalWarningInfo? BuildNavigationalWarning(TFeature feature) => null;
+
+    /// <summary>
     /// Called before the pipeline runs. Return a non-null info string to
     /// suppress rendering (the dataset contributes no portrayal for this
     /// context, e.g. S-411 hides when the time slider is before the issue
@@ -561,6 +568,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
             Attributes = attributes,
             References = references,
             EggCode = BuildEggCode(feature),
+            NavigationalWarning = BuildNavigationalWarning(feature),
         };
     }
 

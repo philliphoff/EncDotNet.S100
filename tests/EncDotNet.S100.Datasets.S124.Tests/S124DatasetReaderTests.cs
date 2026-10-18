@@ -291,6 +291,17 @@ public class S124DatasetReaderTests
     }
 
     [Fact]
+    public void Edition2Dataset_KeepsEachRepeatedNestedAttribute()
+    {
+        // SubAttributes keeps the first information; Groups keeps both (#932).
+        var part = Assert.Single(LoadTestData("navwarn_ccg_ed2_bilingual.gml").Features);
+
+        var info = Assert.IsType<S124ComplexAttribute>(Assert.Single(part.ComplexAttributes, c => c.Code == "warningInformation"));
+        Assert.Equal("eng", info.SubAttributes["information.language"]);
+        Assert.Equal(["eng", "fra"], info.Groups.Where(g => g.Code == "information").Select(g => g.SubAttributes["language"]));
+    }
+
+    [Fact]
     public void Edition2Dataset_ReportsItsExtent()
     {
         var metadata = S124Dataset.ReadMetadata(Path.Combine(TestDataDir, "navwarn_ccg_ed2.gml"));

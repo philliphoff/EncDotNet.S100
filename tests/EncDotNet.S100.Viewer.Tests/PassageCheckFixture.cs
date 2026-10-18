@@ -33,7 +33,7 @@ internal sealed class PassageCheckFixture
         double? s101FallbackUntilLon = null,
         Func<DateTime, float>? tide = null,
         IEnumerable<LoadedDataset>? extraDatasets = null,
-        IRouteViewTime? viewTime = null)
+        IViewTime? viewTime = null)
     {
         var datasets = new List<LoadedDataset>
         {

@@ -1,0 +1,362 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using System.Windows.Input;
+using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Viewer.Resources;
+
+namespace EncDotNet.S100.Viewer.ViewModels;
+
+/// <summary>
+/// The Warning card at the top of a picked navigational warning part in
+/// Object Information (#932): number, type and status, then validity, area
+/// and issue time, then the full message text in a monospaced block with a
+/// tab per language.
+/// </summary>
+/// <remarks>
+/// The status is read at the view time, so it follows the Timeline (now, when
+/// the Timeline is Live). Messages longer than <see cref="ClipThreshold"/>
+/// lines stop at <see cref="ClipLines"/> until "Show all" is chosen, which
+/// holds for the card's lifetime, that is until the pick changes. The
+/// language choice holds for the session.
+/// </remarks>
+internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
+{
+    /// <summary>Messages with more lines than this are clipped.</summary>
+    internal const int ClipThreshold = 22;
+
+    /// <summary>The number of lines a clipped message shows.</summary>
+    internal const int ClipLines = 20;
+
+    // The language the mariner last chose, held for the session.
+    private static string? _sessionLanguage;
+
+    private readonly NavigationalWarningInfo _info;
+    private readonly IReadOnlyList<NavigationalWarningText> _texts;
+    private TimeFormat _timeFormat;
+    private DateTimeOffset _viewTime;
+    private NavigationalWarningText? _selectedText;
+    private bool _showAll;
+
+    public NavigationalWarningCardViewModel(
+        NavigationalWarningInfo info,
+        string? datasetFileName,
+        TimeFormat timeFormat,
+        DateTimeOffset viewTime)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        _info = info;
+        _timeFormat = timeFormat;
+        _viewTime = viewTime;
+        Label = info.Label ?? datasetFileName ?? Strings.Pick_Warning_NoNumber;
+        _texts = OrderForUi(info.Texts, CultureInfo.CurrentUICulture);
+        _selectedText = PickInitial(_texts);
+        foreach (var text in _texts)
+            Languages.Add(new LanguageTab(this, text));
+        ShowAllCommand = new RelayCommand(() => ShowAll = true);
+        CopyCommand = new RelayCommand(
+            () => { if (_selectedText is { } t) CopyRequested?.Invoke(this, t.Text); },
+            () => HasText);
+    }
+
+    /// <summary>The underlying warning message.</summary>
+    public NavigationalWarningInfo Info => _info;
+
+    /// <summary>
+    /// The series and number (e.g. "NAVAREA X 106/26"); the dataset's file
+    /// name when the preamble gives no number.
+    /// </summary>
+    public string Label { get; }
+
+    /// <summary>The detailed warning type, else the general type, else the title.</summary>
+    public string? TypeText => _info.WarningType ?? _info.GeneralType ?? _info.Title;
+
+    /// <summary>The general type shown after <see cref="TypeText"/>, when both are given and differ.</summary>
+    public string? GeneralTypeText =>
+        _info.WarningType is not null && _info.GeneralType is { } general
+            && !string.Equals(general, _info.WarningType, StringComparison.OrdinalIgnoreCase)
+                ? general
+                : null;
+
+    /// <summary>" · " and <see cref="GeneralTypeText"/>, or empty, to follow the type on one line.</summary>
+    public string GeneralTypeSuffix => GeneralTypeText is { } general ? " · " + general : string.Empty;
+
+    /// <summary>Whether <see cref="GeneralTypeText"/> has a value.</summary>
+    public bool HasGeneralType => GeneralTypeText is not null;
+
+    /// <summary>Whether <see cref="TypeText"/> has a value.</summary>
+    public bool HasTypeText => TypeText is not null;
+
+    /// <summary>The warning's status at the view time.</summary>
+    public NavigationalWarningStatus Status => _info.StatusAt(_viewTime);
+
+    /// <summary>Whether the warning is in force at the view time.</summary>
+    public bool IsInForce => Status == NavigationalWarningStatus.InForce;
+
+    /// <summary>Whether the warning is not yet in force at the view time.</summary>
+    public bool IsNotYetInForce => Status == NavigationalWarningStatus.NotYetInForce;
+
+    /// <summary>Whether the warning has ended at the view time.</summary>
+    public bool IsEnded => Status == NavigationalWarningStatus.Ended;
+
+    /// <summary>The status pill's text.</summary>
+    public string StatusText => Status switch
+    {
+        NavigationalWarningStatus.NotYetInForce => Strings.Pick_Warning_StatusNotYet,
+        NavigationalWarningStatus.Ended => Strings.Pick_Warning_StatusEnded,
+        _ => Strings.Pick_Warning_StatusInForce,
+    };
+
+    /// <summary>
+    /// When the warning applies, in the Local/UTC preference: one range per
+    /// validity range, "until cancelled" for an open end.
+    /// </summary>
+    public string ValidityText
+    {
+        get
+        {
+            if (_info.Validity.Count == 0)
+            {
+                return _info.CancellationDate is { } cancel
+                    ? string.Format(CultureInfo.CurrentCulture, Strings.Pick_Warning_ValidUntil, Format(cancel))
+                    : Strings.Pick_Warning_ValidUntilCancelled;
+            }
+
+            return string.Join("; ", _info.Validity.Select(FormatRange));
+        }
+    }
+
+    /// <summary>
+    /// The series, general area and locality; "no location" when the part
+    /// has no geometry, so the mariner knows why nothing is drawn.
+    /// </summary>
+    public string? AreaText
+    {
+        get
+        {
+            var segments = new List<string>(4);
+            if (_info.Series is { } series)
+                segments.Add(series);
+            if (_info.GeneralArea is { } area)
+                segments.Add(area);
+            if (_info.Locality is { } locality && !string.Equals(locality, _info.GeneralArea, StringComparison.OrdinalIgnoreCase))
+                segments.Add(locality);
+            if (!_info.HasLocation)
+                segments.Add(Strings.Pick_Warning_NoLocation);
+            return segments.Count > 0 ? string.Join(" · ", segments) : null;
+        }
+    }
+
+    /// <summary>Whether <see cref="AreaText"/> has a value.</summary>
+    public bool HasAreaText => AreaText is not null;
+
+    /// <summary>
+    /// The issue date-time group exactly as the message writes it
+    /// (e.g. "262222Z SEP 26"); the publication time otherwise.
+    /// </summary>
+    public string? IssuedText =>
+        _texts.Select(t => DtgPattern().Match(t.Text)).FirstOrDefault(m => m.Success)?.Value
+        ?? (_info.PublicationTime is { } published ? Format(published) : null);
+
+    /// <summary>The issuing authority, shown after <see cref="IssuedText"/>.</summary>
+    public string? IssuerText => _info.Issuer;
+
+    /// <summary>
+    /// The issuer after the issue time (" · JRCC Australia"), the issuer alone
+    /// when there is no time, or empty.
+    /// </summary>
+    public string IssuerSuffix => IssuerText is not { } issuer
+        ? string.Empty
+        : IssuedText is null ? issuer : " · " + issuer;
+
+    /// <summary>Whether there is an issue time or issuer to show.</summary>
+    public bool HasIssued => IssuedText is not null || IssuerText is not null;
+
+    /// <summary>Whether <see cref="IssuerText"/> has a value.</summary>
+    public bool HasIssuer => IssuerText is not null;
+
+    /// <summary>Whether <see cref="IssuedText"/> has a value.</summary>
+    public bool HasIssuedTime => IssuedText is not null;
+
+    /// <summary>One tab per language, the UI language first. Shown only with more than one.</summary>
+    public ObservableCollection<LanguageTab> Languages { get; } = new();
+
+    /// <summary>Whether the part gives more than one language.</summary>
+    public bool HasLanguageTabs => Languages.Count > 1;
+
+    /// <summary>Whether the selected language has message text.</summary>
+    public bool HasText => !string.IsNullOrWhiteSpace(_selectedText?.Text);
+
+    /// <summary>The selected language's code, for the text block's language.</summary>
+    public string? SelectedLanguage => _selectedText?.Language;
+
+    /// <summary>The number of lines in the selected language's message.</summary>
+    public int LineCount => Lines(_selectedText?.Text).Length;
+
+    /// <summary>Whether the message is clipped to <see cref="ClipLines"/> lines.</summary>
+    public bool IsClipped => !_showAll && LineCount > ClipThreshold;
+
+    /// <summary>The message text as shown: the whole text, or its first <see cref="ClipLines"/> lines.</summary>
+    public string DisplayedText
+    {
+        get
+        {
+            var lines = Lines(_selectedText?.Text);
+            return IsClipped
+                ? string.Join('\n', lines, 0, ClipLines)
+                : string.Join('\n', lines);
+        }
+    }
+
+    /// <summary>The "Show all N lines" button's text.</summary>
+    public string ShowAllText => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Warning_ShowAllLines, LineCount);
+
+    /// <summary>Whether the whole message is shown. Holds until the pick changes.</summary>
+    public bool ShowAll
+    {
+        get => _showAll;
+        set
+        {
+            if (SetProperty(ref _showAll, value))
+                RaiseTextChanged();
+        }
+    }
+
+    /// <summary>Shows the whole message.</summary>
+    public ICommand ShowAllCommand { get; }
+
+    /// <summary>Copies the selected language's full text.</summary>
+    public ICommand CopyCommand { get; }
+
+    /// <summary>Raised by <see cref="CopyCommand"/> with the text to put on the clipboard.</summary>
+    public event EventHandler<string>? CopyRequested;
+
+    /// <summary>
+    /// The text <see cref="CopyCommand"/> copies: the selected language's
+    /// full message, never the clipped one.
+    /// </summary>
+    public string? CopyText => _selectedText?.Text;
+
+    /// <summary>Selects the message in <paramref name="language"/>, and holds the choice for the session.</summary>
+    public void SelectLanguage(string? language)
+    {
+        var text = _texts.FirstOrDefault(t => string.Equals(t.Language, language, StringComparison.OrdinalIgnoreCase));
+        if (text is null || ReferenceEquals(text, _selectedText))
+            return;
+        _selectedText = text;
+        _sessionLanguage = text.Language;
+        foreach (var tab in Languages)
+            tab.RaiseSelectionChanged();
+        OnPropertyChanged(nameof(SelectedLanguage));
+        RaiseTextChanged();
+    }
+
+    /// <summary>Re-reads the status at a new view time.</summary>
+    public void SetViewTime(DateTimeOffset viewTime)
+    {
+        if (_viewTime == viewTime)
+            return;
+        var before = Status;
+        _viewTime = viewTime;
+        if (Status == before)
+            return;
+        OnPropertyChanged(nameof(Status));
+        OnPropertyChanged(nameof(IsInForce));
+        OnPropertyChanged(nameof(IsNotYetInForce));
+        OnPropertyChanged(nameof(IsEnded));
+        OnPropertyChanged(nameof(StatusText));
+    }
+
+    /// <summary>Re-formats the times in a new Local/UTC preference.</summary>
+    public void SetTimeFormat(TimeFormat timeFormat)
+    {
+        if (_timeFormat == timeFormat)
+            return;
+        _timeFormat = timeFormat;
+        OnPropertyChanged(nameof(ValidityText));
+        OnPropertyChanged(nameof(IssuedText));
+    }
+
+    /// <summary>Resets the session's language choice. For tests.</summary>
+    internal static void ResetSessionLanguage() => _sessionLanguage = null;
+
+    /// <summary>
+    /// Orders the texts for the UI: the UI language first, then the order in
+    /// the data.
+    /// </summary>
+    internal static IReadOnlyList<NavigationalWarningText> OrderForUi(
+        IReadOnlyList<NavigationalWarningText> texts, CultureInfo uiCulture)
+    {
+        var ui = texts.FirstOrDefault(t => LanguageNames.Matches(t.Language, uiCulture));
+        return ui is null ? texts : [ui, .. texts.Where(t => !ReferenceEquals(t, ui))];
+    }
+
+    private static NavigationalWarningText? PickInitial(IReadOnlyList<NavigationalWarningText> texts) =>
+        (_sessionLanguage is { } held
+            ? texts.FirstOrDefault(t => string.Equals(t.Language, held, StringComparison.OrdinalIgnoreCase))
+            : null)
+        ?? texts.FirstOrDefault();
+
+    private void RaiseTextChanged()
+    {
+        OnPropertyChanged(nameof(HasText));
+        OnPropertyChanged(nameof(LineCount));
+        OnPropertyChanged(nameof(IsClipped));
+        OnPropertyChanged(nameof(DisplayedText));
+        OnPropertyChanged(nameof(ShowAllText));
+        OnPropertyChanged(nameof(CopyText));
+        (CopyCommand as RelayCommand)?.NotifyCanExecuteChanged();
+    }
+
+    private string FormatRange(NavigationalWarningValidity range) => (range.Start, range.End) switch
+    {
+        ({ } start, { } end) => $"{Format(start)} – {Format(end)}",
+        ({ } start, null) => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Warning_ValidFrom, Format(start)),
+        (null, { } end) => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Warning_ValidUntil, Format(end)),
+        _ => Strings.Pick_Warning_ValidUntilCancelled,
+    };
+
+    private string Format(DateTimeOffset value) => TimeFormatting.Format(value, _timeFormat);
+
+    // Line breaks normalised to \n, trailing blank lines dropped.
+    private static string[] Lines(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return [];
+        var lines = text.Replace("\r\n", "\n").Replace('\r', '\n').TrimEnd('\n', ' ').Split('\n');
+        return lines;
+    }
+
+    // A telex date-time group: DDHHMMZ MON YY, e.g. "262222Z SEP 26".
+    [GeneratedRegex(@"\b\d{6}Z\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{2}(?:\d{2})?\b", RegexOptions.CultureInvariant)]
+    private static partial Regex DtgPattern();
+
+    /// <summary>One language tab on the card.</summary>
+    internal sealed class LanguageTab : ViewModelBase
+    {
+        private readonly NavigationalWarningCardViewModel _owner;
+        private readonly NavigationalWarningText _text;
+
+        public LanguageTab(NavigationalWarningCardViewModel owner, NavigationalWarningText text)
+        {
+            _owner = owner;
+            _text = text;
+            SelectCommand = new RelayCommand(() => _owner.SelectLanguage(_text.Language));
+        }
+
+        /// <summary>The language's code as the data writes it.</summary>
+        public string? Code => _text.Language;
+
+        /// <summary>The language's own name (e.g. "Français"); the code when unknown.</summary>
+        public string Name => LanguageNames.Display(_text.Language);
+
+        /// <summary>Whether this tab's language is shown.</summary>
+        public bool IsSelected => ReferenceEquals(_owner._selectedText, _text);
+
+        /// <summary>Shows this tab's language.</summary>
+        public ICommand SelectCommand { get; }
+
+        internal void RaiseSelectionChanged() => OnPropertyChanged(nameof(IsSelected));
+    }
+}

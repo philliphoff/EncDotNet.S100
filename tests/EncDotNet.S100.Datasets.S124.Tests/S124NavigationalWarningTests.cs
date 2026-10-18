@@ -101,6 +101,47 @@ public class S124NavigationalWarningTests
     }
 
     [Fact]
+    public void Edition2_KeepsOneTextPerLanguage()
+    {
+        // A part gives one warningInformation/information per language (#932).
+        var part = Assert.Single(Project("navwarn_ccg_ed2_bilingual.gml", out _).Parts);
+
+        Assert.Collection(
+            part.Information,
+            eng =>
+            {
+                Assert.Equal("eng", eng.Language);
+                Assert.StartsWith("Wave monitoring buoys", eng.Text, StringComparison.Ordinal);
+                Assert.Contains('\n', eng.Text);
+            },
+            fra =>
+            {
+                Assert.Equal("fra", fra.Language);
+                Assert.StartsWith("Bouées de surveillance", fra.Text, StringComparison.Ordinal);
+            });
+        Assert.Equal(part.Information[0].Text, part.WarningInformation);
+    }
+
+    [Fact]
+    public void Edition2_ProjectsGeneralTypeLabel()
+    {
+        var w = Project("navwarn_ccg_ed2.gml", out _);
+
+        Assert.Equal(15, w.Preamble?.NavwarnTypeGeneral);
+        Assert.Equal("Scientific Instruments Change", w.Preamble?.NavwarnTypeGeneralName);
+    }
+
+    [Fact]
+    public void Edition1_InformationHasOneTextWithoutLanguage()
+    {
+        var part = Project("navwarn_mixed.gml", out _).Parts.First(p => p.WarningInformation is not null);
+
+        var info = Assert.Single(part.Information);
+        Assert.Null(info.Language);
+        Assert.Equal(part.WarningInformation, info.Text);
+    }
+
+    [Fact]
     public void Mixed_ExtractsWarningInformationAndRestriction()
     {
         var w = Project("navwarn_mixed.gml", out _);

@@ -649,6 +649,19 @@ Turn on **Pick Mode** (the cross-hair button on the map toolbar, **View** >
   bathymetry or S-101 depth areas, dredged areas or soundings, adjusted by
   S-104 water levels over time when they cover the point. With no water-level
   data, the depth is static.
+- A **Warning card** for an S-124 navigational warning part. Its header has
+  the series and number (such as "NAVAREA X 106/26"), the warning type, and
+  whether the warning is **In force**, **Not yet in force** or **Ended** at
+  the view time (now, when the Timeline is Live). Below that are its
+  validity, in your Local/UTC setting, its area, and the issue date-time
+  group as the message writes it. The full message text follows in a
+  monospaced block, so telex columns line up. You can select the text, and
+  **Copy** copies it. A part with text in several languages has a tab per
+  language, with your UI language first; your choice holds for the session.
+  Messages over 22 lines stop at 20 until you select **Show all**. The
+  attribute rows fold into **Attributes** beneath the card, closed until you
+  open them. With several warnings at the point, the hit list names each by
+  its number.
 - An **EGG CODE** diagram for an S-411 sea-ice or lake-ice area. The WMO /
   SIGRID-3 egg shows the total concentration at the top of the oval, with the
   partial concentration, stage of development and form of ice rows beneath it.

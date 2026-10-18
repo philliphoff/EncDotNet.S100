@@ -60,7 +60,7 @@ public sealed class PassageTimelineTests : IDisposable
     {
         var time = new GlobalTimeService();
         var clock = new FakeTimeProvider(Now);
-        var f = new PassageCheckFixture(tide: tide ?? PassageCheckFixture.HighWaterUntil0750, viewTime: new TimelineRouteViewTime(time, clock), post: post);
+        var f = new PassageCheckFixture(tide: tide ?? PassageCheckFixture.HighWaterUntil0750, viewTime: new TimelineViewTime(time, clock), post: post);
         if (!routeDeparture)
             f.Route.SetDeparture(null);
         var timeline = new TimelineViewModel(time, new Utc(), clock, action => action());

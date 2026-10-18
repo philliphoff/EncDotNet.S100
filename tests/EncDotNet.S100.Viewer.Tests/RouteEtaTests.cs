@@ -22,7 +22,7 @@ public sealed class RouteEtaTests : IDisposable
 
     public void Dispose() => CultureInfo.CurrentCulture = _culture;
 
-    private sealed class ViewTime(DateTimeOffset start) : IRouteViewTime
+    private sealed class ViewTime(DateTimeOffset start) : IViewTime
     {
         private DateTimeOffset _current = start;
 

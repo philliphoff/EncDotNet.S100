@@ -27,6 +27,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private readonly IMarinerSettingsProvider? _marinerSettings;
     private readonly IUrlOpener? _urlOpener;
     private readonly IS100ExaminerLinkBuilder? _examinerLinks;
+    private readonly IViewTime? _viewTime;
+    private NavigationalWarningCardViewModel? _warningCard;
+    private bool _warningAttributesExpanded;
     private string? _featureType;
     private string? _featureTypeName;
     private string? _featureRef;
@@ -60,8 +63,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         IMarinerSettingsProvider? marinerSettings,
         IUrlOpener? urlOpener,
         IS100ExaminerLinkBuilder? examinerLinks)
+        : this(timeFormat, marinerSettings, urlOpener, examinerLinks, viewTime: null)
+    {
+    }
+
+    public PickReportViewModel(
+        ITimeFormatProvider? timeFormat,
+        IMarinerSettingsProvider? marinerSettings,
+        IUrlOpener? urlOpener,
+        IS100ExaminerLinkBuilder? examinerLinks,
+        IViewTime? viewTime)
     {
         _timeFormat = timeFormat;
+        _viewTime = viewTime;
         _marinerSettings = marinerSettings;
         _urlOpener = urlOpener;
         _examinerLinks = examinerLinks;
@@ -93,11 +107,20 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
         if (_marinerSettings is not null)
             _marinerSettings.Changed += OnMarinerSettingsChanged;
+
+        if (_viewTime is not null)
+            _viewTime.Changed += OnViewTimeChanged;
     }
 
-    private void OnTimeFormatChanged(TimeFormat _)
+    private void OnViewTimeChanged(object? sender, EventArgs e) =>
+        _warningCard?.SetViewTime(CurrentViewTime);
+
+    private DateTimeOffset CurrentViewTime => _viewTime?.Current ?? DateTimeOffset.UtcNow;
+
+    private void OnTimeFormatChanged(TimeFormat format)
     {
         ReformatAttributesFromSelectedHit();
+        _warningCard?.SetTimeFormat(format);
     }
 
     private void OnMarinerSettingsChanged(MarinerSettings _)
@@ -125,14 +148,57 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private void PopulateAttributeSections(IReadOnlyList<PickAttribute> reformatted)
     {
         Attributes.Clear();
-        foreach (var a in FeatureInfoBuilder.WithoutResolvedFileReferences(reformatted))
+        var rows = FeatureInfoBuilder.WithoutResolvedFileReferences(reformatted);
+        if (_selectedHit?.NavigationalWarning is not null)
+            rows = WithoutWarningText(rows);
+        foreach (var a in rows)
             Attributes.Add(a);
         OnPropertyChanged(nameof(HasAttributes));
+        OnPropertyChanged(nameof(AttributeCount));
 
         ReferencedTexts.Clear();
         foreach (var fileRef in FeatureInfoBuilder.CollectResolvedFileReferences(reformatted))
             ReferencedTexts.Add(PickReferencedText.FromAttribute(fileRef));
         OnPropertyChanged(nameof(HasReferencedText));
+    }
+
+    /// <summary>
+    /// Drops the warning text rows (S-124 <c>warningInformation/information</c>)
+    /// that the Warning card shows, keeping the rest of the complex attribute
+    /// (its <c>navwarnTypeDetails</c>).
+    /// </summary>
+    internal static IReadOnlyList<PickAttribute> WithoutWarningText(IReadOnlyList<PickAttribute> rows)
+    {
+        static bool IsText(PickAttribute child) =>
+            child.Code.Equals("information", StringComparison.OrdinalIgnoreCase)
+            || child.Code.StartsWith("information.", StringComparison.OrdinalIgnoreCase);
+
+        var result = new List<PickAttribute>(rows.Count);
+        foreach (var row in rows)
+        {
+            if (!row.Code.Equals("warningInformation", StringComparison.OrdinalIgnoreCase))
+            {
+                result.Add(row);
+                continue;
+            }
+
+            var kept = row.Children.Where(c => !IsText(c)).ToList();
+            if (kept.Count == 0)
+                continue;
+            result.Add(new PickAttribute
+            {
+                Code = row.Code,
+                Name = row.Name,
+                RawValue = row.RawValue,
+                DisplayValue = row.DisplayValue,
+                DateTimeValue = row.DateTimeValue,
+                DateTimeRangeValue = row.DateTimeRangeValue,
+                DepthMetresValue = row.DepthMetresValue,
+                ExternalText = row.ExternalText,
+                Children = kept,
+            });
+        }
+        return result;
     }
 
     private IReadOnlyList<PickAttribute> ReformatTypedAttributes(IReadOnlyList<PickAttribute> source)
@@ -449,6 +515,57 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public bool HasAttributes => Attributes.Count > 0;
 
     /// <summary>
+    /// The number of attribute rows, counting a complex attribute's children,
+    /// shown on the folded Attributes header beneath a Warning card.
+    /// </summary>
+    public int AttributeCount => Attributes.Sum(a => a.Children.Count == 0 ? 1 : a.Children.Count);
+
+    /// <summary>
+    /// The Warning card for the selected hit when it is part of a
+    /// navigational warning (#932); <c>null</c> otherwise. Its status follows
+    /// the view time.
+    /// </summary>
+    public NavigationalWarningCardViewModel? WarningCard
+    {
+        get => _warningCard;
+        private set
+        {
+            if (ReferenceEquals(_warningCard, value))
+                return;
+            if (_warningCard is not null)
+                _warningCard.CopyRequested -= OnWarningCopyRequested;
+            _warningCard = value;
+            if (_warningCard is not null)
+                _warningCard.CopyRequested += OnWarningCopyRequested;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasWarningCard));
+            OnPropertyChanged(nameof(ShowInlineAttributes));
+        }
+    }
+
+    /// <summary>True when <see cref="WarningCard"/> is shown.</summary>
+    public bool HasWarningCard => _warningCard is not null;
+
+    /// <summary>
+    /// Whether the attribute table shows inline: not when a station chart
+    /// or a Warning card leads, where it folds into an expander.
+    /// </summary>
+    public bool ShowInlineAttributes => !HasStationSeries && !HasWarningCard;
+
+    /// <summary>
+    /// Whether the attributes folded beneath a Warning card are open. Closed
+    /// by default; the choice holds across picks.
+    /// </summary>
+    public bool WarningAttributesExpanded
+    {
+        get => _warningAttributesExpanded;
+        set => SetProperty(ref _warningAttributesExpanded, value);
+    }
+
+    private void OnWarningCopyRequested(object? sender, string text) =>
+        CopyIdentityRequested?.Invoke(this, text);
+
+    /// <summary>
     /// Externally referenced text blocks for the picked feature, lifted out
     /// of <see cref="Attributes"/> from resolved <c>fileReference</c>
     /// attributes (S-101 Feature Catalogue; aliases <c>TXTDSC</c> /
@@ -746,6 +863,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         ReferencedTexts.Clear();
         References.Clear();
         _eggCode = null;
+        WarningCard = null;
         Location = null;
         LocationDepthSeries = null;
         HasPick = false;
@@ -772,11 +890,13 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             ReferencedTexts.Clear();
             References.Clear();
             _eggCode = null;
+            WarningCard = null;
             OnPropertyChanged(nameof(HasAttributes));
             OnPropertyChanged(nameof(HasReferencedText));
             OnPropertyChanged(nameof(HasReferences));
             OnPropertyChanged(nameof(SelectedStationSeries));
             OnPropertyChanged(nameof(HasStationSeries));
+            OnPropertyChanged(nameof(ShowInlineAttributes));
             OnPropertyChanged(nameof(SelectedEggCode));
             OnPropertyChanged(nameof(HasEggCode));
             RaiseIdentityChanged();
@@ -789,6 +909,14 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         DatasetFileName = hit.DatasetFileName;
         ProductSpec = hit.ProductSpec;
 
+        WarningCard = hit.NavigationalWarning is { } warning
+            ? new NavigationalWarningCardViewModel(
+                warning,
+                hit.DatasetFileName,
+                _timeFormat?.Current ?? TimeFormat.Local,
+                CurrentViewTime)
+            : null;
+
         PopulateAttributeSections(ReformatTypedAttributes(hit.Attributes));
 
         References.Clear();
@@ -800,6 +928,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
         OnPropertyChanged(nameof(SelectedStationSeries));
         OnPropertyChanged(nameof(HasStationSeries));
+        OnPropertyChanged(nameof(ShowInlineAttributes));
         OnPropertyChanged(nameof(SelectedEggCode));
         OnPropertyChanged(nameof(HasEggCode));
         RaiseIdentityChanged();

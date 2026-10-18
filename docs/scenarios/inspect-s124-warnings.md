@@ -17,18 +17,20 @@ a warnings file contains before you process it in code.
 2. Turn on pick mode: press <kbd>I</kbd>, select the **Pick mode** button at
    the top right of the map, or choose **View** > **Appearance** >
    **Pick Mode**.
-3. Click a warning on the map. The **OBJECT INFORMATION** panel shows the
-   feature's ID, attributes, referenced text, references and location. If
-   several features are at that point, the panel lists them all. If the panel
-   is closed, choose **View** > **Appearance** > **Pick Report**.
+3. Click a warning on the map. The **OBJECT INFORMATION** panel shows a
+   Warning card with the warning's number, type and status, and its full
+   message text. The feature's attributes fold beneath it under
+   **Attributes**, followed by its references and location. If several
+   warnings are at that point, the panel lists them by number. If the panel is
+   closed, choose **View** > **Appearance** > **Pick Report**.
 4. To check how the warnings read in other lighting conditions, select the
    **Display Settings** button at the top right of the map and choose **Day**,
    **Dusk** or **Night** under **Palette**.
 
 ## Result
 
-You can see each warning's geometry on the map and read its attributes in the
-panel.
+You can see each warning's geometry on the map and read its message and
+attributes in the panel.
 
 ![S-124 navigational warnings on the SoundCharts map](../../site/src/assets/shots/P06.png)
 

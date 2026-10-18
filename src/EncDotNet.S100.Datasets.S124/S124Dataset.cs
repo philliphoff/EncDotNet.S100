@@ -159,6 +159,15 @@ public sealed class S124ComplexAttribute : IS100ComplexAttribute
 
     /// <summary>Sub-attribute values keyed by code.</summary>
     public required IReadOnlyDictionary<string, string> SubAttributes { get; init; }
+
+    /// <summary>
+    /// The nested complex sub-attributes, one per occurrence in document
+    /// order, each with its own leaf values (Edition 2.0.0, for example one
+    /// <c>information</c> per language inside <c>warningInformation</c>).
+    /// <see cref="SubAttributes"/> keeps only the first of a repeated one.
+    /// Empty when the attribute nests none.
+    /// </summary>
+    public IReadOnlyList<S124ComplexAttribute> Groups { get; init; } = [];
 }
 
 
