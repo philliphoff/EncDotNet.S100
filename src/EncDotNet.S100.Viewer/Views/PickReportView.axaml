@@ -118,63 +118,157 @@
         </DataTemplate>
 
         <!--
-            Referenced-text card: a resolved `fileReference` (S-101 FC; alias
-            TXTDSC / NTXTDS) lifted out of the attribute table into its own
-            labelled block. Header row carries a document glyph, the file's
-            promoted heading, the source file name, and a copy button; the
-            body shows the full referenced text (always visible, no expander),
-            mirroring an ECDIS "show textual description" affordance.
+            Long-text card body (#932), shared by the Warning card and the
+            referenced-text / long-value cards: the text one step darker than
+            the card, wrapped at the panel edge and selectable, monospaced
+            when the card says so (telex warnings line up by character).
+            Long texts stop at 20 lines behind "Show all". The footer has
+            Copy, Zoom to (warnings with a location), Examiner, and a NOT FOR
+            NAVIGATION label when the dataset's exchange-set metadata says so.
         -->
-        <DataTemplate x:Key="ReferencedTextCardTemplate" x:DataType="vm:PickReferencedText">
-            <Border BorderBrush="{DynamicResource BorderColor}"
+        <DataTemplate x:Key="LongTextBodyTemplate" x:DataType="vm:LongTextCardViewModel">
+            <StackPanel>
+                <Border IsVisible="{Binding ShowsTextBlock}"
+                        Background="{DynamicResource MutedBackgroundColor}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1">
+                    <StackPanel>
+                        <TextBlock IsVisible="{Binding ShowsNoTextMessage}"
+                                   Text="{Binding NoTextMessage}"
+                                   FontSize="11.5"
+                                   Opacity="0.65"
+                                   TextWrapping="Wrap"
+                                   Margin="12" />
+                        <views:WarningMessageTextBlock IsVisible="{Binding HasText}"
+                                                       Classes="longText"
+                                                       Classes.mono="{Binding IsMonospace}"
+                                                       AutomationProperties.AutomationId="PickReport.TextCard.Text"
+                                                       AutomationProperties.Name="{x:Static loc:Strings.Pick_Warning_Text}"
+                                                       Segments="{Binding Segments}"
+                                                       LinkCommand="{Binding LinkCommand}"
+                                                       LinkForeground="{DynamicResource AccentBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Margin="12,10,12,12" />
+                        <Button IsVisible="{Binding IsClipped}"
+                                AutomationProperties.AutomationId="PickReport.TextCard.ShowAll"
+                                HorizontalAlignment="Center"
+                                Margin="0,0,0,10"
+                                Padding="10,3"
+                                FontSize="11"
+                                Command="{Binding ShowAllCommand}"
+                                Content="{Binding ShowAllText}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Footer actions. The label keeps its place on the right; the actions wrap when narrow. -->
+                <DockPanel Margin="6,5">
+                    <TextBlock DockPanel.Dock="Right"
+                               IsVisible="{Binding NotForNavigation}"
+                               AutomationProperties.AutomationId="PickReport.TextCard.NotForNavigation"
+                               AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NotForNavigation}"
+                               Text="{x:Static loc:Strings.Pick_NotForNavigation}"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_NotForNavigation}"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               LetterSpacing="0.4"
+                               Opacity="0.65"
+                               Margin="6,0"
+                               VerticalAlignment="Center" />
+                    <WrapPanel Orientation="Horizontal">
+                        <Button Classes="cardAction"
+                                AutomationProperties.AutomationId="PickReport.TextCard.Copy"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_CopyText}"
+                                AutomationProperties.HelpText="{Binding CopyTooltip}"
+                                Command="{Binding CopyCommand}"
+                                ToolTip.Tip="{Binding CopyTooltip}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Copy}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="cardAction"
+                                AutomationProperties.AutomationId="PickReport.TextCard.ZoomTo"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_ZoomToWarning}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ZoomToWarning}"
+                                Command="{Binding ZoomToCommand}"
+                                IsVisible="{Binding CanZoom}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToWarning}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Pick_Warning_ZoomTo}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Panel IsVisible="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).IsExaminerAvailable}">
+                            <Button Classes="cardAction"
+                                    AutomationProperties.AutomationId="PickReport.TextCard.OpenInExaminer"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
+                                    Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenFeatureInExaminerCommand}"
+                                    IsVisible="{Binding ExaminesFeature}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Examiner}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Classes="cardAction"
+                                    AutomationProperties.AutomationId="PickReport.TextCard.OpenAttributeInExaminer"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
+                                    Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenAttributeInExaminerCommand}"
+                                    CommandParameter="{Binding ExaminerAttribute}"
+                                    IsVisible="{Binding ExaminesAttribute}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Examiner}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Panel>
+                    </WrapPanel>
+                </DockPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <!--
+            Long-text card (#932): a resolved `fileReference` (S-101 FC; alias
+            TXTDSC / NTXTDS) or a long text value lifted out of the attribute
+            table. The header carries a document glyph and the file's heading
+            and name, or the attribute's name; the body is the shared
+            LongTextBodyTemplate.
+        -->
+        <DataTemplate x:Key="TextCardTemplate" x:DataType="vm:PickTextCardViewModel">
+            <Border AutomationProperties.AutomationId="PickReport.TextCard"
+                    AutomationProperties.Name="{Binding Title}"
+                    BorderBrush="{DynamicResource BorderColor}"
                     BorderThickness="1"
-                    CornerRadius="6"
-                    Margin="0,0,0,8"
+                    CornerRadius="8"
                     ClipToBounds="True">
                 <StackPanel>
-                    <Grid ColumnDefinitions="Auto,*,Auto"
-                          Background="{DynamicResource MutedBackgroundColor}">
+                    <Grid ColumnDefinitions="Auto,*" Margin="12,10,12,10">
                         <ic:FluentIcon Grid.Column="0"
                                        Icon="DocumentText"
                                        IconVariant="Regular"
-                                       FontSize="18"
+                                       FontSize="16"
                                        Opacity="0.7"
-                                       VerticalAlignment="Center"
-                                       Margin="12,0,8,0" />
-                        <StackPanel Grid.Column="1"
-                                    Spacing="2"
-                                    Margin="0,10"
-                                    VerticalAlignment="Center">
-                            <TextBlock Text="{Binding Title}"
-                                       FontSize="14"
-                                       FontWeight="SemiBold"
-                                       TextWrapping="Wrap" />
+                                       VerticalAlignment="Top"
+                                       Margin="0,1,8,0" />
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <SelectableTextBlock AutomationProperties.AutomationId="PickReport.TextCard.Title"
+                                                 Text="{Binding Title}"
+                                                 FontSize="13.5"
+                                                 FontWeight="SemiBold"
+                                                 TextWrapping="Wrap" />
                             <TextBlock Text="{Binding FileName}"
+                                       IsVisible="{Binding HasFileName}"
                                        FontSize="11"
                                        Opacity="0.6"
-                                       FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                       FontFamily="{StaticResource WarningMonoFont}"
                                        TextTrimming="CharacterEllipsis" />
                         </StackPanel>
-                        <Button Grid.Column="2"
-                                AutomationProperties.AutomationId="PickReport.Reference.CopyText"
-                                AutomationProperties.Name="{x:Static loc:Strings.Label_CopyText}"
-                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyReferencedText}"
-                                VerticalAlignment="Top"
-                                Padding="6"
-                                Margin="4"
-                                Background="Transparent"
-                                Command="{Binding $parent[ItemsControl].((vm:PickReportViewModel)DataContext).CopyReferencedTextCommand}"
-                                CommandParameter="{Binding}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyReferencedText}">
-                            <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="16" />
-                        </Button>
                     </Grid>
-                    <SelectableTextBlock Text="{Binding Body}"
-                                         FontSize="14"
-                                         LineHeight="22"
-                                         TextWrapping="Wrap"
-                                         Margin="14,12,14,14"
-                                         IsVisible="{Binding HasBody}" />
+                    <ContentControl Content="{Binding}"
+                                    ContentTemplate="{StaticResource LongTextBodyTemplate}" />
                 </StackPanel>
             </Border>
         </DataTemplate>
@@ -403,80 +497,8 @@
                             </ItemsControl>
                         </Border>
 
-                        <!-- The message: one step darker than the card. -->
-                        <Border Background="{DynamicResource MutedBackgroundColor}"
-                                BorderBrush="{DynamicResource BorderColor}"
-                                BorderThickness="0,1">
-                            <StackPanel>
-                                <TextBlock IsVisible="{Binding !HasText}"
-                                           Text="{x:Static loc:Strings.Pick_Warning_NoText}"
-                                           FontSize="11.5"
-                                           Opacity="0.65"
-                                           TextWrapping="Wrap"
-                                           Margin="12" />
-                                <views:WarningMessageTextBlock IsVisible="{Binding HasText}"
-                                                     AutomationProperties.AutomationId="PickReport.WarningCard.Text"
-                                                     AutomationProperties.Name="{x:Static loc:Strings.Pick_Warning_Text}"
-                                                     Segments="{Binding Segments}"
-                                                     LinkCommand="{Binding OpenLinkCommand}"
-                                                     LinkForeground="{DynamicResource AccentBrush}"
-                                                     FontFamily="{StaticResource WarningMonoFont}"
-                                                     FontSize="11.5"
-                                                     LineHeight="18"
-                                                     TextWrapping="Wrap"
-                                                     Margin="12,10,12,12" />
-                                <Button IsVisible="{Binding IsClipped}"
-                                        AutomationProperties.AutomationId="PickReport.WarningCard.ShowAll"
-                                        HorizontalAlignment="Center"
-                                        Margin="0,0,0,10"
-                                        Padding="10,3"
-                                        FontSize="11"
-                                        Command="{Binding ShowAllCommand}"
-                                        Content="{Binding ShowAllText}" />
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Footer actions. -->
-                        <Grid ColumnDefinitions="Auto,Auto,Auto,*" Margin="6,5">
-                            <Button Grid.Column="0"
-                                    Classes="cardAction"
-                                    AutomationProperties.AutomationId="PickReport.WarningCard.Copy"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Label_CopyText}"
-                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyWarningText}"
-                                    Command="{Binding CopyCommand}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyWarningText}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Copy}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="1"
-                                    Classes="cardAction"
-                                    AutomationProperties.AutomationId="PickReport.WarningCard.ZoomTo"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Label_ZoomToWarning}"
-                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ZoomToWarning}"
-                                    Command="{Binding ZoomToCommand}"
-                                    IsVisible="{Binding CanZoom}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToWarning}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_ZoomTo}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                            <Button Grid.Column="2"
-                                    Classes="cardAction"
-                                    AutomationProperties.AutomationId="PickReport.WarningCard.OpenInExaminer"
-                                    AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
-                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
-                                    Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenFeatureInExaminerCommand}"
-                                    IsVisible="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).IsExaminerAvailable}"
-                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
-                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Examiner}" VerticalAlignment="Center" />
-                                </StackPanel>
-                            </Button>
-                        </Grid>
+                        <ContentControl Content="{Binding}"
+                                        ContentTemplate="{StaticResource LongTextBodyTemplate}" />
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -484,6 +506,17 @@
     </UserControl.Resources>
 
     <UserControl.Styles>
+        <!-- Long-text card text: proportional prose, or monospaced telex. The
+             text block styles as SelectableTextBlock (its StyleKeyOverride). -->
+        <Style Selector="SelectableTextBlock.longText">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="LineHeight" Value="20" />
+        </Style>
+        <Style Selector="SelectableTextBlock.longText.mono">
+            <Setter Property="FontFamily" Value="{StaticResource WarningMonoFont}" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="LineHeight" Value="18" />
+        </Style>
         <!-- Zebra-stripe alternate top-level attribute rows for scanability.
              Targets the row Border inside each even item container. -->
         <Style Selector="ItemsControl.attrTable ContentPresenter:nth-child(even) Border#AttrRow">
@@ -1603,23 +1636,30 @@
                 </Border>
 
                 <!--
-                    Referenced text. Resolved `fileReference` content lifted
-                    out of the attribute table above into standalone cards so
-                    the mariner can read it without an expander or a monospace
-                    table dump. Hidden when the pick has no referenced text.
+                    Text (#932): resolved `fileReference` content and long text
+                    values lifted out of the attribute table above into
+                    long-text cards, so the mariner reads them whole rather
+                    than as a truncated cell. Hidden when the pick has none.
                 -->
                 <Border BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="0,1,0,0"
                         Padding="0,8,0,0"
-                        IsVisible="{Binding HasReferencedText}">
+                        IsVisible="{Binding HasTextCards}">
                     <StackPanel Spacing="6">
-                        <TextBlock Text="{x:Static loc:Strings.Pick_ReferencedTextHeader}"
+                        <TextBlock Text="{x:Static loc:Strings.Pick_TextCardsHeader}"
                                    FontSize="10"
                                    FontWeight="Normal"
                                    LetterSpacing="1"
                                    Opacity="0.7" />
-                        <ItemsControl ItemsSource="{Binding ReferencedTexts}"
-                                      ItemTemplate="{StaticResource ReferencedTextCardTemplate}" />
+                        <ItemsControl ItemsSource="{Binding TextCards}"
+                                      AutomationProperties.AutomationId="PickReport.TextCards"
+                                      ItemTemplate="{StaticResource TextCardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="8" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
                     </StackPanel>
                 </Border>
             </StackPanel>

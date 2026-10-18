@@ -28,27 +28,19 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// (<see cref="IsCollapsible"/>, <see cref="IsOpen"/>).
 /// </para>
 /// </remarks>
-internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
+internal sealed partial class NavigationalWarningCardViewModel : LongTextCardViewModel
 {
-    /// <summary>Messages with more lines than this are clipped.</summary>
-    internal const int ClipThreshold = 22;
-
-    /// <summary>The number of lines a clipped message shows.</summary>
-    internal const int ClipLines = 20;
-
     // The language the mariner last chose, held for the session.
     private static string? _sessionLanguage;
 
     private readonly NavigationalWarningInfo _info;
     private readonly IReadOnlyList<NavigationalWarningText> _texts;
+    private readonly RelayCommand _zoomToCommand;
     private TimeFormat _timeFormat;
     private DateTimeOffset _viewTime;
     private NavigationalWarningText? _selectedText;
-    private bool _showAll;
     private bool _isOpen = true;
-    private bool _canZoom;
     private IReadOnlyList<NavigationalWarningEntry> _linkTargets = [];
-    private IReadOnlyList<WarningTextSegment> _segments = [];
 
     public NavigationalWarningCardViewModel(
         NavigationalWarningInfo info,
@@ -66,16 +58,11 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
         _selectedText = PickInitial(_texts);
         foreach (var text in _texts)
             Languages.Add(new LanguageTab(this, text));
-        ShowAllCommand = new RelayCommand(() => ShowAll = true);
-        CopyCommand = new RelayCommand(
-            () => { if (_selectedText is { } t) CopyRequested?.Invoke(this, t.Text); },
-            () => HasText);
         ToggleCommand = new RelayCommand(() => OpenRequested?.Invoke(this, EventArgs.Empty));
-        ZoomToCommand = new RelayCommand(() => ZoomRequested?.Invoke(this, EventArgs.Empty), () => _canZoom);
+        _zoomToCommand = new RelayCommand(() => ZoomRequested?.Invoke(this, EventArgs.Empty), () => CanZoom);
         OpenLinkCommand = new RelayCommand<NavigationalWarningEntry>(
             target => { if (target is not null) LinkRequested?.Invoke(this, target); },
             target => target is not null);
-        _segments = BuildSegments();
     }
 
     /// <summary>The hit the card describes, when it came from a pick.</summary>
@@ -113,22 +100,8 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
     /// <summary>Raised by <see cref="ToggleCommand"/>.</summary>
     public event EventHandler? OpenRequested;
 
-    /// <summary>
-    /// Whether the part has a location the map can frame, which shows the
-    /// "Zoom to" action.
-    /// </summary>
-    public bool CanZoom
-    {
-        get => _canZoom;
-        set
-        {
-            if (SetProperty(ref _canZoom, value))
-                (ZoomToCommand as RelayCommand)?.NotifyCanExecuteChanged();
-        }
-    }
-
     /// <summary>Centres the map on the part at a scale that fits it, raising <see cref="ZoomRequested"/>.</summary>
-    public ICommand ZoomToCommand { get; }
+    public override ICommand ZoomToCommand => _zoomToCommand;
 
     /// <summary>Raised by <see cref="ZoomToCommand"/>.</summary>
     public event EventHandler? ZoomRequested;
@@ -138,15 +111,6 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
 
     /// <summary>Raised by <see cref="OpenLinkCommand"/> with the warning to open.</summary>
     public event EventHandler<NavigationalWarningEntry>? LinkRequested;
-
-    /// <summary>
-    /// The displayed text as runs: plain text, and warning numbers that link
-    /// to other listed warnings.
-    /// </summary>
-    public IReadOnlyList<WarningTextSegment> Segments => _segments;
-
-    /// <summary>The links in the displayed text, in order.</summary>
-    public IEnumerable<WarningTextSegment> Links => _segments.Where(s => s.IsLink);
 
     /// <summary>Sets the listed warnings that numbers in the text may link to.</summary>
     public void SetLinkTargets(IReadOnlyList<NavigationalWarningEntry> warnings)
@@ -281,58 +245,23 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
     /// <summary>Whether the part gives more than one language.</summary>
     public bool HasLanguageTabs => Languages.Count > 1;
 
-    /// <summary>Whether the selected language has message text.</summary>
-    public bool HasText => !string.IsNullOrWhiteSpace(_selectedText?.Text);
-
     /// <summary>The selected language's code, for the text block's language.</summary>
     public string? SelectedLanguage => _selectedText?.Language;
 
-    /// <summary>The number of lines in the selected language's message.</summary>
-    public int LineCount => Lines(_selectedText?.Text).Length;
+    /// <summary>The selected language's full message.</summary>
+    protected override string? BodyText => _selectedText?.Text;
 
-    /// <summary>Whether the message is clipped to <see cref="ClipLines"/> lines.</summary>
-    public bool IsClipped => !_showAll && LineCount > ClipThreshold;
+    /// <summary>Telex messages line up coordinates and indentation by character, so the text is monospaced.</summary>
+    public override bool IsMonospace => true;
 
-    /// <summary>The message text as shown: the whole text, or its first <see cref="ClipLines"/> lines.</summary>
-    public string DisplayedText
-    {
-        get
-        {
-            var lines = Lines(_selectedText?.Text);
-            return IsClipped
-                ? string.Join('\n', lines, 0, ClipLines)
-                : string.Join('\n', lines);
-        }
-    }
+    /// <inheritdoc />
+    public override string? NoTextMessage => Strings.Pick_Warning_NoText;
 
-    /// <summary>The "Show all N lines" button's text.</summary>
-    public string ShowAllText => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Warning_ShowAllLines, LineCount);
+    /// <inheritdoc />
+    public override string CopyTooltip => Strings.Tooltip_CopyWarningText;
 
-    /// <summary>Whether the whole message is shown. Holds until the pick changes.</summary>
-    public bool ShowAll
-    {
-        get => _showAll;
-        set
-        {
-            if (SetProperty(ref _showAll, value))
-                RaiseTextChanged();
-        }
-    }
-
-    /// <summary>Shows the whole message.</summary>
-    public ICommand ShowAllCommand { get; }
-
-    /// <summary>Copies the selected language's full text.</summary>
-    public ICommand CopyCommand { get; }
-
-    /// <summary>Raised by <see cref="CopyCommand"/> with the text to put on the clipboard.</summary>
-    public event EventHandler<string>? CopyRequested;
-
-    /// <summary>
-    /// The text <see cref="CopyCommand"/> copies: the selected language's
-    /// full message, never the clipped one.
-    /// </summary>
-    public string? CopyText => _selectedText?.Text;
+    /// <inheritdoc />
+    public override ICommand LinkCommand => OpenLinkCommand;
 
     /// <summary>Selects the message in <paramref name="language"/>, and holds the choice for the session.</summary>
     public void SelectLanguage(string? language)
@@ -394,27 +323,9 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
             : null)
         ?? texts.FirstOrDefault();
 
-    private void RaiseTextChanged()
-    {
-        OnPropertyChanged(nameof(HasText));
-        OnPropertyChanged(nameof(LineCount));
-        OnPropertyChanged(nameof(IsClipped));
-        OnPropertyChanged(nameof(DisplayedText));
-        OnPropertyChanged(nameof(ShowAllText));
-        OnPropertyChanged(nameof(CopyText));
-        (CopyCommand as RelayCommand)?.NotifyCanExecuteChanged();
-        RefreshSegments();
-    }
-
-    private void RefreshSegments()
-    {
-        _segments = BuildSegments();
-        OnPropertyChanged(nameof(Segments));
-        OnPropertyChanged(nameof(Links));
-    }
-
-    private IReadOnlyList<WarningTextSegment> BuildSegments() =>
-        NavigationalWarningLinks.Split(DisplayedText, _info, DatasetId, _linkTargets);
+    /// <inheritdoc />
+    protected override IReadOnlyList<WarningTextSegment> BuildSegments(string displayed) =>
+        NavigationalWarningLinks.Split(displayed, _info, DatasetId, _linkTargets);
 
     private string FormatRange(NavigationalWarningValidity range) => (range.Start, range.End) switch
     {
@@ -425,15 +336,6 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
     };
 
     private string Format(DateTimeOffset value) => TimeFormatting.Format(value, _timeFormat);
-
-    // Line breaks normalised to \n, trailing blank lines dropped.
-    private static string[] Lines(string? text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return [];
-        var lines = text.Replace("\r\n", "\n").Replace('\r', '\n').TrimEnd('\n', ' ').Split('\n');
-        return lines;
-    }
 
     // A telex date-time group: DDHHMMZ MON YY, e.g. "262222Z SEP 26".
     [GeneratedRegex(@"\b\d{6}Z\s+(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+\d{2}(?:\d{2})?\b", RegexOptions.CultureInvariant)]

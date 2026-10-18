@@ -54,7 +54,7 @@ public sealed class PickReportWarningCardsViewTests
         pick.SetPicks([bulletin]);
 
         using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
-        var text = host.Find<WarningMessageTextBlock>("PickReport.WarningCard.Text");
+        var text = host.Find<WarningMessageTextBlock>("PickReport.TextCard.Text");
 
         // Selecting everything copies the text with its line breaks, across the link.
         text.SelectAll();
@@ -89,11 +89,59 @@ public sealed class PickReportWarningCardsViewTests
         Assert.False(host.IsShown("PickReport.Hits"));
         var headers = host.FindAll<Button>("PickReport.WarningCard.Header").Where(b => b.IsEffectivelyVisible).ToList();
         Assert.Equal(["P 477/20", "P 478/20"], headers.Select(h => AutomationProperties.GetName(h)));
-        Assert.Single(host.FindAll<Button>("PickReport.WarningCard.ZoomTo"), b => b.IsEffectivelyVisible);
+        Assert.Single(host.FindAll<Button>("PickReport.TextCard.ZoomTo"), b => b.IsEffectivelyVisible);
 
         host.Click(headers[1]);
 
         Assert.Same(second, pick.SelectedHit);
         Assert.Equal([false, true], pick.WarningCards.Select(c => c.IsOpen));
+    }
+
+    [AvaloniaFact]
+    public void A_not_for_navigation_warning_shows_the_footer_label_and_monospaced_text()
+    {
+        var hit = Hit("a", "477/20");
+        var pick = new PickReportViewModel();
+        pick.SetPicks([new PickHit
+        {
+            FeatureType = hit.FeatureType,
+            FeatureRef = hit.FeatureRef,
+            DatasetFileName = hit.DatasetFileName,
+            ProductSpec = hit.ProductSpec,
+            NavigationalWarning = hit.NavigationalWarning,
+            NotForNavigation = true,
+        }]);
+
+        using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
+
+        Assert.True(host.IsShown("PickReport.TextCard.NotForNavigation"));
+        Assert.Contains("Menlo", host.Find<WarningMessageTextBlock>("PickReport.TextCard.Text").FontFamily.ToString());
+    }
+
+    [AvaloniaFact]
+    public void Referenced_text_and_long_values_share_the_body_set_proportional_without_the_label()
+    {
+        var pick = new PickReportViewModel();
+        pick.SetPicks([new PickHit
+        {
+            FeatureType = "CautionArea",
+            FeatureRef = "7",
+            DatasetFileName = "101GB.000",
+            ProductSpec = "S-101",
+            Attributes =
+            [
+                new PickAttribute { Code = "fileReference", RawValue = "CAUTION.TXT", ExternalText = "ANCHORING\nBeware of currents." },
+                new PickAttribute { Code = "note", Name = "Note", RawValue = "A\nB" },
+            ],
+        }]);
+
+        using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
+
+        var cards = host.FindAll<Border>("PickReport.TextCard").Where(b => b.IsEffectivelyVisible).ToList();
+        Assert.Equal(["ANCHORING", "Note"], cards.Select(c => AutomationProperties.GetName(c)));
+        var texts = host.FindAll<WarningMessageTextBlock>("PickReport.TextCard.Text").Where(t => t.IsEffectivelyVisible).ToList();
+        Assert.Equal(2, texts.Count);
+        Assert.All(texts, t => Assert.DoesNotContain("Menlo", t.FontFamily.ToString()));
+        Assert.False(host.IsShown("PickReport.TextCard.NotForNavigation"));
     }
 }

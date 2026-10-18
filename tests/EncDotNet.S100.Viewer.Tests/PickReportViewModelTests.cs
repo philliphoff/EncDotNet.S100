@@ -42,7 +42,7 @@ public class PickReportViewModelTests
     }
 
     [Fact]
-    public void SetPick_LiftsResolvedFileReferenceIntoReferencedTexts()
+    public void SetPick_LiftsResolvedFileReferenceIntoTextCards()
     {
         var vm = new PickReportViewModel();
 
@@ -64,12 +64,12 @@ public class PickReportViewModelTests
         Assert.Equal("objectName", row.Code);
 
         // …and surfaced as a referenced-text card with a promoted heading.
-        Assert.True(vm.HasReferencedText);
-        var card = Assert.Single(vm.ReferencedTexts);
+        Assert.True(vm.HasTextCards);
+        var card = Assert.Single(vm.TextCards);
         Assert.Equal("ANCHORING RESTRICTED", card.Title);
         Assert.Equal("CAUTION.TXT", card.FileName);
         Assert.Equal("Beware of strong currents.", card.Body);
-        Assert.Equal(fileRef.ExternalText, card.ClipboardText);
+        Assert.Equal(fileRef.ExternalText, card.CopyText);
     }
 
     [Fact]
@@ -88,14 +88,14 @@ public class PickReportViewModelTests
 
         vm.SetPick("CautionArea", "Caution Area", "7", "test.000", "S-101", new[] { fileRef });
 
-        Assert.False(vm.HasReferencedText);
-        Assert.Empty(vm.ReferencedTexts);
+        Assert.False(vm.HasTextCards);
+        Assert.Empty(vm.TextCards);
         var row = Assert.Single(vm.Attributes);
         Assert.Equal("MISSING.TXT", row.RawValue);
     }
 
     [Fact]
-    public void Clear_EmptiesReferencedTexts()
+    public void Clear_EmptiesTextCards()
     {
         var vm = new PickReportViewModel();
         var fileRef = new PickAttribute
@@ -106,12 +106,12 @@ public class PickReportViewModelTests
             Children = [],
         };
         vm.SetPick("CautionArea", null, "7", "test.000", "S-101", new[] { fileRef });
-        Assert.True(vm.HasReferencedText);
+        Assert.True(vm.HasTextCards);
 
         vm.Clear();
 
-        Assert.False(vm.HasReferencedText);
-        Assert.Empty(vm.ReferencedTexts);
+        Assert.False(vm.HasTextCards);
+        Assert.Empty(vm.TextCards);
     }
 
     [Fact]
@@ -150,10 +150,10 @@ public class PickReportViewModelTests
         vm.SetPick("CautionArea", "Caution Area", "7", "test.000", "S-101", new[] { fileRef });
 
         Assert.Empty(vm.Attributes);
-        var card = Assert.Single(vm.ReferencedTexts);
+        var card = Assert.Single(vm.TextCards);
         Assert.Equal("CAUTION.TXT", card.FileName);
         Assert.Equal("Beware of strong currents.", card.Title);
-        Assert.Equal("Beware of strong currents.", card.ClipboardText);
+        Assert.Equal("Beware of strong currents.", card.CopyText);
     }
 
     [Fact]
@@ -1049,5 +1049,93 @@ public class PickReportViewModelTests
         Assert.True(raised);
         Assert.False(vm.IsExaminerAvailable);
         Assert.False(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SetPick_LiftsLongValuesIntoTextCardsAndDropsTheirRows()
+    {
+        var vm = new PickReportViewModel();
+        var regulation = string.Join(' ', Enumerable.Repeat("Vessels shall not anchor within the area.", 4));
+        var information = new PickAttribute
+        {
+            Code = "information",
+            Name = "Information",
+            RawValue = "",
+            Children =
+            [
+                new PickAttribute { Code = "language", Name = "Language", RawValue = "eng" },
+                new PickAttribute { Code = "text", Name = "Text", RawValue = regulation },
+            ],
+        };
+        var onlyText = new PickAttribute
+        {
+            Code = "textContent",
+            Name = "Text content",
+            RawValue = "",
+            Children = [new PickAttribute { Code = "text", Name = "Text", RawValue = "Line 1\nLine 2" }],
+        };
+
+        vm.SetPick("Regulation", null, "1", "s122.gml", "S-122",
+            [Leaf("featureName", "Short name", "Feature name"), information, onlyText, Leaf("note", "A\nB", "Note")]);
+
+        // The table keeps short rows; the complex row keeps its short child,
+        // and one left with no children is dropped.
+        Assert.Equal(["featureName", "information"], vm.Attributes.Select(a => a.Code));
+        Assert.Equal(["language"], vm.Attributes[1].Children.Select(c => c.Code));
+
+        Assert.True(vm.HasTextCards);
+        Assert.Equal(["Information · Text", "Text content · Text", "Note"], vm.TextCards.Select(c => c.Title));
+        Assert.Equal(regulation, vm.TextCards[0].CopyText);
+    }
+
+    [Fact]
+    public void SetPicks_CarriesNotForNavigationToTextAndWarningCards()
+    {
+        var vm = new PickReportViewModel();
+        var fileRef = new PickAttribute
+        {
+            Code = "fileReference",
+            RawValue = "CAUTION.TXT",
+            ExternalText = "Hazard.\nDetails.",
+        };
+        vm.SetPicks([
+            new PickHit
+            {
+                FeatureType = "CautionArea",
+                FeatureRef = "7",
+                DatasetFileName = "101GB.000",
+                ProductSpec = "S-101",
+                NotForNavigation = true,
+                Attributes = [fileRef],
+            },
+        ]);
+
+        Assert.True(Assert.Single(vm.TextCards).NotForNavigation);
+
+        vm.SetPicks([
+            new PickHit
+            {
+                FeatureType = "CautionArea",
+                FeatureRef = "8",
+                DatasetFileName = "loose.000",
+                ProductSpec = "S-101",
+                Attributes = [fileRef],
+            },
+        ]);
+
+        Assert.False(Assert.Single(vm.TextCards).NotForNavigation);
+    }
+
+    [Fact]
+    public void TextCardCopy_RaisesCopyIdentityRequested()
+    {
+        var vm = new PickReportViewModel();
+        string? copied = null;
+        vm.CopyIdentityRequested += (_, t) => copied = t;
+        vm.SetPick("Regulation", null, "1", "s122.gml", "S-122", [Leaf("note", "A\nB", "Note")]);
+
+        Assert.Single(vm.TextCards).CopyCommand.Execute(null);
+
+        Assert.Equal("A\nB", copied);
     }
 }

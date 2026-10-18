@@ -18,6 +18,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// <param name="MaximumDisplayScale">Finest display scale, if known.</param>
 /// <param name="GeographicBounds">The cell's EPSG:4326 footprint from the
 /// catalogue, used for viewport culling.</param>
+/// <param name="NotForNavigation">Whether the catalogue marks the cell not for navigation.</param>
 internal sealed record ExchangeSetCellRegistration(
     IAssetSource Source,
     string RelativePath,
@@ -26,4 +27,5 @@ internal sealed record ExchangeSetCellRegistration(
     IReadOnlyList<string>? UpdateRelativePaths = null,
     int? MinimumDisplayScale = null,
     int? MaximumDisplayScale = null,
-    ExchangeSets.BoundingBox? GeographicBounds = null);
+    ExchangeSets.BoundingBox? GeographicBounds = null,
+    bool NotForNavigation = false);
