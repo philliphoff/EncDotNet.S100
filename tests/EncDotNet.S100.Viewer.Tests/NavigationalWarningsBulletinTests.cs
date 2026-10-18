@@ -112,7 +112,7 @@ public sealed class NavigationalWarningsBulletinTests : IDisposable
                     (Warning("NAVAREA X", 104, Oct(5)), new GeoPosition(-16.5, 146.0)),
                     (Warning("NAVAREA X", 105, Oct(6)), new GeoPosition(-17.0, 146.5)),
                     (Warning("NAVAREA X", 111, Oct(13)), new GeoPosition(-17.5, 147.0)),
-                    (Bulletin("NAVAREA X", 110, Oct(12), 104, 110), null)),
+                    (Bulletin("NAVAREA X", 110, Oct(12), 103, 104, 107, 110), null)),
                 [new DatasetEntry("/tmp/auscoast_190.gml", "S-124")] = new FakeProcessor(null,
                     (Warning("AUSCOAST", 190, Oct(1)), new GeoPosition(-34.0, 151.5))),
                 [new DatasetEntry("/tmp/auscoast_200.gml", "S-124")] = new FakeProcessor(Bulletin("AUSCOAST", 200, Oct(12))),
@@ -150,9 +150,9 @@ public sealed class NavigationalWarningsBulletinTests : IDisposable
         Assert.Equal(3, f.Panel.InForceCount);
         Assert.Equal(2, f.Panel.NotInForceCount);
         var dropped = f.Panel.Items.OfType<NavigationalWarningRowItem>().Single(r => r.Number == "105/26");
-        Assert.Equal("Ended — not in in-force bulletin NAVAREA X 110/26", dropped.SubText);
+        Assert.Equal("Not in bulletin NAVAREA X 110/26", dropped.SubText);
         var coastal = f.Panel.Items.OfType<NavigationalWarningRowItem>().Single(r => r.Number == "190/26");
-        Assert.Equal("Ended — not in in-force bulletin AUSCOAST 200/26", coastal.SubText);
+        Assert.Equal("Not in bulletin AUSCOAST 200/26", coastal.SubText);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public sealed class NavigationalWarningsBulletinTests : IDisposable
 
         Assert.True(card.IsEnded);
         Assert.Equal("Ended", card.StatusText);
-        Assert.Equal("Ended — not in in-force bulletin NAVAREA X 110/26", card.StatusReasonText);
+        Assert.Equal("Cancelled — not in in-force bulletin NAVAREA X 110/26", card.StatusReasonText);
         Assert.Contains(nameof(NavigationalWarningCardViewModel.StatusReasonText), changed);
 
         card.SetViewTime(Oct(11));
@@ -211,9 +211,61 @@ public sealed class NavigationalWarningsBulletinTests : IDisposable
         Assert.Equal("ended", dropped.Status);
         Assert.Equal("not_in_bulletin", dropped.StatusReason);
         Assert.Equal("NAVAREA X 110/26", dropped.EndedBy);
-        Assert.Equal("Ended — not in in-force bulletin NAVAREA X 110/26", dropped.StatusReasonText);
+        Assert.Equal("Cancelled — not in in-force bulletin NAVAREA X 110/26", dropped.StatusReasonText);
         var listed = dto.Warnings.Single(w => w.Number == "104/26");
         Assert.Equal(("in_force", (string?)null, (string?)null), (listed.Status, listed.StatusReason, listed.EndedBy));
         Assert.Equal(3, dto.InForce);
+    }
+
+    [Fact]
+    public void The_series_group_notes_what_the_bulletin_lists_but_is_not_received()
+    {
+        var f = new Fixture(Oct(14));
+
+        var navarea = f.Panel.Items.OfType<NavigationalWarningGroupItem>().Single(g => g.Name == "NAVAREA X");
+        Assert.True(navarea.HasNotReceived);
+        Assert.Equal("Listed in NAVAREA X 110/26 but not received: 103/26, 107/26", navarea.NotReceivedText);
+        Assert.Null(f.Panel.Items.OfType<NavigationalWarningGroupItem>().Single(g => g.IsNotInForce).NotReceivedText);
+
+        var dto = NavigationalWarningsToolBase.ToDto(f.Panel, f.Service);
+        var bulletin = Assert.Single(dto.Bulletins, b => b.Series == "NAVAREA X");
+        Assert.Equal("NAVAREA X 110/26", bulletin.Label);
+        Assert.Equal(["103/26", "104/26", "107/26", "110/26"], bulletin.Listed);
+        Assert.Equal(["103/26", "107/26"], bulletin.NotReceived);
+        Assert.Equal(navarea.NotReceivedText, bulletin.NotReceivedText);
+        var coastal = Assert.Single(dto.Bulletins, b => b.Series == "AUSCOAST");
+        Assert.True(coastal.NoMessageOnHand);
+        Assert.Empty(coastal.NotReceived);
+        Assert.Null(coastal.NotReceivedText);
+    }
+
+    [Fact]
+    public void Before_the_bulletins_no_note_shows()
+    {
+        var f = new Fixture(Oct(11));
+
+        Assert.All(f.Panel.Items.OfType<NavigationalWarningGroupItem>(), g => Assert.False(g.HasNotReceived));
+        Assert.Empty(NavigationalWarningsToolBase.ToDto(f.Panel, f.Service).Bulletins);
+    }
+
+    [Fact]
+    public void A_series_with_only_a_partless_bulletin_still_gets_its_note()
+    {
+        var loader = new FakeDatasetLoaderService
+        {
+            Processors = new Dictionary<DatasetEntry, IDatasetProcessor>
+            {
+                [new DatasetEntry("/tmp/navarea_xi.gml", "S-124")] = new FakeProcessor(Bulletin("NAVAREA XI", 40, Oct(12), 31, 36) with { Issuer = "NAVAREA XI coordinator" }),
+            },
+        };
+        var service = new NavigationalWarningsService(loader);
+        var panel = new NavigationalWarningsViewModel(service, new NoPick(), viewTime: new ViewTime(Oct(14)), timeFormat: new Utc(), loader: loader, clock: new FixedClock(Now));
+
+        var group = Assert.Single(panel.Items.OfType<NavigationalWarningGroupItem>());
+        Assert.Equal(("NAVAREA XI", 0, "NAVAREA XI coordinator"), (group.Name, group.Count, group.Source));
+        Assert.Equal("Listed in NAVAREA XI 040/26 but not received: 031/26, 036/26", group.NotReceivedText);
+
+        panel.Query = "zzz";
+        Assert.Empty(panel.Items.OfType<NavigationalWarningGroupItem>());
     }
 }

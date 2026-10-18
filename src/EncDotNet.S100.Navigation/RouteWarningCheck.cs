@@ -192,7 +192,7 @@ public sealed record RouteWarningText
     public string NotInBulletin { get; init; } = "Navigational warning {0} not in in-force bulletin {1}";
 
     /// <summary>The meta line's status when the latest in-force bulletin leaves it out ({0}: the bulletin).</summary>
-    public string NotInBulletinStatus { get; init; } = "Not in in-force bulletin {0}";
+    public string NotInBulletinStatus { get; init; } = "Cancelled — not in in-force bulletin {0}";
 
     /// <summary>A validity range with both ends ({0} start, {1} end).</summary>
     public string ValidityRange { get; init; } = "{0}–{1}";

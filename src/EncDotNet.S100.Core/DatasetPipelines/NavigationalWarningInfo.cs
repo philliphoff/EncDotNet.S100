@@ -170,8 +170,8 @@ public sealed record NavigationalWarningInfo
 
     /// <summary>
     /// What the warning lists as in force when it is an in-force bulletin
-    /// (S-124 <c>navwarnTypeGeneral</c> 8 with a <c>References</c> of
-    /// <c>referenceCategory</c> 3), or <c>null</c> for any other warning.
+    /// (S-124: a <c>References</c> of <c>referenceCategory</c> 3), or
+    /// <c>null</c> for any other warning.
     /// <see cref="NavigationalWarningSet"/> uses it to end warnings the latest
     /// bulletin leaves out (§9.2.1).
     /// </summary>

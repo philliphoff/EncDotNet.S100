@@ -48,6 +48,21 @@ public sealed record NavigationalWarningState(
 }
 
 /// <summary>
+/// The latest in-force bulletin of a series, and what it lists that isn't
+/// loaded (S-124 Edition 2.0.0 §9.2.2: "an indication should be given").
+/// </summary>
+/// <param name="Series">The bulletin's series, as it writes it.</param>
+/// <param name="Bulletin">The bulletin.</param>
+/// <param name="NotReceived">
+/// The warnings it lists as in force with no loaded warning to match, in its
+/// order; the bulletin's reference to itself is never one of them.
+/// </param>
+public sealed record NavigationalWarningBulletinReport(
+    string Series,
+    NavigationalWarningInfo Bulletin,
+    IReadOnlyList<NavigationalWarningReference> NotReceived);
+
+/// <summary>
 /// Every loaded navigational warning, judged together: a warning's status
 /// depends on the others, which may cancel it or, as an in-force bulletin,
 /// leave it out (S-124 Edition 2.0.0 §9.2.1, §9.3).
@@ -69,11 +84,19 @@ public sealed record NavigationalWarningState(
 /// decided, and keeping a warning in force is the safe way to be wrong.
 /// Edition 1.0.0 gives no publication time, so it has no bulletin rule.
 /// </para>
+/// <para>
+/// A warning left out of the bulletin is reported as cancelled, as S-98
+/// Edition 2.0.0 §12.12 has ECDIS do: it stays listed, marked cancelled, and
+/// isn't drawn on the navigation screen. (S-124 §9.3 forbids producers from
+/// using the bulletin to cancel; that is about encoding, not this status.)
+/// <see cref="IsInForceAt"/> is the one test a renderer needs.
+/// </para>
 /// </remarks>
 public sealed class NavigationalWarningSet
 {
     private readonly List<NavigationalWarningInfo> _cancellers = [];
     private readonly List<NavigationalWarningInfo> _bulletins = [];
+    private readonly List<NavigationalWarningReference> _loaded = [];
 
     /// <summary>An empty set, in which each warning is judged on its own.</summary>
     public static NavigationalWarningSet Empty { get; } = new([]);
@@ -90,6 +113,8 @@ public sealed class NavigationalWarningSet
         {
             ArgumentNullException.ThrowIfNull(warning, nameof(warnings));
             Count++;
+            if (warning.Reference is { } reference)
+                _loaded.Add(reference);
             if (warning.Cancels.Count > 0)
                 _cancellers.Add(warning);
             if (warning.InForceBulletin is not null && warning.PublicationTime is not null && SeriesOf(warning) is not null)
@@ -120,6 +145,39 @@ public sealed class NavigationalWarningSet
             NavigationalWarningStatus.InForce => NavigationalWarningState.InForce,
             var status => new NavigationalWarningState(status, NavigationalWarningStatusReason.Validity),
         };
+    }
+
+    /// <summary>Whether the warning is in force at <paramref name="time"/>, judged with the set.</summary>
+    /// <param name="warning">The warning (or one of its parts).</param>
+    /// <param name="time">The time to test.</param>
+    /// <returns><c>true</c> when <see cref="StatusAt"/> gives <see cref="NavigationalWarningStatus.InForce"/>.</returns>
+    public bool IsInForceAt(NavigationalWarningInfo warning, DateTimeOffset time) =>
+        StatusAt(warning, time).Status == NavigationalWarningStatus.InForce;
+
+    /// <summary>
+    /// The latest in-force bulletin of each series published at or before
+    /// <paramref name="time"/>, with the listed warnings that aren't loaded
+    /// (§9.2.2), latest first.
+    /// </summary>
+    /// <param name="time">The time.</param>
+    /// <returns>One report per series that has a bulletin by then.</returns>
+    public IReadOnlyList<NavigationalWarningBulletinReport> LatestBulletins(DateTimeOffset time)
+    {
+        var reports = new List<NavigationalWarningBulletinReport>();
+        foreach (var bulletin in _bulletins)
+        {
+            var series = SeriesOf(bulletin)!;
+            if (bulletin.PublicationTime > time || reports.Any(r => NavigationalWarningReference.SameSeries(r.Series, series)))
+                continue;
+            var notReceived = bulletin.InForceBulletin!.NoMessageOnHand
+                ? []
+                : bulletin.InForceBulletin.InForce
+                    .Where(listed => !(bulletin.Reference?.Matches(listed) ?? false) && !_loaded.Any(l => l.Matches(listed)))
+                    .ToList();
+            reports.Add(new NavigationalWarningBulletinReport(series, bulletin, notReceived));
+        }
+
+        return reports;
     }
 
     /// <summary>

@@ -309,6 +309,8 @@ internal static partial class Strings
     public static string Pick_Warning_EndedNotInBulletinFormat => Get(nameof(Pick_Warning_EndedNotInBulletinFormat));
     public static string Pick_Warning_EndedReplacedFormat => Get(nameof(Pick_Warning_EndedReplacedFormat));
     public static string Pick_Warning_EndedCancelledByFormat => Get(nameof(Pick_Warning_EndedCancelledByFormat));
+    public static string NavWarnings_NotReceivedFormat => Get(nameof(NavWarnings_NotReceivedFormat));
+    public static string NavWarnings_NotInBulletinFormat => Get(nameof(NavWarnings_NotInBulletinFormat));
     public static string Pick_Warning_ValidLabel => Get(nameof(Pick_Warning_ValidLabel));
     public static string Pick_Warning_AreaLabel => Get(nameof(Pick_Warning_AreaLabel));
     public static string Pick_Warning_IssuedLabel => Get(nameof(Pick_Warning_IssuedLabel));

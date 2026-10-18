@@ -170,8 +170,8 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
     public NavigationalWarningStatus Status => State.Status;
 
     /// <summary>
-    /// Why another warning ended this one, under the status pill: "Ended — not
-    /// in in-force bulletin NAVAREA X 110/26", "Ended — cancelled by …";
+    /// Why another warning ended this one, under the status pill: "Cancelled — not
+    /// in in-force bulletin NAVAREA X 110/26", "Cancelled by …";
     /// <see langword="null"/> otherwise.
     /// </summary>
     public string? StatusReasonText => NavigationalWarningStatusText.Reason(State);

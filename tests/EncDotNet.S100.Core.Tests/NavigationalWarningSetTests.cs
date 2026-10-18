@@ -214,4 +214,34 @@ public class NavigationalWarningSetTests
         Assert.Equal(NavigationalWarningState.InForce, NavigationalWarningSet.Empty.StatusAt(warning, Oct(9)));
         Assert.Equal(NavigationalWarningStatusReason.CancellationDate, NavigationalWarningSet.Empty.StatusAt(warning, Oct(10)).Reason);
     }
+
+    [Fact]
+    public void Latest_bulletins_list_what_is_not_received()
+    {
+        var listed = Warning(104, Oct(5));
+        var older = Bulletin(100, Oct(5), NavareaX, 99);
+        var bulletin = Bulletin(110, Oct(12), NavareaX, 103, 104, 107, 110);
+        var set = new NavigationalWarningSet([listed, older, bulletin, NoMessage(200, Oct(12), "AUSCOAST")]);
+
+        var reports = set.LatestBulletins(Oct(14));
+
+        var navarea = Assert.Single(reports, r => r.Series == NavareaX);
+        Assert.Same(bulletin, navarea.Bulletin);
+        Assert.Equal([103, 107], navarea.NotReceived.Select(r => r.Number));
+        Assert.Empty(Assert.Single(reports, r => r.Series == "AUSCOAST").NotReceived);
+
+        // Before the latest, the older bulletin is the series' latest.
+        Assert.Equal([99], Assert.Single(set.LatestBulletins(Oct(8))).NotReceived.Select(r => r.Number));
+        Assert.Empty(set.LatestBulletins(Oct(4)));
+    }
+
+    [Fact]
+    public void IsInForceAt_is_the_renderers_test()
+    {
+        var dropped = Warning(105, Oct(6));
+        var set = new NavigationalWarningSet([dropped, Bulletin(110, Oct(12), NavareaX, 104)]);
+
+        Assert.True(set.IsInForceAt(dropped, Oct(11)));
+        Assert.False(set.IsInForceAt(dropped, Oct(12)));
+    }
 }

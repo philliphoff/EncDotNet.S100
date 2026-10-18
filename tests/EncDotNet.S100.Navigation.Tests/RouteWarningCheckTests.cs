@@ -235,7 +235,7 @@ public class RouteWarningCheckTests
         var finding = result.Matches[1].Finding!;
         Assert.Equal((RouteWarningCodes.Cancelled, RouteFindingGroup.Info), (finding.Code, finding.Group));
         Assert.Equal("Navigational warning 021/26 not in in-force bulletin TEST 030/26", finding.Title);
-        Assert.EndsWith(" · Not in in-force bulletin TEST 030/26", finding.Meta, StringComparison.Ordinal);
+        Assert.EndsWith(" · Cancelled — not in in-force bulletin TEST 030/26", finding.Meta, StringComparison.Ordinal);
         Assert.Equal(NavigationalWarningStatusReason.NotInBulletin, finding.Warning!.Withdrawal!.Reason);
     }
 

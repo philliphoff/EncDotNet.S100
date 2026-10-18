@@ -49,11 +49,14 @@ description: |
    (§9.2.1). `NavigationalWarningInfo.StatusAt` judges one warning alone
    (date ranges and cancellation date); anything that shows or uses a
    status must go through `NavigationalWarningSet.StatusAt`, which also
-   applies cancellations and bulletins. A bulletin is `navwarnTypeGeneral`
-   8 (its own `warningType` 9–12) with a `References` of
-   `referenceCategory` 3 listing `messageSeriesIdentifier`s, or
-   `noMessageOnHand` (Table 8-1, §8.1.3–8.1.4); categories 9–12 are
-   `warningType` codes, not reference categories.
+   applies cancellations and bulletins. A bulletin is recognised by a
+   `References` with `referenceCategory` 3 (In-Force) listing
+   `messageSeriesIdentifier`s, or `noMessageOnHand` (Table 8-1,
+   §8.1.3–8.1.4); `navwarnTypeGeneral` 8 and its own `warningType` 9–12
+   are supporting signals. Values 9–12 are `warningType` codes, not
+   reference categories. A warning left out is reported as cancelled
+   (S-98 §12.12), and `NavigationalWarningSet.LatestBulletins` lists what a
+   bulletin names but isn't loaded (§9.2.2).
 7. Language-bearing complex attributes (`warningInformation/information`,
    `generalArea/locationName`, `navwarnTitle`) carry one language per
    instance, repeated for each language (§4 Figure 4-5). Read every

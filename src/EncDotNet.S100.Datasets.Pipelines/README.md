@@ -473,9 +473,14 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   (S-124 Edition 2.0.0 §9.2.1). `StatusAt(warning, time)` returns the status
   and why: the warning's cancellation date, a warning that cancels it, or the
   latest in-force bulletin for its series leaving it out, then its validity
-  ranges. A bulletin judges only warnings published before it, and a later
-  bulletin replaces an earlier one. Warnings and bulletins without a
-  publication time (all of Edition 1.0.0) are never judged by bulletins.
+  ranges. A warning left out of a bulletin is reported as cancelled, as S-98
+  §12.12 has ECDIS do. A bulletin judges only warnings published before it,
+  and a later bulletin replaces an earlier one. Warnings and bulletins
+  without a publication time (all of Edition 1.0.0) are never judged by
+  bulletins. `IsInForceAt` is the test a renderer needs, and
+  `LatestBulletins` lists each series' latest bulletin with the warnings it
+  lists that aren't loaded (§9.2.2). A bulletin is recognised by a
+  `References` with `referenceCategory` 3 (In-Force).
 - `Navigation/RouteWarningSources`: the S-124 warning parts of loaded datasets
   as `RouteWarning`s for `RouteWarningCheck`, and `SetFromDatasets`, the
   `NavigationalWarningSet` to judge them with (see the Navigation package's

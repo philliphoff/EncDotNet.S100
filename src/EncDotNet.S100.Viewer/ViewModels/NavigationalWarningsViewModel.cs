@@ -536,6 +536,20 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
             _service.MarkSeen(row.Entry);
     }
 
+    /// <summary>"Listed in NAVAREA X 110/26 but not received: 103/26, 107/26".</summary>
+    internal static string NotReceivedText(NavigationalWarningBulletinReport report) =>
+        string.Format(
+            CultureInfo.CurrentCulture,
+            Strings.NavWarnings_NotReceivedFormat,
+            report.Bulletin.Label ?? report.Series,
+            string.Join(", ", report.NotReceived.Select(NumberText)));
+
+    /// <summary>"103/26": the number and two-digit year, as a series group lists it.</summary>
+    internal static string NumberText(NavigationalWarningReference reference) =>
+        reference.Year is { } year
+            ? $"{reference.Number.ToString("D3", CultureInfo.InvariantCulture)}/{(year % 100).ToString("D2", CultureInfo.InvariantCulture)}"
+            : reference.Number.ToString("D3", CultureInfo.InvariantCulture);
+
     private void Rebuild()
     {
         if (_disposed)
@@ -573,8 +587,15 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
             .OrderBy(g => g.Series, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(g => g.Source?.Name ?? g.Issuer, StringComparer.CurrentCultureIgnoreCase);
         var staleShown = new HashSet<Guid>();
+        // §9.2.2: a series' bulletin names warnings that aren't loaded; say so once, on its first group.
+        var notReceived = _service.Set.LatestBulletins(time)
+            .Where(r => r.NotReceived.Count > 0)
+            .ToList();
         foreach (var group in groups)
         {
+            var missing = notReceived.FirstOrDefault(r => NavigationalWarningReference.SameSeries(r.Series, group.Series));
+            if (missing is not null)
+                notReceived.Remove(missing);
             // An unreachable source says so once, at the top of its first group.
             if (group.Source is { IsStale: true } stale && staleShown.Add(stale.Id))
                 items.Add(new NavigationalWarningStaleItem(stale, StaleText(stale, format, now), new RelayCommand(() => _service.RefreshSources([stale.Id]))));
@@ -584,8 +605,21 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
             {
                 IsStale = group.Source?.IsStale == true,
                 SourceId = group.Source?.Id,
+                NotReceivedText = missing is null ? null : NotReceivedText(missing),
             });
             items.AddRange(rows.Select(w => new NavigationalWarningRowItem(w, states[w], time, format) { IsNew = _service.IsNew(w) }));
+        }
+
+        // A series whose bulletin has no parts, and nothing else in force, still gets its note.
+        if (string.IsNullOrWhiteSpace(_query) && !_textOnlyFilter)
+        {
+            foreach (var orphan in notReceived)
+            {
+                items.Add(new NavigationalWarningGroupItem(orphan.Series, 0, orphan.Bulletin.Issuer ?? string.Empty, isNotInForce: false, isExpanded: true, command: null)
+                {
+                    NotReceivedText = NotReceivedText(orphan),
+                });
+            }
         }
 
         var outRows = Ordered(notInForce.Where(Listed)).ToList();
@@ -759,6 +793,16 @@ internal sealed class NavigationalWarningGroupItem : NavigationalWarningListItem
     /// <summary>Whether the group's source didn't answer its latest refresh.</summary>
     public bool IsStale { get; init; }
 
+    /// <summary>
+    /// What the series' latest in-force bulletin lists but isn't loaded
+    /// (S-124 §9.2.2): "Listed in NAVAREA X 110/26 but not received: 103/26,
+    /// 107/26"; <see langword="null"/> when nothing is missing.
+    /// </summary>
+    public string? NotReceivedText { get; init; }
+
+    /// <summary>Whether <see cref="NotReceivedText"/> has a value.</summary>
+    public bool HasNotReceived => NotReceivedText is not null;
+
     /// <summary>The group's Library source, or <see langword="null"/> for a file opened directly.</summary>
     public Guid? SourceId { get; init; }
 
@@ -888,7 +932,7 @@ internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
     private static string BuildSubText(NavigationalWarningEntry entry, NavigationalWarningState state, DateTimeOffset time, TimeFormat format)
     {
         var w = entry.Warning;
-        if (NavigationalWarningStatusText.Reason(state) is { } reason)
+        if (NavigationalWarningStatusText.Reason(state, brief: true) is { } reason)
             return reason;
         if (state.Status != NavigationalWarningStatus.InForce)
         {

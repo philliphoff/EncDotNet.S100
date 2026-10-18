@@ -19,6 +19,7 @@ public class S124InForceBulletinTests
     private const string Bulletin = "navwarn_bulletin_navarea_x_110_26_in_force.gml";
     private const string Coastal = "navwarn_bulletin_auscoast_190_26.gml";
     private const string NoMessage = "navwarn_bulletin_auscoast_200_26_in_force.gml";
+    private const string Untyped = "navwarn_bulletin_navarea_xi_040_26_in_force.gml";
 
     private static readonly DateTimeOffset BeforeBulletin = new(2026, 10, 11, 0, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset AfterBulletin = new(2026, 10, 14, 0, 0, 0, TimeSpan.Zero);
@@ -129,5 +130,24 @@ public class S124InForceBulletinTests
             },
         ]);
         Assert.Equal(edition1.StatusAt(AfterBulletin), set.StatusAt(edition1, AfterBulletin).Status);
+    }
+
+    [Fact]
+    public void Reference_category_3_alone_makes_a_bulletin()
+    {
+        // navwarnTypeGeneral 15 and warningType 4: only the In-Force References says it's a bulletin.
+        var message = CreateProcessor(Untyped).GetNavigationalWarningMessage()!;
+
+        Assert.Equal([31, 36], message.InForceBulletin!.InForce.Select(r => r.Number));
+    }
+
+    [Fact]
+    public void The_set_reports_what_each_latest_bulletin_lists_but_is_not_loaded()
+    {
+        var reports = Set(Listed, Dropped, Bulletin, NoMessage, Untyped).LatestBulletins(AfterBulletin);
+
+        Assert.Empty(Assert.Single(reports, r => r.Series == "NAVAREA X").NotReceived);
+        Assert.Empty(Assert.Single(reports, r => r.Series == "AUSCOAST").NotReceived);
+        Assert.Equal([31, 36], Assert.Single(reports, r => r.Series == "NAVAREA XI").NotReceived.Select(r => r.Number));
     }
 }

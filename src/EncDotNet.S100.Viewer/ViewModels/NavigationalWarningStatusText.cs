@@ -11,18 +11,23 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 internal static class NavigationalWarningStatusText
 {
     /// <summary>
-    /// "Ended — not in in-force bulletin NAVAREA X 110/26", "Ended — cancelled
-    /// by NAVAREA X 104/26" or "Ended — replaced by in-force bulletin …";
+    /// "Cancelled — not in in-force bulletin NAVAREA X 110/26", "Cancelled by
+    /// NAVAREA X 104/26" or "Replaced by in-force bulletin …";
     /// <see langword="null"/> when no other warning ended it.
     /// </summary>
-    public static string? Reason(NavigationalWarningState state)
+    /// <param name="state">The warning's status.</param>
+    /// <param name="brief">
+    /// The panel row's shorter form for a bulletin ("Not in bulletin NAVAREA X
+    /// 110/26"), which fits the row; the card and MCP give the full reason.
+    /// </param>
+    public static string? Reason(NavigationalWarningState state, bool brief = false)
     {
         ArgumentNullException.ThrowIfNull(state);
         if (state.By is not { } by)
             return null;
         var format = state.Reason switch
         {
-            NavigationalWarningStatusReason.NotInBulletin => Strings.Pick_Warning_EndedNotInBulletinFormat,
+            NavigationalWarningStatusReason.NotInBulletin => brief ? Strings.NavWarnings_NotInBulletinFormat : Strings.Pick_Warning_EndedNotInBulletinFormat,
             NavigationalWarningStatusReason.BulletinReplaced => Strings.Pick_Warning_EndedReplacedFormat,
             NavigationalWarningStatusReason.Cancelled => Strings.Pick_Warning_EndedCancelledByFormat,
             _ => null,

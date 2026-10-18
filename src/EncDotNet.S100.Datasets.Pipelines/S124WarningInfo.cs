@@ -17,12 +17,6 @@ internal static partial class S124WarningInfo
     /// <summary>The <c>referenceCategory</c> of an in-force bulletin's list (Edition 2.0.0 Table 8-1).</summary>
     private const int InForceCategory = 3;
 
-    /// <summary>The <c>navwarnTypeGeneral</c> of an in-force bulletin.</summary>
-    private const int InForceBulletinType = 8;
-
-    /// <summary>The <c>warningType</c> codes of in-force bulletins: NAVAREA, sub-area, coastal and local (9–12).</summary>
-    private const int FirstBulletinWarningType = 9, LastBulletinWarningType = 12;
-
     /// <summary>
     /// Builds the warning as a whole, from its preamble and references alone:
     /// what a <see cref="NavigationalWarningSet"/> needs from a dataset that
@@ -116,21 +110,16 @@ internal static partial class S124WarningInfo
 
     /// <summary>
     /// What <paramref name="warning"/> lists as in force when it is an
-    /// in-force bulletin, or <c>null</c>. A bulletin has
-    /// <c>navwarnTypeGeneral</c> 8 or an in-force-bulletin <c>warningType</c>
-    /// (9–12), and a <c>References</c> with <c>referenceCategory</c> 3 that
-    /// lists <c>messageSeriesIdentifier</c>s or sets <c>noMessageOnHand</c>
-    /// (Edition 2.0.0 §8.1.3, §8.1.4). Without that list there is nothing to
-    /// judge other warnings by, so it is treated as an ordinary warning.
+    /// in-force bulletin, or <c>null</c>. A bulletin is recognised by a
+    /// <c>References</c> with <c>referenceCategory</c> 3 (In-Force) that lists
+    /// <c>messageSeriesIdentifier</c>s or sets <c>noMessageOnHand</c>
+    /// (Edition 2.0.0 Table 8-1, §8.1.3, §8.1.4). Its <c>navwarnTypeGeneral</c>
+    /// 8 and its own <c>warningType</c> 9–12 (NAVAREA, sub-area, coastal and
+    /// local in-force bulletin) are supporting signals, not the trigger; the
+    /// series comes from its own <c>messageSeriesIdentifier</c>.
     /// </summary>
     internal static NavigationalWarningBulletin? Bulletin(S124NavigationalWarning warning)
     {
-        var preamble = warning.Preamble;
-        var type = preamble?.MessageSeriesIdentifier?.WarningType;
-        if (preamble?.NavwarnTypeGeneral != InForceBulletinType
-            && type is not (>= FirstBulletinWarningType and <= LastBulletinWarningType))
-            return null;
-
         var lists = warning.References.Where(r => r.ReferenceCategory == InForceCategory).ToList();
         if (lists.Count == 0)
             return null;
