@@ -9,7 +9,7 @@ using ModelContextProtocol.Server;
 namespace EncDotNet.S100.Viewer.McpTools;
 
 /// <summary>A route's findings list (#905).</summary>
-[Description("A route's findings list: the clearance findings (and, once #888 lands, route-check findings), grouped must_review, check and info.")]
+[Description("A route's findings list: what every check found (clearance, route checks, S-124 warnings, confidence and data), grouped must_review, check and info.")]
 internal sealed record RouteFindingsDto(
     [property: Description("Id of the route the findings are for.")] string RouteId,
     [property: Description("True when the findings are the live Check passage list shown in the Routes panel (the checked route); false for a one-off check of another route, or of the active route while Check passage is off.")] bool Live,
@@ -17,6 +17,8 @@ internal sealed record RouteFindingsDto(
     [property: Description("Number of must_review findings.")] int MustReview,
     [property: Description("Number of check findings.")] int Check,
     [property: Description("Number of info findings.")] int Info,
+    [property: Description("The findings summary, e.g. \"2 items to review\" or \"No findings for your settings\"; the verdict card's title when the route has no draft.")] string Summary,
+    [property: Description("True while a check is recomputing and part of the list is out of date (live list only).")] bool Stale,
     [property: Description("Id of the selected finding (outlined on the map), or null. Only the live list has a selection.")] string? SelectedId,
     [property: Description("The findings, in list order: by group, then by distance along the route.")] IReadOnlyList<RouteFindingDto> Findings);
 
@@ -74,13 +76,25 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
 
     protected RouteFindingsService Findings { get; }
 
-    internal static RouteFindingsDto ToDto(string routeId, bool live, IReadOnlyList<RouteFinding> findings, RouteFinding? selected) => new(
+    /// <summary>Waits for the check, then for the findings producers, as <see cref="PassageCheckToolBase.SettleAsync"/>.</summary>
+    protected async Task SettleFindingsAsync(CancellationToken cancellationToken)
+    {
+        await SettleAsync(cancellationToken).ConfigureAwait(false);
+        var idle = await Invoker.InvokeAsync(() => Findings.WhenIdle()).ConfigureAwait(false);
+        await idle.WaitAsync(WaitTimeout, cancellationToken).ConfigureAwait(false);
+        // Results are posted to the UI thread; hop there so they have landed.
+        await Invoker.InvokeAsync(() => true).ConfigureAwait(false);
+    }
+
+    internal static RouteFindingsDto ToDto(string routeId, bool live, IReadOnlyList<RouteFinding> findings, RouteFinding? selected, bool stale = false) => new(
         routeId,
         live,
         findings.Count,
         findings.Count(f => f.Group == RouteFindingGroup.MustReview),
         findings.Count(f => f.Group == RouteFindingGroup.Check),
         findings.Count(f => f.Group == RouteFindingGroup.Info),
+        PassageCheckViewModel.NeedsDraftTitle(findings),
+        live && stale,
         live ? selected?.Id : null,
         findings.Select(f => ToDto(f, live && f.Id == selected?.Id)).ToList());
 
@@ -131,22 +145,19 @@ internal sealed class GetFindingsTool : RouteFindingsToolBase
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (wait)
-            await SettleAsync(cancellationToken).ConfigureAwait(false);
+            await SettleFindingsAsync(cancellationToken).ConfigureAwait(false);
 
         var pending = await Invoker.InvokeAsync(async () =>
         {
             var route = Resolve(routeId, out var notFound);
             if (route is null)
                 return ToolResult<RouteFindingsDto>.Err(notFound!);
-            var live = Check.IsActive && Check.Current?.RouteId == route.Id && ReferenceEquals(route, Routes.Routes.ActiveRoute);
+            var live = Check.Input?.RouteId == route.Id && ReferenceEquals(route, Routes.Routes.ActiveRoute);
             var findings = await Findings.FindingsForAsync(route, cancellationToken);
             if (findings is null)
-            {
-                return ToolResult<RouteFindingsDto>.Err(new InvalidArgument(
-                    "routeId", "the route needs at least two waypoints and a draft; set one with set_passage"));
-            }
+                return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("routeId", "the route needs at least two waypoints"));
 
-            return ToolResult<RouteFindingsDto>.Ok(ToDto(route.Id, live, findings, Findings.Selected));
+            return ToolResult<RouteFindingsDto>.Ok(ToDto(route.Id, live, findings, Findings.Selected, Findings.IsStale));
         }).ConfigureAwait(false);
         return await pending.ConfigureAwait(false);
     }
@@ -164,11 +175,11 @@ internal sealed class SelectFindingTool : RouteFindingsToolBase
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        await SettleAsync(cancellationToken).ConfigureAwait(false);
+        await SettleFindingsAsync(cancellationToken).ConfigureAwait(false);
         return await Invoker.InvokeAsync(() =>
         {
-            if (!Check.IsActive || Check.Current is not { } current)
-                return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("id", "Check passage is off or has no result; turn it on with set_check_mode"));
+            if (Check.Input is not { } current)
+                return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("id", "Check passage is off; turn it on with set_check_mode"));
 
             RouteFinding? finding = null;
             if (request.Id is { } id)
@@ -179,7 +190,7 @@ internal sealed class SelectFindingTool : RouteFindingsToolBase
             }
 
             Findings.Select(finding, request.Zoom);
-            return ToolResult<RouteFindingsDto>.Ok(ToDto(current.RouteId, live: true, Findings.Findings, Findings.Selected));
+            return ToolResult<RouteFindingsDto>.Ok(ToDto(current.RouteId, live: true, Findings.Findings, Findings.Selected, Findings.IsStale));
         }).ConfigureAwait(false);
     }
 }
@@ -192,7 +203,7 @@ internal static class RouteFindingsMcpAdapters
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
             [Description("Route to read; omit for the active route.")] string? routeId = null,
-            [Description("Wait for a pending Check passage recompute first (default true).")] bool wait = true,
+            [Description("Wait for a pending Check passage recompute (and the route checks) first (default true).")] bool wait = true,
             CancellationToken ct = default) =>
             McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(routeId, wait, ct));
 
@@ -204,7 +215,8 @@ internal static class RouteFindingsMcpAdapters
                 "each finding's group (must_review, check, info), source tag, title, meta line, leg, distance along the " +
                 "route, location (point or span) and feature reference. For the checked route it's the live list, with " +
                 "the selection; for another route (or with Check passage off) the route is checked once without changing " +
-                "the view. The route needs a draft (set_passage).",
+                "the view. The route needs at least two waypoints; without a draft (set_passage) there are no clearance " +
+                "findings, only the route checks'. summary is the verdict card's title when the route has no draft.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

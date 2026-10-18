@@ -43,7 +43,7 @@ internal enum NavigationalWarningsSort
 /// now. Parts not in force at that time fall into one dimmed group at the
 /// bottom, collapsed until opened.
 /// </remarks>
-internal sealed class NavigationalWarningsViewModel : ViewModelBase, IDisposable
+internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigationalWarningNavigator, IDisposable
 {
     /// <summary>Half the side of the box a point warning frames, in EPSG:3857 metres (about 1 NM).</summary>
     internal const double PointFrameHalfMetres = 1852.0;
@@ -103,8 +103,33 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, IDisposable
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
         if (_pickReport is not null)
+        {
             _pickReport.PropertyChanged += OnPickReportChanged;
+            _pickReport.WarningNavigator = this;
+        }
         Rebuild();
+    }
+
+    /// <summary>Object Information, where opened warnings show.</summary>
+    internal PickReportViewModel? PickReport => _pickReport;
+
+    /// <inheritdoc />
+    public IReadOnlyList<NavigationalWarningEntry> Warnings => _service.Warnings;
+
+    /// <inheritdoc />
+    public event EventHandler? WarningsChanged;
+
+    /// <inheritdoc />
+    public NavigationalWarningEntry? Find(string datasetId, string featureRef) => _service.Find(datasetId, featureRef);
+
+    /// <inheritdoc />
+    public bool ZoomTo(NavigationalWarningEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (FrameExtent(entry) is not { } extent)
+            return false;
+        _viewport?.Current?.ZoomToExtent(extent);
+        return true;
     }
 
     /// <summary>The list: group headers followed by their rows, in display order.</summary>
@@ -425,7 +450,11 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, IDisposable
             && _pick.OpenFeatureAt(processor, entry.Ordinal, entry.DatasetId);
     }
 
-    private void OnServiceChanged(object? sender, EventArgs e) => Rebuild();
+    private void OnServiceChanged(object? sender, EventArgs e)
+    {
+        Rebuild();
+        WarningsChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     private void OnViewTimeChanged(object? sender, EventArgs e)
     {
@@ -588,7 +617,11 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, IDisposable
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged -= OnTimeFormatChanged;
         if (_pickReport is not null)
+        {
             _pickReport.PropertyChanged -= OnPickReportChanged;
+            if (ReferenceEquals(_pickReport.WarningNavigator, this))
+                _pickReport.WarningNavigator = null;
+        }
     }
 }
 

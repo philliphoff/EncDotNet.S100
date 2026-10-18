@@ -252,14 +252,36 @@ public sealed class PassageCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task Removing_the_draft_turns_check_off()
+    public async Task Removing_the_draft_keeps_check_on_without_clearance()
+    {
+        var f = new PassageCheckFixture();
+        var vm = Panel(f);
+        vm.IsCheckingPassage = true;
+        await f.Check.WhenIdle();
+        Assert.True(f.Check.HasDraft);
+
+        f.Route.History.Execute(RouteEditLabels.EditPassage, () => f.Route.SetPassageValue(RoutePassageField.Draft, null));
+        await f.Check.WhenIdle();
+
+        // #953: the route checks run without a draft; only clearance needs one.
+        Assert.True(vm.CanCheckPassage);
+        Assert.True(vm.IsCheckingPassage);
+        Assert.False(f.Check.HasDraft);
+        Assert.Null(f.Check.Current);
+        Assert.Equal(f.Route.Id, f.Check.Input?.RouteId);
+        Assert.True(vm.Check!.NeedsDraft);
+    }
+
+    [Fact]
+    public async Task Removing_the_waypoints_turns_check_off()
     {
         var f = new PassageCheckFixture();
         var vm = Panel(f);
         vm.IsCheckingPassage = true;
         await f.Check.WhenIdle();
 
-        f.Route.History.Execute(RouteEditLabels.EditPassage, () => f.Route.SetPassageValue(RoutePassageField.Draft, null));
+        while (f.Route.Waypoints.Count > 1)
+            f.Route.RemoveWaypoint(f.Route.Waypoints.Count - 1);
 
         Assert.False(vm.CanCheckPassage);
         Assert.False(vm.IsCheckingPassage);

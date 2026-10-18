@@ -4,7 +4,7 @@
     <TargetFramework />
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <IsPackable>true</IsPackable>
-    <Description>Passage planning calculations for IHO S-100 data: leg ETAs and an under-keel clearance (UKC) engine that combines charted depth (S-102, with S-101 fallback) and S-104 water level along a route. Depends only on EncDotNet.S100.Core; data sources plug in through small interfaces.</Description>
+    <Description>Passage planning calculations for IHO S-100 data: leg ETAs and an under-keel clearance (UKC) engine that combines charted depth (S-102, with S-101 fallback) and S-104 water level along a route, and a route check against charted land, drying ground and chart coverage. Depends only on EncDotNet.S100.Core; data sources plug in through small interfaces.</Description>
   </PropertyGroup>
 
   <ItemGroup>

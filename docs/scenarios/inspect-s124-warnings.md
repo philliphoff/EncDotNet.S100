@@ -21,7 +21,10 @@ a warnings file contains before you process it in code.
    Warning card with the warning's number, type and status, and its full
    message text. The feature's attributes fold beneath it under
    **Attributes**, followed by its references and location. If several
-   warnings are at that point, the panel lists them by number. If the panel is
+   warnings are at that point, each has its own Warning card, sorted points,
+   lines, then areas, and by number; select a card's header to open it. Select
+   **Zoom to** to centre the map on the open warning. In a bulletin that lists
+   other warnings, select a warning number to open that warning. If the panel is
    closed, choose **View** > **Appearance** > **Pick Report**.
 4. To find a warning by number, or one with no location (such as a weekly
    bulletin, which draws nothing on the map), open the **Navigational

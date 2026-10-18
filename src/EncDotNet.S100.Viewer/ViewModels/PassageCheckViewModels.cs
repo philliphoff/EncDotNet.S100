@@ -32,12 +32,18 @@ internal enum CheckTone
 /// verdict card, the Legs / Findings switch and the check-mode leg rows,
 /// projected from <see cref="PassageCheckService"/>.
 /// </summary>
+/// <remarks>
+/// Without a draft (#953) the clearance parts are hidden: the verdict card is
+/// titled from the findings summary and says "Add a draft to check
+/// clearance", and there are no leg chips.
+/// </remarks>
 internal sealed class PassageCheckViewModel : ViewModelBase
 {
     private readonly PassageCheckService _service;
     private readonly RoutesService _routes;
     private readonly Func<DepthUnit> _depthUnit;
     private readonly Func<TimeFormat> _timeFormat;
+    private readonly RouteFindingsService? _findings;
 
     public PassageCheckViewModel(
         PassageCheckService service,
@@ -52,6 +58,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         _routes = routes;
         _depthUnit = depthUnit;
         _timeFormat = timeFormat;
+        _findings = findings;
         Legs = new ObservableCollection<PassageCheckLegRowViewModel>();
         Window = new DepartureWindowViewModel(service, timeFormat);
         ShowLegsCommand = new RelayCommand(() => ShowFindings = false);
@@ -65,6 +72,11 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         {
             Findings = new RouteFindingsViewModel(findings);
             Findings.CountChanged += (_, _) => OnPropertyChanged(nameof(FindingsLabel));
+            findings.Changed += (_, _) =>
+            {
+                if (NeedsDraft || _service.Input is { HasDraft: false })
+                    Refresh();
+            };
         }
         _service.Changed += (_, _) => Refresh();
         Refresh();
@@ -101,6 +113,29 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         get => _hasVerdict;
         private set => SetProperty(ref _hasVerdict, value);
     }
+
+    private bool _needsDraft;
+    /// <summary>
+    /// Whether the checked route has no draft (#953): the verdict card shows
+    /// the no-draft variant and the clearance parts are hidden.
+    /// </summary>
+    public bool NeedsDraft
+    {
+        get => _needsDraft;
+        private set
+        {
+            if (!SetProperty(ref _needsDraft, value))
+                return;
+            OnPropertyChanged(nameof(ShowClearance));
+            OnPropertyChanged(nameof(ShowLegsNeedsDraft));
+        }
+    }
+
+    /// <summary>Whether to show the clearance parts of the verdict card (min UKC); hidden without a draft.</summary>
+    public bool ShowClearance => !NeedsDraft;
+
+    /// <summary>Whether the Legs tab shows "Add a draft to check clearance" in place of the leg chips.</summary>
+    public bool ShowLegsNeedsDraft => NeedsDraft && ShowLegs;
 
     private bool _isStale;
     /// <summary>Whether the shown verdict is being recomputed (C10: dimmed).</summary>
@@ -216,8 +251,10 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         get => _showFindings;
         set
         {
-            if (SetProperty(ref _showFindings, value))
-                OnPropertyChanged(nameof(ShowLegs));
+            if (!SetProperty(ref _showFindings, value))
+                return;
+            OnPropertyChanged(nameof(ShowLegs));
+            OnPropertyChanged(nameof(ShowLegsNeedsDraft));
         }
     }
 
@@ -230,6 +267,13 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     public void Refresh()
     {
         IsActive = _service.IsActive;
+        if (_service.IsActive && _service.Input is { HasDraft: false })
+        {
+            RefreshNeedsDraft();
+            return;
+        }
+
+        NeedsDraft = false;
         var current = _service.IsActive ? _service.Current : null;
         IsStale = current is not null && _service.IsStale;
         HeaderMeta = BuildHeaderMeta(current);
@@ -271,6 +315,42 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         FooterText = Footer(result.Sources);
         RebuildLegs(current);
     }
+
+    // #953: no draft, so no clearance; the title summarises the route checks.
+    private void RefreshNeedsDraft()
+    {
+        NeedsDraft = true;
+        HeaderMeta = BuildHeaderMeta(null);
+        IsStale = _findings?.IsStale ?? false;
+        StatusText = null;
+        HasVerdict = true;
+        Legs.Clear();
+        var findings = _findings?.Findings ?? [];
+        Tone = NeedsDraftTone(findings);
+        Title = NeedsDraftTitle(findings);
+        ConfidenceText = null;
+        MinUkcText = null;
+        MinUkcCaption = null;
+        WhereText = null;
+        FooterText = Strings.Check_FooterNoDraft;
+    }
+
+    /// <summary>
+    /// The no-draft verdict title (#953), from the findings summary: "2 items
+    /// to review", or "No findings for your settings".
+    /// </summary>
+    internal static string NeedsDraftTitle(IReadOnlyList<RouteFinding> findings) => findings.Count switch
+    {
+        0 => Strings.Check_NoDraftVerdictNone,
+        1 => Strings.Check_NoDraftVerdictOne,
+        var n => string.Format(CultureInfo.CurrentCulture, Strings.Check_NoDraftVerdictFormat, n),
+    };
+
+    /// <summary>The no-draft verdict tone: destructive only for must-review findings (F5).</summary>
+    internal static CheckTone NeedsDraftTone(IReadOnlyList<RouteFinding> findings) =>
+        findings.Any(f => f.Group == RouteFindingGroup.MustReview) ? CheckTone.Destructive
+        : findings.Any(f => f.Group == RouteFindingGroup.Check) ? CheckTone.Warning
+        : CheckTone.Neutral;
 
     private void RebuildLegs(PassageCheckSnapshot current)
     {

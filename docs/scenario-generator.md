@@ -145,6 +145,22 @@ The scenario also names places (`Places`) and a route (`Route`) for tests to
 use. The end-to-end tests check the passage under-keel clearance at those
 places against the model.
 
+### Spit crossing
+
+`SyntheticScenarios.SpitCrossing` is "Spit across scales" with three S-421
+routes for the route check (#954), each with 100 m cross-track limits:
+
+- `421ZZ00SPITX` crosses the drying spit, then runs south over the drying
+  foreshore and onto the mainland. It runs aground on purpose.
+- `421ZZ00CHAN` runs along the channel and crosses nothing.
+- `421ZZ00OFFC` runs east off the coastal cell, the last chart.
+
+`GroundTruth.Along` gives the oracle: the stretches of each route's track over
+drying ground and land in the model. The harbour cell charts the same
+boundaries to within its 25 m grid; the coastal cell's generalised land
+reaches about 150 m further, which a route check must ignore where the harbour
+cell covers.
+
 ### Approach with tide window
 
 `SyntheticScenarios.ApproachWithTideWindow` is an S-421 route from a sea buoy

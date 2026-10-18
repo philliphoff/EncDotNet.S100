@@ -90,8 +90,8 @@ public sealed class RoutesViewTests
 
         var check = host.Find<ToggleButton>("Routes.CheckPassageToggle");
 
-        Assert.False(check.IsEnabled);
-        Assert.Equal("Add a draft to check clearance", ToolTip.GetTip(check));
+        Assert.False(check.IsEnabled); // no check service in this panel
+        Assert.Equal("Check this route against your settings; add a draft to check clearance too", ToolTip.GetTip(check));
         Assert.False(host.IsShown("Routes.Done"));
     }
 

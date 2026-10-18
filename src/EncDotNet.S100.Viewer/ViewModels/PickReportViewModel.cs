@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -29,6 +30,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private readonly IS100ExaminerLinkBuilder? _examinerLinks;
     private readonly IViewTime? _viewTime;
     private NavigationalWarningCardViewModel? _warningCard;
+    private INavigationalWarningNavigator? _warningNavigator;
+    private PickHit? _previewHit;
     private bool _warningAttributesExpanded;
     private string? _featureType;
     private string? _featureTypeName;
@@ -112,15 +115,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             _viewTime.Changed += OnViewTimeChanged;
     }
 
-    private void OnViewTimeChanged(object? sender, EventArgs e) =>
-        _warningCard?.SetViewTime(CurrentViewTime);
+    private void OnViewTimeChanged(object? sender, EventArgs e)
+    {
+        foreach (var card in AllWarningCards())
+            card.SetViewTime(CurrentViewTime);
+    }
 
     private DateTimeOffset CurrentViewTime => _viewTime?.Current ?? DateTimeOffset.UtcNow;
 
     private void OnTimeFormatChanged(TimeFormat format)
     {
         ReformatAttributesFromSelectedHit();
-        _warningCard?.SetTimeFormat(format);
+        foreach (var card in AllWarningCards())
+            card.SetTimeFormat(format);
     }
 
     private void OnMarinerSettingsChanged(MarinerSettings _)
@@ -496,12 +503,204 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 return;
             _selectedHit = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedOtherHit));
             ApplyHitToDetailFields(value);
         }
     }
 
     /// <summary>True when more than one feature was hit at the pick location.</summary>
     public bool HasMultipleHits => Hits.Count > 1;
+
+    /// <summary>
+    /// Whether the hit list shows: several hits, unless they include several
+    /// navigational warnings, whose cards are the list instead (#932).
+    /// </summary>
+    public bool ShowHitList => HasMultipleHits && !HasWarningCardList;
+
+    /// <summary>
+    /// One Warning card per navigational warning part the pick hit, when it
+    /// hit two or more (#932): points before lines before areas, then by
+    /// number. One card is open at a time, the selected hit's. Empty
+    /// otherwise; a lone warning shows as <see cref="WarningCard"/>.
+    /// </summary>
+    public ObservableCollection<NavigationalWarningCardViewModel> WarningCards { get; } = new();
+
+    /// <summary>Whether <see cref="WarningCards"/> replaces the hit list.</summary>
+    public bool HasWarningCardList => WarningCards.Count > 0;
+
+    /// <summary>
+    /// The hits beneath the Warning cards that aren't warnings, listed as
+    /// rows below them. Empty unless <see cref="HasWarningCardList"/>.
+    /// </summary>
+    public ObservableCollection<PickHit> OtherHits { get; } = new();
+
+    /// <summary>Whether <see cref="OtherHits"/> has rows.</summary>
+    public bool HasOtherHits => OtherHits.Count > 0;
+
+    /// <summary>
+    /// The selected row in <see cref="OtherHits"/>: <see cref="SelectedHit"/>
+    /// when it is one of them, else <c>null</c>. Setting <c>null</c> keeps the
+    /// selection, so opening a card doesn't bounce off the rows.
+    /// </summary>
+    public PickHit? SelectedOtherHit
+    {
+        get => _selectedHit is not null && OtherHits.Contains(_selectedHit) ? _selectedHit : null;
+        set
+        {
+            if (value is not null)
+                SelectedHit = value;
+            else
+                OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// The hit whose card the pointer is over, previewed on the map with the
+    /// pick highlight; <c>null</c> when none is.
+    /// </summary>
+    public PickHit? PreviewHit
+    {
+        get => _previewHit;
+        private set => SetProperty(ref _previewHit, value);
+    }
+
+    /// <summary>Previews <paramref name="card"/>'s part on the map, or ends the preview with <c>null</c>.</summary>
+    public void SetWarningPreview(NavigationalWarningCardViewModel? card) => PreviewHit = card?.Hit;
+
+    /// <summary>
+    /// The Navigational warnings panel, which Warning cards link to and zoom
+    /// through. Set by the panel; <c>null</c> without it, when cards neither
+    /// link nor zoom.
+    /// </summary>
+    public INavigationalWarningNavigator? WarningNavigator
+    {
+        get => _warningNavigator;
+        set
+        {
+            if (ReferenceEquals(_warningNavigator, value))
+                return;
+            if (_warningNavigator is not null)
+                _warningNavigator.WarningsChanged -= OnWarningsChanged;
+            _warningNavigator = value;
+            if (_warningNavigator is not null)
+                _warningNavigator.WarningsChanged += OnWarningsChanged;
+            RefreshWarningTargets();
+        }
+    }
+
+    private void OnWarningsChanged(object? sender, EventArgs e) => RefreshWarningTargets();
+
+    private void RefreshWarningTargets()
+    {
+        foreach (var card in AllWarningCards())
+            UpdateTargets(card);
+    }
+
+    private void UpdateTargets(NavigationalWarningCardViewModel card)
+    {
+        card.SetLinkTargets(_warningNavigator?.Warnings ?? []);
+        card.CanZoom = FindEntry(card.Hit) is { Extent: not null };
+    }
+
+    private Services.NavigationalWarningEntry? FindEntry(PickHit? hit) =>
+        hit is { DatasetFileName: { } datasetId } && _warningNavigator is { } navigator
+            ? navigator.Find(datasetId, hit.FeatureRef)
+            : null;
+
+    private IEnumerable<NavigationalWarningCardViewModel> AllWarningCards()
+    {
+        foreach (var card in WarningCards)
+            yield return card;
+        if (_warningCard is not null && !WarningCards.Contains(_warningCard))
+            yield return _warningCard;
+    }
+
+    private NavigationalWarningCardViewModel CreateWarningCard(PickHit hit, bool collapsible)
+    {
+        var card = new NavigationalWarningCardViewModel(
+            hit.NavigationalWarning!,
+            hit.DatasetFileName,
+            _timeFormat?.Current ?? TimeFormat.Local,
+            CurrentViewTime)
+        {
+            Hit = hit,
+            IsCollapsible = collapsible,
+            IsOpen = !collapsible,
+        };
+        UpdateTargets(card);
+        card.CopyRequested += OnWarningCopyRequested;
+        card.OpenRequested += OnWarningOpenRequested;
+        card.ZoomRequested += OnWarningZoomRequested;
+        card.LinkRequested += OnWarningLinkRequested;
+        return card;
+    }
+
+    private void DetachWarningCard(NavigationalWarningCardViewModel card)
+    {
+        card.CopyRequested -= OnWarningCopyRequested;
+        card.OpenRequested -= OnWarningOpenRequested;
+        card.ZoomRequested -= OnWarningZoomRequested;
+        card.LinkRequested -= OnWarningLinkRequested;
+    }
+
+    private void OnWarningOpenRequested(object? sender, EventArgs e)
+    {
+        if (sender is NavigationalWarningCardViewModel { Hit: { } hit })
+            SelectedHit = hit;
+    }
+
+    private void OnWarningZoomRequested(object? sender, EventArgs e)
+    {
+        if (sender is not NavigationalWarningCardViewModel { Hit: { } hit } || FindEntry(hit) is not { } entry)
+            return;
+        SelectedHit = hit;
+        _warningNavigator!.ZoomTo(entry);
+    }
+
+    private void OnWarningLinkRequested(object? sender, Services.NavigationalWarningEntry target) =>
+        _warningNavigator?.Select(target);
+
+    /// <summary>
+    /// Orders the warning parts of one pick for their cards: points, then
+    /// lines, then areas, then parts with no location; within each, by year
+    /// and number, then label.
+    /// </summary>
+    internal static IReadOnlyList<PickHit> OrderWarningHits(
+        IEnumerable<PickHit> hits, Func<PickHit, S100GeometryType> geometryOf)
+    {
+        ArgumentNullException.ThrowIfNull(hits);
+        ArgumentNullException.ThrowIfNull(geometryOf);
+        return hits
+            .OrderBy(h => GeometryRank(geometryOf(h)))
+            .ThenBy(h => NumberKey(h.NavigationalWarning?.Number))
+            .ThenBy(h => h.NavigationalWarning?.Label ?? h.FeatureRef, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static int GeometryRank(S100GeometryType geometry) => geometry switch
+    {
+        S100GeometryType.Point => 0,
+        S100GeometryType.Curve => 1,
+        S100GeometryType.Surface => 2,
+        _ => 3,
+    };
+
+    // "106/26" sorts as (26, 106); a number without a year sorts by number
+    // alone, and no number last.
+    private static (int Year, int Number) NumberKey(string? number)
+    {
+        if (number is null)
+            return (int.MaxValue, int.MaxValue);
+        var slash = number.IndexOf('/', StringComparison.Ordinal);
+        var digits = slash < 0 ? number : number[..slash];
+        var year = slash < 0 ? -1 : int.TryParse(number.AsSpan(slash + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var y) ? y : -1;
+        return int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var n)
+            ? (year, n)
+            : (int.MaxValue, int.MaxValue);
+    }
+
+    private S100GeometryType GeometryOf(PickHit hit) =>
+        FindEntry(hit)?.Geometry ?? S100GeometryType.None;
 
     /// <summary>
     /// Attribute rows for the picked feature, decoded against the dataset's
@@ -532,19 +731,21 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         {
             if (ReferenceEquals(_warningCard, value))
                 return;
-            if (_warningCard is not null)
-                _warningCard.CopyRequested -= OnWarningCopyRequested;
+            if (_warningCard is not null && !WarningCards.Contains(_warningCard))
+                DetachWarningCard(_warningCard);
             _warningCard = value;
-            if (_warningCard is not null)
-                _warningCard.CopyRequested += OnWarningCopyRequested;
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasWarningCard));
+            OnPropertyChanged(nameof(HasSingleWarningCard));
             OnPropertyChanged(nameof(ShowInlineAttributes));
         }
     }
 
     /// <summary>True when <see cref="WarningCard"/> is shown.</summary>
     public bool HasWarningCard => _warningCard is not null;
+
+    /// <summary>True when <see cref="WarningCard"/> shows alone, not as one of <see cref="WarningCards"/>.</summary>
+    public bool HasSingleWarningCard => _warningCard is not null && !HasWarningCardList;
 
     /// <summary>
     /// Whether the attribute table shows inline: not when a station chart
@@ -776,9 +977,22 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         ArgumentNullException.ThrowIfNull(dynamicHits);
 
         DisposeHitResources();
+        ClearWarningCards();
         Hits.Clear();
         foreach (var hit in hits)
             Hits.Add(hit);
+
+        var warningHits = hits.Where(h => h.NavigationalWarning is not null).ToList();
+        if (warningHits.Count > 1)
+        {
+            foreach (var hit in OrderWarningHits(warningHits, GeometryOf))
+                WarningCards.Add(CreateWarningCard(hit, collapsible: true));
+            foreach (var hit in hits)
+            {
+                if (hit.NavigationalWarning is null)
+                    OtherHits.Add(hit);
+            }
+        }
 
         DynamicHits.Clear();
         foreach (var dh in dynamicHits)
@@ -795,9 +1009,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         LocationDepthSeries = locationDepth;
         HasPick = true;
         OnPropertyChanged(nameof(HasMultipleHits));
+        RaiseWarningListChanged();
         OnPropertyChanged(nameof(HasDynamicHits));
         OnPropertyChanged(nameof(HasDatasetPick));
-        SelectedHit = hits.Count > 0 ? hits[0] : null;
+        SelectedHit = WarningCards.Count > 0 ? WarningCards[0].Hit : hits.Count > 0 ? hits[0] : null;
         if (hits.Count == 0)
         {
             // ApplyHitToDetailFields(null) cleared the detail fields;
@@ -843,6 +1058,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public void Clear()
     {
         DisposeHitResources();
+        ClearWarningCards();
+        RaiseWarningListChanged();
         Hits.Clear();
         DynamicHits.Clear();
         // SelectedHit setter rejects identical references; clear the backing
@@ -877,6 +1094,33 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasDatasetPick));
     }
 
+    private void ClearWarningCards()
+    {
+        PreviewHit = null;
+        if (_warningCard is not null)
+        {
+            DetachWarningCard(_warningCard);
+            _warningCard = null;
+            OnPropertyChanged(nameof(WarningCard));
+            OnPropertyChanged(nameof(HasWarningCard));
+            OnPropertyChanged(nameof(HasSingleWarningCard));
+            OnPropertyChanged(nameof(ShowInlineAttributes));
+        }
+        foreach (var card in WarningCards)
+            DetachWarningCard(card);
+        WarningCards.Clear();
+        OtherHits.Clear();
+    }
+
+    private void RaiseWarningListChanged()
+    {
+        OnPropertyChanged(nameof(HasWarningCardList));
+        OnPropertyChanged(nameof(ShowHitList));
+        OnPropertyChanged(nameof(HasOtherHits));
+        OnPropertyChanged(nameof(HasSingleWarningCard));
+        OnPropertyChanged(nameof(SelectedOtherHit));
+    }
+
     private void ApplyHitToDetailFields(PickHit? hit)
     {
         if (hit is null)
@@ -909,13 +1153,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         DatasetFileName = hit.DatasetFileName;
         ProductSpec = hit.ProductSpec;
 
-        WarningCard = hit.NavigationalWarning is { } warning
-            ? new NavigationalWarningCardViewModel(
-                warning,
-                hit.DatasetFileName,
-                _timeFormat?.Current ?? TimeFormat.Local,
-                CurrentViewTime)
-            : null;
+        if (WarningCards.Count > 0)
+        {
+            // One card open at a time: the selected hit's, or none when a
+            // row below the cards is selected.
+            var open = WarningCards.FirstOrDefault(c => ReferenceEquals(c.Hit, hit));
+            foreach (var card in WarningCards)
+                card.IsOpen = ReferenceEquals(card, open);
+            WarningCard = open;
+        }
+        else
+        {
+            WarningCard = hit.NavigationalWarning is not null ? CreateWarningCard(hit, collapsible: false) : null;
+        }
 
         PopulateAttributeSections(ReformatTypedAttributes(hit.Attributes));
 

@@ -658,10 +658,23 @@ Turn on **Pick Mode** (the cross-hair button on the map toolbar, **View** >
   monospaced block, so telex columns line up. You can select the text, and
   **Copy** copies it. A part with text in several languages has a tab per
   language, with your UI language first; your choice holds for the session.
-  Messages over 22 lines stop at 20 until you select **Show all**. The
-  attribute rows fold into **Attributes** beneath the card, closed until you
-  open them. With several warnings at the point, the hit list names each by
-  its number.
+  Messages over 22 lines stop at 20 until you select **Show all**. A warning
+  number in the text, such as "106/26" in a weekly "warnings in force"
+  bulletin, is a link when that warning is in the **Navigational warnings**
+  list: select it to open that warning, as selecting its row does. A series
+  name just before the number ("AUSCOAST 314/26"), or the nearest one above
+  it, says which series it belongs to; otherwise the card's own series, or
+  the only listed warning with that number. Numbers not in the list, and the
+  card's own number, stay plain text. **Zoom to** centres the map on a part
+  with a location at a scale that fits it. The attribute rows fold into
+  **Attributes** beneath the card, closed until you open them.
+- When several warnings are at the point, each gets a Warning card in place
+  of the hit list: points first, then lines, then areas, each by number. A
+  closed card still shows the number, type and status. One card is open at a
+  time, and its warning is highlighted on the map; select another card's
+  header to open it instead. Pointing at a card previews its warning on the
+  map with the same highlight. Other features at the point follow as rows
+  below the cards.
 - An **EGG CODE** diagram for an S-411 sea-ice or lake-ice area. The WMO /
   SIGRID-3 egg shows the total concentration at the top of the oval, with the
   partial concentration, stage of development and form of ice rows beneath it.
@@ -885,9 +898,9 @@ Times follow your Local/UTC setting. If a leg has no speed, the ETAs stop
 there and the route's line says so. The speed is the speed over ground you
 enter; S-111 currents aren't applied.
 
-**Check passage**, next to **Edit**, needs a draft, on the passage or on every
-leg. It checks under-keel clearance along the active route at each point's
-ETA: UKC = charted depth + water level − draft − squat, against the
+**Check passage**, next to **Edit**, needs a route with at least two
+waypoints. With a draft, on the passage or on every leg, it checks under-keel
+clearance along the active route at each point's ETA: UKC = charted depth + water level − draft − squat, against the
 **Required UKC** (0 m when unset). Charted depth comes from loaded S-102, or
 from S-101 where there's no S-102 (lower confidence); water level comes from
 loaded S-104. While it's on:
@@ -918,7 +931,14 @@ loaded S-104. While it's on:
   only, water-level gaps (such as data ending before arrival) and expired
   S-111 runs, which aren't used in ETAs. A tag names the check behind each
   one. Clicking a finding zooms the map to it, outlines it dashed in its tone
-  with a "Zoomed to finding" chip, and moves the profile cursor there.
+  with a "Zoomed to finding" chip, and moves the profile cursor there. On the
+  map, a small dot marks each finding, red for MUST REVIEW, amber for CHECK
+  and grey for INFO.
+
+  Without a draft there's no clearance: the verdict card is titled from the
+  findings, such as "2 items to review", and says "Add a draft to check
+  clearance" in place of the minimum UKC and leg chips. The route checks
+  still run.
 - **Object Information** folds to an edge tab, and clicking the tab opens it
   again.
 

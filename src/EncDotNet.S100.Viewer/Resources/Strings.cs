@@ -316,6 +316,13 @@ internal static class Strings
     public static string Pick_Warning_Copy => Get(nameof(Pick_Warning_Copy));
     public static string Tooltip_CopyWarningText => Get(nameof(Tooltip_CopyWarningText));
     public static string Pick_Warning_Examiner => Get(nameof(Pick_Warning_Examiner));
+    public static string Pick_Warning_ZoomTo => Get(nameof(Pick_Warning_ZoomTo));
+    public static string Label_ZoomToWarning => Get(nameof(Label_ZoomToWarning));
+    public static string Tooltip_ZoomToWarning => Get(nameof(Tooltip_ZoomToWarning));
+    public static string Tooltip_OpenWarningCard => Get(nameof(Tooltip_OpenWarningCard));
+    public static string Pick_WarningCardsHeader => Get(nameof(Pick_WarningCardsHeader));
+    public static string Pick_WarningCards => Get(nameof(Pick_WarningCards));
+    public static string Pick_OtherHits => Get(nameof(Pick_OtherHits));
     public static string Pick_Warning_Languages => Get(nameof(Pick_Warning_Languages));
     public static string Pick_Warning_Text => Get(nameof(Pick_Warning_Text));
     public static string Pick_AttributesFold => Get(nameof(Pick_AttributesFold));
@@ -1818,6 +1825,12 @@ internal static class Strings
     public static string Check_FooterFormat => Get(nameof(Check_FooterFormat));
     public static string Check_FooterNoData => Get(nameof(Check_FooterNoData));
     public static string Check_Computing => Get(nameof(Check_Computing));
+    public static string Check_AddDraft => Get(nameof(Check_AddDraft));
+    public static string Check_NoDraftVerdictNone => Get(nameof(Check_NoDraftVerdictNone));
+    public static string Check_NoDraftVerdictOne => Get(nameof(Check_NoDraftVerdictOne));
+    public static string Check_NoDraftVerdictFormat => Get(nameof(Check_NoDraftVerdictFormat));
+    public static string Check_FooterNoDraft => Get(nameof(Check_FooterNoDraft));
+    public static string Tooltip_CheckPassageNoLegs => Get(nameof(Tooltip_CheckPassageNoLegs));
     public static string Check_ErrorFormat => Get(nameof(Check_ErrorFormat));
     public static string Check_NoClearance => Get(nameof(Check_NoClearance));
     public static string Timeline_PassageLane => Get(nameof(Timeline_PassageLane));
