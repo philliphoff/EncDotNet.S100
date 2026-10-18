@@ -187,22 +187,24 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     public RouteLegDetailViewModel LegDetail { get; }
 
     /// <summary>
-    /// Whether the active route has a draft, the one value Check passage
-    /// needs: on the passage, or overridden on every leg.
+    /// Whether the active route has a draft, which the clearance check needs:
+    /// on the passage, or overridden on every leg. Without one Check passage
+    /// runs the route checks only (#953).
     /// </summary>
     public bool HasDraft => _routes.Routes.ActiveRoute is { } route
         && (route.Passage.DraftMeters is not null
             || (route.Legs.Count > 0 && route.Legs.All(l => l.DraftMeters is not null)));
 
     /// <summary>
-    /// Whether Check passage can be turned on: the route needs a draft (B8),
-    /// and the panel needs the check service (absent in some tests).
+    /// Whether Check passage can be turned on: the active route needs at least
+    /// two waypoints (a draft is only needed for clearance, #953), and the
+    /// panel needs the check service (absent in some tests).
     /// </summary>
-    public bool CanCheckPassage => HasDraft && _check is not null;
+    public bool CanCheckPassage => _routes.Routes.ActiveRoute is { Legs.Count: > 0 } && _check is not null;
 
     /// <summary>
     /// Whether Check passage is on (#901). Bound two-way to the footer's
-    /// Check passage toggle; it stays off without a draft.
+    /// Check passage toggle; it stays off without two waypoints.
     /// </summary>
     public bool IsCheckingPassage
     {
@@ -223,8 +225,9 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     public bool ShowCheckPanel => IsCheckingPassage && Check is not null;
 
     /// <summary>Tooltip on the Check passage toggle: what's missing, or what it does.</summary>
-    public string CheckPassageTooltip => HasDraft
-        ? Strings.Tooltip_CheckPassage
+    public string CheckPassageTooltip =>
+        _routes.Routes.ActiveRoute is not { Legs.Count: > 0 } ? Strings.Tooltip_CheckPassageNoLegs
+        : HasDraft ? Strings.Tooltip_CheckPassage
         : Strings.Tooltip_CheckPassageNoDraft;
 
     private DepthUnit DepthUnit => _marinerSettings?.Current.DepthUnit ?? DepthUnit.Metres;
@@ -603,7 +606,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanCheckPassage));
         OnPropertyChanged(nameof(CheckPassageTooltip));
 
-        // Check passage needs a draft (B8): losing it (or the route) turns the mode off.
+        // Check passage needs a route with legs: losing them turns the mode off.
         if (_routes.IsCheckModeActive && !CanCheckPassage)
             _routes.IsCheckModeActive = false;
         ((RelayCommand)ReverseActiveRouteCommand).NotifyCanExecuteChanged();

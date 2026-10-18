@@ -149,8 +149,8 @@ public sealed class RouteEtaTests : IDisposable
         Assert.EndsWith(" · 30 min", legs[0].LegText);
         Assert.EndsWith(" · 15 min", legs[1].LegText);
         Assert.Equal("4 WP · 15.0 NM · 1 h 15 min · arrives 07:15Z from view time", vm.ActiveRouteDetailMeta);
-        Assert.False(vm.CanCheckPassage);
-        Assert.Equal("Add a draft to check clearance", vm.CheckPassageTooltip);
+        Assert.False(vm.CanCheckPassage); // no check service in this panel
+        Assert.Equal("Check this route against your settings; add a draft to check clearance too", vm.CheckPassageTooltip);
     }
 
     [Fact]

@@ -20,14 +20,21 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// <param name="Ghost">The ghost vessel at the cursor, or <c>null</c>.</param>
 /// <param name="Colors">The state colours for the palette.</param>
 /// <param name="Finding">The selected finding's outline and chip (#905, F3), or <c>null</c>.</param>
+/// <param name="FindingMarkers">A small marker per placed finding (#953), in list order; empty when there are none.</param>
+/// <param name="HasClearance">Whether the route is coloured by UKC state, so the "UKC at ETA" legend is drawn; false without a clearance result (no draft, or none yet).</param>
 internal sealed record RouteCheckOverlay(
     IReadOnlyList<RouteCheckOverlay.Segment> Segments,
     bool IsStale,
     RouteCheckOverlay.Marker? Minimum,
     RouteCheckOverlay.GhostVessel? Ghost,
     RouteCheckColors Colors,
-    RouteCheckOverlay.FindingFocus? Finding = null)
+    RouteCheckOverlay.FindingFocus? Finding = null,
+    IReadOnlyList<RouteCheckOverlay.FindingMarker>? FindingMarkers = null,
+    bool HasClearance = true)
 {
+    /// <summary>The finding markers, never <c>null</c>.</summary>
+    public IReadOnlyList<FindingMarker> Markers => FindingMarkers ?? [];
+
     /// <summary>
     /// A run of the route in one state. A lower-confidence run keeps its
     /// band's colour and is drawn dashed (#939).
@@ -51,9 +58,21 @@ internal sealed record RouteCheckOverlay(
     internal sealed record FindingFocus(IReadOnlyList<GeoPosition> Path, SKColor Tone, string ChipText);
 
     /// <summary>
-    /// Builds the overlay for a check, or returns <c>null</c> when there is
-    /// nothing to draw (check mode off, or no result yet).
+    /// A finding's marker (#953): a small dot at the finding, toned by its
+    /// group. Red is for must-review findings only (F5).
     /// </summary>
+    /// <param name="Position">The finding's point, or the middle of its span.</param>
+    /// <param name="Group">The finding's group.</param>
+    /// <param name="Tone">The marker colour.</param>
+    /// <param name="IsSelected">Whether this is the selected finding (also outlined).</param>
+    internal sealed record FindingMarker(GeoPosition Position, RouteFindingGroup Group, SKColor Tone, bool IsSelected);
+
+    /// <summary>
+    /// Builds the overlay for a check, or returns <c>null</c> when check mode
+    /// is off. Without a clearance result (none yet, or no draft) the route
+    /// draws grey and dashed, with the findings' markers and no legend.
+    /// </summary>
+    /// <param name="findings">The findings list, which gets a marker per placed finding (#953); <c>null</c> draws none.</param>
     public static RouteCheckOverlay? Build(
         bool isActive,
         PassageCheckSnapshot? snapshot,
@@ -62,14 +81,16 @@ internal sealed record RouteCheckOverlay(
         MeasureOverlayAppearance appearance,
         DepthUnit depthUnit,
         TimeFormat timeFormat,
-        RouteFinding? selectedFinding = null)
+        RouteFinding? selectedFinding = null,
+        IReadOnlyList<RouteFinding>? findings = null)
     {
         if (!isActive)
             return null;
 
         var colors = RouteCheckColors.For(appearance.Palette);
+        var markers = BuildMarkers(findings, selectedFinding, colors);
         if (snapshot is null)
-            return new RouteCheckOverlay([], true, null, null, colors);
+            return new RouteCheckOverlay([], true, null, null, colors, Focus(null, selectedFinding, colors), markers, HasClearance: false);
 
         var result = snapshot.Result;
         var segments = new List<Segment>();
@@ -101,13 +122,40 @@ internal sealed record RouteCheckOverlay(
         }
 
         var ghost = cursor is { } c ? new GhostVessel(c.Position, c.BearingDegrees) : null;
-        return new RouteCheckOverlay(segments, isStale, minimum, ghost, colors, Focus(snapshot, selectedFinding, colors));
+        return new RouteCheckOverlay(segments, isStale, minimum, ghost, colors, Focus(snapshot, selectedFinding, colors), markers);
+    }
+
+    /// <summary>The marker colour of a group: red only for must review (F5).</summary>
+    internal static SKColor ToneOf(RouteFindingGroup group, RouteCheckColors colors) => group switch
+    {
+        RouteFindingGroup.MustReview => colors.Below,
+        RouteFindingGroup.Check => colors.Tight,
+        _ => colors.NoData,
+    };
+
+    private static IReadOnlyList<FindingMarker> BuildMarkers(IReadOnlyList<RouteFinding>? findings, RouteFinding? selected, RouteCheckColors colors)
+    {
+        if (findings is not { Count: > 0 })
+            return [];
+        var markers = new List<FindingMarker>(findings.Count);
+        foreach (var finding in findings)
+        {
+            if (finding.Location is not { Path.Count: > 0 } location)
+                continue;
+            markers.Add(new FindingMarker(
+                location.Path[location.Path.Count / 2],
+                finding.Group,
+                ToneOf(finding.Group, colors),
+                finding.Id == selected?.Id));
+        }
+
+        return markers;
     }
 
     // No data is already grey and dashed; confidence only qualifies a band.
     private static bool IsLowConfidence(UkcSample sample) => sample.State != UkcState.NoData && sample.IsLowConfidence;
 
-    private static FindingFocus? Focus(PassageCheckSnapshot snapshot, RouteFinding? finding, RouteCheckColors colors)
+    private static FindingFocus? Focus(PassageCheckSnapshot? snapshot, RouteFinding? finding, RouteCheckColors colors)
     {
         if (finding?.Location is not { Path.Count: > 0 } location)
             return null;
@@ -121,7 +169,9 @@ internal sealed record RouteCheckOverlay(
         var chip = Strings.Findings_ZoomedChip;
         if (finding.LegIndex is { } first)
         {
-            var last = location.IsPoint ? first : Math.Max(first, PassageCheckService.CursorAt(snapshot, location.EndDistanceMeters).LegIndex);
+            var last = location.IsPoint || snapshot is null
+                ? first
+                : Math.Max(first, PassageCheckService.CursorAt(snapshot, location.EndDistanceMeters).LegIndex);
             chip += " · " + (first == last
                 ? string.Format(CultureInfo.CurrentCulture, Strings.Findings_ChipLegFormat, first + 1, first + 2)
                 : string.Format(CultureInfo.CurrentCulture, Strings.Findings_ChipLegsFormat, first + 1, last + 2));

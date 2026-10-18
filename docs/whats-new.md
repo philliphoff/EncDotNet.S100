@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Check passage without a draft.** SoundCharts' Check passage now turns on
+  for any route with two or more waypoints. Without a draft the clearance
+  parts are hidden ("Add a draft to check clearance") and the verdict card is
+  titled from the findings. A small marker shows each finding on the map. The
+  findings list now merges findings from several checks, ready for the route
+  checks in #888; `set_check_mode` and `get_findings` accept routes without a
+  draft.
+
 - **Read a navigational warning's whole message in Object Information.**
   Picking an S-124 warning part in SoundCharts now shows a Warning card: the
   series and number, the warning type, whether it is in force at the view

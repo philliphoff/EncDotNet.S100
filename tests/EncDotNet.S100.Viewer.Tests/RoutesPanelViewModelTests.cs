@@ -404,14 +404,17 @@ public class RoutesPanelViewModelTests
     }
 
     [Fact]
-    public void Check_passage_is_disabled_until_a_draft_exists()
+    public void Check_passage_tooltip_asks_for_waypoints_then_a_draft()
     {
         var (svc, vm) = Create();
+        svc.Routes.CreateRoute("Empty");
+        Assert.Equal("Add at least two waypoints to check the route", vm.CheckPassageTooltip);
+
         TwoPointRoute(svc);
 
-        Assert.False(vm.CanCheckPassage);
+        Assert.False(vm.CanCheckPassage); // no check service in this panel
         Assert.False(vm.IsCheckingPassage);
-        Assert.Equal("Add a draft to check clearance", vm.CheckPassageTooltip);
+        Assert.Equal("Check this route against your settings; add a draft to check clearance too", vm.CheckPassageTooltip);
     }
 
     [Fact]

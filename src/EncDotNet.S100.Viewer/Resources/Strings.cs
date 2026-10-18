@@ -1818,6 +1818,12 @@ internal static class Strings
     public static string Check_FooterFormat => Get(nameof(Check_FooterFormat));
     public static string Check_FooterNoData => Get(nameof(Check_FooterNoData));
     public static string Check_Computing => Get(nameof(Check_Computing));
+    public static string Check_AddDraft => Get(nameof(Check_AddDraft));
+    public static string Check_NoDraftVerdictNone => Get(nameof(Check_NoDraftVerdictNone));
+    public static string Check_NoDraftVerdictOne => Get(nameof(Check_NoDraftVerdictOne));
+    public static string Check_NoDraftVerdictFormat => Get(nameof(Check_NoDraftVerdictFormat));
+    public static string Check_FooterNoDraft => Get(nameof(Check_FooterNoDraft));
+    public static string Tooltip_CheckPassageNoLegs => Get(nameof(Tooltip_CheckPassageNoLegs));
     public static string Check_ErrorFormat => Get(nameof(Check_ErrorFormat));
     public static string Check_NoClearance => Get(nameof(Check_NoClearance));
     public static string Timeline_PassageLane => Get(nameof(Timeline_PassageLane));

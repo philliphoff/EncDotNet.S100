@@ -1494,7 +1494,7 @@
     <value>Check passage</value>
   </data>
   <data name="Tooltip_CheckPassageNoDraft" xml:space="preserve">
-    <value>Add a draft to check clearance</value>
+    <value>Check this route against your settings; add a draft to check clearance too</value>
   </data>
   <data name="Label_UndoRouteEdit" xml:space="preserve">
     <value>Undo</value>
@@ -4839,6 +4839,24 @@
   </data>
   <data name="Check_NoClearance" xml:space="preserve">
     <value>No clearance could be computed</value>
+  </data>
+  <data name="Check_AddDraft" xml:space="preserve">
+    <value>Add a draft to check clearance</value>
+  </data>
+  <data name="Check_NoDraftVerdictNone" xml:space="preserve">
+    <value>No findings for your settings</value>
+  </data>
+  <data name="Check_NoDraftVerdictOne" xml:space="preserve">
+    <value>1 item to review</value>
+  </data>
+  <data name="Check_NoDraftVerdictFormat" xml:space="preserve">
+    <value>{0} items to review</value>
+  </data>
+  <data name="Check_FooterNoDraft" xml:space="preserve">
+    <value>Not for navigation · route checked without clearance</value>
+  </data>
+  <data name="Tooltip_CheckPassageNoLegs" xml:space="preserve">
+    <value>Add at least two waypoints to check the route</value>
   </data>
   <data name="Check_TabLegs" xml:space="preserve">
     <value>Legs</value>
