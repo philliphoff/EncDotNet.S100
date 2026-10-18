@@ -22,7 +22,9 @@ description: |
   affecting S-124
 
 ## Spec anchors
-- Canonical: **S-124 Edition 1.x** Navigational Warnings PS
+- Canonical: **S-124 Edition 2.0.0** Navigational Warnings PS
+  (`docs/S-124_Navigational_Warnings_Product_Specification_Ed_2.0.0.pdf`).
+  The reader and typed model also accept Edition 1.0.0.
 - S-100 Part 10b: GML encoding
 - S-100 Part 9: Portrayal (XSLT path)
 - S-124 Annex A: Feature/Information Catalogue
@@ -37,16 +39,34 @@ description: |
    the same way S-101 vectors do — keep the abstraction shared.
 4. Portrayal goes through XSLT (not Lua); inputs to the transform
    must be the canonical GML, not a normalised intermediate form.
-5. Time validity (`fixedDateRange`, `dailyDateRange`) is interpreted
-   in UTC; do not coerce to local time at the source boundary.
-6. Public API changes have xunit tests; small synthetic GML fixtures
+5. Time validity is interpreted in UTC; do not coerce to local time at
+   the source boundary. Ed 2.0.0 has `fixedDateRange` only (a date with an
+   optional `timeOfDayStart` / `timeOfDayEnd`, always UTC, §4 Figure 4-5)
+   and `NavwarnPreamble.cancellationDate`; there is no `dailyDateRange` or
+   periodic range. Convert to the Local/UTC preference only for display.
+6. A warning stays in force until its `cancellationDate`, or until a
+   cancellation dataset or the latest in-force bulletin drops it
+   (§9.2.1). `NavigationalWarningInfo.StatusAt` covers the date ranges
+   and the cancellation date; it does not consult bulletins yet.
+7. Language-bearing complex attributes (`warningInformation/information`,
+   `generalArea/locationName`, `navwarnTitle`) carry one language per
+   instance, repeated for each language (§4 Figure 4-5). Read every
+   instance (`S124ComplexAttribute.Groups`, `S124NavwarnPart.Information`),
+   not only the first.
+8. Public API changes have xunit tests; small synthetic GML fixtures
    live under `tests/datasets/`.
 
 ## Known pitfalls in this repo
 - S-124 GML uses XLink references between features — resolve with the
   exchange set's other files, not just the dataset under inspection.
-- Cancellation messages may omit geometry; renderer must tolerate
-  geometry-less features.
+- Cancellation messages and text-only warnings (such as weekly
+  "warnings in force" bulletins) have no geometry. The renderer must
+  tolerate geometry-less parts, and portrayal draws nothing for them; the
+  viewer's Navigational warnings panel is where they are found.
+- Object information shows a warning through
+  `FeatureInfo.NavigationalWarning` (`NavigationalWarningInfo`, built by
+  `S124DatasetProcessor`), not attribute rows; keep new warning fields there
+  so the card, the panel and MCP stay in step.
 - XSLT processors differ in EXSLT support — keep transforms to plain
   XSLT 1.0/2.0 features that .NET's `XslCompiledTransform` /
   `XslTransform` supports.
