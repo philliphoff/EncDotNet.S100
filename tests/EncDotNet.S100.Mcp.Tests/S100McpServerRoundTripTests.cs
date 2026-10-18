@@ -27,6 +27,7 @@ public class S100McpServerRoundTripTests
         Assert.Equal(
             new[]
             {
+                "check_route",
                 "count_features",
                 "describe_feature",
                 "describe_feature_type",

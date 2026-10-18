@@ -554,6 +554,7 @@ internal sealed class PassageCheckService : IDisposable
     /// <param name="HasDraft">Whether every leg has a draft, which the clearance check needs.</param>
     internal sealed record CheckInput(string RouteId, IReadOnlyList<PassageLeg> Legs, DateTimeOffset Departure, bool HasDraft)
     {
+
         public static CheckInput? From(RoutesService routes) =>
             routes.Routes.ActiveRoute is { } route ? For(route, routes.ViewTime.Current) : null;
 

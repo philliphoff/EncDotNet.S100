@@ -53,7 +53,8 @@ internal static class S100McpServerToolFactory
         SampleCoverageAlongTool sampleCoverageAlong,
         ListSpecsTool listSpecs,
         ListTimeStepsTool listTimeSteps,
-        GetPassageResultTool getPassageResult)
+        GetPassageResultTool getPassageResult,
+        CheckRouteTool checkRoute)
     {
         yield return CreateListDatasetsTool(listDatasets);
         yield return CreateDescribeFeatureTool(describeFeature);
@@ -69,6 +70,7 @@ internal static class S100McpServerToolFactory
         yield return CreateListSpecsTool(listSpecs);
         yield return CreateListTimeStepsTool(listTimeSteps);
         yield return CreateGetPassageResultTool(getPassageResult);
+        yield return CreateCheckRouteTool(checkRoute);
     }
 
     private static McpServerTool CreateListDatasetsTool(ListDatasetsTool inner)
@@ -546,6 +548,46 @@ internal static class S100McpServerToolFactory
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = GetPassageResultTool.Name,
+            Description = description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static McpServerTool CreateCheckRouteTool(CheckRouteTool inner)
+    {
+        var description =
+            "Checks a route against the loaded S-101 charts: where its track crosses land (LandArea, or a Coastline where no land " +
+            "area is charted) or drying ground (a DepthArea whose DRVAL1 is below the datum), both must_review; where either reaches " +
+            "inside the corridor between the cross-track limits (check); and where the track leaves the DataCoverage of every loaded " +
+            "cell (check, source data). With safetyContourMeters and safetyDepthMeters it also reports charted dangers and areas, " +
+            "soundings and S-102 cells shallower than the safety contour or depth. Where cells overlap only the finest cell counts, so a coarse cell's generalised land doesn't " +
+            "fire where a finer cell charts water. Returns the findings (the same codes as get_findings), a summary and the corridor " +
+            "of each leg. Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which uses each leg's port and " +
+            "starboard XTD. Needs no draft. Not for navigation.";
+
+        var del = ([Description("Id of a viewer route; omit with no polyline for the active route.")] string? routeId = null,
+                   [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]}; each pair of consecutive vertices is a leg. WGS-84 decimal degrees. Takes precedence over routeId.")] string? polyline = null,
+                   [Description("The corridor's HALF-width in metres: how far it reaches to port, and to starboard, of the track. Overrides every leg's cross-track limits; unset limits use 50 m.")] double? corridorHalfWidthMeters = null,
+                   [Description("For a polyline, run legs as great circles instead of rhumb lines.")] bool greatCircle = false,
+                   [Description("Safety contour in metres; with safetyDepthMeters, turns on the depth checks (areas and S-102 shallower than it, charted dangers).")] double? safetyContourMeters = null,
+                   [Description("Safety depth in metres, for charted dangers and soundings.")] double? safetyDepthMeters = null,
+                   [Description("Draft in metres: dangers are also judged against draft + squat + required UKC. Overrides a route's draft.")] double? draftMeters = null,
+                   CancellationToken ct = default) =>
+            DispatchAsync(() =>
+                inner.InvokeAsync(
+                    new CheckRouteRequest(
+                        routeId,
+                        string.IsNullOrWhiteSpace(polyline) ? null : ParsePolyline(polyline),
+                        corridorHalfWidthMeters,
+                        greatCircle,
+                        safetyContourMeters,
+                        safetyDepthMeters,
+                        draftMeters),
+                    ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = CheckRouteTool.Name,
             Description = description,
             SerializerOptions = JsonOptions,
         });

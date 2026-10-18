@@ -204,6 +204,8 @@ public sealed record PassageRouteSnapshot(
 /// <param name="SquatMeters">Squat allowance, or <c>null</c>.</param>
 /// <param name="RequiredUkcMeters">Required UKC, or <c>null</c>.</param>
 /// <param name="Name">Display name, such as "Leg 6 → 7".</param>
+/// <param name="PortCrossTrackMeters">The port cross-track limit in metres (a half-width: track to edge), or <c>null</c>; <c>check_route</c> sweeps the corridor.</param>
+/// <param name="StarboardCrossTrackMeters">The starboard cross-track limit in metres, or <c>null</c>.</param>
 public sealed record PassageRouteLeg(
     IReadOnlyList<GeoPosition> Points,
     LegGeometry Geometry,
@@ -211,9 +213,11 @@ public sealed record PassageRouteLeg(
     double? SpeedKnots,
     double? SquatMeters,
     double? RequiredUkcMeters,
-    string? Name);
+    string? Name,
+    double? PortCrossTrackMeters = null,
+    double? StarboardCrossTrackMeters = null);
 
-/// <summary>Supplies host routes (such as the viewer's) to <see cref="GetPassageResultTool"/>.</summary>
+/// <summary>Supplies host routes (such as the viewer's) to <see cref="GetPassageResultTool"/> and <see cref="CheckRouteTool"/>.</summary>
 public interface IPassageRouteProvider
 {
     /// <summary>Snapshots a route, or returns the host's error (such as route not found).</summary>

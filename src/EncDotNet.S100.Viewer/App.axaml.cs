@@ -826,6 +826,14 @@ public partial class App : Application
             new EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
                 sp.GetRequiredService<GlobalTimeService>()));
+        // Findings producers (#953) after the clearance check, in list order.
+        // A new check registers one IRouteFindingProducer line here.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(sp =>
+            new EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckFindingProducer(sp.GetService<IMarinerSettingsProvider>()));
+        // S-124 warnings on the route (#957), from the Navigational warnings panel's list.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(sp =>
+            new EncDotNet.S100.Viewer.Services.PassageCheck.WarningFindingProducer(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));
         // Findings list (#905): merged from the findings producers (#953), the
         // clearance check first, then the S-124 warnings (#957); selecting one zooms the map to it and moves
         // the profile cursor there.
@@ -838,12 +846,7 @@ public partial class App : Application
                 sp.GetService<IMarinerSettingsProvider>(),
                 sp.GetService<ITimeFormatProvider>(),
                 sp.GetService<TimeProvider>(),
-                producers:
-                [
-                    // S-124 warnings on the route (#957), from the Navigational warnings panel's list.
-                    new EncDotNet.S100.Viewer.Services.PassageCheck.WarningFindingProducer(
-                        sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()),
-                ],
+                producers: sp.GetServices<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(),
                 post: action =>
                 {
                     if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())

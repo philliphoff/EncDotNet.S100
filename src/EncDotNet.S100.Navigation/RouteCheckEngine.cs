@@ -53,6 +53,9 @@ public sealed partial class RouteCheckEngine
     // Pieces closer than this are one span.
     private const double MergeGapMeters = 1.0;
 
+    // Crossings shorter than this aren't reported.
+    private const double MinimumCrossingMeters = 1.0;
+
     private readonly IRouteChartSource _charts;
     private readonly RouteCheckOptions _options;
     private readonly IChartedDepthSource? _bathymetry;
@@ -332,6 +335,13 @@ public sealed partial class RouteCheckEngine
             var merged = Merge(pieces);
             foreach (var piece in merged)
             {
+                // A clip of a corner shorter than this is a rounding artefact,
+                // not a stretch to review; it still absorbs its corridor fringe.
+                if (piece.End - piece.Start < MinimumCrossingMeters)
+                {
+                    continue;
+                }
+
                 _findings.Add(crossesCode, RouteFindingGroup.MustReview, RouteFindingSource.RouteCheck, crossesTitle,
                     _legIndex, piece.Start, Location(piece.Start, piece.End), piece.Feature, piece.Feature.FeatureType, piece.End - piece.Start,
                     details?.Invoke(piece.Shoalest ?? piece.Feature));

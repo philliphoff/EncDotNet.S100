@@ -23,8 +23,8 @@ public static class S100McpTools
     /// </summary>
     /// <param name="catalog">The dataset catalog the tools read from.</param>
     /// <param name="passageRoutes">
-    /// The host's routes for <c>get_passage_result</c>, or <c>null</c> when
-    /// the host has none (the tool then takes a polyline and draft only).
+    /// The host's routes for <c>get_passage_result</c> and <c>check_route</c>,
+    /// or <c>null</c> when the host has none (the tools then take a polyline only).
     /// </param>
     /// <returns>
     /// The tools in a stable order. Tool names are the <c>Name</c> constants on
@@ -50,7 +50,8 @@ public static class S100McpTools
             new SampleCoverageAlongTool(catalog),
             new ListSpecsTool(catalog),
             new ListTimeStepsTool(catalog),
-            new GetPassageResultTool(catalog, passageRoutes))
+            new GetPassageResultTool(catalog, passageRoutes),
+            new CheckRouteTool(catalog, passageRoutes))
             .ToList();
     }
 }

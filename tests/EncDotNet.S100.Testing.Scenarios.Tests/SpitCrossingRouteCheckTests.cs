@@ -149,20 +149,27 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         var result = engine.Check(legs, TestContext.Current.CancellationToken);
         first.Stop();
 
-        // The fastest of several warm runs: a shared CI runner's noise only
-        // ever adds time, so the minimum is the check's own cost.
-        const int runs = 5;
-        var each = double.MaxValue;
-        for (var i = 0; i < runs; i++)
+        // The first checks run on tier-0 JIT code (about ten times slower);
+        // a drag re-checks dozens of times, so the steady state is what
+        // matters. Check until it settles (30 runs, or 20 s on a slow
+        // machine) and take the fastest of the last five: a shared CI
+        // runner's noise only ever adds time.
+        var times = new List<double>();
+        var budget = Stopwatch.StartNew();
+        while (times.Count < 30 && (times.Count < 5 || budget.Elapsed < TimeSpan.FromSeconds(20)))
         {
-            var again = Stopwatch.StartNew();
+            var run = Stopwatch.StartNew();
             engine.Check(legs, TestContext.Current.CancellationToken);
-            again.Stop();
-            each = Math.Min(each, again.Elapsed.TotalMilliseconds);
+            times.Add(run.Elapsed.TotalMilliseconds);
         }
+
+        var settled = times.TakeLast(5).ToList();
+        var each = settled.Min();
         TestContext.Current.TestOutputHelper?.WriteLine(
             $"Route check, {result.LengthMeters / PassageGeodesy.MetersPerNauticalMile:0.0} NM in {legs.Count} legs: " +
-            $"first {first.Elapsed.TotalMilliseconds:0} ms (builds the cells' indexes), then {each:0.0} ms per check (fastest of {runs}); {result.Findings.Count} findings.");
+            $"first {first.Elapsed.TotalMilliseconds:0} ms (builds the cells' indexes), settled {each:0.0}–{settled.Max():0.0} ms per check " +
+            $"after {times.Count} checks (the second took {times[0]:0} ms); {result.Findings.Count} findings: " +
+            string.Join(", ", result.Findings.GroupBy(f => f.Code).Select(g => $"{g.Key} ×{g.Count()}")) + ".");
 
         Assert.InRange(result.LengthMeters / PassageGeodesy.MetersPerNauticalMile, 20, 35);
         Assert.Contains(result.Findings, f => f.Code == RouteCheckCodes.CrossesDrying);
