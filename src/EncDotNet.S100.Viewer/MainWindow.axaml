@@ -467,6 +467,26 @@
                                         </MultiBinding>
                                     </ToggleButton.IsChecked>
                                 </ToggleButton>
+                                <!-- A count badge, e.g. new navigational warnings (#932). -->
+                                <Border IsVisible="{Binding HasBadge}"
+                                        IsHitTestVisible="False"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Top"
+                                        Margin="0,7,6,0"
+                                        MinWidth="16"
+                                        Height="16"
+                                        Padding="4,0"
+                                        CornerRadius="8"
+                                        Background="{DynamicResource AccentBrush}"
+                                        AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}Badge}"
+                                        AutomationProperties.Name="{Binding BadgeName}">
+                                    <TextBlock Text="{Binding BadgeCount}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Border>
                             </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
@@ -511,6 +531,26 @@
                                         </MultiBinding>
                                     </ToggleButton.IsChecked>
                                 </ToggleButton>
+                                <!-- A count badge, e.g. new navigational warnings (#932). -->
+                                <Border IsVisible="{Binding HasBadge}"
+                                        IsHitTestVisible="False"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Top"
+                                        Margin="0,7,6,0"
+                                        MinWidth="16"
+                                        Height="16"
+                                        Padding="4,0"
+                                        CornerRadius="8"
+                                        Background="{DynamicResource AccentBrush}"
+                                        AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}Badge}"
+                                        AutomationProperties.Name="{Binding BadgeName}">
+                                    <TextBlock Text="{Binding BadgeCount}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Border>
                             </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

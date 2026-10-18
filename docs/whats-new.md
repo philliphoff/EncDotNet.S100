@@ -6,6 +6,18 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **See how fresh the navigational warnings are.** In SoundCharts'
+  **Navigational warnings** panel, each group header names the SECOM service
+  or feed the warnings came from and when it last answered ("AMSA · 07:40").
+  **Refresh** asks those sources again through the Library. A source whose
+  latest refresh failed says so at the top of its group, with **Retry**. A
+  warning that first appeared in the latest refresh shows **NEW** until you
+  open its card, the summary counts them, and the Warnings button shows a
+  badge. `list_navigational_warnings` reports `new`, `sources` and `stale`,
+  and `refresh_navigational_warnings` refreshes. In the libraries,
+  `SecomSourceIndexer.HealthOf` reports when a SECOM service last answered,
+  as the feed indexers' `HealthOf` does.
+
 - **Warning numbers in a navigational warning link to those warnings.** In a
   Warning card, a number such as "106/26" that names a warning in the
   **Navigational warnings** list opens it, so a weekly "warnings in force"

@@ -626,6 +626,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             Hit = hit,
             IsCollapsible = collapsible,
             IsOpen = !collapsible,
+            // As the card is made: opening it marks the warning seen, and the card keeps saying it was new.
+            IsNew = FindEntry(hit) is { } entry && _warningNavigator!.IsNew(entry),
         };
         UpdateTargets(card);
         card.CopyRequested += OnWarningCopyRequested;

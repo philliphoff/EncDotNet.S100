@@ -43,7 +43,7 @@ internal enum NavigationalWarningsSort
 /// now. Parts not in force at that time fall into one dimmed group at the
 /// bottom, collapsed until opened.
 /// </remarks>
-internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigationalWarningNavigator, IDisposable
+internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigationalWarningNavigator, Activities.IActivityTabBadge, IDisposable
 {
     /// <summary>Half the side of the box a point warning frames, in EPSG:3857 metres (about 1 NM).</summary>
     internal const double PointFrameHalfMetres = 1852.0;
@@ -69,6 +69,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
     private int _inForceCount;
     private int _notInForceCount;
     private int _textOnlyCount;
+    private int _newCount;
     private bool _disposed;
 
     public NavigationalWarningsViewModel(
@@ -96,6 +97,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         ShowNotInForceCommand = new RelayCommand(() => IsNotInForceExpanded = true);
         ClearQueryCommand = new RelayCommand(() => Query = string.Empty);
         OpenLibraryCommand = new RelayCommand(() => OpenLibraryRequested?.Invoke(this, EventArgs.Empty));
+        RefreshCommand = new RelayCommand(() => RefreshSources(), () => CanRefresh);
 
         _service.Changed += OnServiceChanged;
         if (_viewTime is not null)
@@ -121,6 +123,9 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
 
     /// <inheritdoc />
     public NavigationalWarningEntry? Find(string datasetId, string featureRef) => _service.Find(datasetId, featureRef);
+
+    /// <inheritdoc />
+    public bool IsNew(NavigationalWarningEntry entry) => _service.IsNew(entry);
 
     /// <inheritdoc />
     public bool ZoomTo(NavigationalWarningEntry entry)
@@ -231,6 +236,34 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
 
     /// <summary>"N in force".</summary>
     public string InForceText => string.Format(CultureInfo.CurrentCulture, Strings.NavWarnings_InForceFormat, _inForceCount);
+
+    /// <summary>"N new": the in-force parts whose warnings are new.</summary>
+    public string NewText => string.Format(CultureInfo.CurrentCulture, Strings.NavWarnings_NewFormat, _newCount);
+
+    /// <summary>Number of in-force parts whose warnings are new.</summary>
+    public int NewCount => _newCount;
+
+    /// <summary>Whether the summary shows "· N new".</summary>
+    public bool HasNew => _newCount > 0;
+
+    /// <inheritdoc />
+    public int BadgeCount => _newCount;
+
+    /// <inheritdoc />
+    public string BadgeName => NewText;
+
+    /// <summary>Whether Refresh has a source to read again (a listed warning came from a SECOM service or online feed).</summary>
+    public bool CanRefresh => _service.CanRefreshSources;
+
+    /// <summary>Reads the sources of the listed warnings again, through the Library's refresh and sync.</summary>
+    public ICommand RefreshCommand { get; }
+
+    /// <summary>Reads every source again; returns how many were asked.</summary>
+    public int RefreshSources()
+    {
+        using var cmd = ViewerObservability.BeginCommand("navwarnings.refresh");
+        return _service.RefreshSources();
+    }
 
     /// <summary>"N text-only": the in-force parts with no location.</summary>
     public string TextOnlyText => string.Format(CultureInfo.CurrentCulture, Strings.NavWarnings_TextOnlyFormat, _textOnlyCount);
@@ -392,6 +425,8 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
                 _viewport?.Current?.ZoomToExtent(extent);
         }
 
+        // Opening the card is reading it: the warning is no longer new.
+        _service.MarkSeen(entry);
         return true;
     }
 
@@ -493,6 +528,9 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
             _selectedItem = row;
             OnPropertyChanged(nameof(SelectedItem));
         }
+
+        if (row is not null)
+            _service.MarkSeen(row.Entry);
     }
 
     private void Rebuild()
@@ -511,19 +549,35 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         _inForceCount = inForce.Count;
         _notInForceCount = notInForce.Count;
         _textOnlyCount = inForce.Count(w => w.IsTextOnly);
+        _newCount = inForce.Count(_service.IsNew);
+        var now = _clock.GetUtcNow();
 
         bool Listed(NavigationalWarningEntry w) => (!_textOnlyFilter || w.IsTextOnly) && Matches(w, _query);
 
         var items = new List<NavigationalWarningListItem>();
+        // A series appears once per source: a Library source by id (its name
+        // and when it last answered), a file opened directly by its issuer.
         var groups = inForce.Where(Listed)
-            .GroupBy(w => (Series: w.Warning.Series ?? Strings.NavWarnings_NoSeries, Source: w.Warning.Issuer ?? string.Empty))
-            .OrderBy(g => g.Key.Series, StringComparer.CurrentCultureIgnoreCase)
-            .ThenBy(g => g.Key.Source, StringComparer.CurrentCultureIgnoreCase);
+            .GroupBy(w => (
+                Series: w.Warning.Series ?? Strings.NavWarnings_NoSeries,
+                SourceKey: w.Source is { } source ? source.Key : "file:" + (w.Warning.Issuer ?? string.Empty)))
+            .Select(g => (g.Key.Series, g.First().Source, Issuer: g.First().Warning.Issuer ?? string.Empty, Rows: g))
+            .OrderBy(g => g.Series, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(g => g.Source?.Name ?? g.Issuer, StringComparer.CurrentCultureIgnoreCase);
+        var staleShown = new HashSet<Guid>();
         foreach (var group in groups)
         {
-            var rows = Ordered(group).ToList();
-            items.Add(new NavigationalWarningGroupItem(group.Key.Series, rows.Count, group.Key.Source, isNotInForce: false, isExpanded: true, command: null));
-            items.AddRange(rows.Select(w => new NavigationalWarningRowItem(w, time, format, isInForce: true)));
+            // An unreachable source says so once, at the top of its first group.
+            if (group.Source is { IsStale: true } stale && staleShown.Add(stale.Id))
+                items.Add(new NavigationalWarningStaleItem(stale, StaleText(stale, format, now), new RelayCommand(() => _service.RefreshSources([stale.Id]))));
+            var rows = Ordered(group.Rows).ToList();
+            var sourceText = group.Source is { } from ? SourceText(from, format, now) : group.Issuer;
+            items.Add(new NavigationalWarningGroupItem(group.Series, rows.Count, sourceText, isNotInForce: false, isExpanded: true, command: null)
+            {
+                IsStale = group.Source?.IsStale == true,
+                SourceId = group.Source?.Id,
+            });
+            items.AddRange(rows.Select(w => new NavigationalWarningRowItem(w, time, format, isInForce: true) { IsNew = _service.IsNew(w) }));
         }
 
         var outRows = Ordered(notInForce.Where(Listed)).ToList();
@@ -560,6 +614,13 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         OnPropertyChanged(nameof(InForceCount));
         OnPropertyChanged(nameof(NotInForceCount));
         OnPropertyChanged(nameof(TextOnlyCount));
+        OnPropertyChanged(nameof(NewText));
+        OnPropertyChanged(nameof(NewCount));
+        OnPropertyChanged(nameof(HasNew));
+        OnPropertyChanged(nameof(BadgeCount));
+        OnPropertyChanged(nameof(BadgeName));
+        OnPropertyChanged(nameof(CanRefresh));
+        ((RelayCommand)RefreshCommand).NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(HasSummary));
         OnPropertyChanged(nameof(IsLoadingState));
         OnPropertyChanged(nameof(IsNoSourcesState));
@@ -569,6 +630,36 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         OnPropertyChanged(nameof(ShowNotInForceText));
         OnPropertyChanged(nameof(IsNoMatchesState));
         OnPropertyChanged(nameof(HasList));
+    }
+
+    /// <summary>A source's group-header text at the panel's time format.</summary>
+    internal string SourceHeader(NavigationalWarningSource source) =>
+        SourceText(source, _timeFormat?.Current ?? TimeFormat.Local, _clock.GetUtcNow());
+
+    /// <summary>"AMSA · 07:40", "AMSA · 07:40, stale", or the name alone when the time is unknown.</summary>
+    internal static string SourceText(NavigationalWarningSource source, TimeFormat format, DateTimeOffset now)
+    {
+        if (source.ReceivedAt is not { } received)
+            return source.IsStale ? string.Format(CultureInfo.CurrentCulture, Strings.NavWarnings_SourceStaleNoTimeFormat, source.Name) : source.Name;
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            source.IsStale ? Strings.NavWarnings_SourceStaleFormat : Strings.NavWarnings_SourceReceivedFormat,
+            source.Name,
+            ReceivedText(received, format, now));
+    }
+
+    /// <summary>"AMSA hasn't answered since 07:40. You're seeing the warnings received then."</summary>
+    internal static string StaleText(NavigationalWarningSource source, TimeFormat format, DateTimeOffset now) =>
+        source.ReceivedAt is { } received
+            ? string.Format(CultureInfo.CurrentCulture, Strings.NavWarnings_StaleFormat, source.Name, ReceivedText(received, format, now))
+            : string.Format(CultureInfo.CurrentCulture, Strings.NavWarnings_StaleNoTimeFormat, source.Name);
+
+    /// <summary>"07:40" today, else "13 Oct 07:40", in the Local/UTC preference.</summary>
+    internal static string ReceivedText(DateTimeOffset received, TimeFormat format, DateTimeOffset now)
+    {
+        var at = format == TimeFormat.Utc ? received.ToUniversalTime() : received.ToLocalTime();
+        var today = format == TimeFormat.Utc ? now.ToUniversalTime() : now.ToLocalTime();
+        return at.ToString(at.Date == today.Date ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture);
     }
 
     private IEnumerable<NavigationalWarningEntry> Ordered(IEnumerable<NavigationalWarningEntry> warnings) =>
@@ -654,8 +745,14 @@ internal sealed class NavigationalWarningGroupItem : NavigationalWarningListItem
     /// <summary>The number of rows in the group.</summary>
     public int Count { get; }
 
-    /// <summary>The issuing authority, or empty.</summary>
+    /// <summary>Where the group's warnings came from: "AMSA · 07:40" for a Library source, the issuing authority for a file, or empty.</summary>
     public string Source { get; }
+
+    /// <summary>Whether the group's source didn't answer its latest refresh.</summary>
+    public bool IsStale { get; init; }
+
+    /// <summary>The group's Library source, or <see langword="null"/> for a file opened directly.</summary>
+    public Guid? SourceId { get; init; }
 
     /// <summary>Whether this is the dimmed "Not in force" group, which opens and closes.</summary>
     public bool IsNotInForce { get; }
@@ -678,6 +775,37 @@ internal sealed class NavigationalWarningGroupItem : NavigationalWarningListItem
         : $"{Name}, {Count}, {Source}";
 }
 
+/// <summary>
+/// A source that didn't answer its latest refresh, at the top of its first
+/// group: "AMSA hasn't answered since 07:40. You're seeing the warnings
+/// received then." with Retry.
+/// </summary>
+internal sealed class NavigationalWarningStaleItem : NavigationalWarningListItem
+{
+    public NavigationalWarningStaleItem(NavigationalWarningSource source, string text, ICommand retryCommand)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        Source = source;
+        Text = text;
+        RetryCommand = retryCommand;
+    }
+
+    /// <summary>The unreachable source.</summary>
+    public NavigationalWarningSource Source { get; }
+
+    /// <summary>The notice.</summary>
+    public string Text { get; }
+
+    /// <summary>Reads the source again.</summary>
+    public ICommand RetryCommand { get; }
+
+    /// <inheritdoc />
+    public override double ContainerMinHeight => 40;
+
+    /// <inheritdoc />
+    public override string AccessibleName => Text;
+}
+
 /// <summary>A warning part's row: number, type, and "area · validity" or why it isn't in force.</summary>
 internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
 {
@@ -694,6 +822,9 @@ internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
 
     /// <summary>Whether the part is in force at the panel's time.</summary>
     public bool IsInForce { get; }
+
+    /// <summary>Whether the part's warning is new since its source's latest refresh.</summary>
+    public bool IsNew { get; init; }
 
     /// <summary>The number (e.g. "106/26"); the dataset's name when the preamble gives none.</summary>
     public string Number => Entry.Warning.Number ?? Entry.DatasetId;
@@ -732,8 +863,14 @@ internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
     public override double ContainerMinHeight => 40;
 
     /// <inheritdoc />
-    public override string AccessibleName =>
-        string.IsNullOrEmpty(TypeText) ? (Entry.Warning.Label ?? Number) : $"{Entry.Warning.Label ?? Number}, {TypeText}";
+    public override string AccessibleName
+    {
+        get
+        {
+            var name = string.IsNullOrEmpty(TypeText) ? (Entry.Warning.Label ?? Number) : $"{Entry.Warning.Label ?? Number}, {TypeText}";
+            return IsNew ? $"{name}, {Strings.NavWarnings_New}" : name;
+        }
+    }
 
     private static string BuildSubText(NavigationalWarningEntry entry, DateTimeOffset time, TimeFormat format, bool isInForce)
     {

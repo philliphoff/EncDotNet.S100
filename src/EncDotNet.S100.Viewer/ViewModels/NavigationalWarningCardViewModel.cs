@@ -81,6 +81,9 @@ internal sealed partial class NavigationalWarningCardViewModel : ViewModelBase
     /// <summary>The hit the card describes, when it came from a pick.</summary>
     public PickHit? Hit { get; init; }
 
+    /// <summary>Whether the warning was new since its source's latest refresh when the card was made (the header's NEW).</summary>
+    public bool IsNew { get; init; }
+
     /// <summary>The dataset that holds the part (its display name, which is its catalog id).</summary>
     public string? DatasetId { get; }
 

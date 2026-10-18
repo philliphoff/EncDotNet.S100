@@ -5393,4 +5393,37 @@
   <data name="NavWarnings_MapNoteNotInForceNow" xml:space="preserve">
     <value>{0} isn't in force now, so the map wasn't moved.</value>
   </data>
+  <data name="NavWarnings_New" xml:space="preserve">
+    <value>NEW</value>
+  </data>
+  <data name="Tooltip_NavWarnings_New" xml:space="preserve">
+    <value>New since its source last refreshed. Opening the card clears it.</value>
+  </data>
+  <data name="NavWarnings_NewFormat" xml:space="preserve">
+    <value>{0} new</value>
+  </data>
+  <data name="Label_NavWarnings_Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Tooltip_NavWarnings_Refresh" xml:space="preserve">
+    <value>Ask the SECOM services and feeds that supplied these warnings for updates</value>
+  </data>
+  <data name="Label_NavWarnings_Retry" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="NavWarnings_SourceReceivedFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="NavWarnings_SourceStaleFormat" xml:space="preserve">
+    <value>{0} · {1}, stale</value>
+  </data>
+  <data name="NavWarnings_SourceStaleNoTimeFormat" xml:space="preserve">
+    <value>{0}, stale</value>
+  </data>
+  <data name="NavWarnings_StaleFormat" xml:space="preserve">
+    <value>{0} hasn't answered since {1}. You're seeing the warnings received then.</value>
+  </data>
+  <data name="NavWarnings_StaleNoTimeFormat" xml:space="preserve">
+    <value>{0} isn't answering. You're seeing the warnings received earlier.</value>
+  </data>
 </root>

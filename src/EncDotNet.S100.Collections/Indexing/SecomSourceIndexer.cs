@@ -66,6 +66,7 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     private readonly TimeProvider _time;
     private readonly object _gate = new();
     private readonly Dictionary<string, Listing> _recent = new(StringComparer.Ordinal);
+    private readonly Dictionary<Guid, FeedHealth> _health = [];
     private Dictionary<Guid, List<SecomRefusal>>? _refusals;
 
     /// <summary>
@@ -119,6 +120,19 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
 
     /// <inheritdoc/>
     public bool CanIndex(CollectionSource source) => source is SecomSource;
+
+    /// <summary>
+    /// How the last read of <paramref name="source"/>'s list went, in the
+    /// terms a feed's reachability uses: when the service last answered, or
+    /// why it did not and since when, with the time of the list still served
+    /// (#932). <see langword="null"/> before the source was read this session.
+    /// </summary>
+    public FeedHealth? HealthOf(SecomSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        lock (_gate)
+            return _health.TryGetValue(source.Id, out var health) ? health : null;
+    }
 
     /// <inheritdoc/>
     public async ValueTask<string?> GetFingerprintAsync(CollectionSource source, CancellationToken cancellationToken)
@@ -484,7 +498,10 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
         lock (_gate)
         {
             if (_recent.TryGetValue(key, out var recent) && recent.Stale is null && now - recent.ReadAt < ReuseInterval && _attempts.TryGetValue(key, out var reused))
+            {
+                RecordHealth(source, new FeedHealth(recent.ReadAt, null, null, null));
                 return (recent, reused with { Presentation = reused.Presentation with { Setting = resolved.Setting } });
+            }
         }
 
         var trust = Trust;
@@ -507,13 +524,21 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
             };
             attempt = Attempted(serviceUri, resolved, client, failure: null, now);
             Save(key, listing);
+            lock (_gate)
+                RecordHealth(source, new FeedHealth(now, null, null, null));
         }
         catch (Exception ex) when (IsServiceFailure(ex, cancellationToken))
         {
             attempt = Attempted(serviceUri, resolved, client, ex, now);
+            var saved = Load(key);
             lock (_gate)
+            {
                 _attempts[key] = attempt;
-            if (Load(key) is not { } saved)
+                var failingSince = _health.TryGetValue(source.Id, out var previous) ? previous.FailingSince ?? now : now;
+                RecordHealth(source, new FeedHealth(now, ex.Message, failingSince, saved?.ReadAt));
+            }
+
+            if (saved is null)
                 return (null, attempt);
             listing = saved with { Stale = ex.Message };
         }
@@ -528,6 +553,14 @@ public sealed partial class SecomSourceIndexer : ICollectionSourceIndexer
     }
 
     private readonly Dictionary<string, Attempt> _attempts = new(StringComparer.Ordinal);
+
+    /// <summary>Records a read's outcome for <see cref="HealthOf"/>; call under <see cref="_gate"/>.</summary>
+    private void RecordHealth(SecomSource source, FeedHealth health)
+    {
+        // Probes of a service not (yet) in the library carry no id.
+        if (source.Id != Guid.Empty)
+            _health[source.Id] = health;
+    }
 
     /// <summary>One read of a service: what was presented, the outcome, and why it failed (if it did).</summary>
     private sealed record Attempt(SecomPresentation Presentation, string? Failure);

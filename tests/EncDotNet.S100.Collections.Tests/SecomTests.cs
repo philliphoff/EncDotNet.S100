@@ -546,6 +546,41 @@ public sealed class SecomTests : IDisposable
     }
 
     [Fact]
+    public async Task Health_says_when_the_service_last_answered_and_since_when_it_has_not()
+    {
+        var server = new FakeSecomServer(Summaries(2));
+        var start = DateTimeOffset.UtcNow;
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(start);
+        var indexer = new SecomSourceIndexer(new HttpClient(server), Path.Combine(_temp.Path, "cache"), timeProvider: time);
+        var source = Source();
+        Assert.Null(indexer.HealthOf(source));
+
+        await indexer.IndexAsync(source, null, Ct);
+        var reached = indexer.HealthOf(source);
+        Assert.NotNull(reached);
+        Assert.True(reached.IsReachable);
+        Assert.Equal(start, reached.CheckedAt);
+
+        server.Down = true;
+        time.Advance(TimeSpan.FromMinutes(5));
+        await indexer.IndexAsync(source, null, Ct);
+        time.Advance(TimeSpan.FromMinutes(5));
+        await indexer.IndexAsync(source, null, Ct);
+
+        // The warnings shown are the list read at the start, failing since the first miss.
+        var failing = indexer.HealthOf(source)!;
+        Assert.False(failing.IsReachable);
+        Assert.Equal(start, failing.CopyFetchedAt);
+        Assert.Equal(start.AddMinutes(5), failing.FailingSince);
+
+        server.Down = false;
+        time.Advance(TimeSpan.FromMinutes(5));
+        await indexer.IndexAsync(source, null, Ct);
+        Assert.True(indexer.HealthOf(source)!.IsReachable);
+        Assert.Equal(start.AddMinutes(15), indexer.HealthOf(source)!.CheckedAt);
+    }
+
+    [Fact]
     public async Task A_service_allowing_smaller_pages_is_asked_its_page_size()
     {
         // SECOM §5.5: page 0 returns only maxItemsPerPage. A first page refused as

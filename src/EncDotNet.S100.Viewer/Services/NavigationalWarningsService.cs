@@ -31,6 +31,15 @@ internal sealed record NavigationalWarningEntry(
 
     /// <summary>Whether nothing is drawn for the part, so it can only be found in the list.</summary>
     public bool IsTextOnly => Extent is null;
+
+    /// <summary>
+    /// The Library source the part's dataset came from, with how fresh it is;
+    /// <see langword="null"/> for a file opened directly.
+    /// </summary>
+    public NavigationalWarningSource? Source { get; init; }
+
+    /// <summary>The warning's key in the seen-warnings store (series and number, else dataset and feature).</summary>
+    public string Key => NavigationalWarningSeenStore.KeyOf(this);
 }
 
 /// <summary>
@@ -45,13 +54,29 @@ internal sealed class NavigationalWarningsService
 
     private readonly IDatasetLoaderService _loader;
     private readonly DatasetsViewModel? _datasets;
+    private readonly INavigationalWarningSources? _sources;
+    private readonly NavigationalWarningSeenStore _seen;
+    private readonly TimeProvider _clock;
     private readonly HashSet<DatasetEntry> _watched = [];
 
-    public NavigationalWarningsService(IDatasetLoaderService loader, DatasetsViewModel? datasets = null)
+    /// <param name="loader">The loaded datasets.</param>
+    /// <param name="datasets">The Datasets panel, for loading state.</param>
+    /// <param name="sources">Where datasets came from and how fresh they are; <see langword="null"/> treats every dataset as a file opened directly.</param>
+    /// <param name="seen">Which warnings are new; an in-memory store when <see langword="null"/>.</param>
+    /// <param name="clock">The clock.</param>
+    public NavigationalWarningsService(
+        IDatasetLoaderService loader,
+        DatasetsViewModel? datasets = null,
+        INavigationalWarningSources? sources = null,
+        NavigationalWarningSeenStore? seen = null,
+        TimeProvider? clock = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
         _datasets = datasets;
+        _sources = sources;
+        _seen = seen ?? new NavigationalWarningSeenStore(null);
+        _clock = clock ?? TimeProvider.System;
         _loader.DatasetLoaded += _ => Refresh();
         _loader.DatasetRemoved += _ => Refresh();
         if (_datasets is not null)
@@ -59,7 +84,50 @@ internal sealed class NavigationalWarningsService
             _datasets.Entries.CollectionChanged += OnEntriesChanged;
             WatchEntries();
         }
+        if (_sources is not null)
+            _sources.Changed += (_, _) => Refresh();
         Refresh();
+    }
+
+    /// <summary>The Library sources the listed warnings came from, by name.</summary>
+    public IReadOnlyList<NavigationalWarningSource> Sources { get; private set; } = [];
+
+    /// <summary>Whether any listed warning comes from a source the Refresh button can read again.</summary>
+    public bool CanRefreshSources => Sources.Count > 0;
+
+    /// <summary>
+    /// Reads every source of the listed warnings again, through the Library's
+    /// refresh and sync (the panel's Refresh button).
+    /// </summary>
+    /// <returns>How many sources were asked.</returns>
+    public int RefreshSources() => RefreshSources(Sources.Select(s => s.Id).ToArray());
+
+    /// <summary>Reads the given sources again (a stale group's Retry).</summary>
+    /// <returns>How many sources were asked.</returns>
+    public int RefreshSources(IReadOnlyCollection<Guid> sourceIds)
+    {
+        ArgumentNullException.ThrowIfNull(sourceIds);
+        if (_sources is null || sourceIds.Count == 0)
+            return 0;
+        _sources.Refresh(sourceIds);
+        return sourceIds.Count;
+    }
+
+    /// <summary>Whether a listed part's warning is new (see <see cref="NavigationalWarningSeenStore"/>).</summary>
+    public bool IsNew(NavigationalWarningEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return entry.Source is { } source && _seen.IsNew(source.Key, entry.Key);
+    }
+
+    /// <summary>Marks a part's warning seen, as opening its card does; raises <see cref="Changed"/> when it was new.</summary>
+    public bool MarkSeen(NavigationalWarningEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (entry.Source is not { } source || !_seen.MarkSeen(source.Key, entry.Key))
+            return false;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
     }
 
     /// <summary>Every warning part in the loaded datasets, in dataset order.</summary>
@@ -89,6 +157,7 @@ internal sealed class NavigationalWarningsService
         {
             foreach (var (entry, processor) in processors)
             {
+                var source = _sources?.SourceOf(entry);
                 var isWarningProduct = IsWarningProduct(processor.Spec.Name);
                 IReadOnlyList<NavigationalWarningFeature> parts;
                 try
@@ -112,15 +181,37 @@ internal sealed class NavigationalWarningsService
                         part.Ordinal,
                         part.Warning,
                         extent is null ? S100GeometryType.None : geometry!.Primitive,
-                        extent));
+                        extent)
+                    { Source = source });
                 }
             }
         }
 
+        Observe(warnings);
         Warnings = warnings;
+        Sources = warnings.Select(w => w.Source).OfType<NavigationalWarningSource>()
+            .DistinctBy(s => s.Id)
+            .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
         HasWarningDatasets = hasDatasets;
         IsLoading = ComputeIsLoading();
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Records what each source lists now, so warnings it newly brings read as new.</summary>
+    private void Observe(IReadOnlyList<NavigationalWarningEntry> warnings)
+    {
+        var now = _clock.GetUtcNow();
+        foreach (var bySource in warnings.Where(w => w.Source is not null).GroupBy(w => w.Source!.Id))
+        {
+            var source = bySource.First().Source!;
+            var listed = bySource.GroupBy(w => w.Key, StringComparer.Ordinal).Select(g => new NavigationalWarningSeenStore.Observed(
+                g.Key,
+                NavigationalWarningSeenStore.StampOf(g.Select(w => w.Warning)),
+                g.Max(w => w.Warning.PublicationTime)));
+            // A stale source brought nothing; its refresh time is the old copy's.
+            _seen.Observe(source.Key, source.IsStale ? null : source.ReceivedAt, listed, now);
+        }
     }
 
     private static bool IsWarningProduct(string? spec) =>
