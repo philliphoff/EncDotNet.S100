@@ -13,10 +13,11 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// layer) must never leave tiles behind that a later frame at another scale
 /// (the 2x retina window) keeps blitting.
 /// </summary>
+[Collection(RenderingOptimizationsCollection.Name)]
 public sealed class TileDeviceScaleTests
 {
     private const int Band = 10;
-    private static readonly TimeSpan LandTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
 
     [Fact]
     public void LiveFrame_AfterColdFrameAtOtherScale_ReplacesTilesAtLiveScale()
@@ -114,8 +115,11 @@ public sealed class TileDeviceScaleTests
             viewport.Resolution, Band);
 
     /// <summary>
-    /// Renders frames at <paramref name="deviceScale"/> until every visible tile
-    /// is resident at that scale's pixel size (or the timeout lapses).
+    /// Renders live frames at <paramref name="deviceScale"/> until every visible
+    /// tile is resident at that scale's pixel size with no visible work queued
+    /// or rasterising. Waiting on the renderer's state keeps a slow or contended
+    /// host from handing a half-drawn cache to the assertions; a host that never
+    /// settles fails with the scheduler state rather than an empty cache.
     /// </summary>
     private static void RenderUntilSettled(ILayer layer, Mapsui.Viewport viewport, float deviceScale)
     {
@@ -126,15 +130,21 @@ public sealed class TileDeviceScaleTests
         using var surface = SKSurface.Create(info);
         var renderService = new RenderService();
         var sw = Stopwatch.StartNew();
-        while (sw.Elapsed < LandTimeout)
+        while (true)
         {
             surface.Canvas.ResetMatrix();
             surface.Canvas.Scale(deviceScale);
             S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, renderService);
-            var sizes = Sizes(layer);
-            if (VisibleKeys(viewport).All(k => sizes.TryGetValue(k, out var s) && s == px))
+            if (S100VectorTileRenderer.IsVisibleSettledForTest(layer, px))
             {
                 return;
+            }
+
+            if (sw.Elapsed > SettleTimeout)
+            {
+                Assert.Fail(
+                    $"Tiles did not settle at {px} px within {SettleTimeout.TotalSeconds:F0} s: "
+                    + S100VectorTileRenderer.DescribeTileWorkForTest(layer));
             }
 
             Thread.Sleep(20);
