@@ -14,6 +14,61 @@ namespace EncDotNet.S100.Testing.Scenarios.Writers;
 /// <param name="MaintainedDepth">The maintained depth (DRVAL1) in metres; no deeper than the true seabed anywhere in the area.</param>
 public sealed record DredgedChannel(string Name, LocalRect Area, double MaintainedDepth);
 
+/// <summary>The kind of a charted point danger.</summary>
+public enum HazardKind
+{
+    /// <summary>An S-101 <c>Wreck</c>.</summary>
+    Wreck,
+
+    /// <summary>An S-101 <c>Obstruction</c>.</summary>
+    Obstruction,
+
+    /// <summary>An S-101 <c>UnderwaterAwashRock</c>.</summary>
+    Rock,
+}
+
+/// <summary>
+/// A charted point danger (#955): a wreck, obstruction or rock, charted as a
+/// point feature in the cells that cover it.
+/// </summary>
+/// <param name="Name">The scenario's name for it, written as its <c>featureName</c> (fictitious).</param>
+/// <param name="Kind">What it is.</param>
+/// <param name="Position">Where it is, in local metres.</param>
+/// <param name="ValueOfSounding">Its least depth in metres (<c>valueOfSounding</c>), or <c>null</c> when its depth is unknown.</param>
+/// <param name="WaterLevelEffect">
+/// Its <c>waterLevelEffect</c>: 1 partly submerged at high water, 2 always
+/// dry, 3 always under water, 4 covers and uncovers, 5 awash.
+/// </param>
+/// <param name="Cells">
+/// The dataset names of the cells that chart it, or <c>null</c> for every
+/// cell whose extent contains it.
+/// </param>
+public sealed record PointHazard(
+    string Name,
+    HazardKind Kind,
+    (double X, double Y) Position,
+    double? ValueOfSounding,
+    int WaterLevelEffect,
+    IReadOnlyList<string>? Cells = null)
+{
+    /// <summary>The S-101 feature type.</summary>
+    public string FeatureType => Kind switch
+    {
+        HazardKind.Wreck => "Wreck",
+        HazardKind.Obstruction => "Obstruction",
+        _ => "UnderwaterAwashRock",
+    };
+
+    /// <summary>Whether a cell charts it.</summary>
+    /// <param name="cell">The cell.</param>
+    /// <returns><c>true</c> when the cell charts it.</returns>
+    public bool ChartedIn(S101CellSpec cell)
+    {
+        ArgumentNullException.ThrowIfNull(cell);
+        return Cells is null ? cell.Extent.Contains(Position.X, Position.Y) : Cells.Contains(cell.DatasetName);
+    }
+}
+
 /// <summary>
 /// One S-101 cell: its extent, usage band and scale range, and how coarsely
 /// it samples the world.
@@ -54,8 +109,9 @@ public sealed record S101CellSpec(
 /// Samples a <see cref="SyntheticWorld"/> into an S-101 cell (S-101 Ed 2.0.0):
 /// the skin of the earth (<c>LandArea</c>, <c>DepthArea</c>,
 /// <c>DredgedArea</c>), <c>Coastline</c>, <c>DepthContour</c>,
-/// <c>Sounding</c>, and the <c>DataCoverage</c> and <c>SoundingDatum</c>
-/// meta-features.
+/// <c>Sounding</c>, point dangers (<c>Wreck</c>, <c>Obstruction</c>,
+/// <c>UnderwaterAwashRock</c>), and the <c>DataCoverage</c> and
+/// <c>SoundingDatum</c> meta-features.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -85,8 +141,9 @@ public static class S101CellWriter
     /// The cell's producer quirks, or <c>null</c> for none: declared display
     /// scales, a shoal bias, and spiked areas.
     /// </param>
+    /// <param name="hazards">Point dangers, charted where <see cref="PointHazard.ChartedIn"/> says; <c>null</c> for none.</param>
     /// <returns>The document.</returns>
-    public static S101Document Build(SyntheticWorld world, S101CellSpec cell, IReadOnlyList<DredgedChannel> dredged, DateOnly issueDate, DatasetQuirks? quirks = null)
+    public static S101Document Build(SyntheticWorld world, S101CellSpec cell, IReadOnlyList<DredgedChannel> dredged, DateOnly issueDate, DatasetQuirks? quirks = null, IReadOnlyList<PointHazard>? hazards = null)
     {
         quirks ??= DatasetQuirks.None;
         var bias = quirks.ShoalBias;
@@ -192,6 +249,24 @@ public static class S101CellWriter
         foreach (var spiked in quirks.SpikedAreas)
         {
             builder.AddSurface(spiked.FeatureType, DatasetQuirks.SpikedRing(frame, spiked), []);
+        }
+
+        foreach (var hazard in hazards ?? [])
+        {
+            if (!hazard.ChartedIn(cell))
+            {
+                continue;
+            }
+
+            var attributes = new List<FeatureAttribute>();
+            if (hazard.ValueOfSounding is { } valueOfSounding)
+            {
+                attributes.Add(FeatureAttribute.Number("valueOfSounding", valueOfSounding));
+            }
+
+            attributes.Add(FeatureAttribute.Number("waterLevelEffect", hazard.WaterLevelEffect));
+            attributes.Add(FeatureAttribute.FeatureName(hazard.Name));
+            builder.AddPoint(hazard.FeatureType, frame.ToGeo(hazard.Position.X, hazard.Position.Y), [.. attributes]);
         }
 
         var soundings = Soundings(world, cell, highWater, bias);

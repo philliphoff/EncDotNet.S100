@@ -839,7 +839,7 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
                 sp.GetRequiredService<GlobalTimeService>()));
         // Findings list (#905): merged from the findings producers (#953), the
-        // clearance check first; selecting one zooms the map to it and moves
+        // clearance check first, then the S-124 warnings (#957); selecting one zooms the map to it and moves
         // the profile cursor there.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(sp =>
             new EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService(
@@ -850,6 +850,12 @@ public partial class App : Application
                 sp.GetService<IMarinerSettingsProvider>(),
                 sp.GetService<ITimeFormatProvider>(),
                 sp.GetService<TimeProvider>(),
+                producers:
+                [
+                    // S-124 warnings on the route (#957), from the Navigational warnings panel's list.
+                    new EncDotNet.S100.Viewer.Services.PassageCheck.WarningFindingProducer(
+                        sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()),
+                ],
                 post: action =>
                 {
                     if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())

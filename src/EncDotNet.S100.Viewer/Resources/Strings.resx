@@ -602,7 +602,7 @@
   </data>
   <data name="Pick_Warning_Copy" xml:space="preserve">
     <value>Copy</value>
-    <comment>Warning card button that copies the message text.</comment>
+    <comment>Long-text card button (warning, referenced text, long value) that copies the text.</comment>
   </data>
   <data name="Tooltip_CopyWarningText" xml:space="preserve">
     <value>Copy the message text in the language shown</value>
@@ -610,7 +610,7 @@
   </data>
   <data name="Pick_Warning_Examiner" xml:space="preserve">
     <value>Examiner</value>
-    <comment>Warning card button that opens the feature in the S-100 Feature Catalogue eXaminer.</comment>
+    <comment>Long-text card button that opens the feature or attribute in the S-100 Feature Catalogue eXaminer.</comment>
   </data>
   <data name="Pick_Warning_Languages" xml:space="preserve">
     <value>Message language</value>
@@ -624,9 +624,17 @@
     <value>Attributes</value>
     <comment>Header of the attribute fold beneath a Warning card.</comment>
   </data>
-  <data name="Pick_ReferencedTextHeader" xml:space="preserve">
-    <value>REFERENCED TEXT</value>
-    <comment>Header above the referenced-text cards (resolved fileReference content) in the Object Information panel.</comment>
+  <data name="Pick_TextCardsHeader" xml:space="preserve">
+    <value>TEXT</value>
+    <comment>Header above the long-text cards (referenced files and long attribute values) in the Object Information panel.</comment>
+  </data>
+  <data name="Pick_NotForNavigation" xml:space="preserve">
+    <value>NOT FOR NAVIGATION</value>
+    <comment>Footer label on a long-text card whose dataset's exchange-set metadata marks it not for navigation.</comment>
+  </data>
+  <data name="Tooltip_NotForNavigation" xml:space="preserve">
+    <value>The data provider marks this data as not for navigation</value>
+    <comment>Tooltip on a card's NOT FOR NAVIGATION label.</comment>
   </data>
   <data name="Pick_NoAttributes" xml:space="preserve">
     <value>(no attributes)</value>
@@ -699,8 +707,8 @@
   <data name="Tooltip_CopyIdentity" xml:space="preserve">
     <value>Copy this feature's name and identity to the clipboard</value>
   </data>
-  <data name="Tooltip_CopyReferencedText" xml:space="preserve">
-    <value>Copy this referenced text to the clipboard</value>
+  <data name="Tooltip_CopyTextCard" xml:space="preserve">
+    <value>Copy the full text</value>
   </data>
   <!-- Pick panel: station time-series chart -->
   <data name="Pick_Chart_Title_WaterLevel" xml:space="preserve">
@@ -4954,6 +4962,42 @@
   </data>
   <data name="Findings_FromFormat" xml:space="preserve">
     <value>from {0}</value>
+  </data>
+  <data name="Findings_WarningInsideFormat" xml:space="preserve">
+    <value>Inside navigational warning {0}</value>
+    <comment>S-124 finding title (#957): the route goes through the warning's area while it is in force. {0} is the warning number, e.g. 012/26.</comment>
+  </data>
+  <data name="Findings_WarningCrossesFormat" xml:space="preserve">
+    <value>Crosses navigational warning {0}</value>
+    <comment>S-124 finding title: the route crosses the warning's line while it is in force. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningNearFormat" xml:space="preserve">
+    <value>Navigational warning {0} near the route</value>
+    <comment>S-124 finding title: the warning is within the near distance (0,5 NM) of the route. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningNotInForceFormat" xml:space="preserve">
+    <value>Navigational warning {0} not in force</value>
+    <comment>S-124 finding title: on or near the route, but not in force while the vessel is there. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningCancelledFormat" xml:space="preserve">
+    <value>Navigational warning {0} cancelled</value>
+    <comment>S-124 finding title: on or near the route, but cancelled by the time the vessel is there. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningInForceAtFormat" xml:space="preserve">
+    <value>In force at {0}</value>
+    <comment>S-124 finding meta: status at the ETA (or the view time). {0} is the time.</comment>
+  </data>
+  <data name="Findings_WarningNotInForceAtFormat" xml:space="preserve">
+    <value>Not in force at {0}</value>
+    <comment>S-124 finding meta: status at the ETA (or the view time). {0} is the time.</comment>
+  </data>
+  <data name="Findings_WarningCancelled" xml:space="preserve">
+    <value>Cancelled</value>
+    <comment>S-124 finding meta: the warning is cancelled by the time the vessel is there.</comment>
+  </data>
+  <data name="Findings_WarningRangeFormat" xml:space="preserve">
+    <value>{0} – {1}</value>
+    <comment>S-124 finding meta: a validity range. {0} start, {1} end.</comment>
   </data>
   <data name="Findings_TideNotAppliedForFormat" xml:space="preserve">
     <value>tide not applied for {0:0.0} NM</value>

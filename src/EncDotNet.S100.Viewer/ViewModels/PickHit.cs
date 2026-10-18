@@ -48,6 +48,13 @@ internal sealed class PickHit
     /// </summary>
     public NavigationalWarningInfo? NavigationalWarning { get; init; }
 
+    /// <summary>
+    /// Whether the source dataset's exchange-set discovery metadata marks it
+    /// not for navigation (<c>notForNavigation</c>), which labels the hit's
+    /// long-text cards. False for a file opened without a catalogue.
+    /// </summary>
+    public bool NotForNavigation { get; init; }
+
     /// <summary>Attribute rows for the feature, decoded against the dataset's FC where available.</summary>
     public IReadOnlyList<PickAttribute> Attributes { get; init; } = [];
 

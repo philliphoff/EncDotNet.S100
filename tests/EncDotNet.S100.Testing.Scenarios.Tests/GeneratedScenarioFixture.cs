@@ -45,6 +45,9 @@ public sealed class SpitWithoutS102DatumFixture() : GeneratedScenarioFixture(Syn
 /// <summary>"Spit crossing" with the default seed.</summary>
 public sealed class SpitCrossingFixture() : GeneratedScenarioFixture(SyntheticScenarios.SpitCrossing());
 
+/// <summary>"Dangers near route" with the default seed.</summary>
+public sealed class DangersNearRouteFixture() : GeneratedScenarioFixture(SyntheticScenarios.DangersNearRoute());
+
 /// <summary>"Approach with tide window" with the default seed.</summary>
 public sealed class ApproachWithTideWindowFixture() : GeneratedScenarioFixture(SyntheticScenarios.ApproachWithTideWindow());
 
@@ -86,7 +89,7 @@ public static class ScenarioLoading
 
     /// <summary>The route-check sources over the scenario's datasets.</summary>
     public static RouteCheckDataSources RouteCheckSources(GeneratedScenario scenario) =>
-        RouteCheckDataSources.FromDatasets(Catalog(scenario).Datasets);
+        RouteCheckDataSources.FromDatasets(Catalog(scenario).Datasets, new ProjNetCrsTransformFactory());
 
     /// <summary>The passage-check sources over the scenario's datasets.</summary>
     public static PassageDataSources Sources(GeneratedScenario scenario) =>

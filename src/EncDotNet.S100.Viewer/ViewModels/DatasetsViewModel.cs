@@ -155,6 +155,13 @@ internal sealed class DatasetEntry : ViewModelBase
     /// </summary>
     public int? UsageBand { get; }
 
+    /// <summary>
+    /// Whether the exchange-set catalogue's discovery metadata marks the
+    /// dataset not for navigation (S-100 Part 17 <c>notForNavigation</c>).
+    /// False for plain file loads, which have no catalogue.
+    /// </summary>
+    public bool NotForNavigation { get; }
+
     private bool _isDeferred;
     /// <summary>
     /// True when this entry has been <em>registered</em> from a large exchange
@@ -694,9 +701,11 @@ internal sealed class DatasetEntry : ViewModelBase
         IReadOnlyList<string>? updateRelativePaths = null,
         int? minimumDisplayScale = null,
         int? maximumDisplayScale = null,
-        ExchangeSets.BoundingBox? geographicBounds = null)
+        ExchangeSets.BoundingBox? geographicBounds = null,
+        bool notForNavigation = false)
     {
         FilePath = filePath;
+        NotForNavigation = notForNavigation;
         ProductSpec = productSpec;
         Source = source;
         RelativePath = relativePath;
@@ -1294,7 +1303,8 @@ internal sealed class DatasetsViewModel : ViewModelBase
         IReadOnlyList<string>? updateRelativePaths = null,
         int? minimumDisplayScale = null,
         int? maximumDisplayScale = null,
-        ExchangeSets.BoundingBox? geographicBounds = null)
+        ExchangeSets.BoundingBox? geographicBounds = null,
+        bool notForNavigation = false)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
@@ -1313,7 +1323,8 @@ internal sealed class DatasetsViewModel : ViewModelBase
             updateRelativePaths: updateRelativePaths,
             minimumDisplayScale: minimumDisplayScale,
             maximumDisplayScale: maximumDisplayScale,
-            geographicBounds: geographicBounds);
+            geographicBounds: geographicBounds,
+            notForNavigation: notForNavigation);
         Entries.Insert(0, entry);
         return entry;
     }
@@ -1356,7 +1367,8 @@ internal sealed class DatasetsViewModel : ViewModelBase
                 updateRelativePaths: reg.UpdateRelativePaths,
                 minimumDisplayScale: reg.MinimumDisplayScale,
                 maximumDisplayScale: reg.MaximumDisplayScale,
-                geographicBounds: reg.GeographicBounds);
+                geographicBounds: reg.GeographicBounds,
+                notForNavigation: reg.NotForNavigation);
 
             // Mark the entry deferred *before* it is inserted (and therefore
             // before the extent-overlay / grouping subscribers attach to it).

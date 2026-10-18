@@ -142,7 +142,9 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
             (8000, 3000), (12000, 6000), (15000, 2000), (12000, -2000), (6000, 1000), (1000, 2600), (-6000, 6000),
         ];
         var legs = Legs(local.Select(p => World.Frame.ToGeo(p.X, p.Y)).ToList());
-        var engine = new RouteCheckEngine(_sources.Charts);
+
+        // With the depth checks (#955) and S-102, as the viewer runs it.
+        var engine = _sources.CreateEngine(new RouteCheckOptions { Depths = new RouteCheckDepths(10, 10) });
         var first = Stopwatch.StartNew();
         var result = engine.Check(legs, TestContext.Current.CancellationToken);
         first.Stop();

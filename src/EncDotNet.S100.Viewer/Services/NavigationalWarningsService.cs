@@ -38,6 +38,9 @@ internal sealed record NavigationalWarningEntry(
     /// </summary>
     public NavigationalWarningSource? Source { get; init; }
 
+    /// <summary>The part's own geometry in WGS-84, or <see langword="null"/> for a text-only part; route checks read it (#957).</summary>
+    public S100FeatureGeometry? Shape { get; init; }
+
     /// <summary>The warning's key in the seen-warnings store (series and number, else dataset and feature).</summary>
     public string Key => NavigationalWarningSeenStore.KeyOf(this);
 }
@@ -182,7 +185,7 @@ internal sealed class NavigationalWarningsService
                         part.Warning,
                         extent is null ? S100GeometryType.None : geometry!.Primitive,
                         extent)
-                    { Source = source });
+                    { Source = source, Shape = extent is null ? null : geometry });
                 }
             }
         }
