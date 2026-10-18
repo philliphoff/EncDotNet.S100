@@ -51,6 +51,35 @@ public static class RouteWarningSources
     }
 
     /// <summary>
+    /// Every loaded S-124 warning as a whole, including cancellations and
+    /// in-force bulletins with no parts, to judge the parts with (pass it to
+    /// <see cref="RouteWarningCheck.Check(IReadOnlyList{RouteCheckLeg}, IReadOnlyList{RouteWarning}, RouteWarningTiming, NavigationalWarningSet?, CancellationToken)"/>).
+    /// </summary>
+    /// <param name="datasets">The loaded datasets, such as <see cref="IDatasetCatalog.Datasets"/>.</param>
+    /// <returns>The set.</returns>
+    public static NavigationalWarningSet SetFromDatasets(IEnumerable<LoadedDataset> datasets)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        var messages = new List<NavigationalWarningInfo>();
+        foreach (var dataset in datasets)
+        {
+            if (dataset.Data is not S124DatasetData s124)
+                continue;
+            try
+            {
+                var warning = S124NavigationalWarning.From(s124.Model, out _);
+                if (warning.Preamble is not null)
+                    messages.Add(S124WarningInfo.Message(warning));
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        return new NavigationalWarningSet(messages);
+    }
+
+    /// <summary>
     /// The shapes of a part a host already lists (for example from
     /// <see cref="IDatasetProcessor.GetNavigationalWarnings"/> and
     /// <see cref="IDatasetProcessor.GetFeatureGeometryAt"/>): its own geometry,

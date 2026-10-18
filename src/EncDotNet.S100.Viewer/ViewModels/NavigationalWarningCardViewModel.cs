@@ -41,6 +41,7 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
     private NavigationalWarningText? _selectedText;
     private bool _isOpen = true;
     private IReadOnlyList<NavigationalWarningEntry> _linkTargets = [];
+    private NavigationalWarningSet _set = NavigationalWarningSet.Empty;
 
     public NavigationalWarningCardViewModel(
         NavigationalWarningInfo info,
@@ -120,6 +121,20 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
         RefreshSegments();
     }
 
+    /// <summary>
+    /// Sets every loaded warning, which may cancel this one or leave it out
+    /// of an in-force bulletin, so the status agrees with the panel's (#992).
+    /// </summary>
+    public void SetWarningSet(NavigationalWarningSet set)
+    {
+        ArgumentNullException.ThrowIfNull(set);
+        if (ReferenceEquals(_set, set))
+            return;
+        var before = State;
+        _set = set;
+        RaiseStatusChanged(before);
+    }
+
     /// <summary>The underlying warning message.</summary>
     public NavigationalWarningInfo Info => _info;
 
@@ -148,8 +163,21 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
     /// <summary>Whether <see cref="TypeText"/> has a value.</summary>
     public bool HasTypeText => TypeText is not null;
 
+    /// <summary>The warning's status at the view time, with why, judged with every loaded warning.</summary>
+    public NavigationalWarningState State => _set.StatusAt(_info, _viewTime);
+
     /// <summary>The warning's status at the view time.</summary>
-    public NavigationalWarningStatus Status => _info.StatusAt(_viewTime);
+    public NavigationalWarningStatus Status => State.Status;
+
+    /// <summary>
+    /// Why another warning ended this one, under the status pill: "Ended — not
+    /// in in-force bulletin NAVAREA X 110/26", "Ended — cancelled by …";
+    /// <see langword="null"/> otherwise.
+    /// </summary>
+    public string? StatusReasonText => NavigationalWarningStatusText.Reason(State);
+
+    /// <summary>Whether <see cref="StatusReasonText"/> has a value.</summary>
+    public bool HasStatusReason => StatusReasonText is not null;
 
     /// <summary>Whether the warning is in force at the view time.</summary>
     public bool IsInForce => Status == NavigationalWarningStatus.InForce;
@@ -282,15 +310,23 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
     {
         if (_viewTime == viewTime)
             return;
-        var before = Status;
+        var before = State;
         _viewTime = viewTime;
-        if (Status == before)
+        RaiseStatusChanged(before);
+    }
+
+    private void RaiseStatusChanged(NavigationalWarningState before)
+    {
+        if (State == before)
             return;
+        OnPropertyChanged(nameof(State));
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(IsInForce));
         OnPropertyChanged(nameof(IsNotYetInForce));
         OnPropertyChanged(nameof(IsEnded));
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(StatusReasonText));
+        OnPropertyChanged(nameof(HasStatusReason));
     }
 
     /// <summary>Re-formats the times in a new Local/UTC preference.</summary>

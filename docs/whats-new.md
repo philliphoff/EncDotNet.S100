@@ -6,6 +6,22 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Warnings left out of the latest in-force bulletin end.** S-124 Edition
+  2.0.0 §9.2.1 says a warning published before the latest in-force bulletin
+  for its series, and not listed in it, is no longer valid. SoundCharts now
+  applies this, and cancellation datasets, everywhere a warning's status
+  shows: the Warning card adds a reason line ("Ended — not in in-force
+  bulletin NAVAREA X 110/26" or "Ended — cancelled by …"), and the
+  Navigational warnings panel's groups, summary count and rail badge, MCP
+  `list_navigational_warnings` and `get_warning_cards` (new `statusReason`,
+  `endedBy` and `statusReasonText`) and route-check findings agree. In the
+  libraries, `NavigationalWarningSet` (Core) judges all loaded warnings
+  together; `NavigationalWarningInfo` gains `InForceBulletin`,
+  `NavigationalWarningReference` an `InteroperabilityIdentifier`, and
+  `IDatasetProcessor` a `GetNavigationalWarningMessage` for datasets with no
+  parts. `RouteWarningCheck.Check` takes the set, and `StatusOver` now takes
+  it and returns the withdrawal too (a breaking change).
+
 - **Routes are checked against the chart.** With **Check passage** on,
   SoundCharts' findings list shows where a route's track crosses land or
   drying ground (Must review), where either reaches inside the leg's

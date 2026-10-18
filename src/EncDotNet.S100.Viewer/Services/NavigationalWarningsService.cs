@@ -136,6 +136,20 @@ internal sealed class NavigationalWarningsService
     /// <summary>Every warning part in the loaded datasets, in dataset order.</summary>
     public IReadOnlyList<NavigationalWarningEntry> Warnings { get; private set; } = [];
 
+    /// <summary>
+    /// Every loaded warning, judged together (#992): cancellations and
+    /// in-force bulletins, with or without parts, end the listed parts. The
+    /// card, the panel, MCP and route checks all read status through it.
+    /// </summary>
+    public NavigationalWarningSet Set { get; private set; } = NavigationalWarningSet.Empty;
+
+    /// <summary>A listed part's status at <paramref name="time"/>, with why, judged with <see cref="Set"/>.</summary>
+    public NavigationalWarningState StatusAt(NavigationalWarningEntry entry, DateTimeOffset time)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return Set.StatusAt(entry.Warning, time);
+    }
+
     /// <summary>Whether at least one S-124 dataset is loaded (it may hold no parts).</summary>
     public bool HasWarningDatasets { get; private set; }
 
@@ -155,6 +169,7 @@ internal sealed class NavigationalWarningsService
     public void Refresh()
     {
         var warnings = new List<NavigationalWarningEntry>();
+        var messages = new List<NavigationalWarningInfo>();
         var hasDatasets = false;
         using (var processors = _loader.AcquireProcessors())
         {
@@ -163,15 +178,24 @@ internal sealed class NavigationalWarningsService
                 var source = _sources?.SourceOf(entry);
                 var isWarningProduct = IsWarningProduct(processor.Spec.Name);
                 IReadOnlyList<NavigationalWarningFeature> parts;
+                NavigationalWarningInfo? message;
                 try
                 {
                     parts = processor.GetNavigationalWarnings();
+                    message = processor.GetNavigationalWarningMessage();
                 }
                 catch (Exception)
                 {
                     // A malformed dataset lists nothing rather than breaking the panel.
                     parts = [];
+                    message = null;
                 }
+
+                // A cancellation or bulletin may have no parts, yet ends others.
+                if (message is not null)
+                    messages.Add(message);
+                else
+                    messages.AddRange(parts.Select(p => p.Warning));
 
                 hasDatasets |= isWarningProduct || parts.Count > 0;
                 foreach (var part in parts)
@@ -191,6 +215,7 @@ internal sealed class NavigationalWarningsService
         }
 
         Observe(warnings);
+        Set = new NavigationalWarningSet(messages);
         Warnings = warnings;
         Sources = warnings.Select(w => w.Source).OfType<NavigationalWarningSource>()
             .DistinctBy(s => s.Id)

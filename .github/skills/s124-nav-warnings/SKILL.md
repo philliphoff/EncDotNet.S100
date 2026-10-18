@@ -46,8 +46,14 @@ description: |
    periodic range. Convert to the Local/UTC preference only for display.
 6. A warning stays in force until its `cancellationDate`, or until a
    cancellation dataset or the latest in-force bulletin drops it
-   (§9.2.1). `NavigationalWarningInfo.StatusAt` covers the date ranges
-   and the cancellation date; it does not consult bulletins yet.
+   (§9.2.1). `NavigationalWarningInfo.StatusAt` judges one warning alone
+   (date ranges and cancellation date); anything that shows or uses a
+   status must go through `NavigationalWarningSet.StatusAt`, which also
+   applies cancellations and bulletins. A bulletin is `navwarnTypeGeneral`
+   8 (its own `warningType` 9–12) with a `References` of
+   `referenceCategory` 3 listing `messageSeriesIdentifier`s, or
+   `noMessageOnHand` (Table 8-1, §8.1.3–8.1.4); categories 9–12 are
+   `warningType` codes, not reference categories.
 7. Language-bearing complex attributes (`warningInformation/information`,
    `generalArea/locationName`, `navwarnTitle`) carry one language per
    instance, repeated for each language (§4 Figure 4-5). Read every

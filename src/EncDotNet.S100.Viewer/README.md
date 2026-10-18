@@ -652,7 +652,11 @@ Turn on **Pick Mode** (the cross-hair button on the map toolbar, **View** >
 - A **Warning card** for an S-124 navigational warning part. Its header has
   the series and number (such as "NAVAREA X 106/26"), the warning type, and
   whether the warning is **In force**, **Not yet in force** or **Ended** at
-  the view time (now, when the Timeline is Live). Below that are its
+  the view time (now, when the Timeline is Live). When another warning ended
+  it, a line says why: "Ended — cancelled by NAVAREA X 104/26", or "Ended —
+  not in in-force bulletin NAVAREA X 110/26" when the latest in-force
+  bulletin for its series, published after it, doesn't list it (S-124
+  §9.2.1). Below that are its
   validity, in your Local/UTC setting, its area, and the issue date-time
   group as the message writes it. The full message text follows in a
   monospaced block, so telex columns line up. You can select the text, and
@@ -743,7 +747,10 @@ text-only part shows a document glyph and "No location".
   view time, so the list matches the map; **Now** reads it at the current
   time. Warnings not in force then fall into a dimmed **Not in force** group
   at the bottom, closed until you open it, with "Ended" or "Starts" and the
-  date.
+  date, or why another warning ended it ("Ended — not in in-force bulletin
+  NAVAREA X 110/26"). Cancellations and in-force bulletins count here, in
+  the summary and in the rail badge, as they do on the Warning card and in
+  route checks.
 
 Select a row to open its Warning card in **Object information**. When the part
 has a location and is in force, the map centres on it and highlights it. A

@@ -207,4 +207,48 @@ public class RouteWarningCheckTests
         Assert.False(reference.Matches(new NavigationalWarningReference("NAVAREA II", 12, 2026)));
         Assert.False(reference.Matches(new NavigationalWarningReference("NAVAREA I", 13, 2026)));
     }
+
+    [Fact]
+    public void A_warning_left_out_of_the_latest_bulletin_is_cancelled_and_says_why()
+    {
+        // #992: a bulletin with no parts on the route still ends the parts it leaves out.
+        var line = Line((-0.01, 0.005), (0.01, 0.005));
+        var listed = Warning(Info(20) with { PublicationTime = Departure.AddDays(-5) }, line);
+        var dropped = Warning(Info(21) with { PublicationTime = Departure.AddDays(-4) }, line);
+        var later = Warning(Info(22) with { PublicationTime = Departure.AddHours(-1) }, line);
+        var bulletin = Info(30) with
+        {
+            PublicationTime = Departure.AddDays(-1),
+            InForceBulletin = new NavigationalWarningBulletin([new NavigationalWarningReference("TEST", 20, 2026)], NoMessageOnHand: false),
+        };
+        var set = new NavigationalWarningSet([listed.Info, dropped.Info, later.Info, bulletin]);
+
+        var result = new RouteWarningCheck().Check(
+            [East],
+            [listed, dropped, later],
+            new RouteWarningTiming(PassageSchedule.Compute([EastPassage], Departure), Departure),
+            set,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(RouteWarningStatus.InForce, result.Matches[0].Finding!.Warning!.Status);
+        Assert.Equal(RouteWarningStatus.InForce, result.Matches[2].Finding!.Warning!.Status);
+        var finding = result.Matches[1].Finding!;
+        Assert.Equal((RouteWarningCodes.Cancelled, RouteFindingGroup.Info), (finding.Code, finding.Group));
+        Assert.Equal("Navigational warning 021/26 not in in-force bulletin TEST 030/26", finding.Title);
+        Assert.EndsWith(" · Not in in-force bulletin TEST 030/26", finding.Meta, StringComparison.Ordinal);
+        Assert.Equal(NavigationalWarningStatusReason.NotInBulletin, finding.Warning!.Withdrawal!.Reason);
+    }
+
+    [Fact]
+    public void Without_a_set_cancellations_resolve_within_the_checked_warnings()
+    {
+        var line = Line((-0.01, 0.005), (0.01, 0.005));
+        var cancelled = Warning(Info(23), line);
+        var cancels = Warning(Info(24) with { Cancels = [new NavigationalWarningReference("TEST", 23, 2026)] }, line);
+
+        var result = Check(cancelled, cancels);
+
+        Assert.Equal(NavigationalWarningStatusReason.Cancelled, result.Matches[0].Finding!.Warning!.Withdrawal!.Reason);
+        Assert.Null(result.Matches[1].Finding!.Warning!.Withdrawal);
+    }
 }

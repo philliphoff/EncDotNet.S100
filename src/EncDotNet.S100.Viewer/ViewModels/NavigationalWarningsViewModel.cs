@@ -119,6 +119,9 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
     public IReadOnlyList<NavigationalWarningEntry> Warnings => _service.Warnings;
 
     /// <inheritdoc />
+    public NavigationalWarningSet WarningSet => _service.Set;
+
+    /// <inheritdoc />
     public event EventHandler? WarningsChanged;
 
     /// <inheritdoc />
@@ -446,7 +449,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
                 _query = string.Empty;
             if (_textOnlyFilter && !entry.IsTextOnly)
                 _textOnlyFilter = false;
-            if (entry.Warning.StatusAt(StatusTime) != NavigationalWarningStatus.InForce)
+            if (_service.StatusAt(entry, StatusTime).Status != NavigationalWarningStatus.InForce)
                 _notInForceExpanded = true;
             OnPropertyChanged(nameof(Query));
             OnPropertyChanged(nameof(IsTextOnlyFilter));
@@ -543,8 +546,13 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         var all = _service.Warnings;
         var inForce = new List<NavigationalWarningEntry>();
         var notInForce = new List<NavigationalWarningEntry>();
+        var states = new Dictionary<NavigationalWarningEntry, NavigationalWarningState>(ReferenceEqualityComparer.Instance);
         foreach (var w in all)
-            (w.Warning.StatusAt(time) == NavigationalWarningStatus.InForce ? inForce : notInForce).Add(w);
+        {
+            var state = _service.StatusAt(w, time);
+            states[w] = state;
+            (state.Status == NavigationalWarningStatus.InForce ? inForce : notInForce).Add(w);
+        }
 
         _inForceCount = inForce.Count;
         _notInForceCount = notInForce.Count;
@@ -577,7 +585,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
                 IsStale = group.Source?.IsStale == true,
                 SourceId = group.Source?.Id,
             });
-            items.AddRange(rows.Select(w => new NavigationalWarningRowItem(w, time, format, isInForce: true) { IsNew = _service.IsNew(w) }));
+            items.AddRange(rows.Select(w => new NavigationalWarningRowItem(w, states[w], time, format) { IsNew = _service.IsNew(w) }));
         }
 
         var outRows = Ordered(notInForce.Where(Listed)).ToList();
@@ -591,7 +599,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
                 isExpanded: _notInForceExpanded,
                 command: ToggleNotInForceCommand));
             if (_notInForceExpanded)
-                items.AddRange(outRows.Select(w => new NavigationalWarningRowItem(w, time, format, isInForce: false)));
+                items.AddRange(outRows.Select(w => new NavigationalWarningRowItem(w, states[w], time, format)));
         }
 
         // Keep the open part selected across rebuilds.
@@ -809,13 +817,18 @@ internal sealed class NavigationalWarningStaleItem : NavigationalWarningListItem
 /// <summary>A warning part's row: number, type, and "area · validity" or why it isn't in force.</summary>
 internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
 {
-    public NavigationalWarningRowItem(NavigationalWarningEntry entry, DateTimeOffset time, TimeFormat format, bool isInForce)
+    public NavigationalWarningRowItem(NavigationalWarningEntry entry, NavigationalWarningState state, DateTimeOffset time, TimeFormat format)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(state);
         Entry = entry;
-        IsInForce = isInForce;
-        SubText = BuildSubText(entry, time, format, isInForce);
+        State = state;
+        IsInForce = state.Status == NavigationalWarningStatus.InForce;
+        SubText = BuildSubText(entry, state, time, format);
     }
+
+    /// <summary>The part's status at the panel's time, with why (#992).</summary>
+    public NavigationalWarningState State { get; }
 
     /// <summary>The listed part.</summary>
     public NavigationalWarningEntry Entry { get; }
@@ -872,12 +885,14 @@ internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
         }
     }
 
-    private static string BuildSubText(NavigationalWarningEntry entry, DateTimeOffset time, TimeFormat format, bool isInForce)
+    private static string BuildSubText(NavigationalWarningEntry entry, NavigationalWarningState state, DateTimeOffset time, TimeFormat format)
     {
         var w = entry.Warning;
-        if (!isInForce)
+        if (NavigationalWarningStatusText.Reason(state) is { } reason)
+            return reason;
+        if (state.Status != NavigationalWarningStatus.InForce)
         {
-            var status = w.StatusAt(time);
+            var status = state.Status;
             var when = status == NavigationalWarningStatus.NotYetInForce
                 ? NextStart(w, time) is { } start
                     ? string.Format(CultureInfo.CurrentCulture, Strings.NavWarnings_StartsFormat, ShortDate(start, format))

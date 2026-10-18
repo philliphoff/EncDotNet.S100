@@ -564,6 +564,18 @@
     <value>Ended</value>
     <comment>Warning card status pill: the warning ended or was cancelled before the view time.</comment>
   </data>
+  <data name="Pick_Warning_EndedNotInBulletinFormat" xml:space="preserve">
+    <value>Ended — not in in-force bulletin {0}</value>
+    <comment>Why a warning ended (Warning card, Navigational warnings row): the latest in-force bulletin for its series leaves it out (S-124 §9.2.1). {0} = the bulletin's series and number, e.g. "NAVAREA X 110/26".</comment>
+  </data>
+  <data name="Pick_Warning_EndedReplacedFormat" xml:space="preserve">
+    <value>Ended — replaced by in-force bulletin {0}</value>
+    <comment>Why an in-force bulletin ended: a later bulletin for its series replaces it. {0} = the later bulletin's series and number.</comment>
+  </data>
+  <data name="Pick_Warning_EndedCancelledByFormat" xml:space="preserve">
+    <value>Ended — cancelled by {0}</value>
+    <comment>Why a warning ended: another warning cancels it. {0} = the cancelling warning's series and number.</comment>
+  </data>
   <data name="Pick_Warning_ValidLabel" xml:space="preserve">
     <value>Valid</value>
     <comment>Warning card row label for the validity period.</comment>
@@ -5090,6 +5102,14 @@
   <data name="Findings_WarningCancelled" xml:space="preserve">
     <value>Cancelled</value>
     <comment>S-124 finding meta: the warning is cancelled by the time the vessel is there.</comment>
+  </data>
+  <data name="Findings_WarningNotInBulletinFormat" xml:space="preserve">
+    <value>Navigational warning {0} not in in-force bulletin {1}</value>
+    <comment>S-124 route finding title (INFO): the latest in-force bulletin leaves the warning out by the time the vessel gets there. {0} = the warning's number, {1} = the bulletin's series and number.</comment>
+  </data>
+  <data name="Findings_WarningNotInBulletin" xml:space="preserve">
+    <value>Not in in-force bulletin {0}</value>
+    <comment>S-124 route finding meta line status: the latest in-force bulletin leaves the warning out. {0} = the bulletin's series and number.</comment>
   </data>
   <data name="Findings_WarningRangeFormat" xml:space="preserve">
     <value>{0} – {1}</value>
