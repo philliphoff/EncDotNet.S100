@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Navigation;
 
 /// <summary>
 /// What a charted feature means to the route check. More kinds join as the
-/// checks grow (charted dangers, restricted areas and S-124 warnings, #955–#957).
+/// checks grow (restricted areas and S-124 warnings, #956–#957).
 /// </summary>
 public enum RouteChartFeatureKind
 {
@@ -18,6 +18,32 @@ public enum RouteChartFeatureKind
 
     /// <summary>A drying <c>DepthArea</c> (see <see cref="SkinOfTheEarth.IsDrying"/>).</summary>
     DryingArea,
+
+    /// <summary>
+    /// A <c>DepthArea</c> that doesn't dry, with its minimum depth (DRVAL1)
+    /// in <see cref="RouteChartFeature.DepthMeters"/> (#955).
+    /// </summary>
+    DepthArea,
+
+    /// <summary>
+    /// A <c>DredgedArea</c>, with its maintained depth (DRVAL1) in
+    /// <see cref="RouteChartFeature.DepthMeters"/> (#955).
+    /// </summary>
+    DredgedArea,
+
+    /// <summary>
+    /// A charted danger: a <c>Wreck</c>, <c>Obstruction</c> or
+    /// <c>UnderwaterAwashRock</c>, with its <c>valueOfSounding</c> in
+    /// <see cref="RouteChartFeature.DepthMeters"/> when it has one and its
+    /// <c>waterLevelEffect</c> in <see cref="RouteChartFeature.WaterLevelEffect"/> (#955).
+    /// </summary>
+    Danger,
+
+    /// <summary>
+    /// One sounding: a single point of a <c>Sounding</c> feature, with its
+    /// depth in <see cref="RouteChartFeature.DepthMeters"/> (#955).
+    /// </summary>
+    Sounding,
 }
 
 /// <summary>
@@ -51,7 +77,7 @@ public abstract class RouteChartCell
 
 /// <summary>
 /// A charted feature near a route leg: its kind, the cell it comes from,
-/// and its geometry in WGS-84.
+/// its geometry in WGS-84, and the depth it charts.
 /// </summary>
 /// <param name="Kind">What the feature means to the check.</param>
 /// <param name="Cell">The cell that charts it.</param>
@@ -65,7 +91,28 @@ public sealed record RouteChartFeature(
     string FeatureId,
     string FeatureType,
     IReadOnlyList<SurfacePart> Surfaces,
-    IReadOnlyList<IReadOnlyList<GeoPosition>> Curves);
+    IReadOnlyList<IReadOnlyList<GeoPosition>> Curves)
+{
+    /// <summary>The feature's points, for a point feature (a danger or a sounding); empty otherwise.</summary>
+    public IReadOnlyList<GeoPosition> Points { get; init; } = [];
+
+    /// <summary>
+    /// The least depth the feature charts, in metres below the vertical
+    /// datum (negative for a drying height): DRVAL1 for a depth, dredged or
+    /// drying area, <c>valueOfSounding</c> for a danger, the depth of a
+    /// sounding. <c>null</c> when it charts none, such as a danger of
+    /// unknown depth.
+    /// </summary>
+    public double? DepthMeters { get; init; }
+
+    /// <summary>
+    /// The S-101 <c>waterLevelEffect</c> code of a danger (1 partly
+    /// submerged at high water, 2 always dry, 3 always under water, 4 covers
+    /// and uncovers, 5 awash, 6 subject to inundation or flooding, 7
+    /// floating), or <c>null</c> when it isn't given.
+    /// </summary>
+    public int? WaterLevelEffect { get; init; }
+}
 
 /// <summary>
 /// Supplies the charted features a <see cref="RouteCheckEngine"/> checks a

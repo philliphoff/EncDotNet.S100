@@ -4936,6 +4936,84 @@
   <data name="RouteCheck_LengthFormat" xml:space="preserve">
     <value>{0:0.00} NM</value>
   </data>
+  <data name="RouteCheck_DangerInCorridorFormat" xml:space="preserve">
+    <value>{0} in the corridor</value>
+  </data>
+  <data name="RouteCheck_DangerNearRouteFormat" xml:space="preserve">
+    <value>{0} near the route</value>
+  </data>
+  <data name="RouteCheck_Wreck" xml:space="preserve">
+    <value>Wreck</value>
+  </data>
+  <data name="RouteCheck_Obstruction" xml:space="preserve">
+    <value>Obstruction</value>
+  </data>
+  <data name="RouteCheck_Rock" xml:space="preserve">
+    <value>Rock</value>
+  </data>
+  <data name="RouteCheck_CrossesSafetyContour" xml:space="preserve">
+    <value>Crosses the safety contour</value>
+  </data>
+  <data name="RouteCheck_SafetyContourInCorridor" xml:space="preserve">
+    <value>Shallower than the safety contour inside the cross-track limits</value>
+  </data>
+  <data name="RouteCheck_SoundingsBelowSafetyDepth" xml:space="preserve">
+    <value>Soundings shallower than the safety depth</value>
+  </data>
+  <data name="RouteCheck_CrossesS102Shoal" xml:space="preserve">
+    <value>Crosses S-102 depths shallower than the safety contour</value>
+  </data>
+  <data name="RouteCheck_S102ShoalInCorridor" xml:space="preserve">
+    <value>S-102 depths shallower than the safety contour inside the cross-track limits</value>
+  </data>
+  <data name="RouteCheck_ToPortFormat" xml:space="preserve">
+    <value>{0:0} m to port</value>
+  </data>
+  <data name="RouteCheck_ToStarboardFormat" xml:space="preserve">
+    <value>{0:0} m to starboard</value>
+  </data>
+  <data name="RouteCheck_OnTrack" xml:space="preserve">
+    <value>on the track</value>
+  </data>
+  <data name="RouteCheck_DepthFormat" xml:space="preserve">
+    <value>{0:0.0} m</value>
+  </data>
+  <data name="RouteCheck_LeastDepthFormat" xml:space="preserve">
+    <value>least {0:0.0} m</value>
+  </data>
+  <data name="RouteCheck_SoundingCountFormat" xml:space="preserve">
+    <value>{0} soundings</value>
+  </data>
+  <data name="RouteCheck_S102CellWithUncertaintyFormat" xml:space="preserve">
+    <value>least {0:0.0} m ± {1:0.0} m at cell {2} of {3}</value>
+  </data>
+  <data name="RouteCheck_S102CellFormat" xml:space="preserve">
+    <value>least {0:0.0} m at cell {2} of {3}</value>
+  </data>
+  <data name="RouteCheck_DepthUnknown" xml:space="preserve">
+    <value>depth unknown</value>
+  </data>
+  <data name="RouteCheck_Awash" xml:space="preserve">
+    <value>awash</value>
+  </data>
+  <data name="RouteCheck_CoversAndUncovers" xml:space="preserve">
+    <value>covers and uncovers</value>
+  </data>
+  <data name="RouteCheck_AboveWater" xml:space="preserve">
+    <value>above water</value>
+  </data>
+  <data name="RouteCheck_BelowSafetyDepthFormat" xml:space="preserve">
+    <value>shallower than safety depth {0:0.#} m</value>
+  </data>
+  <data name="RouteCheck_BelowKeelFormat" xml:space="preserve">
+    <value>shallower than draft + squat + UKC ({0:0.#} m)</value>
+  </data>
+  <data name="RouteCheck_BelowSafetyContourFormat" xml:space="preserve">
+    <value>shallower than safety contour {0:0.#} m</value>
+  </data>
+  <data name="RouteCheck_Separator" xml:space="preserve">
+    <value> · </value>
+  </data>
   <data name="Findings_TagS124" xml:space="preserve">
     <value>S-124</value>
   </data>
@@ -4980,6 +5058,42 @@
   </data>
   <data name="Findings_FromFormat" xml:space="preserve">
     <value>from {0}</value>
+  </data>
+  <data name="Findings_WarningInsideFormat" xml:space="preserve">
+    <value>Inside navigational warning {0}</value>
+    <comment>S-124 finding title (#957): the route goes through the warning's area while it is in force. {0} is the warning number, e.g. 012/26.</comment>
+  </data>
+  <data name="Findings_WarningCrossesFormat" xml:space="preserve">
+    <value>Crosses navigational warning {0}</value>
+    <comment>S-124 finding title: the route crosses the warning's line while it is in force. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningNearFormat" xml:space="preserve">
+    <value>Navigational warning {0} near the route</value>
+    <comment>S-124 finding title: the warning is within the near distance (0,5 NM) of the route. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningNotInForceFormat" xml:space="preserve">
+    <value>Navigational warning {0} not in force</value>
+    <comment>S-124 finding title: on or near the route, but not in force while the vessel is there. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningCancelledFormat" xml:space="preserve">
+    <value>Navigational warning {0} cancelled</value>
+    <comment>S-124 finding title: on or near the route, but cancelled by the time the vessel is there. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningInForceAtFormat" xml:space="preserve">
+    <value>In force at {0}</value>
+    <comment>S-124 finding meta: status at the ETA (or the view time). {0} is the time.</comment>
+  </data>
+  <data name="Findings_WarningNotInForceAtFormat" xml:space="preserve">
+    <value>Not in force at {0}</value>
+    <comment>S-124 finding meta: status at the ETA (or the view time). {0} is the time.</comment>
+  </data>
+  <data name="Findings_WarningCancelled" xml:space="preserve">
+    <value>Cancelled</value>
+    <comment>S-124 finding meta: the warning is cancelled by the time the vessel is there.</comment>
+  </data>
+  <data name="Findings_WarningRangeFormat" xml:space="preserve">
+    <value>{0} – {1}</value>
+    <comment>S-124 finding meta: a validity range. {0} start, {1} end.</comment>
   </data>
   <data name="Findings_TideNotAppliedForFormat" xml:space="preserve">
     <value>tide not applied for {0:0.0} NM</value>

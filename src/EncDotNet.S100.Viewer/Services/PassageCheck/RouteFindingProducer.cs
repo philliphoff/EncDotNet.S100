@@ -19,6 +19,8 @@ namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 /// <param name="DepthUnit">The depth unit for depths and clearances.</param>
 /// <param name="TimeFormat">The time format for ETAs.</param>
 /// <param name="Now">The current time, for expired data.</param>
+/// <param name="CheckLegs">The legs with their cross-track limits, one per <paramref name="Legs"/> entry, for the corridor checks.</param>
+/// <param name="ViewTime">The view time, which time-dependent checks use where the legs give no ETA.</param>
 internal sealed record RouteFindingRequest(
     string RouteId,
     IReadOnlyList<PassageLeg> Legs,
@@ -28,14 +30,19 @@ internal sealed record RouteFindingRequest(
     PassageCheckSnapshot? Clearance,
     DepthUnit DepthUnit,
     TimeFormat TimeFormat,
-    DateTimeOffset Now)
+    DateTimeOffset Now,
+    IReadOnlyList<RouteCheckLeg> CheckLegs,
+    DateTimeOffset ViewTime);
+
+/// <summary>
+/// A findings producer whose inputs go beyond the request, such as the loaded
+/// navigational warnings: <see cref="RouteFindingsService"/> re-runs it alone
+/// when <see cref="InputsChanged"/> fires (on the UI thread).
+/// </summary>
+internal interface IRouteFindingInputs
 {
-    /// <summary>
-    /// Each leg's effective port and starboard cross-track limits in metres
-    /// (half-widths: track to one edge), or <c>null</c> where unset. Empty
-    /// when the caller doesn't know them.
-    /// </summary>
-    public IReadOnlyList<(double? Port, double? Starboard)> CrossTrack { get; init; } = [];
+    /// <summary>Raised when what the producer would find may have changed.</summary>
+    event EventHandler? InputsChanged;
 }
 
 /// <summary>

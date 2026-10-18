@@ -56,6 +56,9 @@ public sealed record ScenarioDefinition(
     /// <summary>The S-122 marine protected areas, one dataset each.</summary>
     public IReadOnlyList<S122ProtectedAreaSpec> ProtectedAreas { get; init; } = [];
 
+    /// <summary>Charted point dangers (#955), written into the S-101 cells that chart them.</summary>
+    public IReadOnlyList<PointHazard> Hazards { get; init; } = [];
+
     /// <summary>The S-125 aids to navigation, or <c>null</c> for none.</summary>
     public S125AidsSpec? Aids { get; init; }
 

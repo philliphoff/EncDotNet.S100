@@ -355,6 +355,21 @@ corridor is twice as wide. Any side without a limit uses 50 m.
 | `route_check.drying_in_corridor` | `check` | The same, for drying ground. |
 | `data.outside_chart_coverage` | `check` | The track leaves the `DataCoverage` of every loaded cell (source `data`). |
 
+Pass `safetyContourMeters` and `safetyDepthMeters` (together) to add the
+depth checks, as SoundCharts' findings list runs them with the mariner's
+settings (`get_mariner_settings`). `draftMeters` also judges dangers against
+draft + squat + required UKC; a route's own draft is used when you omit it.
+
+| Code | Group | When |
+|---|---|---|
+| `route_check.danger_in_corridor` | `must_review` | A wreck, obstruction or rock shallower than the threshold, or of unknown depth, inside the cross-track limits. |
+| `route_check.danger_near_route` | `check` | Such a danger within 0,1 NM beyond the limits. |
+| `route_check.crosses_safety_contour` | `must_review` | The track crosses depth, dredged or drying areas shallower than the safety contour. |
+| `route_check.safety_contour_in_corridor` | `check` | Such areas inside the limits, off the track. |
+| `route_check.soundings_below_safety_depth` | `check` | Soundings shallower than the safety depth inside the limits. |
+| `route_check.crosses_s102_shoal` | `must_review` | The track crosses S-102 cells shallower than the safety contour. |
+| `route_check.s102_shoal_in_corridor` | `check` | Such S-102 cells inside the limits, off the track. |
+
 Where cells overlap, only the finest cell at a place counts, so a coarse
 cell's generalised land doesn't fire where a finer cell charts water.
 Crossings of the track are exact; ground that only reaches into the corridor

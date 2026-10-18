@@ -827,10 +827,14 @@ public partial class App : Application
                 sp.GetRequiredService<GlobalTimeService>()));
         // Findings producers (#953) after the clearance check, in list order.
         // A new check registers one IRouteFindingProducer line here.
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer,
-            EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckFindingProducer>();
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(sp =>
+            new EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckFindingProducer(sp.GetService<IMarinerSettingsProvider>()));
+        // S-124 warnings on the route (#957), from the Navigational warnings panel's list.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(sp =>
+            new EncDotNet.S100.Viewer.Services.PassageCheck.WarningFindingProducer(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));
         // Findings list (#905): merged from the findings producers (#953), the
-        // clearance check first; selecting one zooms the map to it and moves
+        // clearance check first, then the S-124 warnings (#957); selecting one zooms the map to it and moves
         // the profile cursor there.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(sp =>
             new EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService(

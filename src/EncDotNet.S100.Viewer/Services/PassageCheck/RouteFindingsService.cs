@@ -79,6 +79,14 @@ internal sealed class RouteFindingsService : IDisposable
         _post = post ?? (action => action());
         IRouteFindingProducer[] all = [new ClearanceFindingProducer(transforms), .. producers ?? []];
         _slots = all.Select(p => new Slot(p)).ToArray();
+        foreach (var slot in _slots)
+        {
+            if (slot.Producer is IRouteFindingInputs inputs)
+            {
+                slot.OnInputsChanged = (_, _) => Recheck(slot);
+                inputs.InputsChanged += slot.OnInputsChanged;
+            }
+        }
 
         _check.Changed += OnCheckChanged;
         if (_mariner is not null)
@@ -251,7 +259,20 @@ internal sealed class RouteFindingsService : IDisposable
         if (_timeFormat is not null)
             _timeFormat.TimeFormatChanged -= OnFormatChanged;
         foreach (var slot in _slots)
+        {
             slot.Pending?.Cancel();
+            if (slot.Producer is IRouteFindingInputs inputs && slot.OnInputsChanged is { } handler)
+                inputs.InputsChanged -= handler;
+        }
+    }
+
+    // A producer's own inputs changed: re-run it alone, now, for the checked route.
+    private void Recheck(Slot slot)
+    {
+        if (_disposed || _builtInput is not { } input || slot.Producer.UsesClearance)
+            return;
+        Schedule(slot, Request(input, clearance: null), TimeSpan.Zero);
+        Merge();
     }
 
     private void OnCheckChanged(object? sender, EventArgs e) => Rebuild(force: false);
@@ -267,10 +288,9 @@ internal sealed class RouteFindingsService : IDisposable
         clearance,
         DepthUnit,
         TimeFormat,
-        _clock.GetUtcNow())
-    {
-        CrossTrack = input.CrossTrack,
-    };
+        _clock.GetUtcNow(),
+        input.CheckLegs,
+        _routes.ViewTime.Current);
 
     // The check service raises Changed for cursor moves too; producers re-run
     // only when their inputs change (or a format does).
@@ -441,6 +461,9 @@ internal sealed class RouteFindingsService : IDisposable
         public CancellationTokenSource? Pending { get; set; }
 
         public Task Idle { get; set; } = Task.CompletedTask;
+
+        /// <summary>The handler subscribed to an <see cref="IRouteFindingInputs"/> producer.</summary>
+        public EventHandler? OnInputsChanged { get; set; }
 
         public void Show(string routeId, IReadOnlyList<RouteFinding> findings)
         {

@@ -180,10 +180,10 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     {
         using var s = await Start(fixture.Import("421ZZ00SPITX"));
 
-        Assert.All(s.Check.Input!.CrossTrack, x =>
+        Assert.All(s.Check.Input!.CheckLegs, x =>
         {
-            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.Port);
-            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.Starboard);
+            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.PortCrossTrackMeters);
+            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.StarboardCrossTrackMeters);
         });
     }
 

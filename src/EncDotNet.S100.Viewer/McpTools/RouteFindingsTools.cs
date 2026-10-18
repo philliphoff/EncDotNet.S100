@@ -36,7 +36,35 @@ internal sealed record RouteFindingDto(
     [property: Description("Distance from departure in nautical miles to the point the profile cursor moves to, or null when the finding isn't on the route.")] double? DistanceNm,
     [property: Description("Where the finding is, or null when it has no place on the map.")] RouteFindingLocationDto? Location,
     [property: Description("The feature behind the finding (open it with pick or describe), or null.")] RouteFindingFeatureDto? Feature,
-    [property: Description("True when this is the selected finding.")] bool Selected);
+    [property: Description("True when this is the selected finding.")] bool Selected,
+    [property: Description("For an s124 finding, the navigational warning and how it stands on the route at the ETA; null for other sources.")] RouteFindingWarningDto? Warning = null);
+
+/// <summary>An S-124 finding's warning.</summary>
+[Description("The navigational warning behind an s124 finding, and how it stands on the route.")]
+internal sealed record RouteFindingWarningDto(
+    [property: Description("The series and number, e.g. \"NAVAREA I 012/26\", or null when the preamble gives no number.")] string? Number,
+    [property: Description("The warning's title, or null.")] string? Title,
+    [property: Description("The locality (else the general area), or null.")] string? Locality,
+    [property: Description("How it relates to the route: crosses (a line or area reaches the corridor between the cross-track limits) or near (within 0.5 NM of the track, or a point inside the corridor).")] string Relation,
+    [property: Description("Whether it applies while the vessel is there: in_force, not_in_force or cancelled.")] string Status,
+    [property: Description("When the vessel reaches it, ISO 8601 UTC: the ETA, or the view time when the legs have no speed (see atEta).")] DateTimeOffset From,
+    [property: Description("When the vessel leaves it, ISO 8601 UTC; equal to from for a crossing point or a near warning.")] DateTimeOffset Until,
+    [property: Description("True when from and until are ETAs; false when the route has no speed and the view time is used.")] bool AtEta,
+    [property: Description("When the warning applies: its validity ranges in document order; empty when it gives none (in force until cancelled).")] IReadOnlyList<RouteFindingValidityDto> Validity,
+    [property: Description("When the warning cancels itself, ISO 8601 UTC, or null.")] DateTimeOffset? CancellationDate,
+    [property: Description("The full message text, one entry per language in document order.")] IReadOnlyList<RouteFindingWarningTextDto> Text);
+
+/// <summary>A validity range.</summary>
+[Description("A period when a navigational warning applies; either end may be open (null).")]
+internal sealed record RouteFindingValidityDto(
+    [property: Description("Start, ISO 8601 UTC, or null when open.")] DateTimeOffset? Start,
+    [property: Description("End, ISO 8601 UTC, or null when open.")] DateTimeOffset? End);
+
+/// <summary>One language of a warning's text.</summary>
+[Description("One language of a navigational warning's message text.")]
+internal sealed record RouteFindingWarningTextDto(
+    [property: Description("The language code as the dataset writes it (e.g. \"eng\"), or null.")] string? Language,
+    [property: Description("The text, with its line breaks kept.")] string Text);
 
 /// <summary>Where a finding is.</summary>
 [Description("Where a finding is: a point, or a span of the route.")]
@@ -128,7 +156,26 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
                 l.Path.Select(p => new RouteFindingPointDto(p.Latitude, p.Longitude)).ToList())
             : null,
         f.Feature is { } feature ? new RouteFindingFeatureDto(feature.DatasetId, feature.FeatureId) : null,
-        selected);
+        selected,
+        f.Warning is { } warning ? ToDto(warning) : null);
+
+    private static RouteFindingWarningDto ToDto(RouteFindingWarning w) => new(
+        w.Info.Label,
+        w.Info.Title,
+        w.Info.Locality ?? w.Info.GeneralArea,
+        w.Relation == RouteWarningRelation.Crosses ? "crosses" : "near",
+        w.Status switch
+        {
+            RouteWarningStatus.InForce => "in_force",
+            RouteWarningStatus.NotInForce => "not_in_force",
+            _ => "cancelled",
+        },
+        w.From.ToUniversalTime(),
+        w.Until.ToUniversalTime(),
+        w.AtEta,
+        w.Info.Validity.Select(v => new RouteFindingValidityDto(v.Start?.ToUniversalTime(), v.End?.ToUniversalTime())).ToList(),
+        w.Info.CancellationDate?.ToUniversalTime(),
+        w.Info.Texts.Select(t => new RouteFindingWarningTextDto(t.Language, t.Text)).ToList());
 
     private static double Nm(double meters) => Math.Round(meters / PassageGeodesy.MetersPerNauticalMile, 3);
 }
@@ -213,7 +260,10 @@ internal static class RouteFindingsMcpAdapters
             Description =
                 "Returns a route's findings list, as the Routes panel's Findings tab shows it in Check passage mode: " +
                 "each finding's group (must_review, check, info), source tag, title, meta line, leg, distance along the " +
-                "route, location (point or span) and feature reference. For the checked route it's the live list, with " +
+                "route, location (point or span) and feature reference. An s124 finding also gives its warning: number, " +
+                "relation (crosses or near), status at the ETA (in_force, not_in_force, cancelled; the view time without " +
+                "speeds), validity and full text; must_review = crosses and in force, check = within 0.5 NM and in force, " +
+                "info = not in force or cancelled. For the checked route it's the live list, with " +
                 "the selection; for another route (or with Check passage off) the route is checked once without changing " +
                 "the view. The route needs at least two waypoints; without a draft (set_passage) there are no clearance " +
                 "findings, only the route checks'. summary is the verdict card's title when the route has no draft.",

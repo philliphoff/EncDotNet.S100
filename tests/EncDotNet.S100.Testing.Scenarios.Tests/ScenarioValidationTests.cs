@@ -63,3 +63,6 @@ public sealed class WarningsOnRouteEdition1ValidationTests(WarningsOnRouteEditio
 
 public sealed class PortPlanVsOwnRouteValidationTests(PortPlanVsOwnRouteFixture fixture)
     : ScenarioValidationTests(fixture), IClassFixture<PortPlanVsOwnRouteFixture>;
+
+public sealed class DangersNearRouteValidationTests(DangersNearRouteFixture fixture)
+    : ScenarioValidationTests(fixture), IClassFixture<DangersNearRouteFixture>;

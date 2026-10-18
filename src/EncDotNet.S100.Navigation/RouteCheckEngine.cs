@@ -8,6 +8,8 @@ namespace EncDotNet.S100.Navigation;
 /// Checks a route against charted features (#888, #954): where its track
 /// crosses land or drying ground, where either reaches into the corridor
 /// between its cross-track limits, and where it leaves the loaded charts.
+/// With <see cref="RouteCheckOptions.Depths"/> set it also checks charted
+/// dangers and the safety contour and depth (#955).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -37,7 +39,7 @@ namespace EncDotNet.S100.Navigation;
 /// This is an aid for exploring the data. It isn't for navigation.
 /// </para>
 /// </remarks>
-public sealed class RouteCheckEngine
+public sealed partial class RouteCheckEngine
 {
     // How many cross-sections share one edge bucket.
     private const int ChunkSize = 16;
@@ -56,15 +58,22 @@ public sealed class RouteCheckEngine
 
     private readonly IRouteChartSource _charts;
     private readonly RouteCheckOptions _options;
+    private readonly IChartedDepthSource? _bathymetry;
 
     /// <summary>Creates the engine.</summary>
     /// <param name="charts">The charted features to check against.</param>
     /// <param name="options">Tuning, or <c>null</c> for <see cref="RouteCheckOptions.Default"/>.</param>
-    public RouteCheckEngine(IRouteChartSource charts, RouteCheckOptions? options = null)
+    /// <param name="bathymetry">
+    /// S-102 bathymetry for the safety-contour check, or <c>null</c> when
+    /// none is loaded. Only <see cref="ChartedDepthKind.Bathymetry"/>
+    /// samples are used.
+    /// </param>
+    public RouteCheckEngine(IRouteChartSource charts, RouteCheckOptions? options = null, IChartedDepthSource? bathymetry = null)
     {
         ArgumentNullException.ThrowIfNull(charts);
         _charts = charts;
         _options = options ?? RouteCheckOptions.Default;
+        _bathymetry = bathymetry;
         if (!(_options.StationSpacingMeters > 0))
         {
             throw new ArgumentOutOfRangeException(nameof(options), "StationSpacingMeters must be positive.");
@@ -85,6 +94,7 @@ public sealed class RouteCheckEngine
         ArgumentNullException.ThrowIfNull(legs);
         var findings = new FindingList(_options.Text);
         var corridors = new List<RouteCheckCorridor>(legs.Count);
+        var dangers = new DangerList();
         var offset = 0.0;
         for (var i = 0; i < legs.Count; i++)
         {
@@ -95,11 +105,13 @@ public sealed class RouteCheckEngine
                 throw new ArgumentException($"Leg {i} needs at least two points.", nameof(legs));
             }
 
-            var sweep = new LegSweep(this, i, leg, offset, findings, cancellationToken);
+            var sweep = new LegSweep(this, i, leg, offset, findings, dangers, cancellationToken);
             sweep.Run();
             corridors.Add(sweep.Corridor);
             offset = sweep.EndDistance;
         }
+
+        dangers.AddTo(findings);
 
         return new RouteCheckResult(findings.Sorted(), corridors);
     }
@@ -107,16 +119,20 @@ public sealed class RouteCheckEngine
     /// <summary>One cross-section: a point on the track and the corridor's limits either side of it.</summary>
     private readonly record struct Station(GeoPosition Centre, double Distance, GeoPosition Port, GeoPosition Starboard);
 
-    /// <summary>A stretch of the track inside a feature of one kind.</summary>
-    private readonly record struct Piece(double Start, double End, RouteChartFeature Feature);
+    /// <summary>
+    /// A stretch of the track inside a feature of one kind, and the shoalest
+    /// feature in it once pieces are merged.
+    /// </summary>
+    private readonly record struct Piece(double Start, double End, RouteChartFeature Feature, RouteChartFeature? Shoalest = null);
 
     /// <summary>The sweep of one leg.</summary>
-    private sealed class LegSweep
+    private sealed partial class LegSweep
     {
         private readonly RouteCheckEngine _engine;
         private readonly int _legIndex;
         private readonly RouteCheckLeg _leg;
         private readonly FindingList _findings;
+        private readonly DangerList _dangers;
         private readonly CancellationToken _cancellationToken;
         private readonly double _port;
         private readonly double _starboard;
@@ -131,12 +147,13 @@ public sealed class RouteCheckEngine
         private IReadOnlyList<int>?[] _portBands = [];
         private IReadOnlyList<int>?[] _starboardBands = [];
 
-        public LegSweep(RouteCheckEngine engine, int legIndex, RouteCheckLeg leg, double offset, FindingList findings, CancellationToken cancellationToken)
+        public LegSweep(RouteCheckEngine engine, int legIndex, RouteCheckLeg leg, double offset, FindingList findings, DangerList dangers, CancellationToken cancellationToken)
         {
             _engine = engine;
             _legIndex = legIndex;
             _leg = leg;
             _findings = findings;
+            _dangers = dangers;
             _cancellationToken = cancellationToken;
             var options = engine._options;
             _port = Math.Max(0, leg.PortCrossTrackMeters ?? options.DefaultHalfWidthMeters);
@@ -153,8 +170,14 @@ public sealed class RouteCheckEngine
 
         public void Run()
         {
-            var features = _engine._charts.FeaturesInCorridor(_ring, _extent);
-            _cells = new List<RouteChartCell>(_engine._charts.CellsNear(_extent));
+            // The depth checks look for dangers beyond the limits too, so one
+            // wider query serves every check; the corridor checks test
+            // geometry against the corridor itself, so the extra features
+            // change nothing for them.
+            var depths = _engine._options.Depths;
+            var (ring, extent) = depths is null ? (_ring, _extent) : WideRing(Math.Max(0, _engine._options.DangerNearbyMeters));
+            var features = _engine._charts.FeaturesInCorridor(ring, extent);
+            _cells = new List<RouteChartCell>(_engine._charts.CellsNear(extent));
             foreach (var cell in _cells)
             {
                 _cellIndex.TryAdd(cell, _cellIndex.Count);
@@ -184,6 +207,10 @@ public sealed class RouteCheckEngine
             CheckCoastlines(features, land);
             CheckAreas(features, RouteChartFeatureKind.DryingArea, RouteCheckCodes.CrossesDrying, RouteCheckCodes.DryingInCorridor,
                 _findings.Text.CrossesDrying, _findings.Text.DryingInCorridor);
+            if (depths is not null)
+            {
+                CheckDepths(features, depths);
+            }
         }
 
         private void CheckCoverage()
@@ -213,17 +240,20 @@ public sealed class RouteCheckEngine
 
         // Finds the track's crossings of one kind of area, then the
         // cross-sections that touch it where the track doesn't; returns the
-        // merged crossings.
+        // merged crossings. Details, when given, add to a finding's meta
+        // line from the shoalest feature in it.
         private List<Piece> CheckAreas(
             IReadOnlyList<RouteChartFeature> features,
             RouteChartFeatureKind kind,
             string crossesCode,
             string inCorridorCode,
             string crossesTitle,
-            string inCorridorTitle)
+            string inCorridorTitle,
+            Func<RouteChartFeature, IReadOnlyList<string>>? details = null)
         {
             var pieces = new List<Piece>();
             var touched = new RouteChartFeature?[_stations.Count];
+            var shoalest = new RouteChartFeature?[_stations.Count];
             foreach (var feature in features)
             {
                 if (feature.Kind != kind || feature.Surfaces.Count == 0)
@@ -287,7 +317,8 @@ public sealed class RouteCheckEngine
 
                 for (var k = 0; k < _stations.Count; k++)
                 {
-                    if (touched[k] is not null)
+                    // A touched cross-section is looked at again only for a shoaler feature.
+                    if (touched[k] is not null && !(feature.DepthMeters < shoalest[k]!.DepthMeters))
                     {
                         continue;
                     }
@@ -295,7 +326,8 @@ public sealed class RouteCheckEngine
                     var s = _stations[k];
                     if ((inside[k] || edges.CrossesSection(k, s.Port, s.Starboard)) && SectionInBand(cell, k))
                     {
-                        touched[k] = feature;
+                        touched[k] ??= feature;
+                        shoalest[k] = Shoaler(feature, shoalest[k]);
                     }
                 }
             }
@@ -311,7 +343,8 @@ public sealed class RouteCheckEngine
                 }
 
                 _findings.Add(crossesCode, RouteFindingGroup.MustReview, RouteFindingSource.RouteCheck, crossesTitle,
-                    _legIndex, piece.Start, Location(piece.Start, piece.End), piece.Feature, piece.Feature.FeatureType, piece.End - piece.Start);
+                    _legIndex, piece.Start, Location(piece.Start, piece.End), piece.Feature, piece.Feature.FeatureType, piece.End - piece.Start,
+                    details?.Invoke(piece.Shoalest ?? piece.Feature));
             }
 
             // A run of touched cross-sections that reaches a crossing is the
@@ -327,9 +360,11 @@ public sealed class RouteCheckEngine
 
                 var first = k2;
                 var nearCrossing = false;
+                RouteChartFeature? runShoalest = null;
                 while (k2 < _stations.Count && touched[k2] is not null)
                 {
                     nearCrossing |= NearCrossing(merged, _stations[k2].Distance);
+                    runShoalest = Shoaler(shoalest[k2], runShoalest);
                     k2++;
                 }
 
@@ -342,7 +377,8 @@ public sealed class RouteCheckEngine
                 var end = _stations[k2 - 1].Distance;
                 var feature = touched[first]!;
                 _findings.Add(inCorridorCode, RouteFindingGroup.Check, RouteFindingSource.RouteCheck, inCorridorTitle,
-                    _legIndex, start, Location(start, end), feature, feature.FeatureType, end - start);
+                    _legIndex, start, Location(start, end), feature, feature.FeatureType, end - start,
+                    details?.Invoke(runShoalest ?? feature));
             }
 
             return merged;
@@ -411,7 +447,11 @@ public sealed class RouteCheckEngine
                 if (merged.Count > 0 && piece.Start <= merged[^1].End + MergeGapMeters)
                 {
                     var last = merged[^1];
-                    merged[^1] = last with { End = Math.Max(last.End, piece.End) };
+                    merged[^1] = last with
+                    {
+                        End = Math.Max(last.End, piece.End),
+                        Shoalest = Shoaler(last.Shoalest ?? last.Feature, piece.Feature),
+                    };
                 }
                 else
                 {
@@ -421,6 +461,12 @@ public sealed class RouteCheckEngine
 
             return merged;
         }
+
+        // The feature that charts the lesser depth; the first when neither or only one has a depth.
+        private static RouteChartFeature? Shoaler(RouteChartFeature? a, RouteChartFeature? b) =>
+            a is null ? b
+            : b is null ? a
+            : b.DepthMeters is { } db && (a.DepthMeters is not { } da || db < da) ? b : a;
 
         private static bool InBand(int cell, IReadOnlyList<int> band)
         {
@@ -784,7 +830,8 @@ public sealed class RouteCheckEngine
             RouteFindingLocation location,
             RouteChartFeature? feature,
             string? featureType,
-            double? lengthMeters)
+            double? lengthMeters,
+            IReadOnlyList<string>? details = null)
         {
             _counts.TryGetValue(code, out var n);
             _counts[code] = n + 1;
@@ -801,6 +848,11 @@ public sealed class RouteCheckEngine
             if (featureType is not null)
             {
                 parts.Add(featureType);
+            }
+
+            if (details is not null)
+            {
+                parts.AddRange(details);
             }
 
             _findings.Add(new RouteFinding(

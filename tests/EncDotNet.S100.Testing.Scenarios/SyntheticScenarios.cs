@@ -139,6 +139,84 @@ public static class SyntheticScenarios
     }
 
     /// <summary>
+    /// "Dangers near route" (#955, for #888's route checks): charted point
+    /// dangers in and near a route's corridor, and a small shoal on its track,
+    /// in "Spit across scales"'s Synthetic Sound.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The route (S-421 <c>421ZZ00DNGR</c>, 100 m cross-track limits each
+    /// side) runs east along <c>y = 3300 m</c>, north of the dredged channel,
+    /// from <c>dangers-west</c> (500 m) through <c>dangers-mid</c> (3000 m)
+    /// to <c>dangers-east</c> (5500 m), in 13–14 m. Its passage values are a
+    /// 10 m draft, 0,5 m squat and 1,5 m required UKC, so draft + squat + UKC
+    /// is 12 m. The S-102 surface covers the whole corridor.
+    /// </para>
+    /// <para>
+    /// A shoal (<c>dangers-shoal</c>, a 80 m mound at <c>x = 4000 m</c>)
+    /// rises to about 7,6 m on the track, shallower than 10 m for about
+    /// 120 m of it. The coastal cell's generalisation widens it.
+    /// </para>
+    /// <para>
+    /// The dangers (<see cref="ScenarioDefinition.Hazards"/>), with the
+    /// truth for a route check in <see cref="RouteHazards.For"/>: a 6,2 m
+    /// wreck on the track; an 11 m obstruction 60 m to port (a danger only for
+    /// the draft); a rock awash 80 m to starboard at the turn; a wreck of
+    /// unknown depth 180 m to port (near the route); an obstruction 400 m
+    /// north (off the route); an 18 m wreck on the track (no danger); a 5 m
+    /// obstruction on the shoal (not isolated); and a 3 m wreck on the track
+    /// charted only in the coastal cell, which the harbour cell overrides.
+    /// </para>
+    /// </remarks>
+    /// <param name="seed">The world's seed.</param>
+    /// <returns>The scenario.</returns>
+    public static ScenarioDefinition DangersNearRoute(ulong seed = DefaultSeed)
+    {
+        var spit = SpitAcrossScales(seed);
+        var world = spit.World with
+        {
+            Seabed = spit.World.Seabed with
+            {
+                Features = [.. spit.World.Seabed.Features, new Mound(CentreX: 4000, CentreY: 3300, RadiusX: 80, RadiusY: 80, CrestDepth: 7)],
+            },
+        };
+        var places = new Dictionary<string, (double X, double Y)>(spit.Places)
+        {
+            ["dangers-west"] = (500, 3300),
+            ["dangers-mid"] = (3000, 3300),
+            ["dangers-east"] = (5500, 3300),
+            ["dangers-shoal"] = (4000, 3300),
+        };
+        S421RouteSpec[] routes =
+        [
+            new("421ZZ00DNGR", "ZZ00-DANGERS-1", "Past the wrecks north of the channel (fictitious)",
+                ["dangers-west", "dangers-mid", "dangers-east"],
+                new PassageValues(DraftMeters: 10, SquatMeters: 0.5, SpeedKnots: 8, RequiredUkcMeters: 1.5),
+                new DateTime(2026, 3, 1, 6, 0, 0, DateTimeKind.Utc)),
+        ];
+        PointHazard[] hazards =
+        [
+            new("Synthetic Sound wreck on the track (fictitious)", HazardKind.Wreck, (1500, 3300), 6.2, WaterLevelEffect: 3),
+            new("Synthetic Sound port obstruction (fictitious)", HazardKind.Obstruction, (2200, 3360), 11.0, WaterLevelEffect: 3),
+            new("Synthetic Sound turn rock (fictitious)", HazardKind.Rock, (2990, 3220), null, WaterLevelEffect: 5),
+            new("Synthetic Sound north wreck (fictitious)", HazardKind.Wreck, (4600, 3480), null, WaterLevelEffect: 3),
+            new("Synthetic Sound far obstruction (fictitious)", HazardKind.Obstruction, (4800, 3700), 2.0, WaterLevelEffect: 3),
+            new("Synthetic Sound deep wreck (fictitious)", HazardKind.Wreck, (5200, 3300), 18.0, WaterLevelEffect: 3),
+            new("Synthetic Sound shoal obstruction (fictitious)", HazardKind.Obstruction, (4000, 3310), 5.0, WaterLevelEffect: 3),
+            new("Synthetic Sound coastal-only wreck (fictitious)", HazardKind.Wreck, (2600, 3290), 3.0, WaterLevelEffect: 3, Cells: ["101ZZ00SPIT3"]),
+        ];
+        return spit with
+        {
+            Name = "dangers-near-route",
+            World = world,
+            Places = places,
+            Route = routes[0].Waypoints,
+            Routes = routes,
+            Hazards = hazards,
+        };
+    }
+
+    /// <summary>
     /// "Approach with tide window" (#942): a route from the sea buoy over the
     /// crest of the shoal north-west of the harbour (charted 4 m) and into the
     /// dredged channel, for a 6 m draft that can cross the crest only near
