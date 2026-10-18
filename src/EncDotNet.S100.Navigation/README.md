@@ -153,13 +153,19 @@ gives the ETA at any point along a leg.
 ## Check a route against the chart
 
 `RouteCheckEngine` checks a route against charted land, drying ground and the
-extent of the loaded charts. It reads charted features through
-`IRouteChartSource`; `RouteCheckDataSources` in
-`EncDotNet.S100.Datasets.Pipelines` implements it over loaded S-101 cells:
+extent of the loaded charts, and, given the mariner's depths, against charted
+dangers and the safety contour. It reads charted features through
+`IRouteChartSource`, and S-102 through `IChartedDepthSource`;
+`RouteCheckDataSources` in `EncDotNet.S100.Datasets.Pipelines` implements them
+over loaded S-101 cells and S-102 surfaces:
 
 ```csharp
-var charts = RouteCheckDataSources.FromDatasets(catalog.Datasets).Charts;
-var engine = new RouteCheckEngine(charts);
+var sources = RouteCheckDataSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
+var engine = sources.CreateEngine(new RouteCheckOptions
+{
+    // Safety contour and safety depth; a draft adds draft + squat + UKC for dangers.
+    Depths = RouteCheckDepths.FromMarinerSettings(settings) with { DraftMeters = 11.5, SquatMeters = 0.3, RequiredUkcMeters = 1.0 },
+});
 
 var legs = new[]
 {
@@ -185,12 +191,27 @@ the full corridor is their sum.
 | `route_check.land_in_corridor` | Check | Land reaches inside the cross-track limits, but the track doesn't cross it |
 | `route_check.drying_in_corridor` | Check | The same for drying ground |
 | `data.outside_chart_coverage` | Check | The track leaves the `DataCoverage` of every loaded cell |
+| `route_check.danger_in_corridor` | MustReview | A wreck, obstruction or rock inside the limits is shallower than the threshold, or of unknown depth |
+| `route_check.danger_near_route` | Check | The same within `DangerNearbyMeters` (default 0,1 NM) beyond the limits |
+| `route_check.crosses_safety_contour` | MustReview | The track crosses depth, dredged or drying areas shallower than the safety contour |
+| `route_check.safety_contour_in_corridor` | Check | Such areas reach inside the limits, but the track doesn't cross them |
+| `route_check.soundings_below_safety_depth` | Check | Soundings inside the limits, in deeper areas, are shallower than the safety depth |
+| `route_check.crosses_s102_shoal` | MustReview | The track crosses S-102 cells shallower than the safety contour |
+| `route_check.s102_shoal_in_corridor` | Check | S-102 cells shallower than the safety contour inside the limits, off the track |
 
 Crossings of the track are found exactly. Ground that only reaches into the
 corridor is found at cross-sections every
 `RouteCheckOptions.StationSpacingMeters` (default 10 m). Where cells overlap,
 only the finest cell at a place counts (`CellScaleRanking`), so a coarse cell's
 generalised land doesn't fire where a finer cell charts water.
+
+The depth checks run only when `RouteCheckOptions.Depths` is set. Dangers are
+judged against the safety depth and, with a draft, against draft + squat +
+required UKC on the static charted depth; the meta line names the threshold
+that fired. A danger counts only when it's isolated: one inside water already
+shallower than the safety contour is left to the safety-contour finding.
+Adjacent shallow areas, soundings and S-102 cells merge into one span, so a
+long bank is one finding. `RouteCheckEngine.Dangers.cs` writes out the rules.
 
 Once the cells' indexes are built (the first check), checking the 24 NM Solent
 route against 17 UKHO trial cells takes about 50 ms, and re-checking the two

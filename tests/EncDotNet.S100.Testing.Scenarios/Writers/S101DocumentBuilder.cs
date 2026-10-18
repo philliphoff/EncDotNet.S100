@@ -90,6 +90,13 @@ public sealed class S101DocumentBuilder
     public void AddCurve(string featureType, IReadOnlyList<GeoPosition> line, params FeatureAttribute[] attributes) =>
         AddFeature(featureType, new S101SpatialAssociation(120, AddCurve(line), 1), attributes);
 
+    /// <summary>Adds a point feature, such as a <c>Wreck</c>, on one point record.</summary>
+    /// <param name="featureType">The FC feature type.</param>
+    /// <param name="position">The position.</param>
+    /// <param name="attributes">The attributes.</param>
+    public void AddPoint(string featureType, GeoPosition position, params FeatureAttribute[] attributes) =>
+        AddFeature(featureType, new S101SpatialAssociation(110, AddPoint((Scale(position.Latitude), Scale(position.Longitude))), 1), attributes);
+
     /// <summary>Adds a <c>Sounding</c> feature on one multipoint record.</summary>
     /// <param name="soundings">Positions with their depths in metres.</param>
     /// <param name="attributes">The attributes.</param>

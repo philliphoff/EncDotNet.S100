@@ -17,6 +17,33 @@ public static class RouteCheckCodes
     /// <summary>Drying ground reaches into the corridor, but the track doesn't cross it. CHECK.</summary>
     public const string DryingInCorridor = "route_check.drying_in_corridor";
 
+    /// <summary>
+    /// A charted danger (wreck, obstruction or rock) shallower than the
+    /// threshold, or of unknown depth, inside the cross-track limits. MUST REVIEW.
+    /// </summary>
+    public const string DangerInCorridor = "route_check.danger_in_corridor";
+
+    /// <summary>
+    /// A charted danger shallower than the threshold within
+    /// <see cref="RouteCheckOptions.DangerNearbyMeters"/> beyond the cross-track limits. CHECK.
+    /// </summary>
+    public const string DangerNearRoute = "route_check.danger_near_route";
+
+    /// <summary>The track crosses depth, dredged or drying areas shallower than the safety contour. MUST REVIEW.</summary>
+    public const string CrossesSafetyContour = "route_check.crosses_safety_contour";
+
+    /// <summary>Areas shallower than the safety contour reach into the corridor, but the track doesn't cross them. CHECK.</summary>
+    public const string SafetyContourInCorridor = "route_check.safety_contour_in_corridor";
+
+    /// <summary>Soundings shallower than the safety depth inside the cross-track limits. CHECK.</summary>
+    public const string SoundingsBelowSafetyDepth = "route_check.soundings_below_safety_depth";
+
+    /// <summary>The track crosses S-102 cells shallower than the safety contour. MUST REVIEW.</summary>
+    public const string CrossesS102Shoal = "route_check.crosses_s102_shoal";
+
+    /// <summary>S-102 cells shallower than the safety contour inside the cross-track limits, off the track. CHECK.</summary>
+    public const string S102ShoalInCorridor = "route_check.s102_shoal_in_corridor";
+
     /// <summary>The track leaves the data coverage of every loaded chart cell. CHECK.</summary>
     public const string OutsideChartCoverage = "data.outside_chart_coverage";
 }
