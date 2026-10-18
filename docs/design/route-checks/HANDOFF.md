@@ -31,8 +31,8 @@ The mock is a reference, not code to port. Build it with Avalonia + ShadUI, the 
 13. **Export…** is in the route ⋯ menu for both kinds of route. One dialog chooses RTZ (1.2 default; 1.1, 1.0) or S-421 (1.0), says how the route is identified in the file (decision 17), and names any field the chosen format can't hold. Your check settings are written only on request (decision 16). Findings are never exported.
 14. **Tones** (with #934): findings reuse state tones (Must review = Below, Check = Tight, Info = Low confidence). Night drops to ~0,10 luminance, Day Tight darkens, Dusk keeps #933, No data becomes dotted, Night editing uses a fixed colour (table in Part G).
 15. **Checking a received route** works as for an owned route. Turning Check route on switches a Native-mode route to Planning for as long as the mode is on, and back afterwards. The S-421 action-point layer stays on while checking, because the route renderer doesn't draw action points. The footer's Edit becomes **Copy to edit**. Closing the dataset ends Check route and Follow passage, clears the findings and says why.
-16. **Check settings are local** (#391 concern 2; **needs your confirmation**). Draft, squat, required UKC and departure are *your* settings for checking a route, not route content. They're stored per route in SoundCharts, editable on read-only routes, and not exported unless you ask. Values in the file (leg draft and UKC, a schedule's departure) are the defaults, marked "from file". The Passage card shows them as a group, **Your check settings**, above the route's own values (speed, cross-track), which are read-only on a received route.
-17. **A copy is a new route** (#391 concern 9; **needs your confirmation**). It gets a new route ID, a previous-route reference to the source's route ID and edition, edition 1, and status Planned. Exporting a received route unchanged (for example to convert RTZ to S-421) keeps its route ID, edition and status.
+16. **Check settings are local** (#391 concern 2; confirmed 2026-10-18). Draft, squat, required UKC and departure are *your* settings for checking a route, not route content. They're stored per route in SoundCharts, editable on read-only routes, and not exported unless you ask. Values in the file (leg draft and UKC, a schedule's departure) are the defaults, marked "from file". The Passage card shows them as a group, **Your check settings**, above the route's own values (speed, cross-track), which are read-only on a received route.
+17. **A copy is a new route** (#391 concern 9; confirmed 2026-10-18). It gets a new route ID, a previous-route reference to the source's route ID and edition, edition 1, and status Planned. Exporting a received route unchanged (for example to convert RTZ to S-421) keeps its route ID, edition and status.
 18. **Deferred:** a route-check sweep over departures (route findings don't vary with departure except warnings and S-122 periods; the window line says so); S-411 ice; narrow windows (as in #887).
 
 ## Vocabulary
@@ -179,10 +179,10 @@ The mock is a reference, not code to port. Build it with Avalonia + ShadUI, the 
 
 Part F, A6–A10 and the check-settings split (decision 16) belong to #960 (S-421, received routes, Copy to edit, shared dialogs) and #961 (RTZ). #959's A1–A5 work on owned routes first; A7 and A8 need #960.
 
-## Decisions waiting for confirmation
+## Confirmed decisions
 
-- **Decision 16** (#391 concern 2): check settings are a local, per-route layer, not exported by default, with file values as defaults.
-- **Decision 17** (#391 concern 9): a copy is a new route (new route ID, previous-route reference, edition 1, status Planned); an unchanged received route keeps its identity on export.
+- **Decision 16** (#391 concern 2), confirmed 2026-10-18: check settings are a local, per-route layer, not exported by default, with file values as defaults.
+- **Decision 17** (#391 concern 9), confirmed 2026-10-18: a copy is a new route (new route ID, previous-route reference, edition 1, status Planned); an unchanged received route keeps its identity on export.
 
 ## Acceptance
 
