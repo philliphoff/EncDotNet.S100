@@ -73,9 +73,9 @@ public sealed class RouteS421MappingTests
                 Enumerable.Range(0, imported.Legs.Count).Select(i => imported.GetEffectiveLegValue(i, field)));
         }
 
-        // Shared values come back as passage values; the rest as overrides.
+        // The value most legs share comes back as the passage value; the rest as overrides.
         Assert.Equal(1.2, imported.Passage.RequiredUkcMeters);
-        Assert.Null(imported.Passage.SpeedKnots);
+        Assert.Equal(10, imported.Passage.SpeedKnots);
         Assert.True(imported.IsLegOverridden(1, RoutePassageField.Speed));
         Assert.Equal(original.Legs.Select(l => (l.GeometryType, l.Note, l.SafetyContourMeters)), imported.Legs.Select(l => (l.GeometryType, l.Note, l.SafetyContourMeters)));
     }

@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.S421.DataModel;
+using EncDotNet.S100.Viewer.Routing.Exchange;
 
 namespace EncDotNet.S100.Viewer.Routing;
 
@@ -19,8 +20,9 @@ namespace EncDotNet.S100.Viewer.Routing;
 /// has no S-421 attribute and isn't exported.
 /// </para>
 /// <para>
-/// Import does the reverse and lifts a value every leg shares back into
-/// the passage, leaving the rest as leg overrides. Object ids are written
+/// Import does the reverse: when every leg has a value, the value most
+/// legs share (the first leg's on a tie) is lifted back into the passage,
+/// and the rest stay leg overrides. Object ids are written
 /// as <c>RTE</c>, <c>RTE.WPT.n</c> and <c>RTE.LEG.n</c>; the route's own
 /// id is its <c>routeID</c>.
 /// </para>
@@ -39,21 +41,52 @@ internal static class RouteS421Mapping
 
     /// <summary>The S-421 projection of <paramref name="route"/>.</summary>
     /// <param name="route">The route; it needs at least two waypoints to be written.</param>
+    /// <param name="identity">How the route is identified (decision 17); its own id, edition 1 and status Initial when omitted.</param>
+    /// <param name="includeCheckSettings">
+    /// Whether to write the check settings (draft and required UKC on each
+    /// leg, the departure). Without them a received route writes its file's
+    /// values and an owned route none (decision 16).
+    /// </param>
+    /// <param name="preserved">
+    /// The S-421 route the viewer's model came from (a received route's file,
+    /// or a copy's source): its action points, route-info extras, extension
+    /// attributes and, when <paramref name="writePreservedSchedules"/>, its
+    /// further schedules are written back.
+    /// </param>
+    /// <param name="writePreservedSchedules">Whether to write <paramref name="preserved"/>'s schedules back.</param>
     /// <returns>The typed S-421 route.</returns>
-    public static S421Route ToS421(Route route)
+    public static S421Route ToS421(
+        Route route,
+        RouteExchangeIdentity? identity = null,
+        bool includeCheckSettings = true,
+        S421Route? preserved = null,
+        bool writePreservedSchedules = false)
     {
         ArgumentNullException.ThrowIfNull(route);
+
+        // A check setting comes from the route (its effective value) when
+        // asked for; otherwise from a received route's file, or nowhere.
+        double? Value(int leg, RoutePassageField field)
+        {
+            if (!RoutePassageFields.IsCheckSetting(field) || includeCheckSettings)
+                return route.GetEffectiveLegValue(leg, field);
+            return route.IsReadOnly ? route.GetFileLegValue(leg, field) : null;
+        }
+
+        var departure = includeCheckSettings ? route.Passage.Departure : route.FileDeparture;
+        var sameShape = preserved is not null && preserved.Waypoints.Count == route.Waypoints.Count;
 
         var legs = new List<S421Leg>();
         for (var i = 0; i < route.Legs.Count; i++)
         {
             var leg = route.Legs[i];
+            var source = sameShape ? preserved!.Waypoints[i].OutgoingLeg ?? (preserved.Legs.Count > i ? preserved.Legs[i] : null) : null;
             legs.Add(new S421Leg
             {
                 Id = $"RTE.LEG.{i + 1}",
                 Coordinates = [route.Waypoints[i].Position, route.Waypoints[i + 1].Position],
-                StarboardCrossTrackDistanceLimit = route.GetEffectiveLegValue(i, RoutePassageField.StarboardCrossTrack),
-                PortCrossTrackDistanceLimit = route.GetEffectiveLegValue(i, RoutePassageField.PortCrossTrack),
+                StarboardCrossTrackDistanceLimit = Value(i, RoutePassageField.StarboardCrossTrack),
+                PortCrossTrackDistanceLimit = Value(i, RoutePassageField.PortCrossTrack),
                 StarboardChannelLimit = leg.StarboardChannelLimitMeters,
                 PortChannelLimit = leg.PortChannelLimitMeters,
                 SafetyContour = leg.SafetyContourMeters,
@@ -63,12 +96,12 @@ internal static class RouteS421Mapping
                 SpeedOverGroundMax = leg.SpeedOverGroundMaxKnots,
                 SpeedThroughWaterMin = leg.SpeedThroughWaterMinKnots,
                 SpeedThroughWaterMax = leg.SpeedThroughWaterMaxKnots,
-                Draft = route.GetEffectiveLegValue(i, RoutePassageField.Draft),
-                StaticUnderKeelClearance = route.GetEffectiveLegValue(i, RoutePassageField.RequiredUkc),
+                Draft = Value(i, RoutePassageField.Draft),
+                StaticUnderKeelClearance = Value(i, RoutePassageField.RequiredUkc),
                 DynamicUnderKeelClearance = leg.DynamicUnderKeelClearanceMeters,
                 SafetyMargin = leg.SafetyMarginMeters,
                 Note = leg.Note,
-                ExtraAttributes = NoExtras,
+                ExtraAttributes = source?.ExtraAttributes ?? NoExtras,
             });
         }
 
@@ -77,27 +110,128 @@ internal static class RouteS421Mapping
             Id = $"RTE.WPT.{i + 1}",
             WaypointNumber = w.Number ?? i + 1,
             Name = w.Name,
+            ExternalReferenceId = sameShape ? preserved!.Waypoints[i].ExternalReferenceId : null,
             Fixed = w.Fixed,
             TurnRadius = w.TurnRadiusNm,
             Position = w.Position,
             OutgoingLeg = i < legs.Count ? legs[i] : null,
-            ExtraAttributes = NoExtras,
+            ExtraAttributes = sameShape ? preserved!.Waypoints[i].ExtraAttributes : NoExtras,
         }).ToList();
 
+        var ids = new HashSet<string>(StringComparer.Ordinal) { "RTE", "RTE.INFO" };
+        ids.UnionWith(waypoints.Select(w => w.Id));
+        ids.UnionWith(legs.Select(l => l.Id));
+
+        var schedules = new List<S421Schedule>();
+        if (route.IsReadOnly && preserved is not null && sameShape)
+        {
+            // A received route keeps its own schedules; asked-for check
+            // settings replace the planning schedule's departure.
+            schedules.AddRange(preserved.Schedules.Select(ReidSchedule));
+            if (includeCheckSettings && route.LocalCheckSettings.Departure is { } local && Planning(preserved) is { } planning)
+                schedules = WithDeparture(schedules, planning.Index, planning.Variant.Kind, local);
+        }
+        else
+        {
+            schedules.AddRange(Schedule(route, waypoints, departure, Value));
+            ids.UnionWith(schedules.SelectMany(ScheduleIds));
+            if (preserved is not null && writePreservedSchedules)
+            {
+                var used = Planning(preserved)?.Index;
+                schedules.AddRange(preserved.Schedules.Where((_, i) => i != used).Select(ReidSchedule));
+            }
+        }
+
+        var actionPoints = preserved?.ActionPoints.Select(ReidActionPoint).ToList() ?? [];
+
+        identity ??= new RouteExchangeIdentity(route.Id, 1, RouteExchangeIdentity.StatusInitial, null, null, Kept: false);
         return new S421Route
         {
             Id = "RTE",
             FormatVersion = "1.0",
-            RouteId = route.Id,
-            EditionNumber = 1,
-            Info = ToS421(route.Info),
+            RouteId = identity.RouteId,
+            EditionNumber = identity.Edition,
+            Info = ToS421(route.Info, identity, preserved?.Info),
             Waypoints = waypoints,
             Legs = legs,
-            ActionPoints = [],
-            Schedules = Schedule(route, waypoints),
-            ExtraAttributes = NoExtras,
+            ActionPoints = actionPoints,
+            Schedules = schedules,
+            ExtraAttributes = preserved?.ExtraAttributes ?? NoExtras,
+        };
+
+        // Preserved objects keep their ids unless one is already taken.
+        string Id(string id) => ids.Add(id) ? id : Id("P." + id);
+
+        S421ActionPoint ReidActionPoint(S421ActionPoint a) => new()
+        {
+            Id = Id(a.Id),
+            ActionPointNumber = a.ActionPointNumber,
+            Name = a.Name,
+            RadiusNauticalMiles = a.RadiusNauticalMiles,
+            TimeToActMinutes = a.TimeToActMinutes,
+            RequiredAction = a.RequiredAction,
+            RequiredActionDescription = a.RequiredActionDescription,
+            GeometryKind = a.GeometryKind,
+            Coordinates = a.Coordinates,
+            ExtraAttributes = a.ExtraAttributes,
+        };
+
+        S421Schedule ReidSchedule(S421Schedule schedule) => new()
+        {
+            Id = Id(schedule.Id),
+            ScheduleNumber = schedule.ScheduleNumber,
+            Name = schedule.Name,
+            ExtraAttributes = schedule.ExtraAttributes,
+            Variants = schedule.Variants.Select(v => new S421ScheduleVariant
+            {
+                Id = Id(v.Id),
+                Kind = v.Kind,
+                Elements = v.Elements.Select(e => CopyElement(e, Id(e.Id), e.Etd)).ToList(),
+            }).ToList(),
         };
     }
+
+    private static IEnumerable<string> ScheduleIds(S421Schedule schedule)
+        => schedule.Variants.SelectMany(v => v.Elements.Select(e => e.Id).Append(v.Id)).Append(schedule.Id);
+
+    // The schedules with the planning variant's first ETD set to departure.
+    private static List<S421Schedule> WithDeparture(List<S421Schedule> schedules, int index, S421ScheduleVariantKind kind, DateTimeOffset departure)
+    {
+        var first = schedules[index];
+        var planning = first.Variants.FirstOrDefault(v => v.Kind == kind);
+        var variants = first.Variants.Select(v => !ReferenceEquals(v, planning) || v.Elements.Count == 0
+            ? v
+            : new S421ScheduleVariant
+            {
+                Id = v.Id,
+                Kind = v.Kind,
+                Elements = v.Elements.Select((e, i) => i == 0 ? CopyElement(e, e.Id, departure) : e).ToList(),
+            }).ToList();
+        schedules[index] = new S421Schedule
+        {
+            Id = first.Id,
+            ScheduleNumber = first.ScheduleNumber,
+            Name = first.Name,
+            Variants = variants,
+            ExtraAttributes = first.ExtraAttributes,
+        };
+        return schedules;
+    }
+
+    private static S421ScheduleElement CopyElement(S421ScheduleElement e, string id, DateTimeOffset? etd) => new()
+    {
+        Id = id,
+        WaypointNumber = e.WaypointNumber,
+        PlannedSpeedOverGround = e.PlannedSpeedOverGround,
+        Etd = etd,
+        Eta = e.Eta,
+        EtdWindowBeforeMinutes = e.EtdWindowBeforeMinutes,
+        EtdWindowAfterMinutes = e.EtdWindowAfterMinutes,
+        EtaWindowBeforeMinutes = e.EtaWindowBeforeMinutes,
+        EtaWindowAfterMinutes = e.EtaWindowAfterMinutes,
+        Note = e.Note,
+        ExtraAttributes = e.ExtraAttributes,
+    };
 
     /// <summary>
     /// An editable route from an S-421 route: its waypoints, leg attributes
@@ -177,11 +311,19 @@ internal static class RouteS421Mapping
 
         foreach (var field in LegFields.Append(RoutePassageField.Speed))
         {
-            var values = legValues.Select(v => v[field]).Distinct().ToList();
-            if (values.Count == 1 && values[0] is { } shared)
+            // When every leg has a value, the one most legs share (the first
+            // leg's on a tie) becomes the passage value and the rest stay leg
+            // overrides; SetLegOverride drops an override equal to it.
+            var values = legValues.Select(v => v[field]).ToList();
+            if (values.Count > 0 && values.All(v => v is not null))
             {
+                var shared = values
+                    .Select((v, i) => (Value: v!.Value, Index: i))
+                    .GroupBy(v => v.Value)
+                    .OrderByDescending(g => g.Count())
+                    .ThenBy(g => g.Min(v => v.Index))
+                    .First().Key;
                 route.SetPassageValue(field, shared);
-                continue;
             }
 
             for (var i = 0; i < legValues.Count; i++)
@@ -217,41 +359,59 @@ internal static class RouteS421Mapping
         route.MarkReceived(
             new RouteSource(RouteSourceFormats.S421, s421.FormatVersion, filePath, s421.RouteId, s421.EditionNumber, s421.Info?.Status),
             RouteDisplayMode.Native);
+        route.Preserved = Preserve(s421);
         return route;
     }
 
-    private static S421RouteInfo ToS421(RouteInfo info) => new()
+    /// <summary>The preserved content of an S-421 route: all of it, for writing back.</summary>
+    /// <param name="s421">The S-421 route.</param>
+    /// <returns>The preserved content; its schedule count excludes the schedule the passage reads.</returns>
+    internal static RoutePreservedContent Preserve(S421Route s421)
+        => new(RouteSourceFormats.S421, s421, s421.Waypoints.Count, Math.Max(0, s421.Schedules.Count - (Planning(s421) is null ? 0 : 1)));
+
+    private static S421RouteInfo ToS421(RouteInfo info, RouteExchangeIdentity identity, S421RouteInfo? preserved) => new()
     {
         Id = "RTE.INFO",
         Name = info.Name,
         Author = info.Author,
         Description = info.Description,
-        Status = 1,
+        Status = identity.Status,
+        EditionTime = identity.Kept ? preserved?.EditionTime : null,
         ValidityStart = info.ValidityStart,
         ValidityEnd = info.ValidityEnd,
         DeparturePortId1 = info.DeparturePortId,
+        DeparturePortId2 = preserved?.DeparturePortId2,
+        DeparturePortCall = preserved?.DeparturePortCall,
         ArrivalPortId1 = info.ArrivalPortId,
+        ArrivalPortId2 = preserved?.ArrivalPortId2,
+        ArrivalPortCall = preserved?.ArrivalPortCall,
+        PreviousRouteReference = identity.Kept ? preserved?.PreviousRouteReference : identity.PreviousRouteReference,
+        NextRouteReference = identity.Kept ? preserved?.NextRouteReference : null,
         Vessel = info.Vessel is { } vessel
             ? new S421VesselInfo
             {
+                VesselType = preserved?.Vessel?.VesselType,
                 Name = vessel.Name,
                 Mmsi = vessel.Mmsi,
                 Imo = vessel.Imo,
                 Callsign = vessel.Callsign,
+                VoyageId = preserved?.Vessel?.VoyageId,
+                HeightMeters = preserved?.Vessel?.HeightMeters,
                 LengthMeters = vessel.LengthMeters,
                 BeamMeters = vessel.BeamMeters,
             }
             : null,
-        ExtraAttributes = NoExtras,
+        ExtraAttributes = preserved?.ExtraAttributes ?? NoExtras,
     };
 
     // A manual schedule with each waypoint's planned speed (its outgoing
     // leg's effective speed) and the departure as the first ETD, when the
     // route has either.
-    private static IReadOnlyList<S421Schedule> Schedule(Route route, IReadOnlyList<S421Waypoint> waypoints)
+    private static IReadOnlyList<S421Schedule> Schedule(
+        Route route, IReadOnlyList<S421Waypoint> waypoints, DateTimeOffset? departure, Func<int, RoutePassageField, double?> value)
     {
-        var speeds = Enumerable.Range(0, route.Legs.Count).Select(i => route.GetEffectiveLegValue(i, RoutePassageField.Speed)).ToList();
-        if (route.Passage.Departure is null && speeds.All(s => s is null))
+        var speeds = Enumerable.Range(0, route.Legs.Count).Select(i => value(i, RoutePassageField.Speed)).ToList();
+        if (departure is null && speeds.All(s => s is null))
         {
             return [];
         }
@@ -261,7 +421,7 @@ internal static class RouteS421Mapping
             Id = $"RTE.SCHED.1.MAN.{i + 1}",
             WaypointNumber = w.WaypointNumber,
             PlannedSpeedOverGround = i < speeds.Count ? speeds[i] : null,
-            Etd = i == 0 ? route.Passage.Departure : null,
+            Etd = i == 0 ? departure : null,
             ExtraAttributes = NoExtras,
         }).ToList();
         return
@@ -277,16 +437,25 @@ internal static class RouteS421Mapping
         ];
     }
 
-    // The schedule elements a passage reads: the first schedule's manual
-    // variant, else its first variant.
+    // The schedule elements a passage reads.
     private static IReadOnlyList<S421ScheduleElement> PlanningElements(S421Route route)
-    {
-        if (route.Schedules.Count == 0)
-        {
-            return [];
-        }
+        => Planning(route)?.Variant.Elements ?? [];
 
-        var variants = route.Schedules[0].Variants;
-        return (variants.FirstOrDefault(v => v.Kind == S421ScheduleVariantKind.Manual) ?? variants.FirstOrDefault())?.Elements ?? [];
+    /// <summary>
+    /// The schedule variant a passage reads its speeds and departure from
+    /// (#391 concern 3): the first calculated schedule, else the first manual
+    /// one, else the first schedule's first variant; with its schedule's index.
+    /// </summary>
+    internal static (int Index, S421ScheduleVariant Variant)? Planning(S421Route route)
+    {
+        foreach (var kind in new[] { S421ScheduleVariantKind.Calculated, S421ScheduleVariantKind.Manual })
+        {
+            for (var i = 0; i < route.Schedules.Count; i++)
+            {
+                if (route.Schedules[i].Variants.FirstOrDefault(v => v.Kind == kind) is { } variant)
+                    return (i, variant);
+            }
+        }
+        return route.Schedules.FirstOrDefault()?.Variants.FirstOrDefault() is { } first ? (0, first) : null;
     }
 }

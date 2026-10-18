@@ -135,6 +135,21 @@ public sealed class RouteEditHistory
     /// <returns><c>true</c> when a step was redone.</returns>
     public bool Redo() => Swap(_redo, _undo);
 
+    /// <summary>
+    /// Records the route's creation as the bottom undo step: undoing it runs
+    /// <paramref name="undo"/> (which removes the route from its collection)
+    /// instead of restoring a snapshot, and can't be redone. Copy to edit
+    /// uses it so one undo removes the copy (#960).
+    /// </summary>
+    /// <param name="label">The step's label, e.g. "copy route".</param>
+    /// <param name="undo">Removes the route.</param>
+    internal void RecordCreation(string label, Action undo)
+    {
+        ArgumentNullException.ThrowIfNull(undo);
+        _undo.Insert(0, new Step(label, null, undo));
+        OnChanged();
+    }
+
     /// <summary>Drops every undo and redo step.</summary>
     public void Clear()
     {
@@ -172,7 +187,7 @@ public sealed class RouteEditHistory
         _dirty = false;
         _undo.Add(new Step(label, snapshot));
         if (_undo.Count > MaxDepth)
-            _undo.RemoveAt(0);
+            _undo.RemoveAt(_undo[0].UndoCreation is null || _undo.Count < 2 ? 0 : 1);
         _redo.Clear();
         OnChanged();
     }
@@ -184,15 +199,23 @@ public sealed class RouteEditHistory
 
         var step = from[^1];
         from.RemoveAt(from.Count - 1);
+        if (step.UndoCreation is { } removeRoute)
+        {
+            _redo.Clear();
+            OnChanged();
+            removeRoute();
+            return true;
+        }
+
         to.Add(new Step(step.Label, _route.CaptureSnapshot()));
-        _route.RestoreSnapshot(step.Snapshot);
+        _route.RestoreSnapshot(step.Snapshot!);
         OnChanged();
         return true;
     }
 
     private void OnChanged() => Changed?.Invoke(this, EventArgs.Empty);
 
-    private sealed record Step(string Label, RouteSnapshot Snapshot);
+    private sealed record Step(string Label, RouteSnapshot? Snapshot, Action? UndoCreation = null);
 
     private sealed class GestureScope(RouteEditHistory history) : IDisposable
     {

@@ -120,7 +120,17 @@ internal static partial class RouteStore
                 Id = route.Id,
                 Info = ToDocument(route.Info),
                 Passage = ToDocument(route.Passage),
+                Origin = route.Origin is { } o
+                    ? new RouteSourceDocument { Format = o.Format, FormatVersion = o.FormatVersion, FilePath = o.FilePath, RouteId = o.RouteId, Edition = o.Edition, Status = o.Status }
+                    : null,
             };
+            if (route.Preserved is { } preserved && Exchange.RouteFormatRegistry.Default.Find(preserved.Format) is { } format)
+            {
+                routeDocument.PreservedFormat = preserved.Format;
+                routeDocument.Preserved = format.SerializePreserved(preserved);
+                routeDocument.PreservedScheduleCount = preserved.ScheduleCount;
+                routeDocument.KeepStalePreservedSchedules = route.KeepStalePreservedSchedules ? true : null;
+            }
 
             foreach (var waypoint in route.Waypoints)
             {
@@ -220,6 +230,16 @@ internal static partial class RouteStore
 
             ApplyInfo(route.Info, routeDocument.Info);
             ApplyPassage(route.Passage, routeDocument.Passage);
+            if (routeDocument.Origin is { Format: { } originFormat, FilePath: { } originPath } origin)
+                route.Origin = new RouteSource(originFormat, origin.FormatVersion, originPath, origin.RouteId, origin.Edition, origin.Status);
+            if (routeDocument.Preserved is { } preservedText
+                && Exchange.RouteFormatRegistry.Default.Find(routeDocument.PreservedFormat) is { } preservedFormat
+                && preservedFormat.DeserializePreserved(preservedText) is { } preserved)
+            {
+                route.Preserved = routeDocument.PreservedScheduleCount is { } count ? preserved with { ScheduleCount = count } : preserved;
+                if (routeDocument.KeepStalePreservedSchedules == true)
+                    route.SetKeepStalePreservedSchedules(true);
+            }
 
             foreach (var waypointDocument in routeDocument.Waypoints)
             {

@@ -50,6 +50,7 @@ internal sealed class ReceivedRoutesService
     private readonly FollowPassageService? _follow;
     private readonly Func<DatasetEntry, S421Dataset?> _read;
     private readonly Dictionary<Route, DatasetEntry> _datasets = new();
+    private readonly HashSet<Route> _fileRoutes = [];
     private bool _syncing;
 
     /// <summary>Creates the service and starts watching the loader and the routes.</summary>
@@ -97,11 +98,7 @@ internal sealed class ReceivedRoutesService
     public Route? RouteOf(DatasetEntry entry)
         => _datasets.FirstOrDefault(p => ReferenceEquals(p.Value, entry)).Key;
 
-    /// <summary>
-    /// Makes <paramref name="entry"/>'s route the active route when the entry
-    /// gave one (or was a duplicate of one), for Import route…'s "selects the
-    /// existing route".
-    /// </summary>
+    /// <summary>The received route read from <paramref name="filePath"/>, or <c>null</c>.</summary>
     /// <param name="filePath">The file opened.</param>
     /// <returns>The route for that file, or <c>null</c>.</returns>
     public Route? FindByFile(string filePath)
@@ -156,42 +153,71 @@ internal sealed class ReceivedRoutesService
             return;
         }
 
-        if (s421.RouteId is { Length: > 0 } routeId)
-        {
-            var existing = _routes.Routes.Routes.FirstOrDefault(r => r.Source is { } s && s.RouteId == routeId);
-            if (existing?.Source is { } source)
-            {
-                var edition = s421.EditionNumber ?? 0;
-                var existingEdition = source.Edition ?? 0;
-                if (edition == existingEdition)
-                {
-                    _routes.Routes.SetActiveRoute(existing);
-                    return;
-                }
-                if (edition < existingEdition)
-                {
-                    entry.RouteWarning = string.Format(CultureInfo.CurrentCulture, Strings.Received_OlderEditionFormat, existingEdition);
-                    return;
-                }
+        var received = RouteS421Mapping.ToReceived(s421, entry.FilePath);
+        var (route, warning) = Admit(received, entry);
+        entry.RouteWarning = warning;
+        if (route is not null && ReferenceEquals(route, received))
+            entry.PropertyChanged += OnEntryPropertyChanged;
+    }
 
-                // A newer edition replaces the older one's route; the older
-                // dataset stays open as a dataset.
-                if (_datasets.TryGetValue(existing, out var olderEntry))
-                    olderEntry.PropertyChanged -= OnEntryPropertyChanged;
-                _datasets.Remove(existing);
-                EndCheckIfChecked(existing, announce: false);
-                _routes.Routes.Remove(existing);
+    /// <summary>
+    /// Adds a received route read straight from a file with no dataset (a
+    /// format without its own portrayal, such as RTZ in #961), applying the
+    /// same duplicate and edition rules as a dataset's route.
+    /// </summary>
+    /// <param name="route">The received route.</param>
+    /// <returns>The route now in the list for that file (this one, or the existing one it duplicates), or <c>null</c> with why.</returns>
+    public (Route? Route, string? Warning) Receive(Route route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        if (!route.IsReadOnly)
+            throw new ArgumentException("Only a received route can be received.", nameof(route));
+        if (FindByFile(route.Source!.FilePath) is { } sameFile)
+        {
+            _routes.Routes.SetActiveRoute(sameFile);
+            return (sameFile, null);
+        }
+        return Admit(route, null);
+    }
+
+    // The duplicate rules (F4): the same route ID and edition selects the
+    // route already open; a newer edition replaces it; an older one is
+    // refused. Otherwise the route joins the list with its kept settings.
+    private (Route? Route, string? Warning) Admit(Route route, DatasetEntry? entry)
+    {
+        var source = route.Source!;
+        if (source.RouteId is { Length: > 0 } routeId
+            && _routes.Routes.Routes.FirstOrDefault(r => !ReferenceEquals(r, route) && r.Source is { } s && s.RouteId == routeId) is { Source: { } existingSource } existing)
+        {
+            var edition = source.Edition ?? 0;
+            var existingEdition = existingSource.Edition ?? 0;
+            if (edition == existingEdition)
+            {
+                _routes.Routes.SetActiveRoute(existing);
+                return (existing, null);
             }
+            if (edition < existingEdition)
+                return (null, string.Format(CultureInfo.CurrentCulture, Strings.Received_OlderEditionFormat, existingEdition));
+
+            // A newer edition replaces the older one's route; the older
+            // dataset stays open as a dataset.
+            if (_datasets.TryGetValue(existing, out var olderEntry))
+                olderEntry.PropertyChanged -= OnEntryPropertyChanged;
+            _datasets.Remove(existing);
+            _fileRoutes.Remove(existing);
+            EndCheckIfChecked(existing, announce: false);
+            _routes.Routes.Remove(existing);
         }
 
-        entry.RouteWarning = null;
-        var route = RouteS421Mapping.ToReceived(s421, entry.FilePath);
-        if (_checkSettings.Get(route.Source!.CheckSettingsKey) is { } kept)
+        if (_checkSettings.Get(source.CheckSettingsKey) is { } kept)
             route.ApplyLocalCheckSettings(kept);
-        _datasets[route] = entry;
-        entry.PropertyChanged += OnEntryPropertyChanged;
+        if (entry is not null)
+            _datasets[route] = entry;
+        else
+            _fileRoutes.Add(route);
         _routes.Routes.Add(route);
         SyncVisibility(route);
+        return (route, null);
     }
 
     private void OnDatasetRemoved(DatasetEntry entry)
@@ -233,8 +259,9 @@ internal sealed class ReceivedRoutesService
             _closeDataset?.Invoke(entry);
         }
 
+        _fileRoutes.RemoveWhere(r => !_routes.Routes.Routes.Contains(r));
         var saved = false;
-        foreach (var route in _datasets.Keys)
+        foreach (var route in _datasets.Keys.Concat(_fileRoutes))
         {
             saved |= _checkSettings.Set(route.Source!.CheckSettingsKey, route.LocalCheckSettings);
             SyncVisibility(route);

@@ -77,6 +77,23 @@ public sealed partial class Route
     /// <returns>The file's route-level value.</returns>
     public double? GetFileValue(RoutePassageField field) => _fileDefaults?.Get(field);
 
+    /// <summary>
+    /// The value the file gives leg <paramref name="legIndex"/> for a check
+    /// setting, ignoring the local layer: its leg value, else the file's
+    /// route-level value. <c>null</c> on an owned route.
+    /// </summary>
+    /// <param name="legIndex">Index of the leg in <c>[0, Legs.Count)</c>.</param>
+    /// <param name="field">A check-setting field.</param>
+    /// <returns>The file's value.</returns>
+    public double? GetFileLegValue(int legIndex, RoutePassageField field)
+    {
+        if (!IsReadOnly)
+            return null;
+        LegAt(legIndex);
+        var leg = _fileLegValues!.TryGetValue(field, out var legs) && legIndex < legs.Length ? legs[legIndex] : null;
+        return leg ?? _fileDefaults!.Get(field);
+    }
+
     /// <summary>The departure the file gives, or <c>null</c> on an owned route.</summary>
     public DateTimeOffset? FileDeparture => _fileDefaults?.Departure;
 

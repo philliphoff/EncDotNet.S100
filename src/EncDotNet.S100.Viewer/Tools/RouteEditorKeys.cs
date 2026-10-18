@@ -110,7 +110,11 @@ internal static class RouteEditorKeys
 
         if (key == Key.E && command && !shift)
         {
-            routes.IsEditModeActive = !routes.IsEditModeActive;
+            // On a received route Ctrl+E offers Copy to edit (#960, A8).
+            if (routes.IsEditModeActive)
+                routes.IsEditModeActive = false;
+            else
+                routes.RequestEdit();
             return true;
         }
 

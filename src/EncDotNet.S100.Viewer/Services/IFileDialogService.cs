@@ -56,4 +56,14 @@ internal interface IFileDialogService
 
     /// <summary>Opens a file picker for PEM certificates, e.g. a trust anchor (#845).</summary>
     Task<string?> OpenCertificateAsync(TopLevel? topLevel);
+
+    /// <summary>Picks a route file for Import route… (#960), filtered to <paramref name="patterns"/>.</summary>
+    Task<string?> OpenRouteAsync(TopLevel? topLevel, IReadOnlyList<string> patterns);
+
+    /// <summary>Picks where Export… writes a route, suggesting <paramref name="suggestedName"/> (#960).</summary>
+    /// <param name="topLevel">The window.</param>
+    /// <param name="suggestedName">The suggested file name, with its extension.</param>
+    /// <param name="formatName">The format, for the file type's label.</param>
+    /// <param name="extension">The extension, with its dot.</param>
+    Task<string?> SaveRouteAsync(TopLevel? topLevel, string suggestedName, string formatName, string extension);
 }

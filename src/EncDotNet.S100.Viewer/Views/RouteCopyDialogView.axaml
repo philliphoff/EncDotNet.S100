@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.RouteCopyDialogView"
+             x:DataType="vm:RouteCopyDialogViewModel"
+             AutomationProperties.AutomationId="RouteCopy.Dialog"
+             Width="520">
+
+    <!-- Copy to edit (#960, F5): what the copy keeps and can't hold, before anything changes. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.listHeading">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Opacity" Value="0.6" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" Margin="18,14,18,14" RowSpacing="12">
+        <StackPanel Spacing="3" Margin="0,0,28,0">
+            <TextBlock Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Subtitle}" FontSize="12.5" Opacity="0.65" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- The received route. -->
+        <Border Grid.Row="1" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="8" Padding="10,8">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                <ic:FluentIcon Icon="Document" FontSize="18" Opacity="0.7" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" Spacing="1">
+                    <TextBlock Text="{Binding SourceName}" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding SourceFile}" FontSize="11.5" Opacity="0.65" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding SourceMeta}" FontSize="11.5" Opacity="0.65" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="2" MaxHeight="320" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="10">
+                <StackPanel Spacing="5">
+                    <TextBlock Classes="listHeading" Text="{Binding KeepsHeading}" />
+                    <ItemsControl AutomationProperties.AutomationId="RouteCopy.Keeps" ItemsSource="{Binding Keeps}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,2">
+                                    <ic:FluentIcon Icon="Checkmark" FontSize="13" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Top" />
+                                    <TextBlock Grid.Column="1" Text="{Binding}" FontSize="12" TextWrapping="Wrap" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+                <StackPanel Spacing="5" IsVisible="{Binding HasNotKept}">
+                    <TextBlock Classes="listHeading" Text="{Binding NotKeptHeading}" />
+                    <ItemsControl AutomationProperties.AutomationId="RouteCopy.NotKept" ItemsSource="{Binding NotKept}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,2">
+                                    <ic:FluentIcon Icon="Info" FontSize="13" Opacity="0.65" VerticalAlignment="Top" />
+                                    <TextBlock Grid.Column="1" Text="{Binding}" FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="3" Spacing="3">
+            <TextBlock AutomationProperties.AutomationId="RouteCopy.Identity" FontSize="11.5" TextWrapping="Wrap">
+                <Run Text="{Binding IdentityLabel}" FontWeight="SemiBold" />
+                <Run Text=" · " />
+                <Run Text="{Binding IdentityText}" />
+            </TextBlock>
+            <TextBlock Text="{Binding NamedText}" FontSize="11.5" Opacity="0.65" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}"
+                    AutomationProperties.AutomationId="RouteCopy.Cancel" />
+            <Button Classes="Primary" Content="{x:Static loc:Strings.CopyDialog_Confirm}" Command="{Binding ConfirmCommand}"
+                    AutomationProperties.AutomationId="RouteCopy.Confirm" />
+        </StackPanel>
+    </Grid>
+</UserControl>

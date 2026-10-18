@@ -203,6 +203,9 @@ public partial class App : Application
             .Register<Views.SharedFeedDialogView, ViewModels.SharedFeedDialogViewModel>()
             .Register<Views.AddCollectionManifestDialogView, ViewModels.AddCollectionManifestDialogViewModel>()
             .Register<Views.ImportIdentityDialogView, ViewModels.Keys.ImportIdentityDialogViewModel>()
+            .Register<Views.RouteCopyDialogView, ViewModels.RouteCopyDialogViewModel>()
+            .Register<Views.RouteExportDialogView, ViewModels.RouteExportDialogViewModel>()
+            .Register<Views.RouteImportErrorDialogView, ViewModels.RouteImportErrorDialogViewModel>()
             .Register<Views.AddAuthorityDialogView, ViewModels.Keys.AddAuthorityDialogViewModel>()
             .Register<Views.CertificateDetailsDialogView, ViewModels.Keys.CertificateDetailsDialogViewModel>()
             .Register<Views.RemoveIdentityDialogView, ViewModels.Keys.RemoveIdentityDialogViewModel>();
@@ -517,6 +520,15 @@ public partial class App : Application
         services.AddSingleton(sp => sp.GetRequiredService<Services.Secom.SecomCredentials>().Trust);
         services.AddSingleton(sp => sp.GetRequiredService<Services.Secom.SecomCredentials>().Identities);
         services.AddSingleton(sp => sp.GetRequiredService<Services.Secom.SecomCredentials>().Authorities);
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.IRouteDialogs>(sp => new EncDotNet.S100.Viewer.Services.RouteDialogs(
+            sp.GetRequiredService<ShadUI.DialogManager>(),
+            sp.GetRequiredService<IFileDialogService>(),
+            sp.GetRequiredService<ViewerSettings>().McpTestHooks
+                ? (Func<string?>)(static () => Environment.GetEnvironmentVariable(EncDotNet.S100.Viewer.Services.Secom.KeysDialogs.TestPickVariable))
+                : null,
+            sp.GetRequiredService<ViewerSettings>().McpTestHooks
+                ? (Func<string?>)(static () => Environment.GetEnvironmentVariable(EncDotNet.S100.Viewer.Services.RouteDialogs.TestSaveVariable))
+                : null));
         services.AddSingleton<ViewModels.Keys.IKeysDialogs>(sp => new Services.Secom.KeysDialogs(
             sp.GetRequiredService<ShadUI.DialogManager>(),
             sp.GetRequiredService<IFileDialogService>(),
@@ -866,6 +878,15 @@ public partial class App : Application
                 sp.GetService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>());
         });
+        // Import route…, Copy to edit and Export… (#960), shared by the Routes panel and MCP.
+        services.AddSingleton(sp =>
+        {
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            return new EncDotNet.S100.Viewer.Services.RouteExchangeService(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ReceivedRoutesService>(),
+                openDataset: datasets.LoadFromPathAsync);
+        });
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
         services.AddSingleton<GlobalTimeService>();
@@ -1195,7 +1216,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>(),
             sp.GetRequiredService<NavigationalWarningsViewModel>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));

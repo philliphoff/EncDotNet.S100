@@ -273,7 +273,8 @@ There are two kinds of route:
 - **Owned routes** are the ones you create. They're editable and saved
   between sessions.
 - **Received routes** come from an S-421 dataset you open (from the Datasets
-  or Library panel, by drag and drop, or with `open_dataset`). They're
+  or Library panel, by drag and drop, with `open_dataset`, or with
+  `import_route`). They're
   read-only and aren't saved; each lasts while its dataset is open. Datasets
   the Library loads as you pan never become routes. `list_routes` and
   `get_route` report `readOnly: true` and the `source` (format, version, file,
@@ -283,13 +284,24 @@ There are two kinds of route:
   passage off if it was checking it. `delete_route` on a received route closes
   its dataset.
 
-A tool that would edit a received route fails with `route_read_only`. Only its
-**check settings** can change: draft, squat, required UKC and departure. These
+A tool that would edit a received route fails with `route_read_only`, which names
+`copy_route`. Only its **check settings** can change: draft, squat, required UKC and departure. These
 are your values for checking the route, not route content. Set them with
 `set_passage` (or `set_departure`); they apply to every leg, and they're kept
 on this computer under the route ID and edition. Values in the file are the
 defaults. Speed and cross-track are route values, and they stay as the file
 gives them.
+
+To edit a received route, make an owned copy with `copy_route`. The copy is a
+new route: it gets a new route ID, a reference to the source's route ID and
+edition, edition 1 and status Planned. What the viewer's route can't hold,
+such as action points, further schedules and extension attributes, is kept and
+written back when the copy is exported. If waypoints are inserted or deleted
+afterwards, the preserved schedules no longer match the route, and export
+leaves them out unless you keep them in the **Routes** panel. `export_route`
+writes any route. A received route exported unchanged keeps its route ID,
+edition and status. Your check settings are written only when you ask, and
+check results are never exported.
 
 A received S-421 route starts in **Native** display mode: its dataset draws it
 with the S-421 portrayal, and the route overlay draws nothing.
@@ -317,6 +329,9 @@ on for its action points.
 | `select_route_item` | Yes | Selects a waypoint (`waypointIndex`) or a leg (`legIndex`), as clicking its row in the **Routes** panel does, or clears the selection when you pass neither. The map highlights the selected waypoint, or haloes the selected leg and always shows its label. Selecting makes the route active. Returns the updated route. |
 | `set_passage_card` | Yes | Expands (`expanded: true`) or collapses the **Routes** panel's Passage card, as clicking its header does. Switching the active route sets it again: expanded for a route with passage values, collapsed otherwise. To open a leg's detail, select the leg with `select_route_item`. Returns `expanded`. |
 | `set_route_edit_mode` | Yes | Turns the route editor on (`enabled: true`) or off, as the Routes panel's **Edit** toggle and Ctrl+E (⌘E) do. While it is on, clicks on the map add waypoints to the active route. Returns `enabled` and `activeRouteId`. Turning it on for a received route fails with `route_read_only`. |
+| `import_route` | Yes | Opens a route file (`path`, or its `content`) as a received route, as the **Routes** header's **Import route…** does. The format comes from the file's content. An S-421 file also opens as a dataset, and its route starts in Native mode. A file that's already open, or one with the same route ID and edition, selects the existing route (`alreadyOpen: true`). A newer edition replaces it. Returns the route, now active. Fails with `route_import_failed`, whose `reason` is `not_a_route`, `unsupported_version`, `too_few_waypoints` or `older_edition`. |
+| `copy_route` | Yes | **Copy to edit**: makes an owned, editable copy of a received route (`routeId`, or the active route), named "{name} (copy)". The copy becomes active and opens in Edit mode, and one `undo_route_edit` removes it. Returns `keeps` and `notKept` (the Copy to edit dialog's two lists), the copy's `identity` (`routeId`, `edition`, `status`, `previousRouteId`, `previousEdition`, `kept`) and the `copy`. With `dryRun: true` it changes nothing and returns the lists and identity, with `identity.routeId` null. On an owned route it fails with `invalid_argument`. |
+| `export_route` | No | **Export…**: writes a route in a `format` (`S-421`, version `1.0`). Pass `includeCheckSettings: true` to also write your draft, required UKC and departure. Writes to `path`, or returns the file's `content` when you omit it. Returns the `identity`, `cannotHold` (the fields of this route the format can't hold, empty when nothing is lost) and the dialog's `suggestedFileName`. |
 | `set_route_display_mode` | Yes | Sets how the map draws a route (`mode`): `native` draws a received S-421 route with its dataset's own portrayal, and `planning` hides the dataset and draws the route on the route overlay. The dataset's visibility in the Datasets panel follows the mode, and turning the dataset on or off there switches the mode. Only received S-421 routes have a Native mode. Returns the updated route. |
 | `set_check_mode` | Yes | Turns **Check passage** on (`on: true`) or off for the active route, or for `routeId` (made active first), as the Routes panel's toggle does. The route needs at least two waypoints; without a draft only the route checks run, and the clearance parts (verdict, minimum UKC, profile, window) are absent (`hasDraft: false`). While it's on, the map colours the route by UKC state at ETA, Object Information folds to its edge tab, and the panel shows the verdict card and leg chips. By default it waits for the result (`wait: false` returns at once). Returns what `get_check_state` returns. |
 | `get_check_state` | No | Returns what Check passage is showing: `on`, `routeId`, `hasDraft` (false when only the route checks run), `computing`, `stale` (the result is being recomputed after an edit, so the route draws grey and dashed), the `verdict` and `verdictTitle` (which follow the clearance band), the `confidence` reasons and the verdict card's `confidenceText` (for example "Vertical datums unconfirmed: depth and water level may not share a reference"), `minUkcMeters` and `minUkcLeg`, any `error`, and the cursor (`cursorNm`, `cursorLatitude`, `cursorLongitude`, `cursorLeg`, `cursorEta`). It also returns the `departure` being checked (`departureIsViewTime` when the route has none) and the departure `window`: `from`, `to` and `stepMinutes` of the sweep across the S-104 range, the `windows` of departures that meet your settings (lower-confidence ones included) with their `confidence` caveat, `arrivalAfterDataEnds` (the departures that arrive after the S-104 data ends), `insideWindow`, `nearestMeetingDeparture`, the verdict card's `text` and its `departButton`. `windowComputing` is true while the window is swept again after an edit. Waits for a pending result unless `wait: false`. For the full numbers, call `get_passage_result`. |
