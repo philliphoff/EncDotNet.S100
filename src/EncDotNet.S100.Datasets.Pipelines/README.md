@@ -462,7 +462,12 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   the warning's preamble. `NavigationalWarningInfo.StatusAt` tells whether the
   warning is in force at a time. `GetNavigationalWarnings` lists every part
   with its feature id and ordinal without picking, including parts with no
-  geometry, which a pick can never reach.
+  geometry, which a pick can never reach. The info also carries the warning's
+  `Reference` (series, number, year), the warnings it `Cancels`, and its
+  `AffectedAreas`, which the route check uses.
+- `Navigation/RouteWarningSources`: the S-124 warning parts of loaded datasets
+  as `RouteWarning`s for `RouteWarningCheck` (see the Navigation package's
+  README).
 - `AssetSourceHelpers`: set-up helpers for exchange sets and loose datasets.
 - `Diagnostics/`: the `ActivitySource` and `Meter` instrumentation that the
   OpenTelemetry exporter uses. See [Observability](../../docs/observability.md).

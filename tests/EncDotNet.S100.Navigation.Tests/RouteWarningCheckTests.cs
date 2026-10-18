@@ -1,0 +1,210 @@
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Features;
+
+namespace EncDotNet.S100.Navigation.Tests;
+
+/// <summary>
+/// The S-124 route check (#957) on synthetic shapes near the equator: one leg
+/// due east from 0° to 0,01° E (about 1 112 m), 50 m limits either side, at
+/// 6 kn from 06:00.
+/// </summary>
+public class RouteWarningCheckTests
+{
+    private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
+    private static readonly DateTimeOffset Departure = new(2026, 3, 1, 6, 0, 0, TimeSpan.Zero);
+    private static readonly RouteCheckLeg East = new([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
+    private static readonly PassageLeg EastPassage = new(East.Points, 0, SpeedKnots: 6);
+
+    private static NavigationalWarningInfo Info(int number, DateTimeOffset? from = null, DateTimeOffset? to = null) => new()
+    {
+        Series = "TEST",
+        Number = $"{number:000}/26",
+        Reference = new NavigationalWarningReference("TEST", number, 2026),
+        Validity = from is null && to is null ? [] : [new NavigationalWarningValidity(from, to)],
+    };
+
+    private static S100FeatureGeometry Box(double south, double west, double north, double east) => new()
+    {
+        Primitive = S100GeometryType.Surface,
+        ExteriorRing = [new(south, west), new(south, east), new(north, east), new(north, west), new(south, west)],
+    };
+
+    private static S100FeatureGeometry Line(params (double Lat, double Lon)[] points) => new()
+    {
+        Primitive = S100GeometryType.Curve,
+        Curves = [points.Select(p => new GeoPosition(p.Lat, p.Lon)).ToArray()],
+    };
+
+    private static S100FeatureGeometry Point(double lat, double lon) => new()
+    {
+        Primitive = S100GeometryType.Point,
+        Points = [new GeoPosition(lat, lon)],
+    };
+
+    private static RouteWarningResult Check(params RouteWarning[] warnings) =>
+        new RouteWarningCheck().Check(
+            [East],
+            warnings,
+            new RouteWarningTiming(PassageSchedule.Compute([EastPassage], Departure), Departure),
+            TestContext.Current.CancellationToken);
+
+    private static RouteWarning Warning(NavigationalWarningInfo info, params S100FeatureGeometry[] shapes) =>
+        new(info, shapes, new RouteFindingFeature("124TEST", $"part.{info.Reference!.Number}"));
+
+    [Fact]
+    public void An_area_across_the_track_is_inside_and_must_be_reviewed()
+    {
+        var result = Check(Warning(Info(1), Box(-0.001, 0.004, 0.001, 0.006)));
+
+        var match = Assert.Single(result.Matches);
+        Assert.Equal(RouteWarningRelation.Crosses, match.Relation);
+        Assert.Equal(0.004 * M, match.StartDistanceMeters, 3);
+        Assert.Equal(0.006 * M, match.EndDistanceMeters, 3);
+        var finding = Assert.Single(result.Findings);
+        Assert.Equal((RouteWarningCodes.OnRoute, RouteFindingGroup.MustReview, RouteFindingSource.S124), (finding.Code, finding.Group, finding.Source));
+        Assert.Equal("Inside navigational warning 001/26", finding.Title);
+        Assert.Equal("s124.124TEST/part.1", finding.Id);
+        Assert.Equal(new RouteFindingFeature("124TEST", "part.1"), finding.Feature);
+        Assert.False(finding.Location!.IsPoint);
+        Assert.Equal("TEST 001/26 · until cancelled · In force at 2026-03-01 06:02 UTC", finding.Meta);
+    }
+
+    [Fact]
+    public void A_line_across_the_track_crosses_at_a_point()
+    {
+        var finding = Assert.Single(Check(Warning(Info(2), Line((-0.01, 0.005), (0.01, 0.005)))).Findings);
+
+        Assert.Equal("Crosses navigational warning 002/26", finding.Title);
+        Assert.True(finding.Location!.IsPoint);
+        Assert.Equal(0.005 * M, finding.DistanceMeters!.Value, 3);
+    }
+
+    [Fact]
+    public void An_area_inside_the_limits_but_off_the_track_crosses_the_corridor()
+    {
+        // 30 m north of the track, inside the 50 m port limit.
+        var north = 30 / M;
+        var match = Assert.Single(Check(Warning(Info(3), Box(north, 0.004, north + 0.001, 0.005))).Matches);
+
+        Assert.Equal(RouteWarningRelation.Crosses, match.Relation);
+        Assert.Equal(30, match.ClosestMeters, 0.5);
+        Assert.Equal(RouteFindingGroup.MustReview, match.Finding!.Group);
+    }
+
+    [Fact]
+    public void A_point_in_the_corridor_or_within_half_a_mile_is_near()
+    {
+        var onTrack = Warning(Info(4), Point(0, 0.005));
+        var aside = Warning(Info(5), Point(800 / M, 0.005));
+        var far = Warning(Info(6), Point(1000 / M, 0.005));
+
+        var result = Check(onTrack, aside, far);
+
+        Assert.Equal(RouteWarningRelation.Near, result.Matches[0].Relation);
+        Assert.Equal(RouteWarningRelation.Near, result.Matches[1].Relation);
+        Assert.Equal(RouteWarningRelation.Off, result.Matches[2].Relation);
+        Assert.Null(result.Matches[2].Finding);
+        Assert.All(result.Findings, f => Assert.Equal((RouteWarningCodes.NearRoute, RouteFindingGroup.Check), (f.Code, f.Group)));
+        Assert.Equal("Navigational warning 004/26 near the route", result.Findings[0].Title);
+    }
+
+    [Fact]
+    public void The_near_distance_is_configurable()
+    {
+        var result = new RouteWarningCheck(new RouteWarningOptions { NearDistanceMeters = 100 }).Check(
+            [East],
+            [Warning(Info(7), Point(800 / M, 0.005))],
+            new RouteWarningTiming(null, Departure),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(RouteWarningRelation.Off, Assert.Single(result.Matches).Relation);
+    }
+
+    [Fact]
+    public void A_hole_in_an_area_is_outside_it()
+    {
+        var area = Box(-0.002, 0.002, 0.002, 0.008) with
+        {
+            InteriorRings = [Box(-0.001, 0.003, 0.001, 0.007).ExteriorRing],
+        };
+
+        var match = Assert.Single(Check(Warning(Info(8), area)).Matches);
+
+        // Enters at 0,002°, leaves for the last time at 0,008°: the span covers the hole.
+        Assert.Equal(0.002 * M, match.StartDistanceMeters, 3);
+        Assert.Equal(0.008 * M, match.EndDistanceMeters, 3);
+    }
+
+    [Fact]
+    public void Time_is_judged_at_the_eta_where_the_vessel_meets_the_warning()
+    {
+        // 6 kn: 0,005° (556 m) takes 3 min.
+        var before = Warning(Info(9, Departure, Departure.AddMinutes(2)), Line((-0.01, 0.005), (0.01, 0.005)));
+        var during = Warning(Info(10, Departure.AddMinutes(2), Departure.AddMinutes(4)), Line((-0.01, 0.005), (0.01, 0.005)));
+
+        var result = Check(before, during);
+
+        Assert.Equal((RouteWarningCodes.NotInForce, RouteFindingGroup.Info), (result.Matches[0].Finding!.Code, result.Matches[0].Finding!.Group));
+        Assert.Equal(RouteFindingGroup.MustReview, result.Matches[1].Finding!.Group);
+        Assert.True(result.Matches[1].Finding!.Warning!.AtEta);
+        Assert.StartsWith("Not in force at 2026-03-01 06:03", result.Matches[0].Finding!.Meta.Split(" · ")[^1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Cancellation_by_date_or_by_another_warning_published_in_time()
+    {
+        var line = Line((-0.01, 0.005), (0.01, 0.005));
+        var selfCancelled = Warning(Info(11) with { CancellationDate = Departure }, line);
+        var cancelled = Warning(Info(12), line);
+        var cancels = Warning(
+            Info(13) with { PublicationTime = Departure.AddMinutes(1), Cancels = [new NavigationalWarningReference("TEST", 12, 26)] },
+            Point(1, 1));
+        var lateCancelled = Warning(Info(14), line);
+        var cancelsLate = Warning(
+            Info(15) with { PublicationTime = Departure.AddHours(1), Cancels = [new NavigationalWarningReference(null, 14, null)] },
+            Point(1, 1));
+
+        var result = Check(selfCancelled, cancelled, cancels, lateCancelled, cancelsLate);
+
+        Assert.Equal(RouteWarningStatus.Cancelled, result.Matches[0].Finding!.Warning!.Status);
+        Assert.Equal((RouteWarningCodes.Cancelled, RouteFindingGroup.Info), (result.Matches[1].Finding!.Code, result.Matches[1].Finding!.Group));
+        Assert.Equal("Navigational warning 012/26 cancelled", result.Matches[1].Finding!.Title);
+        Assert.EndsWith(" · Cancelled", result.Matches[1].Finding!.Meta, StringComparison.Ordinal);
+        Assert.Equal(RouteWarningStatus.InForce, result.Matches[3].Finding!.Warning!.Status);
+    }
+
+    [Fact]
+    public void A_warning_crossing_two_legs_is_one_finding_on_the_first()
+    {
+        var legs = new[]
+        {
+            new RouteCheckLeg([new GeoPosition(0, 0), new GeoPosition(0, 0.005)]),
+            new RouteCheckLeg([new GeoPosition(0, 0.005), new GeoPosition(0.005, 0.005)]),
+        };
+        var result = new RouteWarningCheck().Check(
+            legs,
+            [Warning(Info(16), Box(-0.001, 0.004, 0.002, 0.006))],
+            new RouteWarningTiming(null, Departure),
+            TestContext.Current.CancellationToken);
+
+        var match = Assert.Single(result.Matches);
+        Assert.Equal(0, match.LegIndex);
+        Assert.Equal(0.004 * M, match.StartDistanceMeters, 1);
+        Assert.Equal(0.007 * M, match.EndDistanceMeters, 1);
+        Assert.False(match.Finding!.Warning!.AtEta);
+        Assert.Equal(Departure, match.Finding.Warning.From);
+    }
+
+    [Fact]
+    public void References_match_on_number_year_and_series()
+    {
+        var reference = new NavigationalWarningReference("NAVAREA I", 12, 2026);
+
+        Assert.True(reference.Matches(new NavigationalWarningReference("NAVAREAI", 12, 26)));
+        Assert.True(reference.Matches(new NavigationalWarningReference(null, 12, null)));
+        Assert.False(reference.Matches(new NavigationalWarningReference("NAVAREA I", 12, 2025)));
+        Assert.False(reference.Matches(new NavigationalWarningReference("NAVAREA II", 12, 2026)));
+        Assert.False(reference.Matches(new NavigationalWarningReference("NAVAREA I", 13, 2026)));
+    }
+}

@@ -565,15 +565,24 @@ internal sealed class PassageCheckService : IDisposable
 
             var legs = RouteEtas.ToPassageLegs(route);
             var named = new PassageLeg[legs.Count];
+            var checkLegs = new RouteCheckLeg[legs.Count];
             var hasDraft = true;
             for (var i = 0; i < legs.Count; i++)
             {
                 hasDraft &= route.GetEffectiveLegValue(i, RoutePassageField.Draft) is not null;
                 named[i] = legs[i] with { Name = $"{i + 1} → {i + 2}" };
+                checkLegs[i] = new RouteCheckLeg(
+                    legs[i].Points,
+                    route.GetEffectiveLegValue(i, RoutePassageField.PortCrossTrack),
+                    route.GetEffectiveLegValue(i, RoutePassageField.StarboardCrossTrack),
+                    legs[i].Geometry);
             }
 
-            return new CheckInput(route.Id, named, route.Passage.Departure ?? viewTime, hasDraft);
+            return new CheckInput(route.Id, named, route.Passage.Departure ?? viewTime, hasDraft) { CheckLegs = checkLegs };
         }
+
+        /// <summary>The legs with their cross-track limits, for the route checks (#888); one per <see cref="Legs"/> entry.</summary>
+        public IReadOnlyList<RouteCheckLeg> CheckLegs { get; init; } = [];
 
         public bool SameAs(CheckInput other) => Departure == other.Departure && SameLegs(other);
 
@@ -589,6 +598,15 @@ internal sealed class PassageCheckService : IDisposable
                 if (a.DraftMeters != b.DraftMeters || a.SpeedKnots != b.SpeedKnots || a.SquatMeters != b.SquatMeters
                     || a.RequiredUkcMeters != b.RequiredUkcMeters || a.Geometry != b.Geometry
                     || !a.Points.SequenceEqual(b.Points))
+                    return false;
+            }
+
+            if (CheckLegs.Count != other.CheckLegs.Count)
+                return false;
+            for (var i = 0; i < CheckLegs.Count; i++)
+            {
+                if (CheckLegs[i].PortCrossTrackMeters != other.CheckLegs[i].PortCrossTrackMeters
+                    || CheckLegs[i].StarboardCrossTrackMeters != other.CheckLegs[i].StarboardCrossTrackMeters)
                     return false;
             }
 

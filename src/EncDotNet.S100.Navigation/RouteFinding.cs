@@ -98,4 +98,11 @@ public sealed record RouteFinding(
     int? LegIndex,
     double? DistanceMeters,
     RouteFindingLocation? Location,
-    RouteFindingFeature? Feature = null);
+    RouteFindingFeature? Feature = null)
+{
+    /// <summary>
+    /// For an S-124 finding (<see cref="RouteFindingSource.S124"/>), the
+    /// warning and how it stands on the route; <c>null</c> otherwise.
+    /// </summary>
+    public RouteFindingWarning? Warning { get; init; }
+}
