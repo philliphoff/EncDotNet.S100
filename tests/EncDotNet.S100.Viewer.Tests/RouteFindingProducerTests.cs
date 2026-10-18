@@ -26,6 +26,7 @@ public sealed class RouteFindingProducerTests : IDisposable
 {
     private static readonly DateTimeOffset Now = new(2024, 6, 1, 12, 0, 0, TimeSpan.Zero);
     private readonly CultureInfo _culture = CultureInfo.CurrentCulture;
+    private readonly UiThread _ui = new();
 
     public RouteFindingProducerTests() => CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
 
@@ -43,9 +44,33 @@ public sealed class RouteFindingProducerTests : IDisposable
         public override DateTimeOffset GetUtcNow() => now;
     }
 
-    private sealed class InlineInvoker : IRouteEditInvoker
+    /// <summary>
+    /// Stands in for the UI thread the app posts to: the services' posted
+    /// completions and the test's own edits run one at a time, never
+    /// alongside each other on the thread pool.
+    /// </summary>
+    private sealed class UiThread
     {
-        public Task<T> InvokeAsync<T>(Func<T> action) => Task.FromResult(action());
+        private readonly Lock _lock = new();
+
+        public void Post(Action action)
+        {
+            lock (_lock)
+                action();
+        }
+
+        public T Run<T>(Func<T> action)
+        {
+            lock (_lock)
+                return action();
+        }
+
+        public void Run(Action action) => Post(action);
+    }
+
+    private sealed class UiInvoker(UiThread ui) : IRouteEditInvoker
+    {
+        public Task<T> InvokeAsync<T>(Func<T> action) => Task.FromResult(ui.Run(action));
     }
 
     /// <summary>Returns fixed findings and records each request.</summary>
@@ -124,14 +149,24 @@ public sealed class RouteFindingProducerTests : IDisposable
         distance,
         RouteFindingLocation.Point(new GeoPosition(0, distance / 111_320.0), distance));
 
-    private static RouteFindingsService Findings(PassageCheckFixture f, params IRouteFindingProducer[] producers) =>
-        new(f.Check, f.Routes, f.Catalog, timeFormat: new Utc(), clock: new FixedClock(Now), producers: producers);
+    private RouteFindingsService Findings(PassageCheckFixture f, params IRouteFindingProducer[] producers) =>
+        new(f.Check, f.Routes, f.Catalog, timeFormat: new Utc(), clock: new FixedClock(Now), producers: producers, post: _ui.Post);
 
-    private static PassageCheckFixture NoDraft(Action<Action>? post = null)
+    private PassageCheckFixture WithDraft() => new(post: _ui.Post);
+
+    private PassageCheckFixture NoDraft(Action<Action>? post = null)
     {
-        var f = new PassageCheckFixture(post: post);
+        var f = new PassageCheckFixture(post: post ?? _ui.Post);
         f.Route.SetPassageValue(RoutePassageField.Draft, null);
         return f;
+    }
+
+    // As PassageCheckFixture.CheckAsync, with the edit on the stand-in UI thread.
+    private async Task CheckAsync(PassageCheckFixture f)
+    {
+        _ui.Run(() => f.Routes.IsCheckModeActive = true);
+        await f.Check.WhenIdle();
+        Assert.IsType<PassageCheckSnapshot>(f.Check.Current);
     }
 
     private static T Value<T>(ToolResult<T> result)
@@ -154,9 +189,9 @@ public sealed class RouteFindingProducerTests : IDisposable
     [Fact]
     public async Task The_clearance_findings_are_the_first_producer()
     {
-        var f = new PassageCheckFixture();
+        var f = WithDraft();
         using var findings = Findings(f);
-        await f.CheckAsync();
+        await CheckAsync(f);
 
         Assert.IsType<ClearanceFindingProducer>(Assert.Single(findings.Producers));
         Assert.True(findings.Producers[0].UsesClearance);
@@ -177,7 +212,7 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.False(panel.HasDraft);
         Assert.True(panel.CanCheckPassage);
         Assert.Equal("Check this route against your settings; add a draft to check clearance too", panel.CheckPassageTooltip);
-        panel.IsCheckingPassage = true;
+        _ui.Run(() => panel.IsCheckingPassage = true);
         await findings.WhenIdle();
 
         Assert.True(f.Routes.IsCheckModeActive);
@@ -216,7 +251,7 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.False(clearance.HasProfile);
 
         // Adding a draft brings the clearance back alongside the route checks.
-        f.Route.SetPassageValue(RoutePassageField.Draft, 11);
+        _ui.Run(() => f.Route.SetPassageValue(RoutePassageField.Draft, 11));
         await findings.WhenIdle();
         Assert.False(check.NeedsDraft);
         Assert.Equal("Below your UKC setting in 1 place", check.Title);
@@ -249,7 +284,7 @@ public sealed class RouteFindingProducerTests : IDisposable
             Finding("b.must.0", RouteFindingGroup.MustReview, 1000));
         using var findings = Findings(f, a, b);
 
-        f.Routes.IsCheckModeActive = true;
+        _ui.Run(() => f.Routes.IsCheckModeActive = true);
         await findings.WhenIdle();
 
         Assert.Equal(["b.must.0", "a.must.0", "b.check.0", "a.info.0"], findings.Findings.Select(x => x.Id));
@@ -257,10 +292,14 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.Empty(findings.Errors);
 
         // A one-off check of another route merges the same way.
-        var other = f.Routes.Routes.CreateRoute("Other");
-        other.AppendWaypoint(new GeoPosition(0, 0));
-        other.AppendWaypoint(new GeoPosition(0, 0.02));
-        f.Routes.Routes.SetActiveRoute(f.Route);
+        var other = _ui.Run(() =>
+        {
+            var route = f.Routes.Routes.CreateRoute("Other");
+            route.AppendWaypoint(new GeoPosition(0, 0));
+            route.AppendWaypoint(new GeoPosition(0, 0.02));
+            f.Routes.Routes.SetActiveRoute(f.Route);
+            return route;
+        });
         var oneOff = await findings.FindingsForAsync(other, TestContext.Current.CancellationToken);
         Assert.Equal(["b.must.0", "a.must.0", "b.check.0", "a.info.0"], oneOff!.Select(x => x.Id));
         // The active route's own debounced re-check may land after the
@@ -276,7 +315,7 @@ public sealed class RouteFindingProducerTests : IDisposable
         var held = new HeldProducer("held");
         using var findings = Findings(f, fast, held);
 
-        f.Routes.IsCheckModeActive = true;
+        _ui.Run(() => f.Routes.IsCheckModeActive = true);
         await WaitUntil(findings, _ => held.Count == 1);
         await WaitUntil(findings, s => s.Findings.Any(x => x.Id == "fast.0"));
         Assert.True(findings.IsStale);
@@ -287,14 +326,14 @@ public sealed class RouteFindingProducerTests : IDisposable
 
         // An edit: the fast producer lands while the held one is still running,
         // so the held one's findings stay, marked stale.
-        f.Route.SetPassageValue(RoutePassageField.Speed, 7);
+        _ui.Run(() => f.Route.SetPassageValue(RoutePassageField.Speed, 7));
         await WaitUntil(findings, _ => held.Count == 2);
         await WaitUntil(findings, s => s.Findings.Any(x => x.Id == "fast.1"));
         Assert.Equal(["fast.1", "held.0"], findings.Findings.Select(x => x.Id));
         Assert.True(findings.IsStale);
 
         // Another edit cancels the held run; neither producer's findings go.
-        f.Route.SetPassageValue(RoutePassageField.Speed, 8);
+        _ui.Run(() => f.Route.SetPassageValue(RoutePassageField.Speed, 8));
         await WaitUntil(findings, _ => held.Count == 3);
         Assert.True(held.Call(1).Token.IsCancellationRequested);
         await WaitUntil(findings, s => s.Findings.Any(x => x.Id == "fast.2"));
@@ -306,9 +345,9 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.False(findings.IsStale);
 
         // Turning Check passage off cancels and clears everything.
-        f.Route.SetPassageValue(RoutePassageField.Speed, 9);
+        _ui.Run(() => f.Route.SetPassageValue(RoutePassageField.Speed, 9));
         await WaitUntil(findings, _ => held.Count == 4);
-        f.Routes.IsCheckModeActive = false;
+        _ui.Run(() => f.Routes.IsCheckModeActive = false);
         await f.Check.WhenIdle();
         Assert.True(held.Call(3).Token.IsCancellationRequested);
         Assert.Empty(findings.Findings);
@@ -318,10 +357,10 @@ public sealed class RouteFindingProducerTests : IDisposable
     [Fact]
     public async Task A_failing_producer_reports_its_error_and_keeps_the_others()
     {
-        var f = new PassageCheckFixture();
+        var f = WithDraft();
         using var findings = Findings(f, new FailingProducer(), new StubProducer(Finding("ok.0", RouteFindingGroup.Info, 10)));
 
-        await f.CheckAsync();
+        await CheckAsync(f);
         await findings.WhenIdle();
 
         Assert.Equal(["clearance.below_setting.0", "ok.0"], findings.Findings.Select(x => x.Id));
@@ -337,9 +376,9 @@ public sealed class RouteFindingProducerTests : IDisposable
             Finding("c.0", RouteFindingGroup.Check, 1500),
             Finding("i.0", RouteFindingGroup.Info, 500),
             new RouteFinding("u.0", "u", RouteFindingGroup.Info, RouteFindingSource.Data, "Unplaced", "", null, null, null)));
-        f.Routes.IsCheckModeActive = true;
+        _ui.Run(() => f.Routes.IsCheckModeActive = true);
         await findings.WhenIdle();
-        findings.Select(findings.Findings.Single(x => x.Id == "c.0"), zoom: false);
+        _ui.Run(() => findings.Select(findings.Findings.Single(x => x.Id == "c.0"), zoom: false));
 
         var overlay = Assert.IsType<RouteCheckOverlay>(RouteCheckOverlay.Build(
             true, f.Check.Current, f.Check.IsStale, f.Check.Cursor, MeasureOverlayAppearance.Default, DepthUnit.Metres, TimeFormat.Utc,
@@ -363,9 +402,9 @@ public sealed class RouteFindingProducerTests : IDisposable
     [Fact]
     public async Task The_clearance_route_also_marks_its_findings()
     {
-        var f = new PassageCheckFixture();
+        var f = WithDraft();
         using var findings = Findings(f);
-        await f.CheckAsync();
+        await CheckAsync(f);
 
         var overlay = RouteCheckOverlay.Build(
             true, f.Check.Current, false, null, MeasureOverlayAppearance.Default, DepthUnit.Metres, TimeFormat.Utc,
@@ -383,7 +422,7 @@ public sealed class RouteFindingProducerTests : IDisposable
             Finding("route_check.land.0", RouteFindingGroup.MustReview, 3000),
             Finding("route_check.warning.0", RouteFindingGroup.Check, 1500)));
         var ct = TestContext.Current.CancellationToken;
-        var invoker = new InlineInvoker();
+        var invoker = new UiInvoker(_ui);
         var state = Value(await new SetCheckModeTool(f.Routes, invoker, f.Check).InvokeAsync(new SetCheckModeRequest(true), ct));
         Assert.True(state.On);
         Assert.False(state.HasDraft);
