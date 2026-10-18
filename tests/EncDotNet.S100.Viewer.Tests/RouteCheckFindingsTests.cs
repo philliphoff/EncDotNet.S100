@@ -6,6 +6,8 @@ using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Testing.Scenarios;
 using EncDotNet.S100.Testing.Scenarios.World;
 using EncDotNet.S100.Testing.Scenarios.Writers;
@@ -200,6 +202,35 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
 
         Assert.DoesNotContain(s.RouteChecks, f => f.Code == RouteCheckCodes.CrossesLand);
         Assert.Single(s.RouteChecks, f => f.Code == RouteCheckCodes.CrossesDrying);
+    }
+
+    private sealed class Mariner(MarinerSettings settings) : IMarinerSettingsProvider
+    {
+        public MarinerSettings Current => settings;
+
+        public event Action<MarinerSettings>? Changed { add { } remove { } }
+    }
+
+    [Fact]
+    public void The_depth_checks_use_the_mariners_settings_and_the_deepest_keel()
+    {
+        var settings = new MarinerSettings { SafetyContour = Depth.FromMetres(10), SafetyDepth = Depth.FromMetres(8) };
+        var producer = new RouteCheckFindingProducer(new Mariner(settings));
+        PassageLeg[] legs =
+        [
+            new([new(0, 0), new(0, 0.01)], DraftMeters: 5, SquatMeters: 0.2, RequiredUkcMeters: 1),
+            new([new(0, 0.01), new(0, 0.02)], DraftMeters: 6, SquatMeters: 0.3, RequiredUkcMeters: 0.5),
+        ];
+        RouteFindingRequest Request(bool hasDraft) => new("r", legs, Now, hasDraft, [], null, DepthUnit.Metres, TimeFormat.Utc, Now, [], Now);
+
+        var withDraft = producer.Options(Request(hasDraft: true)).Depths!;
+        var withoutDraft = producer.Options(Request(hasDraft: false)).Depths!;
+
+        Assert.Equal((10.0, 8.0), (withDraft.SafetyContourMeters, withDraft.SafetyDepthMeters));
+        Assert.Equal(6.8, withDraft.KeelMeters!.Value, 6);
+        Assert.Null(withoutDraft.KeelMeters);
+        Assert.Null(new RouteCheckFindingProducer().Options(Request(hasDraft: true)).Depths);
+        Assert.Equal("Crosses land", producer.Options(Request(hasDraft: false)).Text.CrossesLand);
     }
 
     [Fact]

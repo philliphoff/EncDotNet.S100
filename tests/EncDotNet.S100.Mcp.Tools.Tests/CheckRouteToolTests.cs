@@ -124,6 +124,23 @@ public class CheckRouteToolTests
         Assert.Equal("invalid_argument", error.Code);
     }
 
+    [Fact]
+    public async Task The_safety_contour_and_depth_go_together()
+    {
+        var error = await Err(new CheckRouteTool(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, SafetyContourMeters: 10));
+
+        Assert.Equal("invalid_argument", error.Code);
+    }
+
+    [Fact]
+    public async Task With_depths_and_no_charts_only_coverage_is_found()
+    {
+        var value = await Ok(new CheckRouteTool(new FakeDatasetCatalog()),
+            new CheckRouteRequest(Polyline: Polyline, SafetyContourMeters: 10, SafetyDepthMeters: 8, DraftMeters: 5));
+
+        Assert.All(value.Findings, f => Assert.Equal(RouteCheckCodes.OutsideChartCoverage, f.Code));
+    }
+
     [Theory]
     [InlineData(2, 5, "2 to review")]
     [InlineData(0, 1, "1 to check")]
