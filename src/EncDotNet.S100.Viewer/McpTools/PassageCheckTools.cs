@@ -15,6 +15,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 internal sealed record CheckStateDto(
     [property: Description("True when Check passage is on.")] bool On,
     [property: Description("Id of the checked (active) route, or null.")] string? RouteId,
+    [property: Description("True when the checked route has a draft. Without one only the route checks run: there is no verdict, minimum UKC, clearance profile or departure window, the verdict card says \"Add a draft to check clearance\" and is titled from the findings (get_findings' summary).")] bool HasDraft,
     [property: Description("True while a recompute is pending or running.")] bool Computing,
     [property: Description("True while the shown result is out of date (the route draws grey and dashed, the verdict is dimmed).")] bool Stale,
     [property: Description("Verdict code, as get_passage_result: water_level_ends_before_arrival, below_setting, incomplete_data, meets_settings_tight or meets_settings; null without a result.")] string? Verdict,
@@ -117,6 +118,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
         return new CheckStateDto(
             check.IsActive,
             check.IsActive ? routes.Routes.ActiveRoute?.Id : null,
+            check.HasDraft,
             check.IsComputing,
             check.IsStale,
             result is null ? null : Verdict(result.Verdict),
@@ -194,11 +196,6 @@ internal sealed class SetCheckModeTool : PassageCheckToolBase
                 Routes.Routes.SetActiveRoute(route);
             if (route.Legs.Count == 0)
                 return new InvalidArgument("routeId", "the route needs at least two waypoints");
-            for (var i = 0; i < route.Legs.Count; i++)
-            {
-                if (route.GetEffectiveLegValue(i, RoutePassageField.Draft) is null)
-                    return new InvalidArgument("routeId", "the route has no draft; set one with set_passage");
-            }
 
             Routes.IsCheckModeActive = true;
             return null;
@@ -387,7 +384,8 @@ internal static class PassageCheckMcpAdapters
             Description =
                 "Turns Check passage on or off, as the Routes panel's Check passage toggle does. While it's on, the " +
                 "map colours the active route by UKC state at ETA, folds Object Information to its edge tab and shows " +
-                "the verdict card. The route needs a draft (set_passage). Returns the state get_check_state returns; " +
+                "the verdict card. The route needs at least two waypoints; without a draft (set_passage) only the route " +
+                "checks run and the clearance parts are hidden (hasDraft false). Returns the state get_check_state returns; " +
                 "use get_passage_result for the full numbers. Viewer-injected tool — mutates live state.",
             SerializerOptions = JsonOptions,
         });

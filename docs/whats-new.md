@@ -16,6 +16,14 @@ month. For package versions and release assets, see
   frames a warning that has a location. The MCP tools `get_warning_cards`,
   `follow_warning_link` and `preview_warning_card` do the same.
 
+- **Check passage without a draft.** SoundCharts' Check passage now turns on
+  for any route with two or more waypoints. Without a draft the clearance
+  parts are hidden ("Add a draft to check clearance") and the verdict card is
+  titled from the findings. A small marker shows each finding on the map. The
+  findings list now merges findings from several checks, ready for the route
+  checks in #888; `set_check_mode` and `get_findings` accept routes without a
+  draft.
+
 - **Find every navigational warning in one list, even the ones with no
   location.** SoundCharts has a **Navigational warnings** panel beside
   **Library**. It lists each S-124 warning part in the loaded datasets,

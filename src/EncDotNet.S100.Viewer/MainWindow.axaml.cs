@@ -1106,7 +1106,8 @@ public partial class MainWindow : ShadUI.Window
                 _routeAppearance.Current,
                 _routeMariner?.Current.DepthUnit ?? EncDotNet.S100.Pipelines.DepthUnit.Metres,
                 _routeTimeFormat?.Current ?? TimeFormat.Local,
-                _routeFindings?.Selected));
+                _routeFindings?.Selected,
+                _routeFindings?.Findings));
         _mapHost.RequestRedraw();
     }
 

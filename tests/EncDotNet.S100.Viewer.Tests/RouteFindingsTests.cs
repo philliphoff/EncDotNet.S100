@@ -372,10 +372,11 @@ public sealed class RouteFindingsTests : IDisposable
         Assert.False(f.Routes.IsCheckModeActive);
         Assert.Same(f.Route, f.Routes.Routes.ActiveRoute);
 
+        // #953: without a draft the route checks still run; there are no clearance findings.
         other.SetPassageValue(RoutePassageField.Draft, null);
-        var noDraft = await get.InvokeAsync(other.Id, cancellationToken: ct);
-        Assert.True(noDraft.TryGetError(out var error));
-        Assert.IsType<InvalidArgument>(error);
+        var noDraft = Value(await get.InvokeAsync(other.Id, cancellationToken: ct));
+        Assert.Empty(noDraft.Findings);
+        Assert.Equal("No findings for your settings", noDraft.Summary);
     }
 
     [Fact]

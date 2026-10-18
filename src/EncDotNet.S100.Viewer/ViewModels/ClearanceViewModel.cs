@@ -452,11 +452,19 @@ internal sealed class ClearanceViewModel : ViewModelBase
         IsStale = snapshot is not null && _check.IsStale;
         if (!ReferenceEquals(snapshot, _shown))
             Rebuild(force: false);
+        else if (snapshot is null)
+            EmptyText = EmptyTextNow();
         UpdateCursor();
         UpdateBand(force: false);
     }
 
     private DepthUnit DepthUnit => _mariner?.Current.DepthUnit ?? DepthUnit.Metres;
+
+    // Without a draft (#953) there is no clearance to profile.
+    private string EmptyTextNow() =>
+        !_check.IsActive ? Strings.Clearance_Empty
+        : _check.Input is { HasDraft: false } ? Strings.Check_AddDraft
+        : Strings.Check_Computing;
 
     private TimeFormat TimeFormat => _timeFormat?.Current ?? TimeFormat.Local;
 
@@ -471,7 +479,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
         {
             _profile = null;
             HasProfile = false;
-            EmptyText = _check.IsActive ? Strings.Check_Computing : Strings.Clearance_Empty;
+            EmptyText = EmptyTextNow();
             Series = [];
             Sections = [];
             SourceGroups.Clear();

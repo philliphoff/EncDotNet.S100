@@ -898,9 +898,9 @@ Times follow your Local/UTC setting. If a leg has no speed, the ETAs stop
 there and the route's line says so. The speed is the speed over ground you
 enter; S-111 currents aren't applied.
 
-**Check passage**, next to **Edit**, needs a draft, on the passage or on every
-leg. It checks under-keel clearance along the active route at each point's
-ETA: UKC = charted depth + water level − draft − squat, against the
+**Check passage**, next to **Edit**, needs a route with at least two
+waypoints. With a draft, on the passage or on every leg, it checks under-keel
+clearance along the active route at each point's ETA: UKC = charted depth + water level − draft − squat, against the
 **Required UKC** (0 m when unset). Charted depth comes from loaded S-102, or
 from S-101 where there's no S-102 (lower confidence); water level comes from
 loaded S-104. While it's on:
@@ -931,7 +931,14 @@ loaded S-104. While it's on:
   only, water-level gaps (such as data ending before arrival) and expired
   S-111 runs, which aren't used in ETAs. A tag names the check behind each
   one. Clicking a finding zooms the map to it, outlines it dashed in its tone
-  with a "Zoomed to finding" chip, and moves the profile cursor there.
+  with a "Zoomed to finding" chip, and moves the profile cursor there. On the
+  map, a small dot marks each finding, red for MUST REVIEW, amber for CHECK
+  and grey for INFO.
+
+  Without a draft there's no clearance: the verdict card is titled from the
+  findings, such as "2 items to review", and says "Add a draft to check
+  clearance" in place of the minimum UKC and leg chips. The route checks
+  still run.
 - **Object Information** folds to an edge tab, and clicking the tab opens it
   again.
 
