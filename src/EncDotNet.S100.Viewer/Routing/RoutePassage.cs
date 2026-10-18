@@ -164,4 +164,20 @@ public static class RoutePassageFields
 
     /// <summary>Whether a leg can carry an override for <paramref name="field"/>.</summary>
     public static bool IsLegOverridable(RoutePassageField field) => field != RoutePassageField.Squat;
+
+    /// <summary>
+    /// The numeric check settings (decision 16): the mariner's values for
+    /// checking a route, not route content. The departure is the other check
+    /// setting. Speed and cross-track are route values.
+    /// </summary>
+    public static IReadOnlyList<RoutePassageField> CheckSettings { get; } =
+    [
+        RoutePassageField.Draft,
+        RoutePassageField.Squat,
+        RoutePassageField.RequiredUkc,
+    ];
+
+    /// <summary>Whether <paramref name="field"/> is a check setting rather than a route value.</summary>
+    public static bool IsCheckSetting(RoutePassageField field)
+        => field is RoutePassageField.Draft or RoutePassageField.Squat or RoutePassageField.RequiredUkc;
 }

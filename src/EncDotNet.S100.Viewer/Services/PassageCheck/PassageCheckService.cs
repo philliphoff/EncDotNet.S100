@@ -240,7 +240,7 @@ internal sealed class PassageCheckService : IDisposable
     {
         if (!IsActive || _routes.Routes.ActiveRoute is not { } route)
             return false;
-        route.History.Execute(RouteEditLabels.EditPassage, () => route.SetDeparture(departure));
+        route.EditCheckSettings(RouteEditLabels.EditPassage, () => route.SetCheckDeparture(departure));
         return true;
     }
 
@@ -250,7 +250,7 @@ internal sealed class PassageCheckService : IDisposable
     /// step. <c>null</c> when there is no checked route.
     /// </summary>
     public IDisposable? BeginDepartureGesture() =>
-        IsActive && _routes.Routes.ActiveRoute is { } route ? route.History.BeginGesture(RouteEditLabels.EditPassage) : null;
+        IsActive && _routes.Routes.ActiveRoute is { } route ? route.BeginCheckSettingsGesture(RouteEditLabels.EditPassage) : null;
 
     /// <summary>
     /// Moves the cursor (and the ghost vessel) to a distance along the

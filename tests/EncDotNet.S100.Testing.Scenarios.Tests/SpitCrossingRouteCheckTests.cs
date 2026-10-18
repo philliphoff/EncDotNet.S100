@@ -152,7 +152,8 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         // The first checks run on tier-0 JIT code (about ten times slower);
         // a drag re-checks dozens of times, so the steady state is what
         // matters. Check until it settles (30 runs, or 20 s on a slow
-        // machine) and take the fastest of the last five.
+        // machine) and take the fastest of the last five: a shared CI
+        // runner's noise only ever adds time.
         var times = new List<double>();
         var budget = Stopwatch.StartNew();
         while (times.Count < 30 && (times.Count < 5 || budget.Elapsed < TimeSpan.FromSeconds(20)))
@@ -173,8 +174,10 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         Assert.InRange(result.LengthMeters / PassageGeodesy.MetersPerNauticalMile, 20, 35);
         Assert.Contains(result.Findings, f => f.Code == RouteCheckCodes.CrossesDrying);
 
-        // Generous, so a loaded CI machine doesn't flake; the PR records the measured time.
-        Assert.True(each < 1000, $"A check took {each:0} ms.");
+        // About 120 ms on Apple silicon, but about 1 s on a 2-core GitHub
+        // ubuntu runner, so the bound leaves room for CI; a regression that
+        // makes checks several times slower still fails.
+        Assert.True(each < 2500, $"A check took {each:0} ms.");
     }
 
     private RouteCheckResult Check(IReadOnlyList<RouteCheckLeg> legs, params string[] only)

@@ -496,6 +496,7 @@
                                  AutomationProperties.AutomationId="{Binding AutomationId}"
                                  AutomationProperties.Name="{Binding Label}"
                                  Text="{Binding Text, Mode=TwoWay}"
+                                 IsReadOnly="{Binding IsReadOnly}"
                                  PlaceholderText="{Binding Placeholder}">
                             <TextBox.KeyBindings>
                                 <KeyBinding Gesture="Enter" Command="{Binding CommitCommand}" />
@@ -508,7 +509,8 @@
                                 Content="{x:Static loc:Strings.Routes_FieldReset}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetOverride}"
                                 Command="{Binding ResetCommand}"
-                                IsVisible="{Binding IsOverridden}" />
+                                IsVisible="{Binding IsOverridden}"
+                                IsEnabled="{Binding !IsReadOnly}" />
                     </Grid>
                 </Panel>
             </StackPanel>
@@ -521,6 +523,7 @@
                          AutomationProperties.AutomationId="{Binding AutomationId}"
                          AutomationProperties.Name="{Binding Label}"
                          Text="{Binding Text, Mode=TwoWay}"
+                         IsReadOnly="{Binding IsReadOnly}"
                          PlaceholderText="{Binding Placeholder}">
                     <TextBox.KeyBindings>
                         <KeyBinding Gesture="Enter" Command="{Binding CommitCommand}" />
@@ -614,16 +617,25 @@
                                 <Button.Flyout>
                                     <MenuFlyout>
                                         <MenuItem Header="{x:Static loc:Strings.Menu_RenameRoute}"
+                                                  IsVisible="{Binding IsOwned}"
                                                   AutomationProperties.AutomationId="Routes.RowMenu.Rename"
                                                   Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).RenameRouteCommand}"
                                                   CommandParameter="{Binding}" />
                                         <MenuItem Header="{x:Static loc:Strings.Menu_ReverseRoute}"
+                                                  IsVisible="{Binding IsOwned}"
                                                   AutomationProperties.AutomationId="Routes.RowMenu.Reverse"
                                                   Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).ReverseRouteCommand}"
                                                   CommandParameter="{Binding}" />
                                         <Separator />
                                         <MenuItem Header="{x:Static loc:Strings.Menu_RemoveRoute}"
+                                                  IsVisible="{Binding IsOwned}"
                                                   AutomationProperties.AutomationId="Routes.RowMenu.Remove"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).RemoveRouteCommand}"
+                                                  CommandParameter="{Binding}" />
+                                        <!-- #960 (F1): a received route is closed with its dataset. -->
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_CloseRoute}"
+                                                  IsVisible="{Binding IsReceived}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.Close"
                                                   Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).RemoveRouteCommand}"
                                                   CommandParameter="{Binding}" />
                                     </MenuFlyout>
@@ -656,9 +668,18 @@
                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_EditRouteName}"
                                 Classes="Icon"
                                 Command="{Binding BeginRenameCommand}"
+                                IsVisible="{Binding CanEditActiveRoute}"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_EditRouteName}">
                             <ic:FluentIcon Icon="Edit" IconVariant="Regular" FontSize="14" />
                         </Button>
+                        <!-- #960 (A6): a received route says so after its name. -->
+                        <Border Grid.Column="1"
+                                Classes="optionalPill"
+                                AutomationProperties.AutomationId="Routes.Active.ReadOnlyBadge"
+                                IsVisible="{Binding IsActiveReadOnly}"
+                                VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ReceivedBadgeText}" FontSize="10" Opacity="0.8" />
+                        </Border>
                         <Border Grid.Column="3"
                                 Classes="editingPill"
                                 AutomationProperties.AutomationId="Routes.Active.EditingBadge"
@@ -684,6 +705,30 @@
                                FontSize="11"
                                Opacity="0.6"
                                IsVisible="{Binding !ShowCheckPanel}" />
+                    <!-- #960 (A6, A7): a received route's source, and its display mode. -->
+                    <TextBlock AutomationProperties.AutomationId="Routes.Active.Source"
+                               Text="{Binding ActiveSourceText}"
+                               FontSize="11"
+                               Opacity="0.6"
+                               TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding IsActiveReadOnly}" />
+                    <StackPanel Orientation="Horizontal"
+                                Margin="0,3,0,1"
+                                IsVisible="{Binding ShowDisplayMode}"
+                                IsEnabled="{Binding CanChangeDisplayMode}"
+                                ToolTip.Tip="{Binding DisplayModeTooltip}"
+                                ToolTip.ShowOnDisabled="True">
+                        <ToggleButton Classes="segment"
+                                      AutomationProperties.AutomationId="Routes.DisplayMode.Native"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayModeNative}"
+                                      Content="{x:Static loc:Strings.Routes_DisplayModeNative}"
+                                      IsChecked="{Binding IsNativeMode, Mode=TwoWay}" />
+                        <ToggleButton Classes="segment last"
+                                      AutomationProperties.AutomationId="Routes.DisplayMode.Planning"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayModePlanning}"
+                                      Content="{x:Static loc:Strings.Routes_DisplayModePlanning}"
+                                      IsChecked="{Binding IsPlanningMode, Mode=TwoWay}" />
+                    </StackPanel>
                     <!-- Check passage header (C2): vessel · draft · dep · arr. -->
                     <TextBlock AutomationProperties.AutomationId="Routes.Check.HeaderMeta"
                                Text="{Binding Check.HeaderMeta, FallbackValue={x:Null}}"
@@ -802,22 +847,39 @@
                                 </Grid>
                             </Button>
                             <StackPanel IsVisible="{Binding IsExpanded}" Margin="10,0,10,9" Spacing="8">
-                                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="7">
-                                    <!-- Draft · squat: squat shows once a draft is set. -->
+                                <!-- #960 (A9): your check settings (local; not route content), then
+                                     the route's own values (read-only on a received route). -->
+                                <StackPanel Spacing="5" AutomationProperties.AutomationId="Routes.Passage.CheckSettings">
+                                    <TextBlock Text="{Binding CheckSettingsHeading}" FontSize="11" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding CheckSettingsNote}" FontSize="10.5" Opacity="0.6" TextWrapping="Wrap" />
+                                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="7">
                                     <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
-                                        <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageDraftSquat}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageDraftSquat}" />
+                                            <TextBlock Classes="fieldLabel" Opacity="0.6" Text="{Binding FromFileText}" IsVisible="{Binding Draft.IsFromFile}" />
+                                        </StackPanel>
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
                                             <ContentControl Grid.Column="0" Content="{Binding Draft}" />
                                             <ContentControl Grid.Column="1" Width="64" Content="{Binding Squat}" IsVisible="{Binding ShowSquat}" />
                                         </Grid>
                                     </StackPanel>
                                     <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
-                                        <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageSpeed}" />
-                                        <ContentControl Content="{Binding Speed}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageRequiredUkc}" />
+                                            <TextBlock Classes="fieldLabel" Opacity="0.6" Text="{Binding FromFileText}" IsVisible="{Binding RequiredUkc.IsFromFile}" />
+                                        </StackPanel>
+                                        <Panel>
+                                            <ContentControl Content="{Binding RequiredUkc}" />
+                                            <TextBlock Classes="fieldSuffix"
+                                                       Text="{x:Static loc:Strings.Routes_PassageStatic}"
+                                                       IsVisible="{Binding RequiredUkc.IsSet}" />
+                                        </Panel>
                                     </StackPanel>
-                                    <!-- Departure: unset shows a clock and "View time". -->
                                     <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
-                                        <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageDeparture}" />
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageDeparture}" />
+                                            <TextBlock Classes="fieldLabel" Opacity="0.6" Text="{Binding FromFileText}" IsVisible="{Binding Departure.IsFromFile}" />
+                                        </StackPanel>
                                         <Panel ToolTip.Tip="{x:Static loc:Strings.Tooltip_PassageDeparture}">
                                             <ContentControl Content="{Binding Departure}" />
                                             <ic:FluentIcon Icon="Clock"
@@ -831,18 +893,26 @@
                                                            IsVisible="{Binding !Departure.IsSet}" />
                                         </Panel>
                                     </StackPanel>
-                                    <!-- Required UKC: static in v1, and says so. -->
-                                    <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
-                                        <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageRequiredUkc}" />
-                                        <Panel>
-                                            <ContentControl Content="{Binding RequiredUkc}" />
-                                            <TextBlock Classes="fieldSuffix"
-                                                       Text="{x:Static loc:Strings.Routes_PassageStatic}"
-                                                       IsVisible="{Binding RequiredUkc.IsSet}" />
-                                        </Panel>
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel Spacing="5" AutomationProperties.AutomationId="Routes.Passage.RouteValues">
+                                    <TextBlock Text="{Binding RouteValuesHeading}" FontSize="11" FontWeight="SemiBold" />
+                                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="7">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageSpeed}" />
+                                            <TextBlock Classes="fieldLabel" Opacity="0.6" Text="{Binding FromFileText}" IsVisible="{Binding Speed.IsFromFile}" />
+                                        </StackPanel>
+                                        <ContentControl Content="{Binding Speed}" />
                                     </StackPanel>
-                                    <!-- Vessel: a chip that opens the particulars. -->
-                                    <StackPanel Grid.Row="2" Grid.Column="0" Spacing="3">
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageCrossTrack}" />
+                                            <TextBlock Classes="fieldLabel" Opacity="0.6" Text="{Binding FromFileText}" IsVisible="{Binding CrossTrack.IsFromFile}" />
+                                        </StackPanel>
+                                        <ContentControl Content="{Binding CrossTrack}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_PassageCrossTrack}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
                                         <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageVessel}" />
                                         <Panel Classes="fieldBox" Classes.set="{Binding HasVessel}">
                                             <Rectangle Classes="fieldFrame" />
@@ -883,11 +953,8 @@
                                             </Button>
                                         </Panel>
                                     </StackPanel>
-                                    <StackPanel Grid.Row="2" Grid.Column="1" Spacing="3">
-                                        <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageCrossTrack}" />
-                                        <ContentControl Content="{Binding CrossTrack}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_PassageCrossTrack}" />
-                                    </StackPanel>
-                                </Grid>
+                                    </Grid>
+                                </StackPanel>
                                 <TextBlock Text="{x:Static loc:Strings.Routes_PassageHelp}"
                                            FontSize="10.5"
                                            Opacity="0.6"
@@ -1433,9 +1500,11 @@
                                       Classes="modeToggle"
                                       AutomationProperties.AutomationId="Routes.EditToggle"
                                       AutomationProperties.Name="{x:Static loc:Strings.Button_EditRoute}"
-                                      AutomationProperties.HelpText="{Binding EditToggleTooltip}"
+                                      AutomationProperties.HelpText="{Binding EditToggleTooltipText}"
+                                      IsEnabled="{Binding CanEditActiveRoute}"
                                       IsChecked="{Binding IsEditing, Mode=TwoWay}"
-                                      ToolTip.Tip="{Binding EditToggleTooltip}">
+                                      ToolTip.Tip="{Binding EditToggleTooltipText}"
+                                      ToolTip.ShowOnDisabled="True">
                             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                 <ic:FluentIcon Icon="Edit" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
                                 <TextBlock Text="{x:Static loc:Strings.Button_EditRoute}" FontSize="12" VerticalAlignment="Center" />

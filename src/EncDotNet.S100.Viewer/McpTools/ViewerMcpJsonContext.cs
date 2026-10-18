@@ -43,6 +43,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(PanelNotFound))]
 [JsonSerializable(typeof(PanelUnavailable))]
 [JsonSerializable(typeof(RouteNotFound))]
+[JsonSerializable(typeof(RouteReadOnly))]
 [JsonSerializable(typeof(RouteHistoryEmpty))]
 [JsonSerializable(typeof(ViewTimeNotApplied))]
 [JsonSerializable(typeof(NotificationNotFound))]

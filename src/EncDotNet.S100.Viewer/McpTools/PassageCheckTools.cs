@@ -286,7 +286,7 @@ internal sealed class SetDepartureTool : PassageCheckToolBase
                 var route = Resolve(request.RouteId, out var notFound);
                 if (route is null)
                     return notFound;
-                route.History.Execute(RouteEditLabels.EditPassage, () => route.SetDeparture(departure));
+                route.EditCheckSettings(RouteEditLabels.EditPassage, () => route.SetCheckDeparture(departure));
                 return null;
             }
 

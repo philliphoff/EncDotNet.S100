@@ -71,6 +71,25 @@ internal class RouteFieldViewModel : ViewModelBase, ICommittableField
     /// <summary>True when the field holds a value (solid border); false shows it dashed.</summary>
     public bool IsSet => _value is not null;
 
+    private bool _isReadOnly;
+    /// <summary>
+    /// True when the value can't be changed: a route value of a received
+    /// route (#960). Typing reverts.
+    /// </summary>
+    public bool IsReadOnly
+    {
+        get => _isReadOnly;
+        set => SetProperty(ref _isReadOnly, value);
+    }
+
+    private bool _isFromFile;
+    /// <summary>True when the value shown comes from a received route's file ("from file", A9).</summary>
+    public bool IsFromFile
+    {
+        get => _isFromFile;
+        set => SetProperty(ref _isFromFile, value);
+    }
+
     /// <inheritdoc />
     public ICommand CommitCommand { get; }
 
@@ -90,7 +109,7 @@ internal class RouteFieldViewModel : ViewModelBase, ICommittableField
         var typed = string.IsNullOrWhiteSpace(Text) ? null : Text.Trim();
         if (typed == _value)
             return;
-        if (!_commit(typed))
+        if (IsReadOnly || !_commit(typed))
             Text = _value ?? string.Empty;
     }
 }
@@ -253,6 +272,33 @@ internal sealed class RoutePassageCardViewModel : ViewModelBase
     /// <summary>True when no passage value or vessel is set.</summary>
     public bool IsEmpty { get; private set; } = true;
 
+    private bool _isReceived;
+    /// <summary>
+    /// True for a received route: the Route group (speed, cross-track,
+    /// vessel) is read-only and the check settings edit the local layer.
+    /// </summary>
+    public bool IsReceived
+    {
+        get => _isReceived;
+        private set
+        {
+            if (SetProperty(ref _isReceived, value))
+                OnPropertyChanged(nameof(RouteValuesHeading));
+        }
+    }
+
+    /// <summary>The "Your check settings" group heading (A9).</summary>
+    public string CheckSettingsHeading => Strings.Routes_PassageCheckSettings;
+
+    /// <summary>The note under the check-settings heading.</summary>
+    public string CheckSettingsNote => Strings.Routes_PassageCheckSettingsNote;
+
+    /// <summary>The "Route" group heading; "Route · from file" on a received route.</summary>
+    public string RouteValuesHeading => IsReceived ? Strings.Routes_PassageRouteValuesFromFile : Strings.Routes_PassageRouteValues;
+
+    /// <summary>The "from file" mark on a value taken from the file.</summary>
+    public string FromFileText => Strings.Routes_PassageFromFile;
+
     /// <summary>
     /// Shows the active route's values. Call after any route change; the
     /// fields are updated in place.
@@ -269,6 +315,20 @@ internal sealed class RoutePassageCardViewModel : ViewModelBase
         Departure.Show(passage?.Departure is { } d ? PassageFormatting.FormatDeparture(d, _timeFormat()) : null);
         RequiredUkc.Show(PassageFormatting.FormatOrNull(passage?.RequiredUkcMeters, PassageQuantity.Depth, unit));
         CrossTrack.Show(FormatCrossTrack(passage?.PortCrossTrackMeters, passage?.StarboardCrossTrackMeters));
+
+        // A received route (#960, A9): its check settings stay editable on
+        // the local layer; its route values and vessel are read-only.
+        var received = route?.IsReadOnly ?? false;
+        IsReceived = received;
+        Draft.IsFromFile = route?.IsCheckSettingFromFile(RoutePassageField.Draft) ?? false;
+        Squat.IsFromFile = route?.IsCheckSettingFromFile(RoutePassageField.Squat) ?? false;
+        RequiredUkc.IsFromFile = route?.IsCheckSettingFromFile(RoutePassageField.RequiredUkc) ?? false;
+        Departure.IsFromFile = route?.IsDepartureFromFile ?? false;
+        foreach (var field in new[] { Speed, CrossTrack, VesselName, VesselMmsi, VesselImo, VesselCallsign, VesselLength, VesselBeam })
+        {
+            field.IsReadOnly = received;
+            field.IsFromFile = received && field.IsSet;
+        }
 
         var vessel = route?.Info.Vessel;
         VesselName.Show(vessel?.Name);
@@ -360,8 +420,14 @@ internal sealed class RoutePassageCardViewModel : ViewModelBase
             return false;
         if (field == RoutePassageField.Speed && value <= 0)
             return false;
-        if (_route() is { } route)
+        if (_route() is not { } route)
+            return true;
+        if (RoutePassageFields.IsCheckSetting(field))
+            route.EditCheckSettings(RouteEditLabels.EditPassage, () => route.SetCheckSetting(field, value));
+        else if (!route.IsReadOnly)
             route.History.Execute(RouteEditLabels.EditPassage, () => route.SetPassageValue(field, value));
+        else
+            return false;
         return true;
     }
 
@@ -370,7 +436,7 @@ internal sealed class RoutePassageCardViewModel : ViewModelBase
         if (!PassageFormatting.TryParseDeparture(text, _timeFormat(), out var value))
             return false;
         if (_route() is { } route)
-            route.History.Execute(RouteEditLabels.EditPassage, () => route.SetDeparture(value));
+            route.EditCheckSettings(RouteEditLabels.EditPassage, () => route.SetCheckDeparture(value));
         return true;
     }
 
@@ -378,7 +444,7 @@ internal sealed class RoutePassageCardViewModel : ViewModelBase
     {
         if (!TryParseCrossTrack(text, out var port, out var starboard))
             return false;
-        if (_route() is { } route)
+        if (_route() is { IsReadOnly: false } route)
         {
             route.History.Execute(RouteEditLabels.EditPassage, () =>
             {
@@ -405,7 +471,7 @@ internal sealed class RoutePassageCardViewModel : ViewModelBase
 
     private void EditVessel(Action<RouteVesselInfo> edit)
     {
-        if (_route() is not { } route)
+        if (_route() is not { IsReadOnly: false } route)
             return;
         route.History.Execute(RouteEditLabels.EditRouteInfo, () =>
         {
@@ -540,6 +606,9 @@ internal sealed class RouteLegDetailViewModel : ViewModelBase
                 : null,
             RoutePassageCardViewModel.FormatCrossTrack(route.Passage.PortCrossTrackMeters, route.Passage.StarboardCrossTrackMeters));
 
+        foreach (var field in new RouteFieldViewModel[] { Speed, Draft, RequiredUkc, CrossTrack, Note })
+            field.IsReadOnly = route.IsReadOnly;
+
         IsGreatCircle = leg.GeometryType == RouteLegGeometryType.Geodesic;
         Note.Show(leg.Note);
         if (leg.Note is not null)
@@ -590,7 +659,7 @@ internal sealed class RouteLegDetailViewModel : ViewModelBase
 
     private bool CommitNote(string? text)
     {
-        if (_route() is { } route && LegIndex >= 0 && LegIndex < route.Legs.Count)
+        if (_route() is { IsReadOnly: false } route && LegIndex >= 0 && LegIndex < route.Legs.Count)
         {
             var leg = route.Legs[LegIndex];
             route.History.Execute(RouteEditLabels.EditLeg, () =>
@@ -604,7 +673,7 @@ internal sealed class RouteLegDetailViewModel : ViewModelBase
 
     private void SetGeometry(RouteLegGeometryType geometry)
     {
-        if (_route() is not { } route || LegIndex < 0 || LegIndex >= route.Legs.Count)
+        if (_route() is not { IsReadOnly: false } route || LegIndex < 0 || LegIndex >= route.Legs.Count)
             return;
         var leg = route.Legs[LegIndex];
         if (leg.GeometryType == geometry)
@@ -618,7 +687,7 @@ internal sealed class RouteLegDetailViewModel : ViewModelBase
 
     private void Edit(Action<Route> edit)
     {
-        if (_route() is { } route && LegIndex >= 0 && LegIndex < route.Legs.Count)
+        if (_route() is { IsReadOnly: false } route && LegIndex >= 0 && LegIndex < route.Legs.Count)
             route.History.Execute(RouteEditLabels.EditLeg, () => edit(route));
     }
 }
