@@ -8,13 +8,14 @@ public sealed partial class RouteCheckEngine
 {
     private sealed partial class LegSweep
     {
-        // The depth checks, run when the options carry depths.
+        // The depth checks, run when the options carry depths. The features
+        // reach DangerNearbyMeters beyond the corridor.
         private void CheckDepths(IReadOnlyList<RouteChartFeature> features, RouteCheckDepths depths)
         {
             var shallow = CheckSafetyContour(features, depths);
             CheckSoundings(features, depths, shallow);
             CheckBathymetry(depths);
-            CheckDangers(depths);
+            CheckDangers(features, depths);
         }
 
         // Depth, dredged and drying areas shallower than the safety contour

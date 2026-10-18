@@ -167,8 +167,14 @@ public sealed partial class RouteCheckEngine
 
         public void Run()
         {
-            var features = _engine._charts.FeaturesInCorridor(_ring, _extent);
-            _cells = new List<RouteChartCell>(_engine._charts.CellsNear(_extent));
+            // The depth checks look for dangers beyond the limits too, so one
+            // wider query serves every check; the corridor checks test
+            // geometry against the corridor itself, so the extra features
+            // change nothing for them.
+            var depths = _engine._options.Depths;
+            var (ring, extent) = depths is null ? (_ring, _extent) : WideRing(Math.Max(0, _engine._options.DangerNearbyMeters));
+            var features = _engine._charts.FeaturesInCorridor(ring, extent);
+            _cells = new List<RouteChartCell>(_engine._charts.CellsNear(extent));
             foreach (var cell in _cells)
             {
                 _cellIndex.TryAdd(cell, _cellIndex.Count);
@@ -198,7 +204,7 @@ public sealed partial class RouteCheckEngine
             CheckCoastlines(features, land);
             CheckAreas(features, RouteChartFeatureKind.DryingArea, RouteCheckCodes.CrossesDrying, RouteCheckCodes.DryingInCorridor,
                 _findings.Text.CrossesDrying, _findings.Text.DryingInCorridor);
-            if (_engine._options.Depths is { } depths)
+            if (depths is not null)
             {
                 CheckDepths(features, depths);
             }

@@ -92,22 +92,14 @@ public sealed partial class RouteCheckEngine
 
     private sealed partial class LegSweep
     {
-        private void CheckDangers(RouteCheckDepths depths)
+        // The features reach DangerNearbyMeters beyond the corridor, and so
+        // do the sweep's cells.
+        private void CheckDangers(IReadOnlyList<RouteChartFeature> features, RouteCheckDepths depths)
         {
             var nearby = Math.Max(0, _engine._options.DangerNearbyMeters);
-            var (ring, extent) = WideRing(nearby);
-            var features = _engine._charts.FeaturesInCorridor(ring, extent);
-
-            // The band beyond the limits can reach cells the corridor doesn't.
-            foreach (var cell in _engine._charts.CellsNear(extent))
-            {
-                AddCell(cell);
-            }
-
             var areas = new List<RouteChartFeature>();
             foreach (var feature in features)
             {
-                AddCell(feature.Cell);
                 if (feature.Kind is RouteChartFeatureKind.DepthArea or RouteChartFeatureKind.DredgedArea or RouteChartFeatureKind.DryingArea
                     && feature.DepthMeters is not null)
                 {
@@ -301,14 +293,6 @@ public sealed partial class RouteCheckEngine
         }
 
         private bool InsideLimits(double offset) => offset > 0 ? offset <= _port : -offset <= _starboard;
-
-        private void AddCell(RouteChartCell cell)
-        {
-            if (_cellIndex.TryAdd(cell, _cellIndex.Count))
-            {
-                _cells.Add(cell);
-            }
-        }
 
         // The corridor widened by extra metres each side, and its box.
         private (IReadOnlyList<GeoPosition> Ring, BoundingBox Extent) WideRing(double extra)
