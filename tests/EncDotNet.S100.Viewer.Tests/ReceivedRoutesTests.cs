@@ -1,17 +1,15 @@
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Headless.XUnit;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.S421;
-using EncDotNet.S100.Datasets.S421.DataModel;
-using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Testing.Scenarios;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Routing.Persistence;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.Tests.Headless;
+using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
 
