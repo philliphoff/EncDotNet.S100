@@ -32,6 +32,17 @@ public abstract record RenderContext
     public EcdisDisplaySettings? EcdisDisplay { get; init; }
 
     /// <summary>
+    /// This dataset's own narrowing of viewing-group visibility, applied on
+    /// top of <see cref="EcdisDisplay"/>, or <c>null</c> for none. A host sets
+    /// it from <see cref="MapDataset.ViewingGroups"/>.
+    /// </summary>
+    /// <remarks>
+    /// Honoured by the XSLT (GML) vector processors, such as S-421, S-122 and
+    /// S-124. S-101 and S-57 ignore it for now.
+    /// </remarks>
+    public ViewingGroupFilter? ViewingGroups { get; init; }
+
+    /// <summary>
     /// Mariner-configurable display preferences (S-100 Part 9 §4.2 —
     /// safety/shallow/deep contours, S-101 boolean toggles, depth display
     /// unit, etc.). When <c>null</c> processors fall back to

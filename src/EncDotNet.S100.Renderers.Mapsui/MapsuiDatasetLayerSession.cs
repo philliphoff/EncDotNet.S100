@@ -3,6 +3,7 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -823,6 +824,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     {
         Entry renderEntry;
         long generation;
+        ViewingGroupFilter? viewingGroups;
         lock (_sync)
         {
             ThrowIfDisposed();
@@ -830,6 +832,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 return null;
             renderEntry = entry;
             generation = ++entry.Generation;
+            viewingGroups = entry.Dataset.ViewingGroups;
         }
 
         if (!_processorOwner.TryAcquire(datasetId, out var lease))
@@ -849,7 +852,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
             var context = presentation.CreateRenderContext(
                 lease.Processor,
-                selectedTime);
+                selectedTime) with
+            {
+                ViewingGroups = viewingGroups,
+            };
             result = await Task.Run(
                 () => _renderer.RenderAsync(
                     lease.Processor,
@@ -1794,7 +1800,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             currentTime,
             subLayers,
             dataset.Validation,
-            dataset.VersionAssessment);
+            dataset.VersionAssessment,
+            dataset.ViewingGroups);
 
     private (bool RangeChanged, DateTime? CurrentChanged) RecomputeTimeState()
     {
