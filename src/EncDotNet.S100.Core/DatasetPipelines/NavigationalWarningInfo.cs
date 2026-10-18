@@ -33,6 +33,37 @@ public sealed record NavigationalWarningText(string? Language, string Text);
 public sealed record NavigationalWarningValidity(DateTimeOffset? Start, DateTimeOffset? End);
 
 /// <summary>
+/// A navigational warning's identifier in its series: the series name, the
+/// warning number and the year, as a cancellation refers to it.
+/// </summary>
+/// <param name="Series">The series name (e.g. <c>"NAVAREA X"</c>), or <c>null</c> when not given.</param>
+/// <param name="Number">The warning number within the series and year.</param>
+/// <param name="Year">The year (four digits, or two when the source gives two), or <c>null</c> when not given.</param>
+public sealed record NavigationalWarningReference(string? Series, int Number, int? Year)
+{
+    /// <summary>
+    /// Whether this reference names <paramref name="other"/>: the same number,
+    /// the same year (compared by its last two digits) when both give one,
+    /// and the same series, ignoring case and spacing, when both give one.
+    /// </summary>
+    /// <param name="other">The identifier to compare with.</param>
+    /// <returns><c>true</c> when they name the same warning.</returns>
+    public bool Matches(NavigationalWarningReference other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        if (Number != other.Number)
+            return false;
+        if (Year is { } year && other.Year is { } otherYear && year % 100 != otherYear % 100)
+            return false;
+        return string.IsNullOrWhiteSpace(Series) || string.IsNullOrWhiteSpace(other.Series)
+            || string.Equals(Normalise(Series), Normalise(other.Series), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string Normalise(string series) =>
+        string.Concat(series.Where(c => !char.IsWhiteSpace(c)));
+}
+
+/// <summary>
 /// The message of a navigational warning part, projected for object
 /// information UIs: identification, type, validity, area and the full text in
 /// every language the dataset gives (S-124 <c>NavwarnPart</c> read through its
@@ -85,6 +116,25 @@ public sealed record NavigationalWarningInfo
 
     /// <summary>Whether the part has geometry, so the map draws it.</summary>
     public bool HasLocation { get; init; }
+
+    /// <summary>
+    /// The warning's identifier in its series, or <c>null</c> when the
+    /// preamble gives no number; what another warning's cancellation names.
+    /// </summary>
+    public NavigationalWarningReference? Reference { get; init; }
+
+    /// <summary>
+    /// The warnings this one cancels (S-124 <c>References</c> with
+    /// <c>referenceCategory</c> 1), in document order. Empty when it cancels none.
+    /// </summary>
+    public IReadOnlyList<NavigationalWarningReference> Cancels { get; init; } = [];
+
+    /// <summary>
+    /// The areas the part affects beyond its own geometry (S-124
+    /// <c>NavwarnAreaAffected</c>, through <c>areaAffected</c>), in WGS-84.
+    /// Empty when it names none.
+    /// </summary>
+    public IReadOnlyList<S100FeatureGeometry> AffectedAreas { get; init; } = [];
 
     /// <summary>
     /// The series and number (e.g. <c>"NAVAREA X 106/26"</c>), or

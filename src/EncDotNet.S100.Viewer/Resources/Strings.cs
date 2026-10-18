@@ -1880,6 +1880,15 @@ internal static class Strings
     public static string Findings_WaterLevelEnds => Get(nameof(Findings_WaterLevelEnds));
     public static string Findings_WaterLevelStartsLate => Get(nameof(Findings_WaterLevelStartsLate));
     public static string Findings_FromFormat => Get(nameof(Findings_FromFormat));
+    public static string Findings_WarningInsideFormat => Get(nameof(Findings_WarningInsideFormat));
+    public static string Findings_WarningCrossesFormat => Get(nameof(Findings_WarningCrossesFormat));
+    public static string Findings_WarningNearFormat => Get(nameof(Findings_WarningNearFormat));
+    public static string Findings_WarningNotInForceFormat => Get(nameof(Findings_WarningNotInForceFormat));
+    public static string Findings_WarningCancelledFormat => Get(nameof(Findings_WarningCancelledFormat));
+    public static string Findings_WarningInForceAtFormat => Get(nameof(Findings_WarningInForceAtFormat));
+    public static string Findings_WarningNotInForceAtFormat => Get(nameof(Findings_WarningNotInForceAtFormat));
+    public static string Findings_WarningCancelled => Get(nameof(Findings_WarningCancelled));
+    public static string Findings_WarningRangeFormat => Get(nameof(Findings_WarningRangeFormat));
     public static string Findings_TideNotAppliedForFormat => Get(nameof(Findings_TideNotAppliedForFormat));
     public static string Findings_TideNotApplied => Get(nameof(Findings_TideNotApplied));
     public static string Findings_NoWaterLevelCoverage => Get(nameof(Findings_NoWaterLevelCoverage));

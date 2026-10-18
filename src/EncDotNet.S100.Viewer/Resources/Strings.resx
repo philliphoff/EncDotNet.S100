@@ -4963,6 +4963,42 @@
   <data name="Findings_FromFormat" xml:space="preserve">
     <value>from {0}</value>
   </data>
+  <data name="Findings_WarningInsideFormat" xml:space="preserve">
+    <value>Inside navigational warning {0}</value>
+    <comment>S-124 finding title (#957): the route goes through the warning's area while it is in force. {0} is the warning number, e.g. 012/26.</comment>
+  </data>
+  <data name="Findings_WarningCrossesFormat" xml:space="preserve">
+    <value>Crosses navigational warning {0}</value>
+    <comment>S-124 finding title: the route crosses the warning's line while it is in force. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningNearFormat" xml:space="preserve">
+    <value>Navigational warning {0} near the route</value>
+    <comment>S-124 finding title: the warning is within the near distance (0,5 NM) of the route. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningNotInForceFormat" xml:space="preserve">
+    <value>Navigational warning {0} not in force</value>
+    <comment>S-124 finding title: on or near the route, but not in force while the vessel is there. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningCancelledFormat" xml:space="preserve">
+    <value>Navigational warning {0} cancelled</value>
+    <comment>S-124 finding title: on or near the route, but cancelled by the time the vessel is there. {0} is the warning number.</comment>
+  </data>
+  <data name="Findings_WarningInForceAtFormat" xml:space="preserve">
+    <value>In force at {0}</value>
+    <comment>S-124 finding meta: status at the ETA (or the view time). {0} is the time.</comment>
+  </data>
+  <data name="Findings_WarningNotInForceAtFormat" xml:space="preserve">
+    <value>Not in force at {0}</value>
+    <comment>S-124 finding meta: status at the ETA (or the view time). {0} is the time.</comment>
+  </data>
+  <data name="Findings_WarningCancelled" xml:space="preserve">
+    <value>Cancelled</value>
+    <comment>S-124 finding meta: the warning is cancelled by the time the vessel is there.</comment>
+  </data>
+  <data name="Findings_WarningRangeFormat" xml:space="preserve">
+    <value>{0} – {1}</value>
+    <comment>S-124 finding meta: a validity range. {0} start, {1} end.</comment>
+  </data>
   <data name="Findings_TideNotAppliedForFormat" xml:space="preserve">
     <value>tide not applied for {0:0.0} NM</value>
   </data>
