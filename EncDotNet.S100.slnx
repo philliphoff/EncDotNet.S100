@@ -30,6 +30,7 @@
     <Project Path="src/EncDotNet.S100.Mcp.Tools/EncDotNet.S100.Mcp.Tools.csproj" />
     <Project Path="src/EncDotNet.S100.Mcp/EncDotNet.S100.Mcp.csproj" />
     <Project Path="src/EncDotNet.S100.Navigation/EncDotNet.S100.Navigation.csproj" />
+    <Project Path="src/EncDotNet.S100.Routes.Rtz/EncDotNet.S100.Routes.Rtz.csproj" />
     <Project Path="src/EncDotNet.S100.Portrayals/EncDotNet.S100.Portrayals.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Mapsui.Avalonia/EncDotNet.S100.Renderers.Mapsui.Avalonia.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Mapsui/EncDotNet.S100.Renderers.Mapsui.csproj" />
@@ -75,6 +76,7 @@
     <Project Path="tests/EncDotNet.S100.Mcp.Tools.Tests/EncDotNet.S100.Mcp.Tools.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Mcp.Tests/EncDotNet.S100.Mcp.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Navigation.Tests/EncDotNet.S100.Navigation.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Routes.Rtz.Tests/EncDotNet.S100.Routes.Rtz.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.PerfReport.Tests/EncDotNet.S100.PerfReport.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.PerfRunner.Tests/EncDotNet.S100.PerfRunner.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Viewer.Tests/EncDotNet.S100.Viewer.Tests.csproj" />

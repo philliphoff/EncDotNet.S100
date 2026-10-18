@@ -5843,4 +5843,82 @@
   <data name="ExportDialog_Version" xml:space="preserve">
     <value>Version</value>
   </data>
+  <data name="Export_RtzDescription" xml:space="preserve">
+    <value>IEC 61174 route exchange</value>
+  </data>
+  <data name="Export_RtzAudience" xml:space="preserve">
+    <value>For ECDIS and route planning tools.</value>
+  </data>
+  <data name="Export_RtzLeavesOutFormat" xml:space="preserve">
+    <value>RTZ has no fields for {0}. They stay in SoundCharts.</value>
+  </data>
+  <data name="Export_RtzFieldSquat" xml:space="preserve">
+    <value>squat</value>
+  </data>
+  <data name="Export_RtzFieldDescription" xml:space="preserve">
+    <value>the description</value>
+  </data>
+  <data name="Export_RtzFieldPorts" xml:space="preserve">
+    <value>port IDs</value>
+  </data>
+  <data name="Export_RtzFieldVessel" xml:space="preserve">
+    <value>the vessel's call sign, length and beam</value>
+  </data>
+  <data name="Export_RtzFieldVesselNumbers" xml:space="preserve">
+    <value>an MMSI or IMO number that isn't all digits</value>
+  </data>
+  <data name="Export_RtzFieldChannelLimits" xml:space="preserve">
+    <value>channel limits</value>
+  </data>
+  <data name="Export_RtzFieldWaterSpeeds" xml:space="preserve">
+    <value>speed-through-water limits</value>
+  </data>
+  <data name="Export_RtzFieldSafetyMargin" xml:space="preserve">
+    <value>safety margins</value>
+  </data>
+  <data name="Export_RtzFieldFixed" xml:space="preserve">
+    <value>fixed waypoints</value>
+  </data>
+  <data name="Export_RtzFieldIdentity" xml:space="preserve">
+    <value>the route ID, edition and previous-route reference</value>
+  </data>
+  <data name="Export_RtzNoS421Content" xml:space="preserve">
+    <value>The S-421 file's action points, other schedules and extensions aren't written to RTZ.</value>
+  </data>
+  <data name="Export_S421NoRtzContent" xml:space="preserve">
+    <value>The RTZ file's other schedules, schedule details and extensions aren't written to S-421.</value>
+  </data>
+  <data name="Copy_RtzKeepsInfo" xml:space="preserve">
+    <value>Name, author and validity → route info</value>
+  </data>
+  <data name="Copy_RtzKeepsLegEnvelope" xml:space="preserve">
+    <value>Safety contour and depth, speed limits and notes on legs</value>
+  </data>
+  <data name="Copy_RtzNotKeptTrim" xml:space="preserve">
+    <value>Draught forward and aft on 1 leg: the copy's draft is the deeper one (written back while it's unchanged)</value>
+  </data>
+  <data name="Copy_RtzNotKeptTrimFormat" xml:space="preserve">
+    <value>Draught forward and aft on {0} legs: the copy's draft is the deeper one (written back while it's unchanged)</value>
+  </data>
+  <data name="Copy_RtzNotKeptLegDetails" xml:space="preserve">
+    <value>Masthead height, reporting information and ETA notes on 1 leg (kept and written back on export)</value>
+  </data>
+  <data name="Copy_RtzNotKeptLegDetailsFormat" xml:space="preserve">
+    <value>Masthead height, reporting information and ETA notes on {0} legs (kept and written back on export)</value>
+  </data>
+  <data name="Copy_RtzNotKeptScheduleDetails" xml:space="preserve">
+    <value>Time windows, stays, weather and fuel in the schedule (kept and written back on export)</value>
+  </data>
+  <data name="Copy_RtzNotKeptVesselDetails" xml:space="preserve">
+    <value>Route status and vessel details such as voyage and displacement (kept and written back on export)</value>
+  </data>
+  <data name="Copy_RtzNotKeptExtensionsFormat" xml:space="preserve">
+    <value>Extensions or unknown attributes on {0} elements (kept and written back on export)</value>
+  </data>
+  <data name="CopyDialog_IdentityFromFileFormat" xml:space="preserve">
+    <value>New route · copied from {0}</value>
+  </data>
+  <data name="ExportDialog_IdentityKeptFileFormat" xml:space="preserve">
+    <value>Kept as received in {0}</value>
+  </data>
 </root>

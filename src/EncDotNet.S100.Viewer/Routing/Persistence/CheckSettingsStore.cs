@@ -8,6 +8,8 @@ namespace EncDotNet.S100.Viewer.Routing.Persistence;
 /// kept locally by <see cref="RouteSource.CheckSettingsKey"/> (route ID and
 /// edition) in <c>check-settings.json</c>, so reopening a received route
 /// restores them and a newer edition starts again from its file's values.
+/// The file also lists the route files open without a dataset (RTZ, #961;
+/// handoff F8), which reopen after a restart.
 /// </summary>
 /// <remarks>
 /// Like <see cref="RouteStore"/>, loading is tolerant: a missing or malformed
@@ -22,6 +24,7 @@ internal sealed partial class CheckSettingsStore
     });
 
     private readonly Dictionary<string, RouteCheckSettings> _entries = new(StringComparer.Ordinal);
+    private List<string> _openFiles = [];
     private readonly string? _path;
 
     /// <summary>Creates a store backed by <paramref name="path"/>, or in memory only when it's <c>null</c>.</summary>
@@ -52,10 +55,27 @@ internal sealed partial class CheckSettingsStore
         return true;
     }
 
+    /// <summary>The route files open without a dataset (RTZ), in the order they were opened.</summary>
+    public IReadOnlyList<string> OpenFiles => _openFiles;
+
+    /// <summary>Replaces the list of route files open without a dataset.</summary>
+    /// <param name="paths">The files, in order.</param>
+    /// <returns><c>true</c> when the list changed.</returns>
+    public bool SetOpenFiles(IEnumerable<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        var list = paths.ToList();
+        if (list.SequenceEqual(_openFiles, StringComparer.Ordinal))
+            return false;
+        _openFiles = list;
+        return true;
+    }
+
     /// <summary>Loads the file, replacing what the store holds. Failures leave it empty.</summary>
     public void Load()
     {
         _entries.Clear();
+        _openFiles = [];
         if (_path is null || !File.Exists(_path))
             return;
         try
@@ -75,10 +95,12 @@ internal sealed partial class CheckSettingsStore
                     Departure = entry.Departure,
                 };
             }
+            _openFiles = document.OpenFiles?.Where(p => !string.IsNullOrEmpty(p)).ToList() ?? [];
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             _entries.Clear();
+            _openFiles = [];
         }
     }
 
@@ -100,6 +122,7 @@ internal sealed partial class CheckSettingsStore
                     Departure = e.Value.Departure,
                 })
                 .ToList(),
+            OpenFiles = _openFiles.Count > 0 ? _openFiles.ToList() : null,
         };
         try
         {
@@ -134,6 +157,9 @@ internal sealed class CheckSettingsDocument
 
     /// <summary>One entry per received route (route ID + edition).</summary>
     public List<CheckSettingsEntry> Entries { get; set; } = new();
+
+    /// <summary>Route files open without a dataset (RTZ), reopened at startup; absent when none.</summary>
+    public List<string>? OpenFiles { get; set; }
 }
 
 /// <summary>One received route's check settings on disk.</summary>

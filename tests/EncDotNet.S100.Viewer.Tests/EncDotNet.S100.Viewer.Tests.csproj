@@ -49,6 +49,7 @@
     <Content Include="..\datasets\S125\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S125\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S128\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S421\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S421\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\RTZ\*.rtz" CopyToOutputDirectory="PreserveNewest" Link="TestData\RTZ\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S124\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S131\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S131\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S104\*.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\S104\%(Filename)%(Extension)" />

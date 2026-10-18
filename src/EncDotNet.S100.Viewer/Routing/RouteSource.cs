@@ -35,6 +35,9 @@ public static class RouteSourceFormats
 {
     /// <summary>IHO S-421 route plan (IEC 63173-1).</summary>
     public const string S421 = "S-421";
+
+    /// <summary>IEC 61174 Annex S route exchange (RTZ). RTZ gives a route no ID or edition.</summary>
+    public const string Rtz = "RTZ";
 }
 
 /// <summary>

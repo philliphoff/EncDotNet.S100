@@ -77,10 +77,10 @@ public sealed partial class S421RouteFormat : IRouteFormat
         keeps.Add(Strings.Copy_KeepsGeometry);
         if (received.Legs.Any(HasEnvelope))
             keeps.Add(Strings.Copy_KeepsLegEnvelope);
-        AddPassage(keeps, received, Strings.Copy_FieldCrossTrack, RoutePassageField.PortCrossTrack, v => PassageFormatting.Format(v, PassageQuantity.Distance, Pipelines.DepthUnit.Metres));
-        AddPassage(keeps, received, Strings.Copy_FieldSpeeds, RoutePassageField.Speed, v => PassageFormatting.Format(v, PassageQuantity.Speed, Pipelines.DepthUnit.Metres));
-        AddPassage(keeps, received, Strings.Copy_FieldDraft, RoutePassageField.Draft, v => PassageFormatting.Format(v, PassageQuantity.Depth, Pipelines.DepthUnit.Metres));
-        AddPassage(keeps, received, Strings.Copy_FieldUkc, RoutePassageField.RequiredUkc, v => PassageFormatting.Format(v, PassageQuantity.Depth, Pipelines.DepthUnit.Metres));
+        RouteCopyLists.AddPassage(keeps, received, Strings.Copy_FieldCrossTrack, RoutePassageField.PortCrossTrack, v => PassageFormatting.Format(v, PassageQuantity.Distance, Pipelines.DepthUnit.Metres));
+        RouteCopyLists.AddPassage(keeps, received, Strings.Copy_FieldSpeeds, RoutePassageField.Speed, v => PassageFormatting.Format(v, PassageQuantity.Speed, Pipelines.DepthUnit.Metres));
+        RouteCopyLists.AddPassage(keeps, received, Strings.Copy_FieldDraft, RoutePassageField.Draft, v => PassageFormatting.Format(v, PassageQuantity.Depth, Pipelines.DepthUnit.Metres));
+        RouteCopyLists.AddPassage(keeps, received, Strings.Copy_FieldUkc, RoutePassageField.RequiredUkc, v => PassageFormatting.Format(v, PassageQuantity.Depth, Pipelines.DepthUnit.Metres));
         if (received.Passage.Departure is { } departure)
             keeps.Add(string.Format(culture, Strings.Copy_KeepsDepartureFormat, departure.UtcDateTime.ToString("g", culture) + " UTC"));
         if (received.Info.Vessel is { } vessel && (vessel.Name ?? vessel.Mmsi ?? vessel.Imo) is { } vesselName)
@@ -130,7 +130,9 @@ public sealed partial class S421RouteFormat : IRouteFormat
         var notes = new List<string>();
         if (options.IncludeCheckSettings && route.Passage.SquatMeters is not null)
             notes.Add(Strings.Export_S421NoSquat);
-        if (route.HasStalePreservedSchedules && !route.KeepStalePreservedSchedules)
+        if (route.Preserved?.Model is EncDotNet.S100.Routes.Rtz.RtzRoute)
+            notes.Add(Strings.Export_S421NoRtzContent);
+        if (route.Preserved?.Model is S421Route && route.HasStalePreservedSchedules && !route.KeepStalePreservedSchedules)
             notes.Add(route.Preserved!.ScheduleCount == 1
                 ? Strings.Export_StaleScheduleDropped
                 : string.Format(CultureInfo.CurrentCulture, Strings.Export_StaleSchedulesDroppedFormat, route.Preserved.ScheduleCount));
@@ -181,29 +183,6 @@ public sealed partial class S421RouteFormat : IRouteFormat
             || leg.SpeedOverGroundMinKnots is not null || leg.SpeedOverGroundMaxKnots is not null
             || leg.SpeedThroughWaterMinKnots is not null || leg.SpeedThroughWaterMaxKnots is not null
             || leg.Note is not null;
-
-    // "Speeds → Passage 12 kn, 2 leg overrides", or with no shared value
-    // "Speeds → 9 leg overrides"; nothing when the file has none.
-    private static void AddPassage(List<string> keeps, Route route, string label, RoutePassageField field, Func<double, string> format)
-    {
-        var overrides = Enumerable.Range(0, route.Legs.Count).Count(i => route.IsLegOverridden(i, field));
-        var culture = CultureInfo.CurrentCulture;
-        if (route.Passage.Get(field) is { } value)
-        {
-            keeps.Add(overrides switch
-            {
-                0 => string.Format(culture, Strings.Copy_KeepsPassageFormat, label, format(value)),
-                1 => string.Format(culture, Strings.Copy_KeepsPassageOverrideFormat, label, format(value)),
-                _ => string.Format(culture, Strings.Copy_KeepsPassageOverridesFormat, label, format(value), overrides),
-            });
-        }
-        else if (overrides > 0)
-        {
-            keeps.Add(overrides == 1
-                ? string.Format(culture, Strings.Copy_KeepsOverrideFormat, label)
-                : string.Format(culture, Strings.Copy_KeepsOverridesFormat, label, overrides));
-        }
-    }
 
     private static string ScheduleName(S421Schedule schedule, int index)
         => schedule.Name ?? string.Format(CultureInfo.CurrentCulture, Strings.Copy_ScheduleUnnamedFormat, schedule.ScheduleNumber ?? index + 1);

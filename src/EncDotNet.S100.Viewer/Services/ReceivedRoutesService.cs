@@ -39,6 +39,9 @@ namespace EncDotNet.S100.Viewer.Services;
 /// route closes its dataset.</item>
 /// <item>The route's local check settings are kept in
 /// <see cref="CheckSettingsStore"/> by route ID and edition.</item>
+/// <item>Route files read without a dataset (RTZ) are listed in the same
+/// store and reopened after a restart while the file still exists (F8);
+/// see <see cref="TakeFilesToReopen"/>.</item>
 /// </list>
 /// Everything runs on the UI thread, where the loader raises its events.
 /// </remarks>
@@ -67,6 +70,7 @@ internal sealed class ReceivedRoutesService
 
     private readonly Dictionary<Route, DatasetEntry> _datasets = new();
     private readonly HashSet<Route> _fileRoutes = [];
+    private IReadOnlyList<string>? _filesToReopen;
     private bool _syncing;
 
     /// <summary>Creates the service and starts watching the loader and the routes.</summary>
@@ -95,12 +99,36 @@ internal sealed class ReceivedRoutesService
         _notifications = notifications;
         _follow = follow;
         _read = read ?? ReadFromLoader;
+        _filesToReopen = _checkSettings.OpenFiles.Count > 0 ? _checkSettings.OpenFiles.ToList() : null;
 
         _loader.DatasetLoaded += OnDatasetLoaded;
         _loader.DatasetRemoved += OnDatasetRemoved;
         _routes.Routes.Changed += (_, _) => OnRoutesChanged();
         _routes.CheckModeChanged += (_, _) => SyncAllVisibility();
     }
+
+    /// <summary>
+    /// The route files without a dataset that were open when the viewer last
+    /// closed, once: until they're taken the store keeps listing them, so a
+    /// route change before they reopen doesn't forget them.
+    /// </summary>
+    /// <returns>The files, in the order they were opened.</returns>
+    public IReadOnlyList<string> TakeFilesToReopen()
+    {
+        var files = _filesToReopen ?? [];
+        _filesToReopen = null;
+        return files;
+    }
+
+    /// <summary>Writes the list of open route files now (after reopening them).</summary>
+    public void SaveOpenFiles()
+    {
+        if (_filesToReopen is null && _checkSettings.SetOpenFiles(OpenFilePaths()))
+            _checkSettings.Save();
+    }
+
+    private IEnumerable<string> OpenFilePaths()
+        => _routes.Routes.Routes.Where(_fileRoutes.Contains).Select(r => r.Source!.FilePath);
 
     /// <summary>The dataset a received route belongs to, or <c>null</c>.</summary>
     /// <param name="route">A route.</param>
@@ -178,7 +206,7 @@ internal sealed class ReceivedRoutesService
 
     /// <summary>
     /// Adds a received route read straight from a file with no dataset (a
-    /// format without its own portrayal, such as RTZ in #961), applying the
+    /// format without its own portrayal, such as RTZ), applying the
     /// same duplicate and edition rules as a dataset's route.
     /// </summary>
     /// <param name="route">The received route.</param>
@@ -285,6 +313,8 @@ internal sealed class ReceivedRoutesService
             saved |= _checkSettings.Set(route.Source!.CheckSettingsKey, route.LocalCheckSettings);
             SyncVisibility(route);
         }
+        if (_filesToReopen is null)
+            saved |= _checkSettings.SetOpenFiles(OpenFilePaths());
         if (saved)
             _checkSettings.Save();
     }

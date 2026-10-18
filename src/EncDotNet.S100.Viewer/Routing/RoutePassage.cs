@@ -25,28 +25,47 @@ namespace EncDotNet.S100.Viewer.Routing;
 /// </para>
 /// <para>
 /// Mapping to exchange formats, for the S-421 and RTZ import/export work
-/// (#390, #391, #888). "Leg" means <c>RouteWaypointLeg</c> in S-421 and
-/// <c>&lt;leg&gt;</c> in RTZ 1.x. Route-level values have no route-level
-/// slot in either format, so on export they are written to every leg (or
-/// schedule element) as its effective value, and on import a value shared by
-/// every leg can be lifted back into the passage.
+/// (#390, #391, #888; <see cref="RouteS421Mapping"/>, <see cref="RouteRtzMapping"/>).
+/// "Leg" means <c>RouteWaypointLeg</c> in S-421 and <c>&lt;leg&gt;</c> in
+/// RTZ 1.x. In RTZ a waypoint's <c>leg</c> and schedule element describe the
+/// leg directed to it, so leg <c>i</c> lives on waypoint <c>i + 1</c>.
+/// Route-level values have no route-level slot in either format, so on
+/// export they are written to every leg (or schedule element) as its
+/// effective value, and on import a value shared by every leg can be lifted
+/// back into the passage.
 /// </para>
 /// <code>
-/// | Passage value            | Leg override (RouteLeg)                 | S-421                                            | RTZ 1.x                                   |
-/// |--------------------------|-----------------------------------------|--------------------------------------------------|-------------------------------------------|
-/// | DraftMeters              | DraftMeters                             | routeWaypointLegDraft                            | leg/@draughtForward, leg/@draughtAft      |
-/// | SquatMeters              | (none; vessel allowance)                | (none)                                           | (none)                                    |
-/// | SpeedKnots (SOG)         | PlannedSpeedKnots                       | RouteScheduleElement routeScheduleElementPlanSOG | scheduleElement/@speed                    |
-/// | Departure                | (none; route-level)                     | first RouteScheduleElement routeScheduleElementETD | first scheduleElement/@etd              |
-/// | RequiredUkcMeters        | StaticUnderKeelClearanceMeters          | routeWaypointLegStaticUKC                        | leg/@staticUKC                            |
-/// | PortCrossTrackMeters     | PortCrossTrackDistanceLimitMeters       | routeWaypointLegPortXTDL                         | leg/@portsideXTD (NM in RTZ)              |
-/// | StarboardCrossTrackMeters| StarboardCrossTrackDistanceLimitMeters  | routeWaypointLegStarboardXTDL                    | leg/@starboardXTD (NM in RTZ)             |
-/// | (RouteInfo.Vessel)       | (none)                                  | routeInfoVessel*                                 | routeInfo/@vesselName, @vesselMMSI, …     |
+/// | Passage value            | Leg override (RouteLeg)                 | S-421                                            | RTZ 1.0, 1.1, 1.2                                          |
+/// |--------------------------|-----------------------------------------|--------------------------------------------------|------------------------------------------------------------|
+/// | DraftMeters              | DraftMeters                             | routeWaypointLegDraft                            | leg/@draughtForward, @draughtAft (deeper one on import)    |
+/// | SquatMeters              | (none; vessel allowance)                | (none)                                           | (none)                                                     |
+/// | SpeedKnots (SOG)         | PlannedSpeedKnots                       | RouteScheduleElement routeScheduleElementPlanSOG | scheduleElement/@speed of the leg's end waypoint           |
+/// | Departure                | (none; route-level)                     | first RouteScheduleElement routeScheduleElementETD | first waypoint's scheduleElement/@etd                    |
+/// | RequiredUkcMeters        | StaticUnderKeelClearanceMeters          | routeWaypointLegStaticUKC                        | leg/@staticUKC                                             |
+/// | PortCrossTrackMeters     | PortCrossTrackDistanceLimitMeters       | routeWaypointLegPortXTDL                         | leg/@portsideXTD (NM in RTZ)                               |
+/// | StarboardCrossTrackMeters| StarboardCrossTrackDistanceLimitMeters  | routeWaypointLegStarboardXTDL                    | leg/@starboardXTD (NM in RTZ)                              |
+/// | (RouteInfo.Vessel)       | (none)                                  | routeInfoVessel*                                 | routeInfo/@vesselName, @vesselMMSI, @vesselIMO             |
 /// </code>
 /// <para>
-/// Per-leg S-421 values that are not passage values (channel limits, safety
-/// contour and depth, SOG/STW limits, dynamic UKC, safety margin, note) stay
-/// plain leg attributes: they round-trip but don't inherit.
+/// RTZ schedules: import reads the first calculated schedule, else the first
+/// manual one; within it the calculated table wins over the manual one, and
+/// a leg with no <c>speed</c> takes the speed its ETD and ETA imply. Export
+/// writes a manual table (speeds and the departure) and, when every leg has
+/// a speed and there is a departure, a calculated table with each
+/// waypoint's ETA. A file's trim (different forward and aft draughts) is
+/// written back while the deeper draught is still the leg's draft;
+/// otherwise both are the draft.
+/// </para>
+/// <para>
+/// Per-leg values that are not passage values stay plain leg attributes:
+/// they round-trip but don't inherit. S-421 has channel limits, safety
+/// contour and depth, SOG/STW limits, dynamic UKC, safety margin and a note.
+/// RTZ has safety contour and depth (<c>@safetyContour</c>,
+/// <c>@safetyDepth</c>), SOG limits (<c>@speedMin</c>, <c>@speedMax</c>),
+/// dynamic UKC (<c>@dynamicUKC</c>), geometry (<c>@geometryType</c>
+/// Loxodrome / Orthodrome) and the note (<c>@legNote2</c>, local remarks),
+/// but no channel limits, STW limits or safety margin; the Export dialog
+/// lists the ones a route has.
 /// </para>
 /// </remarks>
 public sealed class RoutePassage

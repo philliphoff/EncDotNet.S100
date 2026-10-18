@@ -373,7 +373,7 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
         Assert.Same(first, h.Routes.Routes.ActiveRoute);
     }
 
-    /// <summary>A format with no dataset of its own, as RTZ will be (#961).</summary>
+    /// <summary>A format with no dataset of its own, like RTZ (#961).</summary>
     private sealed class FakeFormat : IRouteFormat
     {
         public string Name => "FAKE";
@@ -496,7 +496,7 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
         Assert.Null(written.Content);
         Assert.True(File.Exists(file));
 
-        Assert.True((await export.InvokeAsync(new ExportRouteRequest("RTZ"), ct)).TryGetError(out var unknown));
+        Assert.True((await export.InvokeAsync(new ExportRouteRequest("GPX"), ct)).TryGetError(out var unknown));
         Assert.IsType<Datasets.Pipelines.Query.InvalidArgument>(unknown);
         Assert.True((await export.InvokeAsync(new ExportRouteRequest("S-421", Version: "2.0"), ct)).TryGetError(out var version));
         Assert.IsType<Datasets.Pipelines.Query.InvalidArgument>(version);
@@ -577,6 +577,9 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
         var dialog = Assert.IsType<RouteExportDialogViewModel>(Assert.Single(dialogs.Shown));
         using var host = ViewHost.Show(new RouteExportDialogView { DataContext = dialog }, width: 540, height: 700);
 
+        // RTZ comes first (#961); choose S-421.
+        Assert.True(host.Find<RadioButton>("RouteExport.Format.Rtz").IsChecked);
+        host.Click(host.Find<RadioButton>("RouteExport.Format.S421"));
         Assert.True(host.Find<RadioButton>("RouteExport.Format.S421").IsChecked);
         Assert.False(host.Find<CheckBox>("RouteExport.IncludeCheckSettings").IsChecked);
         Assert.Contains("Route ID owned-1 · edition 1", host.Find<TextBlock>("RouteExport.Identity").Inlines!.Text, StringComparison.Ordinal);

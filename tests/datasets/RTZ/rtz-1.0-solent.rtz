@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic RTZ 1.0 test fixture, written by hand from the IEC 61174 Ed. 4.0 Annex S schema. Not for navigation.
+     acme:planId on routeInfo is deliberately outside the schema: readers keep unknown attributes. -->
+<route xmlns="http://www.cirm.org/RTZ/1/0" xmlns:acme="urn:example:acme" version="1.0">
+  <routeInfo routeName="Nab to Southampton" routeAuthor="Test Planner" routeStatus="Planned"
+             validityPeriodStart="2026-10-20T06:00:00Z" validityPeriodStop="2026-10-21T06:00:00Z"
+             vesselName="Synthetic Trader" vesselMMSI="235000001" vesselIMO="9000001" vesselVoyage="V-042"
+             vesselDisplacement="12000" acme:planId="P-7">
+    <extensions>
+      <acme:planner build="3.1">Bridge copy</acme:planner>
+    </extensions>
+  </routeInfo>
+  <waypoints>
+    <defaultWaypoint radius="0.3">
+      <leg starboardXTD="0.1" portsideXTD="0.1" geometryType="Loxodrome"/>
+    </defaultWaypoint>
+    <waypoint id="1" name="Nab Tower">
+      <position lat="50.66790" lon="-0.95170"/>
+    </waypoint>
+    <waypoint id="2" name="Bembridge" radius="0.5">
+      <position lat="50.71500" lon="-1.03000"/>
+      <leg starboardXTD="0.2" portsideXTD="0.15" safetyContour="10" safetyDepth="12" speedMax="14"
+           draughtForward="8.5" draughtAft="8.5" staticUKC="1.5" dynamicUKC="1.0" legNote2="Keep clear of the spit"/>
+    </waypoint>
+    <waypoint id="3" name="Calshot">
+      <position lat="50.81500" lon="-1.30000"/>
+      <leg draughtForward="8.5" draughtAft="8.5" staticUKC="1.5"/>
+    </waypoint>
+    <waypoint id="4" name="Southampton">
+      <position lat="50.89000" lon="-1.39000"/>
+      <leg draughtForward="8.5" draughtAft="8.5" staticUKC="1.5" speedMin="4"/>
+      <extensions>
+        <acme:berth side="port"/>
+      </extensions>
+    </waypoint>
+  </waypoints>
+  <schedules>
+    <schedule id="1" name="Planned">
+      <manual>
+        <sheduleElement waypointId="1" etd="2026-10-20T08:00:00Z" etdWindowBefore="00:30:00"/>
+        <sheduleElement waypointId="2" speed="12"/>
+        <sheduleElement waypointId="3" speed="12"/>
+        <sheduleElement waypointId="4" speed="8" Note="Pilot on board"/>
+      </manual>
+    </schedule>
+  </schedules>
+</route>

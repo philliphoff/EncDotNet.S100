@@ -1,7 +1,7 @@
 namespace EncDotNet.S100.Viewer.Routing.Exchange;
 
 /// <summary>
-/// One route exchange format (S-421 now, RTZ in #961): how to recognise a
+/// One route exchange format (RTZ or S-421): how to recognise a
 /// file, read it as a received route, describe what a copy keeps, and write a
 /// route (#960). Import route…, Copy to edit and Export… work only through
 /// this interface, so a new format plugs in by registering an implementation
@@ -188,8 +188,8 @@ public sealed class RouteFormatRegistry
         _formats = formats.ToList();
     }
 
-    /// <summary>The registry of the built-in formats (S-421; RTZ joins in #961).</summary>
-    public static RouteFormatRegistry Default { get; } = new([new S421RouteFormat()]);
+    /// <summary>The registry of the built-in formats: RTZ first (the Export dialog's default), then S-421.</summary>
+    public static RouteFormatRegistry Default { get; } = new([new RtzRouteFormat(), new S421RouteFormat()]);
 
     /// <summary>The formats.</summary>
     public IReadOnlyList<IRouteFormat> Formats => _formats;

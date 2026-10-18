@@ -68,7 +68,7 @@
                                     <TextBlock Text="{Binding Audience}" FontSize="11.5" Opacity="0.65" TextWrapping="Wrap" />
                                 </StackPanel>
                                 <ComboBox Grid.Column="1"
-                                          AutomationProperties.AutomationId="RouteExport.Version"
+                                          AutomationProperties.AutomationId="{Binding VersionAutomationId}"
                                           AutomationProperties.Name="{x:Static loc:Strings.ExportDialog_Version}"
                                           ItemsSource="{Binding Versions}"
                                           SelectedItem="{Binding SelectedVersion, Mode=TwoWay}"
