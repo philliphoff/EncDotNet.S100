@@ -1863,6 +1863,12 @@ internal static class Strings
     public static string Findings_GroupInfo => Get(nameof(Findings_GroupInfo));
     public static string Findings_TagClearance => Get(nameof(Findings_TagClearance));
     public static string Findings_TagRouteCheck => Get(nameof(Findings_TagRouteCheck));
+    public static string RouteCheck_CrossesLand => Get(nameof(RouteCheck_CrossesLand));
+    public static string RouteCheck_LandInCorridor => Get(nameof(RouteCheck_LandInCorridor));
+    public static string RouteCheck_CrossesDrying => Get(nameof(RouteCheck_CrossesDrying));
+    public static string RouteCheck_DryingInCorridor => Get(nameof(RouteCheck_DryingInCorridor));
+    public static string RouteCheck_OutsideChartCoverage => Get(nameof(RouteCheck_OutsideChartCoverage));
+    public static string RouteCheck_LengthFormat => Get(nameof(RouteCheck_LengthFormat));
     public static string Findings_TagS124 => Get(nameof(Findings_TagS124));
     public static string Findings_TagConfidence => Get(nameof(Findings_TagConfidence));
     public static string Findings_TagData => Get(nameof(Findings_TagData));

@@ -267,7 +267,10 @@ internal sealed class RouteFindingsService : IDisposable
         clearance,
         DepthUnit,
         TimeFormat,
-        _clock.GetUtcNow());
+        _clock.GetUtcNow())
+    {
+        CrossTrack = input.CrossTrack,
+    };
 
     // The check service raises Changed for cursor moves too; producers re-run
     // only when their inputs change (or a format does).

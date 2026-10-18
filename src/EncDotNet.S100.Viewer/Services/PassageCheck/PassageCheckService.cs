@@ -554,6 +554,13 @@ internal sealed class PassageCheckService : IDisposable
     /// <param name="HasDraft">Whether every leg has a draft, which the clearance check needs.</param>
     internal sealed record CheckInput(string RouteId, IReadOnlyList<PassageLeg> Legs, DateTimeOffset Departure, bool HasDraft)
     {
+        /// <summary>
+        /// Each leg's effective port and starboard cross-track limits in
+        /// metres (half-widths), or <c>null</c> where unset; the route checks
+        /// sweep the corridor between them.
+        /// </summary>
+        public IReadOnlyList<(double? Port, double? Starboard)> CrossTrack { get; init; } = [];
+
         public static CheckInput? From(RoutesService routes) =>
             routes.Routes.ActiveRoute is { } route ? For(route, routes.ViewTime.Current) : null;
 
@@ -565,14 +572,18 @@ internal sealed class PassageCheckService : IDisposable
 
             var legs = RouteEtas.ToPassageLegs(route);
             var named = new PassageLeg[legs.Count];
+            var crossTrack = new (double? Port, double? Starboard)[legs.Count];
             var hasDraft = true;
             for (var i = 0; i < legs.Count; i++)
             {
                 hasDraft &= route.GetEffectiveLegValue(i, RoutePassageField.Draft) is not null;
                 named[i] = legs[i] with { Name = $"{i + 1} → {i + 2}" };
+                crossTrack[i] = (
+                    route.GetEffectiveLegValue(i, RoutePassageField.PortCrossTrack),
+                    route.GetEffectiveLegValue(i, RoutePassageField.StarboardCrossTrack));
             }
 
-            return new CheckInput(route.Id, named, route.Passage.Departure ?? viewTime, hasDraft);
+            return new CheckInput(route.Id, named, route.Passage.Departure ?? viewTime, hasDraft) { CrossTrack = crossTrack };
         }
 
         public bool SameAs(CheckInput other) => Departure == other.Departure && SameLegs(other);
@@ -580,7 +591,8 @@ internal sealed class PassageCheckService : IDisposable
         /// <summary>Same route, legs and vessel values; the departure may differ.</summary>
         public bool SameLegs(CheckInput other)
         {
-            if (RouteId != other.RouteId || HasDraft != other.HasDraft || Legs.Count != other.Legs.Count)
+            if (RouteId != other.RouteId || HasDraft != other.HasDraft || Legs.Count != other.Legs.Count
+                || !CrossTrack.SequenceEqual(other.CrossTrack))
                 return false;
             for (var i = 0; i < Legs.Count; i++)
             {

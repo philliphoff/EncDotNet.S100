@@ -22,6 +22,7 @@ public sealed class McpServeCommandTests
         "await_library_idle",
         "close_all_datasets",
         "close_dataset",
+        "check_route",
         "count_features",
         "describe_feature",
         "describe_feature_type",

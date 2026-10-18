@@ -4910,6 +4910,24 @@
   <data name="Findings_TagRouteCheck" xml:space="preserve">
     <value>Route check</value>
   </data>
+  <data name="RouteCheck_CrossesLand" xml:space="preserve">
+    <value>Crosses land</value>
+  </data>
+  <data name="RouteCheck_LandInCorridor" xml:space="preserve">
+    <value>Land inside the cross-track limits</value>
+  </data>
+  <data name="RouteCheck_CrossesDrying" xml:space="preserve">
+    <value>Crosses drying ground</value>
+  </data>
+  <data name="RouteCheck_DryingInCorridor" xml:space="preserve">
+    <value>Drying ground inside the cross-track limits</value>
+  </data>
+  <data name="RouteCheck_OutsideChartCoverage" xml:space="preserve">
+    <value>Leaves chart coverage</value>
+  </data>
+  <data name="RouteCheck_LengthFormat" xml:space="preserve">
+    <value>{0:0.00} NM</value>
+  </data>
   <data name="Findings_TagS124" xml:space="preserve">
     <value>S-124</value>
   </data>

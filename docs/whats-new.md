@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Routes are checked against the chart.** With **Check passage** on,
+  SoundCharts' findings list shows where a route's track crosses land or
+  drying ground (Must review), where either reaches inside the leg's
+  cross-track limits, and where the route leaves the loaded charts (Check).
+  It runs with or without a draft, and again as you drag a waypoint. Where
+  cells overlap, only the finest one counts. The MCP tool `check_route`
+  returns the same findings for a route or a polyline. In the libraries,
+  `RouteCheckEngine` (`EncDotNet.S100.Navigation`) and
+  `RouteCheckDataSources` (`EncDotNet.S100.Datasets.Pipelines`) do the
+  check.
+
 - **See how fresh the navigational warnings are.** In SoundCharts'
   **Navigational warnings** panel, each group header names the SECOM service
   or feed the warnings came from and when it last answered ("AMSA · 07:40").

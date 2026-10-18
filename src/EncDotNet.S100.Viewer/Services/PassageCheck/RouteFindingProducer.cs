@@ -28,7 +28,15 @@ internal sealed record RouteFindingRequest(
     PassageCheckSnapshot? Clearance,
     DepthUnit DepthUnit,
     TimeFormat TimeFormat,
-    DateTimeOffset Now);
+    DateTimeOffset Now)
+{
+    /// <summary>
+    /// Each leg's effective port and starboard cross-track limits in metres
+    /// (half-widths: track to one edge), or <c>null</c> where unset. Empty
+    /// when the caller doesn't know them.
+    /// </summary>
+    public IReadOnlyList<(double? Port, double? Starboard)> CrossTrack { get; init; } = [];
+}
 
 /// <summary>
 /// One source of findings for a route's findings list (#953). The

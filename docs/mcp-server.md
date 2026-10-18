@@ -158,6 +158,7 @@ Both hosts provide these tools.
 | `sample_coverage` | No | Samples a depth, water level or current at a point from an S-102, S-104 or S-111 dataset. For S-104 and S-111, `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). |
 | `sample_coverage_along` | No | Samples a coverage at each vertex of a polyline, with the same time handling as `sample_coverage`. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
 | `get_passage_result` | No | Checks under-keel clearance along a passage. See [Check a passage's clearance](#check-a-passages-clearance). |
+| `check_route` | No | Checks a route against the loaded charts: land, drying ground and chart coverage. Needs no draft. See [Check a route against the chart](#check-a-route-against-the-chart). |
 
 ### Session tools
 
@@ -294,7 +295,7 @@ revert a drag on the map and Ctrl+Z (⌘Z) can revert a tool's edit.
 | `set_passage_cursor` | Yes | Moves the Check passage cursor and the ghost vessel to `distanceNm` along the checked route, as hovering a leg row does, or hides them when `distanceNm` is omitted. Returns the state, including the cursor's position and ETA. |
 | `get_clearance_state` | No | Returns what the **Clearance** tab shows while Check passage is on: the profile's `axis` (`distance` or `time`), `canShowTime`, `sourcesOpen`, and the readout at the cursor (`readoutSample`, the sample index in `get_passage_result`; `readoutPosition`, `readoutLeg`, `depth` and `depthSource` with its cell, `waterLevel` and `waterLevelSource` with its station or grid and time step, `draftSquat`, `ukc` and `state`, such as "Meets your settings · lower confidence"). The readout's `band` (`meets_settings`, `tight`, `below_setting` or `no_data`) and `confidence` reasons are reported separately. It also returns the `sources` groups, and the `departureBand`: the `departure` beside it, the `knobFraction` (0 to 1 across the band), the `startLabel`, `middleLabel` and `endLabel` ("12:00 · S-104 ends"), `stale`, and the `segments`, each a run of departures with its `kind` (`meets_settings`, `below_setting`, `arrival_after_data_ends` or `no_data`). Without a cursor, the readout describes the minimum. Open the tab with `set_panel` `Clearance`. |
 | `set_clearance_view` | Yes | Sets the Clearance profile's `axis` (`distance` or `time`; time needs ETAs) and opens or closes Sources (`sourcesOpen`), as the tab's header controls do. The cursor stays on the same sample. Returns what `get_clearance_state` returns. |
-| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check passage mode: `count`, the counts per group (`mustReview`, `check`, `info`), the `summary` (such as "2 items to review", the verdict card's title without a draft), `stale` while a check is recomputing, `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, `data.s111_forecast_expired`), its `group` (`must_review`, `check` or `info`), its `source` (`clearance`, `route_check`, `s124`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), and a `feature` reference (dataset and feature id) when one is behind it. Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs at least two waypoints; without a draft there are no clearance findings. |
+| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check passage mode: `count`, the counts per group (`mustReview`, `check`, `info`), the `summary` (such as "2 items to review", the verdict card's title without a draft), `stale` while a check is recomputing, `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, `data.s111_forecast_expired`, or the route checks' `route_check.crosses_land`, `route_check.crosses_drying`, `route_check.land_in_corridor`, `route_check.drying_in_corridor` and `data.outside_chart_coverage`; see `check_route`), its `group` (`must_review`, `check` or `info`), its `source` (`clearance`, `route_check`, `s124`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), and a `feature` reference (dataset and feature id) when one is behind it. Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs at least two waypoints; without a draft there are no clearance findings, but the route checks still run. |
 | `select_finding` | Yes | Selects the finding `id` in the checked route's list, as clicking its row does: the map zooms to it (unless `zoom: false`) and outlines it dashed in its tone with the chip "Zoomed to finding · leg 6 → 7 · 1:31 300", and the profile cursor and ghost vessel move to it. Omit `id` to clear the selection. Needs Check passage on. Returns what `get_findings` returns. |
 
 A typical sequence:
@@ -326,6 +327,46 @@ do.
 | `set_test_clock` | Yes | Moves (`now`, or `advance` such as `+1h`), freezes (`freeze`) or resets (`reset`) the app's notion of now, so forecasts age, runs expire and a Live Timeline advances without waiting. The Timeline and the Library's expiry check react at once. |
 | `ui_tree` | No | Lists the UI as an accessibility client sees it: one root per window and open popup (`kind` `window` or `popup`, such as context menus and flyouts), each a tree of elements. Each element has a `ref` (such as `e12`, valid while the element stays on screen), `id` (its automation id, such as `Datasets.DatasetsTab`, `Library.Tree` or `ActivityBar.Datasets`; see the convention in the [viewer tests README](https://github.com/philliphoff/EncDotNet.S100/blob/main/tests/EncDotNet.S100.Viewer.Tests/README.md)), `role` (`button`, `listItem`, `tabItem`, `treeItem`, `edit`, `checkBox`, `menuItem` and so on), `name`, `text` (a row's visible text, or an icon button's tooltip, when it has no name), `enabled`, `focused`, `patterns` (the actions it supports: `invoke`, `toggle`, `value`, `rangeValue`, `selectionItem`, `expandCollapse`) with their state (`toggle`, `value`, `selected`, `expanded`), and `bounds` in its window. `filter` `interactive` (default) keeps elements with an id or an action and lifts the children of the rest; `all` lists everything. `root` (an id or ref) lists one subtree. `depth` (default 30) and `maxNodes` (default 400; `truncated` says when it cut) limit the size. The map is one element; use the map tools for chart content. |
 | `ui_invoke`, `ui_set_value`, `ui_toggle`, `ui_select`, `ui_expand`, `ui_collapse`, `ui_focus`, `ui_context_menu` | Yes | Act on one element as the user does: click a button or menu item (`ui_invoke`); replace a text box's text or set a slider (`ui_set_value`, `value`); flip a check box or toggle button, or set it with `state` `on` or `off` (`ui_toggle`); select a list row, tab, tree node or radio button (`ui_select`); expand or collapse a tree node, expander, combo box or submenu; move keyboard focus (`ui_focus`; leaving a text box runs its lost-focus behaviour, so an in-place rename commits); or open a context menu as a right-click does, selecting the row or node first (`ui_context_menu`). Target an element by `id` or `ref`, not both. An id repeated in every row (such as `Datasets.Row.Remove`) is ambiguous alone: scope it with `within` (the row's ref or an ancestor's id), or use the ref. Returns the element afterwards. Errors: `ui_element_not_found` (with similar ids on screen), `ui_element_ambiguous` (each match's `ref` and row text), `ui_element_disabled` and `ui_action_not_supported` (with the element's `patterns`). A closing dialog or popup animates briefly after the call returns, so read `ui_tree` again before relying on it being gone. |
+
+## Check a route against the chart
+
+`check_route` checks a route against the loaded S-101 cells (and S-401, and
+translated S-57) with the same engine as SoundCharts' findings list
+(`RouteCheckEngine` in `EncDotNet.S100.Navigation`). It needs no draft. The
+result isn't for navigation; show its `disclaimer` once, with the findings.
+
+Pass the route in one of two ways:
+
+- **A polyline.** `polyline` is `{"vertices":[[lat,lon],...]}`, and each pair
+  of consecutive vertices is a leg. Both hosts accept this form.
+- **A route.** In SoundCharts, pass `routeId`, or neither `routeId` nor
+  `polyline` for the active route. Each leg uses its port and starboard
+  cross-track limits (XTD).
+
+`corridorHalfWidthMeters` overrides every leg's limits. It's a **half-width**:
+how far the corridor reaches to port, and to starboard, of the track, so the
+corridor is twice as wide. Any side without a limit uses 50 m.
+
+| Code | Group | When |
+|---|---|---|
+| `route_check.crosses_land` | `must_review` | The track crosses a `LandArea`, or a `Coastline` where no land area is charted. |
+| `route_check.crosses_drying` | `must_review` | The track crosses a `DepthArea` that dries (DRVAL1 below the datum). |
+| `route_check.land_in_corridor` | `check` | Land reaches inside the cross-track limits, but the track doesn't cross it. |
+| `route_check.drying_in_corridor` | `check` | The same, for drying ground. |
+| `data.outside_chart_coverage` | `check` | The track leaves the `DataCoverage` of every loaded cell (source `data`). |
+
+Where cells overlap, only the finest cell at a place counts, so a coarse
+cell's generalised land doesn't fire where a finer cell charts water.
+Crossings of the track are exact; ground that only reaches into the corridor
+is found at cross-sections every 10 m.
+
+The result has the `findings` (with `id`, `code`, `group`, `source`, `title`,
+`meta`, `legIndex`, `distanceNm`, a `location` and the `feature` behind it), a
+`summary` with the counts per group and its `text` ("2 to review", "1 to
+check" or "No findings for your settings"), each leg's corridor (`legs`, with
+`portMeters` and `starboardMeters`), the `datasets` it read and the
+`disclaimer`. In SoundCharts, `get_findings` shows the same findings in the
+route's list.
 
 ## Check a passage's clearance
 
