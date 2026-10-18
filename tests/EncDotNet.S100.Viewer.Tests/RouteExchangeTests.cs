@@ -1,7 +1,5 @@
 using System.Text;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Headless.XUnit;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
