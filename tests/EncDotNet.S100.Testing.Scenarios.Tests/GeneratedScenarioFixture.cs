@@ -42,6 +42,9 @@ public sealed class SpitAcrossScalesFixture() : GeneratedScenarioFixture(Synthet
 /// <summary>"Spit across scales" with an S-102 surface that declares no vertical datum (#939).</summary>
 public sealed class SpitWithoutS102DatumFixture() : GeneratedScenarioFixture(SyntheticScenarios.SpitAcrossScales(declareS102VerticalDatum: false));
 
+/// <summary>"Spit crossing" with the default seed.</summary>
+public sealed class SpitCrossingFixture() : GeneratedScenarioFixture(SyntheticScenarios.SpitCrossing());
+
 /// <summary>"Approach with tide window" with the default seed.</summary>
 public sealed class ApproachWithTideWindowFixture() : GeneratedScenarioFixture(SyntheticScenarios.ApproachWithTideWindow());
 
@@ -80,6 +83,10 @@ public static class ScenarioLoading
     /// <summary>The loaded dataset whose catalog id is <paramref name="id"/>.</summary>
     public static LoadedDataset Dataset(FileDatasetCatalog catalog, string id) =>
         catalog.Datasets.Single(d => d.Id.Value == id);
+
+    /// <summary>The route-check sources over the scenario's datasets.</summary>
+    public static RouteCheckDataSources RouteCheckSources(GeneratedScenario scenario) =>
+        RouteCheckDataSources.FromDatasets(Catalog(scenario).Datasets);
 
     /// <summary>The passage-check sources over the scenario's datasets.</summary>
     public static PassageDataSources Sources(GeneratedScenario scenario) =>

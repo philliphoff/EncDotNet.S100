@@ -21,6 +21,7 @@ public sealed class ExportScenarioTests
         {
             SyntheticScenarios.SpitAcrossScales(),
             SyntheticScenarios.SpitAcrossScales(declareS102VerticalDatum: false),
+            SyntheticScenarios.SpitCrossing(),
             SyntheticScenarios.ApproachWithTideWindow(),
             SyntheticScenarios.WarningsOnRoute(),
             SyntheticScenarios.WarningsOnRoute(s124Edition: 1),

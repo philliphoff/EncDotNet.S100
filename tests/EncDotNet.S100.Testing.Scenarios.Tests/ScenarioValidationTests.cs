@@ -49,6 +49,9 @@ public abstract class ScenarioValidationTests(GeneratedScenarioFixture fixture)
 public sealed class SpitAcrossScalesValidationTests(SpitAcrossScalesFixture fixture)
     : ScenarioValidationTests(fixture), IClassFixture<SpitAcrossScalesFixture>;
 
+public sealed class SpitCrossingValidationTests(SpitCrossingFixture fixture)
+    : ScenarioValidationTests(fixture), IClassFixture<SpitCrossingFixture>;
+
 public sealed class ApproachWithTideWindowValidationTests(ApproachWithTideWindowFixture fixture)
     : ScenarioValidationTests(fixture), IClassFixture<ApproachWithTideWindowFixture>;
 

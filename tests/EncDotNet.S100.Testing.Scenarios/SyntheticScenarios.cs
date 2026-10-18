@@ -78,6 +78,67 @@ public static class SyntheticScenarios
     }
 
     /// <summary>
+    /// "Spit crossing" (#954, for #888's route checks): "Spit across scales"
+    /// with three S-421 routes the route check is tested on, and the world's
+    /// land and drying ground (<see cref="GroundTruth"/>) as the oracle.
+    /// </summary>
+    /// <remarks>
+    /// <para>Every route has 100 m cross-track limits each side (<see cref="S421RouteBuilder.CrossTrackLimitMeters"/>).</para>
+    /// <list type="table">
+    /// <listheader><term>Route</term><description>What it crosses</description></listheader>
+    /// <item><term><c>421ZZ00SPITX</c></term><description>
+    /// South from <c>spit-approach</c> to <c>spit-west</c> in open water, east
+    /// along <c>y = 1600 m</c> across the drying spit (it dries within about
+    /// 90 m of <c>x = 3000 m</c>), then south from <c>spit-east</c> to
+    /// <c>ashore</c>, over the drying foreshore (from about <c>y = 1240 m</c>)
+    /// and onto the mainland (from about <c>y = 720 m</c>). It runs aground on
+    /// purpose. Both cells cover it; the harbour cell is the finer, and the
+    /// coastal cell's generalised land reaches about 150 m further north.
+    /// </description></item>
+    /// <item><term><c>421ZZ00CHAN</c></term><description>East along the dredged channel (<c>y = 3050 m</c>): nothing.</description></item>
+    /// <item><term><c>421ZZ00OFFC</c></term><description>
+    /// East from <c>east-berth</c> along the channel's line to <c>off-chart</c>
+    /// (<c>x = 24 000 m</c>): it leaves the coastal cell, the last chart, at
+    /// <c>x = 18 000 m</c>.
+    /// </description></item>
+    /// </list>
+    /// </remarks>
+    /// <param name="seed">The world's seed.</param>
+    /// <returns>The scenario.</returns>
+    public static ScenarioDefinition SpitCrossing(ulong seed = DefaultSeed)
+    {
+        var spit = SpitAcrossScales(seed);
+        var places = new Dictionary<string, (double X, double Y)>(spit.Places)
+        {
+            ["spit-approach"] = (2400, 2600),
+            ["spit-west"] = (2400, 1600),
+            ["spit-east"] = (3600, 1600),
+            ["ashore"] = (3600, 400),
+            ["west-entrance"] = (300, 3050),
+            ["east-berth"] = (5700, 3050),
+            ["off-chart"] = (24000, 3050),
+        };
+        var passage = new PassageValues(DraftMeters: 2.0, SquatMeters: 0.1, SpeedKnots: 6, RequiredUkcMeters: 0.5);
+        var departure = new DateTime(2026, 3, 1, 6, 0, 0, DateTimeKind.Utc);
+        S421RouteSpec[] routes =
+        [
+            new("421ZZ00SPITX", "ZZ00-SPIT-X", "Across the spit and ashore (SYNTHETIC, runs aground on purpose)",
+                ["spit-approach", "spit-west", "spit-east", "ashore"], passage, departure),
+            new("421ZZ00CHAN", "ZZ00-CHANNEL-2", "Synthetic Sound channel transit (fictitious)",
+                ["west-entrance", "east-berth"], passage, departure),
+            new("421ZZ00OFFC", "ZZ00-OFFCHART-1", "East off the charts (fictitious)",
+                ["east-berth", "off-chart"], passage, departure),
+        ];
+        return spit with
+        {
+            Name = "spit-crossing",
+            Places = places,
+            Route = routes[0].Waypoints,
+            Routes = routes,
+        };
+    }
+
+    /// <summary>
     /// "Approach with tide window" (#942): a route from the sea buoy over the
     /// crest of the shoal north-west of the harbour (charted 4 m) and into the
     /// dredged channel, for a 6 m draft that can cross the crest only near
