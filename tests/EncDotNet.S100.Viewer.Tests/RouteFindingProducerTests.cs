@@ -263,7 +263,9 @@ public sealed class RouteFindingProducerTests : IDisposable
         f.Routes.Routes.SetActiveRoute(f.Route);
         var oneOff = await findings.FindingsForAsync(other, TestContext.Current.CancellationToken);
         Assert.Equal(["b.must.0", "a.must.0", "b.check.0", "a.info.0"], oneOff!.Select(x => x.Id));
-        Assert.Equal(other.Id, a.Requests.Last().RouteId);
+        // The active route's own debounced re-check may land after the
+        // one-off, so look for the one-off's request rather than the last one.
+        Assert.Contains(a.Requests, r => r.RouteId == other.Id);
     }
 
     [Fact]
