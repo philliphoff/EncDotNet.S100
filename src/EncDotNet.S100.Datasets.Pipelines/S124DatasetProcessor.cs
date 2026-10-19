@@ -112,6 +112,10 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
         return part is null ? null : S124WarningInfo.From(warning!, part);
     }
 
+    /// <inheritdoc />
+    public override NavigationalWarningInfo? GetNavigationalWarningMessage() =>
+        TypedWarning is { Preamble: not null } warning ? S124WarningInfo.Message(warning) : null;
+
     /// <summary>
     /// The typed warning, projected once; <c>null</c> when the dataset is
     /// empty and cannot be projected.

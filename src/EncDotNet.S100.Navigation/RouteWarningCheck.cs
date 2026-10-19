@@ -45,7 +45,11 @@ public enum RouteWarningStatus
     /// <summary>No validity range overlaps the vessel's time there.</summary>
     NotInForce,
 
-    /// <summary>Its cancellation date, or a warning that cancels it, comes before the vessel gets there.</summary>
+    /// <summary>
+    /// Its cancellation date, a warning that cancels it, or an in-force
+    /// bulletin that leaves it out comes before the vessel gets there
+    /// (see <see cref="RouteFindingWarning.Withdrawal"/> for which).
+    /// </summary>
     Cancelled,
 }
 
@@ -84,7 +88,16 @@ public sealed record RouteFindingWarning(
     RouteWarningStatus Status,
     DateTimeOffset From,
     DateTimeOffset Until,
-    bool AtEta);
+    bool AtEta)
+{
+    /// <summary>
+    /// Why the warning is <see cref="RouteWarningStatus.Cancelled"/>: its
+    /// cancellation date, the warning that cancels it, or the in-force
+    /// bulletin that leaves it out (<see cref="NavigationalWarningSet.WithdrawnAt"/>).
+    /// <c>null</c> for any other status.
+    /// </summary>
+    public NavigationalWarningState? Withdrawal { get; init; }
+}
 
 /// <summary>One warning against the route, found or not.</summary>
 /// <param name="Warning">The warning.</param>
@@ -103,7 +116,7 @@ public sealed record RouteWarningMatch(
     double ClosestMeters,
     RouteFinding? Finding);
 
-/// <summary>The result of <see cref="RouteWarningCheck.Check"/>.</summary>
+/// <summary>The result of a <see cref="RouteWarningCheck"/> check.</summary>
 /// <param name="Matches">One entry per warning, in input order.</param>
 /// <param name="Findings">The findings, sorted by group (MUST REVIEW, CHECK, INFO) and then by distance from departure.</param>
 public sealed record RouteWarningResult(
@@ -172,6 +185,15 @@ public sealed record RouteWarningText
     /// <summary>The meta line's status when cancelled.</summary>
     public string CancelledStatus { get; init; } = "Cancelled";
 
+    /// <summary>
+    /// Title when the latest in-force bulletin leaves the warning out
+    /// ({0}: the warning's number, {1}: the bulletin's series and number).
+    /// </summary>
+    public string NotInBulletin { get; init; } = "Navigational warning {0} not in in-force bulletin {1}";
+
+    /// <summary>The meta line's status when the latest in-force bulletin leaves it out ({0}: the bulletin).</summary>
+    public string NotInBulletinStatus { get; init; } = "Cancelled — not in in-force bulletin {0}";
+
     /// <summary>A validity range with both ends ({0} start, {1} end).</summary>
     public string ValidityRange { get; init; } = "{0}–{1}";
 
@@ -228,10 +250,13 @@ public sealed record RouteWarningText
 /// The time is the ETA over the stretch where the vessel meets the warning
 /// when the legs have speeds, otherwise <see cref="RouteWarningTiming.Fallback"/>.
 /// A warning is in force when a validity range overlaps that time (no range:
-/// in force until cancelled). It is cancelled when its cancellation date
-/// (Edition 2.0.0) is at or before the vessel gets there, or when another of
-/// the warnings cancels it and was published by then; a cancelling warning
-/// with no publication time (Edition 1.0.0) cancels at once.
+/// in force until cancelled). It is cancelled when
+/// <see cref="NavigationalWarningSet.WithdrawnAt"/> withdraws it by the time
+/// the vessel gets there: its cancellation date (Edition 2.0.0), another
+/// warning that cancels it and was published by then (one with no
+/// publication time, as in Edition 1.0.0, cancels at once), or the latest
+/// in-force bulletin for its series leaving it out (§9.2.1). The Warning
+/// card and the Navigational warnings panel judge with the same set.
 /// </para>
 /// <para>
 /// Severity (#958 handoff, decision 10): crosses and in force → MUST REVIEW;
@@ -268,9 +293,9 @@ public sealed class RouteWarningCheck
         }
     }
 
-    /// <summary>Checks a route against warnings.</summary>
+    /// <summary>Checks a route against warnings, resolving cancellations and in-force bulletins among them.</summary>
     /// <param name="legs">The route's legs in order, with their cross-track limits; each starts where the previous one ends.</param>
-    /// <param name="warnings">The warning parts. Cancellations between them are resolved within this list.</param>
+    /// <param name="warnings">The warning parts.</param>
     /// <param name="timing">The ETAs, or the time to judge at without them.</param>
     /// <param name="cancellationToken">Cancels the check.</param>
     /// <returns>One match per warning, and the findings.</returns>
@@ -278,6 +303,25 @@ public sealed class RouteWarningCheck
         IReadOnlyList<RouteCheckLeg> legs,
         IReadOnlyList<RouteWarning> warnings,
         RouteWarningTiming timing,
+        CancellationToken cancellationToken = default) =>
+        Check(legs, warnings, timing, null, cancellationToken);
+
+    /// <summary>Checks a route against warnings, judged with every loaded warning.</summary>
+    /// <param name="legs">The route's legs in order, with their cross-track limits; each starts where the previous one ends.</param>
+    /// <param name="warnings">The warning parts to check.</param>
+    /// <param name="timing">The ETAs, or the time to judge at without them.</param>
+    /// <param name="set">
+    /// Every loaded warning, including cancellations and in-force bulletins
+    /// with no parts, which may end the checked ones; <c>null</c> builds it
+    /// from <paramref name="warnings"/>.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the check.</param>
+    /// <returns>One match per warning, and the findings.</returns>
+    public RouteWarningResult Check(
+        IReadOnlyList<RouteCheckLeg> legs,
+        IReadOnlyList<RouteWarning> warnings,
+        RouteWarningTiming timing,
+        NavigationalWarningSet? set,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(legs);
@@ -287,6 +331,7 @@ public sealed class RouteWarningCheck
         var shapes = warnings.Select(w => new Shapes(w ?? throw new ArgumentException("A warning is null.", nameof(warnings)))).ToList();
         var accumulators = shapes.Select(_ => new Accumulator()).ToArray();
         var reach = Math.Max(_options.NearDistanceMeters, track.MaxHalfWidth);
+        set ??= new NavigationalWarningSet(warnings.Select(w => w.Info));
 
         for (var k = 0; k + 1 < track.Samples.Count; k++)
         {
@@ -311,7 +356,7 @@ public sealed class RouteWarningCheck
         var findings = new List<RouteFinding>();
         for (var w = 0; w < warnings.Count; w++)
         {
-            var match = Match(warnings, w, shapes[w], accumulators[w], track, timing);
+            var match = Match(warnings, w, shapes[w], accumulators[w], track, timing, set);
             matches.Add(match);
             if (match.Finding is { } finding)
             {
@@ -327,47 +372,32 @@ public sealed class RouteWarningCheck
     }
 
     /// <summary>
-    /// Whether a warning is in force over a time span, given every warning
-    /// that might cancel it.
+    /// Whether a warning is in force over a time span, given every loaded
+    /// warning, which may cancel it or leave it out of an in-force bulletin.
     /// </summary>
     /// <param name="warning">The warning part.</param>
-    /// <param name="all">Every warning part, which may hold warnings that cancel it.</param>
-    /// <param name="from">When the vessel reaches it.</param>
+    /// <param name="set">Every loaded warning.</param>
+    /// <param name="from">When the vessel reaches it; withdrawals are judged then.</param>
     /// <param name="until">When the vessel leaves it.</param>
-    /// <returns>The status.</returns>
-    public static RouteWarningStatus StatusOver(NavigationalWarningInfo warning, IEnumerable<NavigationalWarningInfo> all, DateTimeOffset from, DateTimeOffset until)
+    /// <returns>The status, and the withdrawal when it is <see cref="RouteWarningStatus.Cancelled"/>.</returns>
+    public static (RouteWarningStatus Status, NavigationalWarningState? Withdrawal) StatusOver(
+        NavigationalWarningInfo warning, NavigationalWarningSet set, DateTimeOffset from, DateTimeOffset until)
     {
         ArgumentNullException.ThrowIfNull(warning);
-        ArgumentNullException.ThrowIfNull(all);
-        if (warning.CancellationDate is { } cancelled && cancelled <= from)
+        ArgumentNullException.ThrowIfNull(set);
+        if (set.WithdrawnAt(warning, from) is { } withdrawn)
         {
-            return RouteWarningStatus.Cancelled;
-        }
-
-        if (warning.Reference is { } reference)
-        {
-            foreach (var other in all)
-            {
-                if (other.Reference is { } own && own.Matches(reference))
-                {
-                    continue;
-                }
-
-                if (other.Cancels.Any(c => c.Matches(reference)) && (other.PublicationTime is not { } published || published <= from))
-                {
-                    return RouteWarningStatus.Cancelled;
-                }
-            }
+            return (RouteWarningStatus.Cancelled, withdrawn);
         }
 
         if (warning.Validity.Count == 0)
         {
-            return RouteWarningStatus.InForce;
+            return (RouteWarningStatus.InForce, null);
         }
 
         return warning.Validity.Any(r => (r.Start is null || r.Start <= until) && (r.End is null || r.End >= from))
-            ? RouteWarningStatus.InForce
-            : RouteWarningStatus.NotInForce;
+            ? (RouteWarningStatus.InForce, null)
+            : (RouteWarningStatus.NotInForce, null);
     }
 
     // Compares one piece of track with one warning's shapes, in a plane centred on the piece's start.
@@ -480,7 +510,7 @@ public sealed class RouteWarningCheck
         }
     }
 
-    private RouteWarningMatch Match(IReadOnlyList<RouteWarning> warnings, int index, Shapes shapes, Accumulator acc, Track track, RouteWarningTiming timing)
+    private RouteWarningMatch Match(IReadOnlyList<RouteWarning> warnings, int index, Shapes shapes, Accumulator acc, Track track, RouteWarningTiming timing, NavigationalWarningSet set)
     {
         var warning = warnings[index];
         RouteWarningRelation relation;
@@ -510,16 +540,19 @@ public sealed class RouteWarningCheck
         var atEta = startEta is not null && endEta is not null;
         var from = atEta ? startEta!.Value : timing.Fallback;
         var until = atEta ? endEta!.Value : timing.Fallback;
-        var status = StatusOver(warning.Info, warnings.Select(w => w.Info), from, until);
+        var (status, withdrawal) = StatusOver(warning.Info, set, from, until);
 
         var text = _options.Text;
         var number = warning.Info.Number ?? warning.Info.Title ?? string.Empty;
+        var bulletin = withdrawal is { Reason: NavigationalWarningStatusReason.NotInBulletin, By: { } by }
+            ? by.Label ?? by.Title ?? string.Empty
+            : null;
         var (code, group, title) = (status, relation) switch
         {
             (RouteWarningStatus.InForce, RouteWarningRelation.Crosses) => (RouteWarningCodes.OnRoute, RouteFindingGroup.MustReview,
                 acc.CrossedArea || (acc.CrossStart is null && shapes.Areas.Count > 0) ? text.InsideArea : text.CrossesLine),
             (RouteWarningStatus.InForce, _) => (RouteWarningCodes.NearRoute, RouteFindingGroup.Check, text.Near),
-            (RouteWarningStatus.Cancelled, _) => (RouteWarningCodes.Cancelled, RouteFindingGroup.Info, text.Cancelled),
+            (RouteWarningStatus.Cancelled, _) => (RouteWarningCodes.Cancelled, RouteFindingGroup.Info, bulletin is null ? text.Cancelled : text.NotInBulletin),
             _ => (RouteWarningCodes.NotInForce, RouteFindingGroup.Info, text.NotInForce),
         };
 
@@ -528,20 +561,20 @@ public sealed class RouteWarningCheck
             code,
             group,
             RouteFindingSource.S124,
-            text.Format(title, number).Trim(),
-            Meta(warning.Info, status, from, text),
+            text.Format(title, number, bulletin).Trim(),
+            Meta(warning.Info, status, from, text, bulletin),
             startLeg,
             start,
             Location(track, start, end),
             warning.Feature)
         {
-            Warning = new RouteFindingWarning(warning.Info, relation, status, from, until, atEta),
+            Warning = new RouteFindingWarning(warning.Info, relation, status, from, until, atEta) { Withdrawal = withdrawal },
         };
         return new RouteWarningMatch(warning, relation, startLeg, start, end, acc.Closest, finding);
     }
 
     // "NAVAREA I 012/26 · Dover Strait · 1 Mar 05:00–08:00 · In force at 06:08"
-    private static string Meta(NavigationalWarningInfo info, RouteWarningStatus status, DateTimeOffset at, RouteWarningText text)
+    private static string Meta(NavigationalWarningInfo info, RouteWarningStatus status, DateTimeOffset at, RouteWarningText text, string? bulletin)
     {
         var parts = new List<string>();
         if (info.Label is { } label)
@@ -567,7 +600,7 @@ public sealed class RouteWarningCheck
         {
             RouteWarningStatus.InForce => text.Format(text.InForceAt, text.At(at)),
             RouteWarningStatus.NotInForce => text.Format(text.NotInForceAt, text.At(at)),
-            _ => text.CancelledStatus,
+            _ => bulletin is null ? text.CancelledStatus : text.Format(text.NotInBulletinStatus, bulletin),
         });
         return string.Join(text.Separator, parts);
     }
