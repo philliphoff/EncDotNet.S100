@@ -54,10 +54,16 @@ public sealed class PassageCheckTests : IDisposable
         Assert.True(check.HasVerdict);
         Assert.Equal("Below your UKC setting in 1 place", check.Title);
         Assert.Equal(CheckTone.Destructive, check.Tone);
-        Assert.Equal("-1.5 m", check.MinUkcText);
-        Assert.Equal("min UKC · required 1.0 m", check.MinUkcCaption);
-        Assert.StartsWith("Leg 6 → 7 · ", check.WhereText);
-        Assert.EndsWith(" min below", check.WhereText);
+        Assert.Equal(RouteCheckVerdictKind.MustReview, check.Kind);
+        // #959 (B3): min UKC moves into the Clearance row.
+        var clearance = check.SummaryRows[0];
+        Assert.Equal(FindingsFilter.Clearance, clearance.Filter);
+        Assert.Equal("min -1.5 m · required 1.0 m", clearance.Text);
+        Assert.Equal("1 below", clearance.Chip);
+        Assert.Equal(CheckTone.Destructive, clearance.ChipTone);
+        Assert.False(clearance.AddDraft);
+        Assert.StartsWith("Leg 6 → 7 · ", check.Subtitle);
+        Assert.EndsWith(" min below", check.Subtitle);
         Assert.Equal("Not for navigation · computed from S-102, S-104 for your settings", check.FooterText);
         Assert.Equal("11.0 m · dep 07:10Z · arr 08:46Z", check.HeaderMeta);
 

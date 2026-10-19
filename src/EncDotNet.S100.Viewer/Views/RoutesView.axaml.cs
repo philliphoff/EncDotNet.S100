@@ -1,6 +1,9 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Views;
@@ -19,6 +22,33 @@ public partial class RoutesView : UserControl
         // field) and when the field loses focus, like any form field.
         AddHandler(LostFocusEvent, OnFieldLostFocus, RoutingStrategies.Bubble, handledEventsToo: true);
     }
+
+    private RoutePassageCardViewModel? _passage;
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (_passage is not null)
+            _passage.FocusRequested -= OnPassageFocusRequested;
+        _passage = (DataContext as RoutesPanelViewModel)?.Passage;
+        if (_passage is not null)
+            _passage.FocusRequested += OnPassageFocusRequested;
+    }
+
+    // #959 (A5): "+ Add draft" expands the Passage card and focuses Draft once it's laid out.
+    private void OnPassageFocusRequested(object? sender, string automationId) =>
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                var field = this.GetVisualDescendants()
+                    .OfType<TextBox>()
+                    .FirstOrDefault(t => AutomationProperties.GetAutomationId(t) == automationId);
+                if (field is null)
+                    return;
+                field.BringIntoView();
+                field.Focus(NavigationMethod.Tab);
+            },
+            DispatcherPriority.Loaded);
 
     static RoutesView()
     {

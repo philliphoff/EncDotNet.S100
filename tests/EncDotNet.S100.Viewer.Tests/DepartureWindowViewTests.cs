@@ -64,7 +64,7 @@ public sealed class DepartureWindowViewTests
         var panel = new RoutesPanelViewModel(fixture.Routes, timeFormat: new UtcTime(), check: fixture.Check);
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
-        host.Click(host.Find<ToggleButton>("Routes.CheckPassageToggle"));
+        host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));
         WaitForWindow(host, fixture);
 
         Assert.Equal("Below your UKC setting in 1 place", host.Find<TextBlock>("Routes.Check.VerdictTitle").Text);
@@ -96,7 +96,7 @@ public sealed class DepartureWindowViewTests
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
         Assert.False(host.IsShown("Routes.Check.Confidence"));
 
-        host.Click(host.Find<ToggleButton>("Routes.CheckPassageToggle"));
+        host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));
         WaitForWindow(host, fixture);
 
         Assert.Equal("Below your UKC setting in 1 place", host.Find<TextBlock>("Routes.Check.VerdictTitle").Text);

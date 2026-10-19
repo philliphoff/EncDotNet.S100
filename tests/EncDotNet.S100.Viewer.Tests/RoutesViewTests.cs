@@ -88,10 +88,10 @@ public sealed class RoutesViewTests
         var (_, _, host) = Show();
         using var _host = host;
 
-        var check = host.Find<ToggleButton>("Routes.CheckPassageToggle");
+        var check = host.Find<ToggleButton>("Routes.CheckRouteToggle");
 
         Assert.False(check.IsEnabled); // no check service in this panel
-        Assert.Equal("Check this route against your settings; add a draft to check clearance too", ToolTip.GetTip(check));
+        Assert.Equal("Check the route against your settings; add a draft to check clearance too", ToolTip.GetTip(check));
         Assert.False(host.IsShown("Routes.Done"));
     }
 
@@ -106,7 +106,7 @@ public sealed class RoutesViewTests
             var panel = new RoutesPanelViewModel(fixture.Routes, check: fixture.Check);
             using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
-            var check = host.Find<ToggleButton>("Routes.CheckPassageToggle");
+            var check = host.Find<ToggleButton>("Routes.CheckRouteToggle");
             Assert.True(check.IsEnabled);
             Assert.True(host.IsShown("Routes.Waypoint"));
 
@@ -116,7 +116,9 @@ public sealed class RoutesViewTests
 
             Assert.True(host.IsShown("Routes.Check.Verdict"));
             Assert.Equal("Below your UKC setting in 1 place", host.Find<TextBlock>("Routes.Check.VerdictTitle").Text);
-            Assert.Equal("-1.5 m", host.Find<TextBlock>("Routes.Check.MinUkc").Text);
+            Assert.Equal("min -1.5 m · required 1.0 m", host.FindAll<TextBlock>("Routes.Check.Summary.Text")[0].Text);
+            Assert.True(host.IsShown("Routes.Check.Summary.Clearance"));
+            Assert.False(host.IsShown("Routes.Check.Summary.AddDraft"));
             Assert.StartsWith("Not for navigation", host.Find<TextBlock>("Routes.Check.Footer").Text);
             Assert.True(host.IsShown("Routes.Check.HeaderMeta"));
             Assert.Equal(8, host.FindAll<Button>("Routes.Check.Leg").Count);
@@ -158,7 +160,7 @@ public sealed class RoutesViewTests
             var panel = new RoutesPanelViewModel(fixture.Routes, check: fixture.Check, findings: findings);
             using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
-            host.Click(host.Find<ToggleButton>("Routes.CheckPassageToggle"));
+            host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));
             WaitForResult(host, fixture);
 
             var tab = host.Find<ToggleButton>("Routes.Check.FindingsTab");
@@ -177,6 +179,9 @@ public sealed class RoutesViewTests
             Assert.Equal(["Clearance", "Data"], host.FindAll<Border>("Routes.Check.Finding.Tag")
                 .Select(t => Avalonia.Automation.AutomationProperties.GetName(t)));
 
+            // The summary rows (#959) push the list down: scroll the row into view first.
+            rows[0].BringIntoView();
+            host.Settle();
             host.Click(rows[0]);
             host.Settle();
             Assert.Equal("clearance.below_setting.0", findings.Selected?.Id);

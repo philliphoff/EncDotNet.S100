@@ -153,10 +153,42 @@ public sealed class LayoutPersistenceTests : IDisposable
             visibility: new CheckModeVisibilitySource(routes)),
     ];
 
+    // A two-waypoint route with a draft: Clearance shows only with one (#959, A2).
+    private static RoutesService RoutesWithDraft(double? draft = 5)
+    {
+        var routes = new RoutesService();
+        var route = new EncDotNet.S100.Viewer.Routing.Route();
+        route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(50.7, -1.3));
+        route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(50.8, -1.3));
+        route.SetPassageValue(EncDotNet.S100.Viewer.Routing.RoutePassageField.Draft, draft);
+        routes.Routes.Add(route);
+        routes.Routes.SetActiveRoute(route);
+        return routes;
+    }
+
+    [Fact]
+    public void Check_route_without_a_draft_has_no_clearance_tab_until_one_is_set()
+    {
+        var routes = RoutesWithDraft(draft: null);
+        var vm = CreateViewModel(TabsWithClearance(routes), routes: routes);
+        vm.WindowWidth = 1200;
+
+        routes.IsCheckModeActive = true;
+        Assert.False(vm.IsBottomDockOpen);
+        Assert.Equal([MainViewModel.TimelineTabId], vm.VisibleBottomTabs.Select(t => t.Id));
+
+        // Setting a draft brings the tab, opened on Clearance; removing it puts things back.
+        routes.Routes.ActiveRoute!.SetPassageValue(EncDotNet.S100.Viewer.Routing.RoutePassageField.Draft, 5);
+        Assert.True(vm.IsClearanceTabSelected);
+        routes.Routes.ActiveRoute!.SetPassageValue(EncDotNet.S100.Viewer.Routing.RoutePassageField.Draft, null);
+        Assert.False(vm.IsBottomDockOpen);
+        Assert.Equal([MainViewModel.TimelineTabId], vm.VisibleBottomTabs.Select(t => t.Id));
+    }
+
     [Fact]
     public void Check_passage_opens_the_bottom_dock_on_clearance_and_restores_it()
     {
-        var routes = new RoutesService();
+        var routes = RoutesWithDraft();
         var vm = CreateViewModel(TabsWithClearance(routes), routes: routes);
         vm.WindowWidth = 1200;
         Assert.False(vm.IsBottomDockOpen);
@@ -186,7 +218,7 @@ public sealed class LayoutPersistenceTests : IDisposable
     [Fact]
     public void Check_passage_leaves_an_open_timeline_dock_open_on_the_timeline()
     {
-        var routes = new RoutesService();
+        var routes = RoutesWithDraft();
         var vm = CreateViewModel(TabsWithClearance(routes), routes: routes);
         vm.WindowWidth = 1200;
         vm.SelectTabCommand.Execute(vm.VisibleBottomTabs[0]);

@@ -408,13 +408,13 @@ public class RoutesPanelViewModelTests
     {
         var (svc, vm) = Create();
         svc.Routes.CreateRoute("Empty");
-        Assert.Equal("Add at least two waypoints to check the route", vm.CheckPassageTooltip);
+        Assert.Equal("Add two waypoints to check the route", vm.CheckPassageTooltip);
 
         TwoPointRoute(svc);
 
         Assert.False(vm.CanCheckPassage); // no check service in this panel
         Assert.False(vm.IsCheckingPassage);
-        Assert.Equal("Check this route against your settings; add a draft to check clearance too", vm.CheckPassageTooltip);
+        Assert.Equal("Check the route against your settings; add a draft to check clearance too", vm.CheckPassageTooltip);
     }
 
     [Fact]
