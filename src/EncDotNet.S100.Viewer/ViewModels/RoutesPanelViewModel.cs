@@ -63,10 +63,10 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         _marinerSettings = marinerSettings;
         _timeFormat = timeFormat;
         _check = check;
-        if (check is not null)
-            Check = new PassageCheckViewModel(check, routes, () => DepthUnit, () => TimeFormat, findings);
-
         Passage = new RoutePassageCardViewModel(() => _routes.Routes.ActiveRoute, () => DepthUnit, () => TimeFormat);
+        if (check is not null)
+            Check = new PassageCheckViewModel(check, routes, () => DepthUnit, () => TimeFormat, findings, Passage.FocusDraft);
+
         LegDetail = new RouteLegDetailViewModel(() => _routes.Routes.ActiveRoute, () => DepthUnit);
 
         Routes = new ObservableCollection<RouteRowViewModel>();
@@ -242,11 +242,11 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     /// <summary>Whether to show the check-mode panel content instead of the waypoint timeline.</summary>
     public bool ShowCheckPanel => IsCheckingPassage && Check is not null;
 
-    /// <summary>Tooltip on the Check passage toggle: what's missing, or what it does.</summary>
+    /// <summary>Tooltip on the Check route toggle: what's missing, or what it does.</summary>
     public string CheckPassageTooltip =>
-        _routes.Routes.ActiveRoute is not { Legs.Count: > 0 } ? Strings.Tooltip_CheckPassageNoLegs
-        : HasDraft ? Strings.Tooltip_CheckPassage
-        : Strings.Tooltip_CheckPassageNoDraft;
+        _routes.Routes.ActiveRoute is not { Legs.Count: > 0 } ? Strings.Tooltip_CheckRouteNoLegs
+        : HasDraft ? Strings.Tooltip_CheckRoute
+        : Strings.Tooltip_CheckRouteNoDraft;
 
     private DepthUnit DepthUnit => _marinerSettings?.Current.DepthUnit ?? DepthUnit.Metres;
 

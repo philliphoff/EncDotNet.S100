@@ -707,8 +707,8 @@ internal static partial class Strings
     public static string Routes_EditHintFormat => Get(nameof(Routes_EditHintFormat));
     public static string Button_EditRoute => Get(nameof(Button_EditRoute));
     public static string Tooltip_EditRouteToggle => Get(nameof(Tooltip_EditRouteToggle));
-    public static string Button_CheckPassage => Get(nameof(Button_CheckPassage));
-    public static string Tooltip_CheckPassageNoDraft => Get(nameof(Tooltip_CheckPassageNoDraft));
+    public static string Button_CheckRoute => Get(nameof(Button_CheckRoute));
+    public static string Tooltip_CheckRouteNoDraft => Get(nameof(Tooltip_CheckRouteNoDraft));
     public static string Label_UndoRouteEdit => Get(nameof(Label_UndoRouteEdit));
     public static string Label_RedoRouteEdit => Get(nameof(Label_RedoRouteEdit));
     public static string Tooltip_UndoRouteEdit => Get(nameof(Tooltip_UndoRouteEdit));
@@ -758,7 +758,7 @@ internal static partial class Strings
     public static string Routes_LegDetailTitleFormat => Get(nameof(Routes_LegDetailTitleFormat));
     public static string Routes_LegDetailFootnote => Get(nameof(Routes_LegDetailFootnote));
     public static string Tooltip_LegDetail => Get(nameof(Tooltip_LegDetail));
-    public static string Tooltip_CheckPassage => Get(nameof(Tooltip_CheckPassage));
+    public static string Tooltip_CheckRoute => Get(nameof(Tooltip_CheckRoute));
     public static string Routes_DurationMinutesFormat => Get(nameof(Routes_DurationMinutesFormat));
     public static string Routes_DurationHoursFormat => Get(nameof(Routes_DurationHoursFormat));
     public static string Routes_DurationHoursMinutesFormat => Get(nameof(Routes_DurationHoursMinutesFormat));
@@ -1834,10 +1834,7 @@ internal static partial class Strings
     public static string Check_Computing => Get(nameof(Check_Computing));
     public static string Check_AddDraft => Get(nameof(Check_AddDraft));
     public static string Check_NoDraftVerdictNone => Get(nameof(Check_NoDraftVerdictNone));
-    public static string Check_NoDraftVerdictOne => Get(nameof(Check_NoDraftVerdictOne));
-    public static string Check_NoDraftVerdictFormat => Get(nameof(Check_NoDraftVerdictFormat));
-    public static string Check_FooterNoDraft => Get(nameof(Check_FooterNoDraft));
-    public static string Tooltip_CheckPassageNoLegs => Get(nameof(Tooltip_CheckPassageNoLegs));
+    public static string Tooltip_CheckRouteNoLegs => Get(nameof(Tooltip_CheckRouteNoLegs));
     public static string Check_ErrorFormat => Get(nameof(Check_ErrorFormat));
     public static string Check_NoClearance => Get(nameof(Check_NoClearance));
     public static string Timeline_PassageLane => Get(nameof(Timeline_PassageLane));

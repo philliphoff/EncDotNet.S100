@@ -50,7 +50,7 @@ public sealed class ClearanceTests : IDisposable
         var f = new PassageCheckFixture();
         var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc());
         Assert.False(vm.HasProfile);
-        Assert.Equal("Turn on Check passage on a route to see its clearance profile.", vm.EmptyText);
+        Assert.Equal("Turn on Check route on a route with a draft to see its clearance profile.", vm.EmptyText);
 
         await f.CheckAsync();
 

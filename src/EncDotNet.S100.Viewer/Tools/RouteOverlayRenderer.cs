@@ -179,7 +179,7 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             }
         }
 
-        if (scene.Check is { } coloured)
+        if (scene.Check is { NoDraft: false } coloured)
         {
             DrawCheckRoute(canvas, coloured, layout, toScreen, opacity);
         }

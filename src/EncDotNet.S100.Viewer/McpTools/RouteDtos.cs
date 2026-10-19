@@ -53,7 +53,7 @@ internal sealed record LegDto(
 /// <summary>Route-level passage values.</summary>
 [Description("A route's passage values, which every leg inherits unless it overrides them; all optional.")]
 internal sealed record PassageDto(
-    [property: Description("Draft in metres, or null. Enables Check passage.")] double? DraftMeters,
+    [property: Description("Draft in metres, or null. Enables Check route.")] double? DraftMeters,
     [property: Description("Fixed squat allowance in metres, or null.")] double? SquatMeters,
     [property: Description("Planned speed over ground in knots, or null. Enables ETAs.")] double? SpeedKnots,
     [property: Description("Planned departure (ISO-8601), or null to use the view time.")] DateTimeOffset? Departure,

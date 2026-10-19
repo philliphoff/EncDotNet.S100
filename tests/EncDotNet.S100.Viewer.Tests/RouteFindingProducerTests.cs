@@ -211,7 +211,7 @@ public sealed class RouteFindingProducerTests : IDisposable
 
         Assert.False(panel.HasDraft);
         Assert.True(panel.CanCheckPassage);
-        Assert.Equal("Check this route against your settings; add a draft to check clearance too", panel.CheckPassageTooltip);
+        Assert.Equal("Check the route against your settings; add a draft to check clearance too", panel.CheckPassageTooltip);
         _ui.Run(() => panel.IsCheckingPassage = true);
         await findings.WhenIdle();
 
@@ -233,17 +233,20 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.Equal(["route_check.land.0", "route_check.warning.0"], findings.Findings.Select(x => x.Id));
         Assert.Equal("Findings 2", panel.Check!.FindingsLabel);
 
-        // The verdict card's no-draft variant: titled from the findings, UKC parts hidden.
+        // The verdict card's no-draft variant (#959): titled from the findings,
+        // the Clearance row "Not checked · + Add draft".
         var check = panel.Check;
         Assert.True(check.HasVerdict);
         Assert.True(check.NeedsDraft);
-        Assert.False(check.ShowClearance);
-        Assert.Equal("2 items to review", check.Title);
+        Assert.Equal("1 to review", check.Title);
+        Assert.Equal("Finding route_check.land.0 · 1 to check", check.Subtitle);
         Assert.Equal(CheckTone.Destructive, check.Tone);
-        Assert.Null(check.MinUkcText);
-        Assert.Null(check.WhereText);
+        Assert.Equal(RouteCheckVerdictKind.MustReview, check.Kind);
+        Assert.Equal("Not checked", check.SummaryRows[0].Text);
+        Assert.True(check.SummaryRows[0].AddDraft);
+        Assert.Equal("1 to review · 1 to check", check.SummaryRows[1].Text);
         Assert.Null(check.ConfidenceText);
-        Assert.Equal("Not for navigation · route checked without clearance", check.FooterText);
+        Assert.StartsWith("Not for navigation · ", check.FooterText);
         Assert.Empty(check.Legs);
         Assert.True(check.ShowLegsNeedsDraft);
         Assert.False(check.Window.IsVisible);
@@ -261,15 +264,14 @@ public sealed class RouteFindingProducerTests : IDisposable
     }
 
     [Theory]
-    [InlineData(new RouteFindingGroup[0], "No findings for your settings", "Neutral")]
-    [InlineData(new[] { RouteFindingGroup.Info }, "1 item to review", "Neutral")]
-    [InlineData(new[] { RouteFindingGroup.Info, RouteFindingGroup.Check }, "2 items to review", "Warning")]
-    [InlineData(new[] { RouteFindingGroup.Check, RouteFindingGroup.MustReview, RouteFindingGroup.Info }, "3 items to review", "Destructive")]
-    public void The_no_draft_verdict_is_titled_from_the_findings_and_red_only_for_must_review(RouteFindingGroup[] groups, string title, string tone)
+    [InlineData(new RouteFindingGroup[0], "No findings for your settings")]
+    [InlineData(new[] { RouteFindingGroup.Info }, "No findings for your settings")]
+    [InlineData(new[] { RouteFindingGroup.Info, RouteFindingGroup.Check }, "1 to check")]
+    [InlineData(new[] { RouteFindingGroup.Check, RouteFindingGroup.MustReview, RouteFindingGroup.MustReview }, "2 to review")]
+    public void The_no_draft_summary_counts_the_worst_group(RouteFindingGroup[] groups, string title)
     {
         var list = groups.Select((g, i) => Finding($"x.{i}", g, i)).ToList();
-        Assert.Equal(title, PassageCheckViewModel.NeedsDraftTitle(list));
-        Assert.Equal(Enum.Parse<CheckTone>(tone), PassageCheckViewModel.NeedsDraftTone(list));
+        Assert.Equal(title, RouteCheckVerdict.NoDraftTitle(list));
     }
 
     [Fact]
@@ -431,7 +433,7 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.True(list.Live);
         Assert.Equal(2, list.Count);
         Assert.Equal(1, list.MustReview);
-        Assert.Equal("2 items to review", list.Summary);
+        Assert.Equal("1 to review", list.Summary);
         Assert.False(list.Stale);
         Assert.Equal("route_check", list.Findings[0].Source);
 
@@ -457,7 +459,7 @@ public sealed class RouteFindingProducerTests : IDisposable
             var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings);
             using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
-            var toggle = host.Find<Avalonia.Controls.Primitives.ToggleButton>("Routes.CheckPassageToggle");
+            var toggle = host.Find<Avalonia.Controls.Primitives.ToggleButton>("Routes.CheckRouteToggle");
             Assert.True(toggle.IsEnabled);
             host.Click(toggle);
             Assert.True(f.Routes.IsCheckModeActive);
@@ -471,10 +473,9 @@ public sealed class RouteFindingProducerTests : IDisposable
             host.Settle();
 
             Assert.True(host.IsShown("Routes.Check.Verdict"));
-            Assert.Equal("1 item to review", host.Find<TextBlock>("Routes.Check.VerdictTitle").Text);
-            Assert.True(host.IsShown("Routes.Check.NeedsDraft"));
-            Assert.Equal("Add a draft to check clearance", host.Find<TextBlock>("Routes.Check.NeedsDraft").Text);
-            Assert.False(host.IsShown("Routes.Check.MinUkc"));
+            Assert.Equal("1 to review", host.Find<TextBlock>("Routes.Check.VerdictTitle").Text);
+            Assert.True(host.IsShown("Routes.Check.Summary.Clearance"));
+            Assert.True(host.IsShown("Routes.Check.Summary.AddDraft"));
             Assert.False(host.IsShown("Routes.Check.Window"));
             Assert.True(host.IsShown("Routes.Check.Legs.NeedsDraft"));
             Assert.Empty(host.FindAll<Button>("Routes.Check.Leg"));

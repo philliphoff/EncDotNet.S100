@@ -217,7 +217,21 @@ internal sealed class RouteFindingsService : IDisposable
     /// Names of the S-111 datasets that overlap the route and whose forecast
     /// ended before <paramref name="now"/> (E4: shown for reference, not used in ETAs).
     /// </summary>
-    internal static IReadOnlyList<string> ExpiredForecasts(IReadOnlyList<LoadedDataset> datasets, IReadOnlyList<PassageLeg> legs, DateTimeOffset now)
+    internal static IReadOnlyList<string> ExpiredForecasts(IReadOnlyList<LoadedDataset> datasets, IReadOnlyList<PassageLeg> legs, DateTimeOffset now) =>
+        Overlapping(datasets, legs)
+            .Where(d => string.Equals(d.Spec.Name, "S-111", StringComparison.OrdinalIgnoreCase)
+                && d.TimeRange is { } range && range.End < now)
+            .Select(d => Path.GetFileNameWithoutExtension(d.Id.Value))
+            .ToList();
+
+    /// <summary>Whether the checked route has a draft, so the clearance check ran.</summary>
+    internal bool HasDraft => _check.HasDraft;
+
+    /// <summary>The loaded datasets, which the producers read.</summary>
+    internal IReadOnlyList<LoadedDataset> Datasets => _catalog.Datasets;
+
+    /// <summary>The datasets whose bounds overlap the route's box; empty without legs.</summary>
+    internal static IReadOnlyList<LoadedDataset> Overlapping(IReadOnlyList<LoadedDataset> datasets, IReadOnlyList<PassageLeg> legs)
     {
         if (legs.Count == 0)
             return [];
@@ -233,19 +247,16 @@ internal sealed class RouteFindingsService : IDisposable
             }
         }
 
-        var names = new List<string>();
+        var overlapping = new List<LoadedDataset>();
         foreach (var dataset in datasets)
         {
-            if (!string.Equals(dataset.Spec.Name, "S-111", StringComparison.OrdinalIgnoreCase)
-                || dataset.TimeRange is not { } range || range.End >= now)
-                continue;
             var b = dataset.Bounds;
             if (b.SouthLatitude > north || b.NorthLatitude < south || b.WestLongitude > east || b.EastLongitude < west)
                 continue;
-            names.Add(Path.GetFileNameWithoutExtension(dataset.Id.Value));
+            overlapping.Add(dataset);
         }
 
-        return names;
+        return overlapping;
     }
 
     public void Dispose()

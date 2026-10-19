@@ -17,6 +17,21 @@ month. For package versions and release assets, see
   `export_route` take RTZ (`format: "RTZ"`, `version`). The new
   `EncDotNet.S100.Routes.Rtz` package reads and writes RTZ in your own code.
 
+- **Check route: one verdict for every check.** SoundCharts' footer toggle
+  is now **Check route**, on for any route with two or more waypoints. The
+  verdict card gives one answer for the clearance check, the route checks and
+  S-124 warnings, worst first: its title names the worst finding ("Crosses
+  drying ground", "Below your UKC setting in 2 places", "Inside navigational
+  warning 001/26"), or without a draft counts them ("2 to review", "1 to
+  check"). Under it, Clearance, Route and Warnings rows sum up each check; the
+  minimum UKC is in the Clearance row, and clicking a row filters the
+  Findings list, which has All, Clearance, Route and Warnings chips. Without a
+  draft the Clearance row reads "Not checked · + Add draft", which opens the
+  Passage card at Draft; there is no Clearance tab and the route keeps its
+  normal colour. `get_check_state` adds `verdictKind`, `verdictSubtitle`, the
+  `summary` rows and the `footer`; `verdictTitle` is now the card's overall
+  title.
+
 - **Warnings left out of the latest in-force bulletin are cancelled.** S-124
   Edition 2.0.0 §9.2.1 says a warning published before the latest in-force
   bulletin for its series, and not listed in it, is no longer valid; S-98
@@ -37,7 +52,7 @@ month. For package versions and release assets, see
   parts. `RouteWarningCheck.Check` takes the set, and `StatusOver` now takes
   it and returns the withdrawal too (a breaking change).
 
-- **Routes are checked against the chart.** With **Check passage** on,
+- **Routes are checked against the chart.** With **Check route** on,
   SoundCharts' findings list shows where a route's track crosses land or
   drying ground (Must review), where either reaches inside the leg's
   cross-track limits, and where the route leaves the loaded charts (Check).
