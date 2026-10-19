@@ -460,13 +460,30 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   `NavwarnPart`: a `NavigationalWarningInfo` with the series and number, type,
   validity, area, issuer and the message text in each language, read through
   the warning's preamble. `NavigationalWarningInfo.StatusAt` tells whether the
-  warning is in force at a time. `GetNavigationalWarnings` lists every part
-  with its feature id and ordinal without picking, including parts with no
-  geometry, which a pick can never reach. The info also carries the warning's
-  `Reference` (series, number, year), the warnings it `Cancels`, and its
+  warning is in force at a time, judged on that warning alone.
+  `GetNavigationalWarnings` lists every part with its feature id and ordinal
+  without picking, including parts with no geometry, which a pick can never
+  reach. `GetNavigationalWarningMessage` returns the dataset's warning as a
+  whole, which a cancellation or an in-force bulletin with no parts still
+  has. The info also carries the warning's `Reference` (series, number, year,
+  interoperability identifier), the warnings it `Cancels`, what it lists
+  when it's an in-force bulletin (`InForceBulletin`), and its
   `AffectedAreas`, which the route check uses.
+- `NavigationalWarningSet` (in Core) judges every loaded warning together
+  (S-124 Edition 2.0.0 §9.2.1). `StatusAt(warning, time)` returns the status
+  and why: the warning's cancellation date, a warning that cancels it, or the
+  latest in-force bulletin for its series leaving it out, then its validity
+  ranges. A warning left out of a bulletin is reported as cancelled, as S-98
+  §12.12 has ECDIS do. A bulletin judges only warnings published before it,
+  and a later bulletin replaces an earlier one. Warnings and bulletins
+  without a publication time (all of Edition 1.0.0) are never judged by
+  bulletins. `IsInForceAt` is the test a renderer needs, and
+  `LatestBulletins` lists each series' latest bulletin with the warnings it
+  lists that aren't loaded (§9.2.2). A bulletin is recognised by a
+  `References` with `referenceCategory` 3 (In-Force).
 - `Navigation/RouteWarningSources`: the S-124 warning parts of loaded datasets
-  as `RouteWarning`s for `RouteWarningCheck` (see the Navigation package's
+  as `RouteWarning`s for `RouteWarningCheck`, and `SetFromDatasets`, the
+  `NavigationalWarningSet` to judge them with (see the Navigation package's
   README).
 - `AssetSourceHelpers`: set-up helpers for exchange sets and loose datasets.
 - `Diagnostics/`: the `ActivitySource` and `Meter` instrumentation that the

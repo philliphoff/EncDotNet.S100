@@ -231,11 +231,13 @@ datasets, one per `NavwarnPart`, with its geometry and affected areas:
 
 ```csharp
 var warnings = RouteWarningSources.FromDatasets(catalog.Datasets);
+var set = RouteWarningSources.SetFromDatasets(catalog.Datasets);   // cancellations and in-force bulletins
 var schedule = PassageSchedule.Compute(passageLegs, departure);
 var result = new RouteWarningCheck().Check(
     legs,                                          // RouteCheckLegs, with cross-track limits
     warnings,
-    new RouteWarningTiming(schedule, viewTime));   // view time where a leg has no speed
+    new RouteWarningTiming(schedule, viewTime),    // view time where a leg has no speed
+    set);
 
 foreach (var finding in result.Findings)
 {
@@ -248,8 +250,15 @@ leg's cross-track limit on its side. A warning is **near** when it comes
 within `RouteWarningOptions.NearDistanceMeters` of the track (default 0,5 NM),
 or is a point inside the corridor. The time is the ETA where the vessel meets
 the warning, or the fallback time without speeds. A warning is cancelled when
-its cancellation date comes before the vessel gets there, or another of the
-warnings cancels it (`References`, category 1) and was published by then.
+`NavigationalWarningSet.WithdrawnAt` withdraws it by the time the vessel gets
+there: its cancellation date passes, another warning cancels it
+(`References`, category 1) and was published by then, or the latest in-force
+bulletin for its series, published after it, leaves it out (S-124 Edition
+2.0.0 §9.2.1). Without a set, `Check` builds one from the checked warnings.
+The viewer's Warning card and Navigational warnings panel judge with the same
+set, so they agree. A finding's `Warning.Withdrawal` says why; one left out of
+a bulletin reads "Navigational warning 105/26 not in in-force bulletin
+NAVAREA X 110/26".
 
 | Code | Group | When |
 | --- | --- | --- |

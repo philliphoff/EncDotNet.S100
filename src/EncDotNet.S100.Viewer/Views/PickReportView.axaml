@@ -407,6 +407,13 @@
                          FontWeight="Normal"
                          Foreground="{DynamicResource MutedColor}" />
                 </TextBlock>
+                <!-- Why another warning ended it: a cancellation or the in-force bulletin (#992). -->
+                <TextBlock IsVisible="{Binding HasStatusReason}"
+                           AutomationProperties.AutomationId="PickReport.WarningCard.StatusReason"
+                           Text="{Binding StatusReasonText}"
+                           FontSize="11.5"
+                           Foreground="{DynamicResource MutedColor}"
+                           TextWrapping="Wrap" />
             </StackPanel>
         </DataTemplate>
 

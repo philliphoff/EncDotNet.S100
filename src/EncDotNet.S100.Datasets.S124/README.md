@@ -103,7 +103,8 @@ namespace projects it into typed objects:
 - **`S124WarningReference`** has the reference category (from the `code`
   attribute in Edition 2.0.0) and what it refers to: a `MessageReference` in
   Edition 1.0.0, or one `Warnings` identifier per referenced warning in 2.0.0,
-  such as the warnings a cancellation cancels.
+  such as the warnings a cancellation cancels (category 1) or an in-force
+  bulletin lists (category 3, or none with `NoMessageOnHand`).
 - **`S124SpatialQuality`** has the quality-of-position code.
 
 The reader keeps the leaves of a nested complex attribute under dotted keys
