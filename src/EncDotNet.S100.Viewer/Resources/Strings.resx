@@ -5542,6 +5542,24 @@
   <data name="Findings_FilterEmpty" xml:space="preserve">
     <value>No findings for this filter.</value>
   </data>
+  <data name="Findings_MergedCountFormat" xml:space="preserve">
+    <value>×{0}</value>
+  </data>
+  <data name="Findings_MergedStretchesFormat" xml:space="preserve">
+    <value>{0} stretches</value>
+  </data>
+  <data name="Findings_MergedPlacesFormat" xml:space="preserve">
+    <value>{0} places</value>
+  </data>
+  <data name="Tooltip_FindingMerged" xml:space="preserve">
+    <value>Show or hide each of these findings</value>
+  </data>
+  <data name="Tooltip_FindingsInfoToggle" xml:space="preserve">
+    <value>Show or hide the information findings</value>
+  </data>
+  <data name="Tooltip_CheckLegBadge" xml:space="preserve">
+    <value>Route-check findings on this leg</value>
+  </data>
   <data name="Clearance_Departure" xml:space="preserve">
     <value>Departure</value>
   </data>

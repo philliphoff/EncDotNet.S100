@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **A shorter findings list.** In SoundCharts' Check route, Check and Info
+  findings with the same code now share one row with a count ("Charted depth
+  from S-101 only ×9 · Legs 7 → 9 · 9 stretches") that expands into each
+  finding; Must review findings are always listed one by one. INFO is folded
+  until you open it, and the Legs tab marks each leg's route-check findings
+  with a badge, with or without a draft. `get_findings` reports the filter,
+  per-chip counts, merged rows (with every member id), the INFO fold and the
+  expanded row; `set_findings_view` changes them.
+
 - **Open and export RTZ routes.** SoundCharts' **Import route…** now opens
   RTZ route plans (IEC 61174 Annex S, versions 1.0, 1.1 and 1.2) as
   read-only received routes in Planning mode, and **Export…** writes any

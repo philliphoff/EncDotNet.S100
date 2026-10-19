@@ -154,7 +154,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Whether the Legs tab shows "Add a draft to check clearance" in place of the leg chips.</summary>
+    /// <summary>Whether the Legs tab shows "Add a draft to check clearance" above the leg rows, which have no chips.</summary>
     public bool ShowLegsNeedsDraft => NeedsDraft && ShowLegs;
 
     private bool _isStale;
@@ -313,10 +313,45 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         _hasRouteFindings = verdict.HasRouteFindings;
         OnPropertyChanged(nameof(ShowWindowNote));
         UpdateRows(verdict.Rows);
-        if (current is null)
-            Legs.Clear();
-        else
+        if (current is not null)
             RebuildLegs(current);
+        else if (input is not null)
+            RebuildLegs(input);
+        else
+            Legs.Clear();
+        UpdateBadges(_findings?.Findings ?? []);
+    }
+
+    // D4: each leg's worst route-check group and how many findings it has.
+    private void UpdateBadges(IReadOnlyList<RouteFinding> findings)
+    {
+        var route = findings
+            .Where(f => f.LegIndex is not null && f.Group != RouteFindingGroup.Info
+                && RouteCheckVerdict.FilterOf(f) == FindingsFilter.Route)
+            .ToLookup(f => f.LegIndex!.Value);
+        foreach (var leg in Legs)
+        {
+            var onLeg = route[leg.LegIndex].ToList();
+            leg.SetBadge(onLeg.Count, onLeg.Count == 0 ? null : onLeg.Min(f => f.Group));
+        }
+    }
+
+    // D4 without a draft: a row per leg with its times and the badge, no chip.
+    private void RebuildLegs(PassageCheckService.CheckInput input)
+    {
+        var schedule = PassageSchedule.Compute(input.Legs, input.Departure);
+        while (Legs.Count > schedule.Legs.Count)
+            Legs.RemoveAt(Legs.Count - 1);
+        for (var i = 0; i < schedule.Legs.Count; i++)
+        {
+            var row = i < Legs.Count ? Legs[i] : null;
+            if (row is null)
+            {
+                row = new PassageCheckLegRowViewModel(i);
+                Legs.Add(row);
+            }
+            row.Update(schedule.Legs[i], input.Departure, _timeFormat());
+        }
     }
 
     private void UpdateRows(IReadOnlyList<RouteCheckSummaryRow> rows)
@@ -607,8 +642,74 @@ internal sealed class PassageCheckLegRowViewModel : ViewModelBase
     /// <summary>Distance from the start of the passage to the middle of the leg.</summary>
     public double MidDistanceMeters { get; private set; }
 
+    private bool _hasChip;
+    /// <summary>Whether the row has a min-UKC chip: only with a draft (D4: no draft, badge only).</summary>
+    public bool HasChip
+    {
+        get => _hasChip;
+        private set => SetProperty(ref _hasChip, value);
+    }
+
+    private int _badgeCount;
+    /// <summary>How many Must review and Check route-check findings are on the leg (D4).</summary>
+    public int BadgeCount
+    {
+        get => _badgeCount;
+        private set
+        {
+            if (!SetProperty(ref _badgeCount, value))
+                return;
+            OnPropertyChanged(nameof(HasBadge));
+            OnPropertyChanged(nameof(BadgeText));
+        }
+    }
+
+    /// <summary>Whether the leg shows the route-check badge.</summary>
+    public bool HasBadge => BadgeCount > 0;
+
+    /// <summary>The badge's count, e.g. "2".</summary>
+    public string BadgeText => BadgeCount.ToString(CultureInfo.CurrentCulture);
+
+    private bool _isBadgeMustReview;
+    /// <summary>Whether the leg's worst route-check finding is Must review (octagon, destructive); else Check (triangle, warning).</summary>
+    public bool IsBadgeMustReview
+    {
+        get => _isBadgeMustReview;
+        private set
+        {
+            if (SetProperty(ref _isBadgeMustReview, value))
+                OnPropertyChanged(nameof(IsBadgeCheck));
+        }
+    }
+
+    public bool IsBadgeCheck => !IsBadgeMustReview;
+
+    internal void SetBadge(int count, RouteFindingGroup? worst)
+    {
+        BadgeCount = count;
+        IsBadgeMustReview = worst == RouteFindingGroup.MustReview;
+    }
+
+    /// <summary>Updates a row without a draft (D4): name and times, no chip.</summary>
+    internal void Update(LegSchedule leg, DateTimeOffset departure, TimeFormat timeFormat)
+    {
+        Name = string.Format(CultureInfo.CurrentCulture, Strings.Check_LegFormat, LegIndex + 1, LegIndex + 2);
+        TimesText = leg.Start is { } start && leg.End is { } end
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Check_LegTimesFormat,
+                PassageFormatting.FormatEta(start, departure, timeFormat),
+                PassageFormatting.FormatEta(end, departure, timeFormat),
+                leg.DistanceNauticalMiles)
+            : string.Format(CultureInfo.CurrentCulture, Strings.Check_LegDistanceFormat, leg.DistanceNauticalMiles);
+        MidDistanceMeters = leg.StartDistanceMeters + (leg.DistanceMeters / 2);
+        HasChip = false;
+        IsLowConfidence = false;
+        ChipText = string.Empty;
+        ChipTone = CheckTone.Neutral;
+    }
+
     internal void Update(LegUkcResult leg, string? placeName, DateTimeOffset departure, DepthUnit depthUnit, TimeFormat timeFormat)
     {
+        HasChip = true;
         Name = placeName ?? string.Format(CultureInfo.CurrentCulture, Strings.Check_LegFormat, LegIndex + 1, LegIndex + 2);
         var nm = leg.DistanceMeters / PassageGeodesy.MetersPerNauticalMile;
         TimesText = leg.Start is { } start && leg.End is { } end

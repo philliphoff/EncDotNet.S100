@@ -20,7 +20,54 @@ internal sealed record RouteFindingsDto(
     [property: Description("The findings summary, e.g. \"2 to review\", \"1 to check\" or \"No findings for your settings\"; the verdict card's title when the route has no draft.")] string Summary,
     [property: Description("True while a check is recomputing and part of the list is out of date (live list only).")] bool Stale,
     [property: Description("Id of the selected finding (outlined on the map), or null. Only the live list has a selection.")] string? SelectedId,
-    [property: Description("The findings, in list order: by group, then by distance along the route.")] IReadOnlyList<RouteFindingDto> Findings);
+    [property: Description("The findings, in list order: by group, then by distance along the route.")] IReadOnlyList<RouteFindingDto> Findings)
+{
+    /// <summary>The filter chip.</summary>
+    [Description("The list's filter chip: all, clearance, route or warnings (live list only; a one-off check reports all). Set it with set_findings_view or a verdict-card summary row.")]
+    public string Filter { get; init; } = "all";
+
+    /// <summary>Per-chip counts.</summary>
+    [Description("How many findings each filter chip shows: all, clearance (the clearance check's findings and its confidence and data findings), route (route checks against the chart) and warnings (S-124).")]
+    public FindingsCountsDto Counts { get; init; } = new(0, 0, 0, 0);
+
+    /// <summary>The merged rows.</summary>
+    [Description("The list's merged rows (after the filter): check and info findings that share a code show as one row with a count (×N); must_review never merges. Each gives every member finding's id.")]
+    public IReadOnlyList<MergedFindingsDto> Merged { get; init; } = [];
+
+    /// <summary>Whether INFO is unfolded.</summary>
+    [Description("True when the INFO group is unfolded; it's folded by default and remembered per route (live list only).")]
+    public bool InfoOpen { get; init; }
+
+    /// <summary>The expanded merged row.</summary>
+    [Description("Id of the merged row expanded into its findings, or null (live list only).")]
+    public string? ExpandedId { get; init; }
+}
+
+/// <summary>How many findings each filter chip shows.</summary>
+[Description("How many findings each filter chip shows.")]
+internal sealed record FindingsCountsDto(
+    [property: Description("Every finding.")] int All,
+    [property: Description("The clearance check's findings, with its confidence and data findings.")] int Clearance,
+    [property: Description("Route checks against the chart (land, drying, dangers, areas, chart coverage).")] int Route,
+    [property: Description("S-124 navigational warnings.")] int Warnings);
+
+/// <summary>A merged row.</summary>
+[Description("Check or info findings with the same code, shown as one row with a count.")]
+internal sealed record MergedFindingsDto(
+    [property: Description("The row's id, e.g. \"merged.check.confidence.charted_depth_from_s101\"; pass it to set_findings_view's expandedId.")] string Id,
+    [property: Description("The shared code.")] string Code,
+    [property: Description("The group: check or info.")] string Group,
+    [property: Description("How many findings the row merges (the \"×N\").")] int Count,
+    [property: Description("The row's meta line, e.g. \"Legs 7 → 9 · 9 stretches\".")] string Meta,
+    [property: Description("The member findings' ids, in list order; each can be selected with select_finding.")] IReadOnlyList<string> Ids,
+    [property: Description("True when the row is expanded into its findings.")] bool Expanded);
+
+/// <summary>Request for <see cref="SetFindingsViewTool"/>.</summary>
+[Description("Request for set_findings_view: set the findings list's filter chip, INFO fold and expanded merged row.")]
+internal sealed record SetFindingsViewRequest(
+    [property: Description("The filter chip: all, clearance, route or warnings; omit to keep it.")] string? Filter = null,
+    [property: Description("True to unfold INFO, false to fold it; omit to keep it.")] bool? InfoOpen = null,
+    [property: Description("Id of a merged row to expand (from get_findings' merged), or an empty string to collapse; omit to keep it.")] string? ExpandedId = null);
 
 /// <summary>One finding.</summary>
 [Description("One finding in a route's findings list.")]
@@ -114,7 +161,32 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
         await Invoker.InvokeAsync(() => true).ConfigureAwait(false);
     }
 
-    internal static RouteFindingsDto ToDto(string routeId, bool live, IReadOnlyList<RouteFinding> findings, RouteFinding? selected, bool stale = false) => new(
+    internal static RouteFindingsDto ToDto(string routeId, bool live, IReadOnlyList<RouteFinding> findings, RouteFinding? selected, bool stale = false, RouteFindingsService? view = null)
+    {
+        var filter = live && view is not null ? view.Filter : FindingsFilter.All;
+        var expanded = live ? view?.ExpandedId : null;
+        var counts = RouteFindingsViewModel.Counts(findings);
+        return Dto(routeId, live, findings, selected, stale) with
+        {
+            Filter = PassageCheckToolBase.Filter(filter),
+            Counts = new FindingsCountsDto(counts[FindingsFilter.All], counts[FindingsFilter.Clearance], counts[FindingsFilter.Route], counts[FindingsFilter.Warnings]),
+            Merged = RouteFindingsViewModel.Entries(findings, filter)
+                .Where(e => e.IsMerged)
+                .Select(e => new MergedFindingsDto(
+                    e.Id,
+                    e.Members[0].Code,
+                    FindingsEntry.GroupCode(e.Group),
+                    e.Members.Count,
+                    FindingsEntry.MergedMeta(e.Members),
+                    e.Members.Select(m => m.Id).ToList(),
+                    e.Id == expanded))
+                .ToList(),
+            InfoOpen = live && (view?.InfoOpen ?? false),
+            ExpandedId = expanded,
+        };
+    }
+
+    private static RouteFindingsDto Dto(string routeId, bool live, IReadOnlyList<RouteFinding> findings, RouteFinding? selected, bool stale) => new(
         routeId,
         live,
         findings.Count,
@@ -204,7 +276,7 @@ internal sealed class GetFindingsTool : RouteFindingsToolBase
             if (findings is null)
                 return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("routeId", "the route needs at least two waypoints"));
 
-            return ToolResult<RouteFindingsDto>.Ok(ToDto(route.Id, live, findings, Findings.Selected, Findings.IsStale));
+            return ToolResult<RouteFindingsDto>.Ok(ToDto(route.Id, live, findings, Findings.Selected, Findings.IsStale, Findings));
         }).ConfigureAwait(false);
         return await pending.ConfigureAwait(false);
     }
@@ -237,7 +309,58 @@ internal sealed class SelectFindingTool : RouteFindingsToolBase
             }
 
             Findings.Select(finding, request.Zoom);
-            return ToolResult<RouteFindingsDto>.Ok(ToDto(current.RouteId, live: true, Findings.Findings, Findings.Selected, Findings.IsStale));
+            return ToolResult<RouteFindingsDto>.Ok(ToDto(current.RouteId, live: true, Findings.Findings, Findings.Selected, Findings.IsStale, Findings));
+        }).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// Sets the live findings list's view (#959, D1–D3), as its filter chips,
+/// the verdict card's summary rows, the INFO heading and a merged row do.
+/// </summary>
+internal sealed class SetFindingsViewTool : RouteFindingsToolBase
+{
+    public const string Name = "set_findings_view";
+
+    public SetFindingsViewTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService findings)
+        : base(routes, invoker, check, findings) { }
+
+    public async Task<ToolResult<RouteFindingsDto>> InvokeAsync(SetFindingsViewRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+        await SettleFindingsAsync(cancellationToken).ConfigureAwait(false);
+        return await Invoker.InvokeAsync(() =>
+        {
+            if (Check.Input is not { } current)
+                return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("filter", "Check route is off; turn it on with set_check_mode"));
+
+            FindingsFilter? filter = null;
+            if (request.Filter is { } name)
+            {
+                filter = name.ToLowerInvariant() switch
+                {
+                    "all" => FindingsFilter.All,
+                    "clearance" => FindingsFilter.Clearance,
+                    "route" => FindingsFilter.Route,
+                    "warnings" => FindingsFilter.Warnings,
+                    _ => null,
+                };
+                if (filter is null)
+                    return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("filter", $"'{name}' isn't a filter; use all, clearance, route or warnings"));
+            }
+
+            string? expand = null;
+            if (request.ExpandedId is { Length: > 0 } id)
+            {
+                var entries = RouteFindingsViewModel.Entries(Findings.Findings, filter ?? Findings.Filter);
+                if (!entries.Any(e => e.IsMerged && e.Id == id))
+                    return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("expandedId", $"no merged row '{id}' in the list; read the ids from get_findings' merged"));
+                expand = id;
+            }
+
+            Findings.SetView(filter, request.InfoOpen, expand, collapse: request.ExpandedId is { Length: 0 });
+            return ToolResult<RouteFindingsDto>.Ok(ToDto(current.RouteId, live: true, Findings.Findings, Findings.Selected, Findings.IsStale, Findings));
         }).ConfigureAwait(false);
     }
 }
@@ -266,7 +389,33 @@ internal static class RouteFindingsMcpAdapters
                 "info = not in force or cancelled. For the checked route it's the live list, with " +
                 "the selection; for another route (or with Check route off) the route is checked once without changing " +
                 "the view. The route needs at least two waypoints; without a draft (set_passage) there are no clearance " +
-                "findings, only the route checks'. summary is the verdict card's title when the route has no draft.",
+                "findings, only the route checks'. summary is the verdict card's title when the route has no draft. " +
+                "It also reports the list's view: the filter chip and per-chip counts, the merged rows (check and info " +
+                "findings sharing a code, with every member id), whether INFO is unfolded and the expanded row; change " +
+                "it with set_findings_view.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    public static McpServerTool Create(SetFindingsViewTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("The filter chip: all, clearance, route or warnings; omit to keep it.")] string? filter = null,
+            [Description("True to unfold the INFO group, false to fold it; omit to keep it.")] bool? infoOpen = null,
+            [Description("Id of a merged row to expand (get_findings' merged), or an empty string to collapse; omit to keep it.")] string? expandedId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetFindingsViewRequest(filter, infoOpen, expandedId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetFindingsViewTool.Name,
+            Description =
+                "Sets the checked route's findings list view, as its controls do: the filter chip (all, clearance, " +
+                "route, warnings; the verdict card's summary rows set it too), whether the INFO group is unfolded " +
+                "(folded by default, remembered per route), and which merged row (check or info findings sharing a " +
+                "code, shown once with ×N) is expanded into its findings. Needs Check route on (set_check_mode). " +
+                "Returns the list get_findings returns. Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

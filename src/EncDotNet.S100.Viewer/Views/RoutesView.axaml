@@ -407,6 +407,12 @@
         <Style Selector="Panel.chip.warning > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
         <Style Selector="Panel.chip.destructive > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
         <Style Selector="Panel.chip.neutral > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource MutedColor}" /></Style>
+        <Style Selector="Panel.chip.destructive StackPanel > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.chip.warning StackPanel > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.chip.warning StackPanel > ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Path.octagon.badge">
+            <Setter Property="RenderTransform" Value="scale(0.8)" />
+        </Style>
         <!-- A chip is tinted more strongly than the card. -->
         <Style Selector="Panel.chip Border.toneFill">
             <Setter Property="Opacity" Value="0.16" />
@@ -560,6 +566,74 @@
     </UserControl.Styles>
 
     <UserControl.DataTemplates>
+        <!-- A finding row (#905 F2); a merged row (#959 D2) shows "×N" and
+             expands into its findings as sub-rows, indented 24 px. -->
+        <DataTemplate x:DataType="vm:RouteFindingRowViewModel">
+            <StackPanel>
+                <Button Classes="finding"
+                        Classes.selected="{Binding IsSelected}"
+                        AutomationProperties.AutomationId="{Binding AutomationId}"
+                        AutomationProperties.Name="{Binding Title}"
+                        AutomationProperties.HelpText="{Binding Tooltip}"
+                        ToolTip.Tip="{Binding Tooltip}"
+                        Command="{Binding $parent[UserControl].((vm:RoutesPanelViewModel)DataContext).Check.Findings.SelectCommand, FallbackValue={x:Null}}"
+                        CommandParameter="{Binding}">
+                    <Grid>
+                        <Border Classes="wpTint" />
+                        <Border Classes="wpBar"
+                                HorizontalAlignment="Left"
+                                Margin="0,8" />
+                        <Grid ColumnDefinitions="Auto,*,Auto"
+                              ColumnSpacing="10"
+                              Margin="12,8,8,8">
+                            <Panel Grid.Column="0"
+                                   VerticalAlignment="Top"
+                                   Margin="0,1,0,0"
+                                   Classes.destructive="{Binding IsDestructive}"
+                                   Classes.warning="{Binding IsWarning}"
+                                   Classes.neutral="{Binding IsNeutral}">
+                                <Path Classes="octagon toneInk" IsVisible="{Binding IsOctagon}" />
+                                <ic:FluentIcon Classes="toneInk" Icon="Warning" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsTriangle}" />
+                                <ic:FluentIcon Classes="toneInk" Icon="Water" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsWaves}" />
+                                <ic:FluentIcon Classes="toneInk" Icon="Info" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsInfo}" />
+                            </Panel>
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock Text="{Binding Title}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           LineHeight="15.6"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Meta}"
+                                           FontSize="11"
+                                           Opacity="0.6"
+                                           LineHeight="14.85"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                                <TextBlock AutomationProperties.AutomationId="Routes.Check.Finding.Count"
+                                           Text="{Binding CountLabel}"
+                                           IsVisible="{Binding IsMerged}"
+                                           FontSize="11"
+                                           FontFamily="{DynamicResource LibraryMonoFont}"
+                                           Opacity="0.7"
+                                           VerticalAlignment="Center" />
+                                <Border Classes="findingTag"
+                                        AutomationProperties.AutomationId="Routes.Check.Finding.Tag"
+                                        AutomationProperties.Name="{Binding Tag}">
+                                    <TextBlock Text="{Binding Tag}"
+                                               FontSize="10"
+                                               Opacity="0.6"
+                                               VerticalAlignment="Center" />
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Button>
+                <ItemsControl ItemsSource="{Binding Members}"
+                              IsVisible="{Binding ShowMembers}"
+                              Margin="24,0,0,0" />
+            </StackPanel>
+        </DataTemplate>
         <!-- A leg-detail field: label (blue, with a dot, when overridden), a
              box that is solid when overridden and dashed showing the inherited
              value when not, and a Reset link on an override. Listed before the
@@ -1319,69 +1393,36 @@
                                     <DataTemplate x:DataType="vm:RouteFindingGroupViewModel">
                                         <StackPanel AutomationProperties.AutomationId="{Binding Key, StringFormat='Routes.Check.Findings.Group.{0}'}"
                                                     AutomationProperties.Name="{Binding Label}">
-                                            <TextBlock Text="{Binding Label}"
-                                                       FontSize="10.5"
-                                                       FontWeight="SemiBold"
-                                                       LetterSpacing="0.6"
-                                                       Opacity="0.6"
-                                                       Margin="8,8,8,4" />
-                                            <ItemsControl ItemsSource="{Binding Items}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate x:DataType="vm:RouteFindingRowViewModel">
-                                                        <Button Classes="finding"
-                                                                Classes.selected="{Binding IsSelected}"
-                                                                AutomationProperties.AutomationId="Routes.Check.Finding"
-                                                                AutomationProperties.Name="{Binding Title}"
-                                                                AutomationProperties.HelpText="{Binding Tooltip}"
-                                                                ToolTip.Tip="{Binding Tooltip}"
-                                                                Command="{Binding $parent[ItemsControl;1].((vm:RouteFindingsViewModel)DataContext).SelectCommand}"
-                                                                CommandParameter="{Binding}">
-                                                            <Grid>
-                                                                <Border Classes="wpTint" />
-                                                                <Border Classes="wpBar"
-                                                                        HorizontalAlignment="Left"
-                                                                        Margin="0,8" />
-                                                                <Grid ColumnDefinitions="Auto,*,Auto"
-                                                                      ColumnSpacing="10"
-                                                                      Margin="12,8,8,8">
-                                                                    <Panel Grid.Column="0"
-                                                                           VerticalAlignment="Top"
-                                                                           Margin="0,1,0,0"
-                                                                           Classes.destructive="{Binding IsDestructive}"
-                                                                           Classes.warning="{Binding IsWarning}"
-                                                                           Classes.neutral="{Binding IsNeutral}">
-                                                                        <Path Classes="octagon toneInk" IsVisible="{Binding IsOctagon}" />
-                                                                        <ic:FluentIcon Classes="toneInk" Icon="Warning" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsTriangle}" />
-                                                                        <ic:FluentIcon Classes="toneInk" Icon="Water" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsWaves}" />
-                                                                        <ic:FluentIcon Classes="toneInk" Icon="Info" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsInfo}" />
-                                                                    </Panel>
-                                                                    <StackPanel Grid.Column="1" Spacing="2">
-                                                                        <TextBlock Text="{Binding Title}"
-                                                                                   FontSize="12"
-                                                                                   FontWeight="SemiBold"
-                                                                                   LineHeight="15.6"
-                                                                                   TextWrapping="Wrap" />
-                                                                        <TextBlock Text="{Binding Meta}"
-                                                                                   FontSize="11"
-                                                                                   Opacity="0.6"
-                                                                                   LineHeight="14.85"
-                                                                                   TextWrapping="Wrap" />
-                                                                    </StackPanel>
-                                                                    <Border Grid.Column="2"
-                                                                            Classes="findingTag"
-                                                                            AutomationProperties.AutomationId="Routes.Check.Finding.Tag"
-                                                                            AutomationProperties.Name="{Binding Tag}">
-                                                                        <TextBlock Text="{Binding Tag}"
-                                                                                   FontSize="10"
-                                                                                   Opacity="0.6"
-                                                                                   VerticalAlignment="Center" />
-                                                                    </Border>
-                                                                </Grid>
-                                                            </Grid>
-                                                        </Button>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
+                                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,8,8,4" IsVisible="{Binding !IsFoldable}">
+                                                <TextBlock Text="{Binding Label}"
+                                                           FontSize="10.5"
+                                                           FontWeight="SemiBold"
+                                                           LetterSpacing="0.6"
+                                                           Opacity="0.6" />
+                                                <TextBlock Text="{Binding CountLabel}" FontSize="10.5" Opacity="0.45" />
+                                            </StackPanel>
+                                            <!-- D3: INFO folds by default; its heading toggles it. -->
+                                            <Button Classes="summaryRow"
+                                                    AutomationProperties.AutomationId="Routes.Check.Findings.InfoToggle"
+                                                    AutomationProperties.Name="{Binding Label}"
+                                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_FindingsInfoToggle}"
+                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_FindingsInfoToggle}"
+                                                    IsVisible="{Binding IsFoldable}"
+                                                    Command="{Binding $parent[ItemsControl].((vm:RouteFindingsViewModel)DataContext).ToggleInfoCommand}"
+                                                    Margin="4,4,4,0">
+                                                <StackPanel Orientation="Horizontal" Spacing="6" Margin="4,0">
+                                                    <TextBlock Text="{Binding Label}"
+                                                               FontSize="10.5"
+                                                               FontWeight="SemiBold"
+                                                               LetterSpacing="0.6"
+                                                               Opacity="0.6"
+                                                               VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding CountLabel}" FontSize="10.5" Opacity="0.45" VerticalAlignment="Center" />
+                                                    <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="11" Opacity="0.6" IsVisible="{Binding IsFolded}" VerticalAlignment="Center" />
+                                                    <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="11" Opacity="0.6" IsVisible="{Binding IsOpen}" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                            <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsOpen}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -1410,7 +1451,7 @@
                                             PointerEntered="OnCheckLegPointerEntered"
                                             Command="{Binding $parent[ItemsControl].((vm:PassageCheckViewModel)DataContext).HoverLegCommand}"
                                             CommandParameter="{Binding}">
-                                        <Grid ColumnDefinitions="22,*,Auto" ColumnSpacing="6">
+                                        <Grid ColumnDefinitions="22,*,Auto,Auto" ColumnSpacing="6">
                                             <TextBlock Grid.Column="0"
                                                        Text="{Binding Number}"
                                                        FontFamily="{DynamicResource LibraryMonoFont}"
@@ -1426,7 +1467,30 @@
                                                            Opacity="0.6"
                                                            TextTrimming="CharacterEllipsis" />
                                             </StackPanel>
+                                            <!-- D4: the leg's worst route-check group and count. -->
                                             <Panel Grid.Column="2"
+                                                   Classes="chip"
+                                                   Classes.destructive="{Binding IsBadgeMustReview}"
+                                                   Classes.warning="{Binding IsBadgeCheck}"
+                                                   AutomationProperties.AutomationId="Routes.Check.Leg.Badge"
+                                                   AutomationProperties.Name="{Binding BadgeText}"
+                                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckLegBadge}"
+                                                   IsVisible="{Binding HasBadge}"
+                                                   Height="20"
+                                                   VerticalAlignment="Center">
+                                                <Border Classes="toneFill" Opacity="0.1" />
+                                                <StackPanel Orientation="Horizontal" Spacing="3" Margin="6,0" VerticalAlignment="Center">
+                                                    <Path Classes="octagon toneInk badge" IsVisible="{Binding IsBadgeMustReview}" />
+                                                    <ic:FluentIcon Classes="toneInk" Icon="Warning" IconVariant="Regular" FontSize="12" IsVisible="{Binding IsBadgeCheck}" />
+                                                    <TextBlock Classes="toneInk"
+                                                               Text="{Binding BadgeText}"
+                                                               FontFamily="{DynamicResource LibraryMonoFont}"
+                                                               FontSize="11"
+                                                               VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Panel>
+                                            <Panel Grid.Column="3"
+                                                   IsVisible="{Binding HasChip}"
                                                    Classes="chip"
                                                    Classes.success="{Binding IsChipSuccess}"
                                                    Classes.warning="{Binding IsChipWarning}"

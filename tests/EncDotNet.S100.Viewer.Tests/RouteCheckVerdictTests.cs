@@ -26,10 +26,14 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// </summary>
 public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IClassFixture<WarningsScenarioFixture>, IDisposable
 {
-    private static readonly DateTimeOffset Departure = new(2026, 3, 1, 6, 0, 0, TimeSpan.Zero);
     private readonly CultureInfo _culture = CultureInfo.CurrentCulture;
 
     public void Dispose() => CultureInfo.CurrentCulture = _culture;
+
+    private sealed class InlineInvoker : IRouteEditInvoker
+    {
+        public Task<T> InvokeAsync<T>(Func<T> action) => Task.FromResult(action());
+    }
 
     private sealed class Utc : ITimeFormatProvider
     {
@@ -38,60 +42,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
         public event Action<TimeFormat>? TimeFormatChanged { add { } remove { } }
     }
 
-    private sealed class InlineInvoker : IRouteEditInvoker
-    {
-        public Task<T> InvokeAsync<T>(Func<T> action) => Task.FromResult(action());
-    }
-
-    private sealed class WarningProcessor(IReadOnlyList<RouteWarning> parts) : IDatasetProcessor
-    {
-        public string ProductSpec => "S-124";
-        public SpecRef Spec { get; } = new("S-124", default);
-        public FeatureInfo? GetFeatureInfo(string featureRef) => null;
-        public IEnumerable<FeatureSummary> EnumerateFeatures() => [];
-
-        public IReadOnlyList<NavigationalWarningFeature> GetNavigationalWarnings() =>
-            parts.Select((p, i) => new NavigationalWarningFeature(p.Feature!.FeatureId, i, p.Info)).ToList();
-
-        public S100FeatureGeometry? GetFeatureGeometryAt(int ordinal) =>
-            parts[ordinal].Shapes.FirstOrDefault() ?? new S100FeatureGeometry { Primitive = S100GeometryType.None };
-    }
-
-    private sealed record Setup(RoutesService Routes, Route Route, PassageCheckService Check, RouteFindingsService Findings) : IDisposable
-    {
-        public void Dispose()
-        {
-            Findings.Dispose();
-            Check.Dispose();
-        }
-    }
-
-    // The scenario's S-421 route without a draft, its S-124 warnings listed, at 06:00 and 8 kn.
-    private Setup Create(Action<Action>? post = null)
-    {
-        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
-        var routes = new RoutesService();
-        var route = RouteS421Mapping.FromS421(fixture.S421Route());
-        route.SetPassageValue(RoutePassageField.Draft, null);
-        route.SetDeparture(Departure);
-        routes.Routes.Add(route);
-        routes.Routes.SetActiveRoute(route);
-
-        var loader = new FakeDatasetLoaderService
-        {
-            Processors = RouteWarningSources.FromDatasets(fixture.Datasets)
-                .GroupBy(w => w.Feature!.DatasetId)
-                .ToDictionary(
-                    g => new DatasetEntry($"/tmp/{g.Key}.gml", "S-124"),
-                    g => (IDatasetProcessor)new WarningProcessor(g.ToList())),
-        };
-        var warnings = new NavigationalWarningsService(loader);
-        var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero, post: post);
-        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(),
-            producers: [new WarningFindingProducer(warnings)], post: post);
-        return new Setup(routes, route, check, findings);
-    }
+    private WarningsRouteCheck Create(Action<Action>? post = null) => WarningsRouteCheck.Create(fixture, post);
 
     private static RouteFinding Finding(string id, string code, RouteFindingGroup group, RouteFindingSource source, string? title = null, string? meta = null) =>
         new(id, code, group, source, title ?? id, meta ?? $"meta {id}", 0, 100, null);
@@ -291,5 +242,66 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
         Assert.True(panel.Passage.IsExpanded);
         var draft = host.Find<TextBox>("Routes.Passage.Draft");
         Assert.True(draft.IsFocused);
+    }
+}
+
+/// <summary>
+/// The generated "Warnings on route" scenario's S-421 route without a draft,
+/// at 06:00 and 8 kn, with its S-124 warnings listed and checked (#957).
+/// </summary>
+internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, PassageCheckService Check, RouteFindingsService Findings) : IDisposable
+{
+    private sealed class Utc : ITimeFormatProvider
+    {
+        public TimeFormat Current => TimeFormat.Utc;
+
+        public event Action<TimeFormat>? TimeFormatChanged { add { } remove { } }
+    }
+
+    private sealed class WarningProcessor(IReadOnlyList<RouteWarning> parts) : IDatasetProcessor
+    {
+        public string ProductSpec => "S-124";
+        public SpecRef Spec { get; } = new("S-124", default);
+        public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+        public IEnumerable<FeatureSummary> EnumerateFeatures() => [];
+
+        public IReadOnlyList<NavigationalWarningFeature> GetNavigationalWarnings() =>
+            parts.Select((p, i) => new NavigationalWarningFeature(p.Feature!.FeatureId, i, p.Info)).ToList();
+
+        public S100FeatureGeometry? GetFeatureGeometryAt(int ordinal) =>
+            parts[ordinal].Shapes.FirstOrDefault() ?? new S100FeatureGeometry { Primitive = S100GeometryType.None };
+    }
+
+    // The scenario's S-421 route without a draft, its S-124 warnings listed, at 06:00 and 8 kn.
+    public static WarningsRouteCheck Create(WarningsScenarioFixture fixture, Action<Action>? post = null)
+    {
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        var routes = new RoutesService();
+        var route = RouteS421Mapping.FromS421(fixture.S421Route());
+        route.SetPassageValue(RoutePassageField.Draft, null);
+        route.SetDeparture(new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero));
+        routes.Routes.Add(route);
+        routes.Routes.SetActiveRoute(route);
+
+        var loader = new FakeDatasetLoaderService
+        {
+            Processors = RouteWarningSources.FromDatasets(fixture.Datasets)
+                .GroupBy(w => w.Feature!.DatasetId)
+                .ToDictionary(
+                    g => new DatasetEntry($"/tmp/{g.Key}.gml", "S-124"),
+                    g => (IDatasetProcessor)new WarningProcessor(g.ToList())),
+        };
+        var warnings = new NavigationalWarningsService(loader);
+        var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
+        var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero, post: post);
+        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(),
+            producers: [new WarningFindingProducer(warnings)], post: post);
+        return new WarningsRouteCheck(routes, route, check, findings);
+    }
+
+    public void Dispose()
+    {
+        Findings.Dispose();
+        Check.Dispose();
     }
 }
