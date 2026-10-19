@@ -73,11 +73,11 @@ internal sealed record PassageFieldDto(
 /// <summary>Where a received route came from.</summary>
 [Description("Where a received (read-only) route came from: its exchange file and the identity the file gives it.")]
 internal sealed record RouteSourceDto(
-    [property: Description("Exchange format, e.g. \"S-421\".")] string Format,
+    [property: Description("Exchange format: \"RTZ\" or \"S-421\".")] string Format,
     [property: Description("The format version the file declares, e.g. \"1.0\", or null.")] string? FormatVersion,
     [property: Description("Full path of the file the route was read from.")] string File,
-    [property: Description("The route identifier in the file (S-421 routeID), or null.")] string? RouteId,
-    [property: Description("The route edition in the file (S-421 routeEditionNo), or null.")] int? Edition,
+    [property: Description("The route identifier in the file (S-421 routeID), or null (always null for RTZ, which has none; the route is known by its file).")] string? RouteId,
+    [property: Description("The route edition in the file (S-421 routeEditionNo), or null (always null for RTZ).")] int? Edition,
     [property: Description("The route status code in the file (S-421 routeInfoStatus: 1 Initial, 2 Planned, 3 Recommended, 4 Acknowledged, 5 Used for monitoring, 6 Terminated, 7 Errors, …), or null.")] int? Status);
 
 /// <summary>A route's timing: departure, arrival and where ETAs stop.</summary>

@@ -309,12 +309,30 @@ internal static class RouteS421Mapping
             });
         }
 
+        ApplyLegValues(route, legValues);
+
+        if (elements.Count > 0 && elements[0].Etd is { } departure)
+        {
+            route.SetDeparture(departure);
+        }
+
+        return route;
+    }
+
+    /// <summary>
+    /// Sets a file's per-leg passage values on <paramref name="route"/>: when
+    /// every leg has a value for a field, the one most legs share (the first
+    /// leg's on a tie) becomes the passage value and the rest stay leg
+    /// overrides; <see cref="Route.SetLegOverride"/> drops an override equal
+    /// to it. Shared with the RTZ mapping.
+    /// </summary>
+    /// <param name="route">The route, with its legs in place.</param>
+    /// <param name="legValues">Each leg's values, in leg order.</param>
+    internal static void ApplyLegValues(Route route, IReadOnlyList<IReadOnlyDictionary<RoutePassageField, double?>> legValues)
+    {
         foreach (var field in LegFields.Append(RoutePassageField.Speed))
         {
-            // When every leg has a value, the one most legs share (the first
-            // leg's on a tie) becomes the passage value and the rest stay leg
-            // overrides; SetLegOverride drops an override equal to it.
-            var values = legValues.Select(v => v[field]).ToList();
+            var values = legValues.Select(v => v.GetValueOrDefault(field)).ToList();
             if (values.Count > 0 && values.All(v => v is not null))
             {
                 var shared = values
@@ -328,16 +346,9 @@ internal static class RouteS421Mapping
 
             for (var i = 0; i < legValues.Count; i++)
             {
-                route.SetLegOverride(i, field, legValues[i][field]);
+                route.SetLegOverride(i, field, legValues[i].GetValueOrDefault(field));
             }
         }
-
-        if (elements.Count > 0 && elements[0].Etd is { } departure)
-        {
-            route.SetDeparture(departure);
-        }
-
-        return route;
     }
 
     /// <summary>

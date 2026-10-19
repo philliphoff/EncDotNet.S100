@@ -15,6 +15,17 @@ month. For package versions and release assets, see
   per-chip counts, merged rows (with every member id), the INFO fold and the
   expanded row; `set_findings_view` changes them.
 
+- **Open and export RTZ routes.** SoundCharts' **Import route…** now opens
+  RTZ route plans (IEC 61174 Annex S, versions 1.0, 1.1 and 1.2) as
+  read-only received routes in Planning mode, and **Export…** writes any
+  route as RTZ, with a version select (1.2, 1.1, 1.0). Speeds, the
+  departure, cross-track limits (nautical miles in RTZ), draughts and UKC map
+  onto the route's passage; a copy keeps further schedules, schedule details,
+  vendor extensions and unknown attributes and writes them back. Open RTZ
+  files reopen after a restart. The MCP tools `import_route` and
+  `export_route` take RTZ (`format: "RTZ"`, `version`). The new
+  `EncDotNet.S100.Routes.Rtz` package reads and writes RTZ in your own code.
+
 - **Check route: one verdict for every check.** SoundCharts' footer toggle
   is now **Check route**, on for any route with two or more waypoints. The
   verdict card gives one answer for the clearance check, the route checks and

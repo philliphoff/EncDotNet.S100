@@ -109,6 +109,18 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
         return result;
     }
 
+    /// <summary>The regulated areas (#956) of every cell whose extent overlaps a box.</summary>
+    internal void AddAreas(BoundingBox extent, List<RouteArea> result)
+    {
+        foreach (var cell in _cells)
+        {
+            if (Overlaps(cell.Bounds, extent))
+            {
+                cell.AddAreas(extent, result);
+            }
+        }
+    }
+
     // S-101 codes first, then the S-57 acronyms a translated cell may carry.
     private static readonly string[] ValueOfSoundingCodes = ["valueOfSounding", "VALSOU"];
     private static readonly string[] WaterLevelEffectCodes = ["waterLevelEffect", "WATLEV"];
@@ -148,6 +160,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
     {
         private readonly S101Dataset _dataset;
         private readonly Lazy<Built> _built;
+        private readonly Lazy<Dictionary<uint, S101FeatureRecord>> _records;
 
         public Cell(string datasetId, BoundingBox bounds, S101Dataset dataset)
             : base(datasetId)
@@ -155,6 +168,9 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
             Bounds = bounds;
             _dataset = dataset;
             _built = new Lazy<Built>(Build, LazyThreadSafetyMode.ExecutionAndPublication);
+            _records = new Lazy<Dictionary<uint, S101FeatureRecord>>(
+                () => dataset.Document.Features.GroupBy(f => f.RecordId).ToDictionary(g => g.Key, g => g.First()),
+                LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
         public BoundingBox Bounds { get; }
@@ -181,6 +197,36 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
                     Points = [position],
                     DepthMeters = s.Depth,
                 });
+            }
+        }
+
+        // Adds the restricted, caution, anchorage and traffic areas in a box,
+        // read from their feature records, which keep every value of a
+        // multi-valued or complex attribute.
+        public void AddAreas(BoundingBox extent, List<RouteArea> result)
+        {
+            foreach (var feature in Index.Query(extent))
+            {
+                if (feature.GeometryType != GeometryType.Surface || CatalogRouteAreaSource.Classify(feature.FeatureType) is not { } kind)
+                {
+                    continue;
+                }
+
+                IS100Feature geometry = feature;
+                if (geometry.Surfaces.Count == 0)
+                {
+                    continue;
+                }
+
+                _records.Value.TryGetValue((uint)feature.Id, out var record);
+                result.Add(CatalogRouteAreaSource.S101Area(
+                    kind,
+                    feature.FeatureType,
+                    geometry.Surfaces,
+                    new RouteFindingFeature(DatasetId, feature.Id.ToString(CultureInfo.InvariantCulture)),
+                    this,
+                    _dataset.Document,
+                    record));
             }
         }
 

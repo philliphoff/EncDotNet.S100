@@ -158,7 +158,7 @@ Both hosts provide these tools.
 | `sample_coverage` | No | Samples a depth, water level or current at a point from an S-102, S-104 or S-111 dataset. For S-104 and S-111, `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). |
 | `sample_coverage_along` | No | Samples a coverage at each vertex of a polyline, with the same time handling as `sample_coverage`. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
 | `get_passage_result` | No | Checks under-keel clearance along a passage. See [Check a passage's clearance](#check-a-passages-clearance). |
-| `check_route` | No | Checks a route against the loaded charts: land, drying ground and chart coverage. Needs no draft. See [Check a route against the chart](#check-a-route-against-the-chart). |
+| `check_route` | No | Checks a route against the loaded charts: land, drying ground, chart coverage, and restricted and S-122 protected areas. Needs no draft. See [Check a route against the chart](#check-a-route-against-the-chart). |
 
 ### Session tools
 
@@ -273,39 +273,67 @@ There are two kinds of route:
 
 - **Owned routes** are the ones you create. They're editable and saved
   between sessions.
-- **Received routes** come from an S-421 dataset you open (from the Datasets
-  or Library panel, by drag and drop, with `open_dataset`, or with
-  `import_route`). They're
-  read-only and aren't saved; each lasts while its dataset is open. Datasets
-  the Library loads as you pan never become routes. `list_routes` and
-  `get_route` report `readOnly: true` and the `source` (format, version, file,
-  route ID, edition and status). Opening the same route again (the same file,
-  or the same route ID and edition) selects the existing route, and a newer
-  edition replaces it. Closing the dataset removes the route, and turns Check
-  passage off if it was checking it. `delete_route` on a received route closes
-  its dataset.
+- **Received routes** come from a route file you open. An S-421 file opens
+  as a dataset (from the Datasets or Library panel, by drag and drop, with
+  `open_dataset`, or with `import_route`), and its route lasts while the
+  dataset is open. Datasets the Library loads as you pan never become routes.
+  An RTZ file (IEC 61174 Annex S, versions 1.0, 1.1 and 1.2) opens only with
+  `import_route` or **Import route…**. RTZ has no portrayal of its own, so
+  the route has no dataset; it lasts until you close it, and it reopens after
+  a restart while the file still exists. Received routes are read-only and
+  aren't saved with your own routes. `list_routes` and `get_route` report
+  `readOnly: true` and the `source` (format, version, file, route ID,
+  edition and status). RTZ gives a route no ID or edition, so an RTZ route's
+  `routeId` and `edition` are null and the route is known by its file.
+  Opening the same route again (the same file, or the same route ID and
+  edition) selects the existing route, and a newer edition replaces it.
+  Closing an S-421 route's dataset removes the route, and turns Check passage
+  off if it was checking it. `delete_route` on a received route closes it,
+  and its dataset if it has one.
 
 A tool that would edit a received route fails with `route_read_only`, which names
 `copy_route`. Only its **check settings** can change: draft, squat, required UKC and departure. These
 are your values for checking the route, not route content. Set them with
 `set_passage` (or `set_departure`); they apply to every leg, and they're kept
-on this computer under the route ID and edition. Values in the file are the
-defaults. Speed and cross-track are route values, and they stay as the file
+on this computer under the route ID and edition (an RTZ route's under its
+file). Values in the file are the defaults. Speed and cross-track are route values, and they stay as the file
 gives them.
 
 To edit a received route, make an owned copy with `copy_route`. The copy is a
 new route: it gets a new route ID, a reference to the source's route ID and
-edition, edition 1 and status Planned. What the viewer's route can't hold,
-such as action points, further schedules and extension attributes, is kept and
-written back when the copy is exported. If waypoints are inserted or deleted
-afterwards, the preserved schedules no longer match the route, and export
-leaves them out unless you keep them in the **Routes** panel. `export_route`
-writes any route. A received route exported unchanged keeps its route ID,
-edition and status. Your check settings are written only when you ask, and
-check results are never exported.
+edition, edition 1 and status Planned. What the viewer's route can't hold is
+kept and written back when the copy is exported in the same format: for
+S-421, action points, further schedules and extension attributes; for RTZ,
+further schedules, schedule details (time windows, stays, weather, fuel),
+masthead heights and leg notes, forward and aft draughts, vessel details,
+vendor extensions and unknown attributes. If waypoints are inserted or
+deleted afterwards, the preserved schedules no longer match the route, and
+export leaves them out unless you keep them in the **Routes** panel; content
+tied to single waypoints is written back only while the copy has as many
+waypoints as its file. `export_route` writes any route in either format. A
+received route exported unchanged keeps its route ID, edition and status.
+Your check settings are written only when you ask, and check results are
+never exported.
 
-A received S-421 route starts in **Native** display mode: its dataset draws it
-with the S-421 portrayal, and the route overlay draws nothing.
+RTZ and the viewer's route differ in a few ways:
+
+- A waypoint's `leg` in RTZ describes the leg arriving at it, so leg `i` is
+  read from waypoint `i+1`. Cross-track limits are nautical miles in RTZ and
+  metres in the tools.
+- Import reads speeds and the departure from the first calculated schedule,
+  else the first manual one. A leg with no speed takes the speed its ETD and
+  ETA imply. Draft is the deeper of the forward and aft draughts.
+- Export writes a manual schedule with each leg's speed and the departure,
+  and a calculated schedule with each waypoint's ETA when every leg has a
+  speed and there is a departure.
+- RTZ has no route ID, edition, description, ports, squat, channel limits,
+  speed-through-water limits, safety margin or fixed waypoints. `cannotHold`
+  lists the ones a route has.
+
+A received RTZ route is always in **Planning** display mode: the route
+overlay draws it, without editing handles. A received S-421 route starts in
+**Native** display mode: its dataset draws it with the S-421 portrayal, and
+the route overlay draws nothing.
 `set_route_display_mode` switches it to **Planning**, which hides the dataset
 and draws the route on the overlay, without editing handles. While Check
 passage is on for the route, it's drawn in Planning mode, and the dataset stays
@@ -331,9 +359,9 @@ reports this as the dataset's `viewingGroups`.
 | `select_route_item` | Yes | Selects a waypoint (`waypointIndex`) or a leg (`legIndex`), as clicking its row in the **Routes** panel does, or clears the selection when you pass neither. The map highlights the selected waypoint, or haloes the selected leg and always shows its label. Selecting makes the route active. Returns the updated route. |
 | `set_passage_card` | Yes | Expands (`expanded: true`) or collapses the **Routes** panel's Passage card, as clicking its header does. Switching the active route sets it again: expanded for a route with passage values, collapsed otherwise. To open a leg's detail, select the leg with `select_route_item`. Returns `expanded`. |
 | `set_route_edit_mode` | Yes | Turns the route editor on (`enabled: true`) or off, as the Routes panel's **Edit** toggle and Ctrl+E (⌘E) do. While it is on, clicks on the map add waypoints to the active route. Returns `enabled` and `activeRouteId`. Turning it on for a received route fails with `route_read_only`. |
-| `import_route` | Yes | Opens a route file (`path`, or its `content`) as a received route, as the **Routes** header's **Import route…** does. The format comes from the file's content. An S-421 file also opens as a dataset, and its route starts in Native mode. A file that's already open, or one with the same route ID and edition, selects the existing route (`alreadyOpen: true`). A newer edition replaces it. Returns the route, now active. Fails with `route_import_failed`, whose `reason` is `not_a_route`, `unsupported_version`, `too_few_waypoints` or `older_edition`. |
+| `import_route` | Yes | Opens a route file (`path`, or its `content`) as a received route, as the **Routes** header's **Import route…** does. The format comes from the file's content: RTZ 1.0, 1.1 or 1.2, or S-421. An RTZ route starts in Planning mode. An S-421 file also opens as a dataset, and its route starts in Native mode. A file that's already open, or one with the same route ID and edition, selects the existing route (`alreadyOpen: true`). A newer edition replaces it. Returns the route, now active. Fails with `route_import_failed`, whose `reason` is `not_a_route`, `unsupported_version`, `too_few_waypoints` or `older_edition`. |
 | `copy_route` | Yes | **Copy to edit**: makes an owned, editable copy of a received route (`routeId`, or the active route), named "{name} (copy)". The copy becomes active and opens in Edit mode, and one `undo_route_edit` removes it. Returns `keeps` and `notKept` (the Copy to edit dialog's two lists), the copy's `identity` (`routeId`, `edition`, `status`, `previousRouteId`, `previousEdition`, `kept`) and the `copy`. With `dryRun: true` it changes nothing and returns the lists and identity, with `identity.routeId` null. On an owned route it fails with `invalid_argument`. |
-| `export_route` | No | **Export…**: writes a route in a `format` (`S-421`, version `1.0`). Pass `includeCheckSettings: true` to also write your draft, required UKC and departure. Writes to `path`, or returns the file's `content` when you omit it. Returns the `identity`, `cannotHold` (the fields of this route the format can't hold, empty when nothing is lost) and the dialog's `suggestedFileName`. |
+| `export_route` | No | **Export…**: writes a route in a `format`: `RTZ` (`version` `1.2`, `1.1` or `1.0`; 1.2 when omitted) or `S-421` (version `1.0`). Pass `includeCheckSettings: true` to also write your draft, required UKC and departure; RTZ writes the departure as a calculated schedule and the draft and required UKC on each leg. Writes to `path`, or returns the file's `content` when you omit it. Returns the `identity`, `cannotHold` (the fields of this route the format can't hold, empty when nothing is lost) and the dialog's `suggestedFileName`. |
 | `set_route_display_mode` | Yes | Sets how the map draws a route (`mode`): `native` draws a received S-421 route with its dataset's own portrayal, and `planning` hides the dataset and draws the route on the route overlay. The dataset's visibility in the Datasets panel follows the mode, and turning the dataset on or off there switches the mode. Only received S-421 routes have a Native mode. Returns the updated route. |
 | `set_check_mode` | Yes | Turns **Check route** on (`on: true`) or off for the active route, or for `routeId` (made active first), as the Routes panel's toggle does. The route needs at least two waypoints; without a draft only the route checks run, and the clearance parts (minimum UKC, Clearance tab, window) are absent (`hasDraft: false`) and the route keeps its normal colour. While it's on, the map colours the route by UKC state at ETA when a draft is set, Object Information folds to its edge tab, and the panel shows the verdict card and leg chips. By default it waits for the result (`wait: false` returns at once). Returns what `get_check_state` returns. |
 | `get_check_state` | No | Returns what Check route is showing: `on`, `routeId`, `hasDraft` (false when the clearance check doesn't run), `clearanceChecked`, `computing`, `stale` (the result is being recomputed after an edit, so the route draws grey and dashed), and the verdict card: one verdict over every check, worst first, as `verdictKind` (`must_review`, `data_ends`, `check` or `clear`), `verdictTone`, `verdictTitle` (naming the worst finding, such as "Crosses drying ground", or without a draft "2 to review"), `verdictSubtitle`, the `summary` rows (`clearance`, `route` and, when S-124 warnings were checked, `warnings`, each with `text`, `chip`, `chipTone` and a `link` such as "+ Add draft") and the `footer`. `verdict` is the clearance band (null without a draft), the `confidence` reasons and the verdict card's `confidenceText` (for example "Vertical datums unconfirmed: depth and water level may not share a reference"), `minUkcMeters` and `minUkcLeg`, any `error`, and the cursor (`cursorNm`, `cursorLatitude`, `cursorLongitude`, `cursorLeg`, `cursorEta`). It also returns the `departure` being checked (`departureIsViewTime` when the route has none) and the departure `window`: `from`, `to` and `stepMinutes` of the sweep across the S-104 range, the `windows` of departures that meet your settings (lower-confidence ones included) with their `confidence` caveat, `arrivalAfterDataEnds` (the departures that arrive after the S-104 data ends), `insideWindow`, `nearestMeetingDeparture`, the verdict card's `text` and its `departButton`. `windowComputing` is true while the window is swept again after an edit. Waits for a pending result unless `wait: false`. For the full numbers, call `get_passage_result`. |
@@ -342,7 +370,7 @@ reports this as the dataset's `viewingGroups`.
 | `set_passage_cursor` | Yes | Moves the Check route cursor and the ghost vessel to `distanceNm` along the checked route, as hovering a leg row does, or hides them when `distanceNm` is omitted. Returns the state, including the cursor's position and ETA. |
 | `get_clearance_state` | No | Returns what the **Clearance** tab shows while Check route is on: the profile's `axis` (`distance` or `time`), `canShowTime`, `sourcesOpen`, and the readout at the cursor (`readoutSample`, the sample index in `get_passage_result`; `readoutPosition`, `readoutLeg`, `depth` and `depthSource` with its cell, `waterLevel` and `waterLevelSource` with its station or grid and time step, `draftSquat`, `ukc` and `state`, such as "Meets your settings · lower confidence"). The readout's `band` (`meets_settings`, `tight`, `below_setting` or `no_data`) and `confidence` reasons are reported separately. It also returns the `sources` groups, and the `departureBand`: the `departure` beside it, the `knobFraction` (0 to 1 across the band), the `startLabel`, `middleLabel` and `endLabel` ("12:00 · S-104 ends"), `stale`, and the `segments`, each a run of departures with its `kind` (`meets_settings`, `below_setting`, `arrival_after_data_ends` or `no_data`). Without a cursor, the readout describes the minimum. Open the tab with `set_panel` `Clearance`. |
 | `set_clearance_view` | Yes | Sets the Clearance profile's `axis` (`distance` or `time`; time needs ETAs) and opens or closes Sources (`sourcesOpen`), as the tab's header controls do. The cursor stays on the same sample. Returns what `get_clearance_state` returns. |
-| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check route mode: `count`, the counts per group (`mustReview`, `check`, `info`), the `summary` (such as "2 to review", the verdict card's title without a draft), `stale` while a check is recomputing, `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, `data.s111_forecast_expired`, or the route checks' `route_check.crosses_land`, `route_check.crosses_drying`, `route_check.land_in_corridor`, `route_check.drying_in_corridor` and `data.outside_chart_coverage`; see `check_route`), its `group` (`must_review`, `check` or `info`), its `source` (`clearance`, `route_check`, `s124`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), and a `feature` reference (dataset and feature id) when one is behind it. Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs at least two waypoints; without a draft there are no clearance findings, but the route checks still run. | It also reports the list's view: the `filter` chip (`all`, `clearance`, `route` or `warnings`) and the `counts` per chip, the `merged` rows (check and info findings that share a code show once with a count; each gives its `id`, `code`, `group`, `count`, `meta`, member `ids` and whether it's `expanded`), `infoOpen` (INFO is folded by default) and `expandedId`.
+| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check route mode: `count`, the counts per group (`mustReview`, `check`, `info`), the `summary` (such as "2 to review", the verdict card's title without a draft), `stale` while a check is recomputing, `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, `data.s111_forecast_expired`, or the route checks' `route_check.crosses_land`, `route_check.crosses_drying`, `route_check.land_in_corridor`, `route_check.drying_in_corridor`, `route_check.enters_prohibited_area`, `route_check.protected_area` and `data.outside_chart_coverage`; see `check_route`), its `group` (`must_review`, `check` or `info`), its `source` (`clearance`, `route_check`, `s124`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), and a `feature` reference (dataset and feature id) when one is behind it. Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs at least two waypoints; without a draft there are no clearance findings, but the route checks still run. It also reports the list's view: the `filter` chip (`all`, `clearance`, `route` or `warnings`) and the `counts` per chip, the `merged` rows (check and info findings that share a code show once with a count; each gives its `id`, `code`, `group`, `count`, `meta`, member `ids` and whether it's `expanded`), `infoOpen` (INFO is folded by default) and `expandedId`.
 | `select_finding` | Yes | Selects the finding `id` in the checked route's list, as clicking its row does: the map zooms to it (unless `zoom: false`) and outlines it dashed in its tone with the chip "Zoomed to finding · leg 6 → 7 · 1:31 300", and the profile cursor and ghost vessel move to it. Omit `id` to clear the selection. Needs Check route on. Returns what `get_findings` returns. |
 | `set_findings_view` | Yes | Sets the checked route's findings list view, as its controls do: the `filter` chip (`all`, `clearance`, `route` or `warnings`; the verdict card's summary rows set it too), `infoOpen` to unfold or fold the INFO group (remembered per route), and `expandedId` to expand a merged row from `get_findings`' `merged` (an empty string collapses it). Needs Check route on. Returns what `get_findings` returns. |
 
@@ -417,6 +445,26 @@ draft + squat + required UKC; a route's own draft is used when you omit it.
 | `route_check.soundings_below_safety_depth` | `check` | Soundings shallower than the safety depth inside the limits. |
 | `route_check.crosses_s102_shoal` | `must_review` | The track crosses S-102 cells shallower than the safety contour. |
 | `route_check.s102_shoal_in_corridor` | `check` | Such S-102 cells inside the limits, off the track. |
+
+It also checks regulated areas, with or without the depth checks: S-101
+restricted, military practice, caution, anchorage and traffic areas, and S-122
+marine protected and restricted areas. For a route, the legs' speeds give ETAs
+from `time` (default: the route's departure) and each area's dates and seasons
+are judged at them; where a leg has no speed, and for a polyline, they're
+judged at `time` (default: now).
+
+| Code | Group | When |
+|---|---|---|
+| `route_check.enters_prohibited_area` | `must_review` | The track enters an S-101 area where entry is prohibited or restricted. |
+| `route_check.prohibited_area_in_corridor` | `check` | Such an area inside the limits, off the track. |
+| `route_check.restricted_area` | `check` or `info` | Another S-101 restricted or military practice area; `info` when its restrictions don't bear on a passage, such as fishing or anchoring prohibited. |
+| `route_check.caution_area` | `check` | A caution area. |
+| `route_check.traffic_area` | `check` or `info` | A separation zone, precautionary area or submarine transit lane; `info` for an inshore traffic zone. |
+| `route_check.anchorage_area` | `check` | An anchorage area. |
+| `route_check.protected_area` | `check` or `info` | An S-122 marine protected or restricted area (never `must_review`). |
+| `route_check.area_not_in_force` | `info` | The area's date range or season doesn't cover the ETAs (or `time`). |
+
+An area that only reaches inside the limits is one group lighter.
 
 Where cells overlap, only the finest cell at a place counts, so a coarse
 cell's generalised land doesn't fire where a finer cell charts water.

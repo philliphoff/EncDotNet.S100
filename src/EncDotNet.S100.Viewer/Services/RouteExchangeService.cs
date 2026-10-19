@@ -9,8 +9,8 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <summary>
 /// Import route…, Copy to edit and Export… (#960; handoff Part F): the flows
 /// the Routes panel and the MCP tools share. Formats come from a
-/// <see cref="RouteFormatRegistry"/>, so a new format (RTZ in #961) needs no
-/// change here.
+/// <see cref="RouteFormatRegistry"/> (RTZ and S-421), so a new format needs
+/// no change here.
 /// </summary>
 /// <remarks>Runs on the UI thread.</remarks>
 internal sealed class RouteExchangeService
@@ -52,7 +52,7 @@ internal sealed class RouteExchangeService
     /// Opens <paramref name="path"/> as a received route (F2): the format is
     /// sniffed from the content. A format with its own portrayal (S-421)
     /// loads as a dataset, and the route follows it in Native mode; any other
-    /// is read directly and opens in Planning mode. A file already open
+    /// (RTZ) is read directly and opens in Planning mode. A file already open
     /// selects its route. The route becomes the active route.
     /// </summary>
     /// <param name="path">The file.</param>
@@ -113,6 +113,25 @@ internal sealed class RouteExchangeService
         return admitted is not null
             ? RouteImportResult.Opened(admitted, alreadyOpen: !ReferenceEquals(admitted, read))
             : RouteImportResult.Failed("older_edition", refused!);
+    }
+
+    /// <summary>
+    /// Reopens the route files without a dataset (RTZ) that were open when the
+    /// viewer last closed and still exist (F8), keeping the active route.
+    /// </summary>
+    /// <returns>The routes reopened.</returns>
+    public async Task<IReadOnlyList<Route>> ReopenFilesAsync()
+    {
+        var active = _routes.Routes.ActiveRoute;
+        var reopened = new List<Route>();
+        foreach (var path in _received.TakeFilesToReopen())
+        {
+            if (File.Exists(path) && (await ImportAsync(path).ConfigureAwait(true)).Route is { } route)
+                reopened.Add(route);
+        }
+        _routes.Routes.SetActiveRoute(active);
+        _received.SaveOpenFiles();
+        return reopened;
     }
 
     /// <summary>

@@ -377,6 +377,8 @@ public partial class App : Application
                 _services.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutePersistenceService>();
             routePersistence.Initialize();
             _ = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.ReceivedRoutesService>();
+            // RTZ files open at the last close come back (F8, #961).
+            _ = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>().ReopenFilesAsync();
 
             // Load the dataset collections and start background re-indexing
             // (cached indexes appear immediately; nothing is loaded).
@@ -840,8 +842,16 @@ public partial class App : Application
                 sp.GetRequiredService<GlobalTimeService>()));
         // Findings producers (#953) after the clearance check, in list order.
         // A new check registers one IRouteFindingProducer line here.
+        // The chart and area checks share one set of sources, so the cells' indexes are built once.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckSourceCache>();
         services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(sp =>
-            new EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckFindingProducer(sp.GetService<IMarinerSettingsProvider>()));
+            new EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckFindingProducer(
+                sp.GetService<IMarinerSettingsProvider>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckSourceCache>()));
+        // Restricted, caution, anchorage and traffic areas (S-101) and protected areas (S-122) on the route (#956).
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(sp =>
+            new EncDotNet.S100.Viewer.Services.PassageCheck.AreaFindingProducer(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckSourceCache>()));
         // S-124 warnings on the route (#957), from the Navigational warnings panel's list.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(sp =>
             new EncDotNet.S100.Viewer.Services.PassageCheck.WarningFindingProducer(
