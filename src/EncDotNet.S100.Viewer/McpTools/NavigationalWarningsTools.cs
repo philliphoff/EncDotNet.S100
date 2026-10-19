@@ -23,7 +23,19 @@ internal sealed record NavigationalWarningsDto(
     [property: Description("Number of in-force parts whose warnings are new since their source's latest refresh (the summary's \"N new\" and the Warnings rail badge).")] int New,
     [property: Description("True when the panel's Refresh can read a source again (a listed warning came from a Library SECOM service or online feed).")] bool CanRefresh,
     [property: Description("The Library sources the listed warnings came from, by name; files opened directly have none.")] IReadOnlyList<NavigationalWarningSourceDto> Sources,
-    [property: Description("Every part, in dataset order (the panel groups them by series and source).")] IReadOnlyList<NavigationalWarningDto> Warnings);
+    [property: Description("Every part, in dataset order (the panel groups them by series and source).")] IReadOnlyList<NavigationalWarningDto> Warnings,
+    [property: Description("The latest in-force bulletin of each series published by statusTime, latest first, with the warnings it lists that aren't loaded (S-124 §9.2.2).")] IReadOnlyList<NavigationalWarningBulletinDto> Bulletins);
+
+/// <summary>A series' latest in-force bulletin.</summary>
+[Description("The latest in-force bulletin of a series, and what it lists that isn't loaded.")]
+internal sealed record NavigationalWarningBulletinDto(
+    [property: Description("The series, e.g. \"NAVAREA X\".")] string Series,
+    [property: Description("The bulletin's series and number, e.g. \"NAVAREA X 110/26\", or null.")] string? Label,
+    [property: Description("When the bulletin was published (UTC).")] DateTimeOffset? Published,
+    [property: Description("True when the bulletin says no warning of the series is in force (noMessageOnHand).")] bool NoMessageOnHand,
+    [property: Description("The numbers it lists as in force, e.g. [\"104/26\", \"110/26\"].")] IReadOnlyList<string> Listed,
+    [property: Description("The listed numbers with no loaded warning (the panel's \"Listed in … but not received\" note).")] IReadOnlyList<string> NotReceived,
+    [property: Description("The note the panel shows on the series group, or null when nothing is missing.")] string? NotReceivedText);
 
 /// <summary>A Library source of warnings.</summary>
 [Description("A Library source (SECOM service or online feed) that supplied loaded warnings, and how fresh they are.")]
@@ -49,7 +61,10 @@ internal sealed record NavigationalWarningDto(
     [property: Description("The locality within the area, or null.")] string? Locality,
     [property: Description("The issuing authority, shown as the group's source, or null.")] string? Issuer,
     [property: Description("When the warning was published (UTC), or null.")] DateTimeOffset? Published,
-    [property: Description("Status at statusTime: \"in_force\", \"not_yet_in_force\" or \"ended\".")] string Status,
+    [property: Description("Status at statusTime: \"in_force\", \"not_yet_in_force\" or \"ended\", judged with every loaded warning (cancellations and in-force bulletins, S-124 §9.2.1).")] string Status,
+    [property: Description("Why the part isn't in force: \"validity\" (its ranges), \"cancellation_date\", \"cancelled\" (another warning cancels it), \"not_in_bulletin\" (the latest in-force bulletin for its series, published after it, leaves it out) or \"bulletin_replaced\" (a later bulletin replaces this bulletin); null while in force.")] string? StatusReason,
+    [property: Description("The warning that ended it (the cancelling warning or the in-force bulletin), by series and number, e.g. \"NAVAREA X 110/26\"; null otherwise.")] string? EndedBy,
+    [property: Description("The reason as the Warning card shows it (the panel row shortens a bulletin reason to \"Not in bulletin …\"), e.g. \"Cancelled — not in in-force bulletin NAVAREA X 110/26\"; null when no other warning ended it.")] string? StatusReasonText,
     [property: Description("Geometry: \"point\", \"curve\", \"surface\", or \"none\" for a text-only part.")] string Geometry,
     [property: Description("True when the part has no location, so nothing is drawn for it and only the list reaches it.")] bool TextOnly,
     [property: Description("The part's WGS-84 bounds, or null when it has no location.")] NavigationalWarningBoundsDto? Bounds,
@@ -88,6 +103,8 @@ internal sealed record WarningCardDto(
     [property: Description("Series and number, e.g. \"NAVAREA X 110/26\" (the file name without a number).")] string Label,
     [property: Description("The warning type shown in the header, or null.")] string? Type,
     [property: Description("Status at the view time: \"in_force\", \"not_yet_in_force\" or \"ended\".")] string Status,
+    [property: Description("Why it isn't in force, as list_navigational_warnings gives statusReason; null while in force.")] string? StatusReason,
+    [property: Description("The reason line under the header, e.g. \"Cancelled — not in in-force bulletin NAVAREA X 110/26\"; null when not shown.")] string? StatusReasonText,
     [property: Description("True when the card's body shows.")] bool Open,
     [property: Description("True when the card is one of several, so its header opens it.")] bool Collapsible,
     [property: Description("True while the card's part is previewed on the map (hovered).")] bool Previewed,
@@ -123,6 +140,13 @@ internal abstract class NavigationalWarningsToolBase
 
     protected IRouteEditInvoker Invoker { get; }
 
+    internal static string StatusCode(NavigationalWarningStatus status) => status switch
+    {
+        NavigationalWarningStatus.InForce => "in_force",
+        NavigationalWarningStatus.NotYetInForce => "not_yet_in_force",
+        _ => "ended",
+    };
+
     internal static NavigationalWarningsDto ToDto(NavigationalWarningsViewModel panel, NavigationalWarningsService service)
     {
         var time = panel.StatusTime;
@@ -140,10 +164,18 @@ internal abstract class NavigationalWarningsToolBase
             panel.CanRefresh,
             service.Sources.Select(s => new NavigationalWarningSourceDto(
                 s.Id, s.Name, s.ReceivedAt, s.IsStale, s.IsRefreshing, panel.SourceHeader(s))).ToList(),
-            service.Warnings.Select(w => ToDto(w, time, selected, service.IsNew(w))).ToList());
+            service.Warnings.Select(w => ToDto(w, service.StatusAt(w, time), selected, service.IsNew(w))).ToList(),
+            service.Set.LatestBulletins(time).Select(r => new NavigationalWarningBulletinDto(
+                r.Series,
+                r.Bulletin.Label,
+                r.Bulletin.PublicationTime,
+                r.Bulletin.InForceBulletin!.NoMessageOnHand,
+                r.Bulletin.InForceBulletin.InForce.Select(NavigationalWarningsViewModel.NumberText).ToList(),
+                r.NotReceived.Select(NavigationalWarningsViewModel.NumberText).ToList(),
+                r.NotReceived.Count > 0 ? NavigationalWarningsViewModel.NotReceivedText(r) : null)).ToList());
     }
 
-    private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, DateTimeOffset time, NavigationalWarningEntry? selected, bool isNew)
+    private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, NavigationalWarningState state, NavigationalWarningEntry? selected, bool isNew)
     {
         var w = entry.Warning;
         NavigationalWarningBoundsDto? bounds = null;
@@ -166,12 +198,10 @@ internal abstract class NavigationalWarningsToolBase
             w.Locality,
             w.Issuer,
             w.PublicationTime,
-            w.StatusAt(time) switch
-            {
-                NavigationalWarningStatus.InForce => "in_force",
-                NavigationalWarningStatus.NotYetInForce => "not_yet_in_force",
-                _ => "ended",
-            },
+            StatusCode(state.Status),
+            NavigationalWarningStatusText.Code(state.Reason),
+            state.By is { } by ? by.Label ?? by.Title : null,
+            NavigationalWarningStatusText.Reason(state),
             entry.Geometry switch
             {
                 S100GeometryType.Point => "point",
@@ -290,12 +320,9 @@ internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
         card.Hit?.FeatureRef,
         card.Label,
         card.TypeText,
-        card.Status switch
-        {
-            NavigationalWarningStatus.InForce => "in_force",
-            NavigationalWarningStatus.NotYetInForce => "not_yet_in_force",
-            _ => "ended",
-        },
+        StatusCode(card.Status),
+        NavigationalWarningStatusText.Code(card.State.Reason),
+        card.StatusReasonText,
         card.IsOpen,
         card.IsCollapsible,
         card.Hit is not null && ReferenceEquals(pick.PreviewHit, card.Hit),

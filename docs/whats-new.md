@@ -21,6 +21,26 @@ month. For package versions and release assets, see
   `summary` rows and the `footer`; `verdictTitle` is now the card's overall
   title.
 
+- **Warnings left out of the latest in-force bulletin are cancelled.** S-124
+  Edition 2.0.0 §9.2.1 says a warning published before the latest in-force
+  bulletin for its series, and not listed in it, is no longer valid; S-98
+  §12.12 has ECDIS mark it cancelled. SoundCharts now applies this, and
+  cancellation datasets, everywhere a warning's status shows. The Warning
+  card adds a reason line ("Cancelled — not in in-force bulletin NAVAREA X
+  110/26" or "Cancelled by …"). The Navigational warnings panel's groups,
+  summary count and rail badge, MCP `list_navigational_warnings` and
+  `get_warning_cards` (new `statusReason`, `endedBy` and `statusReasonText`)
+  and route-check findings agree. A series group also says what its latest
+  bulletin lists but isn't loaded ("Listed in NAVAREA X 110/26 but not
+  received: 103/26, 107/26", §9.2.2); `list_navigational_warnings` returns
+  it in `bulletins`. In the libraries, `NavigationalWarningSet` (Core) judges
+  all loaded warnings together and reports each series' latest bulletin
+  (`LatestBulletins`); `NavigationalWarningInfo` gains `InForceBulletin`,
+  `NavigationalWarningReference` an `InteroperabilityIdentifier`, and
+  `IDatasetProcessor` a `GetNavigationalWarningMessage` for datasets with no
+  parts. `RouteWarningCheck.Check` takes the set, and `StatusOver` now takes
+  it and returns the withdrawal too (a breaking change).
+
 - **Routes are checked against the chart.** With **Check route** on,
   SoundCharts' findings list shows where a route's track crosses land or
   drying ground (Must review), where either reaches inside the leg's

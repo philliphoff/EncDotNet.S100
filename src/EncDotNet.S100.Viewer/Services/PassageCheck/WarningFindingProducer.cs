@@ -11,7 +11,9 @@ namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 /// warnings panel lists (<see cref="NavigationalWarningsService"/>) checked
 /// against the route's corridor with <see cref="RouteWarningCheck"/>, judged
 /// at the ETA where the vessel meets each one, or at the view time where the
-/// legs have no speed.
+/// legs have no speed. Status is judged with <see cref="NavigationalWarningsService.Set"/>,
+/// so a part the panel shows as ended by a cancellation or an in-force
+/// bulletin is cancelled here too (#992).
 /// </summary>
 /// <remarks>
 /// It re-runs with the route, its departure and speeds (they are in the
@@ -63,6 +65,7 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
             request.CheckLegs,
             warnings,
             new RouteWarningTiming(schedule, request.ViewTime),
+            _warnings.Set,
             cancellationToken);
         return Task.FromResult(result.Findings);
     }
@@ -78,6 +81,8 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
         InForceAt = Strings.Findings_WarningInForceAtFormat,
         NotInForceAt = Strings.Findings_WarningNotInForceAtFormat,
         CancelledStatus = Strings.Findings_WarningCancelled,
+        NotInBulletin = Strings.Findings_WarningNotInBulletinFormat,
+        NotInBulletinStatus = Strings.Findings_WarningNotInBulletin,
         ValidityRange = Strings.Findings_WarningRangeFormat,
         ValidityFrom = Strings.Pick_Warning_ValidFrom,
         ValidityUntil = Strings.Pick_Warning_ValidUntil,

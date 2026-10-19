@@ -14,6 +14,37 @@ internal static partial class S124WarningInfo
     /// <summary>The <c>referenceCategory</c> of a warning cancellation.</summary>
     private const int CancellationCategory = 1;
 
+    /// <summary>The <c>referenceCategory</c> of an in-force bulletin's list (Edition 2.0.0 Table 8-1).</summary>
+    private const int InForceCategory = 3;
+
+    /// <summary>
+    /// Builds the warning as a whole, from its preamble and references alone:
+    /// what a <see cref="NavigationalWarningSet"/> needs from a dataset that
+    /// may have no parts, such as a cancellation or an in-force bulletin.
+    /// </summary>
+    /// <param name="warning">The typed warning.</param>
+    /// <returns>The warning, with no validity, text or geometry.</returns>
+    public static NavigationalWarningInfo Message(S124NavigationalWarning warning)
+    {
+        var preamble = warning.Preamble;
+        var msi = preamble?.MessageSeriesIdentifier;
+        return new NavigationalWarningInfo
+        {
+            Series = Trimmed(msi?.NameOfSeries),
+            Number = FormatNumber(msi?.WarningNumber, msi?.Year),
+            GeneralType = preamble?.NavwarnTypeGeneralName,
+            Title = Trimmed(preamble?.Title),
+            GeneralArea = Trimmed(preamble?.GeneralArea),
+            Locality = Trimmed(preamble?.Locality),
+            Issuer = Trimmed(preamble?.PromulgatingAuthority) ?? Trimmed(msi?.ProductionAgency),
+            PublicationTime = preamble?.PublicationTime,
+            CancellationDate = preamble?.CancellationDate,
+            Reference = ReferenceOf(msi),
+            Cancels = [.. Cancellations(warning)],
+            InForceBulletin = Bulletin(warning),
+        };
+    }
+
     /// <summary>
     /// Builds the message for <paramref name="part"/>, reading identification,
     /// general type, area and issuer from the warning's preamble.
@@ -41,10 +72,9 @@ internal static partial class S124WarningInfo
             Validity = [.. part.ValidityRanges.Select(r => new NavigationalWarningValidity(r.Start, r.End))],
             Texts = [.. part.Information.Select(i => new NavigationalWarningText(i.Language, i.Text))],
             HasLocation = part.GeometryKind != S124GeometryKind.None || part.AffectedAreas.Count > 0,
-            Reference = msi?.WarningNumber is { } number
-                ? new NavigationalWarningReference(Trimmed(msi.NameOfSeries), number, msi.Year)
-                : null,
+            Reference = ReferenceOf(msi),
             Cancels = [.. Cancellations(warning)],
+            InForceBulletin = Bulletin(warning),
             AffectedAreas = [.. part.AffectedAreas
                 .Select(a => Geometry(a.GeometryKind, a.Coordinates))
                 .OfType<S100FeatureGeometry>()],
@@ -66,10 +96,10 @@ internal static partial class S124WarningInfo
             var any = false;
             foreach (var msi in reference.Warnings)
             {
-                if (msi.WarningNumber is { } number)
+                if (ReferenceOf(msi) is { } cancelled)
                 {
                     any = true;
-                    yield return new NavigationalWarningReference(Trimmed(msi.NameOfSeries), number, msi.Year);
+                    yield return cancelled;
                 }
             }
 
@@ -77,6 +107,37 @@ internal static partial class S124WarningInfo
                 yield return parsed;
         }
     }
+
+    /// <summary>
+    /// What <paramref name="warning"/> lists as in force when it is an
+    /// in-force bulletin, or <c>null</c>. A bulletin is recognised by a
+    /// <c>References</c> with <c>referenceCategory</c> 3 (In-Force) that lists
+    /// <c>messageSeriesIdentifier</c>s or sets <c>noMessageOnHand</c>
+    /// (Edition 2.0.0 Table 8-1, §8.1.3, §8.1.4). Its <c>navwarnTypeGeneral</c>
+    /// 8 and its own <c>warningType</c> 9–12 (NAVAREA, sub-area, coastal and
+    /// local in-force bulletin) are supporting signals, not the trigger; the
+    /// series comes from its own <c>messageSeriesIdentifier</c>.
+    /// </summary>
+    internal static NavigationalWarningBulletin? Bulletin(S124NavigationalWarning warning)
+    {
+        var lists = warning.References.Where(r => r.ReferenceCategory == InForceCategory).ToList();
+        if (lists.Count == 0)
+            return null;
+        var inForce = lists.SelectMany(r => r.Warnings).Select(ReferenceOf).OfType<NavigationalWarningReference>().ToList();
+        var noMessage = lists.Any(r => r.NoMessageOnHand == true);
+        if (inForce.Count == 0 && !noMessage)
+            return null;
+        return new NavigationalWarningBulletin(inForce, noMessage && inForce.Count == 0);
+    }
+
+    /// <summary>A <c>messageSeriesIdentifier</c> as a reference, or <c>null</c> without a warning number.</summary>
+    private static NavigationalWarningReference? ReferenceOf(S124MessageSeriesIdentifier? msi) =>
+        msi?.WarningNumber is { } number
+            ? new NavigationalWarningReference(Trimmed(msi.NameOfSeries), number, msi.Year)
+            {
+                InteroperabilityIdentifier = Trimmed(msi.InteroperabilityIdentifier),
+            }
+            : null;
 
     /// <summary>Reads "[series] number/year" (the year two or four digits), or <c>null</c>.</summary>
     internal static NavigationalWarningReference? ParseMessageReference(string? text)
