@@ -30,6 +30,12 @@ namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 /// draft; only the clearance check needs one.
 /// </para>
 /// <para>
+/// Edits and posted results may run on different threads (with no
+/// <c>post</c>, results land on the thread pool): every slot change and the
+/// merge into <see cref="Findings"/> happen under one lock, so a merge never
+/// publishes slots it read before a newer run landed.
+/// </para>
+/// <para>
 /// <see cref="Select"/> follows the Validation tab's click-to-zoom pattern
 /// (<c>ValidationFindingViewModel.ZoomToFindingCommand</c>): it zooms the
 /// map to the finding's location and moves the profile cursor to it.
@@ -271,7 +277,8 @@ internal sealed class RouteFindingsService : IDisposable
             _timeFormat.TimeFormatChanged -= OnFormatChanged;
         foreach (var slot in _slots)
         {
-            slot.Pending?.Cancel();
+            lock (_gate)
+                slot.Pending?.Cancel();
             if (slot.Producer is IRouteFindingInputs inputs && slot.OnInputsChanged is { } handler)
                 inputs.InputsChanged -= handler;
         }
@@ -322,8 +329,12 @@ internal sealed class RouteFindingsService : IDisposable
 
         if (input is null)
         {
-            foreach (var slot in _slots)
-                slot.Reset();
+            lock (_gate)
+            {
+                foreach (var slot in _slots)
+                    slot.Reset();
+            }
+
             Merge();
             return;
         }
@@ -350,12 +361,15 @@ internal sealed class RouteFindingsService : IDisposable
     // debounced. A stale check keeps the findings of the one before.
     private void RunClearance(Slot slot, PassageCheckService.CheckInput input, PassageCheckSnapshot? current)
     {
-        slot.Pending?.Cancel();
-        slot.Pending = null;
-        if (current is null || current.RouteId != input.RouteId)
+        lock (_gate)
         {
-            slot.Show(input.RouteId, []);
-            return;
+            slot.Pending?.Cancel();
+            slot.Pending = null;
+            if (current is null || current.RouteId != input.RouteId)
+            {
+                slot.Show(input.RouteId, []);
+                return;
+            }
         }
 
         var cts = new CancellationTokenSource();
@@ -366,27 +380,38 @@ internal sealed class RouteFindingsService : IDisposable
         }
         catch (Exception ex)
         {
-            slot.Fail(input.RouteId, ex.Message);
+            lock (_gate)
+                slot.Fail(input.RouteId, ex.Message);
             return;
         }
 
-        if (task.IsCompletedSuccessfully)
+        lock (_gate)
         {
-            slot.Show(input.RouteId, task.Result);
-            return;
+            if (task.IsCompletedSuccessfully)
+            {
+                slot.Show(input.RouteId, task.Result);
+                return;
+            }
+
+            slot.Pending = cts;
+            slot.MarkStale(input.RouteId);
         }
 
-        slot.Pending = cts;
-        slot.MarkStale(input.RouteId);
         Track(slot, AwaitAsync(slot, input.RouteId, task, cts.Token));
     }
 
     private void Schedule(Slot slot, RouteFindingRequest request, TimeSpan delay)
     {
-        slot.Pending?.Cancel();
         var cts = new CancellationTokenSource();
-        slot.Pending = cts;
-        slot.MarkStale(request.RouteId);
+        lock (_gate)
+        {
+            // Cancelled under the lock: the superseded run's landing either
+            // happened already or sees the cancellation.
+            slot.Pending?.Cancel();
+            slot.Pending = cts;
+            slot.MarkStale(request.RouteId);
+        }
+
         Track(slot, RunAsync(slot, request, delay, cts.Token));
     }
 
@@ -421,10 +446,14 @@ internal sealed class RouteFindingsService : IDisposable
             var found = await task.ConfigureAwait(false);
             _post(() =>
             {
-                if (token.IsCancellationRequested || _disposed)
-                    return;
-                slot.Pending = null;
-                slot.Show(routeId, found);
+                lock (_gate)
+                {
+                    if (token.IsCancellationRequested || _disposed)
+                        return;
+                    slot.Pending = null;
+                    slot.Show(routeId, found);
+                }
+
                 Merge();
             });
         }
@@ -436,22 +465,32 @@ internal sealed class RouteFindingsService : IDisposable
         {
             _post(() =>
             {
-                if (token.IsCancellationRequested || _disposed)
-                    return;
-                slot.Pending = null;
-                slot.Fail(routeId, ex.Message);
+                lock (_gate)
+                {
+                    if (token.IsCancellationRequested || _disposed)
+                        return;
+                    slot.Pending = null;
+                    slot.Fail(routeId, ex.Message);
+                }
+
                 Merge();
             });
         }
     }
 
+    // Reads the slots and publishes their merge in one step, so a merge that
+    // read them before a newer run landed can't overwrite that run's.
     private void Merge()
     {
-        Findings = PassageFindings.Sort(_slots.SelectMany(s => s.Findings));
+        lock (_gate)
+        {
+            Findings = PassageFindings.Sort(_slots.SelectMany(s => s.Findings));
 
-        // Keep the selection when the recompute found the same thing.
-        if (Selected is { } selected)
-            Selected = Findings.FirstOrDefault(f => f.Id == selected.Id);
+            // Keep the selection when the recompute found the same thing.
+            if (Selected is { } selected)
+                Selected = Findings.FirstOrDefault(f => f.Id == selected.Id);
+        }
+
         Changed?.Invoke(this, EventArgs.Empty);
     }
 

@@ -97,6 +97,15 @@ public sealed class RouteFindingProducerTests : IDisposable
         }
     }
 
+    /// <summary>Returns one finding whose id carries the request's departure: <c>departure.{unix seconds}</c>.</summary>
+    private sealed class DepartureProducer : IRouteFindingProducer
+    {
+        public static string IdFor(DateTimeOffset departure) => $"departure.{departure.ToUnixTimeSeconds()}";
+
+        public Task<IReadOnlyList<RouteFinding>> ProduceAsync(RouteFindingRequest request, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<RouteFinding>>([Finding(IdFor(request.Departure), RouteFindingGroup.Check, 1000)]);
+    }
+
     /// <summary>Holds each call until the test releases it.</summary>
     private sealed class HeldProducer(string prefix) : IRouteFindingProducer
     {
@@ -354,6 +363,29 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.True(held.Call(3).Token.IsCancellationRequested);
         Assert.Empty(findings.Findings);
         Assert.False(findings.IsStale);
+    }
+
+    [Fact]
+    public async Task Without_a_post_the_latest_run_wins_over_the_callers_merge()
+    {
+        // No post: a run's findings land on the thread pool while the caller's
+        // edit is still merging. Every edit's findings must survive that.
+        var f = new PassageCheckFixture();
+        f.Route.SetPassageValue(RoutePassageField.Draft, null);
+        using var findings = new RouteFindingsService(f.Check, f.Routes, f.Catalog, timeFormat: new Utc(), clock: new FixedClock(Now),
+            producers: [new DepartureProducer()]);
+        f.Routes.IsCheckModeActive = true;
+        await findings.WhenIdle();
+        Assert.Equal(DepartureProducer.IdFor(PassageCheckFixture.Departure), Assert.Single(findings.Findings).Id);
+
+        for (var i = 1; i <= 500; i++)
+        {
+            var departure = PassageCheckFixture.Departure.AddMinutes(i);
+            f.Route.SetDeparture(departure);
+            await findings.WhenIdle();
+            Assert.Equal(DepartureProducer.IdFor(departure), Assert.Single(findings.Findings).Id);
+            Assert.False(findings.IsStale);
+        }
     }
 
     [Fact]
