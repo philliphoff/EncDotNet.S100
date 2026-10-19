@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Navigation;
@@ -8,36 +9,62 @@ using EncDotNet.S100.Viewer.Services.PassageCheck;
 namespace EncDotNet.S100.Viewer.ViewModels;
 
 /// <summary>
-/// The Findings tab in Check passage mode (#905, handoff F1–F5): the
-/// checked route's findings grouped MUST REVIEW / CHECK / INFO, projected
-/// from <see cref="RouteFindingsService"/>.
+/// The Findings tab in Check route mode (#905, #959, handoff D1, F1–F5): the
+/// checked route's findings grouped MUST REVIEW / CHECK / INFO under the
+/// source filter chips, projected from <see cref="RouteFindingsService"/>.
 /// </summary>
 internal sealed class RouteFindingsViewModel : ViewModelBase
 {
     private readonly RouteFindingsService _service;
+    private IReadOnlyList<RouteFinding> _shown = [];
 
     public RouteFindingsViewModel(RouteFindingsService service)
     {
         ArgumentNullException.ThrowIfNull(service);
         _service = service;
         Groups = new ObservableCollection<RouteFindingGroupViewModel>();
+        FilterChips = new ObservableCollection<FindingsFilterChipViewModel>(
+            Enum.GetValues<FindingsFilter>().Select(f => new FindingsFilterChipViewModel(f)));
         SelectCommand = new RelayCommand<RouteFindingRowViewModel>(row =>
         {
             if (row is not null)
                 _service.Select(row.Finding);
         });
+        SetFilterCommand = new RelayCommand<FindingsFilterChipViewModel>(chip =>
+        {
+            if (chip is not null)
+                Filter = chip.Filter;
+        });
         _service.Changed += (_, _) => Refresh();
         Refresh();
     }
 
-    /// <summary>The non-empty groups, in MUST REVIEW, CHECK, INFO order.</summary>
+    /// <summary>The non-empty groups after the filter, in MUST REVIEW, CHECK, INFO order.</summary>
     public ObservableCollection<RouteFindingGroupViewModel> Groups { get; }
+
+    /// <summary>The source filter chips (D1): All · Clearance · Route · Warnings, each with its count.</summary>
+    public ObservableCollection<FindingsFilterChipViewModel> FilterChips { get; }
 
     /// <summary>Selects a finding: zooms the map to it and moves the profile cursor there (F3).</summary>
     public ICommand SelectCommand { get; }
 
+    /// <summary>Selects a filter chip.</summary>
+    public ICommand SetFilterCommand { get; }
+
+    private FindingsFilter _filter;
+    /// <summary>Which findings the list shows (D1); the verdict card's summary rows set it too (B3).</summary>
+    public FindingsFilter Filter
+    {
+        get => _filter;
+        set
+        {
+            if (SetProperty(ref _filter, value))
+                Refresh();
+        }
+    }
+
     private int _count;
-    /// <summary>How many findings there are; the Findings segment shows it.</summary>
+    /// <summary>How many findings there are in all; the Findings segment shows it.</summary>
     public int Count
     {
         get => _count;
@@ -51,15 +78,52 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
     /// <summary>Whether there are no findings.</summary>
     public bool IsEmpty => Count == 0;
 
+    private bool _isFilteredEmpty;
+    /// <summary>Whether there are findings but none passes the filter.</summary>
+    public bool IsFilteredEmpty
+    {
+        get => _isFilteredEmpty;
+        private set => SetProperty(ref _isFilteredEmpty, value);
+    }
+
+    /// <summary>The findings the list shows, after the filter, in list order.</summary>
+    public IReadOnlyList<RouteFinding> Shown => _shown;
+
     /// <summary>Raised after <see cref="Count"/> may have changed.</summary>
     public event EventHandler? CountChanged;
+
+    /// <summary>The number of findings each filter shows.</summary>
+    internal static IReadOnlyDictionary<FindingsFilter, int> Counts(IReadOnlyList<RouteFinding> findings)
+    {
+        var counts = Enum.GetValues<FindingsFilter>().ToDictionary(f => f, _ => 0);
+        counts[FindingsFilter.All] = findings.Count;
+        foreach (var finding in findings)
+            counts[RouteCheckVerdict.FilterOf(finding)]++;
+        return counts;
+    }
+
+    /// <summary>Whether a finding passes a filter.</summary>
+    internal static bool Passes(RouteFinding finding, FindingsFilter filter) =>
+        filter == FindingsFilter.All || RouteCheckVerdict.FilterOf(finding) == filter;
 
     /// <summary>Re-reads the service.</summary>
     public void Refresh()
     {
         var findings = _service.Findings;
         var selectedId = _service.Selected?.Id;
-        var groups = findings.GroupBy(f => f.Group).OrderBy(g => g.Key).ToList();
+        var counts = Counts(findings);
+        foreach (var chip in FilterChips)
+        {
+            chip.Count = counts[chip.Filter];
+            chip.IsSelected = chip.Filter == Filter;
+            // D1: a chip shows only when it has findings (Clearance only with a
+            // draft); the selected one stays so the filter can be seen and undone.
+            chip.IsVisible = chip.Filter == FindingsFilter.All || chip.IsSelected
+                || (chip.Count > 0 && (chip.Filter != FindingsFilter.Clearance || _service.HasDraft));
+        }
+
+        _shown = findings.Where(f => Passes(f, Filter)).ToList();
+        var groups = _shown.GroupBy(f => f.Group).OrderBy(g => g.Key).ToList();
 
         // Rebuild only what changed so a selection change doesn't recreate rows.
         var same = groups.Count == Groups.Count
@@ -80,7 +144,57 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
         }
 
         Count = findings.Count;
+        IsFilteredEmpty = findings.Count > 0 && _shown.Count == 0;
         CountChanged?.Invoke(this, EventArgs.Empty);
+    }
+}
+
+/// <summary>A source filter chip (D1): "All 7", "Route 1", "Warnings 6".</summary>
+internal sealed class FindingsFilterChipViewModel : ViewModelBase
+{
+    public FindingsFilterChipViewModel(FindingsFilter filter)
+    {
+        Filter = filter;
+    }
+
+    public FindingsFilter Filter { get; }
+
+    /// <summary>A stable AutomationId suffix: All, Clearance, Route or Warnings.</summary>
+    public string Key => Filter.ToString();
+
+    private int _count;
+    /// <summary>How many findings the chip shows.</summary>
+    public int Count
+    {
+        get => _count;
+        set
+        {
+            if (SetProperty(ref _count, value))
+                OnPropertyChanged(nameof(Label));
+        }
+    }
+
+    /// <summary>The chip's text, e.g. "Route 1".</summary>
+    public string Label => string.Format(CultureInfo.CurrentCulture, Filter switch
+    {
+        FindingsFilter.Clearance => Strings.Findings_FilterClearanceFormat,
+        FindingsFilter.Route => Strings.Findings_FilterRouteFormat,
+        FindingsFilter.Warnings => Strings.Findings_FilterWarningsFormat,
+        _ => Strings.Findings_FilterAllFormat,
+    }, Count);
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => SetProperty(ref _isSelected, value);
+    }
+
+    private bool _isVisible = true;
+    public bool IsVisible
+    {
+        get => _isVisible;
+        set => SetProperty(ref _isVisible, value);
     }
 }
 

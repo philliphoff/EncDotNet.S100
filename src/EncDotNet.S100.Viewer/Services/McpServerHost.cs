@@ -444,10 +444,10 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(SetRouteInfoMcpAdapter.Create(new SetRouteInfoTool(_routesService, invoker)));
             if (_passageCheck is not null)
             {
-                tools.Add(PassageCheckMcpAdapters.Create(new SetCheckModeTool(_routesService, invoker, _passageCheck)));
-                tools.Add(PassageCheckMcpAdapters.Create(new GetCheckStateTool(_routesService, invoker, _passageCheck)));
-                tools.Add(PassageCheckMcpAdapters.Create(new SetPassageCursorTool(_routesService, invoker, _passageCheck)));
-                tools.Add(PassageCheckMcpAdapters.Create(new SetDepartureTool(_routesService, invoker, _passageCheck)));
+                tools.Add(PassageCheckMcpAdapters.Create(new SetCheckModeTool(_routesService, invoker, _passageCheck, _routeFindings)));
+                tools.Add(PassageCheckMcpAdapters.Create(new GetCheckStateTool(_routesService, invoker, _passageCheck, _routeFindings)));
+                tools.Add(PassageCheckMcpAdapters.Create(new SetPassageCursorTool(_routesService, invoker, _passageCheck, _routeFindings)));
+                tools.Add(PassageCheckMcpAdapters.Create(new SetDepartureTool(_routesService, invoker, _passageCheck, _routeFindings)));
                 if (_followPassage is not null && _timeline is not null)
                     tools.Add(PassageCheckMcpAdapters.Create(new SetFollowPassageTool(_followPassage, _passageCheck, invoker, _timeline)));
                 if (_routeFindings is not null)

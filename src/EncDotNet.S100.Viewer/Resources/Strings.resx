@@ -1546,11 +1546,11 @@
   <data name="Tooltip_EditRouteToggle" xml:space="preserve">
     <value>Edit the route on the map ({0}). Turn off when done.</value>
   </data>
-  <data name="Button_CheckPassage" xml:space="preserve">
-    <value>Check passage</value>
+  <data name="Button_CheckRoute" xml:space="preserve">
+    <value>Check route</value>
   </data>
-  <data name="Tooltip_CheckPassageNoDraft" xml:space="preserve">
-    <value>Check this route against your settings; add a draft to check clearance too</value>
+  <data name="Tooltip_CheckRouteNoDraft" xml:space="preserve">
+    <value>Check the route against your settings; add a draft to check clearance too</value>
   </data>
   <data name="Label_UndoRouteEdit" xml:space="preserve">
     <value>Undo</value>
@@ -4753,7 +4753,7 @@
     <value>One value for both sides, or port / stbd</value>
   </data>
   <data name="Routes_PassageHelp" xml:space="preserve">
-    <value>Draft enables Check passage. Speed gives ETAs. Everything else is optional.</value>
+    <value>Draft enables the clearance check. Speed gives ETAs. Everything else is optional.</value>
   </data>
   <data name="Routes_PassagePrompt" xml:space="preserve">
     <value>Add draft and speed to check clearance</value>
@@ -4815,8 +4815,8 @@
   <data name="Tooltip_LegDetail" xml:space="preserve">
     <value>Show this leg's speed, draft, cross-track and UKC</value>
   </data>
-  <data name="Tooltip_CheckPassage" xml:space="preserve">
-    <value>Check this departure against your settings</value>
+  <data name="Tooltip_CheckRoute" xml:space="preserve">
+    <value>Check the route against your settings</value>
   </data>
   <data name="Routes_DurationMinutesFormat" xml:space="preserve">
     <value>{0} min</value>
@@ -4902,17 +4902,8 @@
   <data name="Check_NoDraftVerdictNone" xml:space="preserve">
     <value>No findings for your settings</value>
   </data>
-  <data name="Check_NoDraftVerdictOne" xml:space="preserve">
-    <value>1 item to review</value>
-  </data>
-  <data name="Check_NoDraftVerdictFormat" xml:space="preserve">
-    <value>{0} items to review</value>
-  </data>
-  <data name="Check_FooterNoDraft" xml:space="preserve">
-    <value>Not for navigation · route checked without clearance</value>
-  </data>
-  <data name="Tooltip_CheckPassageNoLegs" xml:space="preserve">
-    <value>Add at least two waypoints to check the route</value>
+  <data name="Tooltip_CheckRouteNoLegs" xml:space="preserve">
+    <value>Add two waypoints to check the route</value>
   </data>
   <data name="Check_TabLegs" xml:space="preserve">
     <value>Legs</value>
@@ -5306,7 +5297,7 @@
     <value>Add a speed to plot the profile against ETA</value>
   </data>
   <data name="Clearance_Empty" xml:space="preserve">
-    <value>Turn on Check passage on a route to see its clearance profile.</value>
+    <value>Turn on Check route on a route with a draft to see its clearance profile.</value>
   </data>
   <data name="Clearance_ReadoutPositionFormat" xml:space="preserve">
     <value>{0:0.0} NM · {1}</value>
@@ -5461,6 +5452,96 @@
   <data name="Tooltip_CheckDepart" xml:space="preserve">
     <value>Set the departure to the nearest departure that meets your settings</value>
   </data>
+  <data name="Check_ToReviewFormat" xml:space="preserve">
+    <value>{0} to review</value>
+  </data>
+  <data name="Check_ToCheckFormat" xml:space="preserve">
+    <value>{0} to check</value>
+  </data>
+  <data name="Check_MoreFormat" xml:space="preserve">
+    <value>and {0} more</value>
+  </data>
+  <data name="Check_VerdictCheckFormat" xml:space="preserve">
+    <value>Meets your settings · {0} to check</value>
+  </data>
+  <data name="Check_AndMoreToReviewFormat" xml:space="preserve">
+    <value>{0} · and {1} more to review</value>
+  </data>
+  <data name="Check_ClearNoDraft" xml:space="preserve">
+    <value>Land, drying, dangers, areas and warnings checked</value>
+  </data>
+  <data name="Check_SummaryClearance" xml:space="preserve">
+    <value>Clearance</value>
+  </data>
+  <data name="Check_SummaryRoute" xml:space="preserve">
+    <value>Route</value>
+  </data>
+  <data name="Check_SummaryWarnings" xml:space="preserve">
+    <value>Warnings</value>
+  </data>
+  <data name="Check_SummaryNotChecked" xml:space="preserve">
+    <value>Not checked</value>
+  </data>
+  <data name="Check_SummaryAddDraft" xml:space="preserve">
+    <value>+ Add draft</value>
+  </data>
+  <data name="Check_SummaryClearanceFormat" xml:space="preserve">
+    <value>min {0} · required {1}</value>
+  </data>
+  <data name="Check_SummaryClearanceNoMarginFormat" xml:space="preserve">
+    <value>min {0} · no margin set</value>
+  </data>
+  <data name="Check_SummaryNothingFound" xml:space="preserve">
+    <value>Nothing found</value>
+  </data>
+  <data name="Check_SummaryNothingOnRoute" xml:space="preserve">
+    <value>Nothing on route</value>
+  </data>
+  <data name="Check_SummaryInForceFormat" xml:space="preserve">
+    <value>{0} in force on route</value>
+  </data>
+  <data name="Check_SummaryNearFormat" xml:space="preserve">
+    <value>{0} near</value>
+  </data>
+  <data name="Check_SummaryNearRouteFormat" xml:space="preserve">
+    <value>{0} near route</value>
+  </data>
+  <data name="Check_ChipBelowFormat" xml:space="preserve">
+    <value>{0} below</value>
+  </data>
+  <data name="Check_ChipTight" xml:space="preserve">
+    <value>tight</value>
+  </data>
+  <data name="Check_ChipMeets" xml:space="preserve">
+    <value>meets</value>
+  </data>
+  <data name="Check_WindowRouteFindings" xml:space="preserve">
+    <value>Route-check findings don't change with departure.</value>
+  </data>
+  <data name="Check_NoDraftHeader" xml:space="preserve">
+    <value>No draft</value>
+  </data>
+  <data name="Tooltip_CheckSummaryRow" xml:space="preserve">
+    <value>Show these findings</value>
+  </data>
+  <data name="Tooltip_CheckAddDraft" xml:space="preserve">
+    <value>Add a draft to check clearance</value>
+  </data>
+  <data name="Findings_FilterAllFormat" xml:space="preserve">
+    <value>All {0}</value>
+  </data>
+  <data name="Findings_FilterClearanceFormat" xml:space="preserve">
+    <value>Clearance {0}</value>
+  </data>
+  <data name="Findings_FilterRouteFormat" xml:space="preserve">
+    <value>Route {0}</value>
+  </data>
+  <data name="Findings_FilterWarningsFormat" xml:space="preserve">
+    <value>Warnings {0}</value>
+  </data>
+  <data name="Findings_FilterEmpty" xml:space="preserve">
+    <value>No findings for this filter.</value>
+  </data>
   <data name="Clearance_Departure" xml:space="preserve">
     <value>Departure</value>
   </data>
@@ -5486,7 +5567,7 @@
     <value>Pin the view time to the ETA at the Clearance cursor, so S-104 and S-111 show what the ship meets there. Sets the route's departure if it has none.</value>
   </data>
   <data name="Tooltip_TimelineFollowPassageUnavailable" xml:space="preserve">
-    <value>Turn on Check passage with a speed on every leg to follow the passage</value>
+    <value>Turn on Check route with a speed on every leg to follow the passage</value>
   </data>
   <data name="Tooltip_TimelineWindowLane" xml:space="preserve">
     <value>Departures across the S-104 range: green meet your settings, red don't, hatched arrive after the data ends. Drag, or press Left and Right, to set the departure.</value>

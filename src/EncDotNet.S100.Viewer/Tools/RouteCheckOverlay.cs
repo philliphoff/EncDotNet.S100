@@ -22,6 +22,7 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// <param name="Finding">The selected finding's outline and chip (#905, F3), or <c>null</c>.</param>
 /// <param name="FindingMarkers">A small marker per placed finding (#953), in list order; empty when there are none.</param>
 /// <param name="HasClearance">Whether the route is coloured by UKC state, so the "UKC at ETA" legend is drawn; false without a clearance result (no draft, or none yet).</param>
+/// <param name="NoDraft">Whether the route has no draft, so the line keeps the active-route accent instead of UKC colours (#959, A3).</param>
 internal sealed record RouteCheckOverlay(
     IReadOnlyList<RouteCheckOverlay.Segment> Segments,
     bool IsStale,
@@ -30,7 +31,8 @@ internal sealed record RouteCheckOverlay(
     RouteCheckColors Colors,
     RouteCheckOverlay.FindingFocus? Finding = null,
     IReadOnlyList<RouteCheckOverlay.FindingMarker>? FindingMarkers = null,
-    bool HasClearance = true)
+    bool HasClearance = true,
+    bool NoDraft = false)
 {
     /// <summary>The finding markers, never <c>null</c>.</summary>
     public IReadOnlyList<FindingMarker> Markers => FindingMarkers ?? [];
@@ -69,10 +71,12 @@ internal sealed record RouteCheckOverlay(
 
     /// <summary>
     /// Builds the overlay for a check, or returns <c>null</c> when check mode
-    /// is off. Without a clearance result (none yet, or no draft) the route
-    /// draws grey and dashed, with the findings' markers and no legend.
+    /// is off. Without a clearance result yet the route draws grey and
+    /// dashed; without a draft it keeps the active-route accent (A3). Either
+    /// way it gets the findings' markers and no legend.
     /// </summary>
     /// <param name="findings">The findings list, which gets a marker per placed finding (#953); <c>null</c> draws none.</param>
+    /// <param name="hasDraft">Whether the checked route has a draft; without one there is no clearance to colour the line by.</param>
     public static RouteCheckOverlay? Build(
         bool isActive,
         PassageCheckSnapshot? snapshot,
@@ -82,13 +86,16 @@ internal sealed record RouteCheckOverlay(
         DepthUnit depthUnit,
         TimeFormat timeFormat,
         RouteFinding? selectedFinding = null,
-        IReadOnlyList<RouteFinding>? findings = null)
+        IReadOnlyList<RouteFinding>? findings = null,
+        bool hasDraft = true)
     {
         if (!isActive)
             return null;
 
         var colors = RouteCheckColors.For(appearance.Palette);
         var markers = BuildMarkers(findings, selectedFinding, colors);
+        if (!hasDraft)
+            return new RouteCheckOverlay([], false, null, null, colors, Focus(null, selectedFinding, colors), markers, HasClearance: false, NoDraft: true);
         if (snapshot is null)
             return new RouteCheckOverlay([], true, null, null, colors, Focus(null, selectedFinding, colors), markers, HasClearance: false);
 

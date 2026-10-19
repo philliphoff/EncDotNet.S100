@@ -76,7 +76,7 @@ internal sealed record TimelineStateDto(
     [property: Description("'lanes' (one lane per layer) or 'strip' (the single strip); set_timeline_view layout changes it.")] string Layout,
     [property: Description("The Timeline's lanes: the listed ones by product group, then any folded outside the map view (listed=false).")] IReadOnlyList<TimelineLaneDto> Lanes,
     [property: Description("True while the lanes also show what the Library knows but has not loaded: online (dashed) and on disk (outlined); set_timeline_view showOnline changes it.")] bool ShowOnline,
-    [property: Description("The passage and departure-window lanes, shown above the product groups while Check passage is on and the passage has ETAs; null otherwise.")] TimelinePassageDto? Passage,
+    [property: Description("The passage and departure-window lanes, shown above the product groups while Check route is on and the passage has ETAs; null otherwise.")] TimelinePassageDto? Passage,
     [property: Description("True while Follow passage pins the view time to the ETA at the Clearance cursor (set_follow_passage changes it).")] bool FollowPassage);
 
 /// <summary>The Timeline's passage lanes (#904).</summary>

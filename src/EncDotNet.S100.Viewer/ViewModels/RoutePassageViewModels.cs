@@ -244,6 +244,23 @@ internal sealed class RoutePassageCardViewModel : ViewModelBase
         set => SetProperty(ref _isExpanded, value);
     }
 
+    /// <summary>
+    /// Raised with a field's AutomationId when the view should focus it, e.g.
+    /// the verdict card's "+ Add draft" focusing Draft (#959, A5).
+    /// </summary>
+    public event EventHandler<string>? FocusRequested;
+
+    /// <summary>
+    /// Expands the card and asks the view to focus Draft, in Your check
+    /// settings (A5). On a received route the field edits the local check
+    /// settings, never the route.
+    /// </summary>
+    public void FocusDraft()
+    {
+        IsExpanded = true;
+        FocusRequested?.Invoke(this, Draft.AutomationId);
+    }
+
     /// <summary>True when the squat field shows: a squat is set, or a draft is.</summary>
     public bool ShowSquat => Draft.IsSet || Squat.IsSet;
 
