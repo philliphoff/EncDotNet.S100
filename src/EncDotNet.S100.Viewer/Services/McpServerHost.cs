@@ -423,13 +423,13 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(NavigationalWarningsMcpAdapters.Create(
                 new RefreshNavigationalWarningsTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
             tools.Add(NavigationalWarningsMcpAdapters.Create(
-                new SetNavigationalWarningDisplayTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
-            tools.Add(NavigationalWarningsMcpAdapters.Create(
                 new GetWarningCardsTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
             tools.Add(NavigationalWarningsMcpAdapters.Create(
                 new FollowWarningLinkTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
             tools.Add(NavigationalWarningsMcpAdapters.Create(
                 new PreviewWarningCardTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
+            tools.Add(NavigationalWarningsMcpAdapters.Create(
+                new SetNavigationalWarningDisplayTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
         }
         if (_routesService is not null)
         {

@@ -72,11 +72,11 @@ internal sealed record NavigationalWarningDto(
     [property: Description("The part's WGS-84 bounds, or null when it has no location.")] NavigationalWarningBoundsDto? Bounds,
     [property: Description("Validity ranges (UTC); either end may be null (open).")] IReadOnlyList<NavigationalWarningValidityDto> Validity,
     [property: Description("Message language codes in document order, e.g. [\"eng\", \"fra\"].")] IReadOnlyList<string?> Languages,
+    [property: Description("True when the map draws the part at drawTime (S-98 §12.12): it is in force; or it is not yet in force, published, and showNotYetInForce is on; or its Warning card is open. Ended and cancelled parts are not drawn. A text-only part has nothing to draw whatever this says.")] bool Drawn,
+    [property: Description("True when the part is drawn only because its Warning card is open (it would not be drawn otherwise); it stops being drawn when the card closes.")] bool DrawnForCard,
     [property: Description("True when this part is the one open from the panel.")] bool Selected,
     [property: Description("True when the warning is new: it first appeared in its source's latest refresh and its card hasn't been opened since. Always false for a file opened directly.")] bool New,
-    [property: Description("The Library source id the part came from, or null for a file opened directly.")] Guid? SourceId,
-    [property: Description("True when the map draws the part at drawTime (S-98 §12.12): it is in force; or it is not yet in force, published, and showNotYetInForce is on; or its Warning card is open. Ended and cancelled parts are not drawn. A text-only part has nothing to draw whatever this says.")] bool Drawn,
-    [property: Description("True when the part is drawn only because its Warning card is open (it would not be drawn otherwise); it stops being drawn when the card closes.")] bool DrawnForCard);
+    [property: Description("The Library source id the part came from, or null for a file opened directly.")] Guid? SourceId);
 
 /// <summary>A validity range.</summary>
 [Description("A period when a warning applies.")]
@@ -155,7 +155,7 @@ internal abstract class NavigationalWarningsToolBase
     {
         var time = panel.StatusTime;
         var selected = (panel.SelectedItem as NavigationalWarningRowItem)?.Entry;
-        return new NavigationalWarningsDto(
+        var dto = new NavigationalWarningsDto(
             panel.IsNowFilter ? "now" : "view_time",
             time,
             panel.InForceCount,
@@ -168,7 +168,7 @@ internal abstract class NavigationalWarningsToolBase
             panel.CanRefresh,
             service.Sources.Select(s => new NavigationalWarningSourceDto(
                 s.Id, s.Name, s.ReceivedAt, s.IsStale, s.IsRefreshing, panel.SourceHeader(s))).ToList(),
-            service.Warnings.Select(w => ToDto(w, service.StatusAt(w, time), selected, service.IsNew(w), panel.Drawing)).ToList(),
+            service.Warnings.Select(w => ToDto(w, service.StatusAt(w, time), selected, service.IsNew(w))).ToList(),
             service.Set.LatestBulletins(time).Select(r => new NavigationalWarningBulletinDto(
                 r.Series,
                 r.Bulletin.Label,
@@ -179,9 +179,15 @@ internal abstract class NavigationalWarningsToolBase
                 r.NotReceived.Count > 0 ? NavigationalWarningsViewModel.NotReceivedText(r) : null)).ToList(),
             panel.Drawing?.ShowNotYetInForce ?? false,
             panel.Drawing?.DrawTime ?? time);
+        return panel.Drawing is not { } drawing
+            ? dto
+            : dto with
+            {
+                Warnings = [.. dto.Warnings.Select(w => service.Find(w.DatasetId, w.FeatureId) is { } entry && drawing.IsDrawnForCard(entry) ? w with { DrawnForCard = true } : w)],
+            };
     }
 
-    private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, NavigationalWarningState state, NavigationalWarningEntry? selected, bool isNew, NavigationalWarningDrawingService? drawing)
+    private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, NavigationalWarningState state, NavigationalWarningEntry? selected, bool isNew)
     {
         var w = entry.Warning;
         NavigationalWarningBoundsDto? bounds = null;
@@ -219,13 +225,14 @@ internal abstract class NavigationalWarningsToolBase
             bounds,
             w.Validity.Select(v => new NavigationalWarningValidityDto(v.Start, v.End)).ToList(),
             w.Texts.Select(t => t.Language).ToList(),
+            // What the map draws: the part isn't among its dataset's hidden features (#993).
+            entry.Dataset.HiddenFeatures?.Contains(entry.FeatureRef) != true,
+            false,
             selected is not null
                 && ReferenceEquals(selected.Dataset, entry.Dataset)
                 && string.Equals(selected.FeatureRef, entry.FeatureRef, StringComparison.Ordinal),
             isNew,
-            entry.Source?.Id,
-            drawing?.IsDrawn(entry) ?? true,
-            drawing?.IsDrawnForCard(entry) ?? false);
+            entry.Source?.Id);
     }
 }
 
@@ -474,9 +481,7 @@ internal static class NavigationalWarningsMcpAdapters
                 "languages. Counts in force, not in force, text-only and new match the panel's summary. Each part says " +
                 "whether it is new (it first appeared in its source's latest refresh and its card hasn't been opened) " +
                 "and which Library source it came from; sources say when they last answered and whether they are stale " +
-                "(their latest refresh failed). Files opened directly have no source and are never new. Each part also " +
-                "says whether the map draws it (drawn, at drawTime): only parts in force are drawn, plus those not yet " +
-                "in force while showNotYetInForce is on, plus the part on the open Warning card (drawnForCard).",
+                "(their latest refresh failed). Files opened directly have no source and are never new.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

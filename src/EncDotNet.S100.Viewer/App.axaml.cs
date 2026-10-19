@@ -1362,6 +1362,16 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.INavigationalWarningSources>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore>(),
             sp.GetService<TimeProvider>()));
+        services.AddSingleton(sp => new NavigationalWarningsViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
+            sp.GetRequiredService<IPickService>(),
+            sp.GetRequiredService<PickReportViewModel>(),
+            sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+            sp.GetService<ITimeFormatProvider>(),
+            sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetService<TimeProvider>()));
+        services.AddSingleton<MainViewModel>();
         services.AddSingleton(sp =>
         {
             var drawing = new EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService(
@@ -1375,16 +1385,6 @@ public partial class App : Application
             sp.GetRequiredService<NavigationalWarningsViewModel>().Drawing = drawing;
             return drawing;
         });
-        services.AddSingleton(sp => new NavigationalWarningsViewModel(
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
-            sp.GetRequiredService<IPickService>(),
-            sp.GetRequiredService<PickReportViewModel>(),
-            sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>(),
-            sp.GetService<ITimeFormatProvider>(),
-            sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
-            sp.GetRequiredService<IDatasetLoaderService>(),
-            sp.GetService<TimeProvider>()));
-        services.AddSingleton<MainViewModel>();
 
         // Activity-tab registry. Adding a new tab is a single AddActivityTab
         // line plus the VM registration above and a View under Views/ — no
