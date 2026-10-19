@@ -37,9 +37,12 @@ internal sealed class RouteCopyDialogViewModel : ViewModelBase
         Keeps = preview.Description.Keeps;
         NotKept = preview.Description.NotKept;
         var identity = preview.Identity;
-        IdentityText = identity.PreviousEdition is { } edition
-            ? string.Format(culture, Strings.CopyDialog_IdentityFormat, identity.PreviousRouteId, edition)
-            : string.Format(culture, Strings.CopyDialog_IdentityNoEditionFormat, identity.PreviousRouteId);
+        // RTZ gives a route no ID, so a copy of an RTZ route names its file.
+        IdentityText = identity.PreviousRouteId is null
+            ? string.Format(culture, Strings.CopyDialog_IdentityFromFileFormat, source.Source?.FileName)
+            : identity.PreviousEdition is { } edition
+                ? string.Format(culture, Strings.CopyDialog_IdentityFormat, identity.PreviousRouteId, edition)
+                : string.Format(culture, Strings.CopyDialog_IdentityNoEditionFormat, identity.PreviousRouteId);
         NamedText = string.Format(culture, Strings.CopyDialog_NamedFormat, preview.Name);
         ConfirmCommand = new RelayCommand(() =>
         {
@@ -119,8 +122,21 @@ internal sealed class RouteExportFormatOption : ViewModelBase
     /// <summary>"For S-100 systems."</summary>
     public string Audience => Format.Audience;
 
-    /// <summary>The automation id of the card: <c>RouteExport.Format.S421</c>.</summary>
-    public string AutomationId => "RouteExport.Format." + Format.Name.Replace("-", string.Empty, StringComparison.Ordinal);
+    /// <summary>The automation id of the card: <c>RouteExport.Format.Rtz</c>, <c>RouteExport.Format.S421</c>.</summary>
+    public string AutomationId => "RouteExport.Format." + ShortName;
+
+    /// <summary>The automation id of the card's version select: <c>RouteExport.RtzVersion</c>.</summary>
+    public string VersionAutomationId => "RouteExport." + ShortName + "Version";
+
+    // "Rtz", "S421".
+    private string ShortName
+    {
+        get
+        {
+            var name = Format.Name.Replace("-", string.Empty, StringComparison.Ordinal);
+            return char.ToUpperInvariant(name[0]) + name[1..].ToLowerInvariant();
+        }
+    }
 
     /// <summary>The versions this build writes.</summary>
     public IReadOnlyList<string> Versions => Format.Versions;
@@ -281,7 +297,9 @@ internal sealed class RouteExportDialogViewModel : ViewModelBase
         var identity = preview.Identity;
         var culture = CultureInfo.CurrentCulture;
         IdentityText = identity.Kept
-            ? string.Format(culture, Strings.ExportDialog_IdentityKeptFormat, identity.RouteId, identity.Edition)
+            ? _route.Source is { RouteId: null } file
+                ? string.Format(culture, Strings.ExportDialog_IdentityKeptFileFormat, file.FileName)
+                : string.Format(culture, Strings.ExportDialog_IdentityKeptFormat, identity.RouteId, identity.Edition)
             : identity.PreviousRouteId is not null
                 ? string.Format(culture, Strings.ExportDialog_IdentityCopyFormat, identity.PreviousRouteId, identity.PreviousEdition)
                 : string.Format(culture, Strings.ExportDialog_IdentityNewFormat, identity.RouteId);

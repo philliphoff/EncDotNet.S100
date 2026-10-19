@@ -266,6 +266,7 @@ split into focused packages.
 | Package | Description |
 |---|---|
 | **EncDotNet.S100.Navigation** | Leg ETAs and an under-keel clearance check along a route: charted depth (S-102, S-101 fallback) plus S-104 water level, minus draft and squat, at each sample's ETA. Depends only on Core. |
+| **EncDotNet.S100.Routes.Rtz** | RTZ route plan reader and writer (IEC 61174 Annex S, versions 1.0, 1.1 and 1.2), keeping unknown attributes and vendor extensions for round trips. Depends only on Core. |
 
 The **EncDotNet.S100.Datasets.S129.Fusion** library (project reference,
 not published to NuGet) is a purely additive cross-product helper that

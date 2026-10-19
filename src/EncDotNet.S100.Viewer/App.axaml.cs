@@ -377,6 +377,8 @@ public partial class App : Application
                 _services.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutePersistenceService>();
             routePersistence.Initialize();
             _ = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.ReceivedRoutesService>();
+            // RTZ files open at the last close come back (F8, #961).
+            _ = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>().ReopenFilesAsync();
 
             // Load the dataset collections and start background re-indexing
             // (cached indexes appear immediately; nothing is loaded).

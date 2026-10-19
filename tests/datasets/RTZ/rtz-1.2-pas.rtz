@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic RTZ 1.2 test fixture, written by hand from the IEC PAS 61174-1:2021 RTZ 1.2 schema. Not for navigation.
+     ex:priority on the last leg is deliberately outside the schema: readers keep unknown attributes. -->
+<route xmlns="http://www.cirm.org/RTZ/1/2" xmlns:ex="urn:example:vendor" version="1.2">
+  <routeInfo routeName="Channel crossing" routeAuthor="Test Planner" validityPeriodStart="2026-12-01T00:00:00Z"/>
+  <waypoints>
+    <defaultWaypoint radius="1.0">
+      <leg starboardXTD="0.5" portsideXTD="0.5" draughtForward="9.1" draughtAft="9.1" staticUKC="2.0" geometryType="Orthodrome"/>
+    </defaultWaypoint>
+    <waypoint id="0" revision="0" name="Le Havre approach">
+      <position lat="49.50000" lon="0.00000"/>
+    </waypoint>
+    <waypoint id="1" revision="0" name="Mid-Channel">
+      <position lat="50.00000" lon="-0.50000"/>
+      <leg>
+        <extensions>
+          <extension manufacturer="Example" name="LegWeather" version="1">
+            <ex:sea state="4"/>
+          </extension>
+        </extensions>
+      </leg>
+    </waypoint>
+    <waypoint id="2" revision="3" name="Nab Tower">
+      <position lat="50.66790" lon="-0.95170"/>
+      <leg staticUKC="2.5" ex:priority="high"/>
+    </waypoint>
+  </waypoints>
+  <schedules>
+    <schedule id="5">
+      <calculated>
+        <scheduleElement waypointId="0" etd="2026-12-01T20:00:00Z"/>
+        <scheduleElement waypointId="1" eta="2026-12-01T22:30:00Z" etd="2026-12-01T22:30:00Z" stay="PT0S"/>
+        <scheduleElement waypointId="2" eta="2026-12-02T01:30:00Z" etaWindowBefore="PT2H"/>
+      </calculated>
+    </schedule>
+  </schedules>
+  <extensions>
+    <extension manufacturer="Example" name="Signature" version="1">
+      <ex:hash>0000</ex:hash>
+    </extension>
+  </extensions>
+</route>

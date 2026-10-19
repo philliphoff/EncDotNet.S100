@@ -82,7 +82,7 @@ internal sealed record RouteImportFailed(
 /// <summary>Request for <see cref="ImportRouteTool"/>.</summary>
 [Description("Request for import_route: open a route file as a received, read-only route.")]
 internal sealed record ImportRouteRequest(
-    [property: Description("Path of the route file to open (S-421 GML; RTZ in a later release). Give this or content.")] string? Path = null,
+    [property: Description("Path of the route file to open: RTZ 1.0, 1.1 or 1.2 (.rtz) or S-421 GML. The format is sniffed from the content, not the extension. Give this or content.")] string? Path = null,
     [property: Description("The file's content, when there is no file to point at; it's saved to a temporary file and opened from there. Give this or path.")] string? Content = null);
 
 /// <summary>Result of <see cref="ImportRouteTool"/>.</summary>
@@ -234,9 +234,9 @@ internal sealed class CopyRouteTool : RouteToolBase
 /// <summary>Request for <see cref="ExportRouteTool"/>.</summary>
 [Description("Request for export_route: write a route in an exchange format.")]
 internal sealed record ExportRouteRequest(
-    [property: Description("The format: \"S-421\" (RTZ in a later release).")] string Format,
+    [property: Description("The format: \"RTZ\" (IEC 61174 Annex S) or \"S-421\".")] string Format,
     [property: Description("Id of the route to export; omit to use the active route.")] string? RouteId = null,
-    [property: Description("The format version; the newest when omitted (S-421: 1.0).")] string? Version = null,
+    [property: Description("The format version; the newest when omitted (RTZ: 1.2, 1.1 or 1.0; S-421: 1.0).")] string? Version = null,
     [property: Description("True to also write your check settings (draft, required UKC, departure). Off by default: they're yours, not the route's.")] bool IncludeCheckSettings = false,
     [property: Description("File to write. Omit to get the file's content back instead.")] string? Path = null);
 
@@ -351,7 +351,7 @@ internal static class ReceivedRouteMcpAdapters
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [Description("Path of the route file (S-421 GML). Give this or content.")] string? path = null,
+            [Description("Path of the route file (RTZ or S-421 GML). Give this or content.")] string? path = null,
             [Description("The file's content, when there is no file. Give this or path.")] string? content = null,
             CancellationToken ct = default) =>
             McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new ImportRouteRequest(path, content), ct));
@@ -360,7 +360,7 @@ internal static class ReceivedRouteMcpAdapters
             Name = ImportRouteTool.Name,
             Description =
                 "Opens a route file in the live viewer as a received, read-only route, as the Routes header's Import route… does. " +
-                "The format is sniffed from the content: an S-421 file also opens as a dataset and its route starts in Native mode. " +
+                "The format is sniffed from the content: an RTZ file (1.0, 1.1 or 1.2) is read directly and its route starts in Planning mode (RTZ has no portrayal of its own and no route ID, so the route is known by its file); an S-421 file also opens as a dataset and its route starts in Native mode. " +
                 "A file already open, or the same route ID and edition, selects the existing route (alreadyOpen: true); a newer edition " +
                 "replaces it. The route becomes active. Fails with route_import_failed (reason not_a_route, unsupported_version, " +
                 "too_few_waypoints or older_edition). Edit a received route by copying it with copy_route. Viewer-injected tool — mutates live state.",
@@ -395,9 +395,9 @@ internal static class ReceivedRouteMcpAdapters
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [Description("The format: \"S-421\".")] string format,
+            [Description("The format: \"RTZ\" or \"S-421\".")] string format,
             [Description("Id of the route; omit to use the active route.")] string? routeId = null,
-            [Description("The format version; the newest when omitted.")] string? version = null,
+            [Description("The format version; the newest when omitted (RTZ: 1.2, 1.1 or 1.0; S-421: 1.0).")] string? version = null,
             [Description("True to also write your check settings (draft, required UKC, departure); off by default.")] bool includeCheckSettings = false,
             [Description("File to write; omit to get the content back.")] string? path = null,
             CancellationToken ct = default) =>
@@ -408,7 +408,7 @@ internal static class ReceivedRouteMcpAdapters
             Description =
                 "Export…: writes a route (owned or received) in an exchange format, as the route ⋯ menu's Export… does. A received " +
                 "route exported unchanged keeps its route ID, edition and status; a copy is written as a new route that references its " +
-                "source. Your check settings are written only with includeCheckSettings: true. Check results are never exported. " +
+                "source. RTZ has no route ID or edition, so in RTZ the identity isn't written (cannotHold says so when the route has one); content a received RTZ or S-421 file held that the route can't (other schedules, extensions, unknown attributes) is written back in its own format. Your check settings are written only with includeCheckSettings: true; RTZ writes the departure as a calculated schedule and draft and required UKC as leg draughtForward/draughtAft and staticUKC. Check results are never exported. " +
                 "Returns the identity, the fields the format can't hold (cannotHold), and the path, or the content when no path is given.",
             SerializerOptions = JsonOptions,
         });

@@ -124,6 +124,7 @@
     <ProjectReference Include="..\EncDotNet.S100.Mcp.Tools\EncDotNet.S100.Mcp.Tools.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Navigation\EncDotNet.S100.Navigation.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Renderers.Mapsui.Avalonia\EncDotNet.S100.Renderers.Mapsui.Avalonia.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Routes.Rtz\EncDotNet.S100.Routes.Rtz.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Renderers.Mapsui\EncDotNet.S100.Renderers.Mapsui.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
