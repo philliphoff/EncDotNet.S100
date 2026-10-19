@@ -384,6 +384,11 @@ public sealed class S122MarineProtectedAreaDataset
             },
         };
 
+        // The typed geometry keeps the exterior ring in Coordinates; holes
+        // (gml:interior) ride alongside so area checks don't fill them in.
+        if (kind == S122GeometryKind.Surface && f.InteriorRings.Count > 0 && typed is S122FeatureBase withHoles)
+            withHoles.InteriorRings = f.InteriorRings.Select(r => (IReadOnlyList<GeoPosition>)r.Select(p => new GeoPosition(p.Latitude, p.Longitude)).ToArray()).ToArray();
+
         return typed;
     }
 

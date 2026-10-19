@@ -18,6 +18,7 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="SafetyContourMeters">The safety contour for the depth checks; with <paramref name="SafetyDepthMeters"/>, turns them on.</param>
 /// <param name="SafetyDepthMeters">The safety depth for the danger and sounding checks.</param>
 /// <param name="DraftMeters">A draft to judge dangers against as well; for a route, overrides the route's.</param>
+/// <param name="Time">The departure for a route's ETAs, and the time areas are judged at where legs have no speed.</param>
 public sealed record CheckRouteRequest(
     [property: Description("Id of a host route to check (viewer only). Omit, with no polyline, for the active route.")] string? RouteId = null,
     [property: Description("A route given directly: each pair of consecutive vertices is a leg. Takes precedence over routeId. Its corridorWidthMeters, when set, is the half-width either side of the track.")] GeoPolyline? Polyline = null,
@@ -25,7 +26,8 @@ public sealed record CheckRouteRequest(
     [property: Description("For a polyline, run legs as great circles instead of rhumb lines.")] bool GreatCircle = false,
     [property: Description("Safety contour in metres. With safetyDepthMeters, turns on the depth checks: depth, dredged and drying areas and S-102 cells shallower than it, and charted dangers. SoundCharts' findings list uses the mariner's settings (get_mariner_settings).")] double? SafetyContourMeters = null,
     [property: Description("Safety depth in metres, for charted dangers and soundings. Goes with safetyContourMeters.")] double? SafetyDepthMeters = null,
-    [property: Description("Draft in metres: dangers are also judged against draft + squat + required UKC. For a route it overrides the route's draft; without either, dangers are judged against the safety depth only.")] double? DraftMeters = null);
+    [property: Description("Draft in metres: dangers are also judged against draft + squat + required UKC. For a route it overrides the route's draft; without either, dangers are judged against the safety depth only.")] double? DraftMeters = null,
+    [property: Description("ISO 8601 time. For a route, the departure its legs' speeds give ETAs from (default: the route's departure); restricted and protected areas' date ranges and seasons are judged at those ETAs. Where a leg has no speed, and for a polyline, areas are judged at this time (default: now).")] DateTimeOffset? Time = null);
 
 /// <summary>Result of <see cref="CheckRouteTool"/>.</summary>
 public sealed record CheckRouteResult(
@@ -33,23 +35,23 @@ public sealed record CheckRouteResult(
     [property: Description("Name of the checked route, or null.")] string? RouteName,
     [property: Description("Route length in nautical miles.")] double DistanceNm,
     [property: Description("Counts by group, and the summary line SoundCharts shows.")] CheckRouteSummary Summary,
-    [property: Description("The findings, by group (must_review, check, info) and then by distance along the route. Codes are the same as get_findings: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.soundings_below_safety_depth, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor and data.outside_chart_coverage.")] IReadOnlyList<CheckRouteFinding> Findings,
+    [property: Description("The findings, by group (must_review, check, info) and then by distance along the route. Codes are the same as get_findings: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.soundings_below_safety_depth, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage, and the area checks' route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area (S-122) and route_check.area_not_in_force.")] IReadOnlyList<CheckRouteFinding> Findings,
     [property: Description("The corridor swept along each leg, in route order.")] IReadOnlyList<CheckRouteLeg> Legs,
-    [property: Description("S-101 (and S-401, and translated S-57) cells near the route that the check read.")] IReadOnlyList<string> Datasets,
+    [property: Description("S-101 (and S-401, and translated S-57) cells near the route that the check read, and the S-122 datasets behind area findings.")] IReadOnlyList<string> Datasets,
     [property: Description("Disclaimer to show once with the findings.")] string Disclaimer);
 
 /// <summary>The counts and summary line of a route check.</summary>
 public sealed record CheckRouteSummary(
     [property: Description("Number of findings.")] int Count,
-    [property: Description("Number of must_review findings (the track crosses land, drying ground or the safety contour, or a danger is inside the limits).")] int MustReview,
-    [property: Description("Number of check findings (land, drying ground or shoal water inside the cross-track limits, dangers near the route, leaving chart coverage).")] int Check,
+    [property: Description("Number of must_review findings (the track crosses land, drying ground or the safety contour, enters an area where entry is prohibited or restricted, or a danger is inside the limits).")] int MustReview,
+    [property: Description("Number of check findings (land, drying ground or shoal water inside the cross-track limits, dangers near the route, restricted, caution, traffic, anchorage or protected areas, leaving chart coverage).")] int Check,
     [property: Description("Number of info findings.")] int Info,
     [property: Description("The summary line, e.g. \"2 to review\", \"1 to check\" or \"No findings for your settings\".")] string Text);
 
 /// <summary>One finding of a route check.</summary>
 public sealed record CheckRouteFinding(
     [property: Description("Id, unique within this result, e.g. \"route_check.crosses_land.0\".")] string Id,
-    [property: Description("Kind of finding: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.soundings_below_safety_depth, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor or data.outside_chart_coverage.")] string Code,
+    [property: Description("Kind of finding: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.soundings_below_safety_depth, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage, route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area or route_check.area_not_in_force.")] string Code,
     [property: Description("What to do: must_review, check or info.")] string Group,
     [property: Description("The check that produced it: route_check, or data for chart coverage.")] string Source,
     [property: Description("One line, e.g. \"Crosses drying ground\".")] string Title,
@@ -82,7 +84,9 @@ public sealed record CheckRouteLeg(
 /// <summary>
 /// Checks a route against the loaded charts (<see cref="RouteCheckEngine"/>,
 /// #954): where its track crosses land or drying ground, where either reaches
-/// inside its cross-track limits, and where it leaves chart coverage.
+/// inside its cross-track limits, and where it leaves chart coverage; and
+/// against restricted, caution, anchorage and traffic areas and S-122
+/// protected areas (<see cref="RouteAreaCheck"/>, #956).
 /// </summary>
 /// <remarks>
 /// Takes a host route (the viewer's active or a named route, with each leg's
@@ -95,11 +99,12 @@ public sealed class CheckRouteTool
     public const string Name = "check_route";
 
     /// <summary>The disclaimer shown once with the findings.</summary>
-    public const string Disclaimer = "Not for navigation · checked against the loaded S-101 charts only";
+    public const string Disclaimer = "Not for navigation · checked against the loaded S-101 charts and S-122 protected areas only";
 
     private readonly IDatasetCatalog _catalog;
     private readonly IPassageRouteProvider? _routes;
     private readonly ICrsTransformFactory _transforms;
+    private readonly TimeProvider _time;
     private readonly object _gate = new();
     private IReadOnlyList<LoadedDataset>? _cachedSnapshot;
     private RouteCheckDataSources? _cachedSources;
@@ -108,12 +113,14 @@ public sealed class CheckRouteTool
     /// <param name="catalog">The loaded datasets.</param>
     /// <param name="routes">The host's routes, or <c>null</c> when the host has none (polylines only).</param>
     /// <param name="transforms">CRS transforms for projected S-102 grids, or <c>null</c> for ProjNet.</param>
-    public CheckRouteTool(IDatasetCatalog catalog, IPassageRouteProvider? routes = null, ICrsTransformFactory? transforms = null)
+    /// <param name="time">The clock for "now", or <c>null</c> for the system clock.</param>
+    public CheckRouteTool(IDatasetCatalog catalog, IPassageRouteProvider? routes = null, ICrsTransformFactory? transforms = null, TimeProvider? time = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
         _routes = routes;
         _transforms = transforms ?? new ProjNetCrsTransformFactory();
+        _time = time ?? TimeProvider.System;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -147,6 +154,8 @@ public sealed class CheckRouteTool
         string? routeId = null;
         string? routeName = null;
         var legs = new List<RouteCheckLeg>();
+        var at = request.Time ?? _time.GetUtcNow();
+        PassageSchedule? schedule = null;
         if (request.Polyline is { } polyline)
         {
             if (GeoQueryValidator.Validate(new GeoQuery.Polyline(polyline)) is { } geometryError)
@@ -205,21 +214,32 @@ public sealed class CheckRouteTool
 
             routeId = route.RouteId;
             routeName = route.Name;
+            if (route.Legs.Any(l => l.SpeedKnots is > 0))
+            {
+                var departure = request.Time ?? route.DefaultDeparture;
+                schedule = PassageSchedule.Compute(
+                    route.Legs.Select(l => new PassageLeg(l.Points, l.DraftMeters ?? 0, l.SpeedKnots, Geometry: l.Geometry)).ToList(),
+                    departure);
+                at = departure;
+            }
         }
 
         var sources = SourcesFor(_catalog.Datasets);
         var engine = sources.CreateEngine(Options with { Depths = depths });
         RouteCheckResult result;
+        RouteAreaResult areas;
         try
         {
-            result = await Task.Run(() => engine.Check(legs, cancellationToken), cancellationToken).ConfigureAwait(false);
+            (result, areas) = await Task.Run(
+                () => (engine.Check(legs, cancellationToken), sources.CheckAreas(legs, new RouteWarningTiming(schedule, at), AreaOptions, cancellationToken)),
+                cancellationToken).ConfigureAwait(false);
         }
         catch (ArgumentException ex)
         {
             return ToolResult<CheckRouteResult>.Err(new InvalidArgument("polyline", ex.Message));
         }
 
-        return ToolResult<CheckRouteResult>.Ok(Project(result, routeId, routeName, sources));
+        return ToolResult<CheckRouteResult>.Ok(Project(result, areas, routeId, routeName, sources));
     }
 
     /// <summary>The summary line for a set of findings, as SoundCharts' no-draft verdict titles.</summary>
@@ -234,6 +254,11 @@ public sealed class CheckRouteTool
     private static readonly RouteCheckOptions Options = RouteCheckOptions.Default with
     {
         Text = RouteCheckText.Default with { Culture = System.Globalization.CultureInfo.InvariantCulture },
+    };
+
+    private static readonly RouteAreaOptions AreaOptions = RouteAreaOptions.Default with
+    {
+        Text = RouteAreaText.Default with { Culture = System.Globalization.CultureInfo.InvariantCulture },
     };
 
     // The sources index S-101 cells lazily, so they are kept while the catalog
@@ -252,9 +277,17 @@ public sealed class CheckRouteTool
         }
     }
 
-    private static CheckRouteResult Project(RouteCheckResult result, string? routeId, string? routeName, RouteCheckDataSources sources)
+    private static CheckRouteResult Project(RouteCheckResult result, RouteAreaResult areas, string? routeId, string? routeName, RouteCheckDataSources sources)
     {
-        var findings = result.Findings;
+        // One list, by group and then by distance, as get_findings sorts it.
+        var findings = result.Findings
+            .Concat(areas.Findings)
+            .Select((f, i) => (f, i))
+            .OrderBy(x => x.f.Group)
+            .ThenBy(x => x.f.DistanceMeters ?? double.MaxValue)
+            .ThenBy(x => x.i)
+            .Select(x => x.f)
+            .ToList();
         var mustReview = findings.Count(f => f.Group == RouteFindingGroup.MustReview);
         var check = findings.Count(f => f.Group == RouteFindingGroup.Check);
         var info = findings.Count(f => f.Group == RouteFindingGroup.Info);
@@ -265,6 +298,14 @@ public sealed class CheckRouteTool
             foreach (var cell in sources.Charts.CellsNear(Extent(corridor.Ring)))
             {
                 datasets.Add(cell.DatasetId);
+            }
+        }
+
+        foreach (var match in areas.Matches)
+        {
+            if (match.Finding?.Feature is { } feature)
+            {
+                datasets.Add(feature.DatasetId);
             }
         }
 

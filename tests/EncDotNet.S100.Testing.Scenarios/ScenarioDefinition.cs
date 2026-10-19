@@ -59,6 +59,9 @@ public sealed record ScenarioDefinition(
     /// <summary>Charted point dangers (#955), written into the S-101 cells that chart them.</summary>
     public IReadOnlyList<PointHazard> Hazards { get; init; } = [];
 
+    /// <summary>Regulated areas (#956), written into the S-101 cells that chart them.</summary>
+    public IReadOnlyList<RegulatedAreaSpec> RegulatedAreas { get; init; } = [];
+
     /// <summary>The S-125 aids to navigation, or <c>null</c> for none.</summary>
     public S125AidsSpec? Aids { get; init; }
 

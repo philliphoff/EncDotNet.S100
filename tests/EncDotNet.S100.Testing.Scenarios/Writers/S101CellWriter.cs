@@ -70,6 +70,57 @@ public sealed record PointHazard(
 }
 
 /// <summary>
+/// A regulated area charted in the S-101 cells (#956): a restricted,
+/// caution, military practice, anchorage or traffic area, with its
+/// restrictions, categories and dates.
+/// </summary>
+/// <param name="Name">The scenario's name for it, written as its <c>featureName</c> (fictitious).</param>
+/// <param name="FeatureType">The S-101 feature type, such as <c>"RestrictedArea"</c> or <c>"CautionArea"</c>.</param>
+/// <param name="Area">The area's rectangle, in local metres.</param>
+/// <param name="Restrictions">Its <c>restriction</c> codes, one attribute each (7 entry prohibited, 27 speed restricted, …).</param>
+/// <param name="Categories">
+/// Its category codes (<c>categoryOfRestrictedArea</c> for a restricted area,
+/// <c>categoryOfMilitaryPracticeArea</c>, <c>categoryOfAnchorage</c>).
+/// </param>
+/// <param name="Cells">
+/// The dataset names of the cells that chart it, or <c>null</c> for every
+/// cell whose extent contains it.
+/// </param>
+public sealed record RegulatedAreaSpec(
+    string Name,
+    string FeatureType,
+    LocalRect Area,
+    IReadOnlyList<int> Restrictions,
+    IReadOnlyList<int> Categories,
+    IReadOnlyList<string>? Cells = null)
+{
+    /// <summary>Holes in the area, in local metres; empty for none.</summary>
+    public IReadOnlyList<LocalRect> Holes { get; init; } = [];
+
+    /// <summary>When it applies each year (<c>periodicDateRange</c>); empty for all year.</summary>
+    public IReadOnlyList<Season> Seasons { get; init; } = [];
+
+    /// <summary>Whether a cell charts it.</summary>
+    /// <param name="cell">The cell.</param>
+    /// <returns><c>true</c> when the cell charts it.</returns>
+    public bool ChartedIn(S101CellSpec cell)
+    {
+        ArgumentNullException.ThrowIfNull(cell);
+        return Cells is null
+            ? cell.Extent.Contains(Area.West, Area.South) && cell.Extent.Contains(Area.East, Area.North)
+            : Cells.Contains(cell.DatasetName);
+    }
+
+    /// <summary>The category attribute's code for the feature type.</summary>
+    public string CategoryAttribute => FeatureType switch
+    {
+        "MilitaryPracticeArea" => "categoryOfMilitaryPracticeArea",
+        "AnchorageArea" => "categoryOfAnchorage",
+        _ => "categoryOfRestrictedArea",
+    };
+}
+
+/// <summary>
 /// One S-101 cell: its extent, usage band and scale range, and how coarsely
 /// it samples the world.
 /// </summary>
@@ -142,8 +193,9 @@ public static class S101CellWriter
     /// scales, a shoal bias, and spiked areas.
     /// </param>
     /// <param name="hazards">Point dangers, charted where <see cref="PointHazard.ChartedIn"/> says; <c>null</c> for none.</param>
+    /// <param name="areas">Regulated areas, charted where <see cref="RegulatedAreaSpec.ChartedIn"/> says; <c>null</c> for none.</param>
     /// <returns>The document.</returns>
-    public static S101Document Build(SyntheticWorld world, S101CellSpec cell, IReadOnlyList<DredgedChannel> dredged, DateOnly issueDate, DatasetQuirks? quirks = null, IReadOnlyList<PointHazard>? hazards = null)
+    public static S101Document Build(SyntheticWorld world, S101CellSpec cell, IReadOnlyList<DredgedChannel> dredged, DateOnly issueDate, DatasetQuirks? quirks = null, IReadOnlyList<PointHazard>? hazards = null, IReadOnlyList<RegulatedAreaSpec>? areas = null)
     {
         quirks ??= DatasetQuirks.None;
         var bias = quirks.ShoalBias;
@@ -267,6 +319,32 @@ public static class S101CellWriter
             attributes.Add(FeatureAttribute.Number("waterLevelEffect", hazard.WaterLevelEffect));
             attributes.Add(FeatureAttribute.FeatureName(hazard.Name));
             builder.AddPoint(hazard.FeatureType, frame.ToGeo(hazard.Position.X, hazard.Position.Y), [.. attributes]);
+        }
+
+        foreach (var area in areas ?? [])
+        {
+            if (!area.ChartedIn(cell))
+            {
+                continue;
+            }
+
+            var attributes = new List<FeatureAttribute> { FeatureAttribute.FeatureName(area.Name) };
+            foreach (var season in area.Seasons)
+            {
+                attributes.Add(new FeatureAttribute("periodicDateRange", "",
+                [
+                    new FeatureAttribute("dateStart", "----" + season.Start.Text[2..].Replace("-", "", StringComparison.Ordinal)),
+                    new FeatureAttribute("dateEnd", "----" + season.End.Text[2..].Replace("-", "", StringComparison.Ordinal)),
+                ]));
+            }
+
+            attributes.AddRange(area.Restrictions.Select(r => FeatureAttribute.Number("restriction", r)));
+            attributes.AddRange(area.Categories.Select(c => FeatureAttribute.Number(area.CategoryAttribute, c)));
+            builder.AddSurface(
+                area.FeatureType,
+                Rectangle(frame, area.Area),
+                area.Holes.Select(h => (IReadOnlyList<GeoPosition>)Rectangle(frame, h).Reverse().ToList()).ToList(),
+                [.. attributes]);
         }
 
         var soundings = Soundings(world, cell, highWater, bias);

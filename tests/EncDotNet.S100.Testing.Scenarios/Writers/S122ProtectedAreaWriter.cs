@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Testing.Scenarios.Geometry;
 using EncDotNet.S100.Testing.Scenarios.World;
 
@@ -59,6 +60,9 @@ public sealed record S122ProtectedAreaSpec(
     /// <summary>The <c>jurisdiction</c>; 2 is national.</summary>
     public int Jurisdiction { get; init; } = 2;
 
+    /// <summary>Holes in the protected area, in local metres; empty for none.</summary>
+    public IReadOnlyList<LocalRect> Holes { get; init; } = [];
+
     /// <summary>The <c>categoryOfAuthority</c>; 12 is environmental.</summary>
     public int CategoryOfAuthority { get; init; } = 12;
 
@@ -108,7 +112,7 @@ public static class S122ProtectedAreaWriter
     /// <summary>The S-122 GML namespace.</summary>
     public const string Namespace = "http://www.iho.int/S122/gml/2.0";
 
-    /// <summary>The area's polygon, rounded to 10⁻⁷ degrees, clockwise.</summary>
+    /// <summary>The area's polygon, rounded to 10⁻⁷ degrees, clockwise, with its holes anticlockwise.</summary>
     /// <param name="world">The world.</param>
     /// <param name="spec">The area.</param>
     /// <returns>The polygon.</returns>
@@ -116,7 +120,10 @@ public static class S122ProtectedAreaWriter
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(spec);
-        return GmlWriting.Rectangle(world.Frame, spec.Area);
+        var outer = GmlWriting.Rectangle(world.Frame, spec.Area);
+        return spec.Holes.Count == 0
+            ? outer
+            : outer with { Holes = spec.Holes.Select(h => (IReadOnlyList<GeoPosition>)GmlWriting.Rectangle(world.Frame, h).Exterior.Reverse().ToList()).ToList() };
     }
 
     /// <summary>The coverage polygon, rounded to 10⁻⁷ degrees, clockwise.</summary>
