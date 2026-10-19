@@ -306,6 +306,11 @@ internal static partial class Strings
     public static string Pick_Warning_StatusInForce => Get(nameof(Pick_Warning_StatusInForce));
     public static string Pick_Warning_StatusNotYet => Get(nameof(Pick_Warning_StatusNotYet));
     public static string Pick_Warning_StatusEnded => Get(nameof(Pick_Warning_StatusEnded));
+    public static string Pick_Warning_EndedNotInBulletinFormat => Get(nameof(Pick_Warning_EndedNotInBulletinFormat));
+    public static string Pick_Warning_EndedReplacedFormat => Get(nameof(Pick_Warning_EndedReplacedFormat));
+    public static string Pick_Warning_EndedCancelledByFormat => Get(nameof(Pick_Warning_EndedCancelledByFormat));
+    public static string NavWarnings_NotReceivedFormat => Get(nameof(NavWarnings_NotReceivedFormat));
+    public static string NavWarnings_NotInBulletinFormat => Get(nameof(NavWarnings_NotInBulletinFormat));
     public static string Pick_Warning_ValidLabel => Get(nameof(Pick_Warning_ValidLabel));
     public static string Pick_Warning_AreaLabel => Get(nameof(Pick_Warning_AreaLabel));
     public static string Pick_Warning_IssuedLabel => Get(nameof(Pick_Warning_IssuedLabel));
@@ -1917,6 +1922,8 @@ internal static partial class Strings
     public static string Findings_WarningInForceAtFormat => Get(nameof(Findings_WarningInForceAtFormat));
     public static string Findings_WarningNotInForceAtFormat => Get(nameof(Findings_WarningNotInForceAtFormat));
     public static string Findings_WarningCancelled => Get(nameof(Findings_WarningCancelled));
+    public static string Findings_WarningNotInBulletinFormat => Get(nameof(Findings_WarningNotInBulletinFormat));
+    public static string Findings_WarningNotInBulletin => Get(nameof(Findings_WarningNotInBulletin));
     public static string Findings_WarningRangeFormat => Get(nameof(Findings_WarningRangeFormat));
     public static string Findings_TideNotAppliedForFormat => Get(nameof(Findings_TideNotAppliedForFormat));
     public static string Findings_TideNotApplied => Get(nameof(Findings_TideNotApplied));

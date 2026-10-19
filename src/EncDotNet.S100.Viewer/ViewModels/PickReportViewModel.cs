@@ -657,6 +657,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private void UpdateTargets(NavigationalWarningCardViewModel card)
     {
         card.SetLinkTargets(_warningNavigator?.Warnings ?? []);
+        card.SetWarningSet(_warningNavigator?.WarningSet ?? Datasets.Pipelines.NavigationalWarningSet.Empty);
         card.CanZoom = FindEntry(card.Hit) is { Extent: not null };
     }
 

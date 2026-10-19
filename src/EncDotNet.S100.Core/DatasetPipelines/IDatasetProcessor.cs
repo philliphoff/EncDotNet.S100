@@ -131,6 +131,16 @@ public interface IDatasetProcessor
     IReadOnlyList<NavigationalWarningFeature> GetNavigationalWarnings() => [];
 
     /// <summary>
+    /// Returns the dataset's navigational warning as a whole (S-124: its
+    /// <c>NavwarnPreamble</c> and <c>References</c>), with no part's validity,
+    /// text or geometry. A cancellation or an in-force bulletin may have no
+    /// parts, so <see cref="GetNavigationalWarnings"/> doesn't list it, yet it
+    /// ends other warnings; build a <see cref="NavigationalWarningSet"/> from it.
+    /// </summary>
+    /// <returns>The warning, or <c>null</c> when the product carries none.</returns>
+    NavigationalWarningInfo? GetNavigationalWarningMessage() => null;
+
+    /// <summary>
     /// Samples this dataset at the supplied geographic position and
     /// returns a synthetic <see cref="FeatureInfo"/> describing the
     /// underlying coverage value(s) — used by the viewer to provide a
