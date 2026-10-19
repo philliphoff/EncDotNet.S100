@@ -43,6 +43,21 @@ public abstract record RenderContext
     public ViewingGroupFilter? ViewingGroups { get; init; }
 
     /// <summary>
+    /// Ids of this dataset's features the host doesn't want drawn, or
+    /// <c>null</c> for none. A host sets it from
+    /// <see cref="MapDataset.HiddenFeatures"/>.
+    /// </summary>
+    /// <remarks>
+    /// Honoured by S-124, where the host hides navigational warning parts
+    /// that aren't in force at the view time (S-98 Edition 2.0.0 §12.12; see
+    /// <see cref="NavigationalWarningSet.IsDrawnAt"/>). The processor drops
+    /// the features before portrayal, together with the features only they
+    /// reference, so the portrayal rules see the dataset as if they weren't
+    /// there. Other products ignore it for now.
+    /// </remarks>
+    public IReadOnlySet<string>? HiddenFeatures { get; init; }
+
+    /// <summary>
     /// Mariner-configurable display preferences (S-100 Part 9 §4.2 —
     /// safety/shallow/deep contours, S-101 boolean toggles, depth display
     /// unit, etc.). When <c>null</c> processors fall back to

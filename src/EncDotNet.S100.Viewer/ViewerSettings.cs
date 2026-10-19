@@ -358,6 +358,15 @@ internal sealed partial class ViewerSettings
     public bool ShowOverscaleIndication { get; set; } = true;
 
     /// <summary>
+    /// Whether the map also draws S-124 navigational warnings not yet in
+    /// force at the view time, from their publication time until their
+    /// validity starts (S-98 Edition 2.0.0 §12.12.2 Example 1; #993). Off by
+    /// default: the map draws only warnings in force. Ended and cancelled
+    /// warnings are never drawn, whatever this says.
+    /// </summary>
+    public bool ShowWarningsNotYetInForce { get; set; }
+
+    /// <summary>
     /// Whether the online OpenStreetMap basemap tile layer is shown
     /// beneath the chart data. Enabled by default. Disabling it removes
     /// the remote tile fetch entirely — useful for offline operation

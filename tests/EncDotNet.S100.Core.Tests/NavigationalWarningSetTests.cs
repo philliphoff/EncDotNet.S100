@@ -244,4 +244,56 @@ public class NavigationalWarningSetTests
         Assert.True(set.IsInForceAt(dropped, Oct(11)));
         Assert.False(set.IsInForceAt(dropped, Oct(12)));
     }
+
+    // #993: what the map draws (S-98 Edition 2.0.0 §12.12).
+    private static NavigationalWarningInfo Ranged(int number, DateTimeOffset published, DateTimeOffset start, DateTimeOffset end) =>
+        Warning(number, published) with { Validity = [new NavigationalWarningValidity(start, end)] };
+
+    [Fact]
+    public void IsDrawnAt_draws_a_warning_in_force_whatever_the_setting()
+    {
+        var warning = Ranged(120, Oct(1), Oct(10), Oct(20));
+        var set = new NavigationalWarningSet([warning]);
+
+        Assert.True(set.IsDrawnAt(warning, Oct(15), showNotYetInForce: false));
+        Assert.True(set.IsDrawnAt(warning, Oct(15), showNotYetInForce: true));
+    }
+
+    [Fact]
+    public void IsDrawnAt_never_draws_an_ended_or_cancelled_warning()
+    {
+        var ended = Ranged(120, Oct(1), Oct(1), Oct(5));
+        var cancelled = Ranged(121, Oct(1), Oct(1), Oct(30));
+        var cancelledByDate = Ranged(122, Oct(1), Oct(1), Oct(30)) with { CancellationDate = Oct(12) };
+        var canceller = Warning(130, Oct(11)) with { Cancels = [Ref(121)] };
+        var set = new NavigationalWarningSet([ended, cancelled, cancelledByDate, canceller]);
+
+        foreach (var show in new[] { false, true })
+        {
+            Assert.False(set.IsDrawnAt(ended, Oct(15), show));
+            Assert.False(set.IsDrawnAt(cancelled, Oct(15), show));
+            Assert.False(set.IsDrawnAt(cancelledByDate, Oct(15), show));
+        }
+        Assert.True(set.IsDrawnAt(cancelled, Oct(10), showNotYetInForce: false));
+    }
+
+    [Fact]
+    public void IsDrawnAt_draws_a_warning_not_yet_in_force_from_its_publication_only_with_the_setting()
+    {
+        var later = Ranged(120, Oct(12), Oct(25), Oct(30));
+        var set = new NavigationalWarningSet([later]);
+
+        Assert.False(set.IsDrawnAt(later, Oct(15), showNotYetInForce: false));
+        Assert.True(set.IsDrawnAt(later, Oct(15), showNotYetInForce: true));
+        // Not before it was published.
+        Assert.False(set.IsDrawnAt(later, Oct(11), showNotYetInForce: true));
+    }
+
+    [Fact]
+    public void IsDrawnAt_draws_one_without_a_publication_time_before_it_starts()
+    {
+        var later = Ranged(120, Oct(1), Oct(25), Oct(30)) with { PublicationTime = null };
+
+        Assert.True(new NavigationalWarningSet([later]).IsDrawnAt(later, Oct(15), showNotYetInForce: true));
+    }
 }

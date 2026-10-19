@@ -121,6 +121,17 @@ internal interface IDatasetLoaderService
     /// </summary>
     DatasetProcessorSnapshot AcquireProcessors() => new(Processors);
 
+    /// <summary>
+    /// Sets what decides, before a dataset's first render, which of its
+    /// features the map doesn't draw (<see cref="DatasetEntry.HiddenFeatures"/>);
+    /// <see langword="null"/> hides none. S-124 warnings not in force use it
+    /// so they never flash up (#993).
+    /// </summary>
+    /// <param name="policy">The entry and its processor in, the features to hide out.</param>
+    void SetHiddenFeaturesOnLoad(Func<DatasetEntry, IDatasetProcessor, IReadOnlySet<string>?>? policy)
+    {
+    }
+
     /// <summary>Read-only view of the layers each entry currently owns.</summary>
     IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
 

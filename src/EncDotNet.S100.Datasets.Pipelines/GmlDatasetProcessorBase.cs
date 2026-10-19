@@ -150,6 +150,23 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     protected abstract IFeatureXmlSource CreateFeatureXmlSource();
 
     /// <summary>
+    /// Creates the feature XML source for one render. The default ignores
+    /// <paramref name="context"/> and calls <see cref="CreateFeatureXmlSource()"/>;
+    /// S-124 overrides it to leave out <see cref="RenderContext.HiddenFeatures"/>.
+    /// Called under the render gate.
+    /// </summary>
+    /// <param name="context">The render context, if any.</param>
+    protected virtual IFeatureXmlSource CreateFeatureXmlSource(RenderContext? context) => CreateFeatureXmlSource();
+
+    /// <summary>
+    /// Whether <see cref="HitTestFeatures"/> may report <paramref name="feature"/>.
+    /// The default is <c>true</c>; S-124 returns <c>false</c> for features its
+    /// last portrayal left out, so what isn't drawn isn't picked.
+    /// </summary>
+    /// <param name="feature">The feature hit.</param>
+    protected virtual bool IsPickable(TFeature feature) => true;
+
+    /// <summary>
     /// Minimum extent padding in degrees. Default is 0.01; override for
     /// specs that need wider padding (e.g. S-421 uses 0.05).
     /// </summary>
@@ -243,7 +260,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
         ApplyDisplayMode(catalogue, context);
         await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
-        var featureSource = CreateFeatureXmlSource();
+        var featureSource = CreateFeatureXmlSource(context);
         var pipeline = new PortrayalPipeline();
         var portrayalLayer = await pipeline.ProcessAsync(featureSource, catalogue, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
@@ -513,8 +530,13 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
 
     /// <inheritdoc/>
     public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
-        double latitude, double longitude, double radiusMeters) =>
-        FeatureHitTester.HitTest(Features, latitude, longitude, radiusMeters);
+        double latitude, double longitude, double radiusMeters)
+    {
+        var hits = FeatureHitTester.HitTest(Features, latitude, longitude, radiusMeters);
+        if (hits.Count == 0 || hits.All(hit => IsPickable(Features[hit.Ordinal])))
+            return hits;
+        return [.. hits.Where(hit => IsPickable(Features[hit.Ordinal]))];
+    }
 
     /// <inheritdoc/>
     public IEnumerable<FeatureSummary> EnumerateFeatures()

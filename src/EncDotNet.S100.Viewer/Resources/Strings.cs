@@ -620,6 +620,7 @@ internal static partial class Strings
     public static string Tooltip_TimelinePreset => Get(nameof(Tooltip_TimelinePreset));
     public static string TimelinePanel_Live => Get(nameof(TimelinePanel_Live));
     public static string TimelinePanel_Pinned => Get(nameof(TimelinePanel_Pinned));
+    public static string TimelinePanel_DisplayNotRealTime => Get(nameof(TimelinePanel_DisplayNotRealTime));
     public static string TimelinePanel_GoLive => Get(nameof(TimelinePanel_GoLive));
     public static string TimelinePanel_OffsetNow => Get(nameof(TimelinePanel_OffsetNow));
     public static string TimelinePanel_InFormat => Get(nameof(TimelinePanel_InFormat));
@@ -793,6 +794,9 @@ internal static partial class Strings
     public static string DisplaySettings_DisplayBaseHeader => Get(nameof(DisplaySettings_DisplayBaseHeader));
     public static string DisplaySettings_TextHeader => Get(nameof(DisplaySettings_TextHeader));
     public static string DisplaySettings_PaletteHeader => Get(nameof(DisplaySettings_PaletteHeader));
+    public static string DisplaySettings_WarningsHeader => Get(nameof(DisplaySettings_WarningsHeader));
+    public static string DisplaySettings_ShowWarningsNotYetInForce => Get(nameof(DisplaySettings_ShowWarningsNotYetInForce));
+    public static string Tooltip_ShowWarningsNotYetInForce => Get(nameof(Tooltip_ShowWarningsNotYetInForce));
     public static string Segment_DisplayBase => Get(nameof(Segment_DisplayBase));
     public static string Segment_DisplayOther => Get(nameof(Segment_DisplayOther));
     public static string Segment_TextImportant => Get(nameof(Segment_TextImportant));
@@ -2027,6 +2031,9 @@ internal static partial class Strings
     public static string Tooltip_NavWarnings_FilterViewTime => Get(nameof(Tooltip_NavWarnings_FilterViewTime));
     public static string NavWarnings_NotInForceGroupViewTime => Get(nameof(NavWarnings_NotInForceGroupViewTime));
     public static string NavWarnings_NotInForceGroupNow => Get(nameof(NavWarnings_NotInForceGroupNow));
+    public static string NavWarnings_NotInForceNotDrawn => Get(nameof(NavWarnings_NotInForceNotDrawn));
+    public static string NavWarnings_NotInForceEndedNotDrawn => Get(nameof(NavWarnings_NotInForceEndedNotDrawn));
+    public static string NavWarnings_Drawn => Get(nameof(NavWarnings_Drawn));
     public static string Label_NavWarnings_NotInForce => Get(nameof(Label_NavWarnings_NotInForce));
     public static string NavWarnings_NoSeries => Get(nameof(NavWarnings_NoSeries));
     public static string NavWarnings_NoLocation => Get(nameof(NavWarnings_NoLocation));

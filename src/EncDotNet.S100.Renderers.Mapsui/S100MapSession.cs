@@ -323,7 +323,8 @@ internal sealed class S100MapSession : IS100MapSession
             current.SubLayers,
             current.Validation,
             current.VersionAssessment,
-            current.ViewingGroups);
+            current.ViewingGroups,
+            current.HiddenFeatures);
         _session.SetDataset(
             updated, snapshot.MinimumDisplayScale, snapshot.MaximumDisplayScale);
     }

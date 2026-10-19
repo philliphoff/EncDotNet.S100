@@ -384,6 +384,29 @@ internal sealed class DatasetEntry : ViewModelBase
         }
     }
 
+    private IReadOnlySet<string>? _hiddenFeatures;
+    /// <summary>
+    /// Ids of this dataset's features the map doesn't draw, or <c>null</c>
+    /// for none. Like <see cref="ViewingGroups"/> it isn't a user setting:
+    /// <c>NavigationalWarningDrawingService</c> sets it to the S-124 parts not
+    /// in force at the view time. Changing it re-renders the dataset.
+    /// </summary>
+    public IReadOnlySet<string>? HiddenFeatures
+    {
+        get => _mapDataset is { } dataset ? dataset.HiddenFeatures : _hiddenFeatures;
+        set
+        {
+            var normalised = value is { Count: > 0 } ? value : null;
+            if (SameFeatures(HiddenFeatures, normalised)) return;
+            _hiddenFeatures = normalised;
+            UpdateMapDataset();
+            OnPropertyChanged();
+        }
+    }
+
+    private static bool SameFeatures(IReadOnlySet<string>? a, IReadOnlySet<string>? b) =>
+        a is null ? b is null : b is not null && a.Count == b.Count && a.SetEquals(b);
+
     private bool _isActive = true;
     /// <summary>
     /// Whether this dataset participates in S-98 composition and queries,
@@ -791,7 +814,8 @@ internal sealed class DatasetEntry : ViewModelBase
         _subLayers.Select(subLayer => subLayer.State).ToArray(),
         _validation,
         _versionAssessment,
-        _viewingGroups);
+        _viewingGroups,
+        _hiddenFeatures);
 
     private void ReconcileSubLayerProjectionSubscriptions()
     {

@@ -43,6 +43,12 @@ public sealed class HarnessOptions
     /// </summary>
     public EcdisDisplayCategory? DisplayCategory { get; init; } = EcdisDisplayCategory.Standard;
 
+    /// <summary>
+    /// Feature ids not to draw (<see cref="RenderContext.HiddenFeatures"/>),
+    /// as the viewer hides S-124 parts not in force (#993). Default: none.
+    /// </summary>
+    public IReadOnlySet<string>? HiddenFeatures { get; init; }
+
     /// <summary>Text scale factor. Default: 1.0.</summary>
     public double TextScale { get; init; } = 1.0;
 

@@ -583,6 +583,10 @@ panel:
   Part 9 §11.7). This is separate from the display category.
   **Navigational ice** is provisional: it's derived from total concentration,
   not a POLARIS or RIO navigational-risk calculation, and its tooltip says so.
+- **Show warnings not yet in force** (S-124): shown when an S-124 dataset is
+  loaded; off by default and kept after a restart. When it is on, the map
+  also draws a navigational warning from its publication time until it comes
+  into force. See [Which warnings the map draws](#which-warnings-the-map-draws).
 
 The **Display controls** panel also lists each loaded vector product's viewing
 groups, so you can hide or show particular symbol families:
@@ -760,6 +764,34 @@ has a location and is in force, the map centres on it and highlights it. A
 part that isn't in force opens its card but leaves the map where it is, and a
 text-only part shows a note over the map saying nothing is drawn for it. With
 no S-124 datasets loaded, the panel offers **Open Library**.
+
+#### Which warnings the map draws
+
+The map draws a warning only while it is in force at the view time, as S-98
+Edition 2.0.0 §12.12 asks of an ECDIS, so the map and the list agree:
+
+- An ended or cancelled warning is never drawn. Cancelled includes a passed
+  cancellation date, a cancellation warning, and a warning missing from the
+  latest in-force bulletin for its series.
+- A warning not yet in force is drawn only when **Show warnings not yet in
+  force** is on (in the map's **Display Settings**), from its publication
+  time until it starts.
+- Each part of a warning is judged on its own dates, so a part that has ended
+  disappears while the warning's other parts stay. Its affected area and text
+  go with it.
+- The warning on an open Warning card stays drawn, whatever its status, so
+  **Zoom to** and the highlight show where it is. It goes when the card
+  closes.
+- A warning that isn't drawn can't be picked on the map; find it in the list.
+
+The **Not in force** group says "Not drawn on the chart", or "Ended ones
+aren't drawn" with the setting on, and a row the map still draws ends with
+"Drawn". These notes follow the view time, so they show while the panel reads
+status at **View time**.
+
+When the view time is pinned and S-124 data is loaded, the time stamp at the
+top left of the map starts with "Display Not Real Time" and names the view
+time, and it stays on the map while the time is pinned (S-98 §12.7.2).
 
 #### How fresh the list is
 

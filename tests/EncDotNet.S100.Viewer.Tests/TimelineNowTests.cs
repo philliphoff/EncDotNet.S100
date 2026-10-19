@@ -256,4 +256,31 @@ public sealed class TimelineNowTests
 
         public void RefreshForecastSources() => Refreshes++;
     }
+
+    [Fact]
+    public void A_pinned_time_with_warnings_loaded_says_Display_Not_Real_Time()
+    {
+        var (service, timeline, _) = Create(Run.AddHours(9).AddMinutes(10));
+        service.ApplySnapshot(RunSnapshot(Run, current: null));
+        timeline.HasDateDependentData = true;
+
+        // Live is real time.
+        Assert.False(timeline.IsNotRealTime);
+        Assert.StartsWith("LIVE · ", timeline.StampText, StringComparison.Ordinal);
+
+        var raised = new List<string?>();
+        timeline.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        timeline.PreviousStepCommand.Execute(null);
+
+        // S-98 §12.7.2: a permanent indication starting "Display Not Real Time", naming the time (#993).
+        Assert.True(timeline.IsNotRealTime);
+        Assert.Contains(nameof(TimelineViewModel.IsNotRealTime), raised);
+        Assert.StartsWith("Display Not Real Time · ", timeline.StampText, StringComparison.Ordinal);
+        Assert.EndsWith(" · 10 min ago", timeline.StampText, StringComparison.Ordinal);
+
+        // Without warnings, a pinned time is just pinned.
+        timeline.HasDateDependentData = false;
+        Assert.False(timeline.IsNotRealTime);
+        Assert.DoesNotContain("Display Not Real Time", timeline.StampText, StringComparison.Ordinal);
+    }
 }
