@@ -12,7 +12,13 @@ internal interface INavigationalWarningNavigator
     /// <summary>Every listed warning part.</summary>
     IReadOnlyList<NavigationalWarningEntry> Warnings { get; }
 
-    /// <summary>Raised after <see cref="Warnings"/> changes.</summary>
+    /// <summary>
+    /// Every loaded warning, judged together, so a card's status agrees with
+    /// the panel's (#992); an empty set by default.
+    /// </summary>
+    Datasets.Pipelines.NavigationalWarningSet WarningSet => Datasets.Pipelines.NavigationalWarningSet.Empty;
+
+    /// <summary>Raised after <see cref="Warnings"/> or <see cref="WarningSet"/> changes.</summary>
     event EventHandler? WarningsChanged;
 
     /// <summary>Finds a listed part by dataset id and feature id.</summary>

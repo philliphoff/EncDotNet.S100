@@ -496,6 +496,9 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     }
 
     /// <inheritdoc/>
+    public virtual NavigationalWarningInfo? GetNavigationalWarningMessage() => null;
+
+    /// <inheritdoc/>
     public IReadOnlyList<NavigationalWarningFeature> GetNavigationalWarnings()
     {
         List<NavigationalWarningFeature>? warnings = null;

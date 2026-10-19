@@ -233,20 +233,29 @@
                     <ListBox.DataTemplates>
                         <DataTemplate DataType="vm:NavigationalWarningGroupItem">
                             <Panel Margin="-4,4,0,0">
-                                <!-- A series header: name, count, source. -->
-                                <Grid IsVisible="{Binding IsSeries}" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6"
-                                      Background="Transparent" IsHitTestVisible="False">
-                                    <ic:FluentIcon Grid.Column="0" Icon="ChevronDown" FontSize="12" Opacity="0.55" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="2" Text="{Binding Count}" FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="3" Text="{Binding Source}" FontSize="10.5" Opacity="0.6" VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" MaxWidth="160"
-                                               IsVisible="{Binding !IsStale}" />
-                                    <TextBlock Grid.Column="3" Text="{Binding Source}" FontSize="10.5" VerticalAlignment="Center"
+                                <!-- A series header: name, count, source; then what its in-force bulletin lists but isn't loaded (§9.2.2). -->
+                                <StackPanel IsVisible="{Binding IsSeries}" Spacing="2">
+                                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6"
+                                          Background="Transparent" IsHitTestVisible="False">
+                                        <ic:FluentIcon Grid.Column="0" Icon="ChevronDown" FontSize="12" Opacity="0.55" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Count}" FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="3" Text="{Binding Source}" FontSize="10.5" Opacity="0.6" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="160"
+                                                   IsVisible="{Binding !IsStale}" />
+                                        <TextBlock Grid.Column="3" Text="{Binding Source}" FontSize="10.5" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource DepthWarningBrush}"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="160"
+                                                   IsVisible="{Binding IsStale}" />
+                                    </Grid>
+                                    <TextBlock IsVisible="{Binding HasNotReceived}"
+                                               AutomationProperties.AutomationId="NavigationalWarnings.NotReceived"
+                                               Text="{Binding NotReceivedText}"
+                                               Margin="18,0,0,2"
+                                               FontSize="10.5"
                                                Foreground="{StaticResource DepthWarningBrush}"
-                                               TextTrimming="CharacterEllipsis" MaxWidth="160"
-                                               IsVisible="{Binding IsStale}" />
-                                </Grid>
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
                                 <!-- The dimmed "Not in force" group opens and closes. -->
                                 <Button IsVisible="{Binding IsNotInForce}"
                                         Classes="Ghost"

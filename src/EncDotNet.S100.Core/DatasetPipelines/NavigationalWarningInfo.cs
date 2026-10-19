@@ -42,7 +42,14 @@ public sealed record NavigationalWarningValidity(DateTimeOffset? Start, DateTime
 public sealed record NavigationalWarningReference(string? Series, int Number, int? Year)
 {
     /// <summary>
-    /// Whether this reference names <paramref name="other"/>: the same number,
+    /// The warning's interoperability identifier (S-124 Edition 2.0.0
+    /// <c>interoperabilityIdentifier</c>, e.g. <c>"urn:mrn:…"</c>), when given.
+    /// </summary>
+    public string? InteroperabilityIdentifier { get; init; }
+
+    /// <summary>
+    /// Whether this reference names <paramref name="other"/>: the same
+    /// interoperability identifier when both give one, else the same number,
     /// the same year (compared by its last two digits) when both give one,
     /// and the same series, ignoring case and spacing, when both give one.
     /// </summary>
@@ -51,6 +58,9 @@ public sealed record NavigationalWarningReference(string? Series, int Number, in
     public bool Matches(NavigationalWarningReference other)
     {
         ArgumentNullException.ThrowIfNull(other);
+        if (!string.IsNullOrWhiteSpace(InteroperabilityIdentifier) && !string.IsNullOrWhiteSpace(other.InteroperabilityIdentifier)
+            && string.Equals(InteroperabilityIdentifier.Trim(), other.InteroperabilityIdentifier.Trim(), StringComparison.OrdinalIgnoreCase))
+            return true;
         if (Number != other.Number)
             return false;
         if (Year is { } year && other.Year is { } otherYear && year % 100 != otherYear % 100)
@@ -59,8 +69,37 @@ public sealed record NavigationalWarningReference(string? Series, int Number, in
             || string.Equals(Normalise(Series), Normalise(other.Series), StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Whether two series names are the same, ignoring case and spacing.</summary>
+    /// <param name="a">One series name.</param>
+    /// <param name="b">The other.</param>
+    /// <returns><c>true</c> when both are given and equal.</returns>
+    public static bool SameSeries(string? a, string? b) =>
+        !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b)
+        && string.Equals(Normalise(a), Normalise(b), StringComparison.OrdinalIgnoreCase);
+
     private static string Normalise(string series) =>
         string.Concat(series.Where(c => !char.IsWhiteSpace(c)));
+}
+
+/// <summary>
+/// What an in-force bulletin lists: the warnings of its series in force when
+/// it was published (S-124 Edition 2.0.0 §8.1.3, a <c>References</c> with
+/// <c>referenceCategory</c> 3), or none (<c>noMessageOnHand</c>, §8.1.4).
+/// </summary>
+/// <param name="InForce">The warnings it lists as in force, in document order.</param>
+/// <param name="NoMessageOnHand">Whether it says no warning of the series is in force.</param>
+public sealed record NavigationalWarningBulletin(
+    IReadOnlyList<NavigationalWarningReference> InForce,
+    bool NoMessageOnHand)
+{
+    /// <summary>Whether the bulletin lists <paramref name="reference"/> as in force.</summary>
+    /// <param name="reference">The warning's identifier.</param>
+    /// <returns><c>true</c> when listed.</returns>
+    public bool Lists(NavigationalWarningReference reference)
+    {
+        ArgumentNullException.ThrowIfNull(reference);
+        return !NoMessageOnHand && InForce.Any(r => r.Matches(reference));
+    }
 }
 
 /// <summary>
@@ -130,6 +169,15 @@ public sealed record NavigationalWarningInfo
     public IReadOnlyList<NavigationalWarningReference> Cancels { get; init; } = [];
 
     /// <summary>
+    /// What the warning lists as in force when it is an in-force bulletin
+    /// (S-124: a <c>References</c> of <c>referenceCategory</c> 3), or
+    /// <c>null</c> for any other warning.
+    /// <see cref="NavigationalWarningSet"/> uses it to end warnings the latest
+    /// bulletin leaves out (§9.2.1).
+    /// </summary>
+    public NavigationalWarningBulletin? InForceBulletin { get; init; }
+
+    /// <summary>
     /// The areas the part affects beyond its own geometry (S-124
     /// <c>NavwarnAreaAffected</c>, through <c>areaAffected</c>), in WGS-84.
     /// Empty when it names none.
@@ -145,11 +193,17 @@ public sealed record NavigationalWarningInfo
         : string.IsNullOrWhiteSpace(Series) ? Number : $"{Series} {Number}";
 
     /// <summary>
-    /// Whether the warning applies at <paramref name="time"/>. A warning is
+    /// Whether the warning applies at <paramref name="time"/>, judged on this
+    /// warning alone. A warning is
     /// ended once its cancellation date has passed or every validity range has
     /// ended, and not yet in force while it waits for a range to start. With
     /// no validity range it is in force until cancelled.
     /// </summary>
+    /// <remarks>
+    /// Cancellation datasets and in-force bulletins end a warning too; they
+    /// are other warnings, so <see cref="NavigationalWarningSet.StatusAt"/>
+    /// applies them.
+    /// </remarks>
     /// <param name="time">The time to test, usually the view time.</param>
     /// <returns>The warning's status at that time.</returns>
     public NavigationalWarningStatus StatusAt(DateTimeOffset time)
