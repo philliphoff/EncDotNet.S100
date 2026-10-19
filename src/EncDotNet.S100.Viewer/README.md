@@ -775,15 +775,27 @@ from a file you opened directly keep the issuing authority in the header.
 - When a source's latest refresh fails, its group starts with "AMSA hasn't
   answered since 07:40. You're seeing the warnings received then." and
   **Retry**, and the header reads "AMSA · 07:40, stale".
-- **NEW** marks a warning that first appeared in the latest refresh of its
-  source. It stays until you open the warning's card, or until a later
-  refresh brings it again unchanged. The summary adds "N new", and the
-  Warnings button in the activity bar shows the count. A source seen for the
-  first time sets the baseline, so nothing in it is new until it refreshes
-  again. A warning published well before the previous refresh isn't new, even
-  when its dataset loads later. Files opened directly are never new. Which
-  warnings you have seen is kept in `navigational-warnings.json` in the data
-  folder, so it survives a restart.
+- **NEW** marks a newly received warning until you open its card, or until
+  24 hours have passed since it was received, whichever comes first (S-98
+  Ed 2.0.0 §12.12.1). Opening the card, from the list, the map or a link, is
+  what counts as displaying it; panning past a drawn warning doesn't. A later
+  refresh doesn't clear NEW, and NEW expires on its own, without a refresh.
+  The summary adds "N new", and the Warnings button in the activity bar shows
+  the count. "Received" means the warning first appeared in a refresh of its
+  source. A source seen for the first time sets the baseline, so nothing in
+  it is new until it refreshes again. A warning published well before the
+  previous refresh isn't new, even when its dataset loads later. Files opened
+  directly are never new. Receive times and opened warnings are kept in
+  `navigational-warnings.json` in the data folder, so they survive a restart.
+- **NEW options** (the filter button beside **Refresh**) narrow which new
+  warnings show NEW: **Received within** a number of hours, and **Within** a
+  number of nautical miles of own ship (while it's shown) or the active
+  route. Both are off by default, so every new warning shows NEW. A warning
+  with no location, or nothing to measure from, isn't filtered. A dot on the
+  button shows that a filter is on.
+- **Mark new since**, in the same options, is for a watch handover: it marks
+  every warning received in the last 1, 4, 8, 12 or 24 hours NEW again, for
+  the next 24 hours or until you open it.
 
 ## Work with time-varying data
 

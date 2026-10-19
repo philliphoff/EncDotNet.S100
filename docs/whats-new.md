@@ -6,6 +6,19 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **NEW warnings follow S-98.** In SoundCharts' **Navigational warnings**
+  panel, a newly received warning now shows NEW until you open its card or
+  24 hours have passed since it was received (S-98 Ed 2.0.0 §12.12.1). A
+  later refresh no longer clears it, and NEW expires on its own. New
+  **NEW options** limit the indication to warnings received within some
+  hours, or within some nautical miles of own ship or the active route (both
+  off by default), and **Mark new since** marks everything received in the
+  last few hours NEW again for a watch handover. `list_navigational_warnings`
+  reports each warning's `receivedAt`, `newUntil`, `openedAt` and
+  `newReason`, and the new `mark_navigational_warnings_new` tool does the
+  handover. The seen-warnings file moves to format 2: an older file is
+  discarded, so each source sets a new baseline.
+
 - **Open and export RTZ routes.** SoundCharts' **Import route…** now opens
   RTZ route plans (IEC 61174 Annex S, versions 1.0, 1.1 and 1.2) as
   read-only received routes in Planning mode, and **Export…** writes any

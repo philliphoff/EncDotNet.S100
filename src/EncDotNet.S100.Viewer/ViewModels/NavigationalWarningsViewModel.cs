@@ -249,6 +249,9 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
     /// <summary>Whether the summary shows "· N new".</summary>
     public bool HasNew => _newCount > 0;
 
+    /// <summary>The NEW options (#997): filters on when NEW shows and "Mark new since"; <c>null</c> when not offered.</summary>
+    public NavigationalWarningNewOptionsViewModel? NewOptions { get; init; }
+
     /// <inheritdoc />
     public int BadgeCount => _newCount;
 

@@ -2496,7 +2496,7 @@
     <value>{0} minutes ago</value>
   </data>
   <data name="About_Time_HoursAgo" xml:space="preserve">
-    <value>{0} hours ago</value>
+    <value>{0} h ago</value>
   </data>
   <data name="About_Time_DaysAgo" xml:space="preserve">
     <value>{0} days ago</value>
@@ -5705,10 +5705,58 @@
     <value>NEW</value>
   </data>
   <data name="Tooltip_NavWarnings_New" xml:space="preserve">
-    <value>New since its source last refreshed. Opening the card clears it.</value>
+    <value>Received in the last 24 hours and not yet opened. Opening the card clears it.</value>
   </data>
   <data name="NavWarnings_NewFormat" xml:space="preserve">
     <value>{0} new</value>
+  </data>
+  <data name="Label_NavWarnings_NewOptions" xml:space="preserve">
+    <value>NEW options</value>
+  </data>
+  <data name="Tooltip_NavWarnings_NewOptions" xml:space="preserve">
+    <value>Choose which warnings show NEW, or mark recent ones new again.</value>
+  </data>
+  <data name="NavWarnings_NewOptionsTitle" xml:space="preserve">
+    <value>Show NEW only for warnings</value>
+  </data>
+  <data name="Label_NavWarnings_NewWithinHours" xml:space="preserve">
+    <value>Received within</value>
+  </data>
+  <data name="Label_NavWarnings_NewWithinHoursValue" xml:space="preserve">
+    <value>Hours</value>
+  </data>
+  <data name="NavWarnings_HoursUnit" xml:space="preserve">
+    <value>hours</value>
+  </data>
+  <data name="Label_NavWarnings_NewWithinNm" xml:space="preserve">
+    <value>Within</value>
+  </data>
+  <data name="Label_NavWarnings_NewWithinNmValue" xml:space="preserve">
+    <value>Nautical miles</value>
+  </data>
+  <data name="NavWarnings_NmOfShipOrRoute" xml:space="preserve">
+    <value>NM of own ship or route</value>
+  </data>
+  <data name="NavWarnings_NewOptionsNote" xml:space="preserve">
+    <value>Without a filter, a warning shows NEW for 24 hours after it's received, or until you open it.</value>
+  </data>
+  <data name="NavWarnings_MarkSinceTitle" xml:space="preserve">
+    <value>Watch handover</value>
+  </data>
+  <data name="Label_NavWarnings_MarkSince" xml:space="preserve">
+    <value>Mark new since</value>
+  </data>
+  <data name="NavWarnings_MarkSinceHoursFormat" xml:space="preserve">
+    <value>{0} h ago</value>
+  </data>
+  <data name="Label_NavWarnings_MarkNew" xml:space="preserve">
+    <value>Mark new</value>
+  </data>
+  <data name="Tooltip_NavWarnings_MarkNew" xml:space="preserve">
+    <value>Show NEW again on every warning received since then, for the next 24 hours or until opened.</value>
+  </data>
+  <data name="NavWarnings_MarkedFormat" xml:space="preserve">
+    <value>{0} new after handover.</value>
   </data>
   <data name="Label_NavWarnings_Refresh" xml:space="preserve">
     <value>Refresh</value>

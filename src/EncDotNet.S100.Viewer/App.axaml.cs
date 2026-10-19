@@ -1351,7 +1351,16 @@ public partial class App : Application
             sp.GetRequiredService<DatasetsViewModel>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.INavigationalWarningSources>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore>(),
-            sp.GetService<TimeProvider>()));
+            sp.GetService<TimeProvider>(),
+            // The NEW distance filter measures from own ship while it is shown, and the active route (#997).
+            ownShip: () =>
+            {
+                var source = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>();
+                var fix = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>().Current;
+                return source.IsEnabled && fix is { } f ? new EncDotNet.S100.DataModel.GeoPosition(f.Latitude, f.Longitude) : null;
+            },
+            activeRoute: () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>().Routes.ActiveRoute?.Waypoints
+                .Select(w => w.Position).ToList()));
         services.AddSingleton(sp => new NavigationalWarningsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
             sp.GetRequiredService<IPickService>(),
@@ -1360,7 +1369,13 @@ public partial class App : Application
             sp.GetService<ITimeFormatProvider>(),
             sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
             sp.GetRequiredService<IDatasetLoaderService>(),
-            sp.GetService<TimeProvider>()));
+            sp.GetService<TimeProvider>())
+        {
+            NewOptions = new NavigationalWarningNewOptionsViewModel(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
+                sp.GetRequiredService<ViewerSettings>(),
+                sp.GetService<TimeProvider>()),
+        });
         services.AddSingleton<MainViewModel>();
 
         // Activity-tab registry. Adding a new tab is a single AddActivityTab

@@ -20,7 +20,8 @@ internal sealed record NavigationalWarningsDto(
     [property: Description("True when at least one S-124 dataset is loaded.")] bool HasSources,
     [property: Description("True while an S-124 dataset is still loading.")] bool Loading,
     [property: Description("The in-map note the panel shows for the open part, or null.")] string? MapNote,
-    [property: Description("Number of in-force parts whose warnings are new since their source's latest refresh (the summary's \"N new\" and the Warnings rail badge).")] int New,
+    [property: Description("Number of in-force parts whose warnings show NEW (the summary's \"N new\" and the Warnings rail badge).")] int New,
+    [property: Description("The mariner's filters on when NEW shows (S-98 §12.12.1 item 4); both null means no filtering, the default.")] NavigationalWarningNewFilterDto NewFilter,
     [property: Description("True when the panel's Refresh can read a source again (a listed warning came from a Library SECOM service or online feed).")] bool CanRefresh,
     [property: Description("The Library sources the listed warnings came from, by name; files opened directly have none.")] IReadOnlyList<NavigationalWarningSourceDto> Sources,
     [property: Description("Every part, in dataset order (the panel groups them by series and source).")] IReadOnlyList<NavigationalWarningDto> Warnings,
@@ -71,8 +72,18 @@ internal sealed record NavigationalWarningDto(
     [property: Description("Validity ranges (UTC); either end may be null (open).")] IReadOnlyList<NavigationalWarningValidityDto> Validity,
     [property: Description("Message language codes in document order, e.g. [\"eng\", \"fra\"].")] IReadOnlyList<string?> Languages,
     [property: Description("True when this part is the one open from the panel.")] bool Selected,
-    [property: Description("True when the warning is new: it first appeared in its source's latest refresh and its card hasn't been opened since. Always false for a file opened directly.")] bool New,
+    [property: Description("True when the warning shows NEW: it was received less than 24 hours ago (or marked new since) and its card hasn't been opened, and the NEW filters let it show (S-98 §12.12.1). Always false for a file opened directly.")] bool New,
+    [property: Description("Why it is or isn't new: \"new\", \"opened\" (its card was opened), \"expired\" (24 hours passed since it was received or marked new), \"baseline\" (listed when its source was first seen), \"published_earlier\" (published before the source's previous refresh; its dataset loaded late), \"not_observed\", \"no_source\" (a file opened directly), \"filtered_age\" or \"filtered_distance\" (new, but outside the NEW filters).")] string NewReason,
+    [property: Description("When the viewer first received the warning with its current content (UTC), or null for a file opened directly.")] DateTimeOffset? ReceivedAt,
+    [property: Description("When NEW ends unless its card is opened first (UTC): 24 hours after it was received or marked new. Null when it never was new.")] DateTimeOffset? NewUntil,
+    [property: Description("When its card was opened while it was new (UTC), or null.")] DateTimeOffset? OpenedAt,
     [property: Description("The Library source id the part came from, or null for a file opened directly.")] Guid? SourceId);
+
+/// <summary>The NEW filters.</summary>
+[Description("The mariner's filters on when NEW shows; null for no limit.")]
+internal sealed record NavigationalWarningNewFilterDto(
+    [property: Description("Only warnings received within this many hours show NEW, or null.")] double? ReceivedWithinHours,
+    [property: Description("Only warnings within this many nautical miles of own ship (while shown) or the active route show NEW, or null. Parts with no location aren't filtered.")] double? WithinNauticalMiles);
 
 /// <summary>A validity range.</summary>
 [Description("A period when a warning applies.")]
@@ -147,6 +158,19 @@ internal abstract class NavigationalWarningsToolBase
         _ => "ended",
     };
 
+    internal static string NewReasonCode(NavigationalWarningNewReason reason) => reason switch
+    {
+        NavigationalWarningNewReason.New => "new",
+        NavigationalWarningNewReason.Opened => "opened",
+        NavigationalWarningNewReason.Expired => "expired",
+        NavigationalWarningNewReason.Baseline => "baseline",
+        NavigationalWarningNewReason.PublishedEarlier => "published_earlier",
+        NavigationalWarningNewReason.NoSource => "no_source",
+        NavigationalWarningNewReason.FilteredAge => "filtered_age",
+        NavigationalWarningNewReason.FilteredDistance => "filtered_distance",
+        _ => "not_observed",
+    };
+
     internal static NavigationalWarningsDto ToDto(NavigationalWarningsViewModel panel, NavigationalWarningsService service)
     {
         var time = panel.StatusTime;
@@ -161,10 +185,11 @@ internal abstract class NavigationalWarningsToolBase
             service.IsLoading,
             panel.MapNote,
             panel.NewCount,
+            new NavigationalWarningNewFilterDto(service.NewFilter.ReceivedWithin?.TotalHours, service.NewFilter.WithinNauticalMiles),
             panel.CanRefresh,
             service.Sources.Select(s => new NavigationalWarningSourceDto(
                 s.Id, s.Name, s.ReceivedAt, s.IsStale, s.IsRefreshing, panel.SourceHeader(s))).ToList(),
-            service.Warnings.Select(w => ToDto(w, service.StatusAt(w, time), selected, service.IsNew(w))).ToList(),
+            service.Warnings.Select(w => ToDto(w, service.StatusAt(w, time), selected, service.Newness(w))).ToList(),
             service.Set.LatestBulletins(time).Select(r => new NavigationalWarningBulletinDto(
                 r.Series,
                 r.Bulletin.Label,
@@ -175,7 +200,7 @@ internal abstract class NavigationalWarningsToolBase
                 r.NotReceived.Count > 0 ? NavigationalWarningsViewModel.NotReceivedText(r) : null)).ToList());
     }
 
-    private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, NavigationalWarningState state, NavigationalWarningEntry? selected, bool isNew)
+    private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, NavigationalWarningState state, NavigationalWarningEntry? selected, NavigationalWarningNewness newness)
     {
         var w = entry.Warning;
         NavigationalWarningBoundsDto? bounds = null;
@@ -216,7 +241,11 @@ internal abstract class NavigationalWarningsToolBase
             selected is not null
                 && ReferenceEquals(selected.Dataset, entry.Dataset)
                 && string.Equals(selected.FeatureRef, entry.FeatureRef, StringComparison.Ordinal),
-            isNew,
+            newness.IsNew,
+            NewReasonCode(newness.Reason),
+            newness.ReceivedAt,
+            newness.NewUntil,
+            newness.OpenedAt,
             entry.Source?.Id);
     }
 }
@@ -232,7 +261,31 @@ internal sealed class ListNavigationalWarningsTool : NavigationalWarningsToolBas
     public Task<ToolResult<NavigationalWarningsDto>> InvokeAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Invoker.InvokeAsync(() => ToolResult<NavigationalWarningsDto>.Ok(ToDto(Panel, Service)));
+        return Invoker.InvokeAsync(() =>
+        {
+            // NEW may have expired since the timer last looked (set_test_clock moves time at once).
+            Service.Recheck();
+            return ToolResult<NavigationalWarningsDto>.Ok(ToDto(Panel, Service));
+        });
+    }
+}
+
+/// <summary>Marks the warnings received since a time new again, as the panel's "Mark new since" does (#997).</summary>
+internal sealed class MarkNavigationalWarningsNewTool : NavigationalWarningsToolBase
+{
+    public const string Name = "mark_navigational_warnings_new";
+
+    public MarkNavigationalWarningsNewTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
+        : base(panel, service, invoker) { }
+
+    public Task<ToolResult<NavigationalWarningsDto>> InvokeAsync(DateTimeOffset since, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Invoker.InvokeAsync(() =>
+        {
+            Service.MarkNewSince(since);
+            return ToolResult<NavigationalWarningsDto>.Ok(ToDto(Panel, Service));
+        });
     }
 }
 
@@ -443,9 +496,29 @@ internal static class NavigationalWarningsMcpAdapters
                 "dataset and feature id, label (series and number), type, area, issuer, publication time, status at the " +
                 "panel's time (view time by default, or now), geometry kind and bounds, validity ranges and message " +
                 "languages. Counts in force, not in force, text-only and new match the panel's summary. Each part says " +
-                "whether it is new (it first appeared in its source's latest refresh and its card hasn't been opened) " +
-                "and which Library source it came from; sources say when they last answered and whether they are stale " +
-                "(their latest refresh failed). Files opened directly have no source and are never new.",
+                "whether it shows NEW (received in the last 24 hours and its card not opened, S-98 §12.12.1), why or why " +
+                "not, when it was received and when NEW ends, and which Library source it came from; sources say when " +
+                "they last answered and whether they are stale (their latest refresh failed). Files opened directly have " +
+                "no source and are never new. Also returns the NEW filters (received within, distance from own ship or route).",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    public static McpServerTool Create(MarkNavigationalWarningsNewTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("Mark every warning received at or after this time (ISO-8601) new again.")] DateTimeOffset since,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(since, ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = MarkNavigationalWarningsNewTool.Name,
+            Description =
+                "Marks every navigational warning received since a time NEW again, for a watch handover, as the " +
+                "Navigational warnings panel's \"Mark new since\" does: each stays NEW until its card is opened or 24 " +
+                "hours pass. Returns what list_navigational_warnings returns. Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

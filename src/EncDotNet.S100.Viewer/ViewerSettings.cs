@@ -408,6 +408,18 @@ internal sealed partial class ViewerSettings
     public bool OwnShipOverlayEnabled { get; set; } = false;
 
     /// <summary>
+    /// Show NEW only on navigational warnings received within this many
+    /// hours (#997, S-98 §12.12.1 item 4); <c>null</c>, the default, for no limit.
+    /// </summary>
+    public double? NavigationalWarningsNewWithinHours { get; set; }
+
+    /// <summary>
+    /// Show NEW only on navigational warnings within this many nautical miles
+    /// of own ship or the active route (#997); <c>null</c>, the default, for no limit.
+    /// </summary>
+    public double? NavigationalWarningsNewWithinNm { get; set; }
+
+    /// <summary>
     /// Per-source visibility for dynamic feature sources (PR-D2.1),
     /// keyed by <c>IDynamicFeatureSource.Id</c>. Drives the Layer
     /// Stack panel's visibility toggle for the
