@@ -26,6 +26,25 @@ month. For package versions and release assets, see
   `export_route` take RTZ (`format: "RTZ"`, `version`). The new
   `EncDotNet.S100.Routes.Rtz` package reads and writes RTZ in your own code.
 
+- **The map draws S-124 warnings only while they're in force.** SoundCharts
+  used to draw every loaded navigational warning; now the map follows the
+  same status as the Navigational warnings panel and the Warning card (S-98
+  Edition 2.0.0 §12.12). Ended and cancelled warnings, including those left
+  out of the latest in-force bulletin, are never drawn. A new display
+  setting, **Show warnings not yet in force** (off by default, kept after a
+  restart), also draws a warning from its publication time until it starts.
+  Each part is judged on its own dates, and a hidden part takes its affected
+  area and text with it. The warning on an open Warning card stays drawn. When
+  the view time is pinned with S-124 data loaded, the map's time stamp starts
+  "Display Not Real Time" and stays shown (§12.7.2). The panel's **Not in
+  force** group says what isn't drawn. MCP: `list_navigational_warnings` adds
+  `drawn`, `drawnForCard`, `showNotYetInForce` and `drawTime`, and
+  `set_navigational_warning_display` sets the setting. In the libraries,
+  `NavigationalWarningSet.IsDrawnAt` holds the rule, and
+  `RenderContext.HiddenFeatures` / `MapDataset.HiddenFeatures` let a host
+  hide features; S-124 leaves them out before portrayal, and they aren't
+  picked.
+
 - **Check route: one verdict for every check.** SoundCharts' footer toggle
   is now **Check route**, on for any route with two or more waypoints. The
   verdict card gives one answer for the clearance check, the route checks and

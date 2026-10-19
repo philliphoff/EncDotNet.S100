@@ -636,17 +636,16 @@
                                    Margin="0,0,0,14" />
                 <!-- Map stamp (#713 B4): the view time over the map while the
                      Timeline dock is shown, so the map (and any screenshot of
-                     it) says which time it shows. Green dot Live, accent Pinned. -->
+                     it) says which time it shows. Green dot Live, accent Pinned.
+                     With navigational warnings loaded and the time pinned it
+                     starts "Display Not Real Time" and stays shown (S-98
+                     §12.7.2; #993). -->
                 <Panel HorizontalAlignment="Left"
                        VerticalAlignment="Top"
                        Margin="12,12,0,0"
-                       IsHitTestVisible="False">
-                    <Panel.IsVisible>
-                        <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="Timeline.IsActive" />
-                            <Binding Path="IsBottomDockShown" />
-                        </MultiBinding>
-                    </Panel.IsVisible>
+                       IsHitTestVisible="False"
+                       AutomationProperties.AutomationId="Map.TimeStamp"
+                       IsVisible="{Binding IsMapStampVisible}">
                     <Border Background="{DynamicResource MapOverlaySurfaceBrush}"
                             CornerRadius="6" />
                     <StackPanel Orientation="Horizontal"
@@ -1032,6 +1031,25 @@
                                                              Command="{Binding Settings.SetPaletteNightCommand}" />
                                             </UniformGrid>
                                         </Border>
+                                    </StackPanel>
+
+                                    <!--
+                                      S-124 navigational warnings (#993): the map
+                                      draws only warnings in force at the view
+                                      time; this also draws those not yet in
+                                      force (S-98 §12.12.2). Shown while S-124
+                                      data is loaded.
+                                    -->
+                                    <StackPanel Spacing="6"
+                                                IsVisible="{Binding Timeline.HasDateDependentData}">
+                                        <TextBlock Text="{x:Static loc:Strings.DisplaySettings_WarningsHeader}"
+                                                   FontSize="12"
+                                                   FontWeight="Medium"
+                                                   Opacity="0.8" />
+                                        <CheckBox AutomationProperties.AutomationId="DisplaySettings.ShowWarningsNotYetInForce"
+                                                  Content="{x:Static loc:Strings.DisplaySettings_ShowWarningsNotYetInForce}"
+                                                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowWarningsNotYetInForce}"
+                                                  IsChecked="{Binding NavigationalWarningDrawing.ShowNotYetInForce, FallbackValue=False}" />
                                     </StackPanel>
 
                                     <!--

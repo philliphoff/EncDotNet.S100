@@ -89,7 +89,8 @@ public sealed record NavigationalWarningBulletinReport(
 /// Edition 2.0.0 §12.12 has ECDIS do: it stays listed, marked cancelled, and
 /// isn't drawn on the navigation screen. (S-124 §9.3 forbids producers from
 /// using the bulletin to cancel; that is about encoding, not this status.)
-/// <see cref="IsInForceAt"/> is the one test a renderer needs.
+/// <see cref="IsDrawnAt"/> is the one test a renderer needs; it adds the
+/// mariner's choice to see warnings not yet in force to <see cref="IsInForceAt"/>.
 /// </para>
 /// </remarks>
 public sealed class NavigationalWarningSet
@@ -153,6 +154,27 @@ public sealed class NavigationalWarningSet
     /// <returns><c>true</c> when <see cref="StatusAt"/> gives <see cref="NavigationalWarningStatus.InForce"/>.</returns>
     public bool IsInForceAt(NavigationalWarningInfo warning, DateTimeOffset time) =>
         StatusAt(warning, time).Status == NavigationalWarningStatus.InForce;
+
+    /// <summary>
+    /// Whether the map draws the warning at <paramref name="time"/> (S-98
+    /// Edition 2.0.0 §12.12). An ended or cancelled warning is never drawn
+    /// (§12.12.3). One not yet in force is drawn only when
+    /// <paramref name="showNotYetInForce"/> is set, and only from its
+    /// publication time (§12.12.2 Example 1); with no publication time, as
+    /// in Edition 1.0.0, from any time before its range starts.
+    /// </summary>
+    /// <param name="warning">The warning (or one of its parts).</param>
+    /// <param name="time">The view time.</param>
+    /// <param name="showNotYetInForce">The mariner's choice to see warnings before they start.</param>
+    /// <returns><c>true</c> when the warning is drawn.</returns>
+    public bool IsDrawnAt(NavigationalWarningInfo warning, DateTimeOffset time, bool showNotYetInForce) =>
+        StatusAt(warning, time).Status switch
+        {
+            NavigationalWarningStatus.InForce => true,
+            NavigationalWarningStatus.NotYetInForce => showNotYetInForce
+                && (warning.PublicationTime is not { } published || time >= published),
+            _ => false,
+        };
 
     /// <summary>
     /// The latest in-force bulletin of each series published at or before

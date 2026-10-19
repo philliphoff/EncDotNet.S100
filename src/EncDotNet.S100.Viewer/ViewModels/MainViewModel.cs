@@ -47,6 +47,9 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     public NavigationalWarningsViewModel? NavigationalWarnings { get; }
 
+    /// <summary>Which S-124 warnings the map draws, and the "Show warnings not yet in force" setting (#993).</summary>
+    public Services.NavigationalWarningDrawingService? NavigationalWarningDrawing { get; }
+
     /// <summary>
     /// Identifier of the default tab selected on a fresh launch (and the
     /// fallback when a persisted <see cref="ViewerSettings.LastSelectedActivity"/>
@@ -376,6 +379,12 @@ internal sealed class MainViewModel : ViewModelBase
     /// </summary>
     public bool IsTimeHudVisible => Timeline.IsActive && !(IsBottomDockShown && IsTimelineTabSelected);
 
+    /// <summary>
+    /// True when the map stamp is on the map: while the Timeline dock is shown
+    /// (#713 B4), and always while the display isn't real time (#993).
+    /// </summary>
+    public bool IsMapStampVisible => Timeline.IsNotRealTime || (Timeline.IsActive && IsBottomDockShown);
+
     /// <summary>Opens or closes the Timeline dock from the Time HUD; unavailable in a narrow window.</summary>
     public ICommand ToggleTimelineDockCommand { get; private set; } = null!;
 
@@ -384,6 +393,7 @@ internal sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsWindowNarrow));
         OnPropertyChanged(nameof(IsBottomDockShown));
         OnPropertyChanged(nameof(IsTimeHudVisible));
+        OnPropertyChanged(nameof(IsMapStampVisible));
         (ToggleTimelineDockCommand as RelayCommand)?.NotifyCanExecuteChanged();
     }
 
@@ -1232,7 +1242,8 @@ internal sealed class MainViewModel : ViewModelBase
         IEnumerable<IActivityTab>? activityTabs = null,
         McpServerHost? mcpServerHost = null,
         RoutesService? routes = null,
-        NavigationalWarningsViewModel? navigationalWarnings = null)
+        NavigationalWarningsViewModel? navigationalWarnings = null,
+        Services.NavigationalWarningDrawingService? navigationalWarningDrawing = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -1296,6 +1307,7 @@ internal sealed class MainViewModel : ViewModelBase
         PickReport = pickReport;
         Timeline = timeline;
         NavigationalWarnings = navigationalWarnings;
+        NavigationalWarningDrawing = navigationalWarningDrawing;
         DisplayToolbar = displayToolbar;
         TextToolbar = textToolbar;
         DisplayModeToolbar = displayModeToolbar;
@@ -1305,6 +1317,8 @@ internal sealed class MainViewModel : ViewModelBase
         {
             if (e.PropertyName == nameof(TimelineViewModel.IsActive))
                 OnPropertyChanged(nameof(IsTimeHudVisible));
+            if (e.PropertyName is nameof(TimelineViewModel.IsActive) or nameof(TimelineViewModel.IsNotRealTime))
+                OnPropertyChanged(nameof(IsMapStampVisible));
         };
         // "No data … for N of M layers" opens the dataset list on that layer (#709, handoff D4).
         Timeline.ShowLayerRequested += ShowLayer;

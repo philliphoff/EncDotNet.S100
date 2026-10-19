@@ -102,6 +102,99 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
         new GmlFeatureXmlSource<S124Feature>(_dataset.Features);
 
+    /// <summary>
+    /// Leaves out the parts in <see cref="RenderContext.HiddenFeatures"/>,
+    /// with the <c>NavwarnAreaAffected</c> and <c>TextPlacement</c> features
+    /// that only hidden parts reference (S-98 Edition 2.0.0 §12.12). Areas
+    /// and texts no part references, and those a drawn part also references,
+    /// stay. Filtering the input rather than the drawing instructions keeps
+    /// the rules that look across parts right, such as the count label the
+    /// point rule puts on parts that share a point.
+    /// </summary>
+    /// <param name="context">The render context, if any.</param>
+    protected override IFeatureXmlSource CreateFeatureXmlSource(RenderContext? context)
+    {
+        var undrawn = UndrawnFeatures(context?.HiddenFeatures);
+        _undrawn = undrawn;
+        return undrawn.Count == 0
+            ? CreateFeatureXmlSource()
+            : new GmlFeatureXmlSource<S124Feature>([.. _dataset.Features.Where(f => !undrawn.Contains(f.Id))]);
+    }
+
+    /// <summary>
+    /// Hides the whole warning when every part is in
+    /// <see cref="RenderContext.HiddenFeatures"/>, so its unattached areas
+    /// and texts aren't drawn alone.
+    /// </summary>
+    /// <param name="context">The render context, if any.</param>
+    /// <returns>The status line, or <c>null</c> to render.</returns>
+    protected override string? GetSuppressionInfo(RenderContext? context)
+    {
+        if (context?.HiddenFeatures is not { Count: > 0 } hidden)
+        {
+            _undrawn = Empty;
+            return null;
+        }
+
+        var parts = _dataset.Features.Where(IsPart).ToList();
+        if (parts.Count == 0 || !parts.All(p => hidden.Contains(p.Id)))
+            return null;
+
+        _undrawn = _dataset.Features.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
+        return $"S-124 Navigational Warnings — {FileName}\nHidden (not in force at the view time)";
+    }
+
+    /// <inheritdoc />
+    protected override bool IsPickable(S124Feature feature) => !_undrawn.Contains(feature.Id);
+
+    /// <summary>
+    /// The features a render with <paramref name="hidden"/> leaves out: the
+    /// hidden parts and what only they reference.
+    /// </summary>
+    internal IReadOnlySet<string> UndrawnFeatures(IReadOnlySet<string>? hidden)
+    {
+        if (hidden is not { Count: > 0 })
+            return Empty;
+
+        var undrawn = new HashSet<string>(StringComparer.Ordinal);
+        // Areas and texts referenced by at least one drawn part.
+        var kept = new HashSet<string>(StringComparer.Ordinal);
+        var referencedByHidden = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var feature in _dataset.Features)
+        {
+            if (!IsPart(feature))
+                continue;
+            var isHidden = hidden.Contains(feature.Id);
+            if (isHidden)
+                undrawn.Add(feature.Id);
+            foreach (var reference in feature.References)
+            {
+                var target = reference.Href.TrimStart('#');
+                (isHidden ? referencedByHidden : kept).Add(target);
+            }
+        }
+
+        foreach (var feature in _dataset.Features)
+        {
+            if (feature.FeatureType is "NavwarnAreaAffected" or "TextPlacement"
+                && referencedByHidden.Contains(feature.Id)
+                && !kept.Contains(feature.Id))
+            {
+                undrawn.Add(feature.Id);
+            }
+        }
+
+        return undrawn;
+    }
+
+    private static bool IsPart(S124Feature feature) =>
+        string.Equals(feature.FeatureType, "NavwarnPart", StringComparison.Ordinal);
+
+    private static readonly IReadOnlySet<string> Empty = new HashSet<string>();
+
+    // What the last portrayal left out; read by picking on other threads.
+    private volatile IReadOnlySet<string> _undrawn = Empty;
+
     /// <inheritdoc />
     protected override NavigationalWarningInfo? BuildNavigationalWarning(S124Feature feature)
     {

@@ -825,6 +825,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         Entry renderEntry;
         long generation;
         ViewingGroupFilter? viewingGroups;
+        IReadOnlySet<string>? hiddenFeatures;
         lock (_sync)
         {
             ThrowIfDisposed();
@@ -833,6 +834,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             renderEntry = entry;
             generation = ++entry.Generation;
             viewingGroups = entry.Dataset.ViewingGroups;
+            hiddenFeatures = entry.Dataset.HiddenFeatures;
         }
 
         if (!_processorOwner.TryAcquire(datasetId, out var lease))
@@ -855,6 +857,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 selectedTime) with
             {
                 ViewingGroups = viewingGroups,
+                HiddenFeatures = hiddenFeatures,
             };
             result = await Task.Run(
                 () => _renderer.RenderAsync(
@@ -1801,7 +1804,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             subLayers,
             dataset.Validation,
             dataset.VersionAssessment,
-            dataset.ViewingGroups);
+            dataset.ViewingGroups,
+            dataset.HiddenFeatures);
 
     private (bool RangeChanged, DateTime? CurrentChanged) RecomputeTimeState()
     {

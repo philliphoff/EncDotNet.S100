@@ -658,12 +658,21 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// duplicate coverage variants, default an S-104 gridded surface to hidden,
     /// surface S-101 update diagnostics, and register S-128 catalogues.
     /// </summary>
+    private Func<DatasetEntry, IDatasetProcessor, IReadOnlySet<string>?>? _hiddenFeaturesOnLoad;
+
+    /// <inheritdoc />
+    public void SetHiddenFeaturesOnLoad(Func<DatasetEntry, IDatasetProcessor, IReadOnlySet<string>?>? policy) =>
+        _hiddenFeaturesOnLoad = policy;
+
     private void ApplyPostRegistrationPolicies(
         DatasetEntry entry,
         IDatasetProcessor processor,
         string spec,
         bool wasKnownBySession)
     {
+        if (_hiddenFeaturesOnLoad is { } hiddenFeatures)
+            entry.HiddenFeatures = hiddenFeatures(entry, processor);
+
         // Collapse duplicate coverage products: S-111/S-104 exchange sets
         // routinely bundle several variants of the same cell (e.g. neap /
         // spring tidal regime, depth bands) — often shipped as separate
@@ -1172,7 +1181,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not DatasetEntry entry) return;
-        if (e.PropertyName == nameof(DatasetEntry.ViewingGroups))
+        if (e.PropertyName is nameof(DatasetEntry.ViewingGroups) or nameof(DatasetEntry.HiddenFeatures))
         {
             ApplyEntryState(entry);
             _ = RenderViewingGroupsAsync(entry);
@@ -1186,9 +1195,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ApplyEntryState(entry);
     }
 
-    // A dataset's own viewing groups change what its portrayal draws (Check
-    // route keeps only a received route's action points), so unlike the eye
-    // or opacity the dataset re-renders. A failed render keeps the old
+    // A dataset's own viewing groups and hidden features change what its
+    // portrayal draws (Check route keeps only a received route's action
+    // points; S-124 parts not in force aren't drawn), so unlike the eye or
+    // opacity the dataset re-renders. A failed render keeps the old
     // layers.
     private async Task RenderViewingGroupsAsync(DatasetEntry entry)
     {
