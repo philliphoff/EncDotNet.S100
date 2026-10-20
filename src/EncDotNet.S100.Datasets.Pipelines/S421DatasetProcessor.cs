@@ -91,6 +91,7 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
             authorityProvider,
             "S-421")
     {
+        SetContentHash(DatasetContentHash.HashAndRewind(ref datasetStream));
         using (datasetStream)
         {
             _dataset = S421Dataset.Open(datasetStream);
