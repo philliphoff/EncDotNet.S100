@@ -6234,4 +6234,45 @@
   <data name="Tooltip_NavWarnings_TurnOnDrawing" xml:space="preserve">
     <value>Draw navigational warnings on the chart again</value>
   </data>
+  <data name="NavWarnings_SortClassification" xml:space="preserve">
+    <value>Classification</value>
+    <comment>Navigational warnings order menu: On chart, then Off chart, then Information (S-98 §12.12.1 item 2; #996).</comment>
+  </data>
+  <data name="NavWarnings_ClassOnChart" xml:space="preserve">
+    <value>On chart</value>
+    <comment>Warning classification (S-98 §12.12.2): relevant to the route, always drawn. The default.</comment>
+  </data>
+  <data name="NavWarnings_ClassOffChart" xml:space="preserve">
+    <value>Off chart</value>
+    <comment>Warning classification (S-98 §12.12.2): not relevant to the route, not drawn.</comment>
+  </data>
+  <data name="NavWarnings_ClassInformation" xml:space="preserve">
+    <value>Information</value>
+    <comment>Warning classification (S-98 §12.12.2): relevant to the route for information, not drawn.</comment>
+  </data>
+  <data name="Tooltip_NavWarnings_ClassOnChart" xml:space="preserve">
+    <value>On chart: relevant to the route, drawn while in force</value>
+  </data>
+  <data name="Tooltip_NavWarnings_ClassOffChart" xml:space="preserve">
+    <value>Off chart: not relevant to the route, not drawn; still listed</value>
+  </data>
+  <data name="Tooltip_NavWarnings_ClassInformation" xml:space="preserve">
+    <value>Information: relevant to the route for information, not drawn; still listed</value>
+  </data>
+  <data name="Tooltip_NavWarnings_ClassificationFormat" xml:space="preserve">
+    <value>{0}. Select to change.</value>
+    <comment>Row classification glyph tooltip; {0} is what the classification means.</comment>
+  </data>
+  <data name="Label_NavWarnings_ClassificationFormat" xml:space="preserve">
+    <value>Classification: {0}</value>
+    <comment>Accessible name of a row classification button; {0} is On chart, Off chart or Information.</comment>
+  </data>
+  <data name="Label_NavWarnings_Classification" xml:space="preserve">
+    <value>Classification</value>
+    <comment>Warning card: the on chart / off chart / information control (#996).</comment>
+  </data>
+  <data name="Pick_Warning_NotDrawnClassified" xml:space="preserve">
+    <value>Not drawn on the chart once this card closes</value>
+    <comment>Warning card note under an Off chart or Information classification (#996).</comment>
+  </data>
 </root>

@@ -2028,6 +2028,17 @@ internal static partial class Strings
     public static string Label_NavWarnings_Sort => Get(nameof(Label_NavWarnings_Sort));
     public static string NavWarnings_SortNumber => Get(nameof(NavWarnings_SortNumber));
     public static string NavWarnings_SortPublished => Get(nameof(NavWarnings_SortPublished));
+    public static string NavWarnings_SortClassification => Get(nameof(NavWarnings_SortClassification));
+    public static string NavWarnings_ClassOnChart => Get(nameof(NavWarnings_ClassOnChart));
+    public static string NavWarnings_ClassOffChart => Get(nameof(NavWarnings_ClassOffChart));
+    public static string NavWarnings_ClassInformation => Get(nameof(NavWarnings_ClassInformation));
+    public static string Tooltip_NavWarnings_ClassOnChart => Get(nameof(Tooltip_NavWarnings_ClassOnChart));
+    public static string Tooltip_NavWarnings_ClassOffChart => Get(nameof(Tooltip_NavWarnings_ClassOffChart));
+    public static string Tooltip_NavWarnings_ClassInformation => Get(nameof(Tooltip_NavWarnings_ClassInformation));
+    public static string Tooltip_NavWarnings_ClassificationFormat => Get(nameof(Tooltip_NavWarnings_ClassificationFormat));
+    public static string Label_NavWarnings_ClassificationFormat => Get(nameof(Label_NavWarnings_ClassificationFormat));
+    public static string Label_NavWarnings_Classification => Get(nameof(Label_NavWarnings_Classification));
+    public static string Pick_Warning_NotDrawnClassified => Get(nameof(Pick_Warning_NotDrawnClassified));
     public static string NavWarnings_FilterNow => Get(nameof(NavWarnings_FilterNow));
     public static string NavWarnings_FilterViewTime => Get(nameof(NavWarnings_FilterViewTime));
     public static string Tooltip_NavWarnings_FilterNow => Get(nameof(Tooltip_NavWarnings_FilterNow));

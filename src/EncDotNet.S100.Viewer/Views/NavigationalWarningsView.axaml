@@ -4,6 +4,7 @@
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:svc="using:EncDotNet.S100.Viewer.Services"
              x:Class="EncDotNet.S100.Viewer.Views.NavigationalWarningsView"
              x:DataType="vm:NavigationalWarningsViewModel">
 
@@ -118,6 +119,7 @@
                           MinWidth="96">
                     <ComboBoxItem Content="{x:Static loc:Strings.NavWarnings_SortNumber}" />
                     <ComboBoxItem Content="{x:Static loc:Strings.NavWarnings_SortPublished}" />
+                    <ComboBoxItem Content="{x:Static loc:Strings.NavWarnings_SortClassification}" />
                 </ComboBox>
                 <!-- Reads the SECOM services and feeds that supplied the warnings again (#932). -->
                 <Button Grid.Column="2"
@@ -400,7 +402,7 @@
                             </Border>
                         </DataTemplate>
                         <DataTemplate DataType="vm:NavigationalWarningRowItem">
-                            <Grid ColumnDefinitions="16,*" ColumnSpacing="9" Background="Transparent" Opacity="{Binding RowOpacity}">
+                            <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="9" Background="Transparent" Opacity="{Binding RowOpacity}">
                                 <Panel Grid.Column="0" VerticalAlignment="Center" ToolTip.Tip="{Binding GlyphTip}">
                                     <ic:FluentIcon Icon="{Binding Glyph}" FontSize="14"
                                                    Foreground="{DynamicResource MutedColor}"
@@ -427,6 +429,45 @@
                                     <TextBlock Text="{Binding SubText}" FontSize="10.5" Opacity="0.65"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
+                                <!-- On chart / Off chart / Information (S-98 §12.12.2; #996): a glyph, and a menu to change it. -->
+                                <Button Grid.Column="2"
+                                        Classes="Icon"
+                                        Padding="4"
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.AutomationId="NavigationalWarnings.Row.Classification"
+                                        AutomationProperties.Name="{Binding ClassificationName}"
+                                        AutomationProperties.HelpText="{Binding ClassificationTip}"
+                                        ToolTip.Tip="{Binding ClassificationTip}">
+                                    <Panel>
+                                        <ic:FluentIcon Icon="{Binding ClassificationGlyph}" FontSize="14" Opacity="0.35"
+                                                       IsVisible="{Binding !IsClassifiedOff}" />
+                                        <ic:FluentIcon Icon="{Binding ClassificationGlyph}" FontSize="14"
+                                                       Foreground="{StaticResource DepthWarningBrush}"
+                                                       IsVisible="{Binding IsClassifiedOff}" />
+                                    </Panel>
+                                    <Button.Flyout>
+                                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                            <MenuItem Header="{x:Static loc:Strings.NavWarnings_ClassOnChart}"
+                                                      AutomationProperties.AutomationId="NavigationalWarnings.Row.OnChart"
+                                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassOnChart}"
+                                                      ToggleType="Radio" IsChecked="{Binding IsOnChart, Mode=OneWay}"
+                                                      Command="{Binding ClassifyCommand}"
+                                                      CommandParameter="{x:Static svc:NavigationalWarningClassification.OnChart}" />
+                                            <MenuItem Header="{x:Static loc:Strings.NavWarnings_ClassOffChart}"
+                                                      AutomationProperties.AutomationId="NavigationalWarnings.Row.OffChart"
+                                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassOffChart}"
+                                                      ToggleType="Radio" IsChecked="{Binding IsOffChart, Mode=OneWay}"
+                                                      Command="{Binding ClassifyCommand}"
+                                                      CommandParameter="{x:Static svc:NavigationalWarningClassification.OffChart}" />
+                                            <MenuItem Header="{x:Static loc:Strings.NavWarnings_ClassInformation}"
+                                                      AutomationProperties.AutomationId="NavigationalWarnings.Row.Information"
+                                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassInformation}"
+                                                      ToggleType="Radio" IsChecked="{Binding IsInformation, Mode=OneWay}"
+                                                      Command="{Binding ClassifyCommand}"
+                                                      CommandParameter="{x:Static svc:NavigationalWarningClassification.Information}" />
+                                        </MenuFlyout>
+                                    </Button.Flyout>
+                                </Button>
                             </Grid>
                         </DataTemplate>
                     </ListBox.DataTemplates>

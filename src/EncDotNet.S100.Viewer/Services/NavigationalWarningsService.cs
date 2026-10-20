@@ -82,6 +82,7 @@ internal sealed class NavigationalWarningsService : IDisposable
     private readonly DatasetsViewModel? _datasets;
     private readonly INavigationalWarningSources? _sources;
     private readonly NavigationalWarningSeenStore _seen;
+    private readonly NavigationalWarningClassificationStore _classifications;
     private readonly TimeProvider _clock;
     private readonly Func<GeoPosition?>? _ownShip;
     private readonly Func<IReadOnlyList<GeoPosition>?>? _activeRoute;
@@ -99,6 +100,7 @@ internal sealed class NavigationalWarningsService : IDisposable
     /// <param name="clock">The clock; NEW expires by it.</param>
     /// <param name="ownShip">Own ship's position while it is shown, for the NEW distance filter.</param>
     /// <param name="activeRoute">The active route's waypoints, for the NEW distance filter.</param>
+    /// <param name="classifications">Each warning's on chart / off chart / information classification; an in-memory store when <see langword="null"/>.</param>
     public NavigationalWarningsService(
         IDatasetLoaderService loader,
         DatasetsViewModel? datasets = null,
@@ -106,13 +108,15 @@ internal sealed class NavigationalWarningsService : IDisposable
         NavigationalWarningSeenStore? seen = null,
         TimeProvider? clock = null,
         Func<GeoPosition?>? ownShip = null,
-        Func<IReadOnlyList<GeoPosition>?>? activeRoute = null)
+        Func<IReadOnlyList<GeoPosition>?>? activeRoute = null,
+        NavigationalWarningClassificationStore? classifications = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
         _datasets = datasets;
         _sources = sources;
         _seen = seen ?? new NavigationalWarningSeenStore(null);
+        _classifications = classifications ?? new NavigationalWarningClassificationStore(null);
         _clock = clock ?? TimeProvider.System;
         _ownShip = ownShip;
         _activeRoute = activeRoute;
@@ -207,6 +211,37 @@ internal sealed class NavigationalWarningsService : IDisposable
         if (_activeRoute?.Invoke() is { Count: > 0 } route && NavigationalWarningProximity.DistanceNm(shape, route) is { } toRoute)
             best = best is { } b ? Math.Min(b, toRoute) : toRoute;
         return best;
+    }
+
+    /// <summary>
+    /// The mariner's classification of a part's warning (S-98 Edition 2.0.0
+    /// §12.12.2; #996): every part of a warning shares it. On chart unless set.
+    /// </summary>
+    public NavigationalWarningClassification ClassificationOf(NavigationalWarningEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return _classifications.Get(entry.Key);
+    }
+
+    /// <summary>
+    /// The classification of a part not listed yet (a dataset being loaded),
+    /// keyed as <see cref="ClassificationOf(NavigationalWarningEntry)"/> keys it.
+    /// </summary>
+    public NavigationalWarningClassification ClassificationOf(NavigationalWarningInfo warning, string datasetId, string featureRef) =>
+        _classifications.Get(NavigationalWarningSeenStore.KeyOf(warning, datasetId, featureRef));
+
+    /// <summary>
+    /// Classifies a part's warning, and keeps that across restarts; raises
+    /// <see cref="Changed"/> when it changed, so the map and the panel follow.
+    /// </summary>
+    /// <returns>True when it changed.</returns>
+    public bool SetClassification(NavigationalWarningEntry entry, NavigationalWarningClassification classification)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (!_classifications.Set(entry.Key, classification, _clock.GetUtcNow()))
+            return false;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
     }
 
     /// <summary>

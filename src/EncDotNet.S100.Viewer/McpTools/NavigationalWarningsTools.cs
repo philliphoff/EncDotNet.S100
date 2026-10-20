@@ -76,6 +76,7 @@ internal sealed record NavigationalWarningDto(
     [property: Description("Message language codes in document order, e.g. [\"eng\", \"fra\"].")] IReadOnlyList<string?> Languages,
     [property: Description("True when the map draws the part at drawTime (S-98 §12.12): it is in force; or it is not yet in force, published, and showNotYetInForce is on; or its Warning card is open. Ended and cancelled parts are not drawn, and nothing is while showNavigationalWarnings is off. A text-only part has nothing to draw whatever this says.")] bool Drawn,
     [property: Description("True when the part is drawn only because its Warning card is open (it would not be drawn otherwise); it stops being drawn when the card closes.")] bool DrawnForCard,
+    [property: Description("The mariner's classification of the warning (S-98 §12.12.2), shared by all its parts: \"on_chart\" (the default; drawn by the in-force rules), \"off_chart\" (not relevant to the route) or \"information\" (relevant, for information). Off-chart and information warnings aren't drawn unless their card is open, but stay listed. Set it with set_navigational_warning_classification.")] string Classification,
     [property: Description("True when this part is the one open from the panel.")] bool Selected,
     [property: Description("True when the warning shows NEW: it was received less than 24 hours ago (or marked new since) and its card hasn't been opened, and the NEW filters let it show (S-98 §12.12.1). Always false for a file opened directly.")] bool New,
     [property: Description("Why it is or isn't new: \"new\", \"opened\" (its card was opened), \"expired\" (24 hours passed since it was received or marked new), \"baseline\" (listed when its source was first seen), \"published_earlier\" (published before the source's previous refresh; its dataset loaded late), \"not_observed\", \"no_source\" (a file opened directly), \"filtered_age\" or \"filtered_distance\" (new, but outside the NEW filters).")] string NewReason,
@@ -127,7 +128,8 @@ internal sealed record WarningCardDto(
     [property: Description("True when the card offers Zoom to (the part has a location).")] bool CanZoom,
     [property: Description("True when the header shows NEW: the warning was new when the card was made (opening it marks it seen).")] bool New,
     [property: Description("True when the footer shows NOT FOR NAVIGATION: the dataset's exchange-set metadata marks it not for navigation.")] bool NotForNavigation,
-    [property: Description("Warning numbers in the displayed text that link to another listed warning, in text order.")] IReadOnlyList<WarningLinkDto> Links);
+    [property: Description("Warning numbers in the displayed text that link to another listed warning, in text order.")] IReadOnlyList<WarningLinkDto> Links,
+    [property: Description("The card's classification control: \"on_chart\", \"off_chart\" or \"information\"; null when the part isn't listed, so the card shows no control.")] string? Classification);
 
 /// <summary>A link in a card's text.</summary>
 [Description("A warning number in a card's message that opens another listed warning.")]
@@ -163,6 +165,21 @@ internal abstract class NavigationalWarningsToolBase
         _ => "ended",
     };
 
+    internal static string ClassificationCode(NavigationalWarningClassification classification) => classification switch
+    {
+        NavigationalWarningClassification.OffChart => "off_chart",
+        NavigationalWarningClassification.Information => "information",
+        _ => "on_chart",
+    };
+
+    internal static NavigationalWarningClassification? ParseClassification(string? code) => code?.Trim().ToLowerInvariant() switch
+    {
+        "on_chart" => NavigationalWarningClassification.OnChart,
+        "off_chart" => NavigationalWarningClassification.OffChart,
+        "information" => NavigationalWarningClassification.Information,
+        _ => null,
+    };
+
     internal static string NewReasonCode(NavigationalWarningNewReason reason) => reason switch
     {
         NavigationalWarningNewReason.New => "new",
@@ -194,7 +211,7 @@ internal abstract class NavigationalWarningsToolBase
             panel.CanRefresh,
             service.Sources.Select(s => new NavigationalWarningSourceDto(
                 s.Id, s.Name, s.ReceivedAt, s.IsStale, s.IsRefreshing, panel.SourceHeader(s))).ToList(),
-            service.Warnings.Select(w => ToDto(w, service.StatusAt(w, time), selected, service.Newness(w))).ToList(),
+            service.Warnings.Select(w => ToDto(w, service.StatusAt(w, time), selected, service.Newness(w), service.ClassificationOf(w))).ToList(),
             service.Set.LatestBulletins(time).Select(r => new NavigationalWarningBulletinDto(
                 r.Series,
                 r.Bulletin.Label,
@@ -214,7 +231,7 @@ internal abstract class NavigationalWarningsToolBase
             };
     }
 
-    private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, NavigationalWarningState state, NavigationalWarningEntry? selected, NavigationalWarningNewness newness)
+    private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, NavigationalWarningState state, NavigationalWarningEntry? selected, NavigationalWarningNewness newness, NavigationalWarningClassification classification)
     {
         var w = entry.Warning;
         NavigationalWarningBoundsDto? bounds = null;
@@ -255,6 +272,7 @@ internal abstract class NavigationalWarningsToolBase
             // What the map draws: the part isn't among its dataset's hidden features (#993).
             entry.Dataset.HiddenFeatures?.Contains(entry.FeatureRef) != true,
             false,
+            ClassificationCode(classification),
             selected is not null
                 && ReferenceEquals(selected.Dataset, entry.Dataset)
                 && string.Equals(selected.FeatureRef, entry.FeatureRef, StringComparison.Ordinal),
@@ -330,6 +348,37 @@ internal sealed class SelectNavigationalWarningTool : NavigationalWarningsToolBa
             }
 
             Panel.Select(entry);
+            return ToolResult<NavigationalWarningsDto>.Ok(ToDto(Panel, Service));
+        });
+    }
+}
+
+/// <summary>Classifies a warning on chart, off chart or information, as its row's menu or card does (#996).</summary>
+internal sealed class SetNavigationalWarningClassificationTool : NavigationalWarningsToolBase
+{
+    public const string Name = "set_navigational_warning_classification";
+
+    public SetNavigationalWarningClassificationTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
+        : base(panel, service, invoker) { }
+
+    public Task<ToolResult<NavigationalWarningsDto>> InvokeAsync(string datasetId, string featureId, string classification, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Invoker.InvokeAsync(() =>
+        {
+            if (ParseClassification(classification) is not { } value)
+                return ToolResult<NavigationalWarningsDto>.Err(new InvalidArgument("classification", "one of \"on_chart\", \"off_chart\" or \"information\""));
+            if (string.IsNullOrWhiteSpace(datasetId))
+                return ToolResult<NavigationalWarningsDto>.Err(new InvalidArgument("datasetId", "required; read it with list_navigational_warnings"));
+            if (string.IsNullOrWhiteSpace(featureId))
+                return ToolResult<NavigationalWarningsDto>.Err(new InvalidArgument("featureId", "required; read it with list_navigational_warnings"));
+            if (Service.Find(datasetId, featureId) is not { } entry)
+            {
+                return ToolResult<NavigationalWarningsDto>.Err(new InvalidArgument(
+                    "featureId", $"no warning part '{featureId}' in dataset '{datasetId}'; read the ids with list_navigational_warnings"));
+            }
+
+            Service.SetClassification(entry, value);
             return ToolResult<NavigationalWarningsDto>.Ok(ToDto(Panel, Service));
         });
     }
@@ -426,7 +475,8 @@ internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
         card.CanZoom,
         card.IsNew,
         card.NotForNavigation,
-        card.Links.Select(l => new WarningLinkDto(l.Text, l.Target!.DatasetId, l.Target.FeatureRef, l.Target.Warning.Label)).ToList());
+        card.Links.Select(l => new WarningLinkDto(l.Text, l.Target!.DatasetId, l.Target.FeatureRef, l.Target.Warning.Label)).ToList(),
+        card.CanClassify ? ClassificationCode(card.Classification) : null);
 
     /// <summary>The card for a part, or the open card when no part is named.</summary>
     protected static NavigationalWarningCardViewModel? FindCard(PickReportViewModel pick, string? datasetId, string? featureId)
@@ -585,6 +635,31 @@ internal static class NavigationalWarningsMcpAdapters
                 "highlights it. A part not in force leaves the map where it is; a text-only part shows the in-map note " +
                 "\"… has no location, so nothing is drawn for it.\" Returns what list_navigational_warnings returns. " +
                 "Viewer-injected tool — mutates live state.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    public static McpServerTool Create(SetNavigationalWarningClassificationTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("Catalog id of the dataset that holds the part (from list_navigational_warnings).")] string datasetId,
+            [Description("The part's feature id (from list_navigational_warnings); the classification applies to its whole warning.")] string featureId,
+            [Description("\"on_chart\" (relevant to the route; drawn while in force; the default), \"off_chart\" (not relevant; not drawn) or \"information\" (relevant, for information; not drawn).")] string classification,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(datasetId, featureId, classification, ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetNavigationalWarningClassificationTool.Name,
+            Description =
+                "Classifies a navigational warning's relevance to the intended route, as the classification menu on its " +
+                "Navigational warnings row or the control on its Warning card does (S-98 Ed 2.0.0 §12.12.2). On chart, the " +
+                "default, draws it by the in-force rules; off chart and information don't draw it, its affected areas or " +
+                "its texts, except while its Warning card is open. Off-chart and information warnings stay listed and " +
+                "marked, and route checks still report them. The classification covers every part of the warning, is " +
+                "keyed by series and number (with the year), and is kept across restarts and refreshes; it is global, not " +
+                "per route. Returns what list_navigational_warnings returns. Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

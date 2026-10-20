@@ -20,12 +20,18 @@ namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 /// request), and when the listed warnings change (<see cref="IRouteFindingInputs"/>).
 /// Each finding refers to the warning part's feature, so the #976 Warning
 /// card can open it, and carries the warning in <see cref="RouteFinding.Warning"/>.
+/// <para>
+/// A warning the mariner classified Off chart or Information is still
+/// checked, since the classification only declutters the chart (S-98
+/// §12.12.2; #996); its finding's meta line ends with the classification.
+/// </para>
 /// </remarks>
 internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFindingInputs
 {
     private readonly NavigationalWarningsService _warnings;
     private readonly Func<RouteWarningOptions> _options;
     private IReadOnlyList<NavigationalWarningEntry> _seen;
+    private string _classified;
 
     /// <param name="warnings">The listed navigational warnings.</param>
     /// <param name="options">The check's options (near distance, default corridor), read on each run; the defaults when <see langword="null"/>.</param>
@@ -35,6 +41,7 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
         _warnings = warnings;
         _options = options ?? (() => RouteWarningOptions.Default);
         _seen = warnings.Warnings;
+        _classified = Classified();
         _warnings.Changed += OnWarningsChanged;
     }
 
@@ -67,8 +74,27 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
             new RouteWarningTiming(schedule, request.ViewTime),
             _warnings.Set,
             cancellationToken);
-        return Task.FromResult(result.Findings);
+        return Task.FromResult<IReadOnlyList<RouteFinding>>([.. result.Findings.Select(Tag)]);
     }
+
+    // "… · Off chart": the classification declutters the chart, not the check (#996).
+    private RouteFinding Tag(RouteFinding finding)
+    {
+        if (finding.Feature is not { } feature || _warnings.Find(feature.DatasetId, feature.FeatureId) is not { } entry)
+            return finding;
+        var classification = _warnings.ClassificationOf(entry);
+        return classification == NavigationalWarningClassification.OnChart
+            ? finding
+            : finding with { Meta = $"{finding.Meta} · {ViewModels.NavigationalWarningRowItem.NameOf(classification)}" };
+    }
+
+    // The warnings classified off the chart, so a change re-runs the check.
+    private string Classified() => string.Join(
+        '\u001f',
+        _warnings.Warnings
+            .Where(w => _warnings.ClassificationOf(w) != NavigationalWarningClassification.OnChart)
+            .Select(w => $"{w.Key}={_warnings.ClassificationOf(w)}")
+            .Distinct(StringComparer.Ordinal));
 
     /// <summary>The finding wording from <c>Strings.resx</c>, times in the Local/UTC preference.</summary>
     internal static RouteWarningText Text(RouteFindingRequest request) => new()
@@ -96,9 +122,11 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
     private void OnWarningsChanged(object? sender, EventArgs e)
     {
         var current = _warnings.Warnings;
-        if (ReferenceEquals(current, _seen))
+        var classified = Classified();
+        if (ReferenceEquals(current, _seen) && classified == _classified)
             return;
         _seen = current;
+        _classified = classified;
         InputsChanged?.Invoke(this, EventArgs.Empty);
     }
 }
