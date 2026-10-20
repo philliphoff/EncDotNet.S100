@@ -18,13 +18,19 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <see cref="NavigationalWarningSet.IsDrawnAt"/>.
 /// </para>
 /// <para>
+/// Above those rules sits the Display controls' Navigational warnings switch
+/// (<see cref="ShowNavigationalWarnings"/>; S-98 §6.1.1, §12.12.2; #995): off
+/// draws no warning at all, not even the open card's, and hides a warning's
+/// pick highlight (<see cref="IsHighlightHidden"/>).
+/// </para>
+/// <para>
 /// The warning on the open Warning card stays drawn whatever its status, so
 /// Zoom to and the pick highlight have something to show, until the card
 /// closes (<see cref="SetOpenWarning"/>).
 /// </para>
 /// <para>
 /// The parts are judged again when the view time moves, the warnings change,
-/// the setting changes, the open card changes, and once a minute so a live
+/// a setting changes, the open card changes, and once a minute so a live
 /// view picks up a warning starting or ending. Only datasets whose hidden
 /// parts change re-render.
 /// </para>
@@ -36,6 +42,7 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
     private readonly ViewerSettings? _settings;
     private readonly Action<Action> _dispatch;
     private readonly ITimer? _clock;
+    private readonly EcdisDisplayState _display;
     private (string DatasetId, string FeatureRef)? _open;
     private bool _showNotYetInForce;
 
@@ -45,13 +52,15 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
     /// <param name="loader">The loader, asked to hide parts before a dataset's first render; <see langword="null"/> skips that.</param>
     /// <param name="time">The clock for the once-a-minute check; <see langword="null"/> for none.</param>
     /// <param name="dispatch">Runs the minute check on the UI thread; inline when <see langword="null"/>.</param>
+    /// <param name="display">Where the Navigational warnings switch lives; <see langword="null"/> keeps it in memory, on.</param>
     public NavigationalWarningDrawingService(
         NavigationalWarningsService warnings,
         IViewTime viewTime,
         ViewerSettings? settings = null,
         IDatasetLoaderService? loader = null,
         TimeProvider? time = null,
-        Action<Action>? dispatch = null)
+        Action<Action>? dispatch = null,
+        EcdisDisplayState? display = null)
     {
         ArgumentNullException.ThrowIfNull(warnings);
         ArgumentNullException.ThrowIfNull(viewTime);
@@ -60,6 +69,8 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
         _settings = settings;
         _dispatch = dispatch ?? (action => action());
         _showNotYetInForce = settings?.ShowWarningsNotYetInForce ?? false;
+        _display = display ?? new EcdisDisplayState();
+        _display.NavigationalWarningsChanged += OnShowNavigationalWarningsChanged;
         _warnings.Changed += (_, _) => Apply();
         _viewTime.Changed += (_, _) => Apply();
         loader?.SetHiddenFeaturesOnLoad(HiddenOnLoad);
@@ -92,13 +103,31 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// The Display controls' Navigational warnings switch (on by default,
+    /// kept across restarts with the display settings): off, the map draws no
+    /// S-124 warning, whatever its status or open card say (#995). The panel,
+    /// the cards and route findings don't depend on it.
+    /// </summary>
+    public bool ShowNavigationalWarnings
+    {
+        get => _display.ShowNavigationalWarnings;
+        set => _display.SetShowNavigationalWarnings(value);
+    }
+
+    private void OnShowNavigationalWarningsChanged()
+    {
+        Apply(force: true);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowNavigationalWarnings)));
+    }
+
     /// <inheritdoc />
     public event PropertyChangedEventHandler? PropertyChanged;
 
     /// <summary>Raised after <see cref="ShowNotYetInForce"/> changes.</summary>
     public event EventHandler? ShowNotYetInForceChanged;
 
-    /// <summary>Raised after the drawn parts or <see cref="ShowNotYetInForce"/> change.</summary>
+    /// <summary>Raised after the drawn parts, <see cref="ShowNotYetInForce"/> or <see cref="ShowNavigationalWarnings"/> change.</summary>
     public event EventHandler? Changed;
 
     /// <summary>
@@ -151,7 +180,18 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
     public bool IsDrawnForCard(NavigationalWarningEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        return IsOpen(entry) && !_warnings.Set.IsDrawnAt(entry.Warning, _viewTime.Current, _showNotYetInForce);
+        return ShowNavigationalWarnings && IsOpen(entry) && !_warnings.Set.IsDrawnAt(entry.Warning, _viewTime.Current, _showNotYetInForce);
+    }
+
+    /// <summary>
+    /// Whether the map leaves out <paramref name="hit"/>'s pick highlight: it
+    /// is an S-124 feature and <see cref="ShowNavigationalWarnings"/> is off.
+    /// </summary>
+    public bool IsHighlightHidden(PickHit hit)
+    {
+        ArgumentNullException.ThrowIfNull(hit);
+        return !ShowNavigationalWarnings
+            && (hit.NavigationalWarning is not null || NavigationalWarningsService.IsWarningProduct(hit.ProductSpec));
     }
 
     /// <summary>Judges every part again and hides those not drawn.</summary>
@@ -173,7 +213,7 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
     }
 
     private bool IsDrawnAt(NavigationalWarningEntry entry, DateTimeOffset time) =>
-        IsOpen(entry) || _warnings.Set.IsDrawnAt(entry.Warning, time, _showNotYetInForce);
+        ShowNavigationalWarnings && (IsOpen(entry) || _warnings.Set.IsDrawnAt(entry.Warning, time, _showNotYetInForce));
 
     private bool IsOpen(NavigationalWarningEntry entry) =>
         _open is { } open
@@ -197,12 +237,17 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
             return null;
         }
         var time = _viewTime.Current;
+        var show = ShowNavigationalWarnings;
         return parts
-            .Where(p => !_warnings.Set.IsDrawnAt(p.Warning, time, _showNotYetInForce))
+            .Where(p => !show || !_warnings.Set.IsDrawnAt(p.Warning, time, _showNotYetInForce))
             .Select(p => p.FeatureRef)
             .ToHashSet(StringComparer.Ordinal);
     }
 
     /// <inheritdoc />
-    public void Dispose() => _clock?.Dispose();
+    public void Dispose()
+    {
+        _display.NavigationalWarningsChanged -= OnShowNavigationalWarningsChanged;
+        _clock?.Dispose();
+    }
 }
