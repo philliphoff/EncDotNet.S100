@@ -1,0 +1,176 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.RouteCheckLegendView"
+             x:DataType="vm:RouteCheckLegendViewModel"
+             AutomationProperties.AutomationId="Map.RouteCheckLegend">
+
+    <!-- The Check route map legend (#959, handoff C8): "UKC AT ETA" (with a
+         draft) and "FINDINGS" in one box. The header row folds it to a 28 px
+         "Legend" chip. Swatches use the route's state tones for the chart
+         palette, as the map does. -->
+    <UserControl.Styles>
+        <Style Selector="Button.legendHeader">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Content="{TemplateBinding Content}"
+                                      HorizontalContentAlignment="Stretch"
+                                      VerticalContentAlignment="Center" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="TextBlock.sectionTitle">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="LetterSpacing" Value="0.6" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="StackPanel.legendBody.open">
+            <Setter Property="Width" Value="168" />
+        </Style>
+        <!-- Folded: a 28 px "Legend" chip. -->
+        <Style Selector="TextBlock.sectionTitle.chip">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="TextBlock.row">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="StackPanel.row">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Spacing" Value="8" />
+            <Setter Property="Height" Value="18" />
+        </Style>
+        <Style Selector="TextBlock.glyph">
+            <Setter Property="FontSize" Value="9" />
+            <Setter Property="FontWeight" Value="ExtraBold" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border IsVisible="{Binding IsVisible}"
+            Background="{DynamicResource MapOverlaySurfaceBrush}"
+            BorderBrush="{DynamicResource BorderColor}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="10,0,10,0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Bottom">
+        <StackPanel Classes="legendBody" Classes.open="{Binding IsOpen}" Spacing="2">
+            <Button Classes="legendHeader"
+                    Height="26"
+                    Command="{Binding ToggleCommand}"
+                    ToolTip.Tip="{Binding ToggleTip}"
+                    AutomationProperties.AutomationId="Map.RouteCheckLegend.Toggle"
+                    AutomationProperties.Name="{Binding HeaderText}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Classes="sectionTitle"
+                               Classes.chip="{Binding !IsOpen}"
+                               Text="{Binding HeaderText}"
+                               VerticalAlignment="Center" />
+                    <ic:FluentIcon Grid.Column="1"
+                                   Icon="ChevronDown"
+                                   FontSize="13"
+                                   Margin="6,0,0,0"
+                                   IsVisible="{Binding IsOpen}"
+                                   Foreground="{DynamicResource MutedColor}" />
+                    <ic:FluentIcon Grid.Column="1"
+                                   Icon="ChevronUp"
+                                   FontSize="13"
+                                   Margin="6,0,0,0"
+                                   IsVisible="{Binding !IsOpen}"
+                                   Foreground="{DynamicResource ForegroundColor}" />
+                </Grid>
+            </Button>
+
+            <StackPanel Spacing="2" Margin="0,0,0,8" IsVisible="{Binding IsOpen}">
+                <!-- UKC AT ETA (draft only): the header names it. No data dotted. -->
+                <StackPanel Spacing="2" IsVisible="{Binding HasClearance}"
+                            AutomationProperties.AutomationId="Map.RouteCheckLegend.Ukc">
+                    <StackPanel Classes="row">
+                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" Stroke="{Binding MeetsBrush}" VerticalAlignment="Center" />
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendMeets}" />
+                    </StackPanel>
+                    <StackPanel Classes="row">
+                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" Stroke="{Binding TightBrush}" VerticalAlignment="Center" />
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendTight}" />
+                    </StackPanel>
+                    <StackPanel Classes="row">
+                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="6" Stroke="{Binding BelowBrush}" VerticalAlignment="Center" />
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendBelow}" />
+                    </StackPanel>
+                    <StackPanel Classes="row">
+                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" StrokeDashArray="1.5,1" Stroke="{Binding MeetsBrush}" VerticalAlignment="Center" />
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendLowConfidence}" />
+                    </StackPanel>
+                    <StackPanel Classes="row">
+                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" StrokeDashArray="1.5,1" Stroke="{Binding NoDataBrush}" VerticalAlignment="Center" />
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendNoData}" />
+                    </StackPanel>
+                    <TextBlock Classes="sectionTitle" Margin="0,6,0,2"
+                               IsVisible="{Binding ShowsFindingsTitle}"
+                               Text="{x:Static loc:Strings.Map_LegendFindings}" />
+                </StackPanel>
+
+                <!-- FINDINGS: shape carries the group, so tone isn't the only cue. -->
+                <StackPanel Spacing="2" AutomationProperties.AutomationId="Map.RouteCheckLegend.Findings">
+                    <StackPanel Classes="row">
+                        <Panel Width="22" Height="18">
+                            <Path Width="18" Height="18" Stretch="Fill"
+                                  Data="M5.3,0 L12.7,0 L18,5.3 L18,12.7 L12.7,18 L5.3,18 L0,12.7 L0,5.3 Z"
+                                  Fill="{Binding MustReviewBrush}" Stroke="{Binding CasingBrush}" StrokeThickness="1.6" />
+                            <TextBlock Classes="glyph" Text="!" Foreground="{Binding CasingBrush}" />
+                        </Panel>
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Map_LegendMustReview}" />
+                    </StackPanel>
+                    <StackPanel Classes="row">
+                        <Panel Width="22" Height="18">
+                            <Path Width="19" Height="17" Stretch="Fill"
+                                  Data="M9.5,0 L19,17 L0,17 Z"
+                                  Fill="{Binding CheckBrush}" Stroke="{Binding CasingBrush}" StrokeThickness="1.6" />
+                            <TextBlock Classes="glyph" Text="!" Margin="0,3,0,0" Foreground="{Binding CasingBrush}" />
+                        </Panel>
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Map_LegendCheck}" />
+                    </StackPanel>
+                    <StackPanel Classes="row">
+                        <Panel Width="22" Height="18">
+                            <Ellipse Width="15" Height="15"
+                                     Fill="{Binding InfoBrush}" Stroke="{Binding CasingBrush}" StrokeThickness="1.6" />
+                            <TextBlock Classes="glyph" Text="i" Foreground="{Binding CasingBrush}" />
+                        </Panel>
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Map_LegendInfo}" />
+                    </StackPanel>
+                    <StackPanel Classes="row">
+                        <Border Width="22" Height="10" CornerRadius="2" VerticalAlignment="Center" Background="{Binding SleeveBrush}" />
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Map_LegendSleeve}" />
+                    </StackPanel>
+                    <StackPanel Classes="row">
+                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="1.5" StrokeDashArray="1,2" Stroke="{Binding CorridorBrush}" VerticalAlignment="Center" />
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Map_LegendCorridor}" />
+                    </StackPanel>
+                    <TextBlock FontSize="10" Margin="0,2,0,0"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource MutedColor}"
+                               IsVisible="{Binding IsNoDraft}"
+                               Text="{x:Static loc:Strings.Map_LegendNoDraft}" />
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

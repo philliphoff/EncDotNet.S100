@@ -12,7 +12,9 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// <summary>
 /// What the route overlay draws in Check passage mode (#901, handoff C1 and
 /// C6–C10): the active route coloured by UKC state at ETA, the minimum-UKC
-/// marker, the ghost vessel at the cursor, the wash and the legend.
+/// marker, the ghost vessel at the cursor and the wash, plus the route-check
+/// map layer (#959 slice 3). The legend is a control over the map
+/// (<c>Views.RouteCheckLegendView</c>).
 /// </summary>
 /// <param name="Segments">Runs of samples with one state and confidence, in passage order; a run never crosses a leg boundary.</param>
 /// <param name="IsStale">True while a recompute is running: the route draws grey and dashed (C10).</param>
@@ -20,7 +22,7 @@ namespace EncDotNet.S100.Viewer.Tools;
 /// <param name="Ghost">The ghost vessel at the cursor, or <c>null</c>.</param>
 /// <param name="Colors">The state colours for the palette.</param>
 /// <param name="Finding">The selected finding's outline and chip (#905, F3), or <c>null</c>.</param>
-/// <param name="FindingMarkers">A small marker per placed finding (#953), in list order; empty when there are none.</param>
+/// <param name="FindingMap">The route-check map layer (#959 slice 3): corridor, sleeves and markers; <c>null</c> draws none.</param>
 /// <param name="HasClearance">Whether the route is coloured by UKC state, so the "UKC at ETA" legend is drawn; false without a clearance result (no draft, or none yet).</param>
 /// <param name="NoDraft">Whether the route has no draft, so the line keeps the active-route accent instead of UKC colours (#959, A3).</param>
 internal sealed record RouteCheckOverlay(
@@ -30,12 +32,19 @@ internal sealed record RouteCheckOverlay(
     RouteCheckOverlay.GhostVessel? Ghost,
     RouteCheckColors Colors,
     RouteCheckOverlay.FindingFocus? Finding = null,
-    IReadOnlyList<RouteCheckOverlay.FindingMarker>? FindingMarkers = null,
+    RouteCheckMap? FindingMap = null,
     bool HasClearance = true,
     bool NoDraft = false)
 {
-    /// <summary>The finding markers, never <c>null</c>.</summary>
-    public IReadOnlyList<FindingMarker> Markers => FindingMarkers ?? [];
+    /// <summary>The route-check map layer, never <c>null</c>.</summary>
+    public RouteCheckMap Map => FindingMap ?? RouteCheckMap.Empty;
+
+    /// <summary>
+    /// How far the legend (<c>Map.RouteCheckLegend</c>) reaches up from the
+    /// map's bottom edge, so the finding chip sits above it; 0 when the
+    /// legend isn't shown.
+    /// </summary>
+    public float LegendReserve { get; init; }
 
     /// <summary>
     /// A run of the route in one state. A lower-confidence run keeps its
@@ -57,26 +66,19 @@ internal sealed record RouteCheckOverlay(
     /// <param name="Path">One position for a point, or the span's positions.</param>
     /// <param name="Tone">The finding's tone colour.</param>
     /// <param name="ChipText">The chip text without the scale.</param>
-    internal sealed record FindingFocus(IReadOnlyList<GeoPosition> Path, SKColor Tone, string ChipText);
-
-    /// <summary>
-    /// A finding's marker (#953): a small dot at the finding, toned by its
-    /// group. Red is for must-review findings only (F5).
-    /// </summary>
-    /// <param name="Position">The finding's point, or the middle of its span.</param>
-    /// <param name="Group">The finding's group.</param>
-    /// <param name="Tone">The marker colour.</param>
-    /// <param name="IsSelected">Whether this is the selected finding (also outlined).</param>
-    internal sealed record FindingMarker(GeoPosition Position, RouteFindingGroup Group, SKColor Tone, bool IsSelected);
+    /// <param name="IsOutlined">Whether the area is outlined; false for a route finding, which the map layer rings instead (#959 C7).</param>
+    internal sealed record FindingFocus(IReadOnlyList<GeoPosition> Path, SKColor Tone, string ChipText, bool IsOutlined = true);
 
     /// <summary>
     /// Builds the overlay for a check, or returns <c>null</c> when check mode
     /// is off. Without a clearance result yet the route draws grey and
     /// dashed; without a draft it keeps the active-route accent (A3). Either
-    /// way it gets the findings' markers and no legend.
+    /// way it gets the route-check map layer.
     /// </summary>
-    /// <param name="findings">The findings list, which gets a marker per placed finding (#953); <c>null</c> draws none.</param>
+    /// <param name="findings">The findings list, drawn as sleeves and markers (#959 C2, C4); <c>null</c> draws none.</param>
     /// <param name="hasDraft">Whether the checked route has a draft; without one there is no clearance to colour the line by.</param>
+    /// <param name="route">The checked route, for the corridor and the markers' places; <c>null</c> draws no map layer.</param>
+    /// <param name="viewTime">The time the pill's ETA runs from when the route has no departure.</param>
     public static RouteCheckOverlay? Build(
         bool isActive,
         PassageCheckSnapshot? snapshot,
@@ -87,17 +89,28 @@ internal sealed record RouteCheckOverlay(
         TimeFormat timeFormat,
         RouteFinding? selectedFinding = null,
         IReadOnlyList<RouteFinding>? findings = null,
-        bool hasDraft = true)
+        bool hasDraft = true,
+        Route? route = null,
+        DateTimeOffset? viewTime = null)
     {
         if (!isActive)
             return null;
 
         var colors = RouteCheckColors.For(appearance.Palette);
-        var markers = BuildMarkers(findings, selectedFinding, colors);
+        var markers = RouteCheckMap.Build(
+            route,
+            findings,
+            selectedFinding,
+            colors,
+            RouteOverlayColors.For(appearance).Edit,
+            appearance.Palette,
+            viewTime ?? snapshot?.Result.Departure ?? DateTimeOffset.UtcNow,
+            timeFormat,
+            RouteCheckOptions.Default.DefaultHalfWidthMeters);
         if (!hasDraft)
-            return new RouteCheckOverlay([], false, null, null, colors, Focus(null, selectedFinding, colors), markers, HasClearance: false, NoDraft: true);
+            return new RouteCheckOverlay([], false, null, null, colors, Focus(null, selectedFinding, colors, markers), markers, HasClearance: false, NoDraft: true);
         if (snapshot is null)
-            return new RouteCheckOverlay([], true, null, null, colors, Focus(null, selectedFinding, colors), markers, HasClearance: false);
+            return new RouteCheckOverlay([], true, null, null, colors, Focus(null, selectedFinding, colors, markers), markers, HasClearance: false);
 
         var result = snapshot.Result;
         var segments = new List<Segment>();
@@ -129,10 +142,10 @@ internal sealed record RouteCheckOverlay(
         }
 
         var ghost = cursor is { } c ? new GhostVessel(c.Position, c.BearingDegrees) : null;
-        return new RouteCheckOverlay(segments, isStale, minimum, ghost, colors, Focus(snapshot, selectedFinding, colors), markers);
+        return new RouteCheckOverlay(segments, isStale, minimum, ghost, colors, Focus(snapshot, selectedFinding, colors, markers), markers);
     }
 
-    /// <summary>The marker colour of a group: red only for must review (F5).</summary>
+    /// <summary>The colour of a group: red only for must review (F5). Info uses the No data grey until the tones pass (#934).</summary>
     internal static SKColor ToneOf(RouteFindingGroup group, RouteCheckColors colors) => group switch
     {
         RouteFindingGroup.MustReview => colors.Below,
@@ -140,29 +153,10 @@ internal sealed record RouteCheckOverlay(
         _ => colors.NoData,
     };
 
-    private static IReadOnlyList<FindingMarker> BuildMarkers(IReadOnlyList<RouteFinding>? findings, RouteFinding? selected, RouteCheckColors colors)
-    {
-        if (findings is not { Count: > 0 })
-            return [];
-        var markers = new List<FindingMarker>(findings.Count);
-        foreach (var finding in findings)
-        {
-            if (finding.Location is not { Path.Count: > 0 } location)
-                continue;
-            markers.Add(new FindingMarker(
-                location.Path[location.Path.Count / 2],
-                finding.Group,
-                ToneOf(finding.Group, colors),
-                finding.Id == selected?.Id));
-        }
-
-        return markers;
-    }
-
     // No data is already grey and dashed; confidence only qualifies a band.
     private static bool IsLowConfidence(UkcSample sample) => sample.State != UkcState.NoData && sample.IsLowConfidence;
 
-    private static FindingFocus? Focus(PassageCheckSnapshot? snapshot, RouteFinding? finding, RouteCheckColors colors)
+    private static FindingFocus? Focus(PassageCheckSnapshot? snapshot, RouteFinding? finding, RouteCheckColors colors, RouteCheckMap map)
     {
         if (finding?.Location is not { Path.Count: > 0 } location)
             return null;
@@ -184,7 +178,10 @@ internal sealed record RouteCheckOverlay(
                 : string.Format(CultureInfo.CurrentCulture, Strings.Findings_ChipLegsFormat, first + 1, last + 2));
         }
 
-        return new FindingFocus(location.Path, tone, chip);
+        // A route finding on the map layer gets its marker's ring and pill
+        // instead of the dashed outline (C7).
+        var outlined = map.SelectedMark is null && map.SelectedSleeve is null;
+        return new FindingFocus(location.Path, tone, chip, outlined);
     }
 
     // The positions along one leg between two distances from the start of the passage.

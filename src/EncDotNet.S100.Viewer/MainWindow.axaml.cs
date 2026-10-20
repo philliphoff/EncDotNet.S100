@@ -48,6 +48,8 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? _routeFindings;
     private IMarinerSettingsProvider? _routeMariner;
     private ITimeFormatProvider? _routeTimeFormat;
+    private EncDotNet.S100.Viewer.ViewModels.RouteCheckLegendViewModel? _routeCheckLegend;
+    private float _routeCheckLegendReserve;
     private readonly List<IDisposable> _dynamicSourceRegistrations = new();
     private ViewerCommandSettings? _startupOptions;
     private Color _accentColor;
@@ -1046,7 +1048,67 @@ public partial class MainWindow : ShadUI.Window
         if (_routeFindings is not null)
             _routeFindings.Changed += OnRouteStoreChanged;
 
+        // #959 C8: the map legend, a control at the map's bottom left. The
+        // finding chip (drawn by the overlay) sits above it, so the overlay
+        // learns its height.
+        _routeCheckLegend = new EncDotNet.S100.Viewer.ViewModels.RouteCheckLegendViewModel(
+            _routeStore,
+            _passageCheck,
+            _routeAppearance,
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>());
+        RouteCheckLegend.DataContext = _routeCheckLegend;
+        // Clear of the Time HUD when it's shown, else close to the map's edge.
+        void PlaceLegend() => RouteCheckLegend.Margin = new Thickness(
+            12, 0, 0, _viewModel.IsTimeHudVisible ? EncDotNet.S100.Viewer.Tools.RouteOverlayRenderer.LegendBottomMargin : 12);
+        PlaceLegend();
+        _viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.IsTimeHudVisible))
+                PlaceLegend();
+        };
+        RouteCheckLegend.LayoutUpdated += (_, _) =>
+        {
+            // From the map's bottom edge to the legend's top.
+            var reserve = RouteCheckLegend.IsEffectivelyVisible && _routeCheckLegend.IsVisible && RouteCheckLegend.Bounds.Height > 0
+                ? (float)(MapArea.Bounds.Height - RouteCheckLegend.Bounds.Y)
+                : 0f;
+            if (Math.Abs(reserve - _routeCheckLegendReserve) > 0.5f)
+            {
+                _routeCheckLegendReserve = reserve;
+                RebuildRouteOverlay();
+            }
+        };
+
+        // #959 C6: clicking a finding's marker selects it; clicking a cluster zooms in.
+        MapControl.AddHandler(PointerPressedEvent, OnMapPointerPressedForCheck, RoutingStrategies.Tunnel);
+
         RebuildRouteOverlay();
+    }
+
+    private void OnMapPointerPressedForCheck(object? sender, PointerPressedEventArgs e)
+    {
+        if (_routeOverlayLayer is null || _routeFindings is null
+            || !e.GetCurrentPoint(MapControl).Properties.IsLeftButtonPressed
+            || EncDotNet.S100.Viewer.Tools.RouteOverlayLayer.SceneOf(_routeOverlayLayer).Check is not { } check)
+            return;
+
+        var placement = EncDotNet.S100.Viewer.Tools.RouteCheckMapLayout.Place(check.Map, LatLonToScreen);
+        if (EncDotNet.S100.Viewer.Tools.RouteCheckMapLayout.HitTest(placement, e.GetPosition(MapControl)) is not { } hit)
+            return;
+
+        e.Handled = true;
+        if (hit.Marker is { } marker)
+        {
+            if (_routeFindings.Findings.FirstOrDefault(f => f.Id == marker.Mark.FindingId) is { } finding)
+                _routeFindings.Select(finding, zoom: false);
+        }
+        else if (hit.Cluster is { } cluster && MapControl.Map?.Navigator is { } navigator)
+        {
+            // Two zoom steps on the cluster: its markers are within 24 px, so
+            // at four times the scale they stand apart.
+            var world = navigator.Viewport.ScreenToWorld(cluster.Center.X, cluster.Center.Y + EncDotNet.S100.Viewer.Tools.RouteCheckMapLayout.StemLength);
+            navigator.CenterOnAndZoomTo(world, navigator.Viewport.Resolution / 4, 250);
+        }
     }
 
     /// <summary>Within this many pixels of the checked route, the pointer moves the profile cursor.</summary>
@@ -1108,7 +1170,11 @@ public partial class MainWindow : ShadUI.Window
                 _routeTimeFormat?.Current ?? TimeFormat.Local,
                 _routeFindings?.Selected,
                 _routeFindings?.Findings,
-                hasDraft: _passageCheck?.Input is not { HasDraft: false }),
+                hasDraft: _passageCheck?.Input is not { HasDraft: false },
+                route: _routeStore.Routes.ActiveRoute,
+                viewTime: _routeStore.ViewTime.Current) is { } check
+                ? check with { LegendReserve = _routeCheckLegendReserve }
+                : null,
             // Native-mode received routes are drawn by their dataset (#960).
             route => EncDotNet.S100.Viewer.Services.ReceivedRoutesService.DrawsWithRouteRenderer(_routeStore, route));
         _mapHost.RequestRedraw();

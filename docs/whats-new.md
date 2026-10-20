@@ -6,6 +6,20 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Route findings on the map.** In SoundCharts' Check route, the route's
+  line keeps its clearance colours and the route checks draw on top: a
+  stretch of the route (drying ground, an area, a warning crossed) is a
+  translucent sleeve along the route, and a point (a wreck, a nearby warning)
+  is a marker above the route, an octagon for Must review, a triangle for
+  Check and a circle for Info, with a dotted leader to a feature off the
+  track. Info markers show only when selected, markers closer than 24 px
+  merge into a counted cluster (click to zoom in), and the cross-track
+  corridor's edges are dotted, filled only on the selected finding's leg.
+  The selected finding gets a ring and one pill with its ETA. A legend at
+  the map's bottom left folds to a chip; `get_map_legend` and
+  `set_map_legend` read and set it, and `select_finding` reports what the
+  map highlights.
+
 - **NEW warnings follow S-98.** In SoundCharts' **Navigational warnings**
   panel, a newly received warning now shows NEW until you open its card or
   24 hours have passed since it was received (S-98 Ed 2.0.0 §12.12.1). A
