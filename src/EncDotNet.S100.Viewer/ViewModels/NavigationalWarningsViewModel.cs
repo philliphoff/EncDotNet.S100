@@ -118,6 +118,11 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         ShowNotInForceCommand = new RelayCommand(() => IsNotInForceExpanded = true);
         ClearQueryCommand = new RelayCommand(() => Query = string.Empty);
         OpenLibraryCommand = new RelayCommand(() => OpenLibraryRequested?.Invoke(this, EventArgs.Empty));
+        TurnOnDrawingCommand = new RelayCommand(() =>
+        {
+            if (_drawing is not null)
+                _drawing.ShowNavigationalWarnings = true;
+        });
         RefreshCommand = new RelayCommand(() => RefreshSources(), () => CanRefresh);
 
         _service.Changed += OnServiceChanged;
@@ -480,6 +485,16 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
     public string ShowNotInForceText =>
         string.Format(CultureInfo.CurrentCulture, Strings.NavWarnings_ShowNotInForceFormat, _notInForceCount);
 
+    /// <summary>
+    /// Whether the line "Not drawn: Navigational warnings are off in Display
+    /// controls" shows: warnings are loaded and the Display controls switch
+    /// hides them all on the map (#995). The list still works.
+    /// </summary>
+    public bool IsSwitchedOff => _drawing is { ShowNavigationalWarnings: false } && _service.HasWarningDatasets;
+
+    /// <summary>Turns the Display controls' Navigational warnings switch back on.</summary>
+    public ICommand TurnOnDrawingCommand { get; }
+
     /// <summary>Whether the search found nothing.</summary>
     public bool IsNoMatchesState => _service.Warnings.Count > 0 && Items.Count == 0 && !IsNoneInForceState && !IsNoneOnRouteState;
 
@@ -840,8 +855,9 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         var outExpanded = _notInForceExpanded || routeScope;
         if (outRows.Count > 0)
         {
-            // The map draws at the view time (#993): say so when the panel does too.
-            var drawnNote = IsNowFilter || _drawing is null
+            // The map draws at the view time (#993): say so when the panel does
+            // too, unless the switch draws none (#995), which the panel says above.
+            var drawnNote = IsNowFilter || _drawing is null or { ShowNavigationalWarnings: false }
                 ? string.Empty
                 : _drawing.ShowNotYetInForce ? Strings.NavWarnings_NotInForceEndedNotDrawn : Strings.NavWarnings_NotInForceNotDrawn;
             items.Add(new NavigationalWarningGroupItem(
@@ -895,6 +911,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         OnPropertyChanged(nameof(AllScopeText));
         OnPropertyChanged(nameof(RouteScopeText));
         OnPropertyChanged(nameof(IsNoneOnRouteState));
+        OnPropertyChanged(nameof(IsSwitchedOff));
     }
 
     /// <summary>A source's group-header text at the panel's time format.</summary>

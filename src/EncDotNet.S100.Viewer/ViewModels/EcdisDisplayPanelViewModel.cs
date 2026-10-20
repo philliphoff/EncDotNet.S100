@@ -56,6 +56,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         SetAllCommand = new RelayCommand(() => ActiveCategory = EcdisDisplayCategory.All);
 
         _state.Changed += OnStateChanged;
+        _state.NavigationalWarningsChanged += OnNavigationalWarningsChanged;
         _datasets.Entries.CollectionChanged += OnEntriesChanged;
         _datasets.EntryPortrayalSpecChanged += OnEntryPortrayalSpecChanged;
 
@@ -152,6 +153,19 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         }
     }
 
+    /// <summary>
+    /// The Navigational warnings switch: whether the map draws S-124 warnings
+    /// at all (S-98 Edition 2.0.0 §6.1.1, §12.12.2; #995). It overrides each
+    /// warning dataset's own visibility, which keeps its state.
+    /// </summary>
+    public bool IsNavigationalWarningsVisible
+    {
+        get => _state.ShowNavigationalWarnings;
+        set => _state.SetShowNavigationalWarnings(value);
+    }
+
+    private void OnNavigationalWarningsChanged() => OnPropertyChanged(nameof(IsNavigationalWarningsVisible));
+
     private void OnStateChanged()
     {
         OnPropertyChanged(nameof(ActiveCategory));
@@ -218,6 +232,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _state.Changed -= OnStateChanged;
+        _state.NavigationalWarningsChanged -= OnNavigationalWarningsChanged;
         _datasets.Entries.CollectionChanged -= OnEntriesChanged;
         _datasets.EntryPortrayalSpecChanged -= OnEntryPortrayalSpecChanged;
     }

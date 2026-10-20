@@ -282,6 +282,30 @@
                                    Description="{x:Static loc:Strings.NavWarnings_EmptyDescription}" />
 
             <DockPanel LastChildFill="True">
+                <!-- The Display controls switch draws no warning (#995); the list still works. -->
+                <Border DockPanel.Dock="Top"
+                        IsVisible="{Binding IsSwitchedOff}"
+                        AutomationProperties.AutomationId="NavigationalWarnings.SwitchedOff"
+                        Margin="12,4,12,4"
+                        Padding="10,8"
+                        CornerRadius="6"
+                        Background="{DynamicResource MutedBackgroundColor}">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <ic:FluentIcon Grid.Column="0" Icon="EyeOff" FontSize="14" VerticalAlignment="Center" Opacity="0.7" />
+                        <TextBlock Grid.Column="1" Text="{x:Static loc:Strings.NavWarnings_SwitchedOff}"
+                                   FontSize="11.5" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        <Button Grid.Column="2"
+                                Classes="Outline"
+                                Padding="8,2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="NavigationalWarnings.TurnOnDrawing"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_TurnOnDrawing}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_TurnOnDrawing}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_TurnOnDrawing}"
+                                Content="{x:Static loc:Strings.Label_NavWarnings_TurnOnDrawing}"
+                                Command="{Binding TurnOnDrawingCommand}" />
+                    </Grid>
+                </Border>
                 <!-- None in force at the panel's time. -->
                 <Border DockPanel.Dock="Top"
                         IsVisible="{Binding IsNoneInForceState}"

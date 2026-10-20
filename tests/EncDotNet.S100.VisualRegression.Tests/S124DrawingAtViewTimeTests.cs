@@ -90,4 +90,23 @@ public sealed class S124DrawingAtViewTimeTests
 
         Assert.Equal(0, TestHelpers.CountNonBackgroundPixels(bitmap));
     }
+
+    [Fact]
+    public void Nothing_is_drawn_with_every_part_hidden()
+    {
+        // The viewer's Navigational warnings switch off (#995): every part
+        // hidden, so no part, affected area or text placement is drawn.
+        using var harness = new RenderHarness();
+        var processor = harness.Open(PathOf("navwarn_drawing_parts.gml"));
+        var every = processor.GetNavigationalWarnings().Select(p => p.FeatureRef).ToHashSet(StringComparer.Ordinal);
+
+        var bitmap = harness.Render(PathOf("navwarn_drawing_parts.gml"), new HarnessOptions
+        {
+            Width = 600,
+            Height = 600,
+            HiddenFeatures = every,
+        });
+
+        Assert.Equal(0, TestHelpers.CountNonBackgroundPixels(bitmap));
+    }
 }
