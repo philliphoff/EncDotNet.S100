@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
@@ -35,31 +36,51 @@ public sealed record CheckRouteResult(
     [property: Description("Name of the checked route, or null.")] string? RouteName,
     [property: Description("Route length in nautical miles.")] double DistanceNm,
     [property: Description("Counts by group, and the summary line SoundCharts shows.")] CheckRouteSummary Summary,
-    [property: Description("The findings, by group (must_review, check, info) and then by distance along the route. Codes are the same as get_findings: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.soundings_below_safety_depth, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage, and the area checks' route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area (S-122) and route_check.area_not_in_force.")] IReadOnlyList<CheckRouteFinding> Findings,
+    [property: Description("The findings, by group (must_review, check, info) and then by distance along the route. Codes are the same as get_findings: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.soundings_below_safety_depth, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage, and the area checks' route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area (S-122) and route_check.area_not_in_force, and the S-124 warnings' s124.on_route, s124.near_route, s124.not_in_force and s124.cancelled.")] IReadOnlyList<CheckRouteFinding> Findings,
     [property: Description("The corridor swept along each leg, in route order.")] IReadOnlyList<CheckRouteLeg> Legs,
-    [property: Description("S-101 (and S-401, and translated S-57) cells near the route that the check read, and the S-122 datasets behind area findings.")] IReadOnlyList<string> Datasets,
+    [property: Description("S-101 (and S-401, and translated S-57) cells near the route that the check read, and the S-122 and S-124 datasets behind area and warning findings.")] IReadOnlyList<string> Datasets,
     [property: Description("Disclaimer to show once with the findings.")] string Disclaimer);
 
 /// <summary>The counts and summary line of a route check.</summary>
 public sealed record CheckRouteSummary(
     [property: Description("Number of findings.")] int Count,
-    [property: Description("Number of must_review findings (the track crosses land, drying ground or the safety contour, enters an area where entry is prohibited or restricted, or a danger is inside the limits).")] int MustReview,
-    [property: Description("Number of check findings (land, drying ground or shoal water inside the cross-track limits, dangers near the route, restricted, caution, traffic, anchorage or protected areas, leaving chart coverage).")] int Check,
+    [property: Description("Number of must_review findings (the track crosses land, drying ground or the safety contour, enters an area where entry is prohibited or restricted, a danger is inside the limits, or an S-124 warning in force reaches the corridor).")] int MustReview,
+    [property: Description("Number of check findings (land, drying ground or shoal water inside the cross-track limits, dangers near the route, restricted, caution, traffic, anchorage or protected areas, S-124 warnings near the route, leaving chart coverage).")] int Check,
     [property: Description("Number of info findings.")] int Info,
     [property: Description("The summary line, e.g. \"2 to review\", \"1 to check\" or \"No findings for your settings\".")] string Text);
 
 /// <summary>One finding of a route check.</summary>
 public sealed record CheckRouteFinding(
     [property: Description("Id, unique within this result, e.g. \"route_check.crosses_land.0\".")] string Id,
-    [property: Description("Kind of finding: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.soundings_below_safety_depth, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage, route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area or route_check.area_not_in_force.")] string Code,
+    [property: Description("Kind of finding: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.soundings_below_safety_depth, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage, route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area, route_check.area_not_in_force, s124.on_route, s124.near_route, s124.not_in_force or s124.cancelled.")] string Code,
     [property: Description("What to do: must_review, check or info.")] string Group,
-    [property: Description("The check that produced it: route_check, or data for chart coverage.")] string Source,
+    [property: Description("The check that produced it: route_check, s124 for navigational warnings, or data for chart coverage.")] string Source,
     [property: Description("One line, e.g. \"Crosses drying ground\".")] string Title,
     [property: Description("Where and what, e.g. \"Leg 2 → 3 · 0.10 NM · DepthArea\".")] string Meta,
     [property: Description("Zero-based leg the finding is on.")] int? LegIndex,
     [property: Description("Distance from departure in nautical miles to where it starts.")] double? DistanceNm,
     [property: Description("Where it is: a point, or a span of the route.")] CheckRouteLocation? Location,
-    [property: Description("The feature behind the finding (open it with describe_feature), or null.")] CheckRouteFeature? Feature);
+    [property: Description("The feature behind the finding (open it with describe_feature), or null.")] CheckRouteFeature? Feature,
+    [property: Description("For an s124 finding, the navigational warning and how it stands on the route at the ETA; null for other sources.")] CheckRouteWarning? Warning = null);
+
+/// <summary>The navigational warning behind an S-124 finding, and how it stands on the route.</summary>
+public sealed record CheckRouteWarning(
+    [property: Description("The series and number, e.g. \"NAVAREA I 012/26\", or null when the preamble gives no number.")] string? Number,
+    [property: Description("The warning's title, or null.")] string? Title,
+    [property: Description("The locality (else the general area), or null.")] string? Locality,
+    [property: Description("How it relates to the route: crosses (a line or area reaches the corridor between the cross-track limits) or near (within 0.5 NM of the track, or a point inside the corridor).")] string Relation,
+    [property: Description("Whether it applies while the vessel is there: in_force, not_in_force or cancelled.")] string Status,
+    [property: Description("When the vessel reaches it, ISO 8601 UTC: the ETA, or the check time when the legs have no speed (see atEta).")] DateTimeOffset From,
+    [property: Description("When the vessel leaves it, ISO 8601 UTC; equal to from for a crossing point or a near warning.")] DateTimeOffset Until,
+    [property: Description("True when from and until are ETAs; false when the route has no speed and the check time is used.")] bool AtEta,
+    [property: Description("When the warning applies: its validity ranges in document order; empty when it gives none (in force until cancelled).")] IReadOnlyList<CheckRouteValidity> Validity,
+    [property: Description("When the warning cancels itself, ISO 8601 UTC, or null.")] DateTimeOffset? CancellationDate,
+    [property: Description("The full message text, in document order.")] IReadOnlyList<string> Text);
+
+/// <summary>A period when a navigational warning applies.</summary>
+public sealed record CheckRouteValidity(
+    [property: Description("Start, ISO 8601 UTC, or null when open.")] DateTimeOffset? Start,
+    [property: Description("End, ISO 8601 UTC, or null when open.")] DateTimeOffset? End);
 
 /// <summary>Where a finding is.</summary>
 public sealed record CheckRouteLocation(
@@ -86,7 +107,8 @@ public sealed record CheckRouteLeg(
 /// #954): where its track crosses land or drying ground, where either reaches
 /// inside its cross-track limits, and where it leaves chart coverage; and
 /// against restricted, caution, anchorage and traffic areas and S-122
-/// protected areas (<see cref="RouteAreaCheck"/>, #956).
+/// protected areas (<see cref="RouteAreaCheck"/>, #956), and S-124
+/// navigational warnings (<see cref="RouteWarningCheck"/>, #957).
 /// </summary>
 /// <remarks>
 /// Takes a host route (the viewer's active or a named route, with each leg's
@@ -99,7 +121,7 @@ public sealed class CheckRouteTool
     public const string Name = "check_route";
 
     /// <summary>The disclaimer shown once with the findings.</summary>
-    public const string Disclaimer = "Not for navigation · checked against the loaded S-101 charts and S-122 protected areas only";
+    public const string Disclaimer = "Not for navigation · checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only";
 
     private readonly IDatasetCatalog _catalog;
     private readonly IPassageRouteProvider? _routes;
@@ -108,6 +130,8 @@ public sealed class CheckRouteTool
     private readonly object _gate = new();
     private IReadOnlyList<LoadedDataset>? _cachedSnapshot;
     private RouteCheckDataSources? _cachedSources;
+    private IReadOnlyList<RouteWarning>? _cachedWarnings;
+    private NavigationalWarningSet? _cachedWarningSet;
 
     /// <summary>Creates the tool.</summary>
     /// <param name="catalog">The loaded datasets.</param>
@@ -224,14 +248,19 @@ public sealed class CheckRouteTool
             }
         }
 
-        var sources = SourcesFor(_catalog.Datasets);
+        var (sources, warnings, warningSet) = SourcesFor(_catalog.Datasets);
         var engine = sources.CreateEngine(Options with { Depths = depths });
+        var timing = new RouteWarningTiming(schedule, at);
         RouteCheckResult result;
         RouteAreaResult areas;
+        RouteWarningResult warningResult;
         try
         {
-            (result, areas) = await Task.Run(
-                () => (engine.Check(legs, cancellationToken), sources.CheckAreas(legs, new RouteWarningTiming(schedule, at), AreaOptions, cancellationToken)),
+            (result, areas, warningResult) = await Task.Run(
+                () => (
+                    engine.Check(legs, cancellationToken),
+                    sources.CheckAreas(legs, timing, AreaOptions, cancellationToken),
+                    new RouteWarningCheck(WarningOptions).Check(legs, warnings, timing, warningSet, cancellationToken)),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (ArgumentException ex)
@@ -239,7 +268,7 @@ public sealed class CheckRouteTool
             return ToolResult<CheckRouteResult>.Err(new InvalidArgument("polyline", ex.Message));
         }
 
-        return ToolResult<CheckRouteResult>.Ok(Project(result, areas, routeId, routeName, sources));
+        return ToolResult<CheckRouteResult>.Ok(Project(result, areas, warningResult, routeId, routeName, sources));
     }
 
     /// <summary>The summary line for a set of findings, as SoundCharts' no-draft verdict titles.</summary>
@@ -261,27 +290,35 @@ public sealed class CheckRouteTool
         Text = RouteAreaText.Default with { Culture = System.Globalization.CultureInfo.InvariantCulture },
     };
 
+    private static readonly RouteWarningOptions WarningOptions = RouteWarningOptions.Default with
+    {
+        Text = RouteWarningText.Default with { Culture = System.Globalization.CultureInfo.InvariantCulture },
+    };
+
     // The sources index S-101 cells lazily, so they are kept while the catalog
     // snapshot is unchanged (the catalog publishes a new list on every change).
-    private RouteCheckDataSources SourcesFor(IReadOnlyList<LoadedDataset> snapshot)
+    private (RouteCheckDataSources Sources, IReadOnlyList<RouteWarning> Warnings, NavigationalWarningSet WarningSet) SourcesFor(IReadOnlyList<LoadedDataset> snapshot)
     {
         lock (_gate)
         {
             if (!ReferenceEquals(snapshot, _cachedSnapshot) || _cachedSources is null)
             {
                 _cachedSources = RouteCheckDataSources.FromDatasets(snapshot, _transforms);
+                _cachedWarnings = RouteWarningSources.FromDatasets(snapshot);
+                _cachedWarningSet = RouteWarningSources.SetFromDatasets(snapshot);
                 _cachedSnapshot = snapshot;
             }
 
-            return _cachedSources;
+            return (_cachedSources, _cachedWarnings!, _cachedWarningSet!);
         }
     }
 
-    private static CheckRouteResult Project(RouteCheckResult result, RouteAreaResult areas, string? routeId, string? routeName, RouteCheckDataSources sources)
+    private static CheckRouteResult Project(RouteCheckResult result, RouteAreaResult areas, RouteWarningResult warnings, string? routeId, string? routeName, RouteCheckDataSources sources)
     {
         // One list, by group and then by distance, as get_findings sorts it.
         var findings = result.Findings
             .Concat(areas.Findings)
+            .Concat(warnings.Findings)
             .Select((f, i) => (f, i))
             .OrderBy(x => x.f.Group)
             .ThenBy(x => x.f.DistanceMeters ?? double.MaxValue)
@@ -301,9 +338,9 @@ public sealed class CheckRouteTool
             }
         }
 
-        foreach (var match in areas.Matches)
+        foreach (var feature in areas.Matches.Select(m => m.Finding?.Feature).Concat(warnings.Matches.Select(m => m.Finding?.Feature)))
         {
-            if (match.Finding?.Feature is { } feature)
+            if (feature is not null)
             {
                 datasets.Add(feature.DatasetId);
             }
@@ -334,7 +371,12 @@ public sealed class CheckRouteTool
             RouteFindingGroup.Check => "check",
             _ => "info",
         },
-        f.Source == RouteFindingSource.RouteCheck ? "route_check" : "data",
+        f.Source switch
+        {
+            RouteFindingSource.RouteCheck => "route_check",
+            RouteFindingSource.S124 => "s124",
+            _ => "data",
+        },
         f.Title,
         f.Meta,
         f.LegIndex,
@@ -346,7 +388,26 @@ public sealed class CheckRouteTool
                 Nm(l.EndDistanceMeters),
                 l.Path.Select(p => new[] { p.Latitude, p.Longitude }).ToList())
             : null,
-        f.Feature is { } feature ? new CheckRouteFeature(feature.DatasetId, feature.FeatureId) : null);
+        f.Feature is { } feature ? new CheckRouteFeature(feature.DatasetId, feature.FeatureId) : null,
+        f.Warning is { } warning ? Project(warning) : null);
+
+    private static CheckRouteWarning Project(RouteFindingWarning w) => new(
+        w.Info.Label,
+        w.Info.Title,
+        w.Info.Locality ?? w.Info.GeneralArea,
+        w.Relation == RouteWarningRelation.Crosses ? "crosses" : "near",
+        w.Status switch
+        {
+            RouteWarningStatus.InForce => "in_force",
+            RouteWarningStatus.NotInForce => "not_in_force",
+            _ => "cancelled",
+        },
+        w.From.ToUniversalTime(),
+        w.Until.ToUniversalTime(),
+        w.AtEta,
+        w.Info.Validity.Select(v => new CheckRouteValidity(v.Start?.ToUniversalTime(), v.End?.ToUniversalTime())).ToList(),
+        w.Info.CancellationDate?.ToUniversalTime(),
+        w.Info.Texts.Select(t => t.Text).ToList());
 
     private static EncDotNet.S100.Pipelines.BoundingBox Extent(IReadOnlyList<GeoPosition> ring) => new(
         ring.Min(p => p.Latitude),

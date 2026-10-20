@@ -38,6 +38,8 @@
   href: docs-style.md
 - name: MCP server
   href: mcp-server.md
+- name: Route checks and under-keel clearance
+  href: route-checks.md
 - name: What's new
   href: whats-new.md
 - name: Command-line rendering
