@@ -5,9 +5,12 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.PassageCheck;
 using Mapsui;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -20,6 +23,19 @@ internal enum NavigationalWarningsTimeFilter
 
     /// <summary>The wall clock.</summary>
     Now,
+}
+
+/// <summary>Which warnings the Navigational warnings panel lists (#959, E3).</summary>
+internal enum NavigationalWarningsScope
+{
+    /// <summary>Every loaded warning part.</summary>
+    All,
+
+    /// <summary>
+    /// While Check route is on: the parts with a finding on the checked route
+    /// (Must review, Check or Info), that is those on or near it.
+    /// </summary>
+    Route,
 }
 
 /// <summary>How the Navigational warnings panel orders rows within a group.</summary>
@@ -48,6 +64,11 @@ internal enum NavigationalWarningsSort
 /// Status is read at the view time by default (<see cref="IViewTime"/>), or
 /// now. Parts not in force at that time fall into one dimmed group at the
 /// bottom, collapsed until opened.
+/// <para>
+/// While Check route is on (<see cref="RouteFindings"/>), each part on or
+/// near the checked route says so with its ETA ("On route · 06:08"), and a
+/// scope (<see cref="Scope"/>) lists only those parts (#959, E3).
+/// </para>
 /// </remarks>
 internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigationalWarningNavigator, Activities.IActivityTabBadge, IDisposable
 {
@@ -125,6 +146,159 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
 
     /// <summary>Object Information, where opened warnings show.</summary>
     internal PickReportViewModel? PickReport => _pickReport;
+
+    private RouteFindingsService? _routeFindings;
+    private NavigationalWarningsScope _scope = NavigationalWarningsScope.All;
+    private Dictionary<(string DatasetId, string FeatureId), RouteFinding> _onRoute = [];
+    private string _onRouteKey = string.Empty;
+
+    /// <summary>
+    /// The checked route's findings (#959, E3): their S-124 findings give each
+    /// part's relation to the route and the "On {route}" scope. The panel
+    /// also becomes the findings list's <see cref="RouteFindingsService.WarningNavigator"/>.
+    /// </summary>
+    internal RouteFindingsService? RouteFindings
+    {
+        get => _routeFindings;
+        set
+        {
+            if (ReferenceEquals(_routeFindings, value))
+                return;
+            if (_routeFindings is not null)
+            {
+                _routeFindings.Changed -= OnRouteFindingsChanged;
+                if (ReferenceEquals(_routeFindings.WarningNavigator, this))
+                    _routeFindings.WarningNavigator = null;
+            }
+
+            _routeFindings = value;
+            if (_routeFindings is not null)
+            {
+                _routeFindings.Changed += OnRouteFindingsChanged;
+                _routeFindings.WarningNavigator = this;
+            }
+
+            UpdateOnRoute(force: true);
+        }
+    }
+
+    /// <summary>Whether the scope shows: Check route is on.</summary>
+    public bool IsRouteScopeAvailable => _routeFindings?.IsChecking == true;
+
+    /// <summary>Which warnings are listed; always <see cref="NavigationalWarningsScope.All"/> while Check route is off.</summary>
+    public NavigationalWarningsScope Scope
+    {
+        get => IsRouteScopeAvailable ? _scope : NavigationalWarningsScope.All;
+        set
+        {
+            if (_scope == value)
+                return;
+            _scope = value;
+            RaiseScopeChanged();
+            Rebuild();
+        }
+    }
+
+    /// <summary>Whether every part is listed (the scope's "All N").</summary>
+    public bool IsAllScope
+    {
+        get => Scope == NavigationalWarningsScope.All;
+        set { if (value) Scope = NavigationalWarningsScope.All; }
+    }
+
+    /// <summary>Whether only the parts on or near the checked route are listed (the scope's "On {route} N").</summary>
+    public bool IsRouteScope
+    {
+        get => Scope == NavigationalWarningsScope.Route;
+        set { if (value) Scope = NavigationalWarningsScope.Route; }
+    }
+
+    /// <summary>The Local/UTC preference the panel's times are shown in.</summary>
+    internal TimeFormat TimeFormat => _timeFormat?.Current ?? TimeFormat.Local;
+
+    /// <summary>The checked route's name, or <c>null</c> while Check route is off.</summary>
+    public string? RouteName => IsRouteScopeAvailable ? _routeFindings!.CheckedRouteName : null;
+
+    /// <summary>Number of parts with a finding on the checked route.</summary>
+    public int OnRouteCount => IsRouteScopeAvailable ? _service.Warnings.Count(w => _onRoute.ContainsKey(Key(w))) : 0;
+
+    /// <summary>"All N".</summary>
+    public string AllScopeText => string.Format(CultureInfo.CurrentCulture, Strings.NavWarnings_ScopeAllFormat, _service.Warnings.Count);
+
+    /// <summary>"On {route} N".</summary>
+    public string RouteScopeText => string.Format(CultureInfo.CurrentCulture, Strings.NavWarnings_ScopeRouteFormat, RouteName, OnRouteCount);
+
+    /// <summary>Whether the route scope lists nothing: no warning is on or near the route.</summary>
+    public bool IsNoneOnRouteState => IsRouteScope && OnRouteCount == 0;
+
+    /// <summary>The checked route's finding for a part, or <c>null</c> when it's off the route or Check route is off.</summary>
+    public RouteFinding? RouteFindingFor(NavigationalWarningEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return IsRouteScopeAvailable && _onRoute.TryGetValue(Key(entry), out var finding) ? finding : null;
+    }
+
+    /// <summary>
+    /// A part's line while Check route is on: "On route · 06:08" when it
+    /// crosses, "Near route · 06:19" when near; without speeds, no time.
+    /// </summary>
+    internal static string RouteText(RouteFindingWarning warning, DateTimeOffset? departure, TimeFormat format)
+    {
+        var crosses = warning.Relation == RouteWarningRelation.Crosses;
+        if (!warning.AtEta)
+            return crosses ? Strings.NavWarnings_OnRoute : Strings.NavWarnings_NearRoute;
+        var at = PassageFormatting.FormatEta(warning.From, departure ?? warning.From, format);
+        return string.Format(CultureInfo.CurrentCulture, crosses ? Strings.NavWarnings_OnRouteAtFormat : Strings.NavWarnings_NearRouteAtFormat, at);
+    }
+
+    private static (string, string) Key(NavigationalWarningEntry entry) => (entry.DatasetId, entry.FeatureRef);
+
+    private void OnRouteFindingsChanged(object? sender, EventArgs e) => UpdateOnRoute(force: false);
+
+    // The findings service raises Changed for selections and view changes
+    // too; rebuild only when what the panel shows of the route changes.
+    private void UpdateOnRoute(bool force)
+    {
+        var findings = _routeFindings?.IsChecking == true ? _routeFindings.Findings : [];
+        var onRoute = new Dictionary<(string, string), RouteFinding>();
+        foreach (var finding in findings)
+        {
+            if (finding is { Source: RouteFindingSource.S124, Warning: not null, Feature: { } feature })
+                onRoute.TryAdd((feature.DatasetId, feature.FeatureId), finding);
+        }
+
+        var key = string.Join(
+            "|",
+            onRoute.Values.Select(f => $"{f.Id}:{f.Warning!.Relation}:{f.Warning.Status}:{f.Warning.From:O}:{f.Warning.AtEta}")
+                .Prepend($"{IsRouteScopeAvailable}:{RouteName}:{_routeFindings?.Departure:O}"));
+        if (!force && key == _onRouteKey)
+            return;
+        _onRouteKey = key;
+        _onRoute = onRoute;
+        RaiseScopeChanged();
+        Rebuild();
+    }
+
+    private void RaiseScopeChanged()
+    {
+        OnPropertyChanged(nameof(IsRouteScopeAvailable));
+        OnPropertyChanged(nameof(Scope));
+        OnPropertyChanged(nameof(IsAllScope));
+        OnPropertyChanged(nameof(IsRouteScope));
+        OnPropertyChanged(nameof(RouteName));
+    }
+
+    /// <inheritdoc />
+    public bool Reveal(NavigationalWarningEntry entry)
+    {
+        var opened = Select(entry);
+        if (opened)
+            RevealRequested?.Invoke(this, EventArgs.Empty);
+        return opened;
+    }
+
+    /// <summary>Raised by <see cref="Reveal"/>: the window brings the panel forward.</summary>
+    public event EventHandler? RevealRequested;
 
     /// <inheritdoc />
     public IReadOnlyList<NavigationalWarningEntry> Warnings => _service.Warnings;
@@ -320,7 +494,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
 
     /// <summary>None in force: every listed part is outside its validity at <see cref="StatusTime"/>.</summary>
     public bool IsNoneInForceState =>
-        _service.Warnings.Count > 0 && _inForceCount == 0 && string.IsNullOrWhiteSpace(_query) && !_textOnlyFilter;
+        _service.Warnings.Count > 0 && _inForceCount == 0 && string.IsNullOrWhiteSpace(_query) && !_textOnlyFilter && !IsRouteScope;
 
     /// <summary>"No warnings in force at view time." or "… now."</summary>
     public string NoneInForceText => IsNowFilter ? Strings.NavWarnings_NoneInForceNow : Strings.NavWarnings_NoneInForceViewTime;
@@ -340,7 +514,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
     public ICommand TurnOnDrawingCommand { get; }
 
     /// <summary>Whether the search found nothing.</summary>
-    public bool IsNoMatchesState => _service.Warnings.Count > 0 && Items.Count == 0 && !IsNoneInForceState;
+    public bool IsNoMatchesState => _service.Warnings.Count > 0 && Items.Count == 0 && !IsNoneInForceState && !IsNoneOnRouteState;
 
     /// <summary>Whether the list shows (as opposed to a state message only).</summary>
     public bool HasList => Items.Count > 0;
@@ -487,6 +661,12 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
                 _textOnlyFilter = false;
             if (_service.StatusAt(entry, StatusTime).Status != NavigationalWarningStatus.InForce)
                 _notInForceExpanded = true;
+            if (IsRouteScope && RouteFindingFor(entry) is null)
+            {
+                _scope = NavigationalWarningsScope.All;
+                RaiseScopeChanged();
+            }
+
             OnPropertyChanged(nameof(Query));
             OnPropertyChanged(nameof(IsTextOnlyFilter));
             OnPropertyChanged(nameof(IsNotInForceExpanded));
@@ -634,7 +814,12 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         _newCount = inForce.Count(_service.IsNew);
         var now = _clock.GetUtcNow();
 
-        bool Listed(NavigationalWarningEntry w) => (!_textOnlyFilter || w.IsTextOnly) && Matches(w, _query);
+        var routeScope = IsRouteScope;
+        var departure = _routeFindings?.Departure;
+        bool Listed(NavigationalWarningEntry w) =>
+            (!_textOnlyFilter || w.IsTextOnly) && Matches(w, _query) && (!routeScope || RouteFindingFor(w) is not null);
+        string? OnRouteText(NavigationalWarningEntry w) =>
+            RouteFindingFor(w)?.Warning is { } onRoute ? RouteText(onRoute, departure, format) : null;
 
         var items = new List<NavigationalWarningListItem>();
         // A series appears once per source: a Library source by id (its name
@@ -667,7 +852,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
                 SourceId = group.Source?.Id,
                 NotReceivedText = missing is null ? null : NotReceivedText(missing),
             });
-            items.AddRange(rows.Select(w => Row(w, states[w], time, format, isNew: _service.IsNew(w))));
+            items.AddRange(rows.Select(w => Row(w, states[w], time, format, isNew: _service.IsNew(w), routeText: OnRouteText(w))));
         }
 
         // A series whose bulletin has no parts, and nothing else in force, still gets its note.
@@ -683,6 +868,9 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         }
 
         var outRows = Ordered(notInForce.Where(Listed)).ToList();
+        // On the route, the few parts not in force at the panel's time show
+        // unfolded: they may well be in force when the vessel gets there.
+        var outExpanded = _notInForceExpanded || routeScope;
         if (outRows.Count > 0)
         {
             // The map draws at the view time (#993): say so when the panel does
@@ -695,10 +883,10 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
                 outRows.Count,
                 drawnNote,
                 isNotInForce: true,
-                isExpanded: _notInForceExpanded,
+                isExpanded: outExpanded,
                 command: ToggleNotInForceCommand));
-            if (_notInForceExpanded)
-                items.AddRange(outRows.Select(w => Row(w, states[w], time, format, isDrawn: _drawing?.IsDrawn(w) == true)));
+            if (outExpanded)
+                items.AddRange(outRows.Select(w => Row(w, states[w], time, format, isDrawn: _drawing?.IsDrawn(w) == true, routeText: OnRouteText(w))));
         }
 
         // Keep the open part selected across rebuilds.
@@ -737,6 +925,10 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         OnPropertyChanged(nameof(ShowNotInForceText));
         OnPropertyChanged(nameof(IsNoMatchesState));
         OnPropertyChanged(nameof(HasList));
+        OnPropertyChanged(nameof(OnRouteCount));
+        OnPropertyChanged(nameof(AllScopeText));
+        OnPropertyChanged(nameof(RouteScopeText));
+        OnPropertyChanged(nameof(IsNoneOnRouteState));
         OnPropertyChanged(nameof(IsSwitchedOff));
     }
 
@@ -782,11 +974,12 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
     };
 
     // A row's classification and the command its menu sets it with (#996).
-    private NavigationalWarningRowItem Row(NavigationalWarningEntry w, NavigationalWarningState state, DateTimeOffset time, TimeFormat format, bool isNew = false, bool isDrawn = false) =>
+    private NavigationalWarningRowItem Row(NavigationalWarningEntry w, NavigationalWarningState state, DateTimeOffset time, TimeFormat format, bool isNew = false, bool isDrawn = false, string? routeText = null) =>
         new(w, state, time, format)
         {
             IsNew = isNew,
             IsDrawn = isDrawn,
+            RouteText = routeText,
             Classification = _service.ClassificationOf(w),
             ClassifyCommand = new RelayCommand<NavigationalWarningClassification>(c => _service.SetClassification(w, c)),
         };
@@ -835,6 +1028,8 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
             if (ReferenceEquals(_pickReport.WarningNavigator, this))
                 _pickReport.WarningNavigator = null;
         }
+
+        RouteFindings = null;
     }
 }
 
@@ -971,6 +1166,12 @@ internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
 
     /// <summary>Whether the part's warning is new since its source's latest refresh.</summary>
     public bool IsNew { get; init; }
+
+    /// <summary>While Check route is on, the part's relation to the route: "On route · 06:08", "Near route · 06:19"; <c>null</c> when off it (#959, E3).</summary>
+    public string? RouteText { get; init; }
+
+    /// <summary>Whether <see cref="RouteText"/> shows.</summary>
+    public bool HasRouteText => RouteText is not null;
 
     /// <summary>The mariner's classification of the part's warning (#996).</summary>
     public NavigationalWarningClassification Classification { get; init; }

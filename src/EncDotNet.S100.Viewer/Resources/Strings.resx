@@ -6212,6 +6212,47 @@
   <data name="ExportDialog_IdentityKeptFileFormat" xml:space="preserve">
     <value>Kept as received in {0}</value>
   </data>
+  <data name="Findings_OpenInWarnings" xml:space="preserve">
+    <value>Open in Navigational warnings</value>
+    <comment>Link under a findings-list row's inline Warning card (#959 E1): selects the warning in the Navigational warnings panel.</comment>
+  </data>
+  <data name="Tooltip_FindingOpenInWarnings" xml:space="preserve">
+    <value>Select this warning in the Navigational warnings panel</value>
+  </data>
+  <data name="NavWarnings_ScopeAllFormat" xml:space="preserve">
+    <value>All {0}</value>
+    <comment>Navigational warnings panel scope while Check route is on (#959 E3). {0} is the number of warning parts.</comment>
+  </data>
+  <data name="NavWarnings_ScopeRouteFormat" xml:space="preserve">
+    <value>On {0} {1}</value>
+    <comment>Navigational warnings panel scope while Check route is on (#959 E3): the warnings with a finding on the checked route. {0} is the route's name, {1} the number of warnings.</comment>
+  </data>
+  <data name="Tooltip_NavWarnings_ScopeAll" xml:space="preserve">
+    <value>List every loaded warning</value>
+  </data>
+  <data name="Tooltip_NavWarnings_ScopeRoute" xml:space="preserve">
+    <value>List the warnings on or near the checked route, with when you're there</value>
+  </data>
+  <data name="NavWarnings_OnRouteAtFormat" xml:space="preserve">
+    <value>On route · {0}</value>
+    <comment>Navigational warnings row line while Check route is on (#959 E3): the warning crosses the route. {0} is the ETA there.</comment>
+  </data>
+  <data name="NavWarnings_NearRouteAtFormat" xml:space="preserve">
+    <value>Near route · {0}</value>
+    <comment>Navigational warnings row line while Check route is on (#959 E3): the warning is within the near distance of the route. {0} is the ETA there.</comment>
+  </data>
+  <data name="NavWarnings_OnRoute" xml:space="preserve">
+    <value>On route</value>
+    <comment>Navigational warnings row line (#959 E3) when the route has no speed, so no ETA.</comment>
+  </data>
+  <data name="NavWarnings_NearRoute" xml:space="preserve">
+    <value>Near route</value>
+    <comment>Navigational warnings row line (#959 E3) when the route has no speed, so no ETA.</comment>
+  </data>
+  <data name="NavWarnings_NoneOnRoute" xml:space="preserve">
+    <value>No warnings on or near the route.</value>
+    <comment>Navigational warnings panel, "On {route}" scope with nothing listed (#959 E3).</comment>
+  </data>
   <data name="EcdisPanel_OverlaysHeader" xml:space="preserve">
     <value>Overlays</value>
     <comment>ECDIS Display controls section: product overlays the mariner can switch on and off (S-98 §6.1.1; #995).</comment>

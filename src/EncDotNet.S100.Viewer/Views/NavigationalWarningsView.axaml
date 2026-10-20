@@ -206,6 +206,31 @@
                     </Panel>
                 </Button>
             </Grid>
+            <!-- #959 E3: while Check route is on, every warning or only those on the route. -->
+            <Border Classes="navwarnSegments" IsVisible="{Binding IsRouteScopeAvailable}">
+                <Grid ColumnDefinitions="*,1.6*">
+                    <RadioButton Grid.Column="0"
+                                 Classes="navwarnSegment" GroupName="NavWarningsScope"
+                                 HorizontalAlignment="Stretch"
+                                 AutomationProperties.AutomationId="NavigationalWarnings.Scope.All"
+                                 AutomationProperties.Name="{Binding AllScopeText}"
+                                 AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_ScopeAll}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ScopeAll}"
+                                 IsChecked="{Binding IsAllScope, Mode=TwoWay}">
+                        <TextBlock Text="{Binding AllScopeText}" TextTrimming="CharacterEllipsis" />
+                    </RadioButton>
+                    <RadioButton Grid.Column="1"
+                                 Classes="navwarnSegment" GroupName="NavWarningsScope"
+                                 HorizontalAlignment="Stretch"
+                                 AutomationProperties.AutomationId="NavigationalWarnings.Scope.Route"
+                                 AutomationProperties.Name="{Binding RouteScopeText}"
+                                 AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_ScopeRoute}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ScopeRoute}"
+                                 IsChecked="{Binding IsRouteScope, Mode=TwoWay}">
+                        <TextBlock Text="{Binding RouteScopeText}" TextTrimming="CharacterEllipsis" />
+                    </RadioButton>
+                </Grid>
+            </Border>
             <StackPanel Orientation="Horizontal" Spacing="8">
                 <Border Classes="navwarnSegments">
                     <StackPanel Orientation="Horizontal">
@@ -302,6 +327,14 @@
                                 Command="{Binding ShowNotInForceCommand}" />
                     </StackPanel>
                 </Border>
+                <TextBlock DockPanel.Dock="Top"
+                           IsVisible="{Binding IsNoneOnRouteState}"
+                           AutomationProperties.AutomationId="NavigationalWarnings.NoneOnRoute"
+                           Text="{x:Static loc:Strings.NavWarnings_NoneOnRoute}"
+                           Margin="16,8"
+                           FontSize="12"
+                           Opacity="0.7"
+                           TextWrapping="Wrap" />
                 <TextBlock DockPanel.Dock="Top"
                            IsVisible="{Binding IsNoMatchesState}"
                            Text="{x:Static loc:Strings.NavWarnings_NoMatches}"
@@ -427,6 +460,13 @@
                                                    VerticalAlignment="Center" />
                                     </StackPanel>
                                     <TextBlock Text="{Binding SubText}" FontSize="10.5" Opacity="0.65"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock IsVisible="{Binding HasRouteText}"
+                                               AutomationProperties.AutomationId="NavigationalWarnings.Row.Route"
+                                               Text="{Binding RouteText}"
+                                               FontSize="10.5"
+                                               FontWeight="Medium"
+                                               Foreground="{DynamicResource AccentBrush}"
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                                 <!-- On chart / Off chart / Information (S-98 §12.12.2; #996): a glyph, and a menu to change it. -->

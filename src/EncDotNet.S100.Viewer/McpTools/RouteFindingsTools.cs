@@ -42,6 +42,10 @@ internal sealed record RouteFindingsDto(
     [Description("Id of the merged row expanded into its findings, or null (live list only).")]
     public string? ExpandedId { get; init; }
 
+    /// <summary>The finding whose Warning card is open inline.</summary>
+    [Description("Id of the s124 finding whose Warning card is expanded inline under its row (the selected s124 finding; select_finding opens it, selecting another finding or clearing the selection closes it), or null. The card's status is the finding's warning.statusText, judged at the ETA (live list only).")]
+    public string? WarningCardId { get; init; }
+
     /// <summary>What the map shows for the selection.</summary>
     [Description("How the map shows the selected finding (live list only; null for a one-off check): its marker and shape, its sleeve, or the dashed outline, and which legs' corridor is filled.")]
     public MapHighlightDto? Highlight { get; init; }
@@ -103,7 +107,16 @@ internal sealed record RouteFindingWarningDto(
     [property: Description("True when from and until are ETAs; false when the route has no speed and the view time is used.")] bool AtEta,
     [property: Description("When the warning applies: its validity ranges in document order; empty when it gives none (in force until cancelled).")] IReadOnlyList<RouteFindingValidityDto> Validity,
     [property: Description("When the warning cancels itself, ISO 8601 UTC, or null.")] DateTimeOffset? CancellationDate,
-    [property: Description("The full message text, one entry per language in document order.")] IReadOnlyList<RouteFindingWarningTextDto> Text);
+    [property: Description("The full message text, one entry per language in document order.")] IReadOnlyList<RouteFindingWarningTextDto> Text)
+{
+    /// <summary>The inline card's status pill.</summary>
+    [Description("The status pill the inline Warning card shows, judged at the ETA (the view time without speeds), in the Local/UTC preference: \"In force at 06:08\", \"Not in force at 06:15\" or \"Cancelled\".")]
+    public string StatusText { get; init; } = "";
+
+    /// <summary>Why it is cancelled.</summary>
+    [Description("Why another warning ended it, as the card's reason line says it, e.g. \"Cancelled by ZZ00 LOCAL 006/26\" or \"Cancelled — not in in-force bulletin …\"; null otherwise.")]
+    public string? StatusReasonText { get; init; }
+}
 
 /// <summary>A validity range.</summary>
 [Description("A period when a navigational warning applies; either end may be open (null).")]
@@ -174,7 +187,9 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
         var filter = live && view is not null ? view.Filter : FindingsFilter.All;
         var expanded = live ? view?.ExpandedId : null;
         var counts = RouteFindingsViewModel.Counts(findings);
-        return Dto(routeId, live, findings, selected, stale) with
+        var departure = view?.Departure;
+        var format = view?.TimeFormat ?? TimeFormat.Local;
+        return Dto(routeId, live, findings, selected, stale, departure, format) with
         {
             Filter = PassageCheckToolBase.Filter(filter),
             Counts = new FindingsCountsDto(counts[FindingsFilter.All], counts[FindingsFilter.Clearance], counts[FindingsFilter.Route], counts[FindingsFilter.Warnings]),
@@ -191,10 +206,12 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
                 .ToList(),
             InfoOpen = live && (view?.InfoOpen ?? false),
             ExpandedId = expanded,
+            // E1: the selected s124 finding's card is open under its row.
+            WarningCardId = live && selected?.Warning is not null ? selected.Id : null,
         };
     }
 
-    private static RouteFindingsDto Dto(string routeId, bool live, IReadOnlyList<RouteFinding> findings, RouteFinding? selected, bool stale) => new(
+    private static RouteFindingsDto Dto(string routeId, bool live, IReadOnlyList<RouteFinding> findings, RouteFinding? selected, bool stale, DateTimeOffset? departure, TimeFormat format) => new(
         routeId,
         live,
         findings.Count,
@@ -204,9 +221,9 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
         RouteCheckVerdict.NoDraftTitle(findings),
         live && stale,
         live ? selected?.Id : null,
-        findings.Select(f => ToDto(f, live && f.Id == selected?.Id)).ToList());
+        findings.Select(f => ToDto(f, live && f.Id == selected?.Id, departure, format)).ToList());
 
-    private static RouteFindingDto ToDto(RouteFinding f, bool selected) => new(
+    private static RouteFindingDto ToDto(RouteFinding f, bool selected, DateTimeOffset? departure, TimeFormat format) => new(
         f.Id,
         f.Code,
         f.Group switch
@@ -237,9 +254,9 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
             : null,
         f.Feature is { } feature ? new RouteFindingFeatureDto(feature.DatasetId, feature.FeatureId) : null,
         selected,
-        f.Warning is { } warning ? ToDto(warning) : null);
+        f.Warning is { } warning ? ToDto(warning, departure, format) : null);
 
-    private static RouteFindingWarningDto ToDto(RouteFindingWarning w) => new(
+    private static RouteFindingWarningDto ToDto(RouteFindingWarning w, DateTimeOffset? departure, TimeFormat format) => new(
         w.Info.Label,
         w.Info.Title,
         w.Info.Locality ?? w.Info.GeneralArea,
@@ -255,7 +272,11 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
         w.AtEta,
         w.Info.Validity.Select(v => new RouteFindingValidityDto(v.Start?.ToUniversalTime(), v.End?.ToUniversalTime())).ToList(),
         w.Info.CancellationDate?.ToUniversalTime(),
-        w.Info.Texts.Select(t => new RouteFindingWarningTextDto(t.Language, t.Text)).ToList());
+        w.Info.Texts.Select(t => new RouteFindingWarningTextDto(t.Language, t.Text)).ToList())
+    {
+        StatusText = RouteFindingsViewModel.StatusAtEta(w, departure ?? w.From, format),
+        StatusReasonText = w.Withdrawal is { } withdrawal ? NavigationalWarningStatusText.Reason(withdrawal) : null,
+    };
 
     private static double Nm(double meters) => Math.Round(meters / PassageGeodesy.MetersPerNauticalMile, 3);
 }
@@ -400,7 +421,7 @@ internal static class RouteFindingsMcpAdapters
                 "each finding's group (must_review, check, info), source tag, title, meta line, leg, distance along the " +
                 "route, location (point or span) and feature reference. An s124 finding also gives its warning: number, " +
                 "relation (crosses or near), status at the ETA (in_force, not_in_force, cancelled; the view time without " +
-                "speeds), validity and full text; must_review = crosses and in force, check = within 0.5 NM and in force, " +
+                "speeds) with the inline card's pill text (statusText) and reason, validity and full text; must_review = crosses and in force, check = within 0.5 NM and in force, " +
                 "info = not in force or cancelled. For the checked route it's the live list, with " +
                 "the selection; for another route (or with Check route off) the route is checked once without changing " +
                 "the view. The route needs at least two waypoints; without a draft (set_passage) there are no clearance " +
@@ -452,7 +473,9 @@ internal static class RouteFindingsMcpAdapters
                 "the map zooms to it with a \"Zoomed to finding\" chip, and the profile cursor and ghost vessel move to it. " +
                 "A route-check or S-124 finding's marker gets a ring in its tone and the one pill (\"{title} · {ETA}\"), its " +
                 "sleeve (a span) draws wider, and its leg's corridor is filled; a clearance-check finding is outlined dashed. " +
-                "The result's highlight says which. Needs Check route on (set_check_mode). Returns the list get_findings returns. " +
+                "Selecting an s124 finding also expands its row into the warning's Warning card (status at the ETA, text " +
+                "clipped at 5 lines; warningCardId in the result); selecting another finding or clearing the selection " +
+                "closes it. The result's highlight says which marker or sleeve is highlighted. Needs Check route on (set_check_mode). Returns the list get_findings returns. " +
                 "Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });

@@ -453,7 +453,11 @@ public partial class MainWindow : ShadUI.Window
 
         // Navigational warnings (#932): the no-sources state's Open Library.
         if (_viewModel.NavigationalWarnings is { } warnings)
+        {
             warnings.OpenLibraryRequested += (_, _) => _viewModel.SelectTab(LibraryImportCoordinator.LibraryPanelId);
+            // #959 E1: a finding's "Open in Navigational warnings" brings the panel forward.
+            warnings.RevealRequested += (_, _) => _viewModel.SelectTab("NavigationalWarnings");
+        }
 
         // Library coverage (issue #655): outline the datasets listed in the
         // Library panel — without loading them — while that panel is showing.

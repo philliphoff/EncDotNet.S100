@@ -629,6 +629,25 @@
                         </Grid>
                     </Grid>
                 </Button>
+                <!-- E1: a selected S-124 finding expands into its Warning card,
+                     status at the ETA (E2), with a link to the warnings panel. -->
+                <StackPanel IsVisible="{Binding HasWarningCard}"
+                            Margin="34,0,6,8"
+                            Spacing="6">
+                    <views:WarningCardView DataContext="{Binding WarningCard}" />
+                    <Button Classes="link"
+                            AutomationProperties.AutomationId="Routes.Check.Finding.OpenInWarnings"
+                            AutomationProperties.Name="{x:Static loc:Strings.Findings_OpenInWarnings}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_FindingOpenInWarnings}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_FindingOpenInWarnings}"
+                            HorizontalAlignment="Left"
+                            IsVisible="{Binding $parent[UserControl].((vm:RoutesPanelViewModel)DataContext).Check.Findings.CanOpenInWarnings, FallbackValue=False}"
+                            Command="{Binding $parent[UserControl].((vm:RoutesPanelViewModel)DataContext).Check.Findings.OpenInWarningsCommand, FallbackValue={x:Null}}">
+                        <TextBlock Text="{x:Static loc:Strings.Findings_OpenInWarnings}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource AccentBrush}" />
+                    </Button>
+                </StackPanel>
                 <ItemsControl ItemsSource="{Binding Members}"
                               IsVisible="{Binding ShowMembers}"
                               Margin="24,0,0,0" />
@@ -1350,6 +1369,10 @@
                                     x:DataType="vm:RouteFindingsViewModel"
                                     IsVisible="{Binding $parent[StackPanel].((vm:PassageCheckViewModel)DataContext).ShowFindings}"
                                     Spacing="2">
+                            <StackPanel.KeyBindings>
+                                <!-- E1: Esc closes the inline Warning card. -->
+                                <KeyBinding Gesture="Escape" Command="{Binding CloseWarningCardCommand}" />
+                            </StackPanel.KeyBindings>
                             <!-- D1: source filter chips; a chip shows only when it has findings. -->
                             <ItemsControl AutomationProperties.AutomationId="Routes.Check.Filter"
                                           ItemsSource="{Binding FilterChips}"

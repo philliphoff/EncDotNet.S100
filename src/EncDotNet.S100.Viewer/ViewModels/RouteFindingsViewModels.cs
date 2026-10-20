@@ -4,6 +4,8 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Routing;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.PassageCheck;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
@@ -114,6 +116,16 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
                 Filter = chip.Filter;
         });
         ToggleInfoCommand = new RelayCommand(() => _service.SetView(infoOpen: !_service.InfoOpen));
+        CloseWarningCardCommand = new RelayCommand(() =>
+        {
+            if (_service.Selected?.Warning is not null)
+                _service.Select(null, zoom: false);
+        });
+        OpenInWarningsCommand = new RelayCommand(() =>
+        {
+            if (_card is not null && WarningEntry(_service.Selected) is { } entry)
+                _service.WarningNavigator!.Reveal(entry);
+        });
         _service.Changed += (_, _) => Refresh();
         Refresh();
     }
@@ -135,6 +147,32 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
 
     /// <summary>Folds or unfolds the INFO group (D3).</summary>
     public ICommand ToggleInfoCommand { get; }
+
+    /// <summary>Esc in the list: closes the inline Warning card by clearing the selection (E1).</summary>
+    public ICommand CloseWarningCardCommand { get; }
+
+    /// <summary>
+    /// The inline card's "Open in Navigational warnings" (E1): selects the
+    /// warning in that panel and brings the panel forward.
+    /// </summary>
+    public ICommand OpenInWarningsCommand { get; }
+
+    /// <summary>Raised by the inline Warning card's Copy with the text to put on the clipboard.</summary>
+    public event EventHandler<string>? CopyRequested;
+
+    private NavigationalWarningCardViewModel? _card;
+    private string? _cardId;
+
+    /// <summary>
+    /// The selected S-124 finding's Warning card, shown inline under its row
+    /// (#959, E1) with its status at the ETA (E2); <c>null</c> when no S-124
+    /// finding is selected. One at a time: selecting another finding, or Esc,
+    /// closes it.
+    /// </summary>
+    public NavigationalWarningCardViewModel? WarningCard => _card;
+
+    /// <summary>The id of the finding whose Warning card is open inline, or <c>null</c>.</summary>
+    public string? WarningCardId => _cardId;
 
     /// <summary>Which findings the list shows (D1); the verdict card's summary rows set it too (B3).</summary>
     public FindingsFilter Filter
@@ -220,6 +258,8 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
         var entries = Entries(findings, filter);
         var infoOpen = _service.InfoOpen;
         var expanded = _service.ExpandedId;
+        if (Reveal(entries, infoOpen, expanded))
+            return;
         var layout = entries
             .Select(e => (e.Group, e.Group != RouteFindingGroup.Info || infoOpen, e.Id, e.IsMerged && e.Id == expanded, e.Members))
             .ToList();
@@ -243,13 +283,145 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
             }
         }
 
+        UpdateWarningCard(_service.Selected);
         foreach (var row in Groups.SelectMany(g => g.Items).SelectMany(r => r.IsMerged ? r.Members : [r]))
+        {
             row.IsSelected = row.Finding.Id == selectedId;
+            row.WarningCard = row.IsSelected ? _card : null;
+        }
 
         Count = findings.Count;
         IsFilteredEmpty = findings.Count > 0 && _shown.Count == 0;
         CountChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    private (string Id, string Entry, RouteFindingGroup Group)? _revealed;
+
+    // E1: a selected S-124 finding's card stays in view. When it lands in a
+    // folded INFO or a collapsed merged row (a recompute moved it, or MCP
+    // selected it there), unfold that once; the mariner can fold it again.
+    private bool Reveal(IReadOnlyList<FindingsEntry> entries, bool infoOpen, string? expanded)
+    {
+        if (_service.Selected is not { Warning: not null } selected
+            || entries.FirstOrDefault(e => e.Members.Any(m => m.Id == selected.Id)) is not { } entry)
+        {
+            _revealed = null;
+            return false;
+        }
+
+        var at = (selected.Id, entry.Id, entry.Group);
+        if (_revealed == at)
+            return false;
+        _revealed = at;
+        var unfold = entry.Group == RouteFindingGroup.Info && !infoOpen;
+        var expand = entry.IsMerged && entry.Id != expanded;
+        if (!unfold && !expand)
+            return false;
+        _service.SetView(infoOpen: unfold ? true : null, expandedId: expand ? entry.Id : null);
+        return true;
+    }
+
+    // E1/E2: the selected S-124 finding's card. It's kept while the same
+    // finding stays selected, so a recompute (a new departure or speed)
+    // re-judges its status at the new ETA without closing it or losing Show all.
+    private void UpdateWarningCard(RouteFinding? selected)
+    {
+        if (selected?.Warning is not { } warning)
+        {
+            DetachCard();
+            return;
+        }
+
+        var navigator = _service.WarningNavigator;
+        var entry = WarningEntry(selected);
+        if (_card is null || _cardId != selected.Id)
+        {
+            DetachCard();
+            _card = new NavigationalWarningCardViewModel(warning.Info, selected.Feature?.DatasetId, _service.TimeFormat, warning.From)
+            {
+                // E1: the list clips the text at 5 lines. E4: the provider's
+                // "not for navigation" label stays off; the verdict carries the disclaimer.
+                ClipAt = InlineClipLines,
+                IsNew = entry is not null && navigator!.IsNew(entry),
+            };
+            _cardId = selected.Id;
+            _card.CopyRequested += OnCardCopyRequested;
+            _card.ZoomRequested += OnCardZoomRequested;
+            _card.LinkRequested += OnCardLinkRequested;
+            OnPropertyChanged(nameof(WarningCard));
+            OnPropertyChanged(nameof(WarningCardId));
+        }
+
+        _card.SetTimeFormat(_service.TimeFormat);
+        _card.SetViewTime(warning.From);
+        _card.SetLinkTargets(navigator?.Warnings ?? []);
+        _card.SetWarningSet(navigator?.WarningSet ?? Datasets.Pipelines.NavigationalWarningSet.Empty);
+        _card.SetStatusOnRoute(warning, StatusAtEta(warning, _service.Departure, _service.TimeFormat));
+        _card.CanZoom = entry is { Extent: not null } || selected.Location is not null;
+        CanOpenInWarnings = entry is not null;
+    }
+
+    /// <summary>The inline Warning card's text clip, in lines (E1).</summary>
+    internal const int InlineClipLines = 5;
+
+    /// <summary>
+    /// The inline card's status pill at the ETA (E2): "In force at 06:08",
+    /// "Not in force at 06:15" or "Cancelled"; the time in the Local/UTC
+    /// preference, with the weekday when it isn't the departure's day.
+    /// </summary>
+    internal static string StatusAtEta(RouteFindingWarning warning, DateTimeOffset? departure, TimeFormat format)
+    {
+        var at = PassageFormatting.FormatEta(warning.From, departure ?? warning.From, format);
+        return warning.Status switch
+        {
+            RouteWarningStatus.InForce => string.Format(CultureInfo.CurrentCulture, Strings.Findings_WarningInForceAtFormat, at),
+            RouteWarningStatus.NotInForce => string.Format(CultureInfo.CurrentCulture, Strings.Findings_WarningNotInForceAtFormat, at),
+            _ => Strings.Findings_WarningCancelled,
+        };
+    }
+
+    private bool _canOpenInWarnings;
+    /// <summary>Whether the inline card's warning is listed in the Navigational warnings panel, which shows its link.</summary>
+    public bool CanOpenInWarnings
+    {
+        get => _canOpenInWarnings;
+        private set => SetProperty(ref _canOpenInWarnings, value);
+    }
+
+    private NavigationalWarningEntry? WarningEntry(RouteFinding? finding) =>
+        finding is { Warning: not null, Feature: { } feature } && _service.WarningNavigator is { } navigator
+            ? navigator.Find(feature.DatasetId, feature.FeatureId)
+            : null;
+
+    private void DetachCard()
+    {
+        if (_card is null)
+            return;
+        _card.CopyRequested -= OnCardCopyRequested;
+        _card.ZoomRequested -= OnCardZoomRequested;
+        _card.LinkRequested -= OnCardLinkRequested;
+        _card = null;
+        _cardId = null;
+        CanOpenInWarnings = false;
+        OnPropertyChanged(nameof(WarningCard));
+        OnPropertyChanged(nameof(WarningCardId));
+    }
+
+    private void OnCardCopyRequested(object? sender, string text) => CopyRequested?.Invoke(this, text);
+
+    // Zoom to frames the warning as the panel does, or the finding without the panel.
+    private void OnCardZoomRequested(object? sender, EventArgs e)
+    {
+        if (_service.Selected is not { } finding)
+            return;
+        if (WarningEntry(finding) is { Extent: not null } entry)
+            _service.WarningNavigator!.ZoomTo(entry);
+        else
+            _service.Select(finding);
+    }
+
+    private void OnCardLinkRequested(object? sender, NavigationalWarningEntry target) =>
+        _service.WarningNavigator?.Reveal(target);
 }
 
 /// <summary>A source filter chip (D1): "All 7", "Route 1", "Warnings 6".</summary>
@@ -452,6 +624,21 @@ internal sealed class RouteFindingRowViewModel : ViewModelBase
         get => _isSelected;
         set => SetProperty(ref _isSelected, value);
     }
+
+    private NavigationalWarningCardViewModel? _warningCard;
+    /// <summary>The Warning card the row expands into while it's the selected S-124 finding (#959, E1); <c>null</c> otherwise.</summary>
+    public NavigationalWarningCardViewModel? WarningCard
+    {
+        get => _warningCard;
+        set
+        {
+            if (SetProperty(ref _warningCard, value))
+                OnPropertyChanged(nameof(HasWarningCard));
+        }
+    }
+
+    /// <summary>Whether the row shows its inline Warning card.</summary>
+    public bool HasWarningCard => _warningCard is not null;
 
     internal static string TagOf(RouteFindingSource source) => source switch
     {

@@ -1,0 +1,243 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.WarningCardView"
+             x:DataType="vm:NavigationalWarningCardViewModel">
+
+    <!--
+        The #976 Warning card as the findings list shows it inline under a
+        selected S-124 finding (#959, E1): number, status at the ETA (E2),
+        type and the reason another warning ended it, then validity, area and
+        issue time, then the message (clipped at 5 lines behind "Show all"),
+        with Copy and Zoom to. It is laid out as Object Information's card
+        (PickReportView's WarningCardTemplate), without Examiner and without
+        the provider's NOT FOR NAVIGATION label (E4): the verdict footer
+        carries the app's disclaimer.
+    -->
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="DepthWarningSubtleBrush" Color="{DynamicResource WarningColor}" Opacity="0.12" />
+        <SolidColorBrush x:Key="DepthSuccessSubtleBrush" Color="{DynamicResource SuccessColor}" Opacity="0.14" />
+        <SolidColorBrush x:Key="DepthWarningBrush" Color="{DynamicResource WarningColor}" />
+        <SolidColorBrush x:Key="DepthSuccessBrush" Color="{DynamicResource SuccessColor}" />
+        <FontFamily x:Key="WarningMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="SelectableTextBlock.longText">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="LineHeight" Value="18" />
+        </Style>
+        <Style Selector="SelectableTextBlock.longText.mono">
+            <Setter Property="FontFamily" Value="{StaticResource WarningMonoFont}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="LineHeight" Value="17" />
+        </Style>
+        <Style Selector="Button.langTab">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="9,3" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="Button.langTab.selected">
+            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Button.cardAction">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="9,4" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard"
+            AutomationProperties.Name="{Binding Label}"
+            Background="{DynamicResource CardBackgroundColor}"
+            BorderBrush="{DynamicResource BorderColor}"
+            BorderThickness="1"
+            CornerRadius="8"
+            ClipToBounds="True">
+        <StackPanel>
+            <StackPanel Margin="12,10,12,10" Spacing="4">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                    <SelectableTextBlock Grid.Column="0"
+                                         AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard.Label"
+                                         Text="{Binding Label}"
+                                         FontFamily="{StaticResource WarningMonoFont}"
+                                         FontSize="12.5"
+                                         FontWeight="SemiBold"
+                                         TextWrapping="Wrap"
+                                         VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1"
+                               IsVisible="{Binding IsNew}"
+                               Text="{x:Static loc:Strings.NavWarnings_New}"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_New}"
+                               Foreground="{DynamicResource AccentBrush}"
+                               FontSize="10.5"
+                               FontWeight="Bold"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center" />
+                    <!-- E2: the status where the vessel meets the warning. -->
+                    <Panel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,0,0"
+                           AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard.Status"
+                           AutomationProperties.Name="{Binding StatusText}">
+                        <Border IsVisible="{Binding IsInForce}"
+                                Background="{StaticResource DepthSuccessSubtleBrush}"
+                                CornerRadius="10" Padding="7,2">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <Ellipse Width="6" Height="6" Fill="{StaticResource DepthSuccessBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource DepthSuccessBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border IsVisible="{Binding IsNotYetInForce}"
+                                Background="{StaticResource DepthWarningSubtleBrush}"
+                                CornerRadius="10" Padding="7,2">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <Ellipse Width="7" Height="7" Stroke="{StaticResource DepthWarningBrush}" StrokeThickness="1.5" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource DepthWarningBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border IsVisible="{Binding IsEnded}"
+                                Background="{DynamicResource MutedBackgroundColor}"
+                                CornerRadius="10" Padding="7,2">
+                            <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                       Opacity="0.75" VerticalAlignment="Center" />
+                        </Border>
+                    </Panel>
+                </Grid>
+                <TextBlock IsVisible="{Binding HasTypeText}"
+                           FontSize="12.5"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap">
+                    <Run Text="{Binding TypeText}" />
+                    <Run Text="{Binding GeneralTypeSuffix}"
+                         FontWeight="Normal"
+                         Foreground="{DynamicResource MutedColor}" />
+                </TextBlock>
+                <TextBlock IsVisible="{Binding HasStatusReason}"
+                           AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard.StatusReason"
+                           Text="{Binding StatusReasonText}"
+                           FontSize="11"
+                           Foreground="{DynamicResource MutedColor}"
+                           TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="Auto,8,*"
+                      RowDefinitions="Auto,Auto,Auto"
+                      Margin="0,4,0,0">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_ValidLabel}"
+                               FontSize="11" Opacity="0.65" Margin="0,1" />
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding ValidityText}"
+                               FontSize="11" TextWrapping="Wrap" Margin="0,1" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_AreaLabel}"
+                               FontSize="11" Opacity="0.65" Margin="0,1"
+                               IsVisible="{Binding HasAreaText}" />
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding AreaText}"
+                               FontSize="11" TextWrapping="Wrap" Margin="0,1"
+                               IsVisible="{Binding HasAreaText}" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_IssuedLabel}"
+                               FontSize="11" Opacity="0.65" Margin="0,1"
+                               IsVisible="{Binding HasIssued}" />
+                    <TextBlock Grid.Row="2" Grid.Column="2" FontSize="11" TextWrapping="Wrap" Margin="0,1"
+                               IsVisible="{Binding HasIssued}">
+                        <Run Text="{Binding IssuedText}" FontFamily="{StaticResource WarningMonoFont}" FontSize="10.5" />
+                        <Run Text="{Binding IssuerSuffix}" Foreground="{DynamicResource MutedColor}" />
+                    </TextBlock>
+                </Grid>
+            </StackPanel>
+
+            <!-- Language tabs, only when the part has more than one. -->
+            <Border IsVisible="{Binding HasLanguageTabs}"
+                    HorizontalAlignment="Left"
+                    Margin="12,0,12,8"
+                    Padding="2"
+                    CornerRadius="6"
+                    Background="{DynamicResource MutedBackgroundColor}">
+                <ItemsControl ItemsSource="{Binding Languages}"
+                              AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard.Languages"
+                              AutomationProperties.Name="{x:Static loc:Strings.Pick_Warning_Languages}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="2" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:NavigationalWarningCardViewModel+LanguageTab">
+                            <Button Classes="langTab"
+                                    Classes.selected="{Binding IsSelected}"
+                                    AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard.Language"
+                                    AutomationProperties.Name="{Binding Name}"
+                                    Command="{Binding SelectCommand}"
+                                    Content="{Binding Name}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
+            <Border IsVisible="{Binding ShowsTextBlock}"
+                    Background="{DynamicResource MutedBackgroundColor}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,1">
+                <StackPanel>
+                    <TextBlock IsVisible="{Binding ShowsNoTextMessage}"
+                               Text="{Binding NoTextMessage}"
+                               FontSize="11"
+                               Opacity="0.65"
+                               TextWrapping="Wrap"
+                               Margin="12" />
+                    <views:WarningMessageTextBlock IsVisible="{Binding HasText}"
+                                                   Classes="longText"
+                                                   Classes.mono="{Binding IsMonospace}"
+                                                   AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard.Text"
+                                                   AutomationProperties.Name="{x:Static loc:Strings.Pick_Warning_Text}"
+                                                   Segments="{Binding Segments}"
+                                                   LinkCommand="{Binding LinkCommand}"
+                                                   LinkForeground="{DynamicResource AccentBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="12,8,12,10" />
+                    <Button IsVisible="{Binding IsClipped}"
+                            AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard.ShowAll"
+                            HorizontalAlignment="Center"
+                            Margin="0,0,0,8"
+                            Padding="10,3"
+                            FontSize="11"
+                            Command="{Binding ShowAllCommand}"
+                            Content="{Binding ShowAllText}" />
+                </StackPanel>
+            </Border>
+
+            <WrapPanel Orientation="Horizontal" Margin="6,4">
+                <Button Classes="cardAction"
+                        AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard.Copy"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_CopyText}"
+                        AutomationProperties.HelpText="{Binding CopyTooltip}"
+                        Command="{Binding CopyCommand}"
+                        ToolTip.Tip="{Binding CopyTooltip}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                        <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Copy}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Classes="cardAction"
+                        AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard.ZoomTo"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_ZoomToWarning}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ZoomToWarning}"
+                        Command="{Binding ZoomToCommand}"
+                        IsVisible="{Binding CanZoom}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToWarning}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                        <TextBlock Text="{x:Static loc:Strings.Pick_Warning_ZoomTo}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </WrapPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

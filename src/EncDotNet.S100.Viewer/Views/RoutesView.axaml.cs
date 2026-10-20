@@ -1,6 +1,7 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -24,6 +25,7 @@ public partial class RoutesView : UserControl
     }
 
     private RoutePassageCardViewModel? _passage;
+    private RouteFindingsViewModel? _findings;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -33,6 +35,25 @@ public partial class RoutesView : UserControl
         _passage = (DataContext as RoutesPanelViewModel)?.Passage;
         if (_passage is not null)
             _passage.FocusRequested += OnPassageFocusRequested;
+        if (_findings is not null)
+            _findings.CopyRequested -= OnCopyRequested;
+        _findings = (DataContext as RoutesPanelViewModel)?.Check?.Findings;
+        if (_findings is not null)
+            _findings.CopyRequested += OnCopyRequested;
+    }
+
+    // #959 (E1): the inline Warning card's Copy.
+    private void OnCopyRequested(object? sender, string text)
+    {
+        try
+        {
+            if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+                _ = clipboard.SetTextAsync(text);
+        }
+        catch
+        {
+            // Best-effort; clipboard access can fail on some Linux WMs.
+        }
     }
 
     // #959 (A5): "+ Add draft" expands the Passage card and focuses Draft once it's laid out.

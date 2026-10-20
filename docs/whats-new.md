@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Warnings in place while checking a route.** In SoundCharts' Check
+  route, selecting an S-124 finding opens the warning's card right in the
+  findings list, with its status judged when you get there ("In force at
+  06:08", "Not in force at 06:15" or "Cancelled") and a link to **Open in
+  Navigational warnings**. Moving the departure or changing speed re-judges
+  the open card. While checking, the **Navigational warnings** panel offers
+  **All | On {route}**, and each warning on or near the route shows "On
+  route · 06:08" or "Near route · 06:19". `get_findings` reports the open
+  card and each warning's status text, and `list_navigational_warnings`
+  gains a `scope` and each warning's `route` relation.
+
 - **Classify navigational warnings on chart, off chart or information.**
   S-98 Ed 2.0.0 §12.12.2 asks that the mariner can classify each warning's
   relevance to the route. In SoundCharts' **Navigational warnings** panel,

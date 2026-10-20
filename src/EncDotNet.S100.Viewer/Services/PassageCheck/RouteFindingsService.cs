@@ -176,7 +176,29 @@ internal sealed class RouteFindingsService : IDisposable
 
     private DepthUnit DepthUnit => _mariner?.Current.DepthUnit ?? DepthUnit.Metres;
 
-    private TimeFormat TimeFormat => _timeFormat?.Current ?? TimeFormat.Local;
+    /// <summary>The Local/UTC preference the findings are worded in.</summary>
+    internal TimeFormat TimeFormat => _timeFormat?.Current ?? TimeFormat.Local;
+
+    /// <summary>The checked route's departure, which ETAs are shown against; <c>null</c> while Check route is off.</summary>
+    internal DateTimeOffset? Departure => _builtInput?.Departure;
+
+    /// <summary>Whether Check route is on for a route with legs, so there is a live list.</summary>
+    public bool IsChecking => _builtInput is not null;
+
+    /// <summary>The checked route's name (its id when unnamed), or <c>null</c> while Check route is off.</summary>
+    public string? CheckedRouteName =>
+        _builtInput is { } input
+            ? (_routes.Routes.Routes.FirstOrDefault(r => r.Id == input.RouteId) is { } route
+                ? (string.IsNullOrWhiteSpace(route.Name) ? route.Id : route.Name)
+                : input.RouteId)
+            : null;
+
+    /// <summary>
+    /// The Navigational warnings panel, which an S-124 finding's inline
+    /// Warning card (#959, E1) links to, zooms through and opens in; set by
+    /// the panel. <c>null</c> without it.
+    /// </summary>
+    internal ViewModels.INavigationalWarningNavigator? WarningNavigator { get; set; }
 
     /// <summary>
     /// Selects a finding (or clears the selection with <c>null</c>). A placed

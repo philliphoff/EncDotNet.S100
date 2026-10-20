@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 
@@ -17,7 +18,9 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 /// <remarks>
 /// The status is read at the view time, so it follows the Timeline (now, when
-/// the Timeline is Live). Messages longer than <see cref="ClipThreshold"/>
+/// the Timeline is Live), or, for a finding's inline card in the findings
+/// list (#959, E2), at the vessel's ETA there (<see cref="SetStatusOnRoute"/>).
+/// Messages longer than <see cref="ClipThreshold"/>
 /// lines stop at <see cref="ClipLines"/> until "Show all" is chosen, which
 /// holds for the card's lifetime, that is until the pick changes. The
 /// language choice holds for the session.
@@ -42,6 +45,8 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
     private bool _isOpen = true;
     private IReadOnlyList<NavigationalWarningEntry> _linkTargets = [];
     private NavigationalWarningSet _set = NavigationalWarningSet.Empty;
+    private RouteFindingWarning? _onRoute;
+    private string? _onRouteText;
 
     public NavigationalWarningCardViewModel(
         NavigationalWarningInfo info,
@@ -216,11 +221,51 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
     /// <summary>Whether <see cref="TypeText"/> has a value.</summary>
     public bool HasTypeText => TypeText is not null;
 
-    /// <summary>The warning's status at the view time, with why, judged with every loaded warning.</summary>
-    public NavigationalWarningState State => _set.StatusAt(_info, _viewTime);
+    /// <summary>
+    /// The warning's status at the view time, with why, judged with every
+    /// loaded warning; at the ETA instead once <see cref="SetStatusOnRoute"/>
+    /// gave the route check's answer.
+    /// </summary>
+    public NavigationalWarningState State => _onRoute is { } onRoute ? StateOnRoute(onRoute) : _set.StatusAt(_info, _viewTime);
 
-    /// <summary>The warning's status at the view time.</summary>
+    /// <summary>The warning's status at the view time (or the ETA, see <see cref="State"/>).</summary>
     public NavigationalWarningStatus Status => State.Status;
+
+    /// <summary>Whether the status is judged at the vessel's ETA on the checked route rather than at the view time.</summary>
+    public bool IsStatusOnRoute => _onRoute is not null;
+
+    /// <summary>
+    /// Judges the status where the vessel meets the warning (#959, E2), as the
+    /// route check did: <paramref name="warning"/> is the finding's
+    /// <see cref="RouteFinding.Warning"/>, and <paramref name="text"/> the
+    /// pill ("In force at 06:08", "Not in force at 06:15", "Cancelled").
+    /// <see langword="null"/> goes back to the view time.
+    /// </summary>
+    public void SetStatusOnRoute(RouteFindingWarning? warning, string? text)
+    {
+        var before = State;
+        var beforeText = StatusText;
+        _onRoute = warning;
+        _onRouteText = warning is null ? null : text;
+        RaiseStatusChanged(before);
+        if (StatusText != beforeText)
+            OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(IsStatusOnRoute));
+    }
+
+    // The route check's status in the card's terms: not in force before a
+    // validity range starts reads "not yet", any other end reads "ended".
+    private static NavigationalWarningState StateOnRoute(RouteFindingWarning warning) => warning.Status switch
+    {
+        RouteWarningStatus.InForce => NavigationalWarningState.InForce,
+        RouteWarningStatus.Cancelled => warning.Withdrawal
+            ?? new NavigationalWarningState(NavigationalWarningStatus.Ended, NavigationalWarningStatusReason.CancellationDate),
+        _ => new NavigationalWarningState(
+            warning.Info.Validity.Any(r => r.Start is { } start && start > warning.From)
+                ? NavigationalWarningStatus.NotYetInForce
+                : NavigationalWarningStatus.Ended,
+            NavigationalWarningStatusReason.Validity),
+    };
 
     /// <summary>
     /// Why another warning ended this one, under the status pill: "Cancelled — not
@@ -241,8 +286,8 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
     /// <summary>Whether the warning has ended at the view time.</summary>
     public bool IsEnded => Status == NavigationalWarningStatus.Ended;
 
-    /// <summary>The status pill's text.</summary>
-    public string StatusText => Status switch
+    /// <summary>The status pill's text; at the ETA, the route check's ("In force at 06:08").</summary>
+    public string StatusText => _onRouteText ?? Status switch
     {
         NavigationalWarningStatus.NotYetInForce => Strings.Pick_Warning_StatusNotYet,
         NavigationalWarningStatus.Ended => Strings.Pick_Warning_StatusEnded,

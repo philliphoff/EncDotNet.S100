@@ -16,7 +16,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// </summary>
 /// <remarks>
 /// Text longer than <see cref="ClipThreshold"/> lines stops at
-/// <see cref="ClipLines"/> until "Show all" is chosen, which holds for the
+/// <see cref="ClipLines"/> (or at <see cref="ClipAt"/>) until "Show all" is chosen, which holds for the
 /// card's lifetime, that is until the pick changes. Copy copies the whole
 /// text, never the clipped one.
 /// </remarks>
@@ -112,17 +112,27 @@ internal abstract class LongTextCardViewModel : ViewModelBase
     /// <summary>The number of lines in the text.</summary>
     public int LineCount => Lines(BodyText).Length;
 
-    /// <summary>Whether the text is clipped to <see cref="ClipLines"/> lines.</summary>
-    public bool IsClipped => !_showAll && LineCount > ClipThreshold;
+    /// <summary>
+    /// The number of lines a clipped text shows; <see cref="ClipLines"/> by
+    /// default, which clips past <see cref="ClipThreshold"/>. Any other value
+    /// clips as soon as the text is longer (the findings list's inline
+    /// Warning card clips at 5, #959 E1).
+    /// </summary>
+    public int ClipAt { get; init; } = ClipLines;
 
-    /// <summary>The text as shown: the whole text, or its first <see cref="ClipLines"/> lines.</summary>
+    private int ClipPast => ClipAt == ClipLines ? ClipThreshold : ClipAt;
+
+    /// <summary>Whether the text is clipped to <see cref="ClipAt"/> lines.</summary>
+    public bool IsClipped => !_showAll && LineCount > ClipPast;
+
+    /// <summary>The text as shown: the whole text, or its first <see cref="ClipAt"/> lines.</summary>
     public string DisplayedText
     {
         get
         {
             var lines = Lines(BodyText);
             return IsClipped
-                ? string.Join('\n', lines, 0, ClipLines)
+                ? string.Join('\n', lines, 0, ClipAt)
                 : string.Join('\n', lines);
         }
     }
