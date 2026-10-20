@@ -106,17 +106,22 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
         }
         if (scene.ActiveRoute is { } active)
         {
-            DrawActive(canvas, active, scene, ToScreen, opacity);
+            // #959 C1, C3: the corridor under the route casing.
+            if (scene.Check is { } corridor)
+                DrawCorridor(canvas, corridor.Map, ToScreen, opacity);
+            var placement = scene.Check is { } placed ? RouteCheckMapLayout.Place(placed.Map, ToScreen) : RouteCheckMapLayout.Placement.Empty;
+            DrawActive(canvas, active, scene, ToScreen, opacity, placement);
             if (scene.Check is { } check)
             {
-                DrawFindingMarkers(canvas, check, ToScreen, opacity);
+                if (check.Finding is { IsOutlined: true } outlined)
+                    DrawFindingOutline(canvas, outlined, check.Colors, ToScreen, opacity);
+                DrawFindingMarkers(canvas, check, placement, opacity);
                 DrawCheckMarkers(canvas, check, ToScreen, (float)viewport.Rotation, opacity);
-                var legendTop = check.HasClearance
-                    ? DrawLegend(canvas, check, (float)viewport.Height, opacity)
-                    : (float)viewport.Height - LegendBottomMargin;
                 if (check.Finding is { } finding)
                 {
-                    DrawFindingOutline(canvas, finding, check.Colors, ToScreen, opacity);
+                    // The legend is a control over the map (Map.RouteCheckLegend);
+                    // the chip sits above it.
+                    var legendTop = (float)viewport.Height - (check.LegendReserve > 0 ? check.LegendReserve : LegendBottomMargin);
                     var scale = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
                     DrawFindingChip(canvas, finding, check.Colors, scale, legendTop, opacity);
                 }
@@ -149,7 +154,7 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
         }
     }
 
-    private static void DrawActive(SKCanvas canvas, RouteOverlayScene.SceneRoute route, RouteOverlayScene scene, Func<GeoPosition, Point?> toScreen, float opacity)
+    private static void DrawActive(SKCanvas canvas, RouteOverlayScene.SceneRoute route, RouteOverlayScene scene, Func<GeoPosition, Point?> toScreen, float opacity, RouteCheckMapLayout.Placement placement)
     {
         var colors = scene.Colors;
         var editing = scene.IsEditing;
@@ -209,11 +214,16 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             }
         }
 
-        DrawLabels(canvas, route, layout, scene, opacity);
+        DrawLabels(canvas, route, layout, scene, opacity, placement);
+
+        // #959 C2: sleeves over the line (and its labels' halos), under the
+        // waypoints and markers.
+        if (scene.Check is { } sleeved)
+            DrawSleeves(canvas, sleeved.Map, toScreen, opacity);
         DrawWaypoints(canvas, route, scene, toScreen, opacity);
     }
 
-    private static void DrawLabels(SKCanvas canvas, RouteOverlayScene.SceneRoute route, IReadOnlyList<LegLayout> layout, RouteOverlayScene scene, float opacity)
+    private static void DrawLabels(SKCanvas canvas, RouteOverlayScene.SceneRoute route, IReadOnlyList<LegLayout> layout, RouteOverlayScene scene, float opacity, RouteCheckMapLayout.Placement markers)
     {
         var colors = scene.Colors;
         foreach (var leg in layout)
@@ -222,6 +232,9 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
                 continue;
             var selected = scene.SelectedLegIndex == leg.Index;
             var text = route.Legs[leg.Index].Label;
+            // A finding's marker (or cluster) wins over the leg label it would cover (#959 C4).
+            if (Covers(markers, placement.Center, placement.AngleDegrees, MeasureLabel(text, selected)))
+                continue;
             using var font = new SKFont(selected ? LabelBoldTypeface : LabelTypeface, LabelFontSize);
             using var halo = new SKPaint
             {
@@ -242,6 +255,24 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             canvas.DrawText(text, 0, baseline, SKTextAlign.Center, font, ink);
             canvas.Restore();
         }
+    }
+
+    // Whether a marker or cluster overlaps a label of `width` centred on `center` and turned by `angle`.
+    private static bool Covers(RouteCheckMapLayout.Placement markers, Point center, double angleDegrees, double width)
+    {
+        if (markers.Markers.Count == 0 && markers.Clusters.Count == 0)
+            return false;
+        var a = -angleDegrees * Math.PI / 180;
+        var (cos, sin) = (Math.Cos(a), Math.Sin(a));
+        const double reach = RouteCheckMapLayout.MarkerSize / 2;
+        bool Hits(Point p)
+        {
+            var (dx, dy) = (p.X - center.X, p.Y - center.Y);
+            var (x, y) = ((dx * cos) - (dy * sin), (dx * sin) + (dy * cos));
+            return Math.Abs(x) < (width / 2) + reach && Math.Abs(y) < (LabelFontSize / 2) + 2 + reach;
+        }
+
+        return markers.Markers.Any(m => Hits(m.Center)) || markers.Clusters.Any(c => Hits(c.Center));
     }
 
     private static void DrawWaypoints(SKCanvas canvas, RouteOverlayScene.SceneRoute route, RouteOverlayScene scene, Func<GeoPosition, Point?> toScreen, float opacity)
@@ -308,22 +339,160 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
         }
     }
 
-    /// <summary>Radius of a finding's marker dot, in pixels (#953).</summary>
-    internal const float FindingMarkerRadius = 4.5f;
-
-    private static void DrawFindingMarkers(SKCanvas canvas, RouteCheckOverlay check, Func<GeoPosition, Point?> toScreen, float opacity)
+    private static void DrawCorridor(SKCanvas canvas, RouteCheckMap map, Func<GeoPosition, Point?> toScreen, float opacity)
     {
-        // #953: a dot per finding in its group's tone, on a casing ring. The
-        // selected one is also outlined (F3), so it's drawn a little larger.
-        using var casing = Stroke(check.Colors.Casing.WithAlpha(Alpha(opacity)), 2f);
-        foreach (var marker in check.Markers)
+        if (map.Corridor.Count == 0)
+            return;
+
+        // C3: the selected finding's leg filled in the accent.
+        if (map.FilledLegs.Count > 0)
         {
-            if (toScreen(marker.Position) is not { } p)
+            using var fill = Fill(map.CorridorFill.WithAlpha(Alpha(map.CorridorFill.Alpha / 255f * opacity)));
+            foreach (var index in map.FilledLegs)
+            {
+                var leg = map.Corridor[index];
+                var ring = Project([.. leg.Port, .. leg.Starboard.Reverse()], toScreen);
+                if (ring.Count < 3)
+                    continue;
+                using var path = new SKPath();
+                path.MoveTo((float)ring[0].X, (float)ring[0].Y);
+                for (var i = 1; i < ring.Count; i++)
+                    path.LineTo((float)ring[i].X, (float)ring[i].Y);
+                path.Close();
+                canvas.DrawPath(path, fill);
+            }
+        }
+
+        // C1: both cross-track limits of every leg, 1 px dotted 2/3.
+        using var edge = Stroke(map.CorridorEdge.WithAlpha(Alpha(map.CorridorEdge.Alpha / 255f * opacity)), 1f);
+        edge.StrokeCap = SKStrokeCap.Butt;
+        edge.PathEffect = SKPathEffect.CreateDash([2f, 3f], 0);
+        foreach (var leg in map.Corridor)
+        {
+            foreach (var side in new[] { leg.Port, leg.Starboard })
+            {
+                foreach (var part in Geodesy.MarineGeodesy.SplitAtAntimeridian(side))
+                    DrawPath(canvas, Project(part, toScreen), edge);
+            }
+        }
+    }
+
+    /// <summary>A sleeve's width and opacity (C2): 16 px at 24 %, or 20 px at 38 % when selected.</summary>
+    internal static (float Width, float Opacity) SleeveStyle(bool selected) => selected ? (20f, 0.38f) : (16f, 0.24f);
+
+    private static void DrawSleeves(SKCanvas canvas, RouteCheckMap map, Func<GeoPosition, Point?> toScreen, float opacity)
+    {
+        // Unselected first, so the selected sleeve draws on top.
+        foreach (var sleeve in map.Sleeves.OrderBy(s => s.IsSelected))
+        {
+            var (width, alpha) = SleeveStyle(sleeve.IsSelected);
+            using var band = Stroke(sleeve.Tone.WithAlpha(Alpha(alpha * opacity)), width);
+            band.StrokeCap = SKStrokeCap.Butt;
+            foreach (var part in Geodesy.MarineGeodesy.SplitAtAntimeridian(sleeve.Path))
+                DrawPath(canvas, Project(part, toScreen), band);
+        }
+    }
+
+    private static void DrawFindingMarkers(SKCanvas canvas, RouteCheckOverlay check, RouteCheckMapLayout.Placement placement, float opacity)
+    {
+        var colors = check.Colors;
+        using var stem = Stroke(colors.Ink.WithAlpha(Alpha(0.6f * opacity)), 1f);
+        stem.StrokeCap = SKStrokeCap.Butt;
+        using var leader = Stroke(colors.Ink.WithAlpha(Alpha(0.7f * opacity)), 1f);
+        leader.StrokeCap = SKStrokeCap.Butt;
+        leader.PathEffect = SKPathEffect.CreateDash([2f, 2f], 0);
+        var half = RouteCheckMapLayout.MarkerSize / 2;
+
+        // C6: clusters, glyph = count.
+        foreach (var cluster in placement.Clusters)
+            DrawMarkerShape(canvas, (float)cluster.Center.X, (float)cluster.Center.Y, cluster.Group, cluster.Tone, colors, cluster.Members.Count.ToString(CultureInfo.CurrentCulture), opacity);
+
+        foreach (var marker in placement.Markers)
+        {
+            var (ax, ay) = ((float)marker.Anchor.X, (float)marker.Anchor.Y);
+            var (cx, cy) = ((float)marker.Center.X, (float)marker.Center.Y);
+            // C5: a dotted leader from the stem's foot to a feature off the centreline.
+            if (marker.Feature is { } f)
+                canvas.DrawLine(ax, ay, (float)f.X, (float)f.Y, leader);
+            canvas.DrawLine(ax, ay, cx, cy + half - 1f, stem);
+            DrawMarkerShape(canvas, cx, cy, marker.Mark.Group, marker.Mark.Tone, colors, null, opacity);
+
+            if (!marker.Mark.IsSelected)
                 continue;
-            var r = marker.IsSelected ? FindingMarkerRadius + 1.5f : FindingMarkerRadius;
-            using var fill = Fill(marker.Tone.WithAlpha(Alpha(opacity)));
-            canvas.DrawCircle((float)p.X, (float)p.Y, r, fill);
-            canvas.DrawCircle((float)p.X, (float)p.Y, r, casing);
+            // C7: a 15 px ring in the tone and the one pill, up and right.
+            using var ring = Stroke(marker.Mark.Tone.WithAlpha(Alpha(opacity)), 2f);
+            canvas.DrawCircle(cx, cy, RouteCheckMapLayout.SelectedRingRadius, ring);
+            if (marker.Mark.Pill is { } text)
+                DrawPill(canvas, text, cx + 18f, cy - 34f, marker.Mark.Tone, colors, opacity);
+        }
+    }
+
+    /// <summary>
+    /// A marker's shape (C4): octagon for must review, triangle for check,
+    /// circle for info, so the group doesn't rely on colour alone; filled in
+    /// the tone with a 1.6 px ring and glyph in the casing colour.
+    /// </summary>
+    private static void DrawMarkerShape(SKCanvas canvas, float x, float y, Navigation.RouteFindingGroup group, SKColor tone, RouteCheckColors colors, string? count, float opacity)
+    {
+        var r = RouteCheckMapLayout.MarkerSize / 2;
+        using var shape = new SKPath();
+        switch (group)
+        {
+            case Navigation.RouteFindingGroup.MustReview:
+                var k = r * 0.414f;
+                shape.MoveTo(x - k, y - r);
+                shape.LineTo(x + k, y - r);
+                shape.LineTo(x + r, y - k);
+                shape.LineTo(x + r, y + k);
+                shape.LineTo(x + k, y + r);
+                shape.LineTo(x - k, y + r);
+                shape.LineTo(x - r, y + k);
+                shape.LineTo(x - r, y - k);
+                shape.Close();
+                break;
+            case Navigation.RouteFindingGroup.Check:
+                shape.MoveTo(x, y - (r * 1.05f));
+                shape.LineTo(x + (r * 1.05f), y + (r * 0.8f));
+                shape.LineTo(x - (r * 1.05f), y + (r * 0.8f));
+                shape.Close();
+                break;
+            default:
+                shape.AddCircle(x, y, r * 0.85f);
+                break;
+        }
+
+        using var fill = Fill(tone.WithAlpha(Alpha(opacity)));
+        using var ring = Stroke(colors.Casing.WithAlpha(Alpha(opacity)), 1.6f);
+        canvas.DrawPath(shape, fill);
+        canvas.DrawPath(shape, ring);
+
+        var glyph = count ?? (group == Navigation.RouteFindingGroup.Info ? "i" : "!");
+        using var font = new SKFont(LabelBoldTypeface, glyph.Length > 1 ? 9f : 10f);
+        using var ink = Fill(colors.Casing.WithAlpha(Alpha(opacity)));
+        // The triangle's visual centre sits a little low.
+        var dy = group == Navigation.RouteFindingGroup.Check ? 2f : 0f;
+        var baseline = y + dy - ((font.Metrics.Ascent + font.Metrics.Descent) / 2f);
+        canvas.DrawText(glyph, x, baseline, SKTextAlign.Center, font, ink);
+    }
+
+    private static void DrawPill(SKCanvas canvas, string text, float left, float top, SKColor tone, RouteCheckColors colors, float opacity)
+    {
+        using var font = new SKFont(LabelBoldTypeface, LabelFontSize);
+        var runs = FallbackRuns(text, font);
+        var rect = SKRect.Create(left, top, runs.Sum(r => r.Width) + 18f, 20f);
+        using var pill = Fill(colors.PillFill.WithAlpha(Alpha(opacity)));
+        using var edge = Stroke(tone.WithAlpha(Alpha(opacity)), 1.5f);
+        canvas.DrawRoundRect(rect, 10f, 10f, pill);
+        canvas.DrawRoundRect(rect, 10f, 10f, edge);
+        using var ink = Fill(colors.Ink.WithAlpha(Alpha(opacity)));
+        var baseline = rect.MidY - ((font.Metrics.Ascent + font.Metrics.Descent) / 2f);
+        var x = rect.Left + 9f;
+        foreach (var run in runs)
+        {
+            canvas.DrawText(run.Text, x, baseline, SKTextAlign.Left, run.Font, ink);
+            x += run.Width;
+            if (!ReferenceEquals(run.Font, font))
+                run.Font.Dispose();
         }
     }
 
@@ -372,52 +541,8 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
         }
     }
 
-    /// <summary>Space below the legend, clear of the Time HUD (36 px tall, 12 px up).</summary>
-    private const float LegendBottomMargin = 60f;
-
-    /// <returns>The legend's top edge, so the finding chip can sit above it.</returns>
-    private static float DrawLegend(SKCanvas canvas, RouteCheckOverlay check, float height, float opacity)
-    {
-        // C7: "UKC AT ETA" at the map's bottom left: the three bands, then
-        // the dashed lower-confidence key (in the Meets colour, standing for
-        // any band) and grey dashed no data (#939).
-        var colors = check.Colors;
-        var items = new (string Label, Navigation.UkcState State, bool IsLowConfidence)[]
-        {
-            (Resources.Strings.Check_LegendMeets, Navigation.UkcState.MeetsSettings, false),
-            (Resources.Strings.Check_LegendTight, Navigation.UkcState.Tight, false),
-            (Resources.Strings.Check_LegendBelow, Navigation.UkcState.BelowSetting, false),
-            (Resources.Strings.Check_LegendLowConfidence, Navigation.UkcState.MeetsSettings, true),
-            (Resources.Strings.Check_LegendNoData, Navigation.UkcState.NoData, false),
-        };
-        using var font = new SKFont(LabelTypeface, LabelFontSize);
-        using var titleFont = new SKFont(LabelBoldTypeface, 9.5f);
-        var width = 24f + items.Max(i => font.MeasureText(i.Label)) + 20f;
-        var rowHeight = 16f;
-        var boxHeight = 22f + (items.Length * rowHeight);
-        // Clear of the Time HUD at the bottom centre and the scale readout.
-        var rect = SKRect.Create(12f, height - boxHeight - LegendBottomMargin, Math.Max(width, titleFont.MeasureText(Resources.Strings.Check_LegendTitle) + 20f), boxHeight);
-
-        using var fill = Fill(colors.PillFill.WithAlpha(Alpha(0.92f * opacity)));
-        using var edge = Stroke(colors.NoData.WithAlpha(Alpha(0.5f * opacity)), 1f);
-        canvas.DrawRoundRect(rect, 6f, 6f, fill);
-        canvas.DrawRoundRect(rect, 6f, 6f, edge);
-        using var ink = Fill(colors.Ink.WithAlpha(Alpha(opacity)));
-        canvas.DrawText(Resources.Strings.Check_LegendTitle, rect.Left + 10f, rect.Top + 15f, SKTextAlign.Left, titleFont, ink);
-
-        for (var i = 0; i < items.Length; i++)
-        {
-            var y = rect.Top + 28f + (i * rowHeight);
-            using var swatch = Stroke(colors.Of(items[i].State).WithAlpha(Alpha(opacity)), CheckStrokeWidth(items[i].State) - 1f);
-            swatch.StrokeCap = SKStrokeCap.Butt;
-            if (IsCheckDashed(items[i].State, items[i].IsLowConfidence))
-                swatch.PathEffect = SKPathEffect.CreateDash([6f, 4f], 0);
-            canvas.DrawLine(rect.Left + 10f, y, rect.Left + 28f, y, swatch);
-            canvas.DrawText(items[i].Label, rect.Left + 34f, y + 3.5f, SKTextAlign.Left, font, ink);
-        }
-
-        return rect.Top;
-    }
+    /// <summary>Space below the legend while the Time HUD (36 px tall, 12 px up) is shown; the chip's floor without a legend.</summary>
+    internal const float LegendBottomMargin = 60f;
 
     /// <summary>Half the width of the corridor outlined around a selected finding's span, in pixels.</summary>
     internal const float FindingOutlineHalfWidth = 14f;

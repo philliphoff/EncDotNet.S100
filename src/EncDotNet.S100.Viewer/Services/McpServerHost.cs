@@ -45,6 +45,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? _passageCheck;
     private readonly EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel? _clearance;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? _routeFindings;
+    private readonly EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? _routeCheckLegend;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? _followPassage;
     private readonly RouteExchangeService? _routeExchange;
     private readonly IViewerDatasetStateController? _datasetState;
@@ -97,8 +98,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? followPassage = null,
         EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel? navigationalWarnings = null,
         NavigationalWarningsService? navigationalWarningsService = null,
-        RouteExchangeService? routeExchange = null)
+        RouteExchangeService? routeExchange = null,
+        EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? routeCheckLegend = null)
     {
+        _routeCheckLegend = routeCheckLegend;
         _routeExchange = routeExchange;
         _navigationalWarnings = navigationalWarnings;
         _navigationalWarningsService = navigationalWarningsService;
@@ -461,6 +464,11 @@ internal sealed class McpServerHost : IAsyncDisposable
                     tools.Add(RouteFindingsMcpAdapters.Create(new GetFindingsTool(_routesService, invoker, _passageCheck, _routeFindings)));
                     tools.Add(RouteFindingsMcpAdapters.Create(new SelectFindingTool(_routesService, invoker, _passageCheck, _routeFindings)));
                     tools.Add(RouteFindingsMcpAdapters.Create(new SetFindingsViewTool(_routesService, invoker, _passageCheck, _routeFindings)));
+                }
+                if (_routeCheckLegend is not null)
+                {
+                    tools.Add(RouteCheckMapMcpAdapters.Create(new GetMapLegendTool(_routeCheckLegend, _routesService, _passageCheck, invoker)));
+                    tools.Add(RouteCheckMapMcpAdapters.Create(new SetMapLegendTool(_routeCheckLegend, _routesService, _passageCheck, invoker)));
                 }
             }
             if (_clearance is not null)

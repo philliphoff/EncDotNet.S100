@@ -5272,6 +5272,36 @@
   <data name="Check_LegendNoData" xml:space="preserve">
     <value>No data</value>
   </data>
+  <data name="Map_LegendChip" xml:space="preserve">
+    <value>Legend</value>
+  </data>
+  <data name="Map_LegendFindings" xml:space="preserve">
+    <value>FINDINGS</value>
+  </data>
+  <data name="Map_LegendMustReview" xml:space="preserve">
+    <value>Must review</value>
+  </data>
+  <data name="Map_LegendCheck" xml:space="preserve">
+    <value>Check</value>
+  </data>
+  <data name="Map_LegendInfo" xml:space="preserve">
+    <value>Info (on select)</value>
+  </data>
+  <data name="Map_LegendSleeve" xml:space="preserve">
+    <value>Stretch of the route</value>
+  </data>
+  <data name="Map_LegendCorridor" xml:space="preserve">
+    <value>Cross-track corridor</value>
+  </data>
+  <data name="Map_LegendNoDraft" xml:space="preserve">
+    <value>No draft: the line isn't coloured by clearance.</value>
+  </data>
+  <data name="Tooltip_MapLegendFold" xml:space="preserve">
+    <value>Fold the legend</value>
+  </data>
+  <data name="Tooltip_MapLegendOpen" xml:space="preserve">
+    <value>Show the legend</value>
+  </data>
   <data name="Check_MinUkcPillFormat" xml:space="preserve">
     <value>Min UKC {0} · {1}</value>
   </data>

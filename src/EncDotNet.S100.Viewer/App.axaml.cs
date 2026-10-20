@@ -886,6 +886,9 @@ public partial class App : Application
                     else
                         Avalonia.Threading.Dispatcher.UIThread.Post(action);
                 }));
+        // The Check route map legend's fold, kept per user (#959, C8).
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState(
+            sp.GetRequiredService<ViewerSettings>()));
         // Loads persisted routes at startup and writes them back (debounced)
         // on change, so user/agent routes survive a restart. Eagerly
         // initialized in OnFrameworkInitializationCompleted and flushed on
@@ -1176,7 +1179,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>(),
             sp.GetRequiredService<NavigationalWarningsViewModel>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));

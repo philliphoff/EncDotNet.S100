@@ -406,7 +406,7 @@ public sealed class RouteFindingProducerTests : IDisposable
     }
 
     [Fact]
-    public async Task The_map_marks_every_finding_toned_by_group()
+    public async Task The_map_marks_route_findings_toned_by_group_and_info_only_when_selected()
     {
         var f = NoDraft();
         using var findings = Findings(f, new StubProducer(
@@ -418,27 +418,32 @@ public sealed class RouteFindingProducerTests : IDisposable
         await findings.WhenIdle();
         _ui.Run(() => findings.Select(findings.Findings.Single(x => x.Id == "c.0"), zoom: false));
 
-        var overlay = Assert.IsType<RouteCheckOverlay>(RouteCheckOverlay.Build(
+        RouteCheckOverlay Build() => Assert.IsType<RouteCheckOverlay>(RouteCheckOverlay.Build(
             true, f.Check.Current, f.Check.IsStale, f.Check.Cursor, MeasureOverlayAppearance.Default, DepthUnit.Metres, TimeFormat.Utc,
-            findings.Selected, findings.Findings));
+            findings.Selected, findings.Findings, hasDraft: false, route: f.Route));
+        var overlay = Build();
 
         Assert.False(overlay.HasClearance);
         var colors = overlay.Colors;
+        // #959 C4: Must review and Check get markers; Info only when selected.
         Assert.Equal(
-            [(RouteFindingGroup.MustReview, colors.Below, false), (RouteFindingGroup.Check, colors.Tight, true), (RouteFindingGroup.Info, colors.NoData, false)],
-            overlay.Markers.Select(m => (m.Group, m.Tone, m.IsSelected)));
-        Assert.Equal(findings.Findings[0].Location!.Path[0], overlay.Markers[0].Position);
+            [(RouteFindingGroup.MustReview, colors.Below, false), (RouteFindingGroup.Check, colors.Tight, true)],
+            overlay.Map.Marks.Select(m => (m.Group, m.Tone, m.IsSelected)));
 
-        // The selected finding keeps its outline and chip (#905).
+        // The selected finding keeps its chip (#905); a route finding is ringed, not outlined (C7).
         var focus = Assert.IsType<RouteCheckOverlay.FindingFocus>(overlay.Finding);
         Assert.Equal("Zoomed to finding · leg 2 → 3", focus.ChipText);
+        Assert.False(focus.IsOutlined);
 
         // Red only for must-review findings (F5).
-        Assert.All(overlay.Markers.Where(m => m.Group != RouteFindingGroup.MustReview), m => Assert.NotEqual(colors.Below, m.Tone));
+        Assert.All(overlay.Map.Marks.Where(m => m.Group != RouteFindingGroup.MustReview), m => Assert.NotEqual(colors.Below, m.Tone));
+
+        _ui.Run(() => findings.Select(findings.Findings.Single(x => x.Id == "i.0"), zoom: false));
+        Assert.Equal((RouteFindingGroup.Info, colors.NoData), Build().Map.Marks.Where(m => m.IsSelected).Select(m => (m.Group, m.Tone)).Single());
     }
 
     [Fact]
-    public async Task The_clearance_route_also_marks_its_findings()
+    public async Task The_clearance_route_leaves_clearance_findings_to_the_line()
     {
         var f = WithDraft();
         using var findings = Findings(f);
@@ -446,10 +451,13 @@ public sealed class RouteFindingProducerTests : IDisposable
 
         var overlay = RouteCheckOverlay.Build(
             true, f.Check.Current, false, null, MeasureOverlayAppearance.Default, DepthUnit.Metres, TimeFormat.Utc,
-            null, findings.Findings)!;
+            findings.Selected, findings.Findings, route: f.Route)!;
         Assert.True(overlay.HasClearance);
-        var marker = Assert.Single(overlay.Markers);
-        Assert.Equal(overlay.Colors.Below, marker.Tone);
+        // Decision 5: the UKC line shows below-setting stretches; no sleeves or markers for them.
+        Assert.NotEmpty(findings.Findings);
+        Assert.Empty(overlay.Map.Marks);
+        Assert.Empty(overlay.Map.Sleeves);
+        Assert.Equal(f.Route.Legs.Count, overlay.Map.Corridor.Count);
     }
 
     [Fact]
