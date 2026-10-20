@@ -25,7 +25,9 @@ internal sealed record NavigationalWarningsDto(
     [property: Description("True when the panel's Refresh can read a source again (a listed warning came from a Library SECOM service or online feed).")] bool CanRefresh,
     [property: Description("The Library sources the listed warnings came from, by name; files opened directly have none.")] IReadOnlyList<NavigationalWarningSourceDto> Sources,
     [property: Description("Every part, in dataset order (the panel groups them by series and source).")] IReadOnlyList<NavigationalWarningDto> Warnings,
-    [property: Description("The latest in-force bulletin of each series published by statusTime, latest first, with the warnings it lists that aren't loaded (S-124 §9.2.2).")] IReadOnlyList<NavigationalWarningBulletinDto> Bulletins);
+    [property: Description("The latest in-force bulletin of each series published by statusTime, latest first, with the warnings it lists that aren't loaded (S-124 §9.2.2).")] IReadOnlyList<NavigationalWarningBulletinDto> Bulletins,
+    [property: Description("The display setting \"Show warnings not yet in force\" (Display settings › Navigational warnings; off by default): when true the map also draws warnings not yet in force at the view time, from their publication time. Set it with set_navigational_warning_display.")] bool ShowNotYetInForce,
+    [property: Description("The time the map draws warnings at (UTC): the Timeline's view time, or now when nothing time-aware is loaded. Each part's drawn flag is judged at it, whatever time says.")] DateTimeOffset DrawTime);
 
 /// <summary>A series' latest in-force bulletin.</summary>
 [Description("The latest in-force bulletin of a series, and what it lists that isn't loaded.")]
@@ -71,6 +73,8 @@ internal sealed record NavigationalWarningDto(
     [property: Description("The part's WGS-84 bounds, or null when it has no location.")] NavigationalWarningBoundsDto? Bounds,
     [property: Description("Validity ranges (UTC); either end may be null (open).")] IReadOnlyList<NavigationalWarningValidityDto> Validity,
     [property: Description("Message language codes in document order, e.g. [\"eng\", \"fra\"].")] IReadOnlyList<string?> Languages,
+    [property: Description("True when the map draws the part at drawTime (S-98 §12.12): it is in force; or it is not yet in force, published, and showNotYetInForce is on; or its Warning card is open. Ended and cancelled parts are not drawn. A text-only part has nothing to draw whatever this says.")] bool Drawn,
+    [property: Description("True when the part is drawn only because its Warning card is open (it would not be drawn otherwise); it stops being drawn when the card closes.")] bool DrawnForCard,
     [property: Description("True when this part is the one open from the panel.")] bool Selected,
     [property: Description("True when the warning shows NEW: it was received less than 24 hours ago (or marked new since) and its card hasn't been opened, and the NEW filters let it show (S-98 §12.12.1). Always false for a file opened directly.")] bool New,
     [property: Description("Why it is or isn't new: \"new\", \"opened\" (its card was opened), \"expired\" (24 hours passed since it was received or marked new), \"baseline\" (listed when its source was first seen), \"published_earlier\" (published before the source's previous refresh; its dataset loaded late), \"not_observed\", \"no_source\" (a file opened directly), \"filtered_age\" or \"filtered_distance\" (new, but outside the NEW filters).")] string NewReason,
@@ -175,7 +179,7 @@ internal abstract class NavigationalWarningsToolBase
     {
         var time = panel.StatusTime;
         var selected = (panel.SelectedItem as NavigationalWarningRowItem)?.Entry;
-        return new NavigationalWarningsDto(
+        var dto = new NavigationalWarningsDto(
             panel.IsNowFilter ? "now" : "view_time",
             time,
             panel.InForceCount,
@@ -197,7 +201,15 @@ internal abstract class NavigationalWarningsToolBase
                 r.Bulletin.InForceBulletin!.NoMessageOnHand,
                 r.Bulletin.InForceBulletin.InForce.Select(NavigationalWarningsViewModel.NumberText).ToList(),
                 r.NotReceived.Select(NavigationalWarningsViewModel.NumberText).ToList(),
-                r.NotReceived.Count > 0 ? NavigationalWarningsViewModel.NotReceivedText(r) : null)).ToList());
+                r.NotReceived.Count > 0 ? NavigationalWarningsViewModel.NotReceivedText(r) : null)).ToList(),
+            panel.Drawing?.ShowNotYetInForce ?? false,
+            panel.Drawing?.DrawTime ?? time);
+        return panel.Drawing is not { } drawing
+            ? dto
+            : dto with
+            {
+                Warnings = [.. dto.Warnings.Select(w => service.Find(w.DatasetId, w.FeatureId) is { } entry && drawing.IsDrawnForCard(entry) ? w with { DrawnForCard = true } : w)],
+            };
     }
 
     private static NavigationalWarningDto ToDto(NavigationalWarningEntry entry, NavigationalWarningState state, NavigationalWarningEntry? selected, NavigationalWarningNewness newness)
@@ -238,6 +250,9 @@ internal abstract class NavigationalWarningsToolBase
             bounds,
             w.Validity.Select(v => new NavigationalWarningValidityDto(v.Start, v.End)).ToList(),
             w.Texts.Select(t => t.Language).ToList(),
+            // What the map draws: the part isn't among its dataset's hidden features (#993).
+            entry.Dataset.HiddenFeatures?.Contains(entry.FeatureRef) != true,
+            false,
             selected is not null
                 && ReferenceEquals(selected.Dataset, entry.Dataset)
                 && string.Equals(selected.FeatureRef, entry.FeatureRef, StringComparison.Ordinal),
@@ -313,6 +328,27 @@ internal sealed class SelectNavigationalWarningTool : NavigationalWarningsToolBa
             }
 
             Panel.Select(entry);
+            return ToolResult<NavigationalWarningsDto>.Ok(ToDto(Panel, Service));
+        });
+    }
+}
+
+/// <summary>Sets the "Show warnings not yet in force" display setting (#993).</summary>
+internal sealed class SetNavigationalWarningDisplayTool : NavigationalWarningsToolBase
+{
+    public const string Name = "set_navigational_warning_display";
+
+    public SetNavigationalWarningDisplayTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
+        : base(panel, service, invoker) { }
+
+    public Task<ToolResult<NavigationalWarningsDto>> InvokeAsync(bool showNotYetInForce, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Invoker.InvokeAsync(() =>
+        {
+            if (Panel.Drawing is not { } drawing)
+                return ToolResult<NavigationalWarningsDto>.Err(new HostNotReady("the map's warning drawing isn't attached yet"));
+            drawing.ShowNotYetInForce = showNotYetInForce;
             return ToolResult<NavigationalWarningsDto>.Ok(ToDto(Panel, Service));
         });
     }
@@ -541,6 +577,28 @@ internal static class NavigationalWarningsMcpAdapters
                 "highlights it. A part not in force leaves the map where it is; a text-only part shows the in-map note " +
                 "\"… has no location, so nothing is drawn for it.\" Returns what list_navigational_warnings returns. " +
                 "Viewer-injected tool — mutates live state.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    public static McpServerTool Create(SetNavigationalWarningDisplayTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("True to also draw warnings not yet in force at the view time, from their publication time; false (the default) to draw only warnings in force.")] bool showNotYetInForce,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(showNotYetInForce, ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetNavigationalWarningDisplayTool.Name,
+            Description =
+                "Sets the display setting \"Show warnings not yet in force\" (Display settings › Navigational warnings), " +
+                "as its check box does; it is kept across restarts. The map draws S-124 warnings only while they are " +
+                "in force at the view time (S-98 §12.12): ended and cancelled warnings are never drawn, and with this " +
+                "on a warning not yet in force is also drawn from its publication time until it starts. The warning " +
+                "on the open Warning card stays drawn either way. Returns what list_navigational_warnings returns, " +
+                "with each part's drawn flag. Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
@@ -90,6 +91,10 @@ public sealed class RenderHarness : IDisposable
         _mapsuiRenderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
     }
 
+    /// <summary>Opens <paramref name="path"/> with the harness's factory, for reading it before a render (e.g. its warnings).</summary>
+    /// <param name="path">The dataset file.</param>
+    public IDatasetProcessor Open(string path) => _factory.CreateProcessor(path);
+
     /// <summary>
     /// Loads the dataset at <paramref name="path"/>, runs it through its pipeline,
     /// and returns the rendered bitmap. Caller owns the returned bitmap.
@@ -172,6 +177,20 @@ public sealed class RenderHarness : IDisposable
             }
         }
 
+        return BuildSpecContext(processor, palette, symScale, txtScale, ecdis, timeStep) with
+        {
+            HiddenFeatures = options.HiddenFeatures,
+        };
+    }
+
+    private static RenderContext BuildSpecContext(
+        IDatasetProcessor processor,
+        PaletteType palette,
+        double symScale,
+        double txtScale,
+        EcdisDisplaySettings? ecdis,
+        DateTime? timeStep)
+    {
         return processor.Spec.Name switch
         {
             "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },

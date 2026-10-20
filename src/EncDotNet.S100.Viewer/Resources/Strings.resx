@@ -1650,6 +1650,17 @@
   <data name="DisplaySettings_PaletteHeader" xml:space="preserve">
     <value>Palette</value>
   </data>
+  <data name="DisplaySettings_WarningsHeader" xml:space="preserve">
+    <value>Navigational warnings</value>
+    <comment>Display settings section for S-124 navigational warnings (#993).</comment>
+  </data>
+  <data name="DisplaySettings_ShowWarningsNotYetInForce" xml:space="preserve">
+    <value>Show warnings not yet in force</value>
+    <comment>Check box: also draw S-124 warnings from their publication until they come into force (S-98 §12.12.2). Ended and cancelled warnings are never drawn.</comment>
+  </data>
+  <data name="Tooltip_ShowWarningsNotYetInForce" xml:space="preserve">
+    <value>Also draw warnings published but not yet in force at the view time. Ended and cancelled warnings are never drawn.</value>
+  </data>
   <data name="Segment_DisplayBase" xml:space="preserve">
     <value>Base</value>
     <comment>Compact segment label for the Display Base category in the display-settings overlay.</comment>
@@ -3617,6 +3628,10 @@
     <value>LIVE</value>
     <comment>Mode pill while the view time follows now. Upper case.</comment>
   </data>
+  <data name="TimelinePanel_DisplayNotRealTime" xml:space="preserve">
+    <value>Display Not Real Time</value>
+    <comment>Starts the map stamp while the view time is pinned and navigational warnings are loaded, so their drawing follows a time other than now (S-98 §12.7.2 wording; keep it).</comment>
+  </data>
   <data name="TimelinePanel_Pinned" xml:space="preserve">
     <value>PINNED</value>
     <comment>Mode pill while the user chose a time. Upper case.</comment>
@@ -5542,6 +5557,24 @@
   <data name="Findings_FilterEmpty" xml:space="preserve">
     <value>No findings for this filter.</value>
   </data>
+  <data name="Findings_MergedCountFormat" xml:space="preserve">
+    <value>×{0}</value>
+  </data>
+  <data name="Findings_MergedStretchesFormat" xml:space="preserve">
+    <value>{0} stretches</value>
+  </data>
+  <data name="Findings_MergedPlacesFormat" xml:space="preserve">
+    <value>{0} places</value>
+  </data>
+  <data name="Tooltip_FindingMerged" xml:space="preserve">
+    <value>Show or hide each of these findings</value>
+  </data>
+  <data name="Tooltip_FindingsInfoToggle" xml:space="preserve">
+    <value>Show or hide the information findings</value>
+  </data>
+  <data name="Tooltip_CheckLegBadge" xml:space="preserve">
+    <value>Route-check findings on this leg</value>
+  </data>
   <data name="Clearance_Departure" xml:space="preserve">
     <value>Departure</value>
   </data>
@@ -5625,6 +5658,18 @@
   </data>
   <data name="NavWarnings_NotInForceGroupViewTime" xml:space="preserve">
     <value>Not in force at view time</value>
+  </data>
+  <data name="NavWarnings_NotInForceNotDrawn" xml:space="preserve">
+    <value>Not drawn on the chart</value>
+    <comment>Beside the "Not in force at view time" group: the map draws only warnings in force (#993).</comment>
+  </data>
+  <data name="NavWarnings_NotInForceEndedNotDrawn" xml:space="preserve">
+    <value>Ended ones aren't drawn</value>
+    <comment>Beside the "Not in force at view time" group with "Show warnings not yet in force" on: those not yet in force are drawn, ended and cancelled ones aren't (#993).</comment>
+  </data>
+  <data name="NavWarnings_Drawn" xml:space="preserve">
+    <value>Drawn</value>
+    <comment>Ends a not-in-force row's line when the map still draws it: not yet in force with the setting on, or its card is open (#993).</comment>
   </data>
   <data name="NavWarnings_NotInForceGroupNow" xml:space="preserve">
     <value>Not in force now</value>

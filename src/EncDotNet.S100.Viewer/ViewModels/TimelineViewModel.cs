@@ -276,6 +276,29 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     /// <summary>True while the view time follows now.</summary>
     public bool IsLive => _service.Mode == TimeMode.Live;
 
+    private bool _hasDateDependentData;
+
+    /// <summary>
+    /// Whether date-dependent data is loaded whose drawing follows the view
+    /// time (S-124 navigational warnings, #993); the App keeps it current.
+    /// </summary>
+    public bool HasDateDependentData
+    {
+        get => _hasDateDependentData;
+        set
+        {
+            if (SetProperty(ref _hasDateDependentData, value))
+                RaiseNow();
+        }
+    }
+
+    /// <summary>
+    /// True when the map shows a pinned view time with date-dependent data
+    /// loaded: the map stamp then starts "Display Not Real Time" and stays on
+    /// the map (S-98 Edition 2.0.0 §12.7.2; #993).
+    /// </summary>
+    public bool IsNotRealTime => IsActive && !IsLive && _hasDateDependentData;
+
     /// <summary>"LIVE" or "PINNED", for the mode pill.</summary>
     public string ModeLabel => IsLive ? Strings.TimelinePanel_Live : Strings.TimelinePanel_Pinned;
 
@@ -331,13 +354,16 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
 
     /// <summary>
     /// The map stamp: "LIVE · 01.10.2026 20:30" or "02.10.2026 08:00 · in 11 h 30"
-    /// (top left of the map while the Timeline is open; #713 B4).
+    /// (top left of the map while the Timeline is open; #713 B4); while
+    /// <see cref="IsNotRealTime"/>, "Display Not Real Time · 02.10.2026 08:00 · in 11 h 30".
     /// </summary>
     public string StampText => _service.CurrentTime is { } t
         ? IsDrawing && _progress?.Drawn is { } drawn && _progress.Target is { } target
             ? string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_StampDrawingFormat, TimeFormatting.Format(drawn, ActiveFormat), TimeFormatting.Format(target, ActiveFormat))
         : IsLive
             ? $"{Strings.TimelinePanel_Live} · {TimeFormatting.Format(t, ActiveFormat)}"
+        : IsNotRealTime
+            ? $"{Strings.TimelinePanel_DisplayNotRealTime} · {TimeFormatting.Format(t, ActiveFormat)} · {OffsetText}"
             : $"{TimeFormatting.Format(t, ActiveFormat)} · {OffsetText}"
         : string.Empty;
 
@@ -480,6 +506,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     private void RaiseNow()
     {
         OnPropertyChanged(nameof(IsLive));
+        OnPropertyChanged(nameof(IsNotRealTime));
         OnPropertyChanged(nameof(ModeLabel));
         OnPropertyChanged(nameof(IsForecastTimeline));
         OnPropertyChanged(nameof(IsNowInRange));

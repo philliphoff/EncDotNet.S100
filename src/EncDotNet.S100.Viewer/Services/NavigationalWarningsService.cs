@@ -384,7 +384,7 @@ internal sealed class NavigationalWarningsService : IDisposable
         }
     }
 
-    private static bool IsWarningProduct(string? spec) =>
+    internal static bool IsWarningProduct(string? spec) =>
         string.Equals(spec, WarningProduct, StringComparison.OrdinalIgnoreCase);
 
     private bool ComputeIsLoading() =>

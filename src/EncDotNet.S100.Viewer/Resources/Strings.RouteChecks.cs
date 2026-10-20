@@ -34,4 +34,10 @@ internal static partial class Strings
     public static string Findings_FilterRouteFormat => Get(nameof(Findings_FilterRouteFormat));
     public static string Findings_FilterWarningsFormat => Get(nameof(Findings_FilterWarningsFormat));
     public static string Findings_FilterEmpty => Get(nameof(Findings_FilterEmpty));
+    public static string Findings_MergedCountFormat => Get(nameof(Findings_MergedCountFormat));
+    public static string Findings_MergedStretchesFormat => Get(nameof(Findings_MergedStretchesFormat));
+    public static string Findings_MergedPlacesFormat => Get(nameof(Findings_MergedPlacesFormat));
+    public static string Tooltip_FindingMerged => Get(nameof(Tooltip_FindingMerged));
+    public static string Tooltip_FindingsInfoToggle => Get(nameof(Tooltip_FindingsInfoToggle));
+    public static string Tooltip_CheckLegBadge => Get(nameof(Tooltip_CheckLegBadge));
 }

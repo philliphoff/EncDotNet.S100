@@ -430,6 +430,8 @@ internal sealed class McpServerHost : IAsyncDisposable
                 new FollowWarningLinkTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
             tools.Add(NavigationalWarningsMcpAdapters.Create(
                 new PreviewWarningCardTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
+            tools.Add(NavigationalWarningsMcpAdapters.Create(
+                new SetNavigationalWarningDisplayTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
         }
         if (_routesService is not null)
         {
@@ -456,6 +458,7 @@ internal sealed class McpServerHost : IAsyncDisposable
                 {
                     tools.Add(RouteFindingsMcpAdapters.Create(new GetFindingsTool(_routesService, invoker, _passageCheck, _routeFindings)));
                     tools.Add(RouteFindingsMcpAdapters.Create(new SelectFindingTool(_routesService, invoker, _passageCheck, _routeFindings)));
+                    tools.Add(RouteFindingsMcpAdapters.Create(new SetFindingsViewTool(_routesService, invoker, _passageCheck, _routeFindings)));
                 }
             }
             if (_clearance is not null)

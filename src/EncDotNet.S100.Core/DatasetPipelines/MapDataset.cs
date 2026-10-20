@@ -47,6 +47,9 @@ public sealed class MapDataset
     /// <param name="viewingGroups">
     /// This dataset's own narrowing of viewing-group visibility, or <c>null</c>.
     /// </param>
+    /// <param name="hiddenFeatures">
+    /// Ids of this dataset's features the host doesn't want drawn, or <c>null</c>.
+    /// </param>
     /// <exception cref="ArgumentException">
     /// <paramref name="id"/> is the default value, or <paramref name="name"/>
     /// is empty or consists only of white-space characters.
@@ -69,7 +72,8 @@ public sealed class MapDataset
         IReadOnlyList<MapDatasetSubLayer>? subLayers = null,
         ValidationReport? validation = null,
         SpecVersionAssessment? versionAssessment = null,
-        ViewingGroupFilter? viewingGroups = null)
+        ViewingGroupFilter? viewingGroups = null,
+        IReadOnlySet<string>? hiddenFeatures = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id.Value, nameof(id));
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -90,6 +94,7 @@ public sealed class MapDataset
         Validation = validation;
         VersionAssessment = versionAssessment;
         ViewingGroups = viewingGroups;
+        HiddenFeatures = hiddenFeatures is { Count: > 0 } ? hiddenFeatures : null;
     }
 
     /// <summary>Stable identity assigned by the host.</summary>
@@ -141,6 +146,15 @@ public sealed class MapDataset
     /// re-render of the dataset (see <see cref="RenderContext.ViewingGroups"/>).
     /// </summary>
     public ViewingGroupFilter? ViewingGroups { get; }
+
+    /// <summary>
+    /// Ids of this dataset's features the host doesn't want drawn, or
+    /// <c>null</c> for none (an empty set is stored as <c>null</c>). Like
+    /// <see cref="ViewingGroups"/>, changing it needs a re-render of the
+    /// dataset (see <see cref="RenderContext.HiddenFeatures"/>); hidden
+    /// features aren't picked either.
+    /// </summary>
+    public IReadOnlySet<string>? HiddenFeatures { get; }
 
     /// <summary>
     /// Validation report, or <c>null</c> when no rule pack exists for the

@@ -55,6 +55,7 @@
     <Content Include="..\datasets\S124\navwarn_ccg_ed2*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S124\navwarn_bulletin_*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S124\navwarn_point.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S124\navwarn_drawing_*.gml;..\datasets\S124\navwarn_with_xlinks.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
   </ItemGroup>
 
 

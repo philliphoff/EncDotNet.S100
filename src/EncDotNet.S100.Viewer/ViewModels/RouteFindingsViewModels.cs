@@ -9,14 +9,88 @@ using EncDotNet.S100.Viewer.Services.PassageCheck;
 namespace EncDotNet.S100.Viewer.ViewModels;
 
 /// <summary>
-/// The Findings tab in Check route mode (#905, #959, handoff D1, F1–F5): the
-/// checked route's findings grouped MUST REVIEW / CHECK / INFO under the
-/// source filter chips, projected from <see cref="RouteFindingsService"/>.
+/// One entry in a findings group (#959, D2): a single finding, or the Check
+/// or Info findings that share a code, merged into one row with a count.
+/// </summary>
+/// <param name="Id">The finding's id, or for a merged row <c>merged.{group}.{code}</c>.</param>
+/// <param name="Group">The group the entry is in.</param>
+/// <param name="Members">The findings, in list order; more than one for a merged row.</param>
+internal sealed record FindingsEntry(string Id, RouteFindingGroup Group, IReadOnlyList<RouteFinding> Members)
+{
+    /// <summary>Whether the entry merges several findings.</summary>
+    public bool IsMerged => Members.Count > 1;
+
+    /// <summary>
+    /// Lays out one group's findings (D2): in Check and Info, findings with
+    /// the same code merge into one entry where the first of them is; Must
+    /// review never merges.
+    /// </summary>
+    public static IReadOnlyList<FindingsEntry> For(RouteFindingGroup group, IReadOnlyList<RouteFinding> findings)
+    {
+        if (group == RouteFindingGroup.MustReview)
+            return findings.Select(f => new FindingsEntry(f.Id, group, [f])).ToList();
+
+        var byCode = findings.GroupBy(f => f.Code).ToDictionary(g => g.Key, g => g.ToList());
+        var entries = new List<FindingsEntry>();
+        var placed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var finding in findings)
+        {
+            var members = byCode[finding.Code];
+            if (members.Count == 1)
+                entries.Add(new FindingsEntry(finding.Id, group, members));
+            else if (placed.Add(finding.Code))
+                entries.Add(new FindingsEntry(MergedId(group, finding.Code), group, members));
+        }
+
+        return entries;
+    }
+
+    /// <summary>A merged entry's id, e.g. <c>merged.check.confidence.charted_depth_from_s101</c>.</summary>
+    public static string MergedId(RouteFindingGroup group, string code) => $"merged.{GroupCode(group)}.{code}";
+
+    /// <summary>The MCP name of a group: must_review, check or info.</summary>
+    public static string GroupCode(RouteFindingGroup group) => group switch
+    {
+        RouteFindingGroup.MustReview => "must_review",
+        RouteFindingGroup.Check => "check",
+        _ => "info",
+    };
+
+    /// <summary>
+    /// A merged row's meta line: the legs it spans and how many stretches
+    /// or places, e.g. "Legs 7 → 9 · 9 stretches".
+    /// </summary>
+    public static string MergedMeta(IReadOnlyList<RouteFinding> members)
+    {
+        var parts = new List<string>();
+        var legs = members.Where(m => m.LegIndex is not null).Select(m => m.LegIndex!.Value).ToList();
+        if (legs.Count > 0)
+        {
+            var (first, last) = (legs.Min(), legs.Max());
+            parts.Add(first == last
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Check_LegFormat, first + 1, first + 2)
+                : string.Format(CultureInfo.CurrentCulture, Strings.Findings_LegsFormat, first + 1, last + 2));
+        }
+
+        var spans = members.All(m => m.Location is { IsPoint: false });
+        parts.Add(string.Format(CultureInfo.CurrentCulture,
+            spans ? Strings.Findings_MergedStretchesFormat : Strings.Findings_MergedPlacesFormat, members.Count));
+        return string.Join(" · ", parts);
+    }
+}
+
+/// <summary>
+/// The Findings tab in Check route mode (#905, #959, handoff D1–D3, F1–F5):
+/// the checked route's findings grouped MUST REVIEW / CHECK / INFO under the
+/// source filter chips, with same-code Check and Info findings merged and
+/// INFO folded, projected from <see cref="RouteFindingsService"/>, which also
+/// keeps the view (filter, fold, expanded row) so MCP sees the same list.
 /// </summary>
 internal sealed class RouteFindingsViewModel : ViewModelBase
 {
     private readonly RouteFindingsService _service;
     private IReadOnlyList<RouteFinding> _shown = [];
+    private List<(RouteFindingGroup Group, bool Open, string Id, bool Expanded, IReadOnlyList<RouteFinding> Members)> _layout = [];
 
     public RouteFindingsViewModel(RouteFindingsService service)
     {
@@ -27,7 +101,11 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
             Enum.GetValues<FindingsFilter>().Select(f => new FindingsFilterChipViewModel(f)));
         SelectCommand = new RelayCommand<RouteFindingRowViewModel>(row =>
         {
-            if (row is not null)
+            if (row is null)
+                return;
+            if (row.IsMerged)
+                _service.SetView(expandedId: row.IsExpanded ? null : row.Id, collapse: row.IsExpanded);
+            else
                 _service.Select(row.Finding);
         });
         SetFilterCommand = new RelayCommand<FindingsFilterChipViewModel>(chip =>
@@ -35,6 +113,7 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
             if (chip is not null)
                 Filter = chip.Filter;
         });
+        ToggleInfoCommand = new RelayCommand(() => _service.SetView(infoOpen: !_service.InfoOpen));
         _service.Changed += (_, _) => Refresh();
         Refresh();
     }
@@ -45,21 +124,26 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
     /// <summary>The source filter chips (D1): All · Clearance · Route · Warnings, each with its count.</summary>
     public ObservableCollection<FindingsFilterChipViewModel> FilterChips { get; }
 
-    /// <summary>Selects a finding: zooms the map to it and moves the profile cursor there (F3).</summary>
+    /// <summary>
+    /// A row's click: selects a finding (zooming the map to it and moving the
+    /// profile cursor there, F3), or expands or collapses a merged row (D2).
+    /// </summary>
     public ICommand SelectCommand { get; }
 
     /// <summary>Selects a filter chip.</summary>
     public ICommand SetFilterCommand { get; }
 
-    private FindingsFilter _filter;
+    /// <summary>Folds or unfolds the INFO group (D3).</summary>
+    public ICommand ToggleInfoCommand { get; }
+
     /// <summary>Which findings the list shows (D1); the verdict card's summary rows set it too (B3).</summary>
     public FindingsFilter Filter
     {
-        get => _filter;
+        get => _service.Filter;
         set
         {
-            if (SetProperty(ref _filter, value))
-                Refresh();
+            if (value != _service.Filter)
+                _service.SetView(filter: value);
         }
     }
 
@@ -106,42 +190,61 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
     internal static bool Passes(RouteFinding finding, FindingsFilter filter) =>
         filter == FindingsFilter.All || RouteCheckVerdict.FilterOf(finding) == filter;
 
+    /// <summary>The list's entries after <paramref name="filter"/>, by group, merged (D2).</summary>
+    internal static IReadOnlyList<FindingsEntry> Entries(IReadOnlyList<RouteFinding> findings, FindingsFilter filter) =>
+        findings.Where(f => Passes(f, filter))
+            .GroupBy(f => f.Group)
+            .OrderBy(g => g.Key)
+            .SelectMany(g => FindingsEntry.For(g.Key, g.ToList()))
+            .ToList();
+
     /// <summary>Re-reads the service.</summary>
     public void Refresh()
     {
         var findings = _service.Findings;
         var selectedId = _service.Selected?.Id;
+        var filter = _service.Filter;
+        OnPropertyChanged(nameof(Filter));
         var counts = Counts(findings);
         foreach (var chip in FilterChips)
         {
             chip.Count = counts[chip.Filter];
-            chip.IsSelected = chip.Filter == Filter;
+            chip.IsSelected = chip.Filter == filter;
             // D1: a chip shows only when it has findings (Clearance only with a
             // draft); the selected one stays so the filter can be seen and undone.
             chip.IsVisible = chip.Filter == FindingsFilter.All || chip.IsSelected
                 || (chip.Count > 0 && (chip.Filter != FindingsFilter.Clearance || _service.HasDraft));
         }
 
-        _shown = findings.Where(f => Passes(f, Filter)).ToList();
-        var groups = _shown.GroupBy(f => f.Group).OrderBy(g => g.Key).ToList();
+        _shown = findings.Where(f => Passes(f, filter)).ToList();
+        var entries = Entries(findings, filter);
+        var infoOpen = _service.InfoOpen;
+        var expanded = _service.ExpandedId;
+        var layout = entries
+            .Select(e => (e.Group, e.Group != RouteFindingGroup.Info || infoOpen, e.Id, e.IsMerged && e.Id == expanded, e.Members))
+            .ToList();
 
         // Rebuild only what changed so a selection change doesn't recreate rows.
-        var same = groups.Count == Groups.Count
-            && groups.Zip(Groups).All(p => p.First.Key == p.Second.Group
-                && p.First.Select(f => f.Id).SequenceEqual(p.Second.Items.Select(r => r.Finding.Id))
-                && p.First.Zip(p.Second.Items).All(q => q.First == q.Second.Finding));
+        var same = layout.Count == _layout.Count
+            && layout.Zip(_layout).All(p => p.First.Group == p.Second.Group && p.First.Item2 == p.Second.Open
+                && p.First.Id == p.Second.Id && p.First.Item4 == p.Second.Expanded
+                && p.First.Members.SequenceEqual(p.Second.Members, ReferenceEqualityComparer.Instance));
         if (!same)
         {
+            _layout = layout;
             Groups.Clear();
-            foreach (var group in groups)
-                Groups.Add(new RouteFindingGroupViewModel(group.Key, group.Select(f => new RouteFindingRowViewModel(f))));
+            foreach (var group in entries.GroupBy(e => e.Group))
+            {
+                var open = group.Key != RouteFindingGroup.Info || infoOpen;
+                var rows = group.Select(e => e.IsMerged
+                    ? new RouteFindingRowViewModel(e.Members[0], e.Id, e.Members) { IsExpanded = e.Id == expanded }
+                    : new RouteFindingRowViewModel(e.Members[0]));
+                Groups.Add(new RouteFindingGroupViewModel(group.Key, rows, group.Sum(e => e.Members.Count), open));
+            }
         }
 
-        foreach (var group in Groups)
-        {
-            foreach (var row in group.Items)
-                row.IsSelected = row.Finding.Id == selectedId;
-        }
+        foreach (var row in Groups.SelectMany(g => g.Items).SelectMany(r => r.IsMerged ? r.Members : [r]))
+            row.IsSelected = row.Finding.Id == selectedId;
 
         Count = findings.Count;
         IsFilteredEmpty = findings.Count > 0 && _shown.Count == 0;
@@ -198,13 +301,15 @@ internal sealed class FindingsFilterChipViewModel : ViewModelBase
     }
 }
 
-/// <summary>A group heading and its rows (F1).</summary>
+/// <summary>A group heading and its rows (F1); INFO folds (D3).</summary>
 internal sealed class RouteFindingGroupViewModel
 {
-    public RouteFindingGroupViewModel(RouteFindingGroup group, IEnumerable<RouteFindingRowViewModel> items)
+    public RouteFindingGroupViewModel(RouteFindingGroup group, IEnumerable<RouteFindingRowViewModel> items, int count = -1, bool isOpen = true)
     {
         Group = group;
         Items = [.. items];
+        Count = count < 0 ? Items.Count : count;
+        IsOpen = isOpen;
     }
 
     public RouteFindingGroup Group { get; }
@@ -219,6 +324,20 @@ internal sealed class RouteFindingGroupViewModel
 
     /// <summary>A stable AutomationId suffix: MustReview, Check or Info.</summary>
     public string Key => Group.ToString();
+
+    /// <summary>How many findings the group holds (merged rows count each).</summary>
+    public int Count { get; }
+
+    /// <summary>The heading's count, e.g. "3".</summary>
+    public string CountLabel => Count.ToString(CultureInfo.CurrentCulture);
+
+    /// <summary>Whether the heading folds the group: INFO only (D3).</summary>
+    public bool IsFoldable => Group == RouteFindingGroup.Info;
+
+    /// <summary>Whether the rows show: always, except a folded INFO.</summary>
+    public bool IsOpen { get; }
+
+    public bool IsFolded => !IsOpen;
 
     public IReadOnlyList<RouteFindingRowViewModel> Items { get; }
 }
@@ -246,13 +365,54 @@ internal sealed class RouteFindingRowViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(finding);
         Finding = finding;
+        Id = finding.Id;
+        Members = [];
     }
 
+    /// <summary>A merged row (D2): <paramref name="members"/> share a code; the row expands into their sub-rows.</summary>
+    public RouteFindingRowViewModel(RouteFinding first, string id, IReadOnlyList<RouteFinding> members)
+    {
+        ArgumentNullException.ThrowIfNull(first);
+        ArgumentNullException.ThrowIfNull(members);
+        Finding = first;
+        Id = id;
+        Members = members.Select(m => new RouteFindingRowViewModel(m) { IsSubRow = true }).ToList();
+    }
+
+    /// <summary>The finding, or a merged row's first finding.</summary>
     public RouteFinding Finding { get; }
 
-    public string Title => Finding.Title;
+    /// <summary>The finding's id, or the merged row's <c>merged.{group}.{code}</c>.</summary>
+    public string Id { get; }
 
-    public string Meta => Finding.Meta;
+    /// <summary>A merged row's findings, as sub-rows; empty for a single finding.</summary>
+    public IReadOnlyList<RouteFindingRowViewModel> Members { get; }
+
+    /// <summary>Whether the row merges same-code findings (D2).</summary>
+    public bool IsMerged => Members.Count > 0;
+
+    /// <summary>Whether this is a merged row's sub-row, indented 24 px.</summary>
+    public bool IsSubRow { get; init; }
+
+    /// <summary>"×9" before the tag on a merged row; <c>null</c> otherwise.</summary>
+    public string? CountLabel => IsMerged ? string.Format(CultureInfo.CurrentCulture, Strings.Findings_MergedCountFormat, Members.Count) : null;
+
+    /// <summary>Whether a merged row shows its sub-rows.</summary>
+    public bool IsExpanded { get; init; }
+
+    /// <summary>Whether to show the sub-rows under this row.</summary>
+    public bool ShowMembers => IsMerged && IsExpanded;
+
+    /// <summary>The row's AutomationId: <c>Routes.Check.Finding.Expand</c> for a merged row, else <c>Routes.Check.Finding</c>.</summary>
+    public string AutomationId => IsMerged ? "Routes.Check.Finding.Expand" : "Routes.Check.Finding";
+
+    /// <summary>The title; a merged row whose findings are titled differently says "{first} and N more".</summary>
+    public string Title => IsMerged && Members.Any(m => m.Finding.Title != Finding.Title)
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Findings_AndMoreFormat, Finding.Title, Members.Count - 1)
+        : Finding.Title;
+
+    /// <summary>The meta line; a merged row's summarises its findings ("Legs 7 → 9 · 9 stretches").</summary>
+    public string Meta => IsMerged ? FindingsEntry.MergedMeta(Members.Select(m => m.Finding).ToList()) : Finding.Meta;
 
     /// <summary>The check that produced it: "Clearance", "Route check", "S-124", "Confidence" or "Data".</summary>
     public string Tag => TagOf(Finding.Source);
@@ -281,7 +441,9 @@ internal sealed class RouteFindingRowViewModel : ViewModelBase
     public bool HasLocation => Finding.Location is not null;
 
     /// <summary>The row's tooltip: what clicking does.</summary>
-    public string Tooltip => HasLocation ? Strings.Tooltip_FindingRow : Strings.Tooltip_FindingRowNoPlace;
+    public string Tooltip => IsMerged ? Strings.Tooltip_FindingMerged
+        : HasLocation ? Strings.Tooltip_FindingRow
+        : Strings.Tooltip_FindingRowNoPlace;
 
     private bool _isSelected;
     /// <summary>Whether this is the selected finding (the selected-row pattern).</summary>

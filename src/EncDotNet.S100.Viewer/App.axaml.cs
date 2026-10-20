@@ -254,6 +254,16 @@ public partial class App : Application
         // Failures are logged but never block app startup.
         var mcpHost = _services.GetRequiredService<McpServerHost>();
         var settingsVm = _services.GetRequiredService<SettingsViewModel>();
+        // Judges which S-124 warnings the map draws from the first load on (#993),
+        // and has the map stamp say "Display Not Real Time" while they're loaded
+        // and the view time is pinned (S-98 §12.7.2).
+        _services.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>();
+        {
+            var warningsService = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>();
+            var timeline = _services.GetRequiredService<TimelineViewModel>();
+            warningsService.Changed += (_, _) => timeline.HasDateDependentData = warningsService.HasWarningDatasets;
+            timeline.HasDateDependentData = warningsService.HasWarningDatasets;
+        }
         WatchSecomIdentity();
         settingsVm.McpSettingsChanged += () =>
         {
@@ -1377,6 +1387,19 @@ public partial class App : Application
                 sp.GetService<TimeProvider>()),
         });
         services.AddSingleton<MainViewModel>();
+        services.AddSingleton(sp =>
+        {
+            var drawing = new EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+                sp.GetRequiredService<ViewerSettings>(),
+                sp.GetRequiredService<IDatasetLoaderService>(),
+                sp.GetService<TimeProvider>() ?? TimeProvider.System,
+                action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
+            drawing.Follow(sp.GetRequiredService<PickReportViewModel>());
+            sp.GetRequiredService<NavigationalWarningsViewModel>().Drawing = drawing;
+            return drawing;
+        });
 
         // Activity-tab registry. Adding a new tab is a single AddActivityTab
         // line plus the VM registration above and a View under Views/ — no

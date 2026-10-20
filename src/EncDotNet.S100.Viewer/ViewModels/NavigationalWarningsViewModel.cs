@@ -553,6 +553,30 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
             ? $"{reference.Number.ToString("D3", CultureInfo.InvariantCulture)}/{(year % 100).ToString("D2", CultureInfo.InvariantCulture)}"
             : reference.Number.ToString("D3", CultureInfo.InvariantCulture);
 
+    private Services.NavigationalWarningDrawingService? _drawing;
+
+    /// <summary>
+    /// Which warnings the map draws (#993), for the "Not in force" group's
+    /// wording; set once by the App. <see langword="null"/> says nothing about drawing.
+    /// </summary>
+    internal Services.NavigationalWarningDrawingService? Drawing
+    {
+        get => _drawing;
+        set
+        {
+            if (ReferenceEquals(_drawing, value))
+                return;
+            if (_drawing is not null)
+                _drawing.Changed -= OnDrawingChanged;
+            _drawing = value;
+            if (_drawing is not null)
+                _drawing.Changed += OnDrawingChanged;
+            Rebuild();
+        }
+    }
+
+    private void OnDrawingChanged(object? sender, EventArgs e) => Rebuild();
+
     private void Rebuild()
     {
         if (_disposed)
@@ -628,15 +652,19 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         var outRows = Ordered(notInForce.Where(Listed)).ToList();
         if (outRows.Count > 0)
         {
+            // The map draws at the view time (#993): say so when the panel does too.
+            var drawnNote = IsNowFilter || _drawing is null
+                ? string.Empty
+                : _drawing.ShowNotYetInForce ? Strings.NavWarnings_NotInForceEndedNotDrawn : Strings.NavWarnings_NotInForceNotDrawn;
             items.Add(new NavigationalWarningGroupItem(
                 IsNowFilter ? Strings.NavWarnings_NotInForceGroupNow : Strings.NavWarnings_NotInForceGroupViewTime,
                 outRows.Count,
-                string.Empty,
+                drawnNote,
                 isNotInForce: true,
                 isExpanded: _notInForceExpanded,
                 command: ToggleNotInForceCommand));
             if (_notInForceExpanded)
-                items.AddRange(outRows.Select(w => new NavigationalWarningRowItem(w, states[w], time, format)));
+                items.AddRange(outRows.Select(w => new NavigationalWarningRowItem(w, states[w], time, format) { IsDrawn = _drawing?.IsDrawn(w) == true }));
         }
 
         // Keep the open part selected across rebuilds.
@@ -871,8 +899,17 @@ internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
         Entry = entry;
         State = state;
         IsInForce = state.Status == NavigationalWarningStatus.InForce;
-        SubText = BuildSubText(entry, state, time, format);
+        _subText = BuildSubText(entry, state, time, format);
     }
+
+    private readonly string _subText;
+
+    /// <summary>
+    /// Whether the map draws the part though it isn't in force at the panel's
+    /// time: it is not yet in force with "Show warnings not yet in force" on,
+    /// or its card is open (#993). <see cref="SubText"/> then says "Drawn".
+    /// </summary>
+    public bool IsDrawn { get; init; }
 
     /// <summary>The part's status at the panel's time, with why (#992).</summary>
     public NavigationalWarningState State { get; }
@@ -893,7 +930,7 @@ internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
     public string TypeText => Entry.Warning.WarningType ?? Entry.Warning.GeneralType ?? Entry.Warning.Title ?? string.Empty;
 
     /// <summary>"Coral Sea · 13 Oct – 24 Oct", "No location · …", or "Ended 12 Oct · NAVAREA X".</summary>
-    public string SubText { get; }
+    public string SubText => IsDrawn && !IsInForce ? $"{_subText} · {Strings.NavWarnings_Drawn}" : _subText;
 
     /// <summary>Whether the part has no location (the document glyph).</summary>
     public bool IsTextOnly => Entry.IsTextOnly;
