@@ -227,8 +227,8 @@ public sealed class RoutePaletteTests : IDisposable
 
     /// <summary>
     /// The route overlay in check mode on the fixture route (below the setting
-    /// at 07:10, with the cursor and ghost at 3 NM), drawn over bands of the
-    /// palette's S-101 depth shades and land.
+    /// at 07:10, with the cursor and ghost at 3 NM, and the corridor's dotted
+    /// edges), drawn over bands of the palette's S-101 depth shades and land.
     /// </summary>
     [Theory]
     [MemberData(nameof(Palettes))]
@@ -242,7 +242,7 @@ public sealed class RoutePaletteTests : IDisposable
             Palette = palette,
             ChartBackground = MeasureOverlayAppearance.ChartBackgroundFor(palette),
         };
-        var check = RouteCheckOverlay.Build(true, f.Check.Current, false, f.Check.Cursor, appearance, DepthUnit.Metres, TimeFormat.Utc);
+        var check = RouteCheckOverlay.Build(true, f.Check.Current, false, f.Check.Cursor, appearance, DepthUnit.Metres, TimeFormat.Utc, route: f.Route);
         var scene = RouteOverlayScene.Build(f.Routes.Routes, null, null, false, appearance, check);
 
         const int width = 900;

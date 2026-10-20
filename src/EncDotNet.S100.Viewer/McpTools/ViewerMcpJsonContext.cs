@@ -36,6 +36,8 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(CopyRouteResult))]
 [JsonSerializable(typeof(ExportRouteResult))]
 [JsonSerializable(typeof(CheckStateDto))]
+[JsonSerializable(typeof(RouteFindingsDto))]
+[JsonSerializable(typeof(MapLegendDto))]
 [JsonSerializable(typeof(ClearanceStateDto))]
 [JsonSerializable(typeof(NavigationalWarningsDto))]
 [JsonSerializable(typeof(WarningCardsDto))]

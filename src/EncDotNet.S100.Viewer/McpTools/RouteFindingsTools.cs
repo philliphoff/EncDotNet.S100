@@ -45,6 +45,10 @@ internal sealed record RouteFindingsDto(
     /// <summary>The finding whose Warning card is open inline.</summary>
     [Description("Id of the s124 finding whose Warning card is expanded inline under its row (the selected s124 finding; select_finding opens it, selecting another finding or clearing the selection closes it), or null. The card's status is the finding's warning.statusText, judged at the ETA (live list only).")]
     public string? WarningCardId { get; init; }
+
+    /// <summary>What the map shows for the selection.</summary>
+    [Description("How the map shows the selected finding (live list only; null for a one-off check): its marker and shape, its sleeve, or the dashed outline, and which legs' corridor is filled.")]
+    public MapHighlightDto? Highlight { get; init; }
 }
 
 /// <summary>How many findings each filter chip shows.</summary>
@@ -174,6 +178,10 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
         await Invoker.InvokeAsync(() => true).ConfigureAwait(false);
     }
 
+    /// <summary>What the map shows for the live list's selection.</summary>
+    protected MapHighlightDto LiveHighlight() =>
+        MapHighlight.For(Routes.Routes.ActiveRoute, Findings.Findings, Findings.Selected, Routes.ViewTime.Current);
+
     internal static RouteFindingsDto ToDto(string routeId, bool live, IReadOnlyList<RouteFinding> findings, RouteFinding? selected, bool stale = false, RouteFindingsService? view = null)
     {
         var filter = live && view is not null ? view.Filter : FindingsFilter.All;
@@ -297,7 +305,8 @@ internal sealed class GetFindingsTool : RouteFindingsToolBase
             if (findings is null)
                 return ToolResult<RouteFindingsDto>.Err(new InvalidArgument("routeId", "the route needs at least two waypoints"));
 
-            return ToolResult<RouteFindingsDto>.Ok(ToDto(route.Id, live, findings, Findings.Selected, Findings.IsStale, Findings));
+            var dto = ToDto(route.Id, live, findings, Findings.Selected, Findings.IsStale, Findings);
+            return ToolResult<RouteFindingsDto>.Ok(live ? dto with { Highlight = LiveHighlight() } : dto);
         }).ConfigureAwait(false);
         return await pending.ConfigureAwait(false);
     }
@@ -330,7 +339,10 @@ internal sealed class SelectFindingTool : RouteFindingsToolBase
             }
 
             Findings.Select(finding, request.Zoom);
-            return ToolResult<RouteFindingsDto>.Ok(ToDto(current.RouteId, live: true, Findings.Findings, Findings.Selected, Findings.IsStale, Findings));
+            return ToolResult<RouteFindingsDto>.Ok(ToDto(current.RouteId, live: true, Findings.Findings, Findings.Selected, Findings.IsStale, Findings) with
+            {
+                Highlight = LiveHighlight(),
+            });
         }).ConfigureAwait(false);
     }
 }
@@ -381,7 +393,10 @@ internal sealed class SetFindingsViewTool : RouteFindingsToolBase
             }
 
             Findings.SetView(filter, request.InfoOpen, expand, collapse: request.ExpandedId is { Length: 0 });
-            return ToolResult<RouteFindingsDto>.Ok(ToDto(current.RouteId, live: true, Findings.Findings, Findings.Selected, Findings.IsStale, Findings));
+            return ToolResult<RouteFindingsDto>.Ok(ToDto(current.RouteId, live: true, Findings.Findings, Findings.Selected, Findings.IsStale, Findings) with
+            {
+                Highlight = LiveHighlight(),
+            });
         }).ConfigureAwait(false);
     }
 }
@@ -454,11 +469,13 @@ internal static class RouteFindingsMcpAdapters
         {
             Name = SelectFindingTool.Name,
             Description =
-                "Selects a finding in the checked route's findings list, as clicking its row does: the map zooms to it " +
-                "and outlines it dashed in its tone with a \"Zoomed to finding\" chip, and the profile cursor and ghost " +
-                "vessel move to it. Selecting an s124 finding expands its row into the warning's Warning card (status at " +
-                "the ETA, text clipped at 5 lines; warningCardId in the result); selecting another finding or clearing the " +
-                "selection closes it. Needs Check route on (set_check_mode). Returns the list get_findings returns. " +
+                "Selects a finding in the checked route's findings list, as clicking its row (or its map marker) does: " +
+                "the map zooms to it with a \"Zoomed to finding\" chip, and the profile cursor and ghost vessel move to it. " +
+                "A route-check or S-124 finding's marker gets a ring in its tone and the one pill (\"{title} · {ETA}\"), its " +
+                "sleeve (a span) draws wider, and its leg's corridor is filled; a clearance-check finding is outlined dashed. " +
+                "Selecting an s124 finding also expands its row into the warning's Warning card (status at the ETA, text " +
+                "clipped at 5 lines; warningCardId in the result); selecting another finding or clearing the selection " +
+                "closes it. The result's highlight says which marker or sleeve is highlighted. Needs Check route on (set_check_mode). Returns the list get_findings returns. " +
                 "Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });

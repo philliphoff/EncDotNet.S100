@@ -343,6 +343,12 @@ internal sealed partial class ViewerSettings
     public bool IsStatusBarVisible { get; set; } = true;
 
     /// <summary>
+    /// Whether the Check route map legend is open; folded, it's a 28 px
+    /// "Legend" chip (#959, handoff C8).
+    /// </summary>
+    public bool IsRouteCheckLegendOpen { get; set; } = true;
+
+    /// <summary>
     /// Whether an accent-coloured border is drawn around the extent of a loaded
     /// dataset that has zoomed out past its display-scale minimum (and therefore
     /// renders no content). Enabled by default so a mariner who frames a
