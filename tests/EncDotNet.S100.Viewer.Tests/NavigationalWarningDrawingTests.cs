@@ -86,6 +86,7 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
         public NavigationalWarningsService Service { get; }
         public NavigationalWarningDrawingService Drawing { get; }
         public NavigationalWarningsViewModel Panel { get; }
+        public EcdisDisplayState Display { get; } = new();
 
         public Fixture(bool showNotYetInForce = false)
         {
@@ -97,7 +98,7 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
                 Part(124, Oct(1), Oct(30), published: Oct(12)) with { Cancels = [new NavigationalWarningReference("NAVAREA X", 123, 2026)] });
             Loader.Processors = new Dictionary<DatasetEntry, IDatasetProcessor> { [Entry] = processor };
             Service = new NavigationalWarningsService(Loader);
-            Drawing = new NavigationalWarningDrawingService(Service, ViewTime, new ViewerSettings { IsReadOnly = true, ShowWarningsNotYetInForce = showNotYetInForce });
+            Drawing = new NavigationalWarningDrawingService(Service, ViewTime, new ViewerSettings { IsReadOnly = true, ShowWarningsNotYetInForce = showNotYetInForce }, display: Display);
             Panel = new NavigationalWarningsViewModel(Service, viewTime: ViewTime, clock: new FixedClock(Oct(15))) { Drawing = Drawing };
         }
 
@@ -239,10 +240,145 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
         Assert.False(byId[PartId(2)].Drawn);
         Assert.False(byId[PartId(3)].Drawn);
 
-        var set = await new SetNavigationalWarningDisplayTool(f.Panel, f.Service, new InlineInvoker()).InvokeAsync(true, TestContext.Current.CancellationToken);
+        var set = await new SetNavigationalWarningDisplayTool(f.Panel, f.Service, new InlineInvoker()).InvokeAsync(true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(set.TryGetValue(out dto));
         Assert.True(dto!.ShowNotYetInForce);
         Assert.True(f.Drawing.ShowNotYetInForce);
         Assert.True(dto.Warnings.Single(w => w.FeatureId == PartId(2)).Drawn);
+    }
+
+    // #995: the Display controls' Navigational warnings switch.
+
+    private static HashSet<string> AllParts => [.. Enumerable.Range(0, 5).Select(PartId)];
+
+    [Fact]
+    public void The_switch_off_draws_no_warning_not_even_the_open_cards()
+    {
+        var f = new Fixture(showNotYetInForce: true);
+        f.Drawing.SetOpenWarning(f.Entry.DisplayName, PartId(1));
+        var raised = 0;
+        f.Drawing.Changed += (_, _) => raised++;
+
+        f.Display.SetShowNavigationalWarnings(false);
+
+        Assert.False(f.Drawing.ShowNavigationalWarnings);
+        Assert.Equal(AllParts.Order(), f.Hidden.Order());
+        Assert.False(f.Drawing.IsDrawn(f.Find(0)));
+        Assert.False(f.Drawing.IsDrawnForCard(f.Find(1)));
+        Assert.Equal(1, raised);
+
+        // Moving the view time or the open card doesn't bring any back.
+        f.ViewTime.MoveTo(Oct(26));
+        f.Drawing.SetOpenWarning(f.Entry.DisplayName, PartId(0));
+        Assert.Equal(AllParts.Order(), f.Hidden.Order());
+    }
+
+    [Fact]
+    public void The_switch_on_again_draws_by_the_in_force_rules()
+    {
+        var f = new Fixture();
+        f.Drawing.ShowNavigationalWarnings = false;
+
+        f.Drawing.ShowNavigationalWarnings = true;
+
+        Assert.True(f.Display.ShowNavigationalWarnings);
+        Assert.Equal([PartId(1), PartId(2), PartId(3)], f.Hidden.Order());
+    }
+
+    [Fact]
+    public void The_switch_leaves_the_datasets_own_visibility_alone()
+    {
+        var f = new Fixture();
+        f.Entry.IsVisible = false;
+
+        f.Drawing.ShowNavigationalWarnings = false;
+        Assert.False(f.Entry.IsVisible);
+        f.Drawing.ShowNavigationalWarnings = true;
+        Assert.False(f.Entry.IsVisible);
+
+        f.Entry.IsVisible = true;
+        f.Drawing.ShowNavigationalWarnings = false;
+        Assert.True(f.Entry.IsVisible);
+        Assert.False(f.Drawing.ShowNavigationalWarnings);
+    }
+
+    [Fact]
+    public void The_switch_off_hides_parts_before_the_first_render()
+    {
+        var loader = new FakeDatasetLoaderService();
+        var entry = new DatasetEntry("/tmp/navarea.gml", "S-124");
+        var processor = new FakeProcessor(Part(120, Oct(10), Oct(20)), Part(121, Oct(10), Oct(20)));
+        var display = new EcdisDisplayState();
+        display.SetShowNavigationalWarnings(false);
+
+        using var drawing = new NavigationalWarningDrawingService(new NavigationalWarningsService(loader), new MovableViewTime(Oct(15)), loader: loader, display: display);
+
+        var policy = loader.HiddenFeaturesOnLoad;
+        Assert.NotNull(policy);
+        Assert.Equal([PartId(0), PartId(1)], policy(entry, processor)!.Order());
+        display.SetShowNavigationalWarnings(true);
+        Assert.Empty(policy(entry, processor)!);
+    }
+
+    [Fact]
+    public void The_switch_off_hides_a_warnings_pick_highlight_only()
+    {
+        var f = new Fixture();
+        var warning = new PickHit { FeatureType = "NavwarnPart", FeatureRef = PartId(0), DatasetFileName = f.Entry.DisplayName, ProductSpec = "S-124", NavigationalWarning = f.Find(0).Warning };
+        var area = new PickHit { FeatureType = "NavwarnAreaAffected", FeatureRef = "area.0", DatasetFileName = f.Entry.DisplayName, ProductSpec = "S-124" };
+        var chart = new PickHit { FeatureType = "Wreck", FeatureRef = "W1", DatasetFileName = "101GB0001.000", ProductSpec = "S-101" };
+
+        Assert.False(f.Drawing.IsHighlightHidden(warning));
+
+        f.Drawing.ShowNavigationalWarnings = false;
+
+        Assert.True(f.Drawing.IsHighlightHidden(warning));
+        Assert.True(f.Drawing.IsHighlightHidden(area));
+        Assert.False(f.Drawing.IsHighlightHidden(chart));
+    }
+
+    [Fact]
+    public void The_panel_keeps_listing_and_says_the_switch_is_off()
+    {
+        var f = new Fixture();
+        var rows = f.Panel.Items.OfType<NavigationalWarningRowItem>().Count();
+        Assert.False(f.Panel.IsSwitchedOff);
+
+        f.Drawing.ShowNavigationalWarnings = false;
+
+        Assert.True(f.Panel.IsSwitchedOff);
+        Assert.Equal(rows, f.Panel.Items.OfType<NavigationalWarningRowItem>().Count());
+        // The banner says it; the Not in force group doesn't repeat it.
+        Assert.Equal(string.Empty, f.Panel.Items.OfType<NavigationalWarningGroupItem>().Single(g => g.IsNotInForce).Source);
+
+        f.Panel.TurnOnDrawingCommand.Execute(null);
+
+        Assert.True(f.Drawing.ShowNavigationalWarnings);
+        Assert.False(f.Panel.IsSwitchedOff);
+    }
+
+    [Fact]
+    public async Task Mcp_reads_and_sets_the_switch()
+    {
+        var f = new Fixture();
+        var tool = new SetNavigationalWarningDisplayTool(f.Panel, f.Service, new InlineInvoker());
+
+        var set = await tool.InvokeAsync(null, showNavigationalWarnings: false, TestContext.Current.CancellationToken);
+
+        Assert.True(set.TryGetValue(out var dto));
+        Assert.False(dto!.ShowNavigationalWarnings);
+        Assert.False(dto.ShowNotYetInForce); // left as it was
+        Assert.All(dto.Warnings, w => Assert.False(w.Drawn));
+        Assert.False(f.Display.ShowNavigationalWarnings);
+
+        var list = await new ListNavigationalWarningsTool(f.Panel, f.Service, new InlineInvoker()).InvokeAsync(TestContext.Current.CancellationToken);
+        Assert.True(list.TryGetValue(out dto));
+        Assert.False(dto!.ShowNavigationalWarnings);
+        Assert.Equal(5, dto.Warnings.Count);
+
+        set = await tool.InvokeAsync(null, showNavigationalWarnings: true, TestContext.Current.CancellationToken);
+        Assert.True(set.TryGetValue(out dto));
+        Assert.True(dto!.ShowNavigationalWarnings);
+        Assert.True(dto.Warnings.Single(w => w.FeatureId == PartId(0)).Drawn);
     }
 }

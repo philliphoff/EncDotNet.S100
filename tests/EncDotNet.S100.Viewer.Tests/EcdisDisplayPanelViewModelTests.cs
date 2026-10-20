@@ -76,6 +76,23 @@ public class EcdisDisplayPanelViewModelTests
     }
 
     [Fact]
+    public void NavigationalWarningsSwitch_TwoWaySyncWithState()
+    {
+        var state = new EcdisDisplayState();
+        using var vm = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new StubDatasetLoaderService()));
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        Assert.True(vm.IsNavigationalWarningsVisible);
+        vm.IsNavigationalWarningsVisible = false;
+        Assert.False(state.ShowNavigationalWarnings);
+        Assert.Contains(nameof(EcdisDisplayPanelViewModel.IsNavigationalWarningsVisible), raised);
+
+        state.SetShowNavigationalWarnings(true);
+        Assert.True(vm.IsNavigationalWarningsVisible);
+    }
+
+    [Fact]
     public void ActiveCategory_TwoWaySyncWithState()
     {
         var state = new EcdisDisplayState();

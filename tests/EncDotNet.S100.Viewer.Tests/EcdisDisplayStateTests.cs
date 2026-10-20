@@ -147,4 +147,55 @@ public class ViewerSettingsEcdisRoundTripTests
             if (File.Exists(path)) File.Delete(path);
         }
     }
+
+    [Fact]
+    public void NavigationalWarnings_OnByDefault_AndSwitchingRaisesItsOwnEvent()
+    {
+        var state = new EcdisDisplayState();
+        var changed = 0;
+        var warnings = 0;
+        state.Changed += () => changed++;
+        state.NavigationalWarningsChanged += () => warnings++;
+
+        Assert.True(state.ShowNavigationalWarnings);
+        state.SetShowNavigationalWarnings(false);
+        state.SetShowNavigationalWarnings(false); // no-op
+
+        Assert.False(state.ShowNavigationalWarnings);
+        Assert.Equal(1, warnings);
+        Assert.Equal(0, changed); // no re-render of every vector dataset
+    }
+
+    [Fact]
+    public void NavigationalWarnings_SwitchIsRestoredAndSavedWithTheDisplaySettings()
+    {
+        var settings = new ViewerSettings { IsReadOnly = true, EcdisShowNavigationalWarnings = false };
+
+        var state = EcdisDisplayStatePersistence.Create(settings);
+        Assert.False(state.ShowNavigationalWarnings);
+
+        state.SetShowNavigationalWarnings(true);
+        Assert.True(settings.EcdisShowNavigationalWarnings);
+
+        // A fresh start (the default) draws them.
+        Assert.True(EcdisDisplayStatePersistence.Create(new ViewerSettings { IsReadOnly = true }).ShowNavigationalWarnings);
+    }
+
+    [Fact]
+    public void NavigationalWarnings_SwitchSurvivesARestart()
+    {
+        var dir = Directory.CreateTempSubdirectory("ecdis-switch-");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "settings.json");
+            var state = EcdisDisplayStatePersistence.Create(ViewerSettings.Load(path));
+            state.SetShowNavigationalWarnings(false);
+
+            Assert.False(EcdisDisplayStatePersistence.Create(ViewerSettings.Load(path)).ShowNavigationalWarnings);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 }
