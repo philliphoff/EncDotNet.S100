@@ -141,7 +141,7 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
             return null;
 
         _undrawn = _dataset.Features.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
-        return $"S-124 Navigational Warnings — {FileName}\nHidden (not in force at the view time)";
+        return $"S-124 Navigational Warnings — {FileName}\nHidden (no warning drawn)";
     }
 
     /// <inheritdoc />

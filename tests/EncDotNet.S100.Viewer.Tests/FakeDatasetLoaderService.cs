@@ -54,5 +54,11 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
     public event Action? LayerStackChanged { add { } remove { } }
     public bool GetActive(string datasetId) => true;
     public void SetActive(string datasetId, bool active) { }
+
+    /// <summary>The policy last passed to <see cref="SetHiddenFeaturesOnLoad"/>.</summary>
+    public Func<DatasetEntry, IDatasetProcessor, IReadOnlySet<string>?>? HiddenFeaturesOnLoad { get; private set; }
+
+    public void SetHiddenFeaturesOnLoad(Func<DatasetEntry, IDatasetProcessor, IReadOnlySet<string>?>? policy) =>
+        HiddenFeaturesOnLoad = policy;
     public event Action<string>? ActiveChanged { add { } remove { } }
 }

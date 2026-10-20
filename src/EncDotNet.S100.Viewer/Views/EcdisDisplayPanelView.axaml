@@ -64,6 +64,25 @@
                     </Grid>
                 </StackPanel>
 
+                <!-- Product overlays the mariner switches on and off (S-98 §6.1.1).
+                     Navigational warnings (#995): off draws no S-124 warning at all;
+                     the Navigational warnings panel still lists them. -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{x:Static loc:Strings.EcdisPanel_OverlaysHeader}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               LetterSpacing="0.5"
+                               Opacity="0.7" />
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_NavigationalWarnings}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_NavigationalWarnings}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsNavigationalWarningsVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.NavigationalWarnings"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_NavigationalWarnings}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_NavigationalWarnings}" />
+                    </Grid>
+                </StackPanel>
+
                 <!-- Global reset -->
                 <Button Content="{x:Static loc:Strings.Button_ResetAllOverrides}"
                         AutomationProperties.AutomationId="Ecdis.ResetAllOverrides"

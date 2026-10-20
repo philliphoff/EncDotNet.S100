@@ -573,6 +573,11 @@ panel:
   or **All**. Changing it redraws every vector dataset.
 - **Display planes**: **Under Radar** and **Over Radar** toggles (S-100 Part 9
   §11.6).
+- **Overlays** › **Navigational warnings** (Display controls panel): on by
+  default and kept after a restart. Off, the map draws no S-124 warning at
+  all, whatever its status, and no warning pick highlight (S-98 Edition 2.0.0
+  §6.1.1, §12.12.2). Each warning dataset's own visibility in **Datasets**
+  keeps its state. See [Which warnings the map draws](#which-warnings-the-map-draws).
 - **Text**: toggles for the three S-101 text viewing groups, **Important
   Text**, **Other Text** and **All other chart text**.
 - **Palette**: **Day**, **Dusk** or **Night**, the three S-100 Part 9 mariner
@@ -586,7 +591,8 @@ panel:
 - **Show warnings not yet in force** (S-124): shown when an S-124 dataset is
   loaded; off by default and kept after a restart. When it is on, the map
   also draws a navigational warning from its publication time until it comes
-  into force. See [Which warnings the map draws](#which-warnings-the-map-draws).
+  into force. It has no effect while the **Navigational warnings** switch is
+  off. See [Which warnings the map draws](#which-warnings-the-map-draws).
 
 The **Display controls** panel also lists each loaded vector product's viewing
 groups, so you can hide or show particular symbol families:
@@ -769,6 +775,14 @@ no S-124 datasets loaded, the panel offers **Open Library**.
 
 The map draws a warning only while it is in force at the view time, as S-98
 Edition 2.0.0 §12.12 asks of an ECDIS, so the map and the list agree:
+
+- Above every other rule, the **Navigational warnings** switch in **Display
+  controls** › **Overlays** turns all warning drawing off (S-98 §6.1.1,
+  §12.12.2): no parts, affected areas, texts or pick highlight, not even for
+  the open Warning card. The panel then says "Not drawn: Navigational
+  warnings are off in Display controls", with **Turn on** to draw them again.
+  The list, the Warning cards, opening a warning from the list, links and
+  route checks keep working; picking on the map finds no warning.
 
 - An ended or cancelled warning is never drawn. Cancelled includes a passed
   cancellation date, a cancellation warning, and a warning missing from the

@@ -52,6 +52,7 @@ internal sealed class PickHighlightController : IDisposable
     private readonly SettingsViewModel _settings;
     private readonly Action<Action> _marshal;
     private readonly MemoryLayer _layer;
+    private readonly NavigationalWarningDrawingService? _warningDrawing;
     private bool _disposed;
 
     /// <summary>
@@ -73,13 +74,19 @@ internal sealed class PickHighlightController : IDisposable
     /// <see cref="Dispatcher.UIThread"/>; tests inject a synchronous
     /// implementation.
     /// </param>
+    /// <param name="warningDrawing">
+    /// Which S-124 warnings the map draws; with its Navigational warnings
+    /// switch off, a warning's pick isn't highlighted either (#995).
+    /// <see langword="null"/> always highlights.
+    /// </param>
     public PickHighlightController(
         IMapLayerCollection layers,
         PickReportViewModel pickReport,
         IDatasetCatalog catalog,
         IMeasureOverlayAppearanceProvider appearance,
         SettingsViewModel settings,
-        Action<Action>? marshal = null)
+        Action<Action>? marshal = null,
+        NavigationalWarningDrawingService? warningDrawing = null)
     {
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -93,12 +100,15 @@ internal sealed class PickHighlightController : IDisposable
         _appearance = appearance;
         _settings = settings;
         _marshal = marshal ?? DispatcherMarshal;
+        _warningDrawing = warningDrawing;
 
         _layer = PickHighlightOverlayLayer.Create();
 
         _pickReport.PropertyChanged += OnPickReportChanged;
         _appearance.Changed += OnAppearanceChanged;
         _settings.PaletteChanged += OnPaletteChanged;
+        if (_warningDrawing is not null)
+            _warningDrawing.PropertyChanged += OnWarningDrawingChanged;
 
         _marshal(() =>
         {
@@ -125,15 +135,27 @@ internal sealed class PickHighlightController : IDisposable
 
     private void OnPaletteChanged(PaletteType palette) => _marshal(Rebuild);
 
+    private void OnWarningDrawingChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(NavigationalWarningDrawingService.ShowNavigationalWarnings) or null)
+            _marshal(Rebuild);
+    }
+
     private void Rebuild()
     {
         if (_disposed) return;
 
+        var hit = _pickReport.PreviewHit ?? _pickReport.SelectedHit;
+
+        // With the Navigational warnings switch off nothing of a warning is on
+        // the map, so neither is its highlight (#995).
+        var hidden = hit is not null && _warningDrawing?.IsHighlightHidden(hit) == true;
+
         GeoPosition? location =
-            _pickReport.Location is { } loc ? new GeoPosition(loc.Latitude, loc.Longitude) : null;
+            !hidden && _pickReport.Location is { } loc ? new GeoPosition(loc.Latitude, loc.Longitude) : null;
 
         PickHighlightGeometry? geometry =
-            (_pickReport.PreviewHit ?? _pickReport.SelectedHit) is { } hit ? TryResolveGeometry(hit) : null;
+            !hidden && hit is not null ? TryResolveGeometry(hit) : null;
 
         var state = new PickHighlightState(location, geometry);
 
@@ -235,6 +257,8 @@ internal sealed class PickHighlightController : IDisposable
         _pickReport.PropertyChanged -= OnPickReportChanged;
         _appearance.Changed -= OnAppearanceChanged;
         _settings.PaletteChanged -= OnPaletteChanged;
+        if (_warningDrawing is not null)
+            _warningDrawing.PropertyChanged -= OnWarningDrawingChanged;
 
         _marshal(() => _layers.RemoveOverlayLayer(_layer));
     }

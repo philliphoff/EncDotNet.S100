@@ -775,6 +775,9 @@ internal static partial class Strings
     public static string DisplayPlane_OverRadar => Get(nameof(DisplayPlane_OverRadar));
     public static string Tooltip_DisplayPlane_UnderRadar => Get(nameof(Tooltip_DisplayPlane_UnderRadar));
     public static string Tooltip_DisplayPlane_OverRadar => Get(nameof(Tooltip_DisplayPlane_OverRadar));
+    public static string EcdisPanel_OverlaysHeader => Get(nameof(EcdisPanel_OverlaysHeader));
+    public static string EcdisPanel_NavigationalWarnings => Get(nameof(EcdisPanel_NavigationalWarnings));
+    public static string Tooltip_EcdisPanel_NavigationalWarnings => Get(nameof(Tooltip_EcdisPanel_NavigationalWarnings));
 
     // Text group toolbar pill
     public static string Toolbar_Text => Get(nameof(Toolbar_Text));
@@ -2034,6 +2037,9 @@ internal static partial class Strings
     public static string NavWarnings_NotInForceNotDrawn => Get(nameof(NavWarnings_NotInForceNotDrawn));
     public static string NavWarnings_NotInForceEndedNotDrawn => Get(nameof(NavWarnings_NotInForceEndedNotDrawn));
     public static string NavWarnings_Drawn => Get(nameof(NavWarnings_Drawn));
+    public static string NavWarnings_SwitchedOff => Get(nameof(NavWarnings_SwitchedOff));
+    public static string Label_NavWarnings_TurnOnDrawing => Get(nameof(Label_NavWarnings_TurnOnDrawing));
+    public static string Tooltip_NavWarnings_TurnOnDrawing => Get(nameof(Tooltip_NavWarnings_TurnOnDrawing));
     public static string Label_NavWarnings_NotInForce => Get(nameof(Label_NavWarnings_NotInForce));
     public static string NavWarnings_NoSeries => Get(nameof(NavWarnings_NoSeries));
     public static string NavWarnings_NoLocation => Get(nameof(NavWarnings_NoLocation));

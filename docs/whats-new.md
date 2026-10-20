@@ -22,6 +22,18 @@ month. For package versions and release assets, see
   and the route formats. In the libraries, `S421Route.GetPlanningSchedule`
   returns the schedule a passage reads its speeds and departure from.
 
+- **One switch for navigational warnings on the chart.** SoundCharts'
+  **Display controls** panel has a new **Overlays** › **Navigational
+  warnings** switch, on by default and kept after a restart (S-98 Ed 2.0.0
+  §6.1.1, §12.12.2). Off, the map draws no S-124 warning, affected area, text
+  or warning pick highlight, even for an open Warning card; each dataset's own
+  visibility keeps its state. The Navigational warnings panel, the cards and
+  route checks keep working, and the panel says "Not drawn: Navigational
+  warnings are off in Display controls" with a **Turn on** button.
+  `list_navigational_warnings` reports `showNavigationalWarnings`, and
+  `set_navigational_warning_display` sets it; both of its arguments are now
+  optional.
+
 - **NEW warnings follow S-98.** In SoundCharts' **Navigational warnings**
   panel, a newly received warning now shows NEW until you open its card or
   24 hours have passed since it was received (S-98 Ed 2.0.0 §12.12.1). A
