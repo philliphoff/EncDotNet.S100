@@ -747,8 +747,9 @@ lists every S-124 warning part in the loaded datasets, including parts with no
 location. Nothing is drawn for those, so this list is the only way to reach
 them. Parts are grouped by series and source, with the newest number first;
 choose **Published** in the sort menu to put the most recently published
-first. Rows show the number, the warning type, and the area and validity. A
-text-only part shows a document glyph and "No location".
+first, or **Classification** to list on-chart warnings first, then off-chart,
+then information ones. Rows show the number, the warning type, and the area
+and validity. A text-only part shows a document glyph and "No location".
 
 - The summary line counts the warnings in force and the text-only ones. Select
   the text-only count to list only those; select it again to show all.
@@ -771,6 +772,28 @@ part that isn't in force opens its card but leaves the map where it is, and a
 text-only part shows a note over the map saying nothing is drawn for it. With
 no S-124 datasets loaded, the panel offers **Open Library**.
 
+#### Classify warnings on chart, off chart or information
+
+S-98 Edition 2.0.0 §12.12.2 asks that you can classify each warning's
+relevance to your intended route:
+
+- **On chart** (the default): relevant to the route, drawn while it is in
+  force.
+- **Off chart**: not relevant to the route, for example a danger in water too
+  shallow for the ship to reach. Not drawn.
+- **Information**: relevant to the route, for information. Not drawn.
+
+Each row ends with a glyph for its classification: a faint map for on chart,
+and an amber crossed eye (off chart) or "i" (information) otherwise. Select
+the glyph to change it. The Warning card has the same choice under
+**Classification**. The classification covers every part of the warning and
+is kept after a restart and a refresh. It is keyed by series and number with
+the year, so a cancellation or a replacement warning, which has its own
+number, starts on chart. Off-chart and information warnings stay in the list
+and are never removed. Route checks still report them, with the
+classification at the end of the finding's details. For now the
+classification is the same for every route, not per route.
+
 #### Which warnings the map draws
 
 The map draws a warning only while it is in force at the view time, as S-98
@@ -787,13 +810,16 @@ Edition 2.0.0 §12.12 asks of an ECDIS, so the map and the list agree:
 - An ended or cancelled warning is never drawn. Cancelled includes a passed
   cancellation date, a cancellation warning, and a warning missing from the
   latest in-force bulletin for its series.
+- A warning classified **Off chart** or **Information** isn't drawn, nor are
+  its affected areas and texts, until you classify it **On chart** again.
 - A warning not yet in force is drawn only when **Show warnings not yet in
   force** is on (in the map's **Display Settings**), from its publication
   time until it starts.
 - Each part of a warning is judged on its own dates, so a part that has ended
   disappears while the warning's other parts stay. Its affected area and text
   go with it.
-- The warning on an open Warning card stays drawn, whatever its status, so
+- The warning on an open Warning card stays drawn, whatever its status or
+  classification, so
   **Zoom to** and the highlight show where it is. It goes when the card
   closes.
 - A warning that isn't drawn can't be picked on the map; find it in the list.

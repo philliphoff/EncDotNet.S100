@@ -46,6 +46,12 @@ internal enum NavigationalWarningsSort
 
     /// <summary>Most recently published first.</summary>
     Published,
+
+    /// <summary>
+    /// By the mariner's classification (#996, S-98 §12.12.1 item 2): On
+    /// chart, then Off chart, then Information; newest number first within each.
+    /// </summary>
+    Classification,
 }
 
 /// <summary>
@@ -310,6 +316,13 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
     public bool IsNew(NavigationalWarningEntry entry) => _service.IsNew(entry);
 
     /// <inheritdoc />
+    public NavigationalWarningClassification ClassificationOf(NavigationalWarningEntry entry) => _service.ClassificationOf(entry);
+
+    /// <inheritdoc />
+    public bool SetClassification(NavigationalWarningEntry entry, NavigationalWarningClassification classification) =>
+        _service.SetClassification(entry, classification);
+
+    /// <inheritdoc />
     public bool ZoomTo(NavigationalWarningEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -346,11 +359,16 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         }
     }
 
-    /// <summary>The sort as a combo-box index (0 Number, 1 Published).</summary>
+    /// <summary>The sort as a combo-box index (0 Number, 1 Published, 2 Classification).</summary>
     public int SortIndex
     {
         get => (int)_sort;
-        set => Sort = value == 1 ? NavigationalWarningsSort.Published : NavigationalWarningsSort.Number;
+        set => Sort = value switch
+        {
+            1 => NavigationalWarningsSort.Published,
+            2 => NavigationalWarningsSort.Classification,
+            _ => NavigationalWarningsSort.Number,
+        };
     }
 
     /// <summary>Which time status is read at.</summary>
@@ -834,7 +852,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
                 SourceId = group.Source?.Id,
                 NotReceivedText = missing is null ? null : NotReceivedText(missing),
             });
-            items.AddRange(rows.Select(w => new NavigationalWarningRowItem(w, states[w], time, format) { IsNew = _service.IsNew(w), RouteText = OnRouteText(w) }));
+            items.AddRange(rows.Select(w => Row(w, states[w], time, format, isNew: _service.IsNew(w), routeText: OnRouteText(w))));
         }
 
         // A series whose bulletin has no parts, and nothing else in force, still gets its note.
@@ -868,7 +886,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
                 isExpanded: outExpanded,
                 command: ToggleNotInForceCommand));
             if (outExpanded)
-                items.AddRange(outRows.Select(w => new NavigationalWarningRowItem(w, states[w], time, format) { IsDrawn = _drawing?.IsDrawn(w) == true, RouteText = OnRouteText(w) }));
+                items.AddRange(outRows.Select(w => Row(w, states[w], time, format, isDrawn: _drawing?.IsDrawn(w) == true, routeText: OnRouteText(w))));
         }
 
         // Keep the open part selected across rebuilds.
@@ -944,12 +962,27 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         return at.ToString(at.Date == today.Date ? "HH:mm" : "d MMM HH:mm", CultureInfo.CurrentCulture);
     }
 
-    private IEnumerable<NavigationalWarningEntry> Ordered(IEnumerable<NavigationalWarningEntry> warnings) =>
-        _sort == NavigationalWarningsSort.Published
-            ? warnings.OrderByDescending(w => w.Warning.PublicationTime ?? DateTimeOffset.MinValue)
-                .ThenByDescending(w => NumberKey(w.Warning.Number))
-            : warnings.OrderByDescending(w => NumberKey(w.Warning.Number))
-                .ThenByDescending(w => w.Warning.PublicationTime ?? DateTimeOffset.MinValue);
+    private IEnumerable<NavigationalWarningEntry> Ordered(IEnumerable<NavigationalWarningEntry> warnings) => _sort switch
+    {
+        NavigationalWarningsSort.Published => warnings.OrderByDescending(w => w.Warning.PublicationTime ?? DateTimeOffset.MinValue)
+            .ThenByDescending(w => NumberKey(w.Warning.Number)),
+        NavigationalWarningsSort.Classification => warnings.OrderBy(_service.ClassificationOf)
+            .ThenByDescending(w => NumberKey(w.Warning.Number))
+            .ThenByDescending(w => w.Warning.PublicationTime ?? DateTimeOffset.MinValue),
+        _ => warnings.OrderByDescending(w => NumberKey(w.Warning.Number))
+            .ThenByDescending(w => w.Warning.PublicationTime ?? DateTimeOffset.MinValue),
+    };
+
+    // A row's classification and the command its menu sets it with (#996).
+    private NavigationalWarningRowItem Row(NavigationalWarningEntry w, NavigationalWarningState state, DateTimeOffset time, TimeFormat format, bool isNew = false, bool isDrawn = false, string? routeText = null) =>
+        new(w, state, time, format)
+        {
+            IsNew = isNew,
+            IsDrawn = isDrawn,
+            RouteText = routeText,
+            Classification = _service.ClassificationOf(w),
+            ClassifyCommand = new RelayCommand<NavigationalWarningClassification>(c => _service.SetClassification(w, c)),
+        };
 
     /// <summary>A sort key for "106/26": year then number; parts with no number sort last.</summary>
     internal static (int Year, int Number) NumberKey(string? number)
@@ -1140,6 +1173,57 @@ internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
     /// <summary>Whether <see cref="RouteText"/> shows.</summary>
     public bool HasRouteText => RouteText is not null;
 
+    /// <summary>The mariner's classification of the part's warning (#996).</summary>
+    public NavigationalWarningClassification Classification { get; init; }
+
+    /// <summary>Sets <see cref="Classification"/>; the parameter is the new <see cref="NavigationalWarningClassification"/>.</summary>
+    public ICommand? ClassifyCommand { get; init; }
+
+    /// <summary>Whether the warning is Off chart or Information, so it isn't drawn (the glyph is emphasised).</summary>
+    public bool IsClassifiedOff => Classification != NavigationalWarningClassification.OnChart;
+
+    /// <summary>Whether the classification is On chart (the menu's check).</summary>
+    public bool IsOnChart => Classification == NavigationalWarningClassification.OnChart;
+
+    /// <summary>Whether the classification is Off chart (the menu's check).</summary>
+    public bool IsOffChart => Classification == NavigationalWarningClassification.OffChart;
+
+    /// <summary>Whether the classification is Information (the menu's check).</summary>
+    public bool IsInformation => Classification == NavigationalWarningClassification.Information;
+
+    /// <summary>The classification glyph: a map On chart, a crossed eye Off chart, an "i" for Information.</summary>
+    public FluentIcons.Common.Icon ClassificationGlyph => GlyphOf(Classification);
+
+    /// <summary>The classification glyph's tooltip: what it means, and that it changes it.</summary>
+    public string ClassificationTip => string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_NavWarnings_ClassificationFormat, TipOf(Classification));
+
+    /// <summary>The classification glyph's accessible name, e.g. "Classification: Off chart".</summary>
+    public string ClassificationName => string.Format(CultureInfo.CurrentCulture, Strings.Label_NavWarnings_ClassificationFormat, NameOf(Classification));
+
+    /// <summary>"On chart", "Off chart" or "Information".</summary>
+    internal static string NameOf(NavigationalWarningClassification classification) => classification switch
+    {
+        NavigationalWarningClassification.OffChart => Strings.NavWarnings_ClassOffChart,
+        NavigationalWarningClassification.Information => Strings.NavWarnings_ClassInformation,
+        _ => Strings.NavWarnings_ClassOnChart,
+    };
+
+    /// <summary>What a classification means for drawing.</summary>
+    internal static string TipOf(NavigationalWarningClassification classification) => classification switch
+    {
+        NavigationalWarningClassification.OffChart => Strings.Tooltip_NavWarnings_ClassOffChart,
+        NavigationalWarningClassification.Information => Strings.Tooltip_NavWarnings_ClassInformation,
+        _ => Strings.Tooltip_NavWarnings_ClassOnChart,
+    };
+
+    /// <summary>The glyph of a classification.</summary>
+    internal static FluentIcons.Common.Icon GlyphOf(NavigationalWarningClassification classification) => classification switch
+    {
+        NavigationalWarningClassification.OffChart => FluentIcons.Common.Icon.EyeOff,
+        NavigationalWarningClassification.Information => FluentIcons.Common.Icon.Info,
+        _ => FluentIcons.Common.Icon.Map,
+    };
+
     /// <summary>The number (e.g. "106/26"); the dataset's name when the preamble gives none.</summary>
     public string Number => Entry.Warning.Number ?? Entry.DatasetId;
 
@@ -1182,6 +1266,8 @@ internal sealed class NavigationalWarningRowItem : NavigationalWarningListItem
         get
         {
             var name = string.IsNullOrEmpty(TypeText) ? (Entry.Warning.Label ?? Number) : $"{Entry.Warning.Label ?? Number}, {TypeText}";
+            if (IsClassifiedOff)
+                name = $"{name}, {NameOf(Classification)}";
             return IsNew ? $"{name}, {Strings.NavWarnings_New}" : name;
         }
     }

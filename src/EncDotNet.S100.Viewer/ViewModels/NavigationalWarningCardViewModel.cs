@@ -66,6 +66,9 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
             Languages.Add(new LanguageTab(this, text));
         ToggleCommand = new RelayCommand(() => OpenRequested?.Invoke(this, EventArgs.Empty));
         _zoomToCommand = new RelayCommand(() => ZoomRequested?.Invoke(this, EventArgs.Empty), () => CanZoom);
+        ClassifyCommand = new RelayCommand<NavigationalWarningClassification>(
+            c => ClassificationRequested?.Invoke(this, c),
+            _ => CanClassify);
         OpenLinkCommand = new RelayCommand<NavigationalWarningEntry>(
             target => { if (target is not null) LinkRequested?.Invoke(this, target); },
             target => target is not null);
@@ -76,6 +79,56 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
 
     /// <summary>Whether the warning was new since its source's latest refresh when the card was made (the header's NEW).</summary>
     public bool IsNew { get; init; }
+
+    private NavigationalWarningClassification _classification;
+    private bool _canClassify;
+
+    /// <summary>
+    /// The mariner's classification of the warning (S-98 Edition 2.0.0
+    /// §12.12.2; #996), set from the Navigational warnings panel's list.
+    /// </summary>
+    public NavigationalWarningClassification Classification
+    {
+        get => _classification;
+        set
+        {
+            if (!SetProperty(ref _classification, value))
+                return;
+            OnPropertyChanged(nameof(IsOnChart));
+            OnPropertyChanged(nameof(IsOffChart));
+            OnPropertyChanged(nameof(IsInformation));
+            OnPropertyChanged(nameof(IsClassifiedOff));
+        }
+    }
+
+    /// <summary>Whether the warning is listed, so it can be classified (the control shows).</summary>
+    public bool CanClassify
+    {
+        get => _canClassify;
+        set
+        {
+            if (SetProperty(ref _canClassify, value))
+                ((RelayCommand<NavigationalWarningClassification>)ClassifyCommand).NotifyCanExecuteChanged();
+        }
+    }
+
+    /// <summary>Whether <see cref="Classification"/> is On chart.</summary>
+    public bool IsOnChart => _classification == NavigationalWarningClassification.OnChart;
+
+    /// <summary>Whether <see cref="Classification"/> is Off chart.</summary>
+    public bool IsOffChart => _classification == NavigationalWarningClassification.OffChart;
+
+    /// <summary>Whether <see cref="Classification"/> is Information.</summary>
+    public bool IsInformation => _classification == NavigationalWarningClassification.Information;
+
+    /// <summary>Whether the warning is Off chart or Information, so the map draws it only while this card is open.</summary>
+    public bool IsClassifiedOff => _classification != NavigationalWarningClassification.OnChart;
+
+    /// <summary>Classifies the warning; the parameter is the <see cref="NavigationalWarningClassification"/>.</summary>
+    public ICommand ClassifyCommand { get; }
+
+    /// <summary>Raised by <see cref="ClassifyCommand"/> with the chosen classification.</summary>
+    public event EventHandler<NavigationalWarningClassification>? ClassificationRequested;
 
     /// <summary>The dataset that holds the part (its display name, which is its catalog id).</summary>
     public string? DatasetId { get; }

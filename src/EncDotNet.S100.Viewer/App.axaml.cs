@@ -1271,6 +1271,10 @@ public partial class App : Application
             sp.GetRequiredService<ViewerDataPaths>().NavigationalWarningsFilePath,
             sp.GetRequiredService<ViewerSettings>().IsReadOnly,
             sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore>>()));
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(
+            sp.GetRequiredService<ViewerDataPaths>().NavigationalWarningClassificationsFilePath,
+            sp.GetRequiredService<ViewerSettings>().IsReadOnly,
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore>>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.INavigationalWarningSources>(sp =>
         {
             // A warning's source and freshness: SECOM services and shared feeds report when they last answered (#932).
@@ -1304,7 +1308,8 @@ public partial class App : Application
                 return source.IsEnabled && fix is { } f ? new EncDotNet.S100.DataModel.GeoPosition(f.Latitude, f.Longitude) : null;
             },
             activeRoute: () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>().Routes.ActiveRoute?.Waypoints
-                .Select(w => w.Position).ToList()));
+                .Select(w => w.Position).ToList(),
+            classifications: sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore>()));
         services.AddSingleton(sp => new NavigationalWarningsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
             sp.GetRequiredService<IPickService>(),

@@ -49,4 +49,14 @@ internal interface INavigationalWarningNavigator
     /// refresh (the card header's NEW); false by default.
     /// </summary>
     bool IsNew(NavigationalWarningEntry entry) => false;
+
+    /// <summary>
+    /// The mariner's classification of a listed part's warning (#996); On
+    /// chart by default. A change raises <see cref="WarningsChanged"/>.
+    /// </summary>
+    NavigationalWarningClassification ClassificationOf(NavigationalWarningEntry entry) => NavigationalWarningClassification.OnChart;
+
+    /// <summary>Classifies a listed part's warning, as the panel's row does (#996).</summary>
+    /// <returns>Whether it changed; false by default.</returns>
+    bool SetClassification(NavigationalWarningEntry entry, NavigationalWarningClassification classification) => false;
 }
