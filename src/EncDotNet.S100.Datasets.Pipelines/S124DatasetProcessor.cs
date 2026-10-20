@@ -88,6 +88,7 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
             authorityProvider,
             "S-124")
     {
+        SetContentHash(DatasetContentHash.HashAndRewind(ref datasetStream));
         using (datasetStream)
         {
             _dataset = S124Dataset.Open(datasetStream);

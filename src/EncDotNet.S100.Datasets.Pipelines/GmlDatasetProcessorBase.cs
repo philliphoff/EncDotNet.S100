@@ -37,6 +37,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     private readonly GmlPortrayalCatalogueBase _catalogue;
     private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
+    private string? _contentHash;
     private readonly IDisplayPlaneAuthorityProvider _authorityProvider;
 
     // Serializes portrayal builds for this processor. The build mutates
@@ -104,6 +105,20 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     /// constructor, after parsing the dataset.
     /// </summary>
     protected void SetAxisOrder(AxisOrderAssessment? axisOrder) => AxisOrder = axisOrder;
+
+    /// <summary>
+    /// Records the hash of the dataset's raw bytes (see
+    /// <see cref="DatasetContentHash"/>), from which
+    /// <see cref="VectorPortrayalResult.ContentScope"/> is built. Subclasses
+    /// call this once, from their constructor, before parsing the dataset.
+    /// Until it is called the dataset reports no content scope, so its layers
+    /// bypass the warm tile disk cache.
+    /// </summary>
+    protected void SetContentHash(string contentHash) => _contentHash = contentHash;
+
+    private string? ContentScope => _contentHash is null
+        ? null
+        : $"ds:{_contentHash}|spec:{Spec}|pc:{_catalogue.CatalogueRef}";
 
     /// <summary>
     /// Records the dataset's declared product-spec edition (parsed from the
@@ -376,6 +391,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 Product = Spec.Name,
                 Spec = Spec,
                 SourceDatasetId = _fileName,
+                ContentScope = ContentScope,
                 Info = info,
                 SymbolScale = context?.SymbolScale ?? 1.0,
                 TextScale = context?.TextScale ?? 1.0,

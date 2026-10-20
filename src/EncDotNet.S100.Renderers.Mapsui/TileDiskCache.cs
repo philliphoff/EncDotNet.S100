@@ -26,14 +26,15 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </para>
 /// <para>
 /// <b>Correctness.</b> The cache is correct only because the namespace fully
-/// captures the style state: the caller passes <c>(productLayerSet,
-/// styleStateHash)</c> to <see cref="NamespaceFor(string, string)"/>, and the renderer derives
-/// <c>styleStateHash</c> from the resolved drawing instructions plus the palette
-/// and symbol/text scales (see <c>MapsuiDisplayListRenderer</c>). A change to any
-/// of those, or to the bound scene's geometry (whose fingerprint the renderer
-/// folds into <c>styleStateHash</c>), yields a different namespace — old tiles
-/// are simply orphaned and reclaimed by the byte-budget LRU sweep, never served
-/// stale. The renderer
+/// captures the dataset content and style state: the caller passes
+/// <c>(productLayerSet, styleStateHash)</c> to <see cref="NamespaceFor(string, string)"/>.
+/// The renderer builds <c>productLayerSet</c> from the product and the
+/// dataset's content scope (a hash of its bytes, since the instructions do not
+/// carry geometry), and <c>styleStateHash</c> from the resolved drawing
+/// instructions plus the palette and symbol/text scales (see
+/// <c>MapsuiDisplayListRenderer</c>). A change to any of those yields a
+/// different namespace — old tiles are simply orphaned and
+/// reclaimed by the byte-budget LRU sweep, never served stale. The renderer
 /// further splits that namespace by the tile's raster pixel size
 /// (<see cref="NamespaceFor(string, int)"/>), so a tile rasterised at one device
 /// scale is never served to a frame at another.

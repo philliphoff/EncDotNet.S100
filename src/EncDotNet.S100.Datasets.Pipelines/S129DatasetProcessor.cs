@@ -91,6 +91,7 @@ public sealed class S129DatasetProcessor : GmlDatasetProcessorBase<S129Feature>
             authorityProvider,
             "S-129")
     {
+        SetContentHash(DatasetContentHash.HashAndRewind(ref datasetStream));
         using (datasetStream)
         {
             _dataset = S129Dataset.Open(datasetStream);
