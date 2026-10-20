@@ -251,6 +251,9 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
 /// </summary>
 internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, PassageCheckService Check, RouteFindingsService Findings) : IDisposable
 {
+    /// <summary>The listed warnings the producer checks.</summary>
+    public NavigationalWarningsService Warnings { get; init; } = null!;
+
     private sealed class Utc : ITimeFormatProvider
     {
         public TimeFormat Current => TimeFormat.Utc;
@@ -273,7 +276,7 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
     }
 
     // The scenario's S-421 route without a draft, its S-124 warnings listed, at 06:00 and 8 kn.
-    public static WarningsRouteCheck Create(WarningsScenarioFixture fixture, Action<Action>? post = null)
+    public static WarningsRouteCheck Create(WarningsScenarioFixture fixture, Action<Action>? post = null, RouteWarningOptions? options = null)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
         var routes = new RoutesService();
@@ -295,8 +298,8 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero, post: post);
         var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(),
-            producers: [new WarningFindingProducer(warnings)], post: post);
-        return new WarningsRouteCheck(routes, route, check, findings);
+            producers: [new WarningFindingProducer(warnings, options is null ? null : () => options)], post: post);
+        return new WarningsRouteCheck(routes, route, check, findings) { Warnings = warnings };
     }
 
     public void Dispose()

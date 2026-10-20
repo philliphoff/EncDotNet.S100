@@ -1385,6 +1385,8 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
                 sp.GetRequiredService<ViewerSettings>(),
                 sp.GetService<TimeProvider>()),
+            // #959 E3: the checked route's warnings, and the findings list's inline cards' navigator.
+            RouteFindings = sp.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
         });
         services.AddSingleton<MainViewModel>();
         services.AddSingleton(sp =>

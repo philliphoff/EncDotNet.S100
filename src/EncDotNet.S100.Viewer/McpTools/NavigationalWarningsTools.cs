@@ -2,6 +2,7 @@ using System.ComponentModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Projections;
@@ -27,7 +28,35 @@ internal sealed record NavigationalWarningsDto(
     [property: Description("Every part, in dataset order (the panel groups them by series and source).")] IReadOnlyList<NavigationalWarningDto> Warnings,
     [property: Description("The latest in-force bulletin of each series published by statusTime, latest first, with the warnings it lists that aren't loaded (S-124 §9.2.2).")] IReadOnlyList<NavigationalWarningBulletinDto> Bulletins,
     [property: Description("The display setting \"Show warnings not yet in force\" (Display settings › Navigational warnings; off by default): when true the map also draws warnings not yet in force at the view time, from their publication time. Set it with set_navigational_warning_display.")] bool ShowNotYetInForce,
-    [property: Description("The time the map draws warnings at (UTC): the Timeline's view time, or now when nothing time-aware is loaded. Each part's drawn flag is judged at it, whatever time says.")] DateTimeOffset DrawTime);
+    [property: Description("The time the map draws warnings at (UTC): the Timeline's view time, or now when nothing time-aware is loaded. Each part's drawn flag is judged at it, whatever time says.")] DateTimeOffset DrawTime)
+{
+    /// <summary>The panel's scope.</summary>
+    [Description("Which parts the panel lists, and warnings holds: \"all\" (every part) or \"route\" (while Check route is on: the parts with a finding on the checked route, on or near it). Set it with list_navigational_warnings' scope.")]
+    public string Scope { get; init; } = "all";
+
+    /// <summary>Whether the route scope is offered.</summary>
+    [Description("True while Check route is on (set_check_mode), when the panel offers the \"On {route}\" scope and each part has its route relation.")]
+    public bool RouteScopeAvailable { get; init; }
+
+    /// <summary>The checked route.</summary>
+    [Description("The checked route's name (its id when unnamed), or null while Check route is off.")]
+    public string? RouteName { get; init; }
+
+    /// <summary>How many parts are on or near the route.</summary>
+    [Description("Number of parts with a finding on the checked route (the scope's \"On {route} N\"); 0 while Check route is off.")]
+    public int OnRoute { get; init; }
+}
+
+/// <summary>A part's relation to the checked route.</summary>
+[Description("How a navigational warning part stands on the checked route (#959): from the route check's S-124 finding, judged at the ETA.")]
+internal sealed record NavigationalWarningRouteDto(
+    [property: Description("\"crosses\" (a line or area reaches the corridor), \"near\" (within 0.5 NM of the track, or a point inside the corridor) or \"off\".")] string Relation,
+    [property: Description("The s124 finding's id (pass it to select_finding), or null when off the route.")] string? FindingId,
+    [property: Description("The finding's group: must_review (crosses and in force), check (near and in force) or info (not in force or cancelled when the vessel is there); null when off.")] string? Group,
+    [property: Description("Whether it applies while the vessel is there: in_force, not_in_force or cancelled; null when off.")] string? Status,
+    [property: Description("When the vessel reaches it (UTC): the ETA, or the view time when the route has no speed (see atEta); null when off.")] DateTimeOffset? Eta,
+    [property: Description("True when eta is an ETA; false when the route has no speed and the view time is used.")] bool AtEta,
+    [property: Description("The panel row's line, e.g. \"On route · 06:08\" or \"Near route · 06:19\", in the Local/UTC preference; null when off.")] string? Text);
 
 /// <summary>A series' latest in-force bulletin.</summary>
 [Description("The latest in-force bulletin of a series, and what it lists that isn't loaded.")]
@@ -81,7 +110,12 @@ internal sealed record NavigationalWarningDto(
     [property: Description("When the viewer first received the warning with its current content (UTC), or null for a file opened directly.")] DateTimeOffset? ReceivedAt,
     [property: Description("When NEW ends unless its card is opened first (UTC): 24 hours after it was received or marked new. Null when it never was new.")] DateTimeOffset? NewUntil,
     [property: Description("When its card was opened while it was new (UTC), or null.")] DateTimeOffset? OpenedAt,
-    [property: Description("The Library source id the part came from, or null for a file opened directly.")] Guid? SourceId);
+    [property: Description("The Library source id the part came from, or null for a file opened directly.")] Guid? SourceId)
+{
+    /// <summary>The part's relation to the checked route.</summary>
+    [Description("While Check route is on, how the part stands on the checked route (relation, finding, status and ETA there); null while Check route is off.")]
+    public NavigationalWarningRouteDto? Route { get; init; }
+}
 
 /// <summary>The NEW filters.</summary>
 [Description("The mariner's filters on when NEW shows; null for no limit.")]
@@ -176,6 +210,46 @@ internal abstract class NavigationalWarningsToolBase
     };
 
     internal static NavigationalWarningsDto ToDto(NavigationalWarningsViewModel panel, NavigationalWarningsService service)
+    {
+        var dto = ListDto(panel, service);
+        if (!panel.IsRouteScopeAvailable)
+            return dto;
+
+        var departure = panel.RouteFindings?.Departure;
+        var format = panel.TimeFormat;
+        var warnings = dto.Warnings
+            .Select(w => (Dto: w, Finding: service.Find(w.DatasetId, w.FeatureId) is { } entry ? panel.RouteFindingFor(entry) : null))
+            .Where(w => !panel.IsRouteScope || w.Finding is not null)
+            .Select(w => w.Dto with { Route = RouteDto(w.Finding, departure, format) })
+            .ToList();
+        return dto with
+        {
+            Warnings = warnings,
+            Scope = panel.IsRouteScope ? "route" : "all",
+            RouteScopeAvailable = true,
+            RouteName = panel.RouteName,
+            OnRoute = panel.OnRouteCount,
+        };
+    }
+
+    private static NavigationalWarningRouteDto RouteDto(RouteFinding? finding, DateTimeOffset? departure, TimeFormat format) =>
+        finding?.Warning is not { } w
+            ? new NavigationalWarningRouteDto("off", null, null, null, null, false, null)
+            : new NavigationalWarningRouteDto(
+                w.Relation == RouteWarningRelation.Crosses ? "crosses" : "near",
+                finding.Id,
+                FindingsEntry.GroupCode(finding.Group),
+                w.Status switch
+                {
+                    RouteWarningStatus.InForce => "in_force",
+                    RouteWarningStatus.NotInForce => "not_in_force",
+                    _ => "cancelled",
+                },
+                w.From.ToUniversalTime(),
+                w.AtEta,
+                NavigationalWarningsViewModel.RouteText(w, departure, format));
+
+    private static NavigationalWarningsDto ListDto(NavigationalWarningsViewModel panel, NavigationalWarningsService service)
     {
         var time = panel.StatusTime;
         var selected = (panel.SelectedItem as NavigationalWarningRowItem)?.Entry;
@@ -273,11 +347,30 @@ internal sealed class ListNavigationalWarningsTool : NavigationalWarningsToolBas
     public ListNavigationalWarningsTool(NavigationalWarningsViewModel panel, NavigationalWarningsService service, IRouteEditInvoker invoker)
         : base(panel, service, invoker) { }
 
-    public Task<ToolResult<NavigationalWarningsDto>> InvokeAsync(CancellationToken cancellationToken = default)
+    public Task<ToolResult<NavigationalWarningsDto>> InvokeAsync(CancellationToken cancellationToken) => InvokeAsync(null, cancellationToken);
+
+    public Task<ToolResult<NavigationalWarningsDto>> InvokeAsync(string? scope = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Invoker.InvokeAsync(() =>
         {
+            if (scope is not null)
+            {
+                switch (scope.ToLowerInvariant())
+                {
+                    case "all":
+                        Panel.Scope = NavigationalWarningsScope.All;
+                        break;
+                    case "route":
+                        if (!Panel.IsRouteScopeAvailable)
+                            return ToolResult<NavigationalWarningsDto>.Err(new InvalidArgument("scope", "the route scope needs Check route on; turn it on with set_check_mode"));
+                        Panel.Scope = NavigationalWarningsScope.Route;
+                        break;
+                    default:
+                        return ToolResult<NavigationalWarningsDto>.Err(new InvalidArgument("scope", $"'{scope}' isn't a scope; use all or route"));
+                }
+            }
+
             // NEW may have expired since the timer last looked (set_test_clock moves time at once).
             Service.Recheck();
             return ToolResult<NavigationalWarningsDto>.Ok(ToDto(Panel, Service));
@@ -520,8 +613,10 @@ internal static class NavigationalWarningsMcpAdapters
     public static McpServerTool Create(ListNavigationalWarningsTool inner)
     {
         ArgumentNullException.ThrowIfNull(inner);
-        var del = (CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(ct));
+        var del = (
+            [Description("The panel's scope to set first: \"all\" (every part) or \"route\" (the parts on or near the checked route; needs Check route on). Omit to keep it.")] string? scope = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(scope, ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -535,7 +630,12 @@ internal static class NavigationalWarningsMcpAdapters
                 "whether it shows NEW (received in the last 24 hours and its card not opened, S-98 §12.12.1), why or why " +
                 "not, when it was received and when NEW ends, and which Library source it came from; sources say when " +
                 "they last answered and whether they are stale (their latest refresh failed). Files opened directly have " +
-                "no source and are never new. Also returns the NEW filters (received within, distance from own ship or route).",
+                "no source and are never new. Also returns the NEW filters (received within, distance from own ship or route). " +
+                "While Check route is on (set_check_mode), each part has its route relation (crosses, near or off), the " +
+                "route check's s124 finding id, group and status at the ETA, and the row's \"On route · 06:08\" line; " +
+                "scope \"route\" sets the panel to \"On {route}\" and lists only the parts on or near the route " +
+                "(every part with a finding, whatever its group). Setting scope changes the panel (viewer-injected; " +
+                "mutates live state).",
             SerializerOptions = McpAdapterShared.Options,
         });
     }
