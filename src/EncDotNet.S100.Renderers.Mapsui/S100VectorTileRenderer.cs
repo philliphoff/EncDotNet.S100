@@ -283,6 +283,22 @@ public static class S100VectorTileRenderer
     /// </summary>
     internal static bool DiagEnabled { get; } = ReadBool("S100_VECTOR_TILE_DIAG", false);
 
+    /// <summary>
+    /// Whether a scene whose product hints live drawing
+    /// (<see cref="VectorScene.PreferLiveDrawing"/>) is drawn directly each
+    /// frame instead of tiled (see <see cref="DrawsLive"/>). Seeded from
+    /// <c>S100_VECTOR_TILE_LIVE_BASE</c> (default on); off tiles every scene.
+    /// </summary>
+    internal static bool LiveBaseEnabled { get; } = ReadBool("S100_VECTOR_TILE_LIVE_BASE", true);
+
+    /// <summary>
+    /// The most base-plane vertices a hinted scene may carry and still be drawn
+    /// live: a safety valve for a dataset denser than its product's usual.
+    /// Lines are clipped to the view before they are stroked, so the per-frame
+    /// cost follows what is on screen, not how long the lines are.
+    /// </summary>
+    internal const int LiveBaseMaxVertices = 4096;
+
     private static long _diagLastTick;
 
     private static long _diagBailTick;
@@ -630,6 +646,7 @@ public static class S100VectorTileRenderer
         {
             var (baseScene, overlayScene) = PartitionScene(scene);
             state.Scene = baseScene;
+            state.LiveBase = DrawsLive(scene, baseScene);
             state.BaseIndex = new BaseSpatialIndex(baseScene);
             state.OverlayScene = overlayScene;
             state.OverlayIndex = new OverlaySpatialIndex(overlayScene);
@@ -695,7 +712,11 @@ public static class S100VectorTileRenderer
                 ops.Add(op);
         }
 
-        BindScene(target, new VectorScene(ops) { ScaleMinimumCap = baseScene.ScaleMinimumCap });
+        BindScene(target, new VectorScene(ops)
+        {
+            ScaleMinimumCap = baseScene.ScaleMinimumCap,
+            PreferLiveDrawing = baseScene.PreferLiveDrawing,
+        });
         return true;
     }
 
@@ -770,8 +791,8 @@ public static class S100VectorTileRenderer
         }
 
         return (
-            new VectorScene(baseOps) { ScaleMinimumCap = scene.ScaleMinimumCap },
-            new VectorScene(overlayOps) { ScaleMinimumCap = scene.ScaleMinimumCap });
+            new VectorScene(baseOps) { ScaleMinimumCap = scene.ScaleMinimumCap, PreferLiveDrawing = scene.PreferLiveDrawing },
+            new VectorScene(overlayOps) { ScaleMinimumCap = scene.ScaleMinimumCap, PreferLiveDrawing = scene.PreferLiveDrawing });
     }
 
     /// <summary>
@@ -903,6 +924,15 @@ public static class S100VectorTileRenderer
         var (coverWidth, coverHeight) = rotationDeg == 0
             ? (widthDip, heightDip)
             : TileGrid.RotatedCoverSize(widthDip, heightDip, rotationDeg);
+
+        // A sparse overlay its product hints for live drawing (an S-421 route)
+        // is drawn directly: a collection of many such datasets would otherwise
+        // rasterise, cache and blit a stack of mostly transparent tiles per
+        // dataset every frame.
+        if (TryRenderLive(canvas, viewport, layer, state, copies, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, deviceScale))
+        {
+            return;
+        }
 
         // The copy whose data lies nearest the view centre orders the tile queue.
         var layerExtent = layer.Extent;
@@ -1418,6 +1448,180 @@ public static class S100VectorTileRenderer
                 Interlocked.Add(ref _activeWorkerTotal, -(workersToStart - started));
             }
         }
+    }
+
+    /// <summary>
+    /// Whether the scene bound to a layer is drawn live: live drawing is on and
+    /// <see cref="IsLiveBaseScene"/> accepts its base plane. A hinted scene that
+    /// is tiled anyway is counted, so how often a hinted product outgrows the
+    /// budget can be measured before the hint is given to more products.
+    /// </summary>
+    private static bool DrawsLive(VectorScene scene, VectorScene baseScene)
+    {
+        if (!LiveBaseEnabled || !scene.PreferLiveDrawing)
+        {
+            return false;
+        }
+
+        if (IsLiveBaseScene(baseScene))
+        {
+            return true;
+        }
+
+        S100Diag.Telemetry.TileLiveBaseFallback.Add(1);
+        return false;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="baseScene"/>'s product hints live drawing
+    /// (<see cref="VectorScene.PreferLiveDrawing"/>) and it is sparse enough to
+    /// draw every frame: no pattern fills (their clip and tile decode is the
+    /// costly part of a raster) and at most <see cref="LiveBaseMaxVertices"/>
+    /// vertices across its lines and areas.
+    /// </summary>
+    internal static bool IsLiveBaseScene(VectorScene baseScene)
+    {
+        if (!baseScene.PreferLiveDrawing)
+        {
+            return false;
+        }
+
+        var vertices = 0;
+        foreach (var op in baseScene.Ops)
+        {
+            switch (op)
+            {
+                case LinePaintOp line:
+                    vertices += line.World.Count;
+                    break;
+                case AreaPaintOp area:
+                    vertices += area.WorldShell.Count;
+                    foreach (var hole in area.WorldHoles)
+                    {
+                        vertices += hole.Count;
+                    }
+
+                    break;
+                default:
+                    return false;
+            }
+
+            if (vertices > LiveBaseMaxVertices)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Draws a layer whose scene <see cref="IsLiveBaseScene">is drawn live</see>:
+    /// the base plane straight onto the canvas at the live scale, then the
+    /// overlay, at every world copy and under the same coverage clip as tiles.
+    /// No tile is scheduled, cached or blitted.
+    /// </summary>
+    /// <returns><see langword="false"/> when the layer is tiled instead.</returns>
+    private static bool TryRenderLive(
+        SKCanvas canvas, Viewport viewport, ILayer layer, TileState state, IReadOnlyList<double> copies,
+        double centerX, double centerY, double widthDip, double heightDip,
+        double coverWidth, double coverHeight, double resolution, double rotationDeg, float deviceScale)
+    {
+        lock (state.Sync)
+        {
+            if (!state.LiveBase || state.Scene is not { } scene)
+            {
+                return false;
+            }
+
+            // Like the tiled composite, a throw here costs one frame, not the layer.
+            try
+            {
+                var clipPaths = BuildCopyClipPaths(layer, viewport, resolution);
+                var clipApplied = false;
+                try
+                {
+                    if (clipPaths.Count > 0)
+                    {
+                        canvas.Save();
+                        clipApplied = true;
+                        foreach (var clipPath in clipPaths)
+                            canvas.ClipPath(clipPath, SKClipOperation.Difference, antialias: true);
+                    }
+
+                    foreach (var offset in copies)
+                    {
+                        DrawLiveBase(canvas, scene, centerX - offset, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, deviceScale);
+                    }
+
+                    foreach (var offset in copies)
+                    {
+                        DrawOverlay(canvas, state, centerX - offset, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
+                    }
+                }
+                finally
+                {
+                    if (clipApplied)
+                        canvas.Restore();
+                    foreach (var clipPath in clipPaths)
+                        clipPath.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                S100Diag.Telemetry.RecordRenderFault(ex);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Draws <paramref name="scene"/>'s base plane live for one world copy. A
+    /// rotated view draws north-up over the rotated viewport's bounding box and
+    /// turns the canvas about the screen centre, as the tiled composite does.
+    /// </summary>
+    private static void DrawLiveBase(
+        SKCanvas canvas, VectorScene scene,
+        double centerX, double centerY, double widthDip, double heightDip,
+        double coverWidth, double coverHeight, double resolution, double rotationDeg, float deviceScale)
+    {
+        if (scene.Ops.Count == 0)
+        {
+            return;
+        }
+
+        var halfWorldW = coverWidth * resolution * 0.5;
+        var halfWorldH = coverHeight * resolution * 0.5;
+        // Lossless (unclamped) inverse, as in DrawOverlay, so WorldToScreen maps
+        // back to these exact EPSG:3857 bounds.
+        var (minLon, minLat) = WebMercator.ToLonLat(centerX - halfWorldW, centerY - halfWorldH, clampLatitude: false);
+        var (maxLon, maxLat) = WebMercator.ToLonLat(centerX + halfWorldW, centerY + halfWorldH, clampLatitude: false);
+
+        // Tiles are rasterised in device pixels (RasterizeTile), so base-plane
+        // widths and dashes are device pixels; project in device pixels too so
+        // a live layer looks the same as a tiled one.
+        var coverViewport = new CoreViewport
+        {
+            MinLatitude = minLat,
+            MaxLatitude = maxLat,
+            MinLongitude = minLon,
+            MaxLongitude = maxLon,
+            WidthPixels = Math.Max(1, (int)Math.Round(coverWidth * deviceScale)),
+            HeightPixels = Math.Max(1, (int)Math.Round(coverHeight * deviceScale)),
+            ScaleDenominator = S100VectorSceneRenderer.ScaleDenominatorFor(centerX, centerY, resolution),
+        };
+
+        canvas.Save();
+        if (rotationDeg != 0)
+        {
+            canvas.RotateDegrees((float)rotationDeg, (float)(widthDip * 0.5), (float)(heightDip * 0.5));
+        }
+
+        canvas.Translate((float)((widthDip - coverWidth) * 0.5), (float)((heightDip - coverHeight) * 0.5));
+        canvas.Scale(1f / deviceScale);
+        OverlayRenderer.RenderOnto(canvas, scene, coverViewport);
+        canvas.Restore();
     }
 
     internal static long NextViewportEpoch(
@@ -4255,6 +4459,10 @@ public static class S100VectorTileRenderer
         public readonly object Sync = new();
 
         public VectorScene? Scene;
+
+        // Whether Scene is sparse enough to draw live each frame, skipping the
+        // tile pipeline (see IsLiveBaseScene). Set with Scene by BindScene.
+        public bool LiveBase;
 
         // Spatial index over the base-plane op extents (#332 cold tile-gen,
         // perf line under #347), built once when a scene is bound so each

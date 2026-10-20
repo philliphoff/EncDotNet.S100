@@ -37,6 +37,13 @@ public sealed class S421DatasetProcessor : GmlDatasetProcessorBase<S421Feature>
     /// <inheritdoc />
     protected override double MinExtentPadding => 0.05;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// A route plan is a handful of legs and waypoints, and a SECOM collection
+    /// can hold a hundred of them, so each is drawn directly rather than tiled.
+    /// </remarks>
+    protected override bool PreferLiveDrawing => true;
+
     /// <summary>
     /// Initializes a new <see cref="S421DatasetProcessor"/> by reading and parsing the
     /// dataset file at <paramref name="path"/>. The file is read in full and

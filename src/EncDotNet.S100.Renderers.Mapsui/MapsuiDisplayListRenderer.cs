@@ -110,6 +110,12 @@ public sealed class MapsuiDisplayListRenderer
     public int? OutOfBandMinDisplayScale { get; set; }
 
     /// <summary>
+    /// The product's <see cref="Scene.VectorScene.PreferLiveDrawing"/> hint,
+    /// stamped on the scene so the tiled renderer may draw it directly.
+    /// </summary>
+    public bool PreferLiveDrawing { get; set; }
+
+    /// <summary>
     /// Optional shared cache for processed-SVG symbol entries and rasterised
     /// pattern tiles. When set, the renderer routes its symbol/pattern
     /// lookups through this cache so re-renders of the same dataset (e.g.
@@ -206,6 +212,7 @@ public sealed class MapsuiDisplayListRenderer
             SymbolScale = SymbolScale,
             TextScale = TextScale,
             OutOfBandMinDisplayScale = OutOfBandMinDisplayScale,
+            PreferLiveDrawing = PreferLiveDrawing,
         };
         var scene = sceneBuilder.Build(instructions, geometryProvider);
 

@@ -173,6 +173,14 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     protected virtual double MinExtentPadding => 0.01;
 
     /// <summary>
+    /// Whether this product's datasets are sparse overlays a renderer may draw
+    /// directly every frame (<see cref="VectorPortrayalResult.PreferLiveDrawing"/>).
+    /// Off by default; a product turns it on only when every dataset it can
+    /// produce is small.
+    /// </summary>
+    protected virtual bool PreferLiveDrawing => false;
+
+    /// <summary>
     /// Builds feature references for the pick UI. Override to expose
     /// xlink/information references as navigable links.
     /// </summary>
@@ -383,6 +391,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 AreaFillProvider = output.AreaFill,
                 LineStyleProvider = output.LineStyle,
                 GeographicExtent = ComputeGeographicExtent(),
+                PreferLiveDrawing = PreferLiveDrawing,
             };
         }
         finally

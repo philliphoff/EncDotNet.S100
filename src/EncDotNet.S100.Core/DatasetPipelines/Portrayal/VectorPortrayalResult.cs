@@ -100,6 +100,15 @@ public sealed class VectorPortrayalResult
     public int? OutOfBandMinDisplayScale { get; init; }
 
     /// <summary>
+    /// Whether the product's datasets are sparse overlays, such as S-421
+    /// routes, that a renderer may draw directly every frame rather than
+    /// through cached tiles. Many such datasets are often shown at once, so the
+    /// per-dataset cost of tiling outweighs the drawing. A hint: a renderer
+    /// still tiles a dataset too dense to draw each frame.
+    /// </summary>
+    public bool PreferLiveDrawing { get; init; }
+
+    /// <summary>
     /// The cell's coarsest (largest-denominator) intended display scale, used
     /// as the whole-cell zoom-out window when no exchange-set
     /// <c>CATALOG.XML</c> supplied one (S-101 FC §3.1.1
