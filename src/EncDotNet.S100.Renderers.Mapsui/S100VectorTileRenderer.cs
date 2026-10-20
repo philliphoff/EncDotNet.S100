@@ -604,9 +604,11 @@ public static class S100VectorTileRenderer
     /// <param name="productLayerSet">
     /// Stable identity of the dataset/cell + product, used (with
     /// <paramref name="styleStateHash"/>) as the persistent disk-cache namespace
-    /// so warm tiles are reused across layer rebuilds and sessions. When either
-    /// this or <paramref name="styleStateHash"/> is null/empty, the warm disk
-    /// cache is bypassed for this layer.
+    /// so warm tiles are reused across layer rebuilds and sessions. A content
+    /// fingerprint of <paramref name="scene"/> is folded in as well (see
+    /// <see cref="DiskNamespaceFor"/>), so different geometry never shares
+    /// tiles. When either this or <paramref name="styleStateHash"/> is
+    /// null/empty, the warm disk cache is bypassed for this layer.
     /// </param>
     /// <param name="styleStateHash">
     /// A hash that fully captures the mariner/palette style state (palette,
@@ -618,12 +620,9 @@ public static class S100VectorTileRenderer
         ArgumentNullException.ThrowIfNull(layer);
         ArgumentNullException.ThrowIfNull(scene);
 
-        var diskNamespace =
-            DiskCacheEnabled
-            && !string.IsNullOrEmpty(productLayerSet)
-            && !string.IsNullOrEmpty(styleStateHash)
-                ? TileDiskCache.NamespaceFor(productLayerSet, styleStateHash)
-                : null;
+        var diskNamespace = DiskCacheEnabled
+            ? DiskNamespaceFor(scene, productLayerSet, styleStateHash)
+            : null;
 
         var state = States.GetValue(layer, static l => new TileState(l));
         lock (state.Sync)
@@ -655,6 +654,27 @@ public static class S100VectorTileRenderer
             state.VelocityX = 0;
             state.VelocityY = 0;
         }
+    }
+
+    /// <summary>
+    /// The warm disk-cache namespace for <paramref name="scene"/> bound under
+    /// <paramref name="productLayerSet"/> and <paramref name="styleStateHash"/>,
+    /// or <see langword="null"/> when either key is missing. The scene's content
+    /// fingerprint is folded in: the style-state hash covers the drawing
+    /// instructions, not the geometry they draw, so without it two same-shaped
+    /// datasets of one product (or a re-issued dataset whose geometry moved)
+    /// would share a namespace and be served each other's tiles.
+    /// </summary>
+    internal static string? DiskNamespaceFor(VectorScene scene, string? productLayerSet, string? styleStateHash)
+    {
+        if (string.IsNullOrEmpty(productLayerSet) || string.IsNullOrEmpty(styleStateHash))
+        {
+            return null;
+        }
+
+        return TileDiskCache.NamespaceFor(
+            productLayerSet,
+            styleStateHash + "|scene:" + VectorSceneFingerprint.Compute(scene));
     }
 
     /// <summary>
