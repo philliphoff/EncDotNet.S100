@@ -84,7 +84,7 @@
                            AutomationProperties.AutomationId="NavigationalWarnings.NewCount"
                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_New}" />
             </StackPanel>
-            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4">
                 <TextBox Grid.Column="0"
                          AutomationProperties.AutomationId="NavigationalWarnings.Search"
                          AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Search}"
@@ -131,6 +131,77 @@
                         ToolTip.ShowOnDisabled="True"
                         Command="{Binding RefreshCommand}">
                     <ic:FluentIcon Icon="ArrowClockwise" FontSize="14" />
+                </Button>
+                <!-- When NEW shows (S-98 §12.12.1 item 4) and the watch-handover reset (#997). -->
+                <Button Grid.Column="3"
+                        Classes="Icon"
+                        Padding="6"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding NewOptions, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        AutomationProperties.AutomationId="NavigationalWarnings.NewOptions"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_NewOptions}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_NewOptions}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_NewOptions}">
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                            <StackPanel Spacing="8" MaxWidth="300" DataContext="{Binding NewOptions}" x:DataType="vm:NavigationalWarningNewOptionsViewModel">
+                                <TextBlock Text="{x:Static loc:Strings.NavWarnings_NewOptionsTitle}" FontWeight="SemiBold" FontSize="12" />
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <CheckBox IsChecked="{Binding IsWithinHoursEnabled, Mode=TwoWay}"
+                                              AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.WithinHours"
+                                              Content="{x:Static loc:Strings.Label_NavWarnings_NewWithinHours}"
+                                              FontSize="12" />
+                                    <NumericUpDown Value="{Binding WithinHours, Mode=TwoWay}"
+                                                   AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.WithinHoursValue"
+                                                   AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_NewWithinHoursValue}"
+                                                   IsEnabled="{Binding IsWithinHoursEnabled}"
+                                                   Minimum="1" Maximum="24" Increment="1" FormatString="0"
+                                                   MinWidth="96" FontSize="12" />
+                                    <TextBlock Text="{x:Static loc:Strings.NavWarnings_HoursUnit}" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <CheckBox IsChecked="{Binding IsWithinNmEnabled, Mode=TwoWay}"
+                                              AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.WithinNm"
+                                              Content="{x:Static loc:Strings.Label_NavWarnings_NewWithinNm}"
+                                              FontSize="12" />
+                                    <NumericUpDown Value="{Binding WithinNm, Mode=TwoWay}"
+                                                   AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.WithinNmValue"
+                                                   AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_NewWithinNmValue}"
+                                                   IsEnabled="{Binding IsWithinNmEnabled}"
+                                                   Minimum="1" Maximum="2000" Increment="5" FormatString="0"
+                                                   MinWidth="96" FontSize="12" />
+                                    <TextBlock Text="{x:Static loc:Strings.NavWarnings_NmOfShipOrRoute}" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Text="{x:Static loc:Strings.NavWarnings_NewOptionsNote}" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
+                                <Separator />
+                                <TextBlock Text="{x:Static loc:Strings.NavWarnings_MarkSinceTitle}" FontWeight="SemiBold" FontSize="12" />
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{x:Static loc:Strings.Label_NavWarnings_MarkSince}" FontSize="12" VerticalAlignment="Center" />
+                                    <ComboBox ItemsSource="{Binding MarkSinceChoices}"
+                                              SelectedIndex="{Binding MarkSinceIndex, Mode=TwoWay}"
+                                              AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.MarkSince"
+                                              AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_MarkSince}"
+                                              FontSize="12" MinWidth="96" />
+                                    <Button Classes="Outline"
+                                            Content="{x:Static loc:Strings.Label_NavWarnings_MarkNew}"
+                                            AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.MarkNew"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_MarkNew}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_MarkNew}"
+                                            Command="{Binding MarkNewSinceCommand}"
+                                            FontSize="12" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding MarkedText}" FontSize="11" Opacity="0.7"
+                                           IsVisible="{Binding MarkedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                    <Panel>
+                        <ic:FluentIcon Icon="Filter" FontSize="14" />
+                        <!-- A filter is on: a dot, so suppressed NEW markers aren't a surprise. -->
+                        <Ellipse Width="6" Height="6" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-2,0"
+                                 Fill="{DynamicResource AccentBrush}"
+                                 IsVisible="{Binding NewOptions.IsFiltering, FallbackValue=False}" />
+                    </Panel>
                 </Button>
             </Grid>
             <StackPanel Orientation="Horizontal" Spacing="8">

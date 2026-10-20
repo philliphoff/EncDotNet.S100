@@ -6,6 +6,19 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **NEW warnings follow S-98.** In SoundCharts' **Navigational warnings**
+  panel, a newly received warning now shows NEW until you open its card or
+  24 hours have passed since it was received (S-98 Ed 2.0.0 §12.12.1). A
+  later refresh no longer clears it, and NEW expires on its own. New
+  **NEW options** limit the indication to warnings received within some
+  hours, or within some nautical miles of own ship or the active route (both
+  off by default), and **Mark new since** marks everything received in the
+  last few hours NEW again for a watch handover. `list_navigational_warnings`
+  reports each warning's `receivedAt`, `newUntil`, `openedAt` and
+  `newReason`, and the new `mark_navigational_warnings_new` tool does the
+  handover. The seen-warnings file moves to format 2: an older file is
+  discarded, so each source sets a new baseline.
+
 - **A shorter findings list.** In SoundCharts' Check route, Check and Info
   findings with the same code now share one row with a count ("Charted depth
   from S-101 only ×9 · Legs 7 → 9 · 9 stretches") that expands into each

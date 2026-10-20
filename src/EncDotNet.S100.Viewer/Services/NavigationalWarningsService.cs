@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -46,12 +47,34 @@ internal sealed record NavigationalWarningEntry(
 }
 
 /// <summary>
+/// The mariner's filters on when the NEW indication shows (#997, S-98 Ed
+/// 2.0.0 §12.12.1 item 4). The default, <see cref="None"/>, filters nothing.
+/// </summary>
+/// <param name="ReceivedWithin">Only warnings received this recently show NEW; <c>null</c> for no limit.</param>
+/// <param name="WithinNauticalMiles">
+/// Only warnings this close to own ship or the active route show NEW;
+/// <c>null</c> for no limit. A warning with no location, or nothing to
+/// measure from (own ship hidden and no active route), isn't filtered.
+/// </param>
+internal sealed record NavigationalWarningNewFilter(TimeSpan? ReceivedWithin = null, double? WithinNauticalMiles = null)
+{
+    /// <summary>No filtering, the S-98 default.</summary>
+    public static NavigationalWarningNewFilter None { get; } = new();
+}
+
+/// <summary>
 /// Lists every navigational warning part in the loaded datasets, including
 /// parts with no geometry, which the map can't show (#932). Rebuilt when a
 /// dataset loads or is removed.
 /// </summary>
-internal sealed class NavigationalWarningsService
+internal sealed class NavigationalWarningsService : IDisposable
 {
+    /// <summary>
+    /// The longest the NEW indication goes unchecked: the expiry timer runs at
+    /// least this often, so the distance filter follows own ship and route edits.
+    /// </summary>
+    internal static readonly TimeSpan RecheckEvery = TimeSpan.FromMinutes(1);
+
     /// <summary>The product whose datasets carry navigational warnings.</summary>
     internal const string WarningProduct = "S-124";
 
@@ -60,19 +83,30 @@ internal sealed class NavigationalWarningsService
     private readonly INavigationalWarningSources? _sources;
     private readonly NavigationalWarningSeenStore _seen;
     private readonly TimeProvider _clock;
+    private readonly Func<GeoPosition?>? _ownShip;
+    private readonly Func<IReadOnlyList<GeoPosition>?>? _activeRoute;
+    private readonly SynchronizationContext? _context;
     private readonly HashSet<DatasetEntry> _watched = [];
+    private readonly ITimer _timer;
+    private HashSet<string> _newKeys = new(StringComparer.Ordinal);
+    private NavigationalWarningNewFilter _newFilter = NavigationalWarningNewFilter.None;
+    private bool _disposed;
 
     /// <param name="loader">The loaded datasets.</param>
     /// <param name="datasets">The Datasets panel, for loading state.</param>
     /// <param name="sources">Where datasets came from and how fresh they are; <see langword="null"/> treats every dataset as a file opened directly.</param>
     /// <param name="seen">Which warnings are new; an in-memory store when <see langword="null"/>.</param>
-    /// <param name="clock">The clock.</param>
+    /// <param name="clock">The clock; NEW expires by it.</param>
+    /// <param name="ownShip">Own ship's position while it is shown, for the NEW distance filter.</param>
+    /// <param name="activeRoute">The active route's waypoints, for the NEW distance filter.</param>
     public NavigationalWarningsService(
         IDatasetLoaderService loader,
         DatasetsViewModel? datasets = null,
         INavigationalWarningSources? sources = null,
         NavigationalWarningSeenStore? seen = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        Func<GeoPosition?>? ownShip = null,
+        Func<IReadOnlyList<GeoPosition>?>? activeRoute = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
@@ -80,6 +114,10 @@ internal sealed class NavigationalWarningsService
         _sources = sources;
         _seen = seen ?? new NavigationalWarningSeenStore(null);
         _clock = clock ?? TimeProvider.System;
+        _ownShip = ownShip;
+        _activeRoute = activeRoute;
+        _context = SynchronizationContext.Current;
+        _timer = _clock.CreateTimer(_ => OnTimer(), null, RecheckEvery, RecheckEvery);
         _loader.DatasetLoaded += _ => Refresh();
         _loader.DatasetRemoved += _ => Refresh();
         if (_datasets is not null)
@@ -116,21 +154,124 @@ internal sealed class NavigationalWarningsService
         return sourceIds.Count;
     }
 
-    /// <summary>Whether a listed part's warning is new (see <see cref="NavigationalWarningSeenStore"/>).</summary>
-    public bool IsNew(NavigationalWarningEntry entry)
+    /// <summary>The mariner's filters on when NEW shows; <see cref="NavigationalWarningNewFilter.None"/> by default.</summary>
+    public NavigationalWarningNewFilter NewFilter
     {
-        ArgumentNullException.ThrowIfNull(entry);
-        return entry.Source is { } source && _seen.IsNew(source.Key, entry.Key);
+        get => _newFilter;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (value == _newFilter)
+                return;
+            _newFilter = value;
+            Recheck(force: true);
+        }
     }
 
-    /// <summary>Marks a part's warning seen, as opening its card does; raises <see cref="Changed"/> when it was new.</summary>
+    /// <summary>Whether a listed part's warning shows NEW (see <see cref="Newness"/>).</summary>
+    public bool IsNew(NavigationalWarningEntry entry) => Newness(entry).IsNew;
+
+    /// <summary>
+    /// Whether a listed part's warning shows NEW now, and why: the
+    /// <see cref="NavigationalWarningSeenStore"/> rule, then <see cref="NewFilter"/>.
+    /// </summary>
+    public NavigationalWarningNewness Newness(NavigationalWarningEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (entry.Source is not { } source)
+            return new NavigationalWarningNewness(NavigationalWarningNewReason.NoSource);
+        var now = _clock.GetUtcNow();
+        var newness = _seen.Newness(source.Key, entry.Key, now);
+        if (!newness.IsNew)
+            return newness;
+        // A warning marked new again counts from the mark, not from when it was received.
+        if (_newFilter.ReceivedWithin is { } within && now - (newness.MarkedAt ?? newness.ReceivedAt ?? now) > within)
+            return newness with { Reason = NavigationalWarningNewReason.FilteredAge };
+        if (_newFilter.WithinNauticalMiles is { } miles && DistanceNm(entry) is { } distance && distance > miles)
+            return newness with { Reason = NavigationalWarningNewReason.FilteredDistance };
+        return newness;
+    }
+
+    /// <summary>
+    /// The least distance in NM from a part to own ship or the active route;
+    /// <c>null</c> when it has no location or there is nothing to measure from.
+    /// </summary>
+    public double? DistanceNm(NavigationalWarningEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (entry.Shape is not { } shape)
+            return null;
+        double? best = null;
+        if (_ownShip?.Invoke() is { } ship && NavigationalWarningProximity.DistanceNm(shape, ship) is { } toShip)
+            best = toShip;
+        if (_activeRoute?.Invoke() is { Count: > 0 } route && NavigationalWarningProximity.DistanceNm(shape, route) is { } toRoute)
+            best = best is { } b ? Math.Min(b, toRoute) : toRoute;
+        return best;
+    }
+
+    /// <summary>
+    /// Marks a part's warning displayed, as opening its card does (S-98
+    /// §12.12.1 item 3); raises <see cref="Changed"/> when it was new.
+    /// </summary>
     public bool MarkSeen(NavigationalWarningEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        if (entry.Source is not { } source || !_seen.MarkSeen(source.Key, entry.Key))
+        if (entry.Source is not { } source || !_seen.MarkSeen(source.Key, entry.Key, _clock.GetUtcNow()))
             return false;
-        Changed?.Invoke(this, EventArgs.Empty);
+        Recheck(force: true);
         return true;
+    }
+
+    /// <summary>
+    /// Marks every warning received since <paramref name="since"/> new again,
+    /// for a watch handover (see <see cref="NavigationalWarningSeenStore.MarkNewSince"/>).
+    /// </summary>
+    /// <returns>How many listed parts show NEW afterwards.</returns>
+    public int MarkNewSince(DateTimeOffset since)
+    {
+        _seen.MarkNewSince(since, _clock.GetUtcNow());
+        Recheck(force: true);
+        return Warnings.Count(IsNew);
+    }
+
+    /// <summary>
+    /// Reads which parts show NEW again, and raises <see cref="Changed"/>
+    /// when that changed: NEW expires by the clock, and the distance filter
+    /// follows own ship and the route. The timer calls this; MCP and tests
+    /// may call it after moving the clock.
+    /// </summary>
+    /// <returns>True when which parts show NEW changed.</returns>
+    public bool Recheck() => Recheck(force: false);
+
+    private bool Recheck(bool force)
+    {
+        if (_disposed)
+            return false;
+        var keys = NewKeys(Warnings);
+        var changed = !keys.SetEquals(_newKeys);
+        _newKeys = keys;
+        if (changed || force)
+            Changed?.Invoke(this, EventArgs.Empty);
+        return changed;
+    }
+
+    private HashSet<string> NewKeys(IEnumerable<NavigationalWarningEntry> warnings) =>
+        warnings.Where(IsNew).Select(w => w.Source!.Key + "\u001f" + w.Key).ToHashSet(StringComparer.Ordinal);
+
+    private void OnTimer()
+    {
+        // Timers fire on the thread pool; the panel lists on the UI thread.
+        if (_context is { } context)
+            context.Post(_ => Recheck(), null);
+        else
+            Recheck();
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _disposed = true;
+        _timer.Dispose();
     }
 
     /// <summary>Every warning part in the loaded datasets, in dataset order.</summary>
@@ -223,10 +364,11 @@ internal sealed class NavigationalWarningsService
             .ToList();
         HasWarningDatasets = hasDatasets;
         IsLoading = ComputeIsLoading();
+        _newKeys = NewKeys(warnings);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Records what each source lists now, so warnings it newly brings read as new.</summary>
+    /// <summary>Records what each source lists now, so warnings it newly brings are received now.</summary>
     private void Observe(IReadOnlyList<NavigationalWarningEntry> warnings)
     {
         var now = _clock.GetUtcNow();
