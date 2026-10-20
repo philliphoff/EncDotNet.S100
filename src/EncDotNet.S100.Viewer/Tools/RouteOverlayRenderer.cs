@@ -306,12 +306,21 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
     /// <summary>Width of a state's line: below the setting is wider, so it doesn't rely on colour alone (C6).</summary>
     internal static float CheckStrokeWidth(Navigation.UkcState state) => state == Navigation.UkcState.BelowSetting ? 7f : 5f;
 
+    /// <summary>The dash of a lower-confidence run and of the stale route: 6/4 (C6, C10).</summary>
+    internal static readonly float[] LowConfidenceDash = [6f, 4f];
+
+    /// <summary>The dots of a no-data run: 1,5/3,5, so it isn't mistaken for a lower-confidence one (#934).</summary>
+    internal static readonly float[] NoDataDash = [1.5f, 3.5f];
+
     /// <summary>
-    /// Whether a run's line is dashed 6/4: no data, and lower confidence in
-    /// any band (C6, with confidence drawn over the band colour per #939).
+    /// A run's dash intervals, or <c>null</c> for a solid line: no data is
+    /// dotted, lower confidence in any band is dashed (C6, with confidence
+    /// drawn over the band colour per #939, and the dotted no data per #934).
     /// </summary>
-    internal static bool IsCheckDashed(Navigation.UkcState state, bool isLowConfidence = false) =>
-        isLowConfidence || state == Navigation.UkcState.NoData;
+    internal static float[]? CheckDash(Navigation.UkcState state, bool isLowConfidence = false) =>
+        state == Navigation.UkcState.NoData ? NoDataDash
+        : isLowConfidence ? LowConfidenceDash
+        : null;
 
     private static void DrawCheckRoute(SKCanvas canvas, RouteCheckOverlay check, IReadOnlyList<LegLayout> layout, Func<GeoPosition, Point?> toScreen, float opacity)
     {
@@ -320,7 +329,7 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             // C10: grey and dashed while a result is computing.
             using var stale = Stroke(check.Colors.Stale.WithAlpha(Alpha(opacity)), 5f);
             stale.StrokeCap = SKStrokeCap.Butt;
-            stale.PathEffect = SKPathEffect.CreateDash([6f, 4f], 0);
+            stale.PathEffect = SKPathEffect.CreateDash(LowConfidenceDash, 0);
             foreach (var leg in layout)
                 DrawParts(canvas, leg.Parts, stale);
             return;
@@ -329,10 +338,10 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
         foreach (var segment in check.Segments)
         {
             using var paint = Stroke(check.Colors.Of(segment.State).WithAlpha(Alpha(opacity)), CheckStrokeWidth(segment.State));
-            if (IsCheckDashed(segment.State, segment.IsLowConfidence))
+            if (CheckDash(segment.State, segment.IsLowConfidence) is { } dash)
             {
                 paint.StrokeCap = SKStrokeCap.Butt;
-                paint.PathEffect = SKPathEffect.CreateDash([6f, 4f], 0);
+                paint.PathEffect = SKPathEffect.CreateDash(dash, 0);
             }
             foreach (var part in Geodesy.MarineGeodesy.SplitAtAntimeridian(segment.Path))
                 DrawPath(canvas, Project(part, toScreen), paint);

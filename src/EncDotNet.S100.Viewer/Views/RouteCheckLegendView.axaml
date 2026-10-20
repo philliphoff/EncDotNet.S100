@@ -100,7 +100,9 @@
             </Button>
 
             <StackPanel Spacing="2" Margin="0,0,0,8" IsVisible="{Binding IsOpen}">
-                <!-- UKC AT ETA (draft only): the header names it. No data dotted. -->
+                <!-- UKC AT ETA (draft only): the header names it. Lower confidence is
+                     dashed 6/4 and No data dotted 1,5/3,5, as on the map (dash
+                     arrays are in multiples of the stroke thickness). -->
                 <StackPanel Spacing="2" IsVisible="{Binding HasClearance}"
                             AutomationProperties.AutomationId="Map.RouteCheckLegend.Ukc">
                     <StackPanel Classes="row">
@@ -120,7 +122,7 @@
                         <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendLowConfidence}" />
                     </StackPanel>
                     <StackPanel Classes="row">
-                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" StrokeDashArray="1.5,1" Stroke="{Binding NoDataBrush}" VerticalAlignment="Center" />
+                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" StrokeDashArray="0.375,0.875" Stroke="{Binding NoDataBrush}" VerticalAlignment="Center" />
                         <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendNoData}" />
                     </StackPanel>
                     <TextBlock Classes="sectionTitle" Margin="0,6,0,2"

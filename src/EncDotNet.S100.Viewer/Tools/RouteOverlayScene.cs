@@ -103,7 +103,8 @@ internal sealed record RouteOverlayScene(
 
 /// <summary>
 /// The route overlay's colours for one accent and chart palette. The edit
-/// colour is the app accent (<c>--selected</c>); the casing, waypoint fill,
+/// colour is the app accent (<c>--selected</c>) on Day and Dusk, and a fixed
+/// blue on Night (#934); the casing, waypoint fill,
 /// text halo and inactive colours follow the Day / Dusk / Night chart palette.
 /// </summary>
 /// <param name="Edit">The route line, waypoint ring and insert-handle colour.</param>
@@ -125,7 +126,8 @@ internal readonly record struct RouteOverlayColors(
     /// <summary>The colours for <paramref name="appearance"/>.</summary>
     /// <remarks>
     /// Day keeps the accent on a white casing. Dusk and Night use a black
-    /// casing; the accent is toned down on Dusk and loses chroma on Night
+    /// casing; the accent is toned down on Dusk, Night draws
+    /// <see cref="ColorContrast.NightEdit"/> instead
     /// (<see cref="ColorContrast.AccentFor"/>), and the label text dims with
     /// the palette (palette pass, #906).
     /// </remarks>

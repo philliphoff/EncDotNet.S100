@@ -145,12 +145,12 @@ internal sealed record RouteCheckOverlay(
         return new RouteCheckOverlay(segments, isStale, minimum, ghost, colors, Focus(snapshot, selectedFinding, colors, markers), markers);
     }
 
-    /// <summary>The colour of a group: red only for must review (F5). Info uses the No data grey until the tones pass (#934).</summary>
+    /// <summary>The colour of a group, from the state tones (Part G): red only for must review (F5).</summary>
     internal static SKColor ToneOf(RouteFindingGroup group, RouteCheckColors colors) => group switch
     {
         RouteFindingGroup.MustReview => colors.Below,
         RouteFindingGroup.Check => colors.Tight,
-        _ => colors.NoData,
+        _ => colors.Info,
     };
 
     // No data is already grey and dashed; confidence only qualifies a band.
@@ -165,7 +165,7 @@ internal sealed record RouteCheckOverlay(
         {
             ViewModels.CheckTone.Destructive => colors.Below,
             ViewModels.CheckTone.Warning => colors.Tight,
-            _ => colors.Ink,
+            _ => colors.Info,
         };
         var chip = Strings.Findings_ZoomedChip;
         if (finding.LegIndex is { } first)
@@ -202,35 +202,37 @@ internal sealed record RouteCheckOverlay(
 }
 
 /// <summary>
-/// The UKC state colours (handoff C6), per chart palette.
+/// The UKC state colours (handoff C6), per chart palette, which the route
+/// findings reuse (#959 Part G): Must review is Below, Check is Tight, Info is
+/// the Low confidence grey.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Day and the Meets / Tight / Below hues on Night are the handoff's. Dusk
-/// isn't mocked: it sits between Day and Night in hue, on the black casing
-/// that Dusk shares with Night, with its brightest colour no brighter than
-/// S-101 Dusk's (<c>CHWHT</c>). The palette pass (#906) set the greys so that
-/// every state keeps at least 3:1 against its casing on Dusk and Night. Night
-/// ink is dimmed towards S-101 Night's brightest colour.
+/// Day is the #887 handoff's, with Tight darkened to <c>#B07D00</c> so it keeps
+/// 3:1 on its white casing (#934). Dusk keeps the palette pass's values
+/// (#933): between Day and Night in hue, on the black casing that Dusk shares
+/// with Night, and no brighter than S-101 Dusk's <c>CHWHT</c>. Night drops
+/// every state to about 0,10 relative luminance (from 0,15–0,22), so the route
+/// is no brighter than it must be to keep 3:1 on its black casing (#934).
 /// </para>
 /// <para>
-/// Lower confidence has no colour of its own (#939, a deliberate change from
-/// the handoff's C6 table): a lower-confidence run keeps its band's colour and
-/// is dashed, so meets and tight stay visible where S-102 has no declared
-/// datum or S-101 stands in. No data stays grey and dashed, and fainter than
-/// every band colour.
+/// Lower confidence has no colour of its own on the line (#939): a
+/// lower-confidence run keeps its band's colour and is dashed 6/4, so meets
+/// and tight stay visible where S-102 has no declared datum or S-101 stands
+/// in. The Low confidence grey colours Info findings. No data is grey and
+/// dotted 1,5/3,5, fainter than every band colour.
 /// </para>
 /// <para>
-/// Red is reserved for Below your UKC setting (and must-review findings);
-/// Below is also drawn wider, so it doesn't rely on colour alone. Day's amber
-/// Tight is 2.3:1 against its white casing: it's identified by hue, and the
-/// casing outlines it against the chart.
+/// Red is reserved for Below your UKC setting and Must review findings; Below
+/// is also drawn wider, so it doesn't rely on colour alone.
 /// </para>
 /// </remarks>
+/// <param name="Info">Info findings: the handoff's Low confidence grey.</param>
 internal readonly record struct RouteCheckColors(
     SKColor Meets,
     SKColor Tight,
     SKColor Below,
+    SKColor Info,
     SKColor NoData,
     SKColor Stale,
     SKColor Casing,
@@ -240,8 +242,9 @@ internal readonly record struct RouteCheckColors(
 {
     private static readonly RouteCheckColors Day = new(
         new SKColor(0x13, 0x89, 0x5B),
-        new SKColor(0xE0, 0xA0, 0x08),
+        new SKColor(0xB0, 0x7D, 0x00),
         new SKColor(0xD4, 0x2A, 0x3A),
+        new SKColor(0x5E, 0x6B, 0x7E),
         new SKColor(0x8C, 0x95, 0xA3),
         new SKColor(0x8C, 0x95, 0xA3),
         SKColors.White,
@@ -253,6 +256,7 @@ internal readonly record struct RouteCheckColors(
         new SKColor(0x20, 0x89, 0x5C),
         new SKColor(0xC1, 0x8D, 0x12),
         new SKColor(0xCA, 0x32, 0x40),
+        new SKColor(0x6A, 0x75, 0x84),
         new SKColor(0x58, 0x61, 0x6E),
         new SKColor(0x58, 0x61, 0x6E),
         SKColors.Black,
@@ -261,11 +265,12 @@ internal readonly record struct RouteCheckColors(
         new SKColor(0x14, 0x1A, 0x22));
 
     private static readonly RouteCheckColors Night = new(
-        new SKColor(0x2E, 0x8A, 0x5E),
-        new SKColor(0xA2, 0x7A, 0x1C),
-        new SKColor(0xC0, 0x3A, 0x46),
-        new SKColor(0x52, 0x5B, 0x66),
-        new SKColor(0x52, 0x5B, 0x66),
+        new SKColor(0x22, 0x67, 0x46),
+        new SKColor(0x73, 0x56, 0x14),
+        new SKColor(0xA4, 0x32, 0x3C),
+        new SKColor(0x57, 0x60, 0x6F),
+        new SKColor(0x51, 0x5A, 0x65),
+        new SKColor(0x51, 0x5A, 0x65),
         SKColors.Black,
         SKColors.Black.WithAlpha(77),
         new SKColor(0x8A, 0x94, 0xA0),

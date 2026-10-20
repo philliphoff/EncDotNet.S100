@@ -1064,7 +1064,13 @@ and confidence. While it's on:
   - Lower confidence keeps its state's colour and is drawn dashed: the depth
     is from S-101, or the depth and water-level datums can't be confirmed to
     agree.
-  - No data is grey and dashed.
+  - No data is grey and dotted.
+
+  Route findings use the same tones: Must review in the Below red, Check in
+  the Tight amber and Info in grey. Red is used only for Below your UKC
+  setting and Must review. On the Night palette every state is dimmed to about
+  a tenth of white's brightness, and the editing line is a fixed dim blue
+  instead of your accent colour.
 
   A legend sits at the bottom left. A ring and a pill mark the minimum UKC,
   and a ghost vessel marks the cursor.
