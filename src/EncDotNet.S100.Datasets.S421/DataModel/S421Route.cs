@@ -48,6 +48,27 @@ public sealed class S421Route
     /// attributes round-trip here verbatim.
     /// </summary>
     public required IReadOnlyDictionary<string, string> ExtraAttributes { get; init; }
+
+    /// <summary>
+    /// The schedule variant a passage reads its speeds and departure from:
+    /// the first calculated schedule, else the first manual one, else the
+    /// first schedule's first variant; with its schedule's index in
+    /// <see cref="Schedules"/>.
+    /// </summary>
+    /// <returns>The variant and its schedule's index, or <c>null</c> when the route has no schedule variants.</returns>
+    public (int ScheduleIndex, S421ScheduleVariant Variant)? GetPlanningSchedule()
+    {
+        foreach (var kind in new[] { S421ScheduleVariantKind.Calculated, S421ScheduleVariantKind.Manual })
+        {
+            for (var i = 0; i < Schedules.Count; i++)
+            {
+                if (Schedules[i].Variants.FirstOrDefault(v => v.Kind == kind) is { } variant)
+                    return (i, variant);
+            }
+        }
+
+        return Schedules.FirstOrDefault()?.Variants.FirstOrDefault() is { } first ? (0, first) : null;
+    }
 }
 
 /// <summary>

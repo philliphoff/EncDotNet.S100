@@ -54,6 +54,23 @@ public sealed class VectorPortrayalResult
     /// </summary>
     public required string SourceDatasetId { get; init; }
 
+    /// <summary>
+    /// A content identity of everything that shapes this dataset's portrayal
+    /// beyond the drawing instructions themselves: at least a hash of the
+    /// dataset's bytes (with any applied updates), plus the catalogue identity
+    /// where the processor knows it. Unlike <see cref="SourceDatasetId"/>, it
+    /// changes when a dataset is re-issued under the same name, and differs
+    /// between same-named or same-shaped datasets.
+    /// </summary>
+    /// <remarks>
+    /// The Mapsui renderer folds it into the warm tile disk-cache namespace.
+    /// The drawing instructions carry feature references and styles but not
+    /// geometry, so this is what keeps two datasets with structurally
+    /// identical instructions from sharing tiles. When <see langword="null"/>,
+    /// the dataset's layers bypass the disk cache.
+    /// </remarks>
+    public string? ContentScope { get; init; }
+
     /// <summary>Human-readable status line describing the dataset.</summary>
     public required string Info { get; init; }
 
@@ -98,6 +115,15 @@ public sealed class VectorPortrayalResult
     /// sub-layer with <see cref="VectorSubLayer.ApplyOutOfBandCap"/> set.
     /// </summary>
     public int? OutOfBandMinDisplayScale { get; init; }
+
+    /// <summary>
+    /// Whether the product's datasets are sparse overlays, such as S-421
+    /// routes, that a renderer may draw directly every frame rather than
+    /// through cached tiles. Many such datasets are often shown at once, so the
+    /// per-dataset cost of tiling outweighs the drawing. A hint: a renderer
+    /// still tiles a dataset too dense to draw each frame.
+    /// </summary>
+    public bool PreferLiveDrawing { get; init; }
 
     /// <summary>
     /// The cell's coarsest (largest-denominator) intended display scale, used

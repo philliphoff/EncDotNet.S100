@@ -69,6 +69,8 @@ flowchart LR
   S-101 portrayal.
 - [S-57 and ISO 8211 libraries](../external/EncDotNet/docs/index.md): read S-57
   cells, update cells and exchange sets, and ISO 8211 files, with EncDotNet.
+- [Route checks and under-keel clearance](route-checks.md): what each route
+  finding means, UKC and confidence, and the RTZ and S-421 route formats.
 
 **Tasks**
 

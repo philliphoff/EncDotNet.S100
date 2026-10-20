@@ -110,6 +110,9 @@ public sealed class VectorSceneBuilder
     /// </summary>
     public double? OutOfBandMinDisplayScale { get; init; }
 
+    /// <summary>The <see cref="VectorScene.PreferLiveDrawing"/> hint to stamp on the built scene.</summary>
+    public bool PreferLiveDrawing { get; init; }
+
     /// <summary>
     /// Clamps a per-op <c>ScaleMinimum</c> (largest allowed denominator) to the
     /// dataset-wide <see cref="OutOfBandMinDisplayScale"/> cap when one is set.
@@ -237,7 +240,7 @@ public sealed class VectorSceneBuilder
         if (patternPriorities.Count > 0)
             ClipPatternAreas(ops, patternPriorities, featuresWithPatterns);
 
-        return new VectorScene(ops) { ScaleMinimumCap = OutOfBandMinDisplayScale };
+        return new VectorScene(ops) { ScaleMinimumCap = OutOfBandMinDisplayScale, PreferLiveDrawing = PreferLiveDrawing };
     }
 
     private static readonly GeometryFactory ClipGeometryFactory = new();

@@ -112,6 +112,7 @@ public sealed class S411DatasetProcessor :
             authorityProvider,
             "S-411")
     {
+        SetContentHash(DatasetContentHash.HashAndRewind(ref datasetStream));
         using (datasetStream)
         {
             _dataset = S411Dataset.Open(datasetStream);

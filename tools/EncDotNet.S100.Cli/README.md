@@ -3,7 +3,7 @@
 This project builds `s100`, the cross-platform command-line tool for S-100
 datasets. `s100` renders datasets and exchange sets to images and web-map
 tile sets, and inspects,
-identifies, validates, converts and serves them. It uses the same portrayal and
+identifies, validates, converts and serves them, and checks routes against them. It uses the same portrayal and
 validation code as the libraries and SoundCharts, with a headless Skia
 renderer, so it runs in scripts and CI without a UI.
 

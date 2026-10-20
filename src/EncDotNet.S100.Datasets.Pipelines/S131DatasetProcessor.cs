@@ -42,6 +42,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     private readonly ILuaEngine _luaEngine;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
+    private readonly string _contentScope;
     private readonly SemaphoreSlim _renderGate = new(1, 1);
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -104,6 +105,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         _luaEngine = luaEngine;
         _provider = catalogueManager.GetProvider("S-131");
         _catalogue = new S131PortrayalCatalogue(_provider, _luaEngine);
+        var contentHash = DatasetContentHash.HashAndRewind(ref datasetStream);
         using (datasetStream)
         {
             _dataset = S131Dataset.Open(datasetStream);
@@ -120,6 +122,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
         VersionAssessment = SupportedSpecEditions.Assess(Spec, _catalogue.CatalogueRef);
+        _contentScope = $"ds:{contentHash}|spec:{Spec}|pc:{_catalogue.CatalogueRef}";
     }
 
     /// <inheritdoc/>
@@ -202,6 +205,7 @@ public sealed class S131DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             Product = "S-131",
             Spec = new SpecRef("S-131", default),
             SourceDatasetId = _fileName,
+            ContentScope = _contentScope,
             Info = info,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
