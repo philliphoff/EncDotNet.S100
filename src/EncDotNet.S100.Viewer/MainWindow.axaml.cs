@@ -428,7 +428,8 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<ViewerDatasetCatalog>(),
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
-            App.Services.GetRequiredService<SettingsViewModel>());
+            App.Services.GetRequiredService<SettingsViewModel>(),
+            warningDrawing: App.Services.GetService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>());
 
         // Out-of-scale extent indicators: outline the extents of loaded
         // datasets that have zoomed out past their display-scale minimum, so a

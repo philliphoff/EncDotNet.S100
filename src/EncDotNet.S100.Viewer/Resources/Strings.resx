@@ -6212,4 +6212,26 @@
   <data name="ExportDialog_IdentityKeptFileFormat" xml:space="preserve">
     <value>Kept as received in {0}</value>
   </data>
+  <data name="EcdisPanel_OverlaysHeader" xml:space="preserve">
+    <value>Overlays</value>
+    <comment>ECDIS Display controls section: product overlays the mariner can switch on and off (S-98 §6.1.1; #995).</comment>
+  </data>
+  <data name="EcdisPanel_NavigationalWarnings" xml:space="preserve">
+    <value>Navigational warnings</value>
+    <comment>Switch label and accessible name: draw S-124 navigational warnings on the chart (#995).</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_NavigationalWarnings" xml:space="preserve">
+    <value>Draw S-124 navigational warnings on the chart. Off hides every warning, even one whose card is open; the Navigational warnings panel still lists them.</value>
+  </data>
+  <data name="NavWarnings_SwitchedOff" xml:space="preserve">
+    <value>Not drawn: Navigational warnings are off in Display controls</value>
+    <comment>Navigational warnings panel line while the Display controls switch hides every warning on the chart (#995).</comment>
+  </data>
+  <data name="Label_NavWarnings_TurnOnDrawing" xml:space="preserve">
+    <value>Turn on</value>
+    <comment>Button beside the not-drawn line: turns the Navigational warnings switch back on (#995).</comment>
+  </data>
+  <data name="Tooltip_NavWarnings_TurnOnDrawing" xml:space="preserve">
+    <value>Draw navigational warnings on the chart again</value>
+  </data>
 </root>

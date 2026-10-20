@@ -931,77 +931,7 @@ public partial class App : Application
             sp.GetService<ITimeFormatProvider>(),
             library: () => sp.GetService<ILibraryTimeSource>()));
         services.AddSingleton<EcdisDisplayState>(sp =>
-        {
-            var settings = sp.GetRequiredService<ViewerSettings>();
-            var state = new EcdisDisplayState();
-
-            // Seed the viewer's default viewing-group visibility once so
-            // the noisy S-101 mariner-selector patterns (shallow water
-            // pattern, survey accuracy/quality, low-accuracy marker)
-            // start off even in the "All" category. Mariner choices made
-            // afterwards persist and are never re-forced.
-            if (EcdisDisplayDefaults.Apply(settings))
-            {
-                try { settings.Save(); } catch { /* best-effort */ }
-            }
-
-            var category = Enum.TryParse<EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory>(
-                settings.EcdisDisplayCategory, ignoreCase: true, out var c)
-                ? c
-                : EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory.Standard;
-            var hidden = new Dictionary<string, IReadOnlySet<int>>(StringComparer.OrdinalIgnoreCase);
-            foreach (var kv in settings.EcdisHiddenViewingGroups)
-            {
-                var ids = new HashSet<int>();
-                foreach (var token in (kv.Value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                {
-                    if (int.TryParse(token, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id))
-                        ids.Add(id);
-                }
-                if (ids.Count > 0) hidden[kv.Key] = ids;
-            }
-            // Hydrate hidden display planes
-            var hiddenPlanes = new HashSet<EncDotNet.S100.Pipelines.Vector.DisplayPlane>();
-            foreach (var token in (settings.EcdisHiddenDisplayPlanes ?? string.Empty)
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (Enum.TryParse<EncDotNet.S100.Pipelines.Vector.DisplayPlane>(token, ignoreCase: true, out var plane))
-                    hiddenPlanes.Add(plane);
-            }
-            // Hydrate explicit per-spec display-mode selections (§11.7).
-            var displayModes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-            foreach (var kv in settings.EcdisActiveDisplayModes)
-            {
-                if (!string.IsNullOrWhiteSpace(kv.Value))
-                    displayModes[kv.Key] = kv.Value;
-            }
-            state.Hydrate(category, hidden, hiddenPlanes.Count > 0 ? hiddenPlanes : null,
-                displayModes.Count > 0 ? displayModes : null);
-
-            // Persist on every change so a crash doesn't lose the user's
-            // ECDIS preferences. Cheap because settings.json is small.
-            state.Changed += () =>
-            {
-                settings.EcdisDisplayCategory = state.Category.ToString();
-                var snap = state.Snapshot();
-                settings.EcdisHiddenViewingGroups.Clear();
-                foreach (var kv in snap.HiddenViewingGroups)
-                {
-                    settings.EcdisHiddenViewingGroups[kv.Key] =
-                        string.Join(",", kv.Value.OrderBy(i => i));
-                }
-                settings.EcdisHiddenDisplayPlanes =
-                    string.Join(",", snap.HiddenDisplayPlanes.OrderBy(p => p));
-                settings.EcdisActiveDisplayModes.Clear();
-                foreach (var kv in snap.ActiveDisplayModes)
-                {
-                    if (!string.IsNullOrEmpty(kv.Value))
-                        settings.EcdisActiveDisplayModes[kv.Key] = kv.Value;
-                }
-                try { settings.Save(); } catch { /* best-effort */ }
-            };
-            return state;
-        });
+            EcdisDisplayStatePersistence.Create(sp.GetRequiredService<ViewerSettings>()));
         services.AddSingleton<IUiDispatcher, AvaloniaUiDispatcher>();
         // One clock for every clock-driven view model; with --mcp-test-hooks it
         // is adjustable so set_test_clock can age forecasts and Live (#715).
@@ -1399,7 +1329,8 @@ public partial class App : Application
                 sp.GetRequiredService<ViewerSettings>(),
                 sp.GetRequiredService<IDatasetLoaderService>(),
                 sp.GetService<TimeProvider>() ?? TimeProvider.System,
-                action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
+                action => Avalonia.Threading.Dispatcher.UIThread.Post(action),
+                sp.GetRequiredService<EcdisDisplayState>());
             drawing.Follow(sp.GetRequiredService<PickReportViewModel>());
             sp.GetRequiredService<NavigationalWarningsViewModel>().Drawing = drawing;
             return drawing;

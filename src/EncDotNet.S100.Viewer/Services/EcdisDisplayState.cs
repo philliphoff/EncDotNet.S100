@@ -19,9 +19,46 @@ internal sealed class EcdisDisplayState
     private readonly Dictionary<string, string?> _displayModes =
         new(StringComparer.OrdinalIgnoreCase);
     private EcdisDisplayCategory _category = EcdisDisplayCategory.Standard;
+    private bool _showNavigationalWarnings = true;
 
     /// <summary>Raised after any mutation completes.</summary>
     public event Action? Changed;
+
+    /// <summary>
+    /// Raised after <see cref="ShowNavigationalWarnings"/> changes. Not
+    /// <see cref="Changed"/>: the switch only hides S-124 parts, which
+    /// <c>NavigationalWarningDrawingService</c> does without re-rendering
+    /// every vector dataset.
+    /// </summary>
+    public event Action? NavigationalWarningsChanged;
+
+    /// <summary>
+    /// Whether the map draws S-124 navigational warnings at all (S-98
+    /// Edition 2.0.0 §6.1.1, §12.12.2; #995). On by default. Off hides every
+    /// part, affected area and text placement, and the pick highlight of a
+    /// warning, whatever each warning's status, its open card or its
+    /// dataset's own visibility say. The Navigational warnings panel and the
+    /// Warning cards still list and open them.
+    /// </summary>
+    public bool ShowNavigationalWarnings
+    {
+        get { lock (_gate) return _showNavigationalWarnings; }
+    }
+
+    /// <summary>
+    /// Sets <see cref="ShowNavigationalWarnings"/> and raises
+    /// <see cref="NavigationalWarningsChanged"/> when it differs.
+    /// </summary>
+    public void SetShowNavigationalWarnings(bool show)
+    {
+        bool changed;
+        lock (_gate)
+        {
+            changed = _showNavigationalWarnings != show;
+            _showNavigationalWarnings = show;
+        }
+        if (changed) NavigationalWarningsChanged?.Invoke();
+    }
 
     /// <summary>
     /// The active ECDIS standard display category (defaults to Standard).
@@ -238,19 +275,23 @@ internal sealed class EcdisDisplayState
     /// <summary>
     /// Replaces the entire state from a hydrated settings record
     /// (used on viewer startup to restore the persisted category,
-    /// per-spec overrides, and explicit display-mode selections).
-    /// Raises <see cref="Changed"/> exactly once after the swap.
+    /// per-spec overrides, explicit display-mode selections and the
+    /// navigational-warnings switch). Raises <see cref="Changed"/> exactly
+    /// once after the swap, and <see cref="NavigationalWarningsChanged"/>
+    /// too.
     /// </summary>
     public void Hydrate(
         EcdisDisplayCategory category,
         IReadOnlyDictionary<string, IReadOnlySet<int>> hidden,
         IReadOnlySet<DisplayPlane>? hiddenPlanes = null,
-        IReadOnlyDictionary<string, string?>? displayModes = null)
+        IReadOnlyDictionary<string, string?>? displayModes = null,
+        bool showNavigationalWarnings = true)
     {
         ArgumentNullException.ThrowIfNull(hidden);
         lock (_gate)
         {
             _category = category;
+            _showNavigationalWarnings = showNavigationalWarnings;
             _hidden.Clear();
             foreach (var kv in hidden)
                 _hidden[kv.Key] = new HashSet<int>(kv.Value);
@@ -271,5 +312,6 @@ internal sealed class EcdisDisplayState
             }
         }
         Changed?.Invoke();
+        NavigationalWarningsChanged?.Invoke();
     }
 }

@@ -97,7 +97,7 @@ public class S124HiddenPartsTests
         // The only part is hidden: the whole warning goes.
         var none = await processor.BuildVectorPortrayalAsync(new S124RenderContext { HiddenFeatures = new HashSet<string> { "part1" } }, TestContext.Current.CancellationToken);
         Assert.Empty(none.SubLayers);
-        Assert.Contains("not in force", none.Info);
+        Assert.Contains("no warning drawn", none.Info);
 
         // Hiding a feature that isn't a part changes nothing about the part's area.
         var drawn = await DrawnFeatures(processor, new HashSet<string> { "nope" });
@@ -114,6 +114,19 @@ public class S124HiddenPartsTests
         var result = await processor.BuildVectorPortrayalAsync(new S124RenderContext { HiddenFeatures = hidden }, TestContext.Current.CancellationToken);
 
         Assert.Empty(result.SubLayers);
+    }
+
+    [Fact]
+    public async Task Every_part_hidden_draws_no_area_or_text_either()
+    {
+        // The viewer's Navigational warnings switch off (#995) hides every part.
+        var processor = CreateProcessor(Parts);
+        var hidden = processor.GetNavigationalWarnings().Select(p => p.FeatureRef).ToHashSet(StringComparer.Ordinal);
+
+        var result = await processor.BuildVectorPortrayalAsync(new S124RenderContext { HiddenFeatures = hidden }, TestContext.Current.CancellationToken);
+
+        Assert.Empty(result.SubLayers);
+        Assert.Empty(processor.HitTestFeatures(-16.50, 146.00, 500));
     }
 
     [Fact]

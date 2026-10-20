@@ -312,6 +312,13 @@ internal sealed partial class ViewerSettings
     public string EcdisHiddenDisplayPlanes { get; set; } = "";
 
     /// <summary>
+    /// The ECDIS panel's Navigational warnings switch: whether the map draws
+    /// S-124 warnings at all (S-98 Edition 2.0.0 §6.1.1, §12.12.2; #995).
+    /// On by default.
+    /// </summary>
+    public bool EcdisShowNavigationalWarnings { get; set; } = true;
+
+    /// <summary>
     /// Per-spec explicit S-100 Part 9 §11.7 display-mode selections. Keys
     /// are spec codes (e.g. "S-411"); values are the spec-native mode id
     /// (e.g. "IceScientificIcesodDisplayMode"). Populated by the per-dataset

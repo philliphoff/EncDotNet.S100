@@ -1055,7 +1055,8 @@
                                         <CheckBox AutomationProperties.AutomationId="DisplaySettings.ShowWarningsNotYetInForce"
                                                   Content="{x:Static loc:Strings.DisplaySettings_ShowWarningsNotYetInForce}"
                                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowWarningsNotYetInForce}"
-                                                  IsChecked="{Binding NavigationalWarningDrawing.ShowNotYetInForce, FallbackValue=False}" />
+                                                  IsChecked="{Binding NavigationalWarningDrawing.ShowNotYetInForce, FallbackValue=False}"
+                                                  IsEnabled="{Binding NavigationalWarningDrawing.ShowNavigationalWarnings, FallbackValue=True}" />
                                     </StackPanel>
 
                                     <!--
