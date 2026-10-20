@@ -4,8 +4,8 @@
 dataset, or a composite of several, to a PNG, JPEG or WebP image, or to a
 raster tile set for web maps. It also
 validates datasets and exchange sets, reports what a dataset contains, picks
-the features at a point, converts S-57 cells, serves datasets to AI agents over
-MCP, and publishes datasets as an S-100 feed.
+the features at a point, checks routes, converts S-57 cells, serves datasets to
+AI agents over MCP, and publishes datasets as an S-100 feed.
 
 `s100` uses the same portrayal and validation code as the `EncDotNet.S100`
 library and SoundCharts. It renders through headless Skia renderers, so it
@@ -93,6 +93,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
 | [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude. |
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
+| [`route check`](#route-check) | Checks an RTZ or S-421 route against datasets, and its under-keel clearance when it has a draft. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
 | [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools over standard input and output for a set of datasets. |
@@ -698,6 +699,96 @@ summary line says how many were suppressed.
 and information findings are reported but don't fail unless you pass
 `--strict`. Failing findings exit with code `6`.
 
+## route check
+
+```text
+s100 route check <route> <datasets>... [options]
+```
+
+`route check` checks a route against datasets, as **Check route** does in
+SoundCharts. The route is an RTZ file (IEC 61174 Annex S, versions 1.0, 1.1
+and 1.2) or an S-421 GML dataset. The datasets are any mix of dataset files,
+one exchange set (a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a
+`.zip`) and one folder of datasets. A route file among the datasets is
+skipped.
+
+It runs two checks:
+
+- **The route check**: land, drying ground, chart coverage, regulated and
+  S-122 protected areas, S-124 navigational warnings, and, with the safety
+  contour and depth, depth areas, S-102 shoals, soundings and charted dangers.
+- **The under-keel clearance check**, when every leg has a draft, from the
+  file or `--draft`. Charted depth comes from S-102, or S-101 where there's
+  no S-102, and water level from S-104 at each point's ETA.
+
+[Route checks and under-keel clearance](route-checks.md) explains every
+finding, its thresholds and confidence. `route check` uses the same code as
+the MCP `check_route` and `get_passage_result` tools, so the findings, codes
+and summary match. The results aren't for navigation.
+
+The route's values come from the file: each leg's cross-track limits, draft
+and static UKC, and the speeds and departure of its planning schedule. RTZ and
+S-421 have no squat. These options replace the file's value on every leg:
+
+| Option | Default | Description |
+|---|---|---|
+| `--draft <metres>` | the file's | Draft. With a draft, the UKC check runs, and dangers are also judged against draft + squat + required UKC. |
+| `--squat <metres>` | `0` | Squat allowance. |
+| `--speed <knots>` | the file's | Speed over ground. Speeds give the ETAs that warnings, seasonal areas and S-104 water levels are judged at. |
+| `--departure <iso8601>` | the file's, else now | Departure time. A time without an offset is UTC. |
+| `--required-ukc <metres>` | the file's | Required under-keel clearance. |
+| `--corridor <metres>` | each leg's limits | The corridor's half-width: how far it reaches to port, and to starboard, of the track. A side without a limit uses 50 m. |
+
+Other options:
+
+| Option | Default | Description |
+|---|---|---|
+| `--safety-contour <metres>` | `30` | Safety contour, as the mariner setting. |
+| `--safety-depth <metres>` | `30` | Safety depth, for charted dangers and soundings. |
+| `--window` | off | Also sweeps departures across the S-104 time range to find the departure window. Needs a draft. |
+| `--only <specs>` | all | Exchange set or folder only. Loads only these product specifications, comma-separated. |
+| `--fail-on <level>` | `must-review` | When to exit with code `7`: `must-review`, `check` or `never`. See [Exit codes for CI](#exit-codes-for-ci). |
+| `--format <format>` | `text` | `text` or `json`. |
+| `--debug` | off | Prints full stack traces on error. |
+
+The default safety contour and depth are the S-101 portrayal defaults, which
+flag most coastal water. Set them to the vessel's values.
+
+```bash
+s100 route check route.rtz exchange-set/ --safety-contour 10 --safety-depth 10
+s100 route check route.gml enc.000 bathy.h5 tides.h5 warnings.gml --draft 7 --required-ukc 1
+s100 route check route.rtz exchange-set.zip --corridor 100 --fail-on check
+s100 route check route.gml exchange-set/ --departure 2026-03-01T06:00Z --speed 8 --window --format json
+```
+
+The text output lists the findings by group, then the UKC verdict and its
+minimum. The JSON output is an object with:
+
+- `route`: the `file`, `format` (`rtz` or `s421`), `version`, `routeId`
+  (S-421 only), `name`, number of `waypoints` and the `departure` used.
+- `settings`: the safety contour and depth, and any options that replaced
+  the file's values.
+- `check`: the `check_route` result: `findings`, `summary`, each leg's
+  corridor, the `datasets` read and the `disclaimer`.
+- `passage`: the `get_passage_result` result, with the verdict, the minimum,
+  each leg, gaps and confidence. Without a draft, `passageSkipped` says why
+  instead.
+- `loadWarnings`: datasets that couldn't be loaded, when there are any.
+
+### Exit codes for CI
+
+`route check` exits with code `0` when nothing reaches `--fail-on`, and with
+code `7` when something does:
+
+| `--fail-on` | Exits with `7` when |
+|---|---|
+| `must-review` | There's a Must review finding, or the UKC verdict is below your UKC setting or water level ends before arrival. |
+| `check` | As `must-review`, or there's a Check finding, or the UKC data is incomplete. |
+| `never` | Never. |
+
+A route file that can't be read, or datasets that can't be loaded, exit with
+code `2`.
+
 ## list-specs
 
 ```text
@@ -880,11 +971,12 @@ command exits with code `1`.
 |---|---|
 | `0` | Success. |
 | `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. |
-| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. |
+| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. For `route check`: the route file can't be read. |
 | `3` | The product specification doesn't support headless rendering or display-list output. |
 | `4` | The dataset is recognised, but its structure or encoding isn't supported, such as an unsupported data coding format. |
 | `5` | The dataset is recognised but doesn't conform: a required attribute, dataset or group is missing or malformed. |
 | `6` | `validate` only: failing findings, or failed signature or checksum checks. |
+| `7` | `route check` only: findings at or above `--fail-on`. |
 | other non-zero | Invalid arguments, such as a missing file or an unknown palette. |
 
 ## See also

@@ -74,6 +74,7 @@ public sealed class S201DatasetProcessor : GmlDatasetProcessorBase<S201Feature>
             authorityProvider,
             "S-201")
     {
+        SetContentHash(DatasetContentHash.HashAndRewind(ref datasetStream));
         using (datasetStream)
         {
             _dataset = S201Dataset.Open(datasetStream);

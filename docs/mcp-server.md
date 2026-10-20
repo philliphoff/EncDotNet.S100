@@ -158,7 +158,7 @@ Both hosts provide these tools.
 | `sample_coverage` | No | Samples a depth, water level or current at a point from an S-102, S-104 or S-111 dataset. For S-104 and S-111, `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). |
 | `sample_coverage_along` | No | Samples a coverage at each vertex of a polyline, with the same time handling as `sample_coverage`. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
 | `get_passage_result` | No | Checks under-keel clearance along a passage. See [Check a passage's clearance](#check-a-passages-clearance). |
-| `check_route` | No | Checks a route against the loaded charts: land, drying ground, chart coverage, and restricted and S-122 protected areas. Needs no draft. See [Check a route against the chart](#check-a-route-against-the-chart). |
+| `check_route` | No | Checks a route against the loaded data: land, drying ground, chart coverage, restricted and S-122 protected areas, and S-124 warnings; with a safety contour and depth, also depths and charted dangers. Needs no draft. See [Check a route against the chart](#check-a-route-against-the-chart). |
 
 ### Session tools
 
@@ -289,7 +289,7 @@ There are two kinds of route:
   `routeId` and `edition` are null and the route is known by its file.
   Opening the same route again (the same file, or the same route ID and
   edition) selects the existing route, and a newer edition replaces it.
-  Closing an S-421 route's dataset removes the route, and turns Check passage
+  Closing an S-421 route's dataset removes the route, and turns Check route
   off if it was checking it. `delete_route` on a received route closes it,
   and its dataset if it has one.
 
@@ -409,9 +409,11 @@ do.
 ## Check a route against the chart
 
 `check_route` checks a route against the loaded S-101 cells (and S-401, and
-translated S-57) with the same engine as SoundCharts' findings list
-(`RouteCheckEngine` in `EncDotNet.S100.Navigation`). It needs no draft. The
-result isn't for navigation; show its `disclaimer` once, with the findings.
+translated S-57), S-122 protected areas and S-124 navigational warnings, with
+the same checks as SoundCharts' findings list and `s100 route check`. It needs
+no draft. [Route checks and under-keel clearance](route-checks.md) lists every
+finding code, its group and when it fires. The result isn't for navigation;
+show its `disclaimer` once, with the findings.
 
 Pass the route in one of two ways:
 
@@ -425,56 +427,20 @@ Pass the route in one of two ways:
 how far the corridor reaches to port, and to starboard, of the track, so the
 corridor is twice as wide. Any side without a limit uses 50 m.
 
-| Code | Group | When |
-|---|---|---|
-| `route_check.crosses_land` | `must_review` | The track crosses a `LandArea`, or a `Coastline` where no land area is charted. |
-| `route_check.crosses_drying` | `must_review` | The track crosses a `DepthArea` that dries (DRVAL1 below the datum). |
-| `route_check.land_in_corridor` | `check` | Land reaches inside the cross-track limits, but the track doesn't cross it. |
-| `route_check.drying_in_corridor` | `check` | The same, for drying ground. |
-| `data.outside_chart_coverage` | `check` | The track leaves the `DataCoverage` of every loaded cell (source `data`). |
-
 Pass `safetyContourMeters` and `safetyDepthMeters` (together) to add the
-depth checks, as SoundCharts' findings list runs them with the mariner's
-settings (`get_mariner_settings`). `draftMeters` also judges dangers against
-draft + squat + required UKC; a route's own draft is used when you omit it.
+depth and danger checks, as SoundCharts' findings list runs them with the
+mariner's settings (`get_mariner_settings`). `draftMeters` also judges dangers
+against draft + squat + required UKC; a route's own draft is used when you
+omit it.
 
-| Code | Group | When |
-|---|---|---|
-| `route_check.danger_in_corridor` | `must_review` | A wreck, obstruction or rock shallower than the threshold, or of unknown depth, inside the cross-track limits. |
-| `route_check.danger_near_route` | `check` | Such a danger within 0,1 NM beyond the limits. |
-| `route_check.crosses_safety_contour` | `must_review` | The track crosses depth, dredged or drying areas shallower than the safety contour. |
-| `route_check.safety_contour_in_corridor` | `check` | Such areas inside the limits, off the track. |
-| `route_check.soundings_below_safety_depth` | `check` | Soundings shallower than the safety depth inside the limits. |
-| `route_check.crosses_s102_shoal` | `must_review` | The track crosses S-102 cells shallower than the safety contour. |
-| `route_check.s102_shoal_in_corridor` | `check` | Such S-102 cells inside the limits, off the track. |
-
-It also checks regulated areas, with or without the depth checks: S-101
-restricted, military practice, caution, anchorage and traffic areas, and S-122
-marine protected and restricted areas. For a route, the legs' speeds give ETAs
-from `time` (default: the route's departure) and each area's dates and seasons
-are judged at them; where a leg has no speed, and for a polyline, they're
-judged at `time` (default: now).
-
-| Code | Group | When |
-|---|---|---|
-| `route_check.enters_prohibited_area` | `must_review` | The track enters an S-101 area where entry is prohibited or restricted. |
-| `route_check.prohibited_area_in_corridor` | `check` | Such an area inside the limits, off the track. |
-| `route_check.restricted_area` | `check` or `info` | Another S-101 restricted or military practice area; `info` when its restrictions don't bear on a passage, such as fishing or anchoring prohibited. |
-| `route_check.caution_area` | `check` | A caution area. |
-| `route_check.traffic_area` | `check` or `info` | A separation zone, precautionary area or submarine transit lane; `info` for an inshore traffic zone. |
-| `route_check.anchorage_area` | `check` | An anchorage area. |
-| `route_check.protected_area` | `check` or `info` | An S-122 marine protected or restricted area (never `must_review`). |
-| `route_check.area_not_in_force` | `info` | The area's date range or season doesn't cover the ETAs (or `time`). |
-
-An area that only reaches inside the limits is one group lighter.
-
-Where cells overlap, only the finest cell at a place counts, so a coarse
-cell's generalised land doesn't fire where a finer cell charts water.
-Crossings of the track are exact; ground that only reaches into the corridor
-is found at cross-sections every 10 m.
+For a route, the legs' speeds give ETAs from `time` (default: the route's
+departure), and areas and warnings are judged at them. Where a leg has no
+speed, and for a polyline, they're judged at `time` (default: now).
 
 The result has the `findings` (with `id`, `code`, `group`, `source`, `title`,
-`meta`, `legIndex`, `distanceNm`, a `location` and the `feature` behind it), a
+`meta`, `legIndex`, `distanceNm`, a `location`, the `feature` behind it and,
+for an S-124 finding, the `warning`: its number, title, locality, `relation`,
+`status`, `from`, `until`, `atEta`, validity, cancellation date and text), a
 `summary` with the counts per group and its `text` ("2 to review", "1 to
 check" or "No findings for your settings"), each leg's corridor (`legs`, with
 `portMeters` and `starboardMeters`), the `datasets` it read and the

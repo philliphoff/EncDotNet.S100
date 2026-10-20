@@ -503,34 +503,177 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
             return;
         }
 
-        var path = scratch.Path;
-        path.Rewind();
-        path.AddPoly(points.AsSpan(0, count), close: false);
-
         var paint = scratch.Paint;
         paint.Color = op.Color.ToSkia();
         paint.StrokeWidth = width;
 
+        float[]? dashPattern = null;
         if (op.DashArrayPx is { Count: > 0 } dashArray)
         {
-            int n = dashArray.Count;
-            Span<float> intervals = n <= 16 ? stackalloc float[n] : new float[n];
-            for (int i = 0; i < n; i++)
-                intervals[i] = dashArray[i];
-            paint.PathEffect = scratch.DashFor(intervals, 0f);
+            dashPattern = new float[dashArray.Count];
+            for (int i = 0; i < dashPattern.Length; i++)
+                dashPattern[i] = dashArray[i];
         }
         else if (op.DefaultDash)
         {
             float d = (float)Math.Max(op.WidthPx * 3.0, 3.0);
-            Span<float> intervals = [d, d];
-            paint.PathEffect = scratch.DashFor(intervals, 0f);
+            dashPattern = [d, d];
+        }
+
+        var path = scratch.Path;
+
+        // A line that stays near the cull rectangle is stroked whole. One that
+        // reaches far past it (a long route leg when zoomed in) is clipped to
+        // the rectangle first: a dash effect walks the whole path, so stroking
+        // it unclipped costs its full projected length, nearly all off screen.
+        // The clip margin keeps caps and joins at the cut off screen.
+        float margin = width + LineClipMarginPx;
+        var clip = new SKRect(
+            cullBounds.Left - margin, cullBounds.Top - margin,
+            cullBounds.Right + margin, cullBounds.Bottom + margin);
+        if (minX >= clip.Left && maxX <= clip.Right && minY >= clip.Top && maxY <= clip.Bottom)
+        {
+            path.Rewind();
+            path.AddPoly(points.AsSpan(0, count), close: false);
+            paint.PathEffect = dashPattern is null ? null : scratch.DashFor(dashPattern, 0f);
+            canvas.DrawPath(path, paint);
+            return;
+        }
+
+        DrawClippedLine(canvas, points.AsSpan(0, count), clip, dashPattern, paint, scratch);
+    }
+
+    /// <summary>
+    /// Margin, in pixels beyond the stroke width, around the cull rectangle a
+    /// long line is clipped to, so its caps and joins at the cut fall off screen.
+    /// </summary>
+    private const float LineClipMarginPx = 8f;
+
+    /// <summary>
+    /// Strokes the parts of the polyline <paramref name="points"/> inside
+    /// <paramref name="clip"/>. Each run starts its dash pattern at its distance
+    /// along the whole line, so dashes sit where the unclipped line puts them
+    /// and stay put as the view pans.
+    /// </summary>
+    private static void DrawClippedLine(
+        SKCanvas canvas, ReadOnlySpan<SKPoint> points, SKRect clip, float[]? dashPattern,
+        SKPaint paint, LineDrawScratch scratch)
+    {
+        double patternLength = 0;
+        if (dashPattern is not null)
+        {
+            foreach (var interval in dashPattern)
+                patternLength += interval;
+        }
+
+        var path = scratch.Path;
+        path.Rewind();
+        var runOpen = false;
+        double runStart = 0;
+        double along = 0;
+
+        for (int i = 0; i + 1 < points.Length; i++)
+        {
+            var a = points[i];
+            var b = points[i + 1];
+            double dx = b.X - a.X;
+            double dy = b.Y - a.Y;
+            double length = Math.Sqrt(dx * dx + dy * dy);
+
+            if (ClipSegment(a, dx, dy, clip, out var t0, out var t1))
+            {
+                if (!runOpen || t0 > 0)
+                {
+                    // A dashed run is stroked alone, with its own phase; a
+                    // solid line collects every run into one path.
+                    if (runOpen && dashPattern is not null)
+                        StrokeRun(canvas, path, dashPattern, patternLength, runStart, paint, scratch);
+
+                    path.MoveTo((float)(a.X + dx * t0), (float)(a.Y + dy * t0));
+                    runStart = along + length * t0;
+                    runOpen = true;
+                }
+
+                path.LineTo((float)(a.X + dx * t1), (float)(a.Y + dy * t1));
+                if (t1 < 1)
+                {
+                    if (dashPattern is not null)
+                        StrokeRun(canvas, path, dashPattern, patternLength, runStart, paint, scratch);
+                    runOpen = false;
+                }
+            }
+            else if (runOpen)
+            {
+                if (dashPattern is not null)
+                    StrokeRun(canvas, path, dashPattern, patternLength, runStart, paint, scratch);
+                runOpen = false;
+            }
+
+            along += length;
+        }
+
+        if (dashPattern is null)
+        {
+            paint.PathEffect = null;
+            if (!path.IsEmpty)
+                canvas.DrawPath(path, paint);
+        }
+        else if (runOpen)
+        {
+            StrokeRun(canvas, path, dashPattern, patternLength, runStart, paint, scratch);
+        }
+    }
+
+    /// <summary>Strokes the dashed run in <paramref name="path"/>, phased to <paramref name="runStart"/>, then empties the path.</summary>
+    private static void StrokeRun(
+        SKCanvas canvas, SKPath path, float[] dashPattern, double patternLength, double runStart,
+        SKPaint paint, LineDrawScratch scratch)
+    {
+        var phase = patternLength > 0 ? (float)(runStart % patternLength) : 0f;
+        paint.PathEffect = scratch.DashFor(dashPattern, phase);
+        canvas.DrawPath(path, paint);
+        path.Rewind();
+    }
+
+    /// <summary>
+    /// Clips the segment from <paramref name="start"/> along
+    /// (<paramref name="dx"/>, <paramref name="dy"/>) to <paramref name="clip"/>
+    /// (Liang–Barsky), returning the kept parameter range [<paramref name="t0"/>,
+    /// <paramref name="t1"/>] within 0…1, or <see langword="false"/> when no part
+    /// lies inside.
+    /// </summary>
+    internal static bool ClipSegment(SKPoint start, double dx, double dy, SKRect clip, out double t0, out double t1)
+    {
+        t0 = 0;
+        t1 = 1;
+        return ClipEdge(-dx, start.X - clip.Left, ref t0, ref t1)
+            && ClipEdge(dx, clip.Right - start.X, ref t0, ref t1)
+            && ClipEdge(-dy, start.Y - clip.Top, ref t0, ref t1)
+            && ClipEdge(dy, clip.Bottom - start.Y, ref t0, ref t1);
+    }
+
+    private static bool ClipEdge(double p, double q, ref double t0, ref double t1)
+    {
+        if (p == 0)
+            return q >= 0;
+
+        var r = q / p;
+        if (p < 0)
+        {
+            if (r > t1)
+                return false;
+            if (r > t0)
+                t0 = r;
         }
         else
         {
-            paint.PathEffect = null;
+            if (r < t0)
+                return false;
+            if (r < t1)
+                t1 = r;
         }
 
-        canvas.DrawPath(path, paint);
+        return true;
     }
 
     private static void DrawPoint(SKCanvas canvas, PointPaintOp op, WorldToScreen t, SKRect cullBounds,

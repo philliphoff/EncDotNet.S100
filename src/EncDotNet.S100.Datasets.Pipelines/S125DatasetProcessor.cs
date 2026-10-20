@@ -107,6 +107,7 @@ public sealed class S125DatasetProcessor : GmlDatasetProcessorBase<S125Feature>
             authorityProvider,
             "S-125")
     {
+        SetContentHash(DatasetContentHash.HashAndRewind(ref datasetStream));
         using (datasetStream)
         {
             _dataset = S125Dataset.Open(datasetStream);

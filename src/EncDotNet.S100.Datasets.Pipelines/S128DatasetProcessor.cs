@@ -93,6 +93,7 @@ public sealed class S128DatasetProcessor : GmlDatasetProcessorBase<S128Feature>
             authorityProvider,
             "S-128")
     {
+        SetContentHash(DatasetContentHash.HashAndRewind(ref datasetStream));
         using (datasetStream)
         {
             _dataset = S128Dataset.Open(datasetStream);

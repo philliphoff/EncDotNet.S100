@@ -381,6 +381,17 @@ internal static class Telemetry
             description: "Visible tiles per frame skipped (not scheduled, rasterised or blitted) because finer coverage hides them.");
 
     /// <summary>
+    /// Count of scenes whose product hinted live drawing
+    /// (<c>VectorScene.PreferLiveDrawing</c>) but that were tiled anyway because
+    /// they were too dense to draw every frame.
+    /// </summary>
+    public static readonly Counter<long> TileLiveBaseFallback =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.live_base.fallback",
+            unit: "{scene}",
+            description: "Scenes hinted for live drawing that were tiled because they exceeded the live-drawing budget.");
+
+    /// <summary>
     /// Count of layer frames skipped outright because finer, currently-drawing
     /// coverage hides the layer across the whole viewport (issue #691).
     /// </summary>
