@@ -1,0 +1,529 @@
+{
+  "route": {
+    "file": "421ZZ00WARN.gml",
+    "format": "s421",
+    "version": "1.0",
+    "routeId": "ZZ00-CHANNEL-1",
+    "name": "Synthetic Sound channel transit (fictitious)",
+    "waypoints": 2,
+    "departure": "2026-03-01T06:00:00.0000000\u002B00:00"
+  },
+  "settings": {
+    "safetyContourMeters": 5,
+    "safetyDepthMeters": 5,
+    "squatMeters": 0.4
+  },
+  "check": {
+    "routeId": "ZZ00-CHANNEL-1",
+    "routeName": "Synthetic Sound channel transit (fictitious)",
+    "distanceNm": 2.9137,
+    "summary": {
+      "count": 7,
+      "mustReview": 1,
+      "check": 3,
+      "info": 3,
+      "text": "1 to review"
+    },
+    "findings": [
+      {
+        "id": "s124.S-124/DATASET_FILES/124ZZ00W0001.gml/ZZ00.S124.0001.26.2",
+        "code": "s124.on_route",
+        "group": "must_review",
+        "source": "s124",
+        "title": "Inside navigational warning 001/26",
+        "meta": "ZZ00 LOCAL 001/26 \u00B7 Synthetic Sound (fictitious) \u00B7 2026-03-01 05:00 UTC\u20132026-03-01 08:00 UTC \u00B7 In force at 2026-03-01 06:08 UTC",
+        "legIndex": 0,
+        "distanceNm": 1.1331,
+        "location": {
+          "kind": "span",
+          "startNm": 1.1331,
+          "endNm": 1.3489,
+          "path": [
+            [
+              -40.9726,
+              -134.97143
+            ],
+            [
+              -40.9726,
+              -134.97084
+            ],
+            [
+              -40.9726,
+              -134.97024
+            ],
+            [
+              -40.9726,
+              -134.96965
+            ],
+            [
+              -40.9726,
+              -134.96905
+            ],
+            [
+              -40.9726,
+              -134.96846
+            ],
+            [
+              -40.9726,
+              -134.96786
+            ],
+            [
+              -40.9726,
+              -134.96727
+            ],
+            [
+              -40.9726,
+              -134.96667
+            ],
+            [
+              -40.9726,
+              -134.96667
+            ]
+          ]
+        },
+        "feature": {
+          "datasetId": "S-124/DATASET_FILES/124ZZ00W0001.gml",
+          "featureId": "ZZ00.S124.0001.26.2"
+        },
+        "warning": {
+          "number": "ZZ00 LOCAL 001/26",
+          "title": "Survey operations (fictitious)",
+          "locality": "Synthetic Sound (fictitious)",
+          "relation": "crosses",
+          "status": "in_force",
+          "from": "2026-03-01T06:08:29.8986683\u002B00:00",
+          "until": "2026-03-01T06:10:07.022127\u002B00:00",
+          "atEta": true,
+          "validity": [
+            {
+              "start": "2026-03-01T05:00:00\u002B00:00",
+              "end": "2026-03-01T08:00:00\u002B00:00"
+            }
+          ],
+          "text": [
+            "SYNTHETIC. Survey vessel working in the channel. Pass with caution."
+          ]
+        }
+      },
+      {
+        "id": "s124.S-124/DATASET_FILES/124ZZ00W0003.gml/ZZ00.S124.0003.26.2",
+        "code": "s124.near_route",
+        "group": "check",
+        "source": "s124",
+        "title": "Navigational warning 003/26 near the route",
+        "meta": "ZZ00 LOCAL 003/26 \u00B7 Synthetic Sound (fictitious) \u00B7 from 2026-02-27 00:00 UTC \u00B7 In force at 2026-03-01 06:04 UTC",
+        "legIndex": 0,
+        "distanceNm": 0.6475,
+        "location": {
+          "kind": "point",
+          "startNm": 0.6475,
+          "endNm": 0.6475,
+          "path": [
+            [
+              -40.9726,
+              -134.98215
+            ]
+          ]
+        },
+        "feature": {
+          "datasetId": "S-124/DATASET_FILES/124ZZ00W0003.gml",
+          "featureId": "ZZ00.S124.0003.26.2"
+        },
+        "warning": {
+          "number": "ZZ00 LOCAL 003/26",
+          "title": "Buoy off station (fictitious)",
+          "locality": "Synthetic Sound (fictitious)",
+          "relation": "near",
+          "status": "in_force",
+          "from": "2026-03-01T06:04:51.3703761\u002B00:00",
+          "until": "2026-03-01T06:04:51.3703761\u002B00:00",
+          "atEta": true,
+          "validity": [
+            {
+              "start": "2026-02-27T00:00:00\u002B00:00"
+            }
+          ],
+          "text": [
+            "SYNTHETIC. Channel buoy reported off station."
+          ]
+        }
+      },
+      {
+        "id": "route_check.protected_area.S-122/DATASET_FILES/122ZZ00SEAL.gml/ZZ00.S122.122ZZ00SEAL.1",
+        "code": "route_check.protected_area",
+        "group": "check",
+        "source": "route_check",
+        "title": "Crosses Synthetic Sound Seal Sanctuary (fictitious)",
+        "meta": "Leg 1 \u2192 2 \u00B7 S-122 marine protected area \u00B7 speed restricted \u00B7 seal sanctuary, IUCN IV \u00B7 1 Mar\u201331 May \u00B7 2026-03-01 06:11 UTC\u20132026-03-01 06:13 UTC",
+        "legIndex": 0,
+        "distanceNm": 1.5108,
+        "location": {
+          "kind": "span",
+          "startNm": 1.5108,
+          "endNm": 1.8346,
+          "path": [
+            [
+              -40.9726,
+              -134.9631
+            ],
+            [
+              -40.9726,
+              -134.96251
+            ],
+            [
+              -40.9726,
+              -134.96191
+            ],
+            [
+              -40.9726,
+              -134.96132
+            ],
+            [
+              -40.9726,
+              -134.96072
+            ],
+            [
+              -40.9726,
+              -134.96013
+            ],
+            [
+              -40.9726,
+              -134.95953
+            ],
+            [
+              -40.9726,
+              -134.95894
+            ],
+            [
+              -40.9726,
+              -134.95834
+            ],
+            [
+              -40.9726,
+              -134.95775
+            ],
+            [
+              -40.9726,
+              -134.95715
+            ],
+            [
+              -40.9726,
+              -134.95656
+            ],
+            [
+              -40.9726,
+              -134.95596
+            ]
+          ]
+        },
+        "feature": {
+          "datasetId": "S-122/DATASET_FILES/122ZZ00SEAL.gml",
+          "featureId": "ZZ00.S122.122ZZ00SEAL.1"
+        }
+      },
+      {
+        "id": "s124.S-124/DATASET_FILES/124ZZ00W0006.gml/ZZ00.S124.0006.26.2",
+        "code": "s124.near_route",
+        "group": "check",
+        "source": "s124",
+        "title": "Navigational warning 006/26 near the route",
+        "meta": "ZZ00 LOCAL 006/26 \u00B7 Synthetic Sound (fictitious) \u00B7 from 2026-03-01 05:00 UTC \u00B7 In force at 2026-03-01 06:18 UTC",
+        "legIndex": 0,
+        "distanceNm": 2.4281,
+        "location": {
+          "kind": "point",
+          "startNm": 2.4281,
+          "endNm": 2.4281,
+          "path": [
+            [
+              -40.9726,
+              -134.94287
+            ]
+          ]
+        },
+        "feature": {
+          "datasetId": "S-124/DATASET_FILES/124ZZ00W0006.gml",
+          "featureId": "ZZ00.S124.0006.26.2"
+        },
+        "warning": {
+          "number": "ZZ00 LOCAL 006/26",
+          "title": "Diving operations moved (fictitious)",
+          "locality": "Synthetic Sound (fictitious)",
+          "relation": "near",
+          "status": "in_force",
+          "from": "2026-03-01T06:18:12.6394206\u002B00:00",
+          "until": "2026-03-01T06:18:12.6394206\u002B00:00",
+          "atEta": true,
+          "validity": [
+            {
+              "start": "2026-03-01T05:00:00\u002B00:00"
+            }
+          ],
+          "text": [
+            "SYNTHETIC. Diving operations moved north of the channel. Warning 0005/2026 cancelled."
+          ]
+        }
+      },
+      {
+        "id": "s124.S-124/DATASET_FILES/124ZZ00W0007.gml/ZZ00.S124.0007.26.2",
+        "code": "s124.cancelled",
+        "group": "info",
+        "source": "s124",
+        "title": "Navigational warning 007/26 cancelled",
+        "meta": "ZZ00 LOCAL 007/26 \u00B7 Synthetic Sound (fictitious) \u00B7 2026-03-01 00:00 UTC\u20132026-03-01 12:00 UTC \u00B7 Cancelled",
+        "legIndex": 0,
+        "distanceNm": 0.3777,
+        "location": {
+          "kind": "point",
+          "startNm": 0.3777,
+          "endNm": 0.3777,
+          "path": [
+            [
+              -40.9726,
+              -134.9881
+            ]
+          ]
+        },
+        "feature": {
+          "datasetId": "S-124/DATASET_FILES/124ZZ00W0007.gml",
+          "featureId": "ZZ00.S124.0007.26.2"
+        },
+        "warning": {
+          "number": "ZZ00 LOCAL 007/26",
+          "title": "Towing operations (fictitious)",
+          "locality": "Synthetic Sound (fictitious)",
+          "relation": "crosses",
+          "status": "cancelled",
+          "from": "2026-03-01T06:02:49.9655427\u002B00:00",
+          "until": "2026-03-01T06:02:49.9655427\u002B00:00",
+          "atEta": true,
+          "validity": [
+            {
+              "start": "2026-03-01T00:00:00\u002B00:00",
+              "end": "2026-03-01T12:00:00\u002B00:00"
+            }
+          ],
+          "cancellationDate": "2026-03-01T05:30:00\u002B00:00",
+          "text": [
+            "SYNTHETIC. Tow crossing the channel."
+          ]
+        }
+      },
+      {
+        "id": "s124.S-124/DATASET_FILES/124ZZ00W0002.gml/ZZ00.S124.0002.26.2",
+        "code": "s124.not_in_force",
+        "group": "info",
+        "source": "s124",
+        "title": "Navigational warning 002/26 not in force",
+        "meta": "ZZ00 LOCAL 002/26 \u00B7 Synthetic Sound (fictitious) \u00B7 2026-03-01 12:00 UTC\u20132026-03-01 18:00 UTC \u00B7 Not in force at 2026-03-01 06:14 UTC",
+        "legIndex": 0,
+        "distanceNm": 1.9964,
+        "location": {
+          "kind": "point",
+          "startNm": 1.9964,
+          "endNm": 1.9964,
+          "path": [
+            [
+              -40.9726,
+              -134.95239
+            ]
+          ]
+        },
+        "feature": {
+          "datasetId": "S-124/DATASET_FILES/124ZZ00W0002.gml",
+          "featureId": "ZZ00.S124.0002.26.2"
+        },
+        "warning": {
+          "number": "ZZ00 LOCAL 002/26",
+          "title": "Cable laying (fictitious)",
+          "locality": "Synthetic Sound (fictitious)",
+          "relation": "crosses",
+          "status": "not_in_force",
+          "from": "2026-03-01T06:14:58.3925032\u002B00:00",
+          "until": "2026-03-01T06:14:58.3925032\u002B00:00",
+          "atEta": true,
+          "validity": [
+            {
+              "start": "2026-03-01T12:00:00\u002B00:00",
+              "end": "2026-03-01T18:00:00\u002B00:00"
+            }
+          ],
+          "text": [
+            "SYNTHETIC. Cable laying across the channel. Keep clear."
+          ]
+        }
+      },
+      {
+        "id": "s124.S-124/DATASET_FILES/124ZZ00W0005.gml/ZZ00.S124.0005.26.2",
+        "code": "s124.cancelled",
+        "group": "info",
+        "source": "s124",
+        "title": "Navigational warning 005/26 cancelled",
+        "meta": "ZZ00 LOCAL 005/26 \u00B7 Synthetic Sound (fictitious) \u00B7 from 2026-02-27 00:00 UTC \u00B7 Cancelled",
+        "legIndex": 0,
+        "distanceNm": 2.4281,
+        "location": {
+          "kind": "span",
+          "startNm": 2.4281,
+          "endNm": 2.59,
+          "path": [
+            [
+              -40.9726,
+              -134.94287
+            ],
+            [
+              -40.9726,
+              -134.94227
+            ],
+            [
+              -40.9726,
+              -134.94168
+            ],
+            [
+              -40.9726,
+              -134.94108
+            ],
+            [
+              -40.9726,
+              -134.94049
+            ],
+            [
+              -40.9726,
+              -134.93989
+            ],
+            [
+              -40.9726,
+              -134.9393
+            ],
+            [
+              -40.9726,
+              -134.9393
+            ]
+          ]
+        },
+        "feature": {
+          "datasetId": "S-124/DATASET_FILES/124ZZ00W0005.gml",
+          "featureId": "ZZ00.S124.0005.26.2"
+        },
+        "warning": {
+          "number": "ZZ00 LOCAL 005/26",
+          "title": "Diving operations (fictitious)",
+          "locality": "Synthetic Sound (fictitious)",
+          "relation": "crosses",
+          "status": "cancelled",
+          "from": "2026-03-01T06:18:12.6394206\u002B00:00",
+          "until": "2026-03-01T06:19:25.4815047\u002B00:00",
+          "atEta": true,
+          "validity": [
+            {
+              "start": "2026-02-27T00:00:00\u002B00:00"
+            }
+          ],
+          "text": [
+            "SYNTHETIC. Divers in the water in the channel."
+          ]
+        }
+      }
+    ],
+    "legs": [
+      {
+        "index": 0,
+        "startNm": 0,
+        "distanceNm": 2.9137,
+        "portMeters": 100,
+        "starboardMeters": 100
+      }
+    ],
+    "datasets": [
+      "S-101/DATASET_FILES/101ZZ00SPIT3.000",
+      "S-101/DATASET_FILES/101ZZ00SPIT5.000",
+      "S-122/DATASET_FILES/122ZZ00SEAL.gml",
+      "S-124/DATASET_FILES/124ZZ00W0001.gml",
+      "S-124/DATASET_FILES/124ZZ00W0002.gml",
+      "S-124/DATASET_FILES/124ZZ00W0003.gml",
+      "S-124/DATASET_FILES/124ZZ00W0005.gml",
+      "S-124/DATASET_FILES/124ZZ00W0006.gml",
+      "S-124/DATASET_FILES/124ZZ00W0007.gml"
+    ],
+    "disclaimer": "Not for navigation \u00B7 checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only"
+  },
+  "passage": {
+    "routeId": "ZZ00-CHANNEL-1",
+    "routeName": "Synthetic Sound channel transit (fictitious)",
+    "departure": "2026-03-01T06:00:00\u002B00:00",
+    "arrival": "2026-03-01T06:21:51.1656728\u002B00:00",
+    "verdict": "incomplete_data",
+    "verdictTitle": "No data for part of the passage",
+    "confidence": [
+      "charted_depth_from_s101"
+    ],
+    "noMarginSet": false,
+    "minutesBelow": 0,
+    "placesBelow": 0,
+    "distanceNm": 2.914,
+    "sampleCount": 109,
+    "legs": [
+      {
+        "index": 0,
+        "name": "Leg 1 \u2192 2",
+        "startNm": 0,
+        "distanceNm": 2.914,
+        "start": "2026-03-01T06:00:00\u002B00:00",
+        "end": "2026-03-01T06:21:51.1656728\u002B00:00",
+        "draftMeters": 7,
+        "speedKnots": 8,
+        "squatMeters": 0.4,
+        "requiredUkcMeters": 1,
+        "worstState": "no_data",
+        "minutesBelow": 0,
+        "placesBelow": 0,
+        "lowConfidence": true,
+        "confidence": [
+          "charted_depth_from_s101"
+        ],
+        "noWaterLevel": true
+      }
+    ],
+    "gaps": [
+      {
+        "kind": "no_water_level_coverage",
+        "firstSample": 0,
+        "lastSample": 108,
+        "firstLeg": 0,
+        "lastLeg": 0,
+        "startNm": 0,
+        "endNm": 2.914,
+        "from": "2026-03-01T06:00:00\u002B00:00",
+        "to": "2026-03-01T06:21:51.1656728\u002B00:00"
+      }
+    ],
+    "lowConfidence": [
+      {
+        "kind": "charted_depth_from_s101",
+        "firstSample": 0,
+        "lastSample": 108,
+        "firstLeg": 0,
+        "lastLeg": 0,
+        "startNm": 0,
+        "endNm": 2.914,
+        "from": "2026-03-01T06:00:00\u002B00:00",
+        "to": "2026-03-01T06:21:51.1656728\u002B00:00"
+      }
+    ],
+    "sources": {
+      "bathymetryDatasets": [],
+      "fallbackDatasets": [
+        "S-101/DATASET_FILES/101ZZ00SPIT5.000"
+      ],
+      "waterLevels": [],
+      "depthDatums": [
+        {
+          "code": 23,
+          "label": "Lowest Astronomical Tide"
+        }
+      ],
+      "waterLevelDatums": []
+    },
+    "disclaimer": "Not for navigation \u00B7 computed from S-101 for your settings"
+  }
+}
