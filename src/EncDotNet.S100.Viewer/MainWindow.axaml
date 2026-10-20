@@ -634,6 +634,12 @@
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Bottom"
                                    Margin="0,0,0,14" />
+                <!-- Check route map legend (#959, handoff C8), at the bottom
+                     left clear of the Time HUD; the finding chip sits above it. -->
+                <views:RouteCheckLegendView x:Name="RouteCheckLegend"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Bottom"
+                                            Margin="12,0,0,60" />
                 <!-- Map stamp (#713 B4): the view time over the map while the
                      Timeline dock is shown, so the map (and any screenshot of
                      it) says which time it shows. Green dot Live, accent Pinned.
