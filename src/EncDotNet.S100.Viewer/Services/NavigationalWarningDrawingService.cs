@@ -18,6 +18,11 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <see cref="NavigationalWarningSet.IsDrawnAt"/>.
 /// </para>
 /// <para>
+/// Only a warning the mariner classifies On chart (the default) is drawn by
+/// those rules; Off chart and Information warnings aren't drawn, and neither
+/// are their affected areas and texts (S-98 §12.12.2; #996). They stay listed.
+/// </para>
+/// <para>
 /// Above those rules sits the Display controls' Navigational warnings switch
 /// (<see cref="ShowNavigationalWarnings"/>; S-98 §6.1.1, §12.12.2; #995): off
 /// draws no warning at all, not even the open card's, and hides a warning's
@@ -180,7 +185,7 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
     public bool IsDrawnForCard(NavigationalWarningEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        return ShowNavigationalWarnings && IsOpen(entry) && !_warnings.Set.IsDrawnAt(entry.Warning, _viewTime.Current, _showNotYetInForce);
+        return ShowNavigationalWarnings && IsOpen(entry) && !IsDrawnByRules(entry, _viewTime.Current);
     }
 
     /// <summary>
@@ -213,7 +218,12 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
     }
 
     private bool IsDrawnAt(NavigationalWarningEntry entry, DateTimeOffset time) =>
-        ShowNavigationalWarnings && (IsOpen(entry) || _warnings.Set.IsDrawnAt(entry.Warning, time, _showNotYetInForce));
+        ShowNavigationalWarnings && (IsOpen(entry) || IsDrawnByRules(entry, time));
+
+    // On chart and drawn by the in-force rules (#993, #996).
+    private bool IsDrawnByRules(NavigationalWarningEntry entry, DateTimeOffset time) =>
+        _warnings.ClassificationOf(entry) == NavigationalWarningClassification.OnChart
+        && _warnings.Set.IsDrawnAt(entry.Warning, time, _showNotYetInForce);
 
     private bool IsOpen(NavigationalWarningEntry entry) =>
         _open is { } open
@@ -239,7 +249,9 @@ internal sealed class NavigationalWarningDrawingService : INotifyPropertyChanged
         var time = _viewTime.Current;
         var show = ShowNavigationalWarnings;
         return parts
-            .Where(p => !show || !_warnings.Set.IsDrawnAt(p.Warning, time, _showNotYetInForce))
+            .Where(p => !show
+                || _warnings.ClassificationOf(p.Warning, entry.DisplayName, p.FeatureRef) != NavigationalWarningClassification.OnChart
+                || !_warnings.Set.IsDrawnAt(p.Warning, time, _showNotYetInForce))
             .Select(p => p.FeatureRef)
             .ToHashSet(StringComparer.Ordinal);
     }

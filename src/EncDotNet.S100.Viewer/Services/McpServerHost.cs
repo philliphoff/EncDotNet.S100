@@ -432,6 +432,8 @@ internal sealed class McpServerHost : IAsyncDisposable
                 new PreviewWarningCardTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
             tools.Add(NavigationalWarningsMcpAdapters.Create(
                 new SetNavigationalWarningDisplayTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
+            tools.Add(NavigationalWarningsMcpAdapters.Create(
+                new SetNavigationalWarningClassificationTool(_navigationalWarnings, _navigationalWarningsService, warningsInvoker)));
         }
         if (_routesService is not null)
         {

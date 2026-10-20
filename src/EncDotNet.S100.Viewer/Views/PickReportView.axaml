@@ -3,6 +3,7 @@
              xmlns:views="using:EncDotNet.S100.Viewer.Views"
              xmlns:ic="using:FluentIcons.Avalonia"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:svc="using:EncDotNet.S100.Viewer.Services"
              xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
              xmlns:conv="using:EncDotNet.S100.Viewer"
@@ -473,6 +474,49 @@
                                 <Run Text="{Binding IssuerSuffix}" Foreground="{DynamicResource MutedColor}" />
                             </TextBlock>
                         </Grid>
+                        <!-- On chart / Off chart / Information (S-98 §12.12.2; #996), for a listed warning. -->
+                        <StackPanel Spacing="4" Margin="0,6,0,0">
+                            <StackPanel.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsOpen" />
+                                    <Binding Path="CanClassify" />
+                                </MultiBinding>
+                            </StackPanel.IsVisible>
+                            <TextBlock Text="{x:Static loc:Strings.Label_NavWarnings_Classification}"
+                                       FontSize="11.5" Opacity="0.65" />
+                            <!-- Wraps in a narrow panel rather than clipping the last choice. -->
+                            <WrapPanel Orientation="Horizontal" ItemSpacing="12"
+                                       AutomationProperties.AutomationId="PickReport.WarningCard.Classification"
+                                       AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Classification}">
+                                <RadioButton Content="{x:Static loc:Strings.NavWarnings_ClassOnChart}"
+                                             AutomationProperties.AutomationId="PickReport.WarningCard.OnChart"
+                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassOnChart}"
+                                             FontSize="11.5"
+                                             IsChecked="{Binding IsOnChart, Mode=OneWay}"
+                                             Command="{Binding ClassifyCommand}"
+                                             CommandParameter="{x:Static svc:NavigationalWarningClassification.OnChart}" />
+                                <RadioButton Content="{x:Static loc:Strings.NavWarnings_ClassOffChart}"
+                                             AutomationProperties.AutomationId="PickReport.WarningCard.OffChart"
+                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassOffChart}"
+                                             FontSize="11.5"
+                                             IsChecked="{Binding IsOffChart, Mode=OneWay}"
+                                             Command="{Binding ClassifyCommand}"
+                                             CommandParameter="{x:Static svc:NavigationalWarningClassification.OffChart}" />
+                                <RadioButton Content="{x:Static loc:Strings.NavWarnings_ClassInformation}"
+                                             AutomationProperties.AutomationId="PickReport.WarningCard.Information"
+                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassInformation}"
+                                             FontSize="11.5"
+                                             IsChecked="{Binding IsInformation, Mode=OneWay}"
+                                             Command="{Binding ClassifyCommand}"
+                                             CommandParameter="{x:Static svc:NavigationalWarningClassification.Information}" />
+                            </WrapPanel>
+                            <TextBlock IsVisible="{Binding IsClassifiedOff}"
+                                       AutomationProperties.AutomationId="PickReport.WarningCard.ClassificationNote"
+                                       Text="{x:Static loc:Strings.Pick_Warning_NotDrawnClassified}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MutedColor}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
                     </StackPanel>
                     <StackPanel IsVisible="{Binding IsOpen}">
 

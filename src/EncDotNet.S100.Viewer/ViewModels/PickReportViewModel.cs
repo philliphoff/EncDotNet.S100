@@ -658,7 +658,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     {
         card.SetLinkTargets(_warningNavigator?.Warnings ?? []);
         card.SetWarningSet(_warningNavigator?.WarningSet ?? Datasets.Pipelines.NavigationalWarningSet.Empty);
-        card.CanZoom = FindEntry(card.Hit) is { Extent: not null };
+        var entry = FindEntry(card.Hit);
+        card.CanZoom = entry is { Extent: not null };
+        card.CanClassify = entry is not null;
+        card.Classification = entry is null ? Services.NavigationalWarningClassification.OnChart : _warningNavigator!.ClassificationOf(entry);
     }
 
     private Services.NavigationalWarningEntry? FindEntry(PickHit? hit) =>
@@ -694,6 +697,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         card.OpenRequested += OnWarningOpenRequested;
         card.ZoomRequested += OnWarningZoomRequested;
         card.LinkRequested += OnWarningLinkRequested;
+        card.ClassificationRequested += OnWarningClassificationRequested;
         return card;
     }
 
@@ -703,6 +707,14 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         card.OpenRequested -= OnWarningOpenRequested;
         card.ZoomRequested -= OnWarningZoomRequested;
         card.LinkRequested -= OnWarningLinkRequested;
+        card.ClassificationRequested -= OnWarningClassificationRequested;
+    }
+
+    // The navigator raises WarningsChanged, which updates every card (#996).
+    private void OnWarningClassificationRequested(object? sender, Services.NavigationalWarningClassification classification)
+    {
+        if (sender is NavigationalWarningCardViewModel { Hit: { } hit } && FindEntry(hit) is { } entry)
+            _warningNavigator!.SetClassification(entry, classification);
     }
 
     private void OnWarningOpenRequested(object? sender, EventArgs e)

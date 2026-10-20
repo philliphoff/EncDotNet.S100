@@ -302,10 +302,16 @@ internal sealed partial class NavigationalWarningSeenStore : IDisposable
     internal static string KeyOf(NavigationalWarningEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        var w = entry.Warning;
+        return KeyOf(entry.Warning, entry.DatasetId, entry.FeatureRef);
+    }
+
+    /// <summary>The store key of a part <paramref name="featureRef"/> of <paramref name="datasetId"/> that isn't listed yet.</summary>
+    internal static string KeyOf(NavigationalWarningInfo w, string datasetId, string featureRef)
+    {
+        ArgumentNullException.ThrowIfNull(w);
         return w.Number is { Length: > 0 } number
             ? $"{w.Series?.Trim()}|{number.Trim()}"
-            : $"{entry.DatasetId}#{entry.FeatureRef}";
+            : $"{datasetId}#{featureRef}";
     }
 
     /// <summary>A stamp of a warning's content: its publication time and messages, across its parts.</summary>

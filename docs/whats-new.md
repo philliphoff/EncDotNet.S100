@@ -6,6 +6,20 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Classify navigational warnings on chart, off chart or information.**
+  S-98 Ed 2.0.0 §12.12.2 asks that the mariner can classify each warning's
+  relevance to the route. In SoundCharts' **Navigational warnings** panel,
+  each row now ends with a glyph you select to choose **On chart** (the
+  default), **Off chart** or **Information**; the Warning card has the same
+  choice. Off-chart and information warnings aren't drawn, nor are their
+  affected areas and texts, except while their card is open. They stay in
+  the list, marked, and route checks still report them, tagged with the
+  classification. **Classification** in the order menu lists on-chart
+  warnings first. The classification is kept across restarts and refreshes,
+  keyed by series and number with the year. `list_navigational_warnings`
+  and `get_warning_cards` report `classification`, and the new
+  `set_navigational_warning_classification` tool sets it.
+
 - **One switch for navigational warnings on the chart.** SoundCharts'
   **Display controls** panel has a new **Overlays** › **Navigational
   warnings** switch, on by default and kept after a restart (S-98 Ed 2.0.0

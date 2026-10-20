@@ -144,6 +144,28 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
     }
 
     [Fact]
+    public async Task An_off_chart_warning_is_still_a_finding_tagged_with_its_classification()
+    {
+        using var s = Create();
+        s.Routes.IsCheckModeActive = true;
+        await s.Findings.WhenIdle();
+        var survey = Warning(s.Findings, 1);
+        var entry = s.Warnings.Find(survey.Feature!.DatasetId, survey.Feature.FeatureId)!;
+
+        s.Warnings.SetClassification(entry, NavigationalWarningClassification.OffChart);
+        await s.Findings.WhenIdle();
+
+        survey = Warning(s.Findings, 1);
+        Assert.Equal(RouteFindingGroup.MustReview, survey.Group);
+        Assert.EndsWith(" · Off chart", survey.Meta, StringComparison.Ordinal);
+        Assert.DoesNotContain("Off chart", Warning(s.Findings, 3).Meta, StringComparison.Ordinal);
+
+        s.Warnings.SetClassification(entry, NavigationalWarningClassification.OnChart);
+        await s.Findings.WhenIdle();
+        Assert.DoesNotContain("Off chart", Warning(s.Findings, 1).Meta, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Changing_departure_or_speed_moves_warnings_in_and_out_of_force()
     {
         using var s = Create();
