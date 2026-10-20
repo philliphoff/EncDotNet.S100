@@ -192,6 +192,7 @@ public sealed class MapsuiDatasetRenderer
             {
                 LayerName = sub.LayerName,
                 Product = result.Product,
+                ContentScope = result.ContentScope,
                 Palette = result.Palette,
                 AssetCache = assetCache,
                 PatternClipCache = sub.PatternClipCacheKey is not null
@@ -218,6 +219,7 @@ public sealed class MapsuiDatasetRenderer
                 OutOfBandMinDisplayScale = sub.ApplyOutOfBandCap
                     ? result.OutOfBandMinDisplayScale
                     : null,
+                PreferLiveDrawing = result.PreferLiveDrawing,
             };
 
             var layer = renderer.Render(sub.Instructions, result.GeometryProvider);

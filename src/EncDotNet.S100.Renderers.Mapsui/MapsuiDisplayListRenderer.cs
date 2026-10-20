@@ -59,6 +59,17 @@ public sealed class MapsuiDisplayListRenderer
     public string? Product { get; set; }
 
     /// <summary>
+    /// Content identity of the dataset this layer portrays (see
+    /// <see cref="EncDotNet.S100.Datasets.Pipelines.Portrayal.VectorPortrayalResult.ContentScope"/>),
+    /// folded into the warm tile disk-cache namespace. The style-state hash
+    /// covers the drawing instructions but not the geometry they draw, so
+    /// without it two same-shaped datasets of one product, or a re-issued
+    /// dataset whose geometry moved, would be served each other's tiles. When
+    /// <see langword="null"/>, the layer bypasses the disk cache.
+    /// </summary>
+    public string? ContentScope { get; set; }
+
+    /// <summary>
     /// The color palette to use for resolving S-100 color tokens.
     /// When set, overrides the built-in fallback colors.
     /// </summary>
@@ -108,6 +119,12 @@ public sealed class MapsuiDisplayListRenderer
     /// default) applies no cap.
     /// </summary>
     public int? OutOfBandMinDisplayScale { get; set; }
+
+    /// <summary>
+    /// The product's <see cref="Scene.VectorScene.PreferLiveDrawing"/> hint,
+    /// stamped on the scene so the tiled renderer may draw it directly.
+    /// </summary>
+    public bool PreferLiveDrawing { get; set; }
 
     /// <summary>
     /// Optional shared cache for processed-SVG symbol entries and rasterised
@@ -206,6 +223,7 @@ public sealed class MapsuiDisplayListRenderer
             SymbolScale = SymbolScale,
             TextScale = TextScale,
             OutOfBandMinDisplayScale = OutOfBandMinDisplayScale,
+            PreferLiveDrawing = PreferLiveDrawing,
         };
         var scene = sceneBuilder.Build(instructions, geometryProvider);
 
@@ -262,11 +280,8 @@ public sealed class MapsuiDisplayListRenderer
 
         if (TiledSceneModeIsTiled)
         {
-            S100VectorTileRenderer.BindScene(
-                layer,
-                scene,
-                productLayerSet: Product ?? LayerName,
-                styleStateHash: ComputeStyleStateHash(instructions));
+            var (productLayerSet, styleStateHash) = DiskCacheKey(instructions);
+            S100VectorTileRenderer.BindScene(layer, scene, productLayerSet, styleStateHash);
         }
         else
         {
@@ -274,6 +289,21 @@ public sealed class MapsuiDisplayListRenderer
         }
 
         return layer;
+    }
+
+    /// <summary>
+    /// The <c>(productLayerSet, styleStateHash)</c> pair that keys this layer's
+    /// warm tile disk-cache namespace, or a pair of <see langword="null"/>s
+    /// (bypass the disk cache) when no <see cref="ContentScope"/> identifies the
+    /// dataset's content.
+    /// </summary>
+    internal (string? ProductLayerSet, string? StyleStateHash) DiskCacheKey(
+        IReadOnlyList<DrawingInstruction> instructions)
+    {
+        if (string.IsNullOrEmpty(ContentScope))
+            return (null, null);
+
+        return ($"{Product ?? LayerName}|{ContentScope}", ComputeStyleStateHash(instructions));
     }
 
     /// <summary>

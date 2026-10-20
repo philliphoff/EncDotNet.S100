@@ -1029,12 +1029,34 @@ Times follow your Local/UTC setting. If a leg has no speed, the ETAs stop
 there and the route's line says so. The speed is the speed over ground you
 enter; S-111 currents aren't applied.
 
-**Check passage**, next to **Edit**, needs a route with at least two
-waypoints. With a draft, on the passage or on every leg, it checks under-keel
-clearance along the active route at each point's ETA: UKC = charted depth + water level − draft − squat, against the
-**Required UKC** (0 m when unset). Charted depth comes from loaded S-102, or
-from S-101 where there's no S-102 (lower confidence); water level comes from
-loaded S-104. While it's on:
+**From measurement** copies the current Measure Mode path into a new route and
+switches to Route Edit Mode.
+
+The active route is emphasized on the map, and other routes are drawn more
+faintly. The route model follows the S-421 route schema (route, waypoints and
+legs).
+
+Routes are saved in `routes.json` in the SoundCharts data folder, next to
+`settings.json` (or under `--data-dir` or `S100_DATA_DIR`). Only values you set
+are written: a route with only waypoints has no passage values, and a leg
+stores a value only when it overrides the route's passage. Changes from the
+editor or from an agent are saved shortly after you make them, and again when
+you quit. An `--ephemeral` run loads saved routes but never writes them.
+
+### Check a route
+
+**Check route**, next to **Edit**, needs a route with at least two waypoints.
+It checks the active route against the loaded data: land and drying ground,
+chart coverage, water shallower than the **Safety Contour** and charted
+dangers (from [Mariner settings](#mariner-settings)), restricted and S-122
+protected areas, and S-124 navigational warnings, judged at each point's ETA.
+With a draft, on the passage or on every leg, it also checks under-keel
+clearance at each point's ETA: UKC = charted depth + water level − draft −
+squat, against the **Required UKC** (0 m when unset). Charted depth comes from
+loaded S-102, or from S-101 where there's no S-102 (lower confidence); water
+level comes from loaded S-104. [Route checks and under-keel
+clearance](../../docs/route-checks.md) explains every finding, its thresholds
+and confidence. While it's on:
 
 - **The map** washes the chart and colours the route by state at ETA:
   - Meets your settings, Tight (within 0.5 m of the required UKC) and Below
@@ -1059,9 +1081,10 @@ loaded S-104. While it's on:
   hovering a leg moves the cursor to it.
   **Findings** lists what to look at, grouped **MUST REVIEW**, **CHECK** and
   **INFO**: each stretch below your UKC setting, depths charted from S-101
-  only, water-level gaps (such as data ending before arrival) and expired
-  S-111 runs, which aren't used in ETAs. A tag names the check behind each
-  one. Clicking a finding zooms the map to it, outlines it dashed in its tone
+  only, water-level gaps (such as data ending before arrival), expired S-111
+  runs, which aren't used in ETAs, and the route check's findings, such as
+  land, dangers and areas the route crosses and warnings on it. A tag names
+  the check behind each one. Clicking a finding zooms the map to it, outlines it dashed in its tone
   with a "Zoomed to finding" chip, and moves the profile cursor there. On the
   map, a small dot marks each finding, red for MUST REVIEW, amber for CHECK
   and grey for INFO.
@@ -1115,23 +1138,43 @@ Night, and red is used only for Below your UKC setting, which is also drawn
 wider. The Clearance profile uses the same colours for the chrome theme in use.
 
 Editing recomputes live: the route draws grey and dashed, and the verdict
-dims, until the new result arrives. Turning Check passage off restores the
+dims, until the new result arrives. Turning **Check route** off restores the
 map and the docks. The result is an aid for exploring the data, not for
 navigation.
 
-**From measurement** copies the current Measure Mode path into a new route and
-switches to Route Edit Mode.
+To run the same checks without SoundCharts, for example in CI, use
+[`s100 route check`](../../docs/cli.md#route-check).
 
-The active route is emphasized on the map, and other routes are drawn more
-faintly. The route model follows the S-421 route schema (route, waypoints and
-legs).
+### Import and export routes
 
-Routes are saved in `routes.json` in the SoundCharts data folder, next to
-`settings.json` (or under `--data-dir` or `S100_DATA_DIR`). Only values you set
-are written: a route with only waypoints has no passage values, and a leg
-stores a value only when it overrides the route's passage. Changes from the
-editor or from an agent are saved shortly after you make them, and again when
-you quit. An `--ephemeral` run loads saved routes but never writes them.
+**Import route…**, at the top of the **Routes** panel, opens an S-421 or RTZ
+route file (RTZ versions 1.0, 1.1 and 1.2). An S-421 file also opens as a
+dataset from the Datasets or Library panel, or by drag and drop. The route
+opens as a **received** route:
+
+- It's read-only and isn't saved with your own routes. Its row says
+  "received", and names its format, route ID and edition.
+- An S-421 route can be drawn with its own S-421 portrayal (**Native**) or
+  with the route tools (**Planning**). An RTZ route has no portrayal of its
+  own, so it's drawn in Planning mode. **Check route** always draws Planning.
+- **Your check settings** (draft, squat, required UKC and departure) can
+  change. They're kept on this computer for the route, not written into it.
+  Speed and cross-track limits stay as the file gives them.
+- Opening the same route again selects it; a newer edition replaces it. An
+  open RTZ route reopens after a restart while its file still exists.
+
+To edit a received route, choose **Copy to edit** (it replaces **Edit**, or
+it's in the route's menu). The copy is your own route, with a new route ID
+that references the source's route ID and edition. What SoundCharts' route
+can't hold, such as further schedules or extensions, is kept and written back
+when you export the copy in the same format.
+
+**Export…**, in a route's menu, writes any route as RTZ (1.2, 1.1 or 1.0) or
+S-421. A received route exported unchanged keeps its route ID, edition and
+status. **Also write my check settings** adds your draft, required UKC and
+departure; they're left out otherwise. See [Route file
+formats](../../docs/route-checks.md#route-file-formats) for what each format
+holds.
 
 ## Own ship and AIS vessels
 

@@ -89,6 +89,7 @@ public sealed class S122DatasetProcessor : GmlDatasetProcessorBase<S122Feature>
             authorityProvider,
             "S-122")
     {
+        SetContentHash(DatasetContentHash.HashAndRewind(ref datasetStream));
         using (datasetStream)
         {
             _dataset = S122Dataset.Open(datasetStream);

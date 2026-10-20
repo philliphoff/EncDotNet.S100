@@ -37,6 +37,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     private readonly GmlPortrayalCatalogueBase _catalogue;
     private readonly FeatureCatalogueDecoder? _decoder;
     private readonly string _fileName;
+    private string? _contentHash;
     private readonly IDisplayPlaneAuthorityProvider _authorityProvider;
 
     // Serializes portrayal builds for this processor. The build mutates
@@ -106,6 +107,20 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     protected void SetAxisOrder(AxisOrderAssessment? axisOrder) => AxisOrder = axisOrder;
 
     /// <summary>
+    /// Records the hash of the dataset's raw bytes (see
+    /// <see cref="DatasetContentHash"/>), from which
+    /// <see cref="VectorPortrayalResult.ContentScope"/> is built. Subclasses
+    /// call this once, from their constructor, before parsing the dataset.
+    /// Until it is called the dataset reports no content scope, so its layers
+    /// bypass the warm tile disk cache.
+    /// </summary>
+    protected void SetContentHash(string contentHash) => _contentHash = contentHash;
+
+    private string? ContentScope => _contentHash is null
+        ? null
+        : $"ds:{_contentHash}|spec:{Spec}|pc:{_catalogue.CatalogueRef}";
+
+    /// <summary>
     /// Records the dataset's declared product-spec edition (parsed from the
     /// GML <c>productEdition</c> / application-schema namespace) and computes
     /// the <see cref="VersionAssessment"/> against the edition this build
@@ -171,6 +186,14 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
     /// specs that need wider padding (e.g. S-421 uses 0.05).
     /// </summary>
     protected virtual double MinExtentPadding => 0.01;
+
+    /// <summary>
+    /// Whether this product's datasets are sparse overlays a renderer may draw
+    /// directly every frame (<see cref="VectorPortrayalResult.PreferLiveDrawing"/>).
+    /// Off by default; a product turns it on only when every dataset it can
+    /// produce is small.
+    /// </summary>
+    protected virtual bool PreferLiveDrawing => false;
 
     /// <summary>
     /// Builds feature references for the pick UI. Override to expose
@@ -376,6 +399,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 Product = Spec.Name,
                 Spec = Spec,
                 SourceDatasetId = _fileName,
+                ContentScope = ContentScope,
                 Info = info,
                 SymbolScale = context?.SymbolScale ?? 1.0,
                 TextScale = context?.TextScale ?? 1.0,
@@ -383,6 +407,7 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 AreaFillProvider = output.AreaFill,
                 LineStyleProvider = output.LineStyle,
                 GeographicExtent = ComputeGeographicExtent(),
+                PreferLiveDrawing = PreferLiveDrawing,
             };
         }
         finally

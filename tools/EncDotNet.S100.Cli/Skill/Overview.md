@@ -10,6 +10,7 @@ command offers it, and treat paths as local filesystem paths.
 | Detect a dataset's product and available time steps | `s100 info` |
 | Validate a dataset or verify an exchange set | `s100 validate` |
 | Query features or coverage values at a position | `s100 identify` |
+| Check an RTZ or S-421 route against datasets (land, depths, dangers, areas, S-124 warnings, UKC) | `s100 route check` |
 | Render one dataset, multiple layers, or an exchange set | `s100 render` |
 | Write XYZ raster tiles (folder, PMTiles or MBTiles) for a web map | `s100 tiles export` |
 | Serve a built tile set, or datasets rendered on demand, to a local web map on XYZ URLs | `s100 tiles serve` |
@@ -60,3 +61,4 @@ and no network update check.
 | `4` | Recognized operation or dataset capability is not supported. |
 | `5` | Dataset schema is non-conforming. |
 | `6` | Validation findings failed the selected validation policy. |
+| `7` | `route check` findings reached the `--fail-on` level. |

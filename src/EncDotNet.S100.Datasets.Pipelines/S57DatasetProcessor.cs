@@ -47,6 +47,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private readonly ILuaEngine _luaEngine;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
+    private readonly string _contentScope;
 
     /// <summary>
     /// The S-100 product this cell is translated into, chosen from its declared
@@ -176,12 +177,13 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     }
 
     private S57DatasetProcessor(
-        S57Dataset s57,
+        (S57Dataset Dataset, string ContentHash) opened,
         string fileName,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
         FeatureCatalogueManager featureCatalogueManager)
     {
+        var s57 = opened.Dataset;
         ArgumentNullException.ThrowIfNull(s57);
         _fileName = fileName;
         _luaEngine = luaEngine;
@@ -201,6 +203,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
         // S-57 datasets render through the target product's portrayal catalogue.
         Diagnostics.CatalogueResolutionDiagnostics.Report(this, PortrayalSpec, _catalogue.CatalogueRef, "portrayal");
+
+        _contentScope = $"ds:{opened.ContentHash}|target:{_target.Spec}|pc:{_catalogue.CatalogueRef}";
     }
 
     /// <summary>
@@ -217,20 +221,24 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         return catalogueManager.HasCatalogue(target.Spec) ? target : S57TranslationTarget.S101;
     }
 
-    private static S57Dataset OpenFromFile(string path)
+    private static (S57Dataset, string) OpenFromFile(string path)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
-        using var stream = File.OpenRead(path);
-        return S57Dataset.Open(stream);
+        Stream stream = File.OpenRead(path);
+        var contentHash = DatasetContentHash.HashAndRewind(ref stream);
+        using (stream)
+            return (S57Dataset.Open(stream), contentHash);
     }
 
-    private static S57Dataset OpenFromSource(IAssetSource source, string relativePath)
+    private static (S57Dataset, string) OpenFromSource(IAssetSource source, string relativePath)
     {
-        using var stream = AssetSourceHelpers.OpenSeekable(source, relativePath);
-        return S57Dataset.Open(stream);
+        var stream = AssetSourceHelpers.OpenSeekable(source, relativePath);
+        var contentHash = DatasetContentHash.HashAndRewind(ref stream);
+        using (stream)
+            return (S57Dataset.Open(stream), contentHash);
     }
 
-    private static S57Dataset OpenFromSource(
+    private static (S57Dataset, string) OpenFromSource(
         IAssetSource source,
         string baseRelativePath,
         IReadOnlyList<string> updateRelativePaths)
@@ -244,7 +252,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             foreach (var updatePath in updateRelativePaths)
                 updateStreams.Add(AssetSourceHelpers.OpenSeekable(source, updatePath));
 
-            return S57Dataset.Open(baseStream, updateStreams);
+            var contentHash = DatasetContentHash.HashAndRewind([baseStream, .. updateStreams]);
+            return (S57Dataset.Open(baseStream, updateStreams), contentHash);
         }
         finally
         {
@@ -372,6 +381,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             Product = "S-57",
             Spec = new SpecRef("S-57", default),
             SourceDatasetId = _fileName,
+            ContentScope = _contentScope,
             Info = info,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,

@@ -896,6 +896,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             Product = _catalogueSpec,
             Spec = new SpecRef(_catalogueSpec, default),
             SourceDatasetId = _fileName,
+            // Dataset bytes (with updates), FC/PC content and the portrayal
+            // assemblies: everything the scene depends on beyond the
+            // instructions and the renderer's style state.
+            ContentScope = await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false),
             Info = info,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,

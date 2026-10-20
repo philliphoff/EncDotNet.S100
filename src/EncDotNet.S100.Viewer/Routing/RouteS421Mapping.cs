@@ -458,15 +458,5 @@ internal static class RouteS421Mapping
     /// one, else the first schedule's first variant; with its schedule's index.
     /// </summary>
     internal static (int Index, S421ScheduleVariant Variant)? Planning(S421Route route)
-    {
-        foreach (var kind in new[] { S421ScheduleVariantKind.Calculated, S421ScheduleVariantKind.Manual })
-        {
-            for (var i = 0; i < route.Schedules.Count; i++)
-            {
-                if (route.Schedules[i].Variants.FirstOrDefault(v => v.Kind == kind) is { } variant)
-                    return (i, variant);
-            }
-        }
-        return route.Schedules.FirstOrDefault()?.Variants.FirstOrDefault() is { } first ? (0, first) : null;
-    }
+        => route.GetPlanningSchedule();
 }

@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\tools\EncDotNet.S100.Cli\EncDotNet.S100.Cli.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Testing.Scenarios\EncDotNet.S100.Testing.Scenarios.csproj" />
   </ItemGroup>
 
   <ItemGroup>

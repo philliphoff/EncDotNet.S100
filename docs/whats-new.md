@@ -20,6 +20,22 @@ month. For package versions and release assets, see
   and `get_warning_cards` report `classification`, and the new
   `set_navigational_warning_classification` tool sets it.
 
+- **Check routes from the command line.** The new `s100 route check` checks
+  an RTZ (1.0, 1.1, 1.2) or S-421 route against dataset files, an exchange set
+  or a folder, without SoundCharts: land, drying ground, chart coverage, the
+  safety contour, charted dangers, regulated and S-122 protected areas, S-124
+  warnings and, when the route has a draft, under-keel clearance. Options
+  replace the file's draft, squat, speed, departure, required UKC and corridor,
+  and set the safety contour and depth. `--format json` gives the
+  `check_route` and `get_passage_result` results, and the command exits with
+  code 7 on Must review findings (`--fail-on`), for CI. The MCP `check_route`
+  tool now also checks S-124 warnings (`s124.on_route`, `s124.near_route`,
+  `s124.not_in_force`, `s124.cancelled`, with the warning on each finding). A
+  new guide, [Route checks and under-keel clearance](route-checks.md),
+  explains every finding, threshold and confidence reason, received routes
+  and the route formats. In the libraries, `S421Route.GetPlanningSchedule`
+  returns the schedule a passage reads its speeds and departure from.
+
 - **One switch for navigational warnings on the chart.** SoundCharts'
   **Display controls** panel has a new **Overlays** › **Navigational
   warnings** switch, on by default and kept after a restart (S-98 Ed 2.0.0

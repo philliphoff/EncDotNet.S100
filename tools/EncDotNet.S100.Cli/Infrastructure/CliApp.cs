@@ -63,6 +63,18 @@ internal static class CliApp
                     .WithExample("tiles", "serve", "--layer", "enc.000", "--layer", "currents.h5");
             });
 
+            config.AddBranch("route", route =>
+            {
+                route.SetDescription("Check routes against S-100 data.");
+
+                route.AddCommand<RouteCheckCommand>("check")
+                    .WithDescription("Check an RTZ or S-421 route against datasets headlessly: land, drying ground, the safety contour, charted dangers, restricted and protected areas, S-124 warnings, chart coverage and, with a draft, under-keel clearance. Exits with code 7 on Must review findings, for CI.")
+                    .WithExample("route", "check", "route.rtz", "exchange-set/")
+                    .WithExample("route", "check", "route.gml", "enc.000", "bathy.h5", "warnings.gml", "--draft", "7", "--required-ukc", "1")
+                    .WithExample("route", "check", "route.rtz", "exchange-set.zip", "--safety-contour", "10", "--safety-depth", "10", "--corridor", "100")
+                    .WithExample("route", "check", "route.gml", "exchange-set/", "--departure", "2026-03-01T06:00Z", "--speed", "8", "--format", "json");
+            });
+
             config.AddCommand<ValidateCommand>("validate")
                 .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack, or verify an exchange set's integrity (S-100 Part 15 signatures, or S-57 / S-63 CATALOG.031 CRCs).")
                 .WithExample("validate", "warnings.gml")

@@ -298,4 +298,12 @@ public sealed class VectorScene
     /// cap itself against the live scale instead.
     /// </remarks>
     public double? ScaleMinimumCap { get; init; }
+
+    /// <summary>
+    /// Whether the dataset's product marks it as a sparse overlay, such as an
+    /// S-421 route, that a renderer may draw directly every frame instead of
+    /// through cached tiles. A hint: a renderer still tiles a scene too dense
+    /// to draw each frame.
+    /// </summary>
+    public bool PreferLiveDrawing { get; init; }
 }
