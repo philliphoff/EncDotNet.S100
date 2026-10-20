@@ -219,6 +219,7 @@ public sealed class MapsuiDatasetRenderer
                 OutOfBandMinDisplayScale = sub.ApplyOutOfBandCap
                     ? result.OutOfBandMinDisplayScale
                     : null,
+                PreferLiveDrawing = result.PreferLiveDrawing,
             };
 
             var layer = renderer.Render(sub.Instructions, result.GeometryProvider);

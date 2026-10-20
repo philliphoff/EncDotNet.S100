@@ -147,7 +147,7 @@ public sealed class VectorCompositeLayer : CompositeLayer
         var ops = index.Query(minX - marginX, minY - marginY, maxX + marginX, maxY + marginY);
         return ops.Count == _scene.Ops.Count
             ? _scene
-            : new VectorScene(ops) { ScaleMinimumCap = _scene.ScaleMinimumCap };
+            : new VectorScene(ops) { ScaleMinimumCap = _scene.ScaleMinimumCap, PreferLiveDrawing = _scene.PreferLiveDrawing };
     }
 
     private bool IsPastMinimumDisplayScale(Viewport viewport) =>
