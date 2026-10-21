@@ -19,7 +19,7 @@ internal interface INavigationalWarningNavigator
     /// </summary>
     Datasets.Pipelines.NavigationalWarningSet WarningSet => Datasets.Pipelines.NavigationalWarningSet.Empty;
 
-    /// <summary>Raised after <see cref="Warnings"/> or <see cref="WarningSet"/> changes.</summary>
+    /// <summary>Raised after <see cref="Warnings"/>, <see cref="WarningSet"/> or the checked route's warnings (<see cref="RouteFindingFor"/>) change.</summary>
     event EventHandler? WarningsChanged;
 
     /// <summary>Finds a listed part by dataset id and feature id.</summary>
@@ -59,4 +59,15 @@ internal interface INavigationalWarningNavigator
     /// <summary>Classifies a listed part's warning, as the panel's row does (#996).</summary>
     /// <returns>Whether it changed; false by default.</returns>
     bool SetClassification(NavigationalWarningEntry entry, NavigationalWarningClassification classification) => false;
+
+    /// <summary>
+    /// The checked route's S-124 finding for a listed part (#959), which the
+    /// card's "Crosses route · leg 3 → 4" row opens; <c>null</c> when the part
+    /// is off the route or Check route is off, and by default.
+    /// </summary>
+    EncDotNet.S100.Navigation.RouteFinding? RouteFindingFor(NavigationalWarningEntry entry) => null;
+
+    /// <summary>Selects a finding from <see cref="RouteFindingFor"/> in the Findings list and brings the list forward.</summary>
+    /// <returns>Whether it opened; false by default.</returns>
+    bool OpenRouteFinding(EncDotNet.S100.Navigation.RouteFinding finding) => false;
 }

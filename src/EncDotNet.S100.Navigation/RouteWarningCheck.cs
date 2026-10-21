@@ -96,6 +96,13 @@ public sealed record RouteFindingWarning(
     /// <c>null</c> for any other status.
     /// </summary>
     public NavigationalWarningState? Withdrawal { get; init; }
+
+    /// <summary>
+    /// The leg where the route leaves the warning, so a warning met on several
+    /// legs reads "Crosses route on 2 legs"; <c>null</c> when it is the
+    /// finding's <see cref="RouteFinding.LegIndex"/>.
+    /// </summary>
+    public int? EndLegIndex { get; init; }
 }
 
 /// <summary>One warning against the route, found or not.</summary>
@@ -437,7 +444,7 @@ public sealed class RouteWarningCheck
             RouteCorridor.Location(track, start, end),
             warning.Feature)
         {
-            Warning = new RouteFindingWarning(warning.Info, relation, status, from, until, atEta) { Withdrawal = withdrawal },
+            Warning = new RouteFindingWarning(warning.Info, relation, status, from, until, atEta) { Withdrawal = withdrawal, EndLegIndex = endLeg },
         };
         return new RouteWarningMatch(warning, relation, startLeg, start, end, acc.Closest, finding);
     }

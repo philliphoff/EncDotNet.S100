@@ -459,6 +459,10 @@ public partial class MainWindow : ShadUI.Window
             warnings.RevealRequested += (_, _) => _viewModel.SelectTab("NavigationalWarnings");
         }
 
+        // #959: a Warning card's "Crosses route · leg 3 → 4" brings the Routes panel's Findings forward.
+        if (App.Services.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>() is { } routeFindings)
+            routeFindings.OpenRequested += (_, _) => _viewModel.SelectTab("Routes");
+
         // Library coverage (issue #655): outline the datasets listed in the
         // Library panel — without loading them — while that panel is showing.
         _libraryCoverageController = new LibraryCoverageOverlayController(

@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **From a warning to its route finding.** While SoundCharts checks a
+  route, the Warning card of a warning that crosses or is near it, in
+  **Object Information** or opened from the **Navigational warnings**
+  panel, shows where: "Crosses route · leg 3 → 4", "Near route · leg 1 →
+  2", or "Crosses route on 2 legs". Selecting the row selects that finding
+  in the Routes panel's **Findings** list. `get_warning_cards` reports the
+  row as each card's `route`, and `list_navigational_warnings` adds the
+  legs to each warning's `route`.
+
 - **S-421 datasets become routes only when you open them as routes.**
   Loading an S-421 dataset in SoundCharts no longer adds it to the
   **Routes** panel, however it's loaded, so the panel lists only the routes

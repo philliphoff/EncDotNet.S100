@@ -238,6 +238,13 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         return IsRouteScopeAvailable && _onRoute.TryGetValue(Key(entry), out var finding) ? finding : null;
     }
 
+    /// <inheritdoc />
+    public bool OpenRouteFinding(RouteFinding finding)
+    {
+        ArgumentNullException.ThrowIfNull(finding);
+        return IsRouteScopeAvailable && _routeFindings!.Open(finding);
+    }
+
     /// <summary>
     /// A part's line while Check route is on: "On route · 06:08" when it
     /// crosses, "Near route · 06:19" when near; without speeds, no time.
@@ -277,6 +284,8 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         _onRoute = onRoute;
         RaiseScopeChanged();
         Rebuild();
+        // Open Warning cards update their "Crosses route" row.
+        WarningsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void RaiseScopeChanged()
