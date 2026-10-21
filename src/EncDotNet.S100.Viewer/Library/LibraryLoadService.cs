@@ -42,6 +42,11 @@ internal interface ILibraryLoader
     /// <summary>Closes the opened (or deferred) datasets of <paramref name="items"/>; others are ignored (#809).</summary>
     /// <returns>How many were closed.</returns>
     int Close(IReadOnlyList<CollectionItem> items) => 0;
+
+    /// <summary>The dataset <paramref name="item"/> was opened as, or <c>null</c> when it isn't open.</summary>
+    /// <param name="item">A Library item.</param>
+    /// <returns>Its Datasets-panel entry.</returns>
+    DatasetEntry? EntryOf(CollectionItem item) => null;
 }
 
 /// <summary>
@@ -119,6 +124,12 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
         return closed;
     }
 
+    public DatasetEntry? EntryOf(CollectionItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return item.Location is LocalItemLocation local ? _opener.EntryOf(local) : null;
+    }
+
     public void Dispose()
     {
         _loader.Dispose();
@@ -157,6 +168,12 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
                 : entry.IsDeferred ? LibraryLoadState.Deferred
                 : LibraryLoadState.None;
         }
+
+        /// <summary>The entry opened for <paramref name="location"/>, while it's in the Datasets panel.</summary>
+        public DatasetEntry? EntryOf(LocalItemLocation location) =>
+            _entries.TryGetValue(Key(location.RootPath, location.RelativePath), out var entry) && _datasets.Entries.Contains(entry)
+                ? entry
+                : null;
 
         public async Task<LibraryOpenOutcome> OpenAsync(LibraryOpenGroup group, bool defer, CancellationToken cancellationToken)
         {

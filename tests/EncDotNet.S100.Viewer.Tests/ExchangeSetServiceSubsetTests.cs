@@ -47,6 +47,32 @@ public sealed class ExchangeSetServiceSubsetTests
     }
 
     [Fact]
+    public async Task An_explicit_load_takes_a_dataset_loaded_as_you_pan_out_of_the_lazy_loader()
+    {
+        var loader = new CountingLoader();
+        var datasets = new DatasetsViewModel(loader);
+        using var coordinator = new EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator(
+            new SilentNotifier(), (_, _) => Task.CompletedTask, _ => { });
+        using var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), coordinator);
+        var request = new ExchangeSetSubsetRequest(Fixture("Synthetic-S57-Framed"), "CATALOG.031", [Cell("US5WA52M")]);
+        var ct = TestContext.Current.CancellationToken;
+
+        var entry = Assert.Single(await service.OpenSubsetAsync(request, defer: true, ct));
+        Assert.Equal(1, coordinator.DeferredCount);
+        // As the lazy loader leaves a cell it loaded while panning.
+        entry.IsLoaded = true;
+        entry.IsDeferred = false;
+
+        await service.OpenSubsetAsync(request, defer: false, ct);
+
+        // It stays loaded, and panning away no longer unloads it.
+        Assert.Equal(0, coordinator.DeferredCount);
+        Assert.Equal(0, coordinator.LoadedCount);
+        Assert.False(entry.IsDeferred);
+        Assert.Equal(0, loader.Loads);
+    }
+
+    [Fact]
     public async Task A_second_subset_of_the_same_set_reuses_its_header_and_entries()
     {
         var (datasets, service, _) = CreateSystem();

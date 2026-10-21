@@ -276,11 +276,13 @@ There are two kinds of route:
 
 - **Owned routes** are the ones you create. They're editable and saved
   between sessions.
-- **Received routes** come from a route file you open. An S-421 file opens
-  as a dataset (from the Datasets or Library panel, by drag and drop, with
-  `open_dataset`, or with `import_route`), and its route lasts while the
-  dataset is open. Datasets the Library loads as you pan never become routes.
-  An RTZ file (IEC 61174 Annex S, versions 1.0, 1.1 and 1.2) opens only with
+- **Received routes** come from a route you open. Loading an S-421 dataset
+  never adds a route by itself, however it's loaded (Datasets or Library
+  panel, drag and drop, `open_dataset`, or as you pan). You open one as a
+  route with **Import route…** or `import_route` (a file path or content), or
+  with the Library's **Open as route** or `import_route` with `datasetId` (a
+  loaded dataset). The S-421 file opens as a dataset if it isn't open yet, and
+  its route lasts while the dataset is open. An RTZ file (IEC 61174 Annex S, versions 1.0, 1.1 and 1.2) opens only with
   `import_route` or **Import route…**. RTZ has no portrayal of its own, so
   the route has no dataset; it lasts until you close it, and it reopens after
   a restart while the file still exists. Received routes are read-only and

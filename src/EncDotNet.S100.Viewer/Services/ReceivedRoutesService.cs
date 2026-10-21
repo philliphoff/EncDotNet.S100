@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Globalization;
-using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.Pipelines.Vector;
@@ -14,17 +13,18 @@ using EncDotNet.S100.Viewer.ViewModels;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Turns S-421 datasets the user opens into received, read-only routes, and
-/// keeps each route in step with its dataset (#960, #391; handoff decisions
-/// 11, 15 and 16, items A10 and F4).
+/// Turns S-421 datasets the user opens as routes into received, read-only
+/// routes, and keeps each route in step with its dataset (#960, #391; handoff
+/// decisions 11, 15 and 16, items A10 and F4).
 /// </summary>
 /// <remarks>
 /// <list type="bullet">
-/// <item>An S-421 dataset opened explicitly (Datasets, Library <em>Load</em>,
-/// drag and drop, Import route…) adds a received route in Native mode.
-/// Datasets the Library loads as you pan (<see cref="DatasetEntry.IsDeferred"/>)
-/// never do. A file that isn't a valid route stays a dataset, and its row
-/// says why (<see cref="DatasetEntry.RouteWarning"/>).</item>
+/// <item>Loading an S-421 dataset never adds a route by itself, however it was
+/// loaded: a route joins the Routes panel only when the user asks for it, with
+/// Import route… or the Library's <em>Open as route</em>, which call
+/// <see cref="Open"/>. It opens in Native mode. A dataset that isn't a valid
+/// route stays a dataset, and its row says why
+/// (<see cref="DatasetEntry.RouteWarning"/>).</item>
 /// <item>Opening the same file, or another file with the same route ID and
 /// edition, selects the existing route. A newer edition replaces the older
 /// edition's route.</item>
@@ -80,7 +80,7 @@ internal sealed class ReceivedRoutesService
     /// <param name="closeDataset">Closes a dataset (removes it from the Datasets panel) when its route is closed.</param>
     /// <param name="notifications">Shows the "Check route ended" toast; none when <c>null</c>.</param>
     /// <param name="follow">Follow passage, stopped when a checked route's dataset closes.</param>
-    /// <param name="read">Reads a loaded entry's S-421 dataset; from its processor (else its file) when omitted.</param>
+    /// <param name="read">Reads an entry's S-421 dataset; from its exchange set or folder (else its file) when omitted.</param>
     public ReceivedRoutesService(
         IDatasetLoaderService loader,
         RoutesService routes,
@@ -98,7 +98,7 @@ internal sealed class ReceivedRoutesService
         _closeDataset = closeDataset;
         _notifications = notifications;
         _follow = follow;
-        _read = read ?? ReadFromLoader;
+        _read = read ?? ReadDataset;
         _filesToReopen = _checkSettings.OpenFiles.Count > 0 ? _checkSettings.OpenFiles.ToList() : null;
 
         _loader.DatasetLoaded += OnDatasetLoaded;
@@ -163,45 +163,62 @@ internal sealed class ReceivedRoutesService
 
     private void OnDatasetLoaded(DatasetEntry entry)
     {
-        if (!string.Equals(entry.ProductSpec, "S-421", StringComparison.OrdinalIgnoreCase) || entry.IsDeferred)
-            return;
+        // A reload of a route's entry (a re-render): keep the route in step.
+        if (RouteOf(entry) is { } own)
+            SyncVisibility(own);
+    }
+
+    /// <summary>
+    /// Opens a loaded S-421 dataset as a received route (Import route…, the
+    /// Library's Open as route), applying the duplicate and edition rules: a
+    /// dataset already open as a route, or another file with the same route
+    /// ID and edition, selects the route already in the list.
+    /// </summary>
+    /// <param name="entry">A loaded S-421 dataset.</param>
+    /// <param name="filePath">
+    /// The dataset's full path, which identifies the route's file; the
+    /// entry's own path when omitted, which for a dataset in an exchange set
+    /// or Library folder is relative to it.
+    /// </param>
+    /// <returns>The route now in the list for the dataset, or <c>null</c> with why.</returns>
+    public (Route? Route, string? Warning) Open(DatasetEntry entry, string? filePath = null)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (!string.Equals(entry.ProductSpec, "S-421", StringComparison.OrdinalIgnoreCase))
+            return (null, Strings.Received_NotARoute);
         if (RouteOf(entry) is { } own)
         {
-            // A reload of the same entry (a re-render): keep the route.
-            SyncVisibility(own);
-            return;
+            _routes.Routes.SetActiveRoute(own);
+            return (own, null);
         }
-
-        if (FindByFile(entry.FilePath) is { } sameFile)
+        filePath ??= entry.FilePath;
+        if (FindByFile(filePath) is { } sameFile)
         {
             _routes.Routes.SetActiveRoute(sameFile);
-            return;
+            return (sameFile, null);
         }
 
         S421Route s421;
         try
         {
             if (_read(entry) is not { } dataset)
-                return;
+                return (null, entry.RouteWarning = Strings.Received_NotARoute);
             s421 = S421RoutePlan.From(dataset, out _).Route;
         }
         catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or IOException or System.Xml.XmlException or FormatException)
         {
-            entry.RouteWarning = Strings.Received_NotARoute;
-            return;
+            return (null, entry.RouteWarning = Strings.Received_NotARoute);
         }
 
         if (s421.Waypoints.Count < 2)
-        {
-            entry.RouteWarning = Strings.Received_TooFewWaypoints;
-            return;
-        }
+            return (null, entry.RouteWarning = Strings.Received_TooFewWaypoints);
 
-        var received = RouteS421Mapping.ToReceived(s421, entry.FilePath);
+        var received = RouteS421Mapping.ToReceived(s421, filePath);
         var (route, warning) = Admit(received, entry);
         entry.RouteWarning = warning;
         if (route is not null && ReferenceEquals(route, received))
             entry.PropertyChanged += OnEntryPropertyChanged;
+        return (route, warning);
     }
 
     /// <summary>
@@ -359,21 +376,21 @@ internal sealed class ReceivedRoutesService
         route.SetDisplayMode(entry.IsVisible ? RouteDisplayMode.Native : RouteDisplayMode.Planning);
     }
 
-    private S421Dataset? ReadFromLoader(DatasetEntry entry)
+    // Reads the entry's own bytes: a Library entry's FilePath is relative to
+    // its exchange set or folder, and its loaded processor is keyed by an id
+    // other datasets can share, so neither identifies its file.
+    private static S421Dataset? ReadDataset(DatasetEntry entry)
     {
-        using (var processors = _loader.AcquireProcessors())
+        if (entry is { Source: { } source, RelativePath: { } relativePath })
         {
-            if (processors.TryGetValue(entry, out var processor)
-                && processor is ILoadedDatasetProjection projection
-                && projection.CreateLoadedData() is S421DatasetData data)
-            {
-                return data.Model;
-            }
+            using var stream = Task.Run(() => source.OpenAsync(relativePath)).GetAwaiter().GetResult();
+            return S421Dataset.Open(stream);
         }
         return File.Exists(entry.FilePath) ? S421Dataset.Open(entry.FilePath) : null;
     }
 
-    private static bool SamePath(string a, string b)
+    /// <summary>Whether two paths name the same file, ignoring case where the file system does.</summary>
+    internal static bool SamePath(string a, string b)
         => string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal);

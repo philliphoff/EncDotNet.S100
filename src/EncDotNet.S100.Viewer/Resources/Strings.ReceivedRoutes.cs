@@ -8,6 +8,8 @@ internal static partial class Strings
     public static string Received_TooFewWaypoints => Get(nameof(Received_TooFewWaypoints));
     public static string Received_OlderEditionFormat => Get(nameof(Received_OlderEditionFormat));
     public static string Toast_CheckRouteEndedFormat => Get(nameof(Toast_CheckRouteEndedFormat));
+    public static string Library_OpenAsRoute => Get(nameof(Library_OpenAsRoute));
+    public static string Tooltip_LibraryOpenAsRoute => Get(nameof(Tooltip_LibraryOpenAsRoute));
     public static string Received_RouteClosedFormat => Get(nameof(Received_RouteClosedFormat));
     public static string Routes_ReceivedBadge => Get(nameof(Routes_ReceivedBadge));
     public static string Routes_ReceivedSourceFormat => Get(nameof(Routes_ReceivedSourceFormat));

@@ -406,6 +406,43 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Open_as_route_loads_an_S421_dataset_then_opens_it_as_a_route()
+    {
+        await AddS57CollectionAsync();
+        using var vm = CreateViewModel();
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", "S421", "RTE-TEST-GBASIC.s421.gml"), Path.Combine(_context.Root, "RTE-TEST-GBASIC.s421.gml"));
+        var folder = new LibrarySource(new LocalFolderSource(Guid.NewGuid(), null, _context.Root), null, LibrarySourceState.Ready);
+        var route = vm.CreateItem(new CollectionItem
+        {
+            Key = "route",
+            ProductSpec = "S-421",
+            Name = "RTE-TEST-GBASIC",
+            Location = new LocalItemLocation(_context.Root, "RTE-TEST-GBASIC.s421.gml", []),
+        }, folder);
+        var opened = new List<CollectionItem>();
+
+        // Without the host's route opener, and on other products, there's no Open as route.
+        vm.SelectedItem = route;
+        Assert.False(vm.CanOpenAsRoute);
+        vm.OpenRoute = item =>
+        {
+            opened.Add(item);
+            return Task.CompletedTask;
+        };
+        vm.SelectedItem = vm.Items.First(i => i.Item.ProductSpec != "S-421");
+        Assert.False(vm.CanOpenAsRoute);
+        Assert.False(vm.OpenAsRouteCommand.CanExecute(null));
+
+        vm.SelectedItem = route;
+        Assert.True(vm.CanOpenAsRoute);
+        vm.OpenAsRouteCommand.Execute(null);
+
+        // An explicit load first, then the route.
+        Assert.Equal((false, 1), (_loader.Calls.Single().Defer, _loader.Calls.Single().Count));
+        Assert.Same(route.EffectiveItem, Assert.Single(opened));
+    }
+
+    [Fact]
     public async Task Loader_changes_refresh_availability()
     {
         await AddS57CollectionAsync();

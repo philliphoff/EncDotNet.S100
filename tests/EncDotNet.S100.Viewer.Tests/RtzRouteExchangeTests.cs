@@ -64,7 +64,7 @@ public sealed class RtzRouteExchangeTests : IDisposable
 
         private Task<DatasetEntry?> OpenDataset(string path)
         {
-            var entry = new DatasetEntry(path, "S-421");
+            var entry = new DatasetEntry(path, "S-421") { IsLoaded = true };
             Loader.RaiseLoaded(entry);
             return Task.FromResult<DatasetEntry?>(entry);
         }
