@@ -869,6 +869,15 @@
                                             AutomationProperties.Name="{x:Static loc:Strings.Library_GoToRunStart}">
                                         <ic:FluentIcon Icon="Previous" FontSize="16" />
                                     </Button>
+                                    <!-- An S-421 dataset becomes a route only from here or Import route…. -->
+                                    <Button Classes="Icon libraryHeaderAction"
+                                            Command="{Binding OpenAsRouteCommand}"
+                                            AutomationProperties.AutomationId="Library.Details.OpenAsRoute"
+                                            IsVisible="{Binding CanOpenAsRoute}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryOpenAsRoute}"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Library_OpenAsRoute}">
+                                        <ic:FluentIcon Icon="Flow" FontSize="16" />
+                                    </Button>
                                     <Button Classes="Icon libraryHeaderAction"
                                             Command="{Binding ZoomToCommand}"
                                             AutomationProperties.AutomationId="Library.Details.ZoomTo"

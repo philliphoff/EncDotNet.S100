@@ -1122,8 +1122,10 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         else
         {
             // Batch registration marks entries deferred; an explicit load takes
-            // them out of the lazy loader's hands.
+            // them out of the lazy loader's hands, including ones it already
+            // loaded as you panned, so they aren't unloaded when you pan away.
             var toLoad = entries.Where(e => !e.IsLoaded).ToArray();
+            _lazyCoordinator?.Unregister(entries.Where(e => e.IsLoaded));
             _lazyCoordinator?.Unregister(toLoad);
             foreach (var entry in toLoad)
                 entry.IsDeferred = false;

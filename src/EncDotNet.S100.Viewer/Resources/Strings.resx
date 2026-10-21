@@ -1469,7 +1469,7 @@
     <value>Route {0}</value>
   </data>
   <data name="Routes_NoRoutes" xml:space="preserve">
-    <value>No routes yet. Add a route or promote a measurement.</value>
+    <value>No routes yet. Add a route or promote a measurement, import an RTZ or S-421 file, or open an S-421 dataset from the Library with Open as route.</value>
   </data>
   <data name="Routes_NoActiveRoute" xml:space="preserve">
     <value>Select a route to view its waypoints and legs.</value>
@@ -5870,6 +5870,12 @@
   <data name="Toast_CheckRouteEndedFormat" xml:space="preserve">
     <value>Check route ended: {0} was closed with its dataset</value>
   </data>
+  <data name="Library_OpenAsRoute" xml:space="preserve">
+    <value>Open as route</value>
+  </data>
+  <data name="Tooltip_LibraryOpenAsRoute" xml:space="preserve">
+    <value>Open this S-421 dataset as a read-only route in the Routes panel</value>
+  </data>
   <data name="Received_RouteClosedFormat" xml:space="preserve">
     <value>{0} was closed with its dataset</value>
   </data>
@@ -6099,7 +6105,7 @@
     <value>Import route…</value>
   </data>
   <data name="Tooltip_ImportRoute" xml:space="preserve">
-    <value>Open an S-421 route file as a received, read-only route</value>
+    <value>Open an RTZ or S-421 route file as a received, read-only route. S-421 datasets in the Library open as routes with Open as route.</value>
   </data>
   <data name="Routes_CopyToEdit" xml:space="preserve">
     <value>Copy to edit</value>

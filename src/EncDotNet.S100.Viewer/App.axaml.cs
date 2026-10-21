@@ -894,8 +894,9 @@ public partial class App : Application
         // initialized in OnFrameworkInitializationCompleted and flushed on
         // ShutdownRequested.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutePersistenceService>();
-        // Received routes (#960): S-421 datasets opened explicitly become
-        // read-only routes; their check settings are kept by route ID + edition.
+        // Received routes (#960): S-421 datasets opened as routes (Import route…,
+        // the Library's Open as route) become read-only routes; their check
+        // settings are kept by route ID + edition.
         services.AddSingleton(sp =>
         {
             var checkSettings = new EncDotNet.S100.Viewer.Routing.Persistence.CheckSettingsStore(
@@ -917,7 +918,13 @@ public partial class App : Application
             return new EncDotNet.S100.Viewer.Services.RouteExchangeService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.ReceivedRoutesService>(),
-                openDataset: datasets.LoadFromPathAsync);
+                // A file already open as a dataset is opened as a route as it is.
+                openDataset: path => datasets.Entries.FirstOrDefault(e => e.IsLoaded && !e.IsFromExchangeSet && EncDotNet.S100.Viewer.Services.ReceivedRoutesService.SamePath(e.FilePath, path)) is { } open
+                    ? Task.FromResult<DatasetEntry?>(open)
+                    : datasets.LoadFromPathAsync(path),
+                // As select_dataset finds a list_datasets id: by name, then by id.
+                findDataset: id => datasets.Entries.FirstOrDefault(e => string.Equals(e.DisplayName, id, StringComparison.Ordinal))
+                    ?? datasets.Entries.FirstOrDefault(e => string.Equals(e.Id.Value, id, StringComparison.Ordinal)));
         });
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
@@ -1215,6 +1222,16 @@ public partial class App : Application
                 timeFormat: sp.GetService<ITimeFormatProvider>(),
                 sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>());
             panel.OpenKeys = sp.GetRequiredService<Services.Secom.KeysNavigator>().Open;
+            // Open as route: with Import route…, the only way a dataset becomes a route.
+            panel.OpenRoute = item =>
+            {
+                new LibraryRouteOpener(
+                    sp.GetRequiredService<Library.ILibraryLoader>(),
+                    sp.GetRequiredService<ReceivedRoutesService>(),
+                    () => sp.GetRequiredService<MainViewModel>().SelectTab("Routes"),
+                    sp.GetService<INotificationService>()).Open(item);
+                return Task.CompletedTask;
+            };
             // SECOM rows name their identity; a selected source's details choose it (#883).
             panel.Identities = sp.GetRequiredService<Services.Secom.SecomIdentityDirectory>();
             return panel;

@@ -154,6 +154,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
         LoadOrDownloadCommand = new AsyncRelayCommand(
             () => _selectedItem?.CanLoadAfterDownload == true ? DownloadSelectedAsync(load: true) : LoadSelectedAsync(),
             () => _selectedItem is { } item && (item.CanLoad || item.CanLoadAfterDownload));
+        OpenAsRouteCommand = new AsyncRelayCommand(OpenSelectedAsRouteAsync, () => CanOpenAsRoute);
         DownloadListedCommand = new AsyncRelayCommand(DownloadListedAsync, () => DownloadableCount > 0);
         CancelDownloadsCommand = new RelayCommand(() => _downloader.CancelAll(), () => IsBulkDownloading);
         ShowOnTimelineCommand = new RelayCommand(
@@ -257,9 +258,11 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)OpenAsRouteCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)ShowOnTimelineCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)GoToRunStartCommand).NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(HasValidWindow));
+                OnPropertyChanged(nameof(CanOpenAsRoute));
                 UpdatePairing();
             }
         }
@@ -281,6 +284,12 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Opens Settings → Keys &amp; certificates on a tab; set by the host.</summary>
     internal Action<Keys.KeysTab>? OpenKeys { get; set; }
+
+    /// <summary>
+    /// Opens a loaded S-421 item as a received route in the Routes panel, the
+    /// only way a Library dataset becomes a route; set by the host.
+    /// </summary>
+    internal Func<CollectionItem, Task>? OpenRoute { get; set; }
 
     /// <summary>
     /// The identities SECOM sources choose from (#883); set by the host. With
@@ -818,6 +827,15 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// </summary>
     public ICommand LoadOrDownloadCommand { get; }
 
+    /// <summary>Loads the selected S-421 dataset (if it isn't) and opens it as a route in the Routes panel.</summary>
+    public ICommand OpenAsRouteCommand { get; }
+
+    /// <summary>True when the selected dataset is an S-421 route on disk, which Open as route opens.</summary>
+    public bool CanOpenAsRoute => OpenRoute is not null
+        && _selectedItem is { IsGroupHeader: false } item
+        && string.Equals(item.Item.ProductSpec, "S-421", StringComparison.OrdinalIgnoreCase)
+        && (item.CanLoad || item.IsLoadedNow);
+
     /// <summary>Downloads every listed online (or outdated) dataset.</summary>
     public ICommand DownloadListedCommand { get; }
 
@@ -1342,6 +1360,8 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
             ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
+            ((AsyncRelayCommand)OpenAsRouteCommand).NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(CanOpenAsRoute));
             ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(DownloadListedText));
             OnPropertyChanged(nameof(HasDownloadable));
@@ -1354,6 +1374,16 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     private Task LoadSelectedAsync() =>
         _selectedItem is { } item ? LoadLabelledAsync([item], defer: false) : Task.CompletedTask;
+
+    private async Task OpenSelectedAsRouteAsync()
+    {
+        if (!CanOpenAsRoute || _selectedItem is not { } item || OpenRoute is not { } open)
+            return;
+        // An explicit load, also for a dataset loaded as you pan, so the
+        // route's dataset stays loaded wherever the map goes.
+        await LoadLabelledAsync([item], defer: false).ConfigureAwait(true);
+        await open(item.EffectiveItem).ConfigureAwait(true);
+    }
 
     private Task LoadListedAsYouPanAsync() =>
         LoadLabelledAsync(ListedDatasets().ToArray(), defer: true);

@@ -80,10 +80,11 @@ internal sealed record RouteImportFailed(
     : ToolError("route_import_failed", Detail);
 
 /// <summary>Request for <see cref="ImportRouteTool"/>.</summary>
-[Description("Request for import_route: open a route file as a received, read-only route.")]
+[Description("Request for import_route: open a route file, or a loaded S-421 dataset, as a received, read-only route. Loading an S-421 dataset never adds a route by itself.")]
 internal sealed record ImportRouteRequest(
-    [property: Description("Path of the route file to open: RTZ 1.0, 1.1 or 1.2 (.rtz) or S-421 GML. The format is sniffed from the content, not the extension. Give this or content.")] string? Path = null,
-    [property: Description("The file's content, when there is no file to point at; it's saved to a temporary file and opened from there. Give this or path.")] string? Content = null);
+    [property: Description("Path of the route file to open: RTZ 1.0, 1.1 or 1.2 (.rtz) or S-421 GML. The format is sniffed from the content, not the extension. Give one of path, content or datasetId.")] string? Path = null,
+    [property: Description("The file's content, when there is no file to point at; it's saved to a temporary file and opened from there. Give one of path, content or datasetId.")] string? Content = null,
+    [property: Description("Id of a loaded S-421 dataset (list_datasets) to open as a route, as the Library's Open as route does. Give one of path, content or datasetId.")] string? DatasetId = null);
 
 /// <summary>Result of <see cref="ImportRouteTool"/>.</summary>
 [Description("Result of import_route: the received route and whether it was already open.")]
@@ -93,7 +94,8 @@ internal sealed record ImportRouteResult(
 
 /// <summary>
 /// Opens a route file as a received route, as the Routes header's Import
-/// route… does: the format is sniffed from the content.
+/// route… does (the format is sniffed from the content), or a loaded S-421
+/// dataset, as the Library's Open as route does.
 /// </summary>
 internal sealed class ImportRouteTool : RouteToolBase
 {
@@ -121,8 +123,14 @@ internal sealed class ImportRouteTool : RouteToolBase
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        if (string.IsNullOrWhiteSpace(request.Path) == string.IsNullOrEmpty(request.Content))
-            return ToolResult<ImportRouteResult>.Err(new InvalidArgument("path", "give either path or content"));
+        var given = (string.IsNullOrWhiteSpace(request.Path) ? 0 : 1)
+            + (string.IsNullOrEmpty(request.Content) ? 0 : 1)
+            + (string.IsNullOrWhiteSpace(request.DatasetId) ? 0 : 1);
+        if (given != 1)
+            return ToolResult<ImportRouteResult>.Err(new InvalidArgument("path", "give one of path, content or datasetId"));
+
+        if (!string.IsNullOrWhiteSpace(request.DatasetId))
+            return await Invoker.InvokeAsync(() => Project(_exchange.OpenDataset(request.DatasetId.Trim()))).ConfigureAwait(false);
 
         var path = request.Path;
         if (path is null)
@@ -138,10 +146,12 @@ internal sealed class ImportRouteTool : RouteToolBase
         }
 
         var result = await (await Invoker.InvokeAsync(() => _exchange.ImportAsync(path)).ConfigureAwait(false)).ConfigureAwait(false);
-        return await Invoker.InvokeAsync(() => result.Route is { } route
-            ? ToolResult<ImportRouteResult>.Ok(new ImportRouteResult(result.AlreadyOpen, RouteProjection.Detail(route, Routes)))
-            : ToolResult<ImportRouteResult>.Err(new RouteImportFailed(result.ErrorCode!, result.Error!))).ConfigureAwait(false);
+        return await Invoker.InvokeAsync(() => Project(result)).ConfigureAwait(false);
     }
+
+    private ToolResult<ImportRouteResult> Project(RouteImportResult result) => result.Route is { } route
+        ? ToolResult<ImportRouteResult>.Ok(new ImportRouteResult(result.AlreadyOpen, RouteProjection.Detail(route, Routes)))
+        : ToolResult<ImportRouteResult>.Err(new RouteImportFailed(result.ErrorCode!, result.Error!));
 }
 
 // ---------------------------------------------------------------------------
@@ -351,17 +361,19 @@ internal static class ReceivedRouteMcpAdapters
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [Description("Path of the route file (RTZ or S-421 GML). Give this or content.")] string? path = null,
-            [Description("The file's content, when there is no file. Give this or path.")] string? content = null,
+            [Description("Path of the route file (RTZ or S-421 GML). Give one of path, content or datasetId.")] string? path = null,
+            [Description("The file's content, when there is no file. Give one of path, content or datasetId.")] string? content = null,
+            [Description("Id of a loaded S-421 dataset (list_datasets) to open as a route, as the Library's Open as route does. Give one of path, content or datasetId.")] string? datasetId = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new ImportRouteRequest(path, content), ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new ImportRouteRequest(path, content, datasetId), ct));
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = ImportRouteTool.Name,
             Description =
                 "Opens a route file in the live viewer as a received, read-only route, as the Routes header's Import route… does. " +
                 "The format is sniffed from the content: an RTZ file (1.0, 1.1 or 1.2) is read directly and its route starts in Planning mode (RTZ has no portrayal of its own and no route ID, so the route is known by its file); an S-421 file also opens as a dataset and its route starts in Native mode. " +
-                "A file already open, or the same route ID and edition, selects the existing route (alreadyOpen: true); a newer edition " +
+                "datasetId opens an S-421 dataset that's already loaded, as the Library's Open as route does; loading an S-421 dataset never adds a route by itself. " +
+                "A file or dataset already open as a route, or the same route ID and edition, selects the existing route (alreadyOpen: true); a newer edition " +
                 "replaces it. The route becomes active. Fails with route_import_failed (reason not_a_route, unsupported_version, " +
                 "too_few_waypoints or older_edition). Edit a received route by copying it with copy_route. Viewer-injected tool — mutates live state.",
             SerializerOptions = JsonOptions,
