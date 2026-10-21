@@ -114,7 +114,7 @@ public sealed class PassageCheckTests : IDisposable
 
         var tail = Overlay(f).Segments[^1];
         Assert.Equal(UkcState.NoData, tail.State);
-        Assert.True(RouteOverlayRenderer.IsCheckDashed(tail.State, tail.IsLowConfidence));
+        Assert.Same(RouteOverlayRenderer.NoDataDash, RouteOverlayRenderer.CheckDash(tail.State, tail.IsLowConfidence));
         Assert.Equal("no tide", vm.Check.Legs[^1].ChipText);
     }
 
@@ -132,7 +132,7 @@ public sealed class PassageCheckTests : IDisposable
         var first = overlay.Segments[0];
         Assert.Equal(UkcState.MeetsSettings, first.State);
         Assert.True(first.IsLowConfidence);
-        Assert.True(RouteOverlayRenderer.IsCheckDashed(first.State, first.IsLowConfidence));
+        Assert.Same(RouteOverlayRenderer.LowConfidenceDash, RouteOverlayRenderer.CheckDash(first.State, first.IsLowConfidence));
         Assert.Equal(overlay.Colors.Meets, overlay.Colors.Of(first.State));
         Assert.Contains(overlay.Segments, s => s.State == UkcState.BelowSetting && s.IsLowConfidence);
 
@@ -148,7 +148,7 @@ public sealed class PassageCheckTests : IDisposable
     }
 
     [Fact]
-    public async Task No_data_stays_grey_and_dashed_beside_lower_confidence_bands()
+    public async Task No_data_stays_grey_and_dotted_beside_lower_confidence_bands()
     {
         var f = new PassageCheckFixture(depthDatum: null, waterEnd: PassageCheckFixture.WaterStart.AddHours(2));
         var vm = Panel(f);
@@ -160,7 +160,7 @@ public sealed class PassageCheckTests : IDisposable
         Assert.Equal(UkcState.NoData, tail.State);
         Assert.False(tail.IsLowConfidence);
         Assert.Equal(overlay.Colors.NoData, overlay.Colors.Of(tail.State));
-        Assert.True(RouteOverlayRenderer.IsCheckDashed(tail.State, tail.IsLowConfidence));
+        Assert.Same(RouteOverlayRenderer.NoDataDash, RouteOverlayRenderer.CheckDash(tail.State, tail.IsLowConfidence));
         Assert.Equal(UkcState.MeetsSettings, overlay.Segments[0].State);
         Assert.NotEqual(overlay.Colors.NoData, overlay.Colors.Of(overlay.Segments[0].State));
         Assert.Equal(CheckTone.Neutral, vm.Check!.Legs[^1].ChipTone);
@@ -308,14 +308,15 @@ public sealed class PassageCheckTests : IDisposable
     }
 
     [Fact]
-    public void Dusk_colours_sit_between_day_and_night()
+    public void Dusk_keeps_the_palette_pass_colours_and_night_is_dimmer()
     {
-        var day = RouteCheckColors.For(PaletteType.Day);
+        // #934: Dusk keeps #933's values; Night drops below Dusk in every state.
         var night = RouteCheckColors.For(PaletteType.Night);
         var dusk = RouteCheckColors.For(PaletteType.Dusk);
 
-        Assert.Equal(new SkiaSharp.SKColor(0x13, 0x89, 0x5B), day.Meets);
-        Assert.Equal(new SkiaSharp.SKColor(0xC0, 0x3A, 0x46), night.Below);
-        Assert.Equal((day.Below.Red + night.Below.Red) / 2, dusk.Below.Red);
+        Assert.Equal(new SkiaSharp.SKColor(0xCA, 0x32, 0x40), dusk.Below);
+        Assert.All(
+            [UkcState.MeetsSettings, UkcState.Tight, UkcState.BelowSetting, UkcState.NoData],
+            s => Assert.True(ColorContrast.Luminance(night.Of(s)) < ColorContrast.Luminance(dusk.Of(s)), $"Night {s} is no dimmer than Dusk"));
     }
 }

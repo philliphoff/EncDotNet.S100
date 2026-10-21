@@ -40,21 +40,29 @@ internal static class ColorContrast
     }
 
     /// <summary>
+    /// The route editing colour on Night (#934): a fixed blue rather than the
+    /// app accent, so whatever accent is chosen, the line stays dim on the
+    /// Night chart and keeps <see cref="MinimumGraphicContrast"/> on its black
+    /// casing.
+    /// </summary>
+    public static readonly SKColor NightEdit = new(0x3F, 0x64, 0xA6);
+
+    /// <summary>
     /// The app accent as the route editing line draws it on a chart palette
-    /// (handoff A6). Day keeps it. Dusk tones it down a little. Night lowers
-    /// its chroma and brightness so it doesn't glare on a dark chart. On the
-    /// black casing of Dusk and Night it is lightened back up, if needed, to
-    /// keep <see cref="MinimumGraphicContrast"/>.
+    /// (handoff A6). Day keeps it. Dusk tones it down a little, lightened back
+    /// up, if needed, to keep <see cref="MinimumGraphicContrast"/> on its black
+    /// casing. Night doesn't use the accent: it is <see cref="NightEdit"/>.
     /// </summary>
     public static SKColor AccentFor(SKColor accent, PaletteType palette)
     {
         if (palette == PaletteType.Day)
             return accent;
+        if (palette == PaletteType.Night)
+            return NightEdit;
 
         accent.ToHsv(out var h, out var s, out var v);
-        var (sat, value) = palette == PaletteType.Night ? (0.55f, 0.8f) : (0.85f, 0.9f);
-        s *= sat;
-        v *= value;
+        s *= 0.85f;
+        v *= 0.9f;
         var color = SKColor.FromHsv(h, s, v);
         while (Ratio(color, SKColors.Black) < MinimumGraphicContrast && v < 100)
         {

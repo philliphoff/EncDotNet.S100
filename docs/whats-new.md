@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Route check tones for Day, Dusk and Night.** In SoundCharts' Check
+  route, the findings' markers, sleeves and legend use the route's state
+  tones: Must review in the Below red, Check in the Tight amber and Info in
+  the low-confidence grey. Red is used only for Below and Must review. On
+  Night, every state is dimmed to about 0.10 relative luminance (from
+  0.15–0.22) so it doesn't spoil night vision, while keeping 3:1 against its
+  black casing. Day's Tight is darker (`#B07D00`, 3.6:1 on its white
+  casing), No data is now dotted rather than dashed, so it can't be mistaken
+  for lower confidence, and Night edits routes in a fixed blue (`#3F64A6`)
+  instead of a toned-down accent. Dusk keeps its colours.
+
 - **Warnings in place while checking a route.** In SoundCharts' Check
   route, selecting an S-124 finding opens the warning's card right in the
   findings list, with its status judged when you get there ("In force at

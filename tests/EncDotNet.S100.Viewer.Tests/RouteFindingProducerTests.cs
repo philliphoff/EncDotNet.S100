@@ -439,7 +439,7 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.All(overlay.Map.Marks.Where(m => m.Group != RouteFindingGroup.MustReview), m => Assert.NotEqual(colors.Below, m.Tone));
 
         _ui.Run(() => findings.Select(findings.Findings.Single(x => x.Id == "i.0"), zoom: false));
-        Assert.Equal((RouteFindingGroup.Info, colors.NoData), Build().Map.Marks.Where(m => m.IsSelected).Select(m => (m.Group, m.Tone)).Single());
+        Assert.Equal((RouteFindingGroup.Info, colors.Info), Build().Map.Marks.Where(m => m.IsSelected).Select(m => (m.Group, m.Tone)).Single());
     }
 
     [Fact]
