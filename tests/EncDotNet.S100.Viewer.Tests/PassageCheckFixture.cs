@@ -25,6 +25,20 @@ internal sealed class PassageCheckFixture
     public static readonly DateTimeOffset Departure = new(2024, 6, 1, 7, 10, 0, TimeSpan.Zero);
     public static readonly DateTime WaterStart = new(2024, 6, 1, 6, 0, 0, DateTimeKind.Utc);
 
+    private static readonly Lock SerialGate = new();
+
+    /// <summary>
+    /// A <c>post</c> that runs each result under one lock, standing in for the
+    /// UI thread when a view model listens to more than one service: without
+    /// it, the check and the findings raise <c>Changed</c> on different pool
+    /// threads and the view model's collections are edited concurrently.
+    /// </summary>
+    public static void SerialPost(Action action)
+    {
+        lock (SerialGate)
+            action();
+    }
+
     public PassageCheckFixture(
         DateTime? waterEnd = null,
         int? depthDatum = Lat,

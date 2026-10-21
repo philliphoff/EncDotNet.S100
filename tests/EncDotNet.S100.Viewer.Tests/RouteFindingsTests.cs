@@ -62,11 +62,12 @@ public sealed class RouteFindingsTests : IDisposable
         public GeoPosition? TryGetViewportCenterWgs84() => null;
     }
 
-    internal static RouteFindingsService Findings(PassageCheckFixture f, RecordingViewport? viewport = null) =>
+    internal static RouteFindingsService Findings(PassageCheckFixture f, RecordingViewport? viewport = null, Action<Action>? post = null) =>
         new(f.Check, f.Routes, f.Catalog,
             viewport is null ? null : new StaticCapabilityAccessor<IMapViewportController>(viewport),
             timeFormat: new Utc(),
-            clock: new FixedClock(Now));
+            clock: new FixedClock(Now),
+            post: post);
 
     private static T Value<T>(ToolResult<T> result)
     {
@@ -151,9 +152,11 @@ public sealed class RouteFindingsTests : IDisposable
     [Fact]
     public async Task Groups_render_in_order_and_the_findings_segment_shows_the_count()
     {
+        // The panel listens to both services, so their results are serialised as the UI thread would.
         var f = new PassageCheckFixture(waterEnd: PassageCheckFixture.WaterStart.AddHours(2.5),
+            post: PassageCheckFixture.SerialPost,
             extraDatasets: [PassageCheckFixture.CurrentForecast("111EXPIRED", Now.AddDays(-2), Now.AddDays(-1))]);
-        using var findings = Findings(f);
+        using var findings = Findings(f, post: PassageCheckFixture.SerialPost);
         var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings);
         Assert.Equal("Findings 0", panel.Check!.FindingsLabel);
 
