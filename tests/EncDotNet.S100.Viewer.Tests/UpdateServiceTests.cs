@@ -89,6 +89,22 @@ public sealed class UpdateServiceTests
     [InlineData("2.5.0-rc.1", "2.4.1", true)]
     [InlineData("garbage", "2.4.1", false)]
     [InlineData("2.5.0", "", false)]
+    // Pre-release precedence (issue #1020 nightlies).
+    [InlineData("0.25.2", "0.25.2-nightly.20261021", true)]
+    [InlineData("v0.25.2", "0.25.2-nightly.20261021", true)]
+    [InlineData("0.26.0", "0.25.2-nightly.20261021", true)]
+    [InlineData("0.25.1", "0.25.2-nightly.20261021", false)]
+    [InlineData("0.25.2-nightly.20261021", "0.25.2", false)]
+    [InlineData("0.25.2-nightly.20261021", "0.25.1", true)]
+    [InlineData("0.25.2-nightly.20261022", "0.25.2-nightly.20261021", true)]
+    [InlineData("0.25.2-nightly.20261021", "0.25.2-nightly.20261021", false)]
+    [InlineData("0.25.2+abc1234", "0.25.2-nightly.20261021+def5678", true)]
+    [InlineData("1.0.0-rc.1", "1.0.0-beta.11", true)]
+    [InlineData("1.0.0-beta.11", "1.0.0-beta.2", true)]
+    [InlineData("1.0.0-beta", "1.0.0-alpha.1", true)]
+    [InlineData("1.0.0-alpha.beta", "1.0.0-alpha.1", true)]
+    [InlineData("1.0.0-alpha.1", "1.0.0-alpha", true)]
+    [InlineData("1.0.0", "1.0.0-", false)]
     public void IsNewer_ComparesSemanticVersions(string candidate, string current, bool expected)
     {
         Assert.Equal(expected, ReleaseVersion.IsNewer(candidate, current));
@@ -164,6 +180,19 @@ public sealed class UpdateServiceTests
 
         Assert.Equal(UpdateAvailability.UpdateAvailable, status.Availability);
         Assert.Equal("2.5.0", status.LatestVersion);
+    }
+
+    [Fact]
+    public async Task CheckForUpdates_NightlyBuild_ReportsItsStableRelease()
+    {
+        var client = new FakeReleaseClient(Release("v0.25.2"));
+        var time = new FakeTimeProvider();
+        var service = CreateService(client, "0.25.2-nightly.20261021", InMemorySettings(), time);
+
+        var status = await service.CheckForUpdatesAsync(force: true, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(UpdateAvailability.UpdateAvailable, status.Availability);
+        Assert.Equal("0.25.2", status.LatestVersion);
     }
 
     [Fact]
