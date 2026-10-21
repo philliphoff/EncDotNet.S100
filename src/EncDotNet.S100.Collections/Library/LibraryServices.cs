@@ -1,5 +1,6 @@
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.KnownSources;
+using EncDotNet.S100.Collections.Net;
 using EncDotNet.S100.Collections.Secom;
 using Microsoft.Extensions.Logging;
 
@@ -32,6 +33,8 @@ public sealed record LibraryDataPaths(string Root)
 /// <remarks>
 /// SECOM requests trust the built-in MCP anchors and check revocation; no
 /// client identity is set until one is given to <see cref="SecomTrust"/>.
+/// Every other client refuses chains with a distrusted key or a revoked
+/// certificate (<see cref="HardenedTls"/>).
 /// </remarks>
 public sealed class LibraryServices : IDisposable
 {
@@ -135,7 +138,8 @@ public sealed class LibraryServices : IDisposable
             client.Dispose();
     }
 
-    private HttpClient Client(TimeSpan timeout) => Track(new HttpClient { Timeout = timeout });
+    // Feeds, catalogues and downloads: system trust, plus distrusted keys and revocation (HardenedTls).
+    private HttpClient Client(TimeSpan timeout) => Track(new HttpClient(HardenedTls.CreateHandler()) { Timeout = timeout });
 
     private HttpClient SecomClient(TimeSpan timeout) => Track(new HttpClient(SecomTrust.CreateHandler()) { Timeout = timeout });
 

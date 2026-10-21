@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using EncDotNet.S100.Collections.Net;
 
 namespace EncDotNet.S100.Collections.Secom;
 
@@ -27,7 +28,10 @@ public enum SecomServerTrustOutcome
     /// <summary>The certificate does not name the host that was asked for.</summary>
     WrongHost,
 
-    /// <summary>The certificate, or a CA above it, is listed on its issuer's CRL (#833).</summary>
+    /// <summary>
+    /// The certificate, or a CA above it, is listed on its issuer's CRL (#833),
+    /// or carries a key known to be compromised (<see cref="DistrustedKeys"/>).
+    /// </summary>
     Revoked,
 }
 
@@ -45,8 +49,10 @@ public sealed record SecomServerTrustResult(SecomServerTrustOutcome Outcome, str
     /// or <see cref="SecomRevocationStatus.NotChecked"/> when no checker was
     /// given or no current CRL could be had (the connection is still allowed).
     /// A revoked certificate is refused as <see cref="SecomServerTrustOutcome.Revoked"/>.
-    /// The system's own trust decides <see cref="SecomServerTrustOutcome.SystemTrusted"/>
-    /// certificates, so this is <see cref="SecomRevocationStatus.NotChecked"/> for them.
+    /// For a <see cref="SecomServerTrustOutcome.SystemTrusted"/> certificate, what
+    /// the platform's online check found when <see cref="SecomServerTrust.SystemTls"/>
+    /// checks revocation: <see cref="SecomRevocationStatus.NotRevoked"/>, or
+    /// <see cref="SecomRevocationStatus.NotChecked"/> (soft-fail, or not asked).
     /// </summary>
     public SecomRevocationStatus Revocation { get; init; }
 }
@@ -81,7 +87,13 @@ public sealed record SecomServerTrustResult(SecomServerTrustOutcome Outcome, str
 /// checked against its CAs' CRLs (#833): a revoked certificate is refused, and
 /// one whose revocation cannot be checked is allowed with
 /// <see cref="SecomServerTrustResult.Revocation"/> saying so. Certificates the
-/// operating system trusts are left to its own revocation policy.
+/// operating system trusts are checked online through the platform
+/// (<see cref="SystemTls"/>), soft-fail, since .NET leaves that off by default.
+/// </para>
+/// <para>
+/// A chain carrying a <see cref="DistrustedKeys">distrusted key</see> is
+/// refused as <see cref="SecomServerTrustOutcome.Revoked"/> on every path,
+/// even one the operating system still trusts.
 /// </para>
 /// <para>
 /// Identities (#883): the host registers the identities it holds with
@@ -147,6 +159,13 @@ public sealed class SecomServerTrust
 
     /// <summary>Checks anchor-trusted chains for revocation, when set.</summary>
     public SecomRevocation? Revocation { get; }
+
+    /// <summary>
+    /// How certificates the operating system trusts are checked further:
+    /// by default, revocation online through the platform (CRL or OCSP),
+    /// soft-fail. MCP-anchored chains use <see cref="Revocation"/> instead.
+    /// </summary>
+    public HardenedTlsOptions SystemTls { get; set; } = HardenedTlsOptions.Default;
 
     /// <summary>The identities registered with <see cref="SetIdentity(string, SecomClientIdentity?)"/>, by reference id.</summary>
     public IReadOnlyDictionary<string, SecomClientIdentity> Identities
@@ -571,8 +590,12 @@ public sealed class SecomServerTrust
 
     private SecomServerTrustResult Decide(string host, X509Certificate2? certificate, X509Chain? chain, SslPolicyErrors errors)
     {
+        // A compromised CA key is refused whichever root the chain reaches.
+        if (DistrustedKeys.FindDistrusted(certificate, chain) is not null)
+            return new SecomServerTrustResult(SecomServerTrustOutcome.Revoked, RootName(chain)) { Revocation = SecomRevocationStatus.Revoked };
+
         if (errors == SslPolicyErrors.None)
-            return new SecomServerTrustResult(SecomServerTrustOutcome.SystemTrusted);
+            return DecideSystemTrusted(certificate, chain);
         if (certificate is null || errors.HasFlag(SslPolicyErrors.RemoteCertificateNotAvailable))
             return new SecomServerTrustResult(SecomServerTrustOutcome.NotTrusted);
 
@@ -584,6 +607,8 @@ public sealed class SecomServerTrust
         var (anchor, expired) = Anchors.FindServerAnchor(certificate, presented, _time.GetUtcNow(), out var elements);
         if (anchor is null || elements is null)
             return new SecomServerTrustResult(SecomServerTrustOutcome.NotTrusted);
+        if (DistrustedKeys.FindDistrusted(elements) is not null)
+            return new SecomServerTrustResult(SecomServerTrustOutcome.Revoked, anchor) { Revocation = SecomRevocationStatus.Revoked };
         if (expired)
             return new SecomServerTrustResult(SecomServerTrustOutcome.Expired, anchor);
         if (!NamesHost(certificate, host))
@@ -595,6 +620,26 @@ public sealed class SecomServerTrust
             ? new SecomServerTrustResult(SecomServerTrustOutcome.Revoked, anchor) { Revocation = revocation }
             : new SecomServerTrustResult(SecomServerTrustOutcome.AnchorTrusted, anchor) { Revocation = revocation };
     }
+
+    private SecomServerTrustResult DecideSystemTrusted(X509Certificate2? certificate, X509Chain? chain)
+    {
+        var options = SystemTls;
+        if (certificate is null || !options.CheckRevocation)
+            return new SecomServerTrustResult(SecomServerTrustOutcome.SystemTrusted);
+
+        return HardenedTls.CheckRevocation(certificate, HardenedTls.Presented(chain), options.RevocationTimeout) switch
+        {
+            TlsRevocationStatus.Revoked => new SecomServerTrustResult(SecomServerTrustOutcome.Revoked, RootName(chain)) { Revocation = SecomRevocationStatus.Revoked },
+            TlsRevocationStatus.NotRevoked => new SecomServerTrustResult(SecomServerTrustOutcome.SystemTrusted) { Revocation = SecomRevocationStatus.NotRevoked },
+            _ => new SecomServerTrustResult(SecomServerTrustOutcome.SystemTrusted),
+        };
+    }
+
+    /// <summary>The simple name of the root the platform's chain reached, shown with a refusal.</summary>
+    private static string? RootName(X509Chain? chain) =>
+        chain is { ChainElements.Count: > 0 }
+            ? chain.ChainElements[chain.ChainElements.Count - 1].Certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false)
+            : null;
 
     /// <summary>
     /// Whether <paramref name="certificate"/> names <paramref name="host"/>:
