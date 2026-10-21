@@ -462,21 +462,21 @@ public partial class App : Application
         // Dataset collections (issue #655): indexed metadata of local folders,
         // exchange sets, online feeds and S-128 catalogues, never the data.
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.NoaaEncFeedIndexer(
-            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+            new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromMinutes(2) },
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.UsaceIencFeedIndexer(
-            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+            new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromMinutes(2) },
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.S100FeedIndexer(
-            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+            new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromMinutes(2) },
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         // Remote S-100 exchange catalogues, e.g. NOAA's S-102 on AWS (issue #685).
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer(
-            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+            new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromMinutes(2) },
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         // S-100 forecast feeds, e.g. NOAA's S-111 on AWS (issue #685).
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer(
-            new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+            new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromMinutes(2) },
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         services.AddSingleton(sp =>
         {
@@ -484,7 +484,7 @@ public partial class App : Application
             var paths = sp.GetRequiredService<ViewerDataPaths>();
             var metadata = sp.GetRequiredService<IDatasetMetadataReader>();
             return new EncDotNet.S100.Collections.Indexing.ChartCatalogsFeedIndexer(
-                new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(2) },
+                new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromMinutes(2) },
                 paths.CollectionFeedCacheDirectory,
                 paths.DownloadsDirectory,
                 (path, _) => metadata.TryRead(path));
@@ -495,7 +495,7 @@ public partial class App : Application
         // Revocation of MCP-issued certificates (#833): CRLs are fetched over
         // plain HTTP and kept with the feed cache; signers and servers share them.
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Secom.SecomRevocation(
-            new System.Net.Http.HttpClient(),
+            new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()),
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
         // Keys & certificates (#845): private keys of imported MCP identities
         // live in the platform key store; a run whose settings are not saved
@@ -600,7 +600,7 @@ public partial class App : Application
         services.AddSingleton<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(sp =>
         {
             // Recognises catalogues the user adds by URL (issue #670); SECOM is asked through the SECOM client.
-            var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            var http = new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromSeconds(30) };
             var secom = new System.Net.Http.HttpClient(sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>().CreateHandler())
             {
                 Timeout = TimeSpan.FromSeconds(30),
@@ -612,7 +612,7 @@ public partial class App : Application
             // One managed folder per provider, chosen by download host, unless
             // the item names its own (community lists: one per list).
             var downloads = sp.GetRequiredService<ViewerDataPaths>().DownloadsDirectory;
-            var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+            var http = new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromMinutes(10) };
             var trust = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>();
             var secom = new System.Net.Http.HttpClient(trust.CreateHandler())
             {
@@ -970,7 +970,7 @@ public partial class App : Application
             _ => new EncDotNet.S100.Viewer.Services.Updates.AssemblyAppVersionProvider());
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IGitHubReleaseClient>(sp =>
             new EncDotNet.S100.Viewer.Services.Updates.GitHubReleaseClient(
-                new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) },
+                new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromSeconds(10) },
                 sp.GetService<ILogger<EncDotNet.S100.Viewer.Services.Updates.GitHubReleaseClient>>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IUpdateService>(sp =>
             new EncDotNet.S100.Viewer.Services.Updates.UpdateService(
