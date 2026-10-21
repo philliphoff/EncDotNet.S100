@@ -26,12 +26,14 @@ public class CaptureCoordinatorTests
     public async Task RunCapture_waits_while_live_paint_holds_gate()
     {
         var captureStarted = new ManualResetEventSlim(false);
+        var gateHeld = new ManualResetEventSlim(false);
         var releaseLivePaint = new ManualResetEventSlim(false);
         var paintThread = new Thread(() =>
         {
             var lease = CaptureCoordinator.EnterLivePaint();
             try
             {
+                gateHeld.Set();
                 releaseLivePaint.Wait(TimeSpan.FromSeconds(5));
             }
             finally
@@ -40,7 +42,9 @@ public class CaptureCoordinatorTests
             }
         });
         paintThread.Start();
-        Thread.Sleep(50);
+        // Start the capture only once the paint thread holds the gate; a fixed
+        // sleep let the capture win the race on slow runners.
+        Assert.True(gateHeld.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
         var captureTask = Task.Run(() => CaptureCoordinator.RunCapture(
             () =>
