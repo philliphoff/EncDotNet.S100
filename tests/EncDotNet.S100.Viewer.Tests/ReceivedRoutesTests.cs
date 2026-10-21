@@ -43,9 +43,9 @@ public sealed class WarningsRouteScenarioFixture : IDisposable
 }
 
 /// <summary>
-/// Received routes (#960): S-421 datasets opened explicitly become read-only
+/// Received routes (#960): S-421 datasets opened as routes become read-only
 /// routes in Native mode, follow their dataset's lifecycle, and keep a local
-/// check-settings layer.
+/// check-settings layer. Loading a dataset alone never adds a route.
 /// </summary>
 public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) : IClassFixture<WarningsRouteScenarioFixture>, IDisposable
 {
@@ -85,10 +85,19 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
 
         public List<DatasetEntry> Closed { get; }
 
-        public DatasetEntry Open(string path, bool deferred = false)
+        /// <summary>Loads <paramref name="path"/> as a dataset, without opening it as a route.</summary>
+        public DatasetEntry Load(string path, bool deferred = false)
         {
             var entry = new DatasetEntry(path, "S-421") { IsDeferred = deferred };
             Loader.RaiseLoaded(entry);
+            return entry;
+        }
+
+        /// <summary>Loads <paramref name="path"/> and opens it as a route (Import route…, Open as route).</summary>
+        public DatasetEntry Open(string path)
+        {
+            var entry = Load(path);
+            Service.Open(entry);
             return entry;
         }
     }
@@ -190,12 +199,53 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
     }
 
     [Fact]
-    public void Library_datasets_loaded_by_panning_never_become_routes()
+    public void Loading_an_S421_dataset_alone_never_adds_a_route()
     {
         var h = new Harness();
-        h.Open(Fixture("RTE-TEST-GBASIC.s421.gml"), deferred: true);
+        var loaded = h.Load(Fixture("RTE-TEST-GBASIC.s421.gml"));
+        h.Load(Fixture("RTE-TEST-GFULL.s421.gml"), deferred: true);
 
         Assert.Empty(h.Routes.Routes.Routes);
+        Assert.Null(loaded.RouteWarning);
+
+        // Opening it as a route afterwards adds it; asking again selects it.
+        var (route, warning) = h.Service.Open(loaded);
+        Assert.Null(warning);
+        Assert.Same(route, Assert.Single(h.Routes.Routes.Routes));
+        Assert.Same(loaded, h.Service.DatasetOf(route!));
+        h.Routes.Routes.SetActiveRoute(h.Routes.Routes.CreateRoute("Mine"));
+        Assert.Same(route, h.Service.Open(loaded).Route);
+        Assert.Same(route, h.Routes.Routes.ActiveRoute);
+
+        // A reload of the route's dataset keeps the one route.
+        h.Loader.RaiseLoaded(loaded);
+        Assert.Equal(2, h.Routes.Routes.Routes.Count);
+    }
+
+    [Fact]
+    public void Library_datasets_are_read_from_their_own_folder_and_known_by_their_full_path()
+    {
+        // Two Library folders, each with a route file of the same name.
+        var basicFolder = Directory.CreateDirectory(Path.Combine(_temp, "basic")).FullName;
+        var minFolder = Directory.CreateDirectory(Path.Combine(_temp, "min")).FullName;
+        File.Copy(Fixture("RTE-TEST-GBASIC.s421.gml"), Path.Combine(basicFolder, "route.gml"));
+        File.Copy(Fixture("RTE-TEST-GMIN.s421.gml"), Path.Combine(minFolder, "route.gml"));
+        var loader = new FakeDatasetLoaderService();
+        var routes = new RoutesService();
+        var service = new ReceivedRoutesService(loader, routes);
+        var datasets = new DatasetsViewModel(loader);
+        using var basicSource = Core.FileSystemAssetSource.Create(basicFolder);
+        using var minSource = Core.FileSystemAssetSource.Create(minFolder);
+        var basic = datasets.AddFromExchangeSet(basicSource, "route.gml", "S-421");
+        var min = datasets.AddFromExchangeSet(minSource, "route.gml", "S-421");
+
+        var (basicRoute, _) = service.Open(basic, Path.Combine(basicFolder, "route.gml"));
+        var (minRoute, _) = service.Open(min, Path.Combine(minFolder, "route.gml"));
+
+        Assert.Equal("BASIC.00001", basicRoute!.Source!.RouteId);
+        Assert.Equal("GMINI.00001", minRoute!.Source!.RouteId);
+        Assert.Equal(Path.Combine(minFolder, "route.gml"), minRoute.Source.FilePath);
+        Assert.Equal(2, routes.Routes.Routes.Count);
     }
 
     [Fact]

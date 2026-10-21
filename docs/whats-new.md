@@ -15,6 +15,16 @@ month. For package versions and release assets, see
   row as each card's `route`, and `list_navigational_warnings` adds the
   legs to each warning's `route`.
 
+- **S-421 datasets become routes only when you open them as routes.**
+  Loading an S-421 dataset in SoundCharts no longer adds it to the
+  **Routes** panel, however it's loaded, so the panel lists only the routes
+  you chose. Select an S-421 dataset in the **Library** and choose **Open as
+  route** (it loads the dataset if it isn't loaded), or use **Import route…**
+  for a file. An explicit Library load now also keeps a dataset that was
+  loaded as you panned, rather than unloading it when you pan away.
+  `import_route` gains `datasetId`, which opens a loaded S-421 dataset as a
+  route.
+
 - **Route check tones for Day, Dusk and Night.** In SoundCharts' Check
   route, the findings' markers, sleeves and legend use the route's state
   tones: Must review in the Below red, Check in the Tight amber and Info in

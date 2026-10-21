@@ -18,23 +18,27 @@ internal sealed class RouteExchangeService
     private readonly RoutesService _routes;
     private readonly ReceivedRoutesService _received;
     private readonly Func<string, Task<DatasetEntry?>>? _openDataset;
+    private readonly Func<string, DatasetEntry?>? _findDataset;
 
     /// <summary>Creates the service.</summary>
     /// <param name="routes">The route collection.</param>
     /// <param name="received">The received routes, which datasets and imported files feed.</param>
     /// <param name="formats">The route formats; the built-in ones when omitted.</param>
     /// <param name="openDataset">Opens a file as a dataset the user chose (Import route… for a format that opens as one).</param>
+    /// <param name="findDataset">Finds an open dataset by its id, for <see cref="OpenDataset"/>.</param>
     public RouteExchangeService(
         RoutesService routes,
         ReceivedRoutesService received,
         RouteFormatRegistry? formats = null,
-        Func<string, Task<DatasetEntry?>>? openDataset = null)
+        Func<string, Task<DatasetEntry?>>? openDataset = null,
+        Func<string, DatasetEntry?>? findDataset = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
         ArgumentNullException.ThrowIfNull(received);
         _routes = routes;
         _received = received;
         _openDataset = openDataset;
+        _findDataset = findDataset;
         Formats = formats ?? RouteFormatRegistry.Default;
         LastExportFormat = Formats.Formats.FirstOrDefault()?.Name;
     }
@@ -89,14 +93,13 @@ internal sealed class RouteExchangeService
         if (format.OpensAsDataset && _openDataset is not null)
         {
             var entry = await _openDataset(path).ConfigureAwait(true);
-            if (_received.FindByFile(path) is { } route)
-                return RouteImportResult.Opened(route, alreadyOpen: false);
-            if (entry?.RouteWarning is { } warning)
-                return RouteImportResult.Failed("not_a_route", warning);
-            // The same route ID and edition was already open from another file.
-            if (_routes.Routes.ActiveRoute is { IsReadOnly: true } active && entry is { IsLoaded: true })
-                return RouteImportResult.Opened(active, alreadyOpen: true);
-            return RouteImportResult.Failed("not_a_route", Strings.Import_NotARoute);
+            if (entry is not { IsLoaded: true })
+                return RouteImportResult.Failed("not_a_route", Strings.Import_NotARoute);
+            var (route, warning) = _received.Open(entry);
+            if (route is null)
+                return RouteImportResult.Failed("not_a_route", warning ?? Strings.Import_NotARoute);
+            // Not this dataset's route: the same route ID and edition was already open from another file.
+            return RouteImportResult.Opened(route, alreadyOpen: !ReferenceEquals(_received.DatasetOf(route), entry));
         }
 
         Route read;
@@ -113,6 +116,24 @@ internal sealed class RouteExchangeService
         return admitted is not null
             ? RouteImportResult.Opened(admitted, alreadyOpen: !ReferenceEquals(admitted, read))
             : RouteImportResult.Failed("older_edition", refused!);
+    }
+
+    /// <summary>
+    /// Opens a loaded S-421 dataset as a received route, as the Library's Open
+    /// as route does. The route becomes the active route.
+    /// </summary>
+    /// <param name="datasetId">The dataset's id.</param>
+    /// <returns>The route, or the one-line reason it couldn't be opened.</returns>
+    public RouteImportResult OpenDataset(string datasetId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(datasetId);
+        if (_findDataset?.Invoke(datasetId) is not { IsLoaded: true } entry)
+            return RouteImportResult.Failed("not_a_route", Strings.Import_NotARoute);
+        var wasOpen = _received.RouteOf(entry) is not null;
+        var (route, warning) = _received.Open(entry);
+        return route is null
+            ? RouteImportResult.Failed("not_a_route", warning ?? Strings.Import_NotARoute)
+            : RouteImportResult.Opened(route, alreadyOpen: wasOpen || !ReferenceEquals(_received.DatasetOf(route), entry));
     }
 
     /// <summary>

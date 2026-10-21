@@ -46,7 +46,19 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
         public Harness(RouteFormatRegistry? formats = null)
         {
             Received = new ReceivedRoutesService(Loader, Routes, read: e => S421Dataset.Open(e.FilePath));
-            Exchange = new RouteExchangeService(Routes, Received, formats, OpenDataset);
+            Exchange = new RouteExchangeService(Routes, Received, formats, OpenDataset, id => Loaded.FirstOrDefault(e => e.Id.Value == id));
+        }
+
+        /// <summary>The datasets <see cref="Load"/> loaded.</summary>
+        public List<DatasetEntry> Loaded { get; } = [];
+
+        /// <summary>Loads <paramref name="path"/> as a dataset, as the Library does, without opening it as a route.</summary>
+        public DatasetEntry Load(string path)
+        {
+            var entry = new DatasetEntry(path, "S-421") { IsLoaded = true };
+            Loaded.Add(entry);
+            Loader.RaiseLoaded(entry);
+            return entry;
         }
 
         public FakeDatasetLoaderService Loader { get; } = new();
@@ -59,7 +71,7 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
 
         public Task<DatasetEntry?> OpenDataset(string path)
         {
-            var entry = new DatasetEntry(path, "S-421");
+            var entry = new DatasetEntry(path, "S-421") { IsLoaded = true };
             Loader.RaiseLoaded(entry);
             return Task.FromResult<DatasetEntry?>(entry);
         }
@@ -505,6 +517,30 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
         h.Routes.Routes.CreateRoute("Mine");
         Assert.True((await new CopyRouteTool(h.Routes, invoker, h.Exchange).InvokeAsync(new CopyRouteRequest(), ct)).TryGetError(out var owned));
         Assert.IsType<Datasets.Pipelines.Query.InvalidArgument>(owned);
+    }
+
+    [Fact]
+    public async Task Import_route_with_a_dataset_id_opens_a_loaded_dataset_as_a_route()
+    {
+        var h = new Harness();
+        var ct = TestContext.Current.CancellationToken;
+        var import = new ImportRouteTool(h.Routes, new Inline(), h.Exchange, Path.Combine(_temp, "scratch"));
+        var entry = h.Load(Fixture("RTE-TEST-GBASIC.s421.gml"));
+        Assert.Empty(h.Routes.Routes.Routes);
+
+        Assert.True((await import.InvokeAsync(new ImportRouteRequest(DatasetId: entry.Id.Value), ct)).TryGetValue(out var opened));
+        Assert.False(opened!.AlreadyOpen);
+        Assert.Equal("BASIC.00001", opened.Route.Source!.RouteId);
+        Assert.Same(entry, h.Received.DatasetOf(Assert.Single(h.Routes.Routes.Routes)));
+
+        // Again: the route already open; an unknown id and two inputs are refused.
+        Assert.True((await import.InvokeAsync(new ImportRouteRequest(DatasetId: entry.Id.Value), ct)).TryGetValue(out var again));
+        Assert.True(again!.AlreadyOpen);
+        Assert.Equal(opened.Route.RouteId, again.Route.RouteId);
+        Assert.True((await import.InvokeAsync(new ImportRouteRequest(DatasetId: "nope"), ct)).TryGetError(out var unknown));
+        Assert.Equal("not_a_route", Assert.IsType<RouteImportFailed>(unknown).Reason);
+        Assert.True((await import.InvokeAsync(new ImportRouteRequest(Path: entry.FilePath, DatasetId: entry.Id.Value), ct)).TryGetError(out var both));
+        Assert.IsType<Datasets.Pipelines.Query.InvalidArgument>(both);
     }
 
     private sealed class RecordingDialogs(string? importPath = null, string? exportPath = null) : IRouteDialogs
