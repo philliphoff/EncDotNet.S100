@@ -474,6 +474,40 @@
                                 <Run Text="{Binding IssuerSuffix}" Foreground="{DynamicResource MutedColor}" />
                             </TextBlock>
                         </Grid>
+                        <!-- While checking a route (#959): where the route meets the
+                             warning; selecting it opens the finding in the Findings list. -->
+                        <Button Classes="routeRow"
+                                AutomationProperties.AutomationId="PickReport.WarningCard.RouteFinding"
+                                AutomationProperties.Name="{Binding RouteFindingText}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_WarningRouteFinding}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_WarningRouteFinding}"
+                                Command="{Binding OpenRouteFindingCommand}"
+                                Margin="0,4,0,0">
+                            <Button.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsOpen" />
+                                    <Binding Path="HasRouteFinding" />
+                                </MultiBinding>
+                            </Button.IsVisible>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ic:FluentIcon Icon="Flow"
+                                               IconVariant="Regular"
+                                               FontSize="13"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding RouteFindingText}"
+                                           FontSize="11.5"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                                <ic:FluentIcon Icon="ChevronRight"
+                                               IconVariant="Regular"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <!-- On chart / Off chart / Information (S-98 §12.12.2; #996), for a listed warning. -->
                         <StackPanel Spacing="4" Margin="0,6,0,0">
                             <StackPanel.IsVisible>
@@ -629,6 +663,18 @@
                                       HorizontalContentAlignment="Stretch" />
                 </ControlTemplate>
             </Setter>
+        </Style>
+        <!-- A Warning card's route row (#959): flat, the accent colour, a hand cursor. -->
+        <Style Selector="Button.routeRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,2" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.routeRow:pointerover">
+            <Setter Property="Opacity" Value="0.8" />
         </Style>
         <!-- Warning card footer actions: flat, tinted on hover. -->
         <Style Selector="Button.cardAction">

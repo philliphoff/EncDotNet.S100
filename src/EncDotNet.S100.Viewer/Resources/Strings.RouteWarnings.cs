@@ -15,4 +15,13 @@ internal static partial class Strings
     public static string NavWarnings_OnRoute => Get(nameof(NavWarnings_OnRoute));
     public static string NavWarnings_NearRoute => Get(nameof(NavWarnings_NearRoute));
     public static string NavWarnings_NoneOnRoute => Get(nameof(NavWarnings_NoneOnRoute));
+
+    // The Warning card's "Crosses route · leg 3 → 4" row (#959).
+    public static string Pick_Warning_CrossesRouteLegFormat => Get(nameof(Pick_Warning_CrossesRouteLegFormat));
+    public static string Pick_Warning_NearRouteLegFormat => Get(nameof(Pick_Warning_NearRouteLegFormat));
+    public static string Pick_Warning_CrossesRouteLegsFormat => Get(nameof(Pick_Warning_CrossesRouteLegsFormat));
+    public static string Pick_Warning_NearRouteLegsFormat => Get(nameof(Pick_Warning_NearRouteLegsFormat));
+    public static string Pick_Warning_CrossesRoute => Get(nameof(Pick_Warning_CrossesRoute));
+    public static string Pick_Warning_NearRoute => Get(nameof(Pick_Warning_NearRoute));
+    public static string Tooltip_WarningRouteFinding => Get(nameof(Tooltip_WarningRouteFinding));
 }

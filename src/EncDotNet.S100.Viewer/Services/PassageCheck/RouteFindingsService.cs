@@ -222,6 +222,28 @@ internal sealed class RouteFindingsService : IDisposable
     }
 
     /// <summary>
+    /// Opens a finding from somewhere else, as a Warning card's "Crosses route"
+    /// row does (#959): selects it, clearing a filter chip that hides it, and
+    /// raises <see cref="OpenRequested"/> so the Findings list comes forward.
+    /// </summary>
+    /// <param name="finding">A finding; matched by id in <see cref="Findings"/>.</param>
+    /// <returns>Whether the checked route has it.</returns>
+    public bool Open(RouteFinding finding)
+    {
+        ArgumentNullException.ThrowIfNull(finding);
+        if (Findings.FirstOrDefault(f => f.Id == finding.Id) is not { } current)
+            return false;
+        if (!ViewModels.RouteFindingsViewModel.Passes(current, Filter))
+            Filter = ViewModels.FindingsFilter.All;
+        OpenRequested?.Invoke(this, EventArgs.Empty);
+        Select(current);
+        return true;
+    }
+
+    /// <summary>Raised by <see cref="Open"/>: the Routes panel shows its Findings list.</summary>
+    public event EventHandler? OpenRequested;
+
+    /// <summary>
     /// The EPSG:3857 extent a finding zooms to: its span's box, or a 1 km box
     /// around a point; never smaller than that box. <c>null</c> without a location.
     /// </summary>

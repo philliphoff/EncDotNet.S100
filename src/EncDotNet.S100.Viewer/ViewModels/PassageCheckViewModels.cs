@@ -86,6 +86,8 @@ internal sealed class PassageCheckViewModel : ViewModelBase
             Findings = new RouteFindingsViewModel(findings);
             Findings.CountChanged += (_, _) => OnPropertyChanged(nameof(FindingsLabel));
             findings.Changed += (_, _) => Refresh();
+            // #959: a Warning card's "Crosses route" row opens its finding here.
+            findings.OpenRequested += (_, _) => ShowFindings = true;
         }
         _service.Changed += (_, _) => Refresh();
         Window.PropertyChanged += (_, e) =>

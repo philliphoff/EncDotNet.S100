@@ -57,7 +57,25 @@ internal sealed record NavigationalWarningRouteDto(
     [property: Description("Whether it applies while the vessel is there: in_force, not_in_force or cancelled; null when off.")] string? Status,
     [property: Description("When the vessel reaches it (UTC): the ETA, or the view time when the route has no speed (see atEta); null when off.")] DateTimeOffset? Eta,
     [property: Description("True when eta is an ETA; false when the route has no speed and the view time is used.")] bool AtEta,
-    [property: Description("The panel row's line, e.g. \"On route · 06:08\" or \"Near route · 06:19\", in the Local/UTC preference; null when off.")] string? Text);
+    [property: Description("The panel row's line, e.g. \"On route · 06:08\" or \"Near route · 06:19\", in the Local/UTC preference; null when off.")] string? Text)
+{
+    /// <summary>Zero-based first leg.</summary>
+    [Description("Zero-based leg where the route first meets the warning (the finding's legIndex), or null when off.")]
+    public int? LegIndex { get; init; }
+
+    /// <summary>Zero-based last leg.</summary>
+    [Description("Zero-based leg where the route leaves the warning; more than legIndex when the route meets it on several legs. Null when off.")]
+    public int? EndLegIndex { get; init; }
+}
+
+/// <summary>A Warning card's route row.</summary>
+[Description("A Warning card's route row while Check route is on (#959): where the checked route meets the warning. Selecting it (ui_invoke on PickReport.WarningCard.RouteFinding, or select_finding with findingId) selects the finding in the Findings list.")]
+internal sealed record WarningCardRouteDto(
+    [property: Description("\"crosses\" or \"near\", as list_navigational_warnings' route.relation.")] string Relation,
+    [property: Description("The s124 finding's id, as list_navigational_warnings' route.findingId; pass it to select_finding.")] string FindingId,
+    [property: Description("Zero-based leg where the route first meets the warning; null when the finding has no leg.")] int? LegIndex,
+    [property: Description("Zero-based leg where the route leaves it; more than legIndex when the route meets it on several legs.")] int? EndLegIndex,
+    [property: Description("The row as the card shows it: \"Crosses route · leg 3 → 4\", \"Near route · leg 1 → 2\" or \"Crosses route on 2 legs\" (leg numbers are waypoint numbers).")] string Text);
 
 /// <summary>A series' latest in-force bulletin.</summary>
 [Description("The latest in-force bulletin of a series, and what it lists that isn't loaded.")]
@@ -163,7 +181,12 @@ internal sealed record WarningCardDto(
     [property: Description("True when the header shows NEW: the warning was new when the card was made (opening it marks it seen).")] bool New,
     [property: Description("True when the footer shows NOT FOR NAVIGATION: the dataset's exchange-set metadata marks it not for navigation.")] bool NotForNavigation,
     [property: Description("Warning numbers in the displayed text that link to another listed warning, in text order.")] IReadOnlyList<WarningLinkDto> Links,
-    [property: Description("The card's classification control: \"on_chart\", \"off_chart\" or \"information\"; null when the part isn't listed, so the card shows no control.")] string? Classification);
+    [property: Description("The card's classification control: \"on_chart\", \"off_chart\" or \"information\"; null when the part isn't listed, so the card shows no control.")] string? Classification)
+{
+    /// <summary>The route row.</summary>
+    [Description("The card's route row (\"Crosses route · leg 3 → 4\") while Check route is on and the warning crosses or is near the checked route; null otherwise.")]
+    public WarningCardRouteDto? Route { get; init; }
+}
 
 /// <summary>A link in a card's text.</summary>
 [Description("A warning number in a card's message that opens another listed warning.")]
@@ -265,7 +288,11 @@ internal abstract class NavigationalWarningsToolBase
                 },
                 w.From.ToUniversalTime(),
                 w.AtEta,
-                NavigationalWarningsViewModel.RouteText(w, departure, format));
+                NavigationalWarningsViewModel.RouteText(w, departure, format))
+            {
+                LegIndex = finding.LegIndex,
+                EndLegIndex = finding.LegIndex is { } first ? Math.Max(first, w.EndLegIndex ?? first) : null,
+            };
 
     private static NavigationalWarningsDto ListDto(NavigationalWarningsViewModel panel, NavigationalWarningsService service)
     {
@@ -569,7 +596,17 @@ internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
         card.IsNew,
         card.NotForNavigation,
         card.Links.Select(l => new WarningLinkDto(l.Text, l.Target!.DatasetId, l.Target.FeatureRef, l.Target.Warning.Label)).ToList(),
-        card.CanClassify ? ClassificationCode(card.Classification) : null);
+        card.CanClassify ? ClassificationCode(card.Classification) : null)
+    {
+        Route = card.RouteFinding is { } finding
+            ? new WarningCardRouteDto(
+                finding.Warning?.Relation == RouteWarningRelation.Near ? "near" : "crosses",
+                finding.Id,
+                finding.LegIndex,
+                finding.LegIndex is { } first ? Math.Max(first, finding.Warning?.EndLegIndex ?? first) : null,
+                card.RouteFindingText!)
+            : null,
+    };
 
     /// <summary>The card for a part, or the open card when no part is named.</summary>
     protected static NavigationalWarningCardViewModel? FindCard(PickReportViewModel pick, string? datasetId, string? featureId)

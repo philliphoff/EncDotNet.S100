@@ -662,6 +662,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         card.CanZoom = entry is { Extent: not null };
         card.CanClassify = entry is not null;
         card.Classification = entry is null ? Services.NavigationalWarningClassification.OnChart : _warningNavigator!.ClassificationOf(entry);
+        card.SetRouteFinding(entry is null ? null : _warningNavigator!.RouteFindingFor(entry));
     }
 
     private Services.NavigationalWarningEntry? FindEntry(PickHit? hit) =>
@@ -698,6 +699,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         card.ZoomRequested += OnWarningZoomRequested;
         card.LinkRequested += OnWarningLinkRequested;
         card.ClassificationRequested += OnWarningClassificationRequested;
+        card.RouteFindingRequested += OnWarningRouteFindingRequested;
         return card;
     }
 
@@ -708,6 +710,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         card.ZoomRequested -= OnWarningZoomRequested;
         card.LinkRequested -= OnWarningLinkRequested;
         card.ClassificationRequested -= OnWarningClassificationRequested;
+        card.RouteFindingRequested -= OnWarningRouteFindingRequested;
     }
 
     // The navigator raises WarningsChanged, which updates every card (#996).
@@ -733,6 +736,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
     private void OnWarningLinkRequested(object? sender, Services.NavigationalWarningEntry target) =>
         _warningNavigator?.Select(target);
+
+    // #959: "Crosses route · leg 3 → 4" opens the finding in the Findings list.
+    private void OnWarningRouteFindingRequested(object? sender, EncDotNet.S100.Navigation.RouteFinding finding) =>
+        _warningNavigator?.OpenRouteFinding(finding);
 
     /// <summary>
     /// Orders the warning parts of one pick for their cards: points, then

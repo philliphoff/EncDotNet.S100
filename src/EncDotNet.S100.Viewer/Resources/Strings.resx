@@ -6316,4 +6316,32 @@
     <value>Not drawn on the chart once this card closes</value>
     <comment>Warning card note under an Off chart or Information classification (#996).</comment>
   </data>
+  <data name="Pick_Warning_CrossesRouteLegFormat" xml:space="preserve">
+    <value>Crosses route · leg {0} → {1}</value>
+    <comment>Warning card row while checking a route (#959): the warning crosses the checked route on one leg; {0} → {1} are the leg's waypoint numbers. Opens the finding.</comment>
+  </data>
+  <data name="Pick_Warning_NearRouteLegFormat" xml:space="preserve">
+    <value>Near route · leg {0} → {1}</value>
+    <comment>Warning card row while checking a route (#959): the warning lies near the checked route; {0} → {1} are the leg's waypoint numbers. Opens the finding.</comment>
+  </data>
+  <data name="Pick_Warning_CrossesRouteLegsFormat" xml:space="preserve">
+    <value>Crosses route on {0} legs</value>
+    <comment>Warning card row while checking a route (#959): the route meets the warning on {0} legs. Opens the finding at the first.</comment>
+  </data>
+  <data name="Pick_Warning_NearRouteLegsFormat" xml:space="preserve">
+    <value>Near route on {0} legs</value>
+    <comment>Warning card row while checking a route (#959): the warning is near {0} legs. Opens the finding at the first.</comment>
+  </data>
+  <data name="Pick_Warning_CrossesRoute" xml:space="preserve">
+    <value>Crosses route</value>
+    <comment>Warning card row while checking a route (#959) when the finding has no leg.</comment>
+  </data>
+  <data name="Pick_Warning_NearRoute" xml:space="preserve">
+    <value>Near route</value>
+    <comment>Warning card row while checking a route (#959) when the finding has no leg.</comment>
+  </data>
+  <data name="Tooltip_WarningRouteFinding" xml:space="preserve">
+    <value>Show this warning's finding in the checked route's Findings list</value>
+    <comment>Tooltip on the Warning card's route row (#959).</comment>
+  </data>
 </root>

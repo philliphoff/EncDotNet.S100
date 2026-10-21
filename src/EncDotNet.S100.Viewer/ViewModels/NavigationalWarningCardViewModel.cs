@@ -47,6 +47,8 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
     private NavigationalWarningSet _set = NavigationalWarningSet.Empty;
     private RouteFindingWarning? _onRoute;
     private string? _onRouteText;
+    private readonly RelayCommand _openRouteFindingCommand;
+    private RouteFinding? _routeFinding;
 
     public NavigationalWarningCardViewModel(
         NavigationalWarningInfo info,
@@ -72,6 +74,9 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
         OpenLinkCommand = new RelayCommand<NavigationalWarningEntry>(
             target => { if (target is not null) LinkRequested?.Invoke(this, target); },
             target => target is not null);
+        _openRouteFindingCommand = new RelayCommand(
+            () => { if (_routeFinding is { } finding) RouteFindingRequested?.Invoke(this, finding); },
+            () => _routeFinding is not null);
     }
 
     /// <summary>The hit the card describes, when it came from a pick.</summary>
@@ -170,6 +175,54 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
 
     /// <summary>Raised by <see cref="OpenLinkCommand"/> with the warning to open.</summary>
     public event EventHandler<NavigationalWarningEntry>? LinkRequested;
+
+    /// <summary>
+    /// The checked route's S-124 finding for this warning (#959), which the
+    /// card's route row opens; <c>null</c> while Check route is off or the
+    /// warning is off the route, when the row doesn't show.
+    /// </summary>
+    public RouteFinding? RouteFinding => _routeFinding;
+
+    /// <summary>Whether the route row shows.</summary>
+    public bool HasRouteFinding => _routeFinding is not null;
+
+    /// <summary>
+    /// The route row: "Crosses route · leg 3 → 4", "Near route · leg 2 → 3",
+    /// or "Crosses route on 2 legs" when the route meets the warning on more
+    /// than one leg; <c>null</c> without <see cref="RouteFinding"/>.
+    /// </summary>
+    public string? RouteFindingText => _routeFinding is { } finding ? RouteRowText(finding) : null;
+
+    /// <summary>Opens <see cref="RouteFinding"/> in the Findings list, raising <see cref="RouteFindingRequested"/>.</summary>
+    public ICommand OpenRouteFindingCommand => _openRouteFindingCommand;
+
+    /// <summary>Raised by <see cref="OpenRouteFindingCommand"/> with the finding to open.</summary>
+    public event EventHandler<RouteFinding>? RouteFindingRequested;
+
+    /// <summary>Sets the checked route's finding for this warning, or <c>null</c> to hide the route row.</summary>
+    public void SetRouteFinding(RouteFinding? finding)
+    {
+        if (Equals(_routeFinding, finding))
+            return;
+        _routeFinding = finding;
+        OnPropertyChanged(nameof(RouteFinding));
+        OnPropertyChanged(nameof(HasRouteFinding));
+        OnPropertyChanged(nameof(RouteFindingText));
+        _openRouteFindingCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>The route row's text for an S-124 finding, from the route check's legs (<see cref="RouteFindingWarning.EndLegIndex"/>).</summary>
+    internal static string RouteRowText(RouteFinding finding)
+    {
+        ArgumentNullException.ThrowIfNull(finding);
+        var crosses = finding.Warning?.Relation != RouteWarningRelation.Near;
+        if (finding.LegIndex is not { } first)
+            return crosses ? Strings.Pick_Warning_CrossesRoute : Strings.Pick_Warning_NearRoute;
+        var last = Math.Max(first, finding.Warning?.EndLegIndex ?? first);
+        return last == first
+            ? string.Format(CultureInfo.CurrentCulture, crosses ? Strings.Pick_Warning_CrossesRouteLegFormat : Strings.Pick_Warning_NearRouteLegFormat, first + 1, first + 2)
+            : string.Format(CultureInfo.CurrentCulture, crosses ? Strings.Pick_Warning_CrossesRouteLegsFormat : Strings.Pick_Warning_NearRouteLegsFormat, last - first + 1);
+    }
 
     /// <summary>Sets the listed warnings that numbers in the text may link to.</summary>
     public void SetLinkTargets(IReadOnlyList<NavigationalWarningEntry> warnings)
