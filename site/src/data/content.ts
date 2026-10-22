@@ -4,6 +4,7 @@
 export const links = {
   repo: 'https://github.com/philliphoff/EncDotNet.S100',
   releases: 'https://github.com/philliphoff/EncDotNet.S100/releases/latest',
+  nightly: 'https://github.com/philliphoff/EncDotNet.S100/releases/tag/nightly',
   license: 'https://github.com/philliphoff/EncDotNet.S100/blob/main/LICENSE',
   security: 'https://github.com/philliphoff/EncDotNet.S100/blob/main/SECURITY.md',
   standards: 'https://github.com/philliphoff/EncDotNet.S100#supported-standards',

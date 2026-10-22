@@ -38,7 +38,7 @@ docfx docfx.json && (cd site && npm run build) && cp -R site/dist/. _site/
 | `src/pages/index.astro` | The page, made up of the section components |
 | `src/components/` | One component per section. `Shot.astro` is the image slot. |
 | `src/data/content.ts` | Product tiles, standards list, links |
-| `src/data/release.ts` | Latest release assets, fetched at build time for the download button |
+| `src/data/release.ts` | Latest release assets, fetched at build time for the download button, and whether a `nightly` prerelease exists for the hero and footer links |
 | `src/assets/shots/` | Final captures, named `<ID>.png`, plus `<ID>.light.png` twins (see the shot list) |
 | `shot-list.md` | What to capture for each shot ID, and how |
 

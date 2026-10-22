@@ -17,15 +17,18 @@ const patterns = {
   linux: /^(SoundCharts|Viewer)-linux-x64\.tar\.gz$/,
 };
 
+const api = 'https://api.github.com/repos/philliphoff/EncDotNet.S100/releases';
+
+function fetchRelease(path: string) {
+  const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  return fetch(`${api}/${path}`, { headers, signal: AbortSignal.timeout(10_000) });
+}
+
 export async function getRelease(): Promise<ReleaseInfo> {
   const fallback: ReleaseInfo = { url: links.releases };
   try {
-    const headers: Record<string, string> = { Accept: 'application/vnd.github+json' };
-    if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
-    const res = await fetch('https://api.github.com/repos/philliphoff/EncDotNet.S100/releases/latest', {
-      headers,
-      signal: AbortSignal.timeout(10_000),
-    });
+    const res = await fetchRelease('latest');
     if (!res.ok) return fallback;
     const release = (await res.json()) as {
       tag_name: string;
@@ -43,4 +46,16 @@ export async function getRelease(): Promise<ReleaseInfo> {
   } catch {
     return fallback;
   }
+}
+
+// Whether the rolling `nightly` prerelease exists, so the site only links to it
+// once the Nightly workflow has published one. Shared by the hero and footer.
+let nightly: Promise<boolean> | undefined;
+
+export function hasNightly(): Promise<boolean> {
+  nightly ??= fetchRelease('tags/nightly').then(
+    (res) => res.ok,
+    () => false,
+  );
+  return nightly;
 }
