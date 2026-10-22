@@ -219,6 +219,21 @@ Windows signatures" step asserts `Get-AuthenticodeSignature` returns `Valid`.
 The identity is OV-level, so SmartScreen reputation accrues over downloads
 rather than instantly.
 
+### Release token
+
+The `RELEASE_TOKEN` repository secret is a personal access token. Two workflows
+use it:
+
+- **Release** pushes the new `v*` tag with it, because a tag pushed with
+  `GITHUB_TOKEN` doesn't trigger the tag-driven CI run.
+- **Nightly** moves the `nightly` tag and updates the nightly prerelease with
+  it. An Actions token can't move a ref when that changes workflow files.
+
+A fine-grained token needs **Contents: read and write** and **Workflows: read
+and write** on this repository. A classic token needs the `repo` and `workflow`
+scopes. When the token expires, both workflows fail at those steps until you
+replace the secret.
+
 ## Branch & pull-request workflow
 
 1. Create a topic branch off `main` (e.g. `fix-s104-trend-flag` or
