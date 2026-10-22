@@ -77,6 +77,16 @@ internal static class ReleaseVersion
             : ComparePrerelease(candidatePrerelease, currentPrerelease) > 0;
     }
 
+    /// <summary>
+    /// Gets whether <paramref name="value"/> is a nightly build version: its
+    /// first pre-release identifier starts with <c>nightly</c>
+    /// (for example <c>0.25.2-nightly.20261021+abc1234</c>).
+    /// </summary>
+    public static bool IsNightly(string? value) =>
+        TryParse(value, out _, out var prerelease)
+        && prerelease.Length > 0
+        && prerelease[0].StartsWith("nightly", StringComparison.OrdinalIgnoreCase);
+
     private static int ComparePrerelease(string[] left, string[] right)
     {
         if (left.Length == 0 || right.Length == 0)

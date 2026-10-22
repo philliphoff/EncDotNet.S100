@@ -83,6 +83,18 @@ internal static class ReleaseVersion
     }
 
     /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="value"/> is a
+    /// nightly build version, i.e. its first pre-release identifier starts
+    /// with <c>nightly</c> (e.g. <c>"0.25.2-nightly.20261021+abc1234"</c>).
+    /// Stable releases, other pre-releases (<c>-rc.1</c>) and the local
+    /// <c>0.0.0-dev</c> default are not nightly builds.
+    /// </summary>
+    public static bool IsNightly(string? value) =>
+        TryParse(value, out _, out var prerelease)
+        && prerelease.Length > 0
+        && prerelease[0].StartsWith("nightly", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Compares pre-release identifier lists per SemVer 2.0.0 §11: a release
     /// (no identifiers) outranks any of its pre-releases; numeric identifiers
     /// compare numerically and rank below alphanumeric ones, which compare

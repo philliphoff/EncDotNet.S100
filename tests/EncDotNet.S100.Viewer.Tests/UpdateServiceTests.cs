@@ -132,6 +132,35 @@ public sealed class UpdateServiceTests
         Assert.Equal(expected, Version(version).IsDevelopmentBuild);
     }
 
+    [Theory]
+    [InlineData("0.25.2-nightly.20261021", true)]
+    [InlineData("0.25.2-nightly.20261021+abc1234", true)]
+    [InlineData("v0.25.2-Nightly.20261021", true)]
+    [InlineData("0.25.2-nightly", true)]
+    [InlineData("0.25.2", false)]
+    [InlineData("0.25.2+abc1234", false)]
+    [InlineData("0.0.0-dev", false)]
+    [InlineData("0.0.0", false)]
+    [InlineData("1.0.0-rc.1", false)]
+    [InlineData("1.0.0-beta.nightly", false)]
+    [InlineData("garbage-nightly", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsNightly_DetectsNightlyPrerelease(string? version, bool expected)
+    {
+        Assert.Equal(expected, ReleaseVersion.IsNightly(version));
+    }
+
+    [Theory]
+    [InlineData("0.25.2-nightly.20261021", true)]
+    [InlineData("0.25.2", false)]
+    [InlineData("0.0.0-dev", false)]
+    [InlineData("1.0.0-rc.1", false)]
+    public void IsNightlyBuild_FollowsVersion(string version, bool expected)
+    {
+        Assert.Equal(expected, Version(version).IsNightlyBuild);
+    }
+
     // ---- UpdateService decisions -----------------------------------------
 
     [Fact]

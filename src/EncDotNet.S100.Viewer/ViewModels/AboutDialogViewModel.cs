@@ -79,6 +79,12 @@ internal sealed class AboutDialogViewModel : ViewModelBase
         string.Format(CultureInfo.CurrentCulture, Strings.About_VersionFormat, _versionProvider.Current.Version);
 
     /// <summary>
+    /// Whether the running app is an unsupported nightly build, which shows
+    /// a "Nightly build" badge next to the version (issue #1020).
+    /// </summary>
+    public bool IsNightlyBuild => _versionProvider.Current.IsNightlyBuild;
+
+    /// <summary>
     /// The secondary build line: full informational version plus the build
     /// date when one is embedded (e.g. <c>"build 2.4.1+a1f9c20 · 2026-06-18"</c>).
     /// </summary>
