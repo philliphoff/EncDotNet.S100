@@ -62,6 +62,33 @@ optional. Install `fontconfig` and a font package such as `fonts-dejavu-core`
 if you want labels in a system font, or to silence the `Fontconfig error:
 Cannot load default config file` warning.
 
+### Nightly builds
+
+Nightly builds of `s100` are published from `main` to the
+[`nightly` prerelease](https://github.com/philliphoff/EncDotNet.S100/releases/tag/nightly)
+when `main` has changed since the last one. Use them to try a fix or feature
+before it's released. They're unsupported: they pass CI but get no other
+testing, and they can have bugs or unfinished features.
+
+The release's assets keep the same names, so their links always get the newest
+nightly:
+
+| Platform | Asset |
+|---|---|
+| Windows x64 | `s100-nightly-win-x64.zip` |
+| Windows arm64 | `s100-nightly-win-arm64.zip` |
+| macOS (Apple silicon) | `s100-nightly-osx-arm64.tar.gz` |
+| Linux x64 | `s100-nightly-linux-x64.tar.gz` |
+| Linux arm64 | `s100-nightly-linux-arm64.tar.gz` |
+
+Install and run a nightly the same way as a release. Its version is the next
+patch release plus the build date, such as `0.25.2-nightly.20261022`, and
+`s100 --version` marks it as a nightly build. A nightly still shows
+[update notices](#update-notices) for newer stable releases. To go back to a
+stable build, install the archive from the
+[latest release](https://github.com/philliphoff/EncDotNet.S100/releases/latest)
+in its place.
+
 ### The copy inside SoundCharts
 
 SoundCharts ships the same `s100` executable in a `cli/` folder:
@@ -110,8 +137,8 @@ These options work without a command:
 
 ### Update notices
 
-Release builds check the repository's latest GitHub release at most once every
-24 hours. When a newer version exists, each run writes one line to standard
+Release and nightly builds check the repository's latest GitHub release at most
+once every 24 hours. The latest release is always a stable one, never a nightly. When a newer version exists, each run writes one line to standard
 error:
 
 ```text

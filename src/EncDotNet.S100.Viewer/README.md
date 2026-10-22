@@ -26,6 +26,32 @@ has self-contained builds, so you don't need to install .NET:
 For the install steps on each platform, see
 [Getting started](../../docs/getting-started.md#desktop-app).
 
+### Nightly builds
+
+Nightly builds of SoundCharts are published from `main` to the
+[`nightly` prerelease](https://github.com/philliphoff/EncDotNet.S100/releases/tag/nightly)
+when `main` has changed since the last one. Use them to try a fix or feature
+before it's released. They're unsupported: they pass CI but get no other
+testing, and they can have bugs or unfinished features.
+
+The assets are signed like a release's and keep the same names, so their links
+always get the newest nightly: `SoundCharts-nightly.dmg` and
+`SoundCharts-nightly-osx-arm64.tar.gz` for macOS,
+`SoundCharts-nightly-win-x64.zip` and `SoundCharts-nightly-win-arm64.zip` for
+Windows, and `SoundCharts-nightly-linux-x64.tar.gz` and
+`SoundCharts-nightly-linux-arm64.tar.gz` for Linux.
+
+- **About** shows a **Nightly build** badge next to the version, such as
+  `0.25.2-nightly.20261022`: the next patch release plus the build date.
+- A nightly still tells you when a newer stable release ships. It never offers
+  another nightly.
+- Nightly and stable builds share the same settings, Library and other app
+  data, so each reads what the other saved. On macOS they're also the same
+  app, so a nightly replaces the installed SoundCharts.
+- To go back to a stable build, install the
+  [latest release](https://github.com/philliphoff/EncDotNet.S100/releases/latest)
+  over the nightly.
+
 ### Linux runtime prerequisites
 
 The Linux archives bundle the .NET runtime and SkiaSharp's native

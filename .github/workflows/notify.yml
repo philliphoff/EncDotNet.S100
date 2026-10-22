@@ -9,7 +9,7 @@ name: Notify
 # repository's default branch, so this only takes effect once merged to main.
 on:
   workflow_run:
-    workflows: [ "CI", "Release", "Docs", "Performance" ]
+    workflows: [ "CI", "Release", "Docs", "Performance", "Nightly" ]
     types: [ completed ]
 
 permissions:
