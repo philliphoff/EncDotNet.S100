@@ -201,7 +201,11 @@ public sealed class TilesServeRefreshTests : IDisposable
         Assert.Equal(2, Directory.EnumerateDirectories(cache).Count(d => DiskTileCache.IsFingerprint(Path.GetFileName(d))));
     }
 
-    [Fact]
+    // Counts the loop's checks rather than waiting on the clock: a reopen
+    // portrays the cell again, which took longer than any fixed deadline when
+    // the test process stalled under parallel render tests (Windows ARM64 CI).
+    // The timeout only stops a loop that has stopped checking.
+    [Fact(Timeout = 300_000)]
     public async Task The_refresh_loop_picks_up_a_change_on_its_own()
     {
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
@@ -209,23 +213,49 @@ public sealed class TilesServeRefreshTests : IDisposable
         var settings = SettingsFor(cell);
         var fingerprint = TileRenderSession.Fingerprint(settings);
         Assert.Equal(0, TilesServeCommand.OpenRendered(settings, out var initial));
+        int changedChecks = 0;
         await using var source = new RefreshingTileSource(
             initial!,
             fingerprint,
-            () => TileRenderSession.Fingerprint(settings),
-            () => TilesServeCommand.OpenRendered(settings, out var reopened) == 0 ? reopened : null,
+            () =>
+            {
+                var now = TileRenderSession.Fingerprint(settings);
+                if (now != fingerprint)
+                    Interlocked.Increment(ref changedChecks);
+                return now;
+            },
+            () =>
+            {
+                Interlocked.Increment(ref _opens);
+                return TilesServeCommand.OpenRendered(settings, out var reopened) == 0 ? reopened : null;
+            },
             TimeSpan.FromMilliseconds(50),
-            _ => { });
+            line =>
+            {
+                lock (_log)
+                    _log.Add(line);
+            });
 
         Touch(cell);
 
-        var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (source.Reloads == 0 && DateTime.UtcNow < deadline)
-            await Task.Delay(50, TestContext.Current.CancellationToken);
-        Assert.Equal(1, source.Reloads);
+        // Checks run one at a time, so once a third check sees the change the
+        // second, which reopens, has finished.
+        async Task AfterChecksAsync(int count)
+        {
+            while (Volatile.Read(ref changedChecks) < count)
+                await Task.Delay(50, TestContext.Current.CancellationToken);
+        }
+
+        await AfterChecksAsync(3);
+        Assert.Equal(1, _opens);
+        string logged;
+        lock (_log)
+            logged = string.Join(" ", _log);
+        Assert.True(source.Reloads == 1, $"Not reopened: {logged}");
 
         // One change, one reload: later checks find nothing new.
-        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        await AfterChecksAsync(6);
+        Assert.Equal(1, _opens);
         Assert.Equal(1, source.Reloads);
     }
 
