@@ -63,6 +63,29 @@ Then render the exchange set, for example:
 s100 render path/to/folder/spit-across-scales -o spit.png
 ```
 
+### Route showcase
+
+The route showcase puts every principal route state side by side in one
+exchange set, for working on the route UX in SoundCharts. It merges the
+route scenarios below into one Synthetic Sound and adds routes for the
+clearance states: clear, tight, all three bands along one profile, below the
+UKC setting, S-101 depths turning into S-102, no required UKC, water level
+ending before arrival, no draft, and leaving the charts.
+`RouteShowcase.Routes` lists each route with the state it shows.
+
+The export test writes the exchange set, an RTZ route, a Library collection
+manifest, a SoundCharts data folder and `open-showcase.sh`, which opens
+SoundCharts on the data folder with every dataset but the routes loaded. The
+folder's `routes.json` holds every route, plus an empty route, a route with
+one waypoint and a copy of a received route. The RTZ route opens as a
+received route at start-up.
+
+```bash
+S100_ROUTE_SHOWCASE_OUT=path/to/folder dotnet test tests/EncDotNet.S100.Viewer.Tests --filter "FullyQualifiedName~ExportRouteShowcaseTests"
+```
+
+The folder's `README.md` says what to look for in each route.
+
 ## The world model
 
 A scenario samples a `SyntheticWorld`. The world is fictitious and placed in
