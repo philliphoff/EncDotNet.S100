@@ -81,6 +81,18 @@ string[] s131Types = ["Berth", "Dolphin", "MooringBuoy", "HarbourFacility", "Dry
 // (Derived files are cached in .cache/derived; delete them to re-derive.)
 var derivedBox = new Box(47.585, -122.425, 47.640, -122.335);
 var elliottBay = new Box(47.540, -122.560, 47.680, -122.320);
+// F4 and the Check route shots: Colman Dock round West Point to Shilshole Bay
+// Marina. The leg past West Point clips the shoal there, so the check has a
+// real Must review finding.
+(double Lat, double Lon)[] colmanToShilshole =
+[
+    (47.6020, -122.3415), (47.6080, -122.3620), (47.6250, -122.4120),
+    (47.6520, -122.4420), (47.6700, -122.4330), (47.6795, -122.4105),
+];
+var passageBox = new Box(47.590, -122.500, 47.690, -122.320);
+// The Check route shots depart at 06:00 Pacific on a fixed day, with the clock
+// pinned there, so ETAs and warning status come out the same on every run.
+var checkDeparture = new DateTimeOffset(2026, 10, 20, 13, 0, 0, TimeSpan.Zero);
 
 var shots = new List<Shot>
 {
@@ -113,16 +125,33 @@ var shots = new List<Shot>
     {
         await v.Reset();
         await v.OpenAll(await data.Enc(seattleEnc));
-        await v.Call("create_route", new() { ["name"] = "Colman Dock to Shilshole" });
-        foreach (var (lat, lon) in new[]
-        {
-            (47.6020, -122.3415), (47.6080, -122.3620), (47.6250, -122.4120),
-            (47.6520, -122.4420), (47.6700, -122.4330), (47.6795, -122.4105),
-        })
-            await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
+        await PlanRoute(v);
         await v.Panel("Routes");
-        await v.Frame(new Box(47.590, -122.500, 47.690, -122.320));
+        await v.Frame(passageBox);
         return await v.Window();
+    }, Themed: true),
+
+    // F10: Check route on F4's route, with the findings list, the selected
+    // finding's ring and corridor, and the map legend open. The selected finding
+    // is the synthetic dredging warning that crosses leg 3 → 4.
+    new("F10", v => CheckRoute(v, "Day"), Themed: true),
+    new("F10-night", v => CheckRoute(v, "Night"), Chrome: "S100Night"),
+
+    // F11: the Navigational warnings panel scoped to the checked route, with the
+    // dredging warning's card open in Object Information.
+    new("F11", async v =>
+    {
+        await OpenRouteWarning(v);
+        await v.Frame(passageBox);
+        return await v.Window();
+    }, Themed: true),
+
+    // F12: the same card, cropped around its "Crosses route · leg 3 → 4" row.
+    new("F12", async v =>
+    {
+        await OpenRouteWarning(v);
+        await v.Frame(passageBox);
+        return await v.WindowCrop("PickReport.WarningCard.RouteFinding", "PickReport.WarningCard");
     }, Themed: true),
 
     // F2: the currents forecast on the Timeline, Live, with the clock pinned
@@ -546,6 +575,65 @@ async Task<byte[]> Palette(Viewer v, string palette)
     return await v.Window();
 }
 
+async Task PlanRoute(Viewer v)
+{
+    await v.Call("create_route", new() { ["name"] = "Colman Dock to Shilshole" });
+    foreach (var (lat, lon) in colmanToShilshole)
+        await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
+}
+
+// F10–F12: the charts, S-102 depths and the synthetic warnings, F4's route with
+// a small-craft draft at 8 kn departing at the pinned clock, and Check route on.
+async Task CheckedRoute(Viewer v, string palette)
+{
+    await v.Reset(palette);
+    await v.OpenAll(await data.Enc(seattleEnc));
+    await v.OpenAll(await data.S102(seattleS102));
+    await v.OpenAll(SyntheticWarnings.Write(Path.Combine(scriptDir, ".cache", "synthetic"), checkDeparture));
+    await v.Call("set_test_clock", new() { ["now"] = checkDeparture.ToString("O"), ["freeze"] = true });
+    await v.Call("set_view_time", new() { ["time"] = "now" });
+    await PlanRoute(v);
+    await v.Call("set_passage", new()
+    {
+        ["draftMeters"] = 3.0, ["requiredUkcMeters"] = 1.0, ["speedKnots"] = 8.0, ["departure"] = checkDeparture.ToString("O"),
+    });
+    await v.Call("set_check_mode", new() { ["on"] = true });
+}
+
+// The synthetic warning that crosses leg 3 → 4, as the route check relates it.
+async Task<(string DatasetId, string FeatureId, string FindingId)> CrossingWarning(Viewer v)
+{
+    var warnings = (await v.Call("list_navigational_warnings"))?["warnings"]?.AsArray() ?? [];
+    var crossing = warnings.FirstOrDefault(w =>
+            w?["route"]?["relation"]?.GetValue<string>() == "crosses" && w["route"]!["legIndex"]?.GetValue<int>() == 2)
+        ?? throw new InvalidOperationException("no warning crosses leg 3 → 4; check SyntheticWarnings against the route");
+    return (crossing["datasetId"]!.GetValue<string>(), crossing["featureId"]!.GetValue<string>(),
+        crossing["route"]!["findingId"]!.GetValue<string>());
+}
+
+async Task<byte[]> CheckRoute(Viewer v, string palette)
+{
+    await CheckedRoute(v, palette);
+    await v.Panel("Routes");
+    await v.Call("ui_select", new() { ["id"] = "Routes.Check.FindingsTab" });
+    var (_, _, findingId) = await CrossingWarning(v);
+    await v.Call("select_finding", new() { ["id"] = findingId, ["zoom"] = false });
+    await v.Call("set_map_legend", new() { ["open"] = true });
+    await v.Frame(passageBox);
+    return await v.Window();
+}
+
+// F11/F12: the warnings panel showing only the route's warnings, and the
+// crossing warning selected so its card (with the route row) opens.
+async Task OpenRouteWarning(Viewer v)
+{
+    await CheckedRoute(v, "Day");
+    await v.Panel("NavigationalWarnings");
+    await v.Call("list_navigational_warnings", new() { ["scope"] = "route" });
+    var (datasetId, featureId, _) = await CrossingWarning(v);
+    await v.Call("select_navigational_warning", new() { ["datasetId"] = datasetId, ["featureId"] = featureId });
+}
+
 static IEnumerable<string> Grid(string prefix, string rows, string cols) =>
     from r in rows from c in cols select $"{prefix}{r}{c}";
 
@@ -780,6 +868,8 @@ sealed class Viewer : IAsyncDisposable
         "open_dataset", "close_dataset", "set_viewport", "set_palette", "set_display_category", "set_panel",
         "set_dataset_state", "set_test_clock", "set_view_time", "set_timeline_view", "select_dataset", "pick_features",
         "create_route", "append_waypoint", "move_waypoint", "add_library_source", "library_action", "sample_coverage_along",
+        "set_passage", "set_check_mode", "select_finding", "set_map_legend", "list_navigational_warnings",
+        "select_navigational_warning", "ui_select",
     ];
     private bool _quiet;
 
@@ -909,6 +999,45 @@ sealed class Viewer : IAsyncDisposable
         await Settle();
         CaptureMode = "window (capture_app_screenshot, scale 2)";
         return await Image("capture_app_screenshot", new() { ["scale"] = 2.0 });
+    }
+
+    /// <summary>
+    /// A window capture cropped to 16:9: as wide as the element <paramref name="widthId"/>
+    /// plus a margin, centred on the element <paramref name="focusId"/>.
+    /// </summary>
+    public async Task<byte[]> WindowCrop(string focusId, string widthId)
+    {
+        const double scale = 2, margin = 12;
+        var png = await Window();
+        var focus = await BoundsOf(focusId);
+        var frame = await BoundsOf(widthId);
+        using var bitmap = SKBitmap.Decode(png);
+        var width = (int)Math.Min((frame.Width + 2 * margin) * scale, bitmap.Width);
+        var height = Math.Min(width * 9 / 16, bitmap.Height);
+        var left = (int)Math.Clamp((frame.X - margin) * scale, 0, bitmap.Width - width);
+        var top = (int)Math.Clamp((focus.Y + focus.Height / 2) * scale - height / 2.0, 0, bitmap.Height - height);
+        using var cropped = new SKBitmap();
+        if (!bitmap.ExtractSubset(cropped, SKRectI.Create(left, top, width, height)))
+            throw new InvalidOperationException($"could not crop the window around {focusId}");
+        using var image = SKImage.FromBitmap(cropped);
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
+        CaptureMode = $"window crop around {focusId} (capture_app_screenshot, scale 2)";
+        return encoded.ToArray();
+    }
+
+    /// <summary>An element's bounds in the window, in logical pixels, from ui_tree.</summary>
+    private async Task<(double X, double Y, double Width, double Height)> BoundsOf(string id)
+    {
+        var tree = await Call("ui_tree", new() { ["root"] = id, ["depth"] = 1 });
+        static JsonNode? Find(JsonNode? node, string id) => node switch
+        {
+            JsonObject o when o["id"]?.GetValue<string>() == id && o["bounds"] is not null => o["bounds"],
+            JsonObject o => o.Select(kv => Find(kv.Value, id)).FirstOrDefault(b => b is not null),
+            JsonArray a => a.Select(n => Find(n, id)).FirstOrDefault(b => b is not null),
+            _ => null,
+        };
+        var b = Find(tree, id) ?? throw new InvalidOperationException($"{id} is not on screen");
+        return (b["x"]!.GetValue<double>(), b["y"]!.GetValue<double>(), b["width"]!.GetValue<double>(), b["height"]!.GetValue<double>());
     }
 
     public async Task<byte[]> Map(int width, int height)
@@ -1231,6 +1360,119 @@ static class GmlDeriver
 /// viewer calls (viewport, palette, category, panels, clock, …) and when the image
 /// and the record were made. Shared viewer settings are stored once.
 /// </summary>
+/// <summary>
+/// Writes fictitious S-124 Ed 2.0 warnings along F4's route for the Check route
+/// shots, one dataset per warning, dated around the departure: a dredging area
+/// across leg 3 → 4 and a cable line across leg 5 → 6 (both in force), a log
+/// adrift near leg 2 → 3, and a regatta off West Point that starts later.
+/// </summary>
+static class SyntheticWarnings
+{
+    private record Warning(
+        int Number, string Title, int GeneralCode, string General, int DetailsCode, string Details,
+        string Locality, string Text, int StartDays, int? EndDays, string Kind, (double Lat, double Lon)[] Points);
+
+    private static readonly Warning[] Warnings =
+    [
+        new(201, "Dredging operations", 19, "Works", 89, "Dredging Operation", "Elliott Bay, off Magnolia",
+            "DREDGING OPERATIONS IN PROGRESS IN AREA BOUNDED BY 47-38.07N 122-26.04W, 47-38.55N 122-26.04W, 47-38.55N 122-25.20W AND 47-38.07N 122-25.20W. "
+            + "MARINERS ARE REQUESTED TO GIVE A WIDE BERTH. FICTITIOUS, FOR ILLUSTRATION.",
+            StartDays: -2, EndDays: null, "surface",
+            [(47.6345, -122.4340), (47.6425, -122.4340), (47.6425, -122.4200), (47.6345, -122.4200), (47.6345, -122.4340)]),
+        new(202, "Log adrift", 3, "Drifting Hazards", 179, "Log Adrift", "Elliott Bay",
+            "LARGE LOG ADRIFT IN VICINITY 47-36.72N 122-23.42W. FICTITIOUS, FOR ILLUSTRATION.",
+            StartDays: -1, EndDays: null, "point", [(47.6120, -122.3903)]),
+        new(203, "Cable laying", 19, "Works", 64, "Cable Laying Operation", "Shilshole Bay",
+            "CABLE LAYING OPERATIONS ALONG LINE JOINING 47-40.77N 122-25.74W AND 47-40.20N 122-24.90W. "
+            + "VESSEL RESTRICTED IN ABILITY TO MANOEUVRE. FICTITIOUS, FOR ILLUSTRATION.",
+            StartDays: -5, EndDays: 11, "curve", [(47.6795, -122.4290), (47.6700, -122.4150)]),
+        new(204, "Regatta", 17, "Special Operations", 235, "Regatta or Race", "Off West Point",
+            "SAILING REGATTA IN AREA OFF WEST POINT. FICTITIOUS, FOR ILLUSTRATION.",
+            StartDays: 4, EndDays: 5, "surface",
+            [(47.6560, -122.4560), (47.6640, -122.4560), (47.6640, -122.4360), (47.6560, -122.4360), (47.6560, -122.4560)]),
+    ];
+
+    public static IEnumerable<string> Write(string dir, DateTimeOffset departure)
+    {
+        Directory.CreateDirectory(dir);
+        var day = DateOnly.FromDateTime(departure.UtcDateTime);
+        foreach (var w in Warnings)
+        {
+            var id = $"ZZ.S124.SAMPLE.{w.Number}.26";
+            var start = day.AddDays(w.StartDays);
+            var path = Path.Combine(dir, $"124ZZ_SAMPLE_{w.Number}_26.gml");
+            File.WriteAllText(path, Dataset(w, id, start, w.EndDays is { } end ? day.AddDays(end) : null));
+            yield return path;
+        }
+    }
+
+    private static string Dataset(Warning w, string id, DateOnly start, DateOnly? end)
+    {
+        static string Pos((double Lat, double Lon)[] points) => string.Join(" ", points.Select(p => $"{p.Lat:0.0000} {p.Lon:0.0000}"));
+        const string srs = "srsName=\"https://www.opengis.net/def/crs/EPSG/0/4326\" srsDimension=\"2\"";
+        var geometry = w.Kind switch
+        {
+            "point" => $"""
+                <S100:pointProperty><S100:Point gml:id="{id}.1.location" {srs}><gml:pos>{Pos(w.Points)}</gml:pos></S100:Point></S100:pointProperty>
+                """,
+            "curve" => $"""
+                <S100:curveProperty><S100:Curve gml:id="{id}.1.location" {srs}><gml:segments><gml:LineStringSegment><gml:posList>{Pos(w.Points)}</gml:posList></gml:LineStringSegment></gml:segments></S100:Curve></S100:curveProperty>
+                """,
+            _ => $"""
+                <S100:surfaceProperty><S100:Polygon gml:id="{id}.1.location" {srs}><gml:exterior><gml:LinearRing><gml:posList>{Pos(w.Points)}</gml:posList></gml:LinearRing></gml:exterior></S100:Polygon></S100:surfaceProperty>
+                """,
+        };
+        var dateEnd = end is { } e ? $"<S124:dateEnd><S100:date>{e:yyyy-MM-dd}</S100:date></S124:dateEnd>" : "";
+        return $"""
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <S124:Dataset xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:S124="http://www.iho.int/S124/gml/2.0" xmlns:S100="http://www.iho.int/s100gml/5.0" xmlns:xlink="http://www.w3.org/1999/xlink" gml:id="{id}">
+                <S100:DatasetIdentificationInformation>
+                    <S100:encodingSpecification>S-100 Part 10b</S100:encodingSpecification>
+                    <S100:encodingSpecificationEdition>1.0</S100:encodingSpecificationEdition>
+                    <S100:productIdentifier>S-124</S100:productIdentifier>
+                    <S100:productEdition>2.0.0</S100:productEdition>
+                    <S100:applicationProfile>1</S100:applicationProfile>
+                    <S100:datasetFileIdentifier>124ZZ_SAMPLE_{w.Number}_26.gml</S100:datasetFileIdentifier>
+                    <S100:datasetTitle>{w.Title}</S100:datasetTitle>
+                    <S100:datasetReferenceDate>{start.AddDays(-1):yyyy-MM-dd}</S100:datasetReferenceDate>
+                    <S100:datasetLanguage>eng</S100:datasetLanguage>
+                    <S100:datasetAbstract>Fictitious warning for the soundcharts.app screenshots.</S100:datasetAbstract>
+                    <S100:datasetTopicCategory>oceans</S100:datasetTopicCategory>
+                    <S100:datasetPurpose>base</S100:datasetPurpose>
+                    <S100:updateNumber>0</S100:updateNumber>
+                </S100:DatasetIdentificationInformation>
+                <S124:members>
+                    <S124:NavwarnPreamble gml:id="{id}.0">
+                        <S124:generalArea><S124:locationName><S124:language>eng</S124:language><S124:text>Puget Sound</S124:text></S124:locationName></S124:generalArea>
+                        <S124:locality><S124:locationName><S124:language>eng</S124:language><S124:text>{w.Locality}</S124:text></S124:locationName></S124:locality>
+                        <S124:messageSeriesIdentifier>
+                            <S124:agencyResponsibleForProduction>Sample Hydrographic Office (fictitious)</S124:agencyResponsibleForProduction>
+                            <S124:nameOfSeries>SAMPLE</S124:nameOfSeries>
+                            <S124:nationality>Zz</S124:nationality>
+                            <S124:warningNumber>{w.Number}</S124:warningNumber>
+                            <S124:warningType code="1">Local Navigational Warning</S124:warningType>
+                            <S124:year>2026</S124:year>
+                        </S124:messageSeriesIdentifier>
+                        <S124:navwarnTitle><S124:language>eng</S124:language><S124:text>{w.Title}</S124:text></S124:navwarnTitle>
+                        <S124:intService>false</S124:intService>
+                        <S124:navwarnTypeGeneral code="{w.GeneralCode}">{w.General}</S124:navwarnTypeGeneral>
+                        <S124:publicationTime>{start.AddDays(-1):yyyy-MM-dd}T16:00:00Z</S124:publicationTime>
+                    </S124:NavwarnPreamble>
+                    <S124:NavwarnPart gml:id="{id}.1">
+                        <S124:fixedDateRange><S124:dateStart><S100:date>{start:yyyy-MM-dd}</S100:date></S124:dateStart>{dateEnd}</S124:fixedDateRange>
+                        <S124:warningInformation>
+                            <S124:information><S124:language>eng</S124:language><S124:text>SAMPLE {w.Number}/26. {w.Locality.ToUpperInvariant()}. {w.Text}</S124:text></S124:information>
+                            <S124:navwarnTypeDetails code="{w.DetailsCode}">{w.Details}</S124:navwarnTypeDetails>
+                        </S124:warningInformation>
+                        <S124:header xlink:href="#{id}.0"/>
+                        <S124:geometry>{geometry}</S124:geometry>
+                    </S124:NavwarnPart>
+                </S124:members>
+            </S124:Dataset>
+            """;
+    }
+}
+
 static class ShotManifest
 {
     private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -1346,6 +1588,7 @@ static class ShotManifest
             _ when p.Contains("Unencrypted_S100_Datasets") => ("Canadian Hydrographic Service S-100 sample package (Nov 2025)", "CHS licence: non-commercial, CHS notice required, data not redistributed"),
             _ when p.Contains("/tests/datasets/S101/") => ("IHO S-101 test data set (fictional area)", "IHO test data, bundled in this repo"),
             _ when p.Contains("/tests/datasets/") => ("EncDotNet.S100 test fixture", "repo fixture (MIT)"),
+            _ when p.Contains("/.cache/synthetic/") => ("Synthetic S-124 warnings written by capture.cs (fictitious)", "ours (MIT)"),
             _ when p.Contains("/.cache/derived/") => ("Derived by capture.cs from NOAA ENC cells", "public domain source (NOAA)"),
             _ when p.Contains("/.cache/enc/") => ("NOAA ENC (charts.noaa.gov)", "public domain (NOAA)"),
             _ when p.Contains("/.cache/s102/") => ("NOAA S-102 on AWS (noaa-s102-pds)", "public domain (NOAA)"),

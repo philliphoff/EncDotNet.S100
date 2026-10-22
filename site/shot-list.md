@@ -222,26 +222,34 @@ as a desktop app.
   shades) next to a chart that shows the effect, e.g. a shallow harbour entrance.
 
 ### F10 · Check route (Passage section)
-- **Not captured yet.** Reuse F4's route (Colman Dock → West Point → Shilshole
-  Bay Marina) over the NOAA `US5WA*` cells and S-102, with a draft so the UKC
-  check runs. The West Point shoal gives a real Must review finding.
-- **State:** Routes panel open on **Check route** with the Findings list, one
-  finding selected so its ring, ETA pill and leg corridor show, and the map
-  legend unfolded. Day palette, with a Light twin.
-- **F10-night:** the same view in Night, for the "Tones for every light" card.
+- **Recipe written (2026-10-22), not captured yet.** F4's route (Colman Dock →
+  West Point → Shilshole Bay Marina) over the NOAA `US5WA*` cells and S-102,
+  with a 3 m draft, 1 m required UKC and 8 kn, departing 06:00 Pacific on
+  2026-10-20 with the clock pinned there. The West Point shoal gives a real
+  Must review finding.
+- **State:** Routes panel on **Check route** with the Findings tab, the
+  SAMPLE 201/26 dredging finding selected (`zoom: false`) so its ring, pill and
+  leg corridor show, the map legend open, framed on the whole route. Day
+  palette, with a Light twin.
+- **F10-night:** the same in Night, with S100Night chrome.
+- **Warnings:** `SyntheticWarnings` in capture.cs writes four fictitious
+  S-124 Ed 2.0 datasets (series SAMPLE, "Sample Hydrographic Office
+  (fictitious)") to `.cache/synthetic/`, dated around the departure: 201/26
+  dredging area across leg 3 → 4 and 203/26 cable laying across leg 5 → 6
+  (Must review), 202/26 log adrift near leg 2 → 3 (Check), 204/26 regatta off
+  West Point that starts four days later (Info). Checked with `s100 route
+  check` on 2026-10-22. No live CCG SECOM warnings, so no licence question.
 
 ### F11 · Navigational warnings on the route
-- **Not captured yet.** Synthetic S-124 warnings placed across the F10 route
-  (written like P12's derived GML), so there's at least one on-route and one
-  near-route warning. Avoid live CCG SECOM warnings until their terms are
-  checked.
-- **State:** Navigational warnings panel in **On {route}** scope, rows showing
-  "On route · 06:08" / "Near route · 06:19" and the classification glyphs, with
-  a Warning card open. Pin `set_test_clock` so the times are repeatable.
+- **Recipe written, not captured yet.** The F10 set-up, then the
+  Navigational warnings panel in **On {route}** scope and SAMPLE 201/26
+  selected, so Object Information opens its card with the "Crosses route ·
+  leg 3 → 4" row. Framed on the whole route.
 
 ### F12 · From warning to finding (small card)
-- A crop of the Warning card's "Crosses route · leg 3 → 4" row, from the F11
-  session.
+- **Recipe written, not captured yet.** The F11 state, cropped to 16:9 from
+  the window capture: as wide as the Warning card, centred on its route row
+  (bounds from `ui_tree`).
 
 ---
 
