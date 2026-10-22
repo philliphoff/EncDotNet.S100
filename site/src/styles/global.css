@@ -90,6 +90,7 @@ code, pre { font-family: "JetBrains Mono Variable", ui-monospace, monospace; }
 .btn svg { width: 18px; height: 18px; }
 .fineprint { font-size: 13px; color: var(--hero-ink-2); }
 .fineprint a { color: var(--hero-ink); }
+.fineprint-nightly { font-size: 12.5px; }
 
 .hero-shot { position: relative; margin: 56px auto 0; width: min(1180px, 100% - 32px); }
 .palette-switch { display: flex; justify-content: center; gap: 6px; margin-bottom: 16px; }

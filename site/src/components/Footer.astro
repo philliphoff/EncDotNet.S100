@@ -1,5 +1,8 @@
 ---
 import { docs, links, withBase } from '../data/content';
+import { hasNightly } from '../data/release';
+
+const nightly = await hasNightly();
 ---
 <section class="oss" style="padding-top: 24px" aria-labelledby="oss-title">
   <div class="wrap">
@@ -22,6 +25,7 @@ import { docs, links, withBase } from '../data/content';
       <span>© SoundCharts · soundcharts.app</span>
       <ul>
         <li><a href={links.releases}>Releases</a></li>
+        {nightly && <li><a href={links.nightly}>Nightly builds</a></li>}
         <li><a href={withBase(docs.home)}>Docs</a></li>
         <li><a href={links.license}>License</a></li>
         <li><a href={links.security}>Security</a></li>

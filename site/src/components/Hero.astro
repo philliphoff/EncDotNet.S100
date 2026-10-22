@@ -1,8 +1,10 @@
 ---
 import Shot from './Shot.astro';
-import { getRelease } from '../data/release';
+import { links } from '../data/content';
+import { getRelease, hasNightly } from '../data/release';
 
 const release = await getRelease();
+const nightly = await hasNightly();
 const heroSizes = '(max-width: 1212px) calc(100vw - 32px), 1180px';
 ---
 <section class="hero" aria-labelledby="hero-title">
@@ -41,6 +43,12 @@ const heroSizes = '(max-width: 1212px) calc(100vw - 32px), 1180px';
     <p class="fineprint">
       {release.tag && <>{release.tag} · </>}<a href={release.url}>All platforms</a> · MIT licensed · Not for navigation
     </p>
+    {nightly && (
+      <p class="fineprint fineprint-nightly">
+        Want the newest features early? Try a <a href={links.nightly}>nightly build</a>. Nightlies come straight from
+        the latest code, so expect the odd rough edge.
+      </p>
+    )}
   </div>
 
   <div class="hero-shot">
