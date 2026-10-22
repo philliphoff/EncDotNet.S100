@@ -2,21 +2,24 @@ namespace EncDotNet.S100.Viewer.Services.Updates;
 
 /// <summary>
 /// Minimal lenient SemVer comparison sufficient for the viewer's
-/// <c>MAJOR.MINOR.PATCH</c> release tags. A leading <c>v</c> and any
-/// pre-release (<c>-…</c>) or build-metadata (<c>+…</c>) suffix are
-/// ignored; the numeric core is compared via <see cref="System.Version"/>.
+/// <c>MAJOR.MINOR.PATCH[-PRERELEASE]</c> release tags. A leading <c>v</c>
+/// and any build-metadata (<c>+…</c>) suffix are ignored; the numeric core
+/// is compared via <see cref="System.Version"/> and pre-release identifiers
+/// follow SemVer 2.0.0 precedence, so <c>0.25.2-nightly.20261021</c> sorts
+/// after <c>0.25.1</c> and before <c>0.25.2</c>.
 /// </summary>
 internal static class ReleaseVersion
 {
     /// <summary>
     /// Attempts to parse a release version string (e.g. <c>"v2.5.0"</c>,
-    /// <c>"2.5.0"</c>, <c>"2.5.0-rc.1"</c>) into a normalised
-    /// <see cref="System.Version"/>. Returns <see langword="false"/> for
-    /// null/empty or non-numeric input.
+    /// <c>"2.5.0"</c>, <c>"2.5.0-rc.1"</c>) into its normalised numeric core
+    /// and pre-release identifiers (empty for a release). Returns
+    /// <see langword="false"/> for null/empty or non-numeric input.
     /// </summary>
-    public static bool TryParse(string? value, out Version version)
+    public static bool TryParse(string? value, out Version version, out string[] prerelease)
     {
         version = new Version(0, 0, 0);
+        prerelease = [];
         if (string.IsNullOrWhiteSpace(value))
             return false;
 
@@ -24,10 +27,21 @@ internal static class ReleaseVersion
         if (span.StartsWith('v') || span.StartsWith('V'))
             span = span[1..];
 
-        // Drop pre-release / build metadata; keep only the numeric core.
-        var cut = span.IndexOfAny(['-', '+']);
-        if (cut >= 0)
-            span = span[..cut];
+        // Build metadata never affects precedence.
+        var plus = span.IndexOf('+');
+        if (plus >= 0)
+            span = span[..plus];
+
+        var dash = span.IndexOf('-');
+        if (dash >= 0)
+        {
+            var identifiers = span[(dash + 1)..].Split('.');
+            if (identifiers.Any(string.IsNullOrEmpty))
+                return false;
+
+            prerelease = identifiers;
+            span = span[..dash];
+        }
 
         if (span.Length == 0)
             return false;
@@ -56,11 +70,56 @@ internal static class ReleaseVersion
     /// </summary>
     public static bool IsNewer(string? candidate, string? current)
     {
-        if (!TryParse(candidate, out var candidateVersion))
+        if (!TryParse(candidate, out var candidateVersion, out var candidatePrerelease))
             return false;
-        if (!TryParse(current, out var currentVersion))
+        if (!TryParse(current, out var currentVersion, out var currentPrerelease))
             return false;
 
-        return candidateVersion > currentVersion;
+        var core = candidateVersion.CompareTo(currentVersion);
+        if (core != 0)
+            return core > 0;
+
+        return ComparePrerelease(candidatePrerelease, currentPrerelease) > 0;
+    }
+
+    /// <summary>
+    /// Compares pre-release identifier lists per SemVer 2.0.0 §11: a release
+    /// (no identifiers) outranks any of its pre-releases; numeric identifiers
+    /// compare numerically and rank below alphanumeric ones, which compare
+    /// ordinally; a shorter list that is a prefix of a longer one ranks lower.
+    /// </summary>
+    private static int ComparePrerelease(string[] left, string[] right)
+    {
+        if (left.Length == 0 || right.Length == 0)
+            return right.Length.CompareTo(left.Length);
+
+        for (var i = 0; i < Math.Min(left.Length, right.Length); i++)
+        {
+            var result = CompareIdentifier(left[i], right[i]);
+            if (result != 0)
+                return result;
+        }
+
+        return left.Length.CompareTo(right.Length);
+    }
+
+    private static int CompareIdentifier(string left, string right)
+    {
+        var leftNumeric = left.All(char.IsAsciiDigit);
+        var rightNumeric = right.All(char.IsAsciiDigit);
+
+        if (leftNumeric && rightNumeric)
+        {
+            // Compare by length first so arbitrarily long numbers never overflow.
+            var trimmedLeft = left.TrimStart('0');
+            var trimmedRight = right.TrimStart('0');
+            var length = trimmedLeft.Length.CompareTo(trimmedRight.Length);
+            return length != 0 ? length : Math.Sign(string.CompareOrdinal(trimmedLeft, trimmedRight));
+        }
+
+        if (leftNumeric != rightNumeric)
+            return leftNumeric ? -1 : 1;
+
+        return Math.Sign(string.CompareOrdinal(left, right));
     }
 }

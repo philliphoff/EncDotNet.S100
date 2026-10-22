@@ -95,6 +95,12 @@ public sealed class CliVersionAndUpdateTests
     [InlineData("2.4.1", "2.4.1", false)]
     [InlineData("2.4.0", "2.4.1", false)]
     [InlineData("garbage", "2.4.1", false)]
+    [InlineData("v0.25.2", "0.25.2-nightly.20261021", true)]
+    [InlineData("v0.25.1", "0.25.2-nightly.20261021", false)]
+    [InlineData("0.25.2-nightly.20261021", "0.25.2", false)]
+    [InlineData("0.25.2-nightly.20261022", "0.25.2-nightly.20261021", true)]
+    [InlineData("1.0.0-beta.11", "1.0.0-beta.2", true)]
+    [InlineData("1.0.0-alpha.beta", "1.0.0-alpha.1", true)]
     public void ReleaseComparisonHandlesReleaseTagForms(
         string candidate,
         string current,
@@ -115,6 +121,22 @@ public sealed class CliVersionAndUpdateTests
         Assert.Null(notice);
         Assert.Equal(0, cache.LoadCount);
         Assert.Equal(0, client.CallCount);
+    }
+
+    [Fact]
+    public async Task NightlyBuildIsNotifiedOfItsStableRelease()
+    {
+        var now = new DateTimeOffset(2026, 10, 21, 12, 0, 0, TimeSpan.Zero);
+        var cache = new MemoryUpdateCache();
+        var client = new FakeReleaseClient(
+            new GitHubReleaseInfo("v0.25.2", "https://example.test/v0.25.2"));
+        var checker = CreateChecker("0.25.2-nightly.20261021", client, cache, now);
+
+        var notice = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotNull(notice);
+        Assert.Equal("0.25.2", notice.LatestVersion);
+        Assert.Equal(1, client.CallCount);
     }
 
     [Fact]
