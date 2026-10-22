@@ -36,7 +36,7 @@ internal static class CliRunner
 
         var updateTask = updateChecker.CheckAsync();
         var exitCode = CliApp
-            .Build(version.InformationalVersion, commandConsole)
+            .Build(version.DisplayVersion, commandConsole)
             .Run(args);
 
         try
@@ -82,7 +82,7 @@ internal static class CliRunner
     {
         var capture = new SkillModelCaptureHelpProvider();
         var exitCode = CliApp
-            .Build(version.InformationalVersion, commandConsole, capture)
+            .Build(version.DisplayVersion, commandConsole, capture)
             .Run(["--help"]);
 
         if (exitCode != 0)

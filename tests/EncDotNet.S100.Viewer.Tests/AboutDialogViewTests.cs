@@ -1,5 +1,7 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Updates;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -31,10 +33,10 @@ public sealed class AboutDialogViewTests
         public void SetUpdateChecksEnabled(bool enabled) { }
     }
 
-    private sealed class StubVersionProvider : IAppVersionProvider
+    private sealed class StubVersionProvider(AppVersionInfo? current = null) : IAppVersionProvider
     {
         public AppVersionInfo Current { get; } =
-            new("2.4.1", "2.4.1+a1f9c20", "a1f9c20", new DateOnly(2026, 6, 18));
+            current ?? new("2.4.1", "2.4.1+a1f9c20", "a1f9c20", new DateOnly(2026, 6, 18));
     }
 
     private sealed class StubUrlOpener : IUrlOpener
@@ -43,10 +45,10 @@ public sealed class AboutDialogViewTests
         public void Open(string url) => LastUrl = url;
     }
 
-    private static AboutDialogViewModel CreateViewModel() => new(
+    private static AboutDialogViewModel CreateViewModel(AppVersionInfo? version = null) => new(
         new ShadUI.DialogManager(),
         new StubUpdateService(),
-        new StubVersionProvider(),
+        new StubVersionProvider(version),
         new StubUrlOpener(),
         TimeProvider.System);
 
@@ -72,6 +74,44 @@ public sealed class AboutDialogViewTests
 
         Assert.Equal("Version 2.4.1", vm.VersionLine);
         Assert.Equal("build 2.4.1+a1f9c20 · 2026-06-18", vm.BuildLine);
+    }
+
+    [Fact]
+    public void ViewModel_StableBuild_HasNoNightlyBadge()
+    {
+        Assert.False(CreateViewModel().IsNightlyBuild);
+    }
+
+    [Fact]
+    public void ViewModel_DevelopmentBuild_HasNoNightlyBadge()
+    {
+        var vm = CreateViewModel(new AppVersionInfo("0.0.0-dev", "0.0.0-dev", null, null));
+
+        Assert.False(vm.IsNightlyBuild);
+    }
+
+    [AvaloniaFact]
+    public void View_NightlyBuild_ShowsNightlyBadge()
+    {
+        var vm = CreateViewModel(new AppVersionInfo(
+            "0.25.2-nightly.20261021",
+            "0.25.2-nightly.20261021+a1f9c20",
+            "a1f9c20",
+            new DateOnly(2026, 10, 21)));
+        var view = new AboutDialogView { DataContext = vm };
+
+        var window = new Window { Content = view, Width = 480, Height = 640 };
+        window.Show();
+        window.Measure(new Size(480, 640));
+        window.Arrange(new Rect(0, 0, 480, 640));
+
+        Assert.True(vm.IsNightlyBuild);
+        Assert.Equal("Version 0.25.2-nightly.20261021", vm.VersionLine);
+        var badge = view.GetVisualDescendants()
+            .OfType<Border>()
+            .Single(b => AutomationProperties.GetAutomationId(b) == "About.NightlyBadge");
+        Assert.True(badge.IsVisible);
+        window.Close();
     }
 
     [Fact]

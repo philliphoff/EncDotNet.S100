@@ -1,4 +1,5 @@
 using System.Reflection;
+using EncDotNet.S100.Cli.Infrastructure.Updates;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
 
@@ -14,6 +15,20 @@ internal sealed record CliVersionInfo(string Version, string InformationalVersio
     /// </summary>
     public bool IsDevelopmentBuild =>
         Version.StartsWith("0.0.0", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets whether this is an unsupported nightly build
+    /// (for example <c>0.25.2-nightly.20261021</c>).
+    /// </summary>
+    public bool IsNightlyBuild => ReleaseVersion.IsNightly(Version);
+
+    /// <summary>
+    /// Gets the version that <c>s100 --version</c> prints: the informational
+    /// version, marked as an unsupported nightly build when it is one.
+    /// </summary>
+    public string DisplayVersion => IsNightlyBuild
+        ? $"{InformationalVersion} (nightly build, unsupported)"
+        : InformationalVersion;
 
     /// <summary>
     /// Reads version information from an assembly.

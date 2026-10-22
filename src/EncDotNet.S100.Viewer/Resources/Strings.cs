@@ -229,6 +229,8 @@ internal static partial class Strings
     public static string About_BuiltWith => Get(nameof(About_BuiltWith));
     public static string About_VersionFormat => Get(nameof(About_VersionFormat));
     public static string About_BuildFormat => Get(nameof(About_BuildFormat));
+    public static string About_NightlyBadge => Get(nameof(About_NightlyBadge));
+    public static string About_NightlyBadgeTooltip => Get(nameof(About_NightlyBadgeTooltip));
     public static string About_Checking => Get(nameof(About_Checking));
     public static string About_UpToDate => Get(nameof(About_UpToDate));
     public static string About_LastCheckedFormat => Get(nameof(About_LastCheckedFormat));

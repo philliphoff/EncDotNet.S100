@@ -37,6 +37,12 @@ internal sealed record AppVersionInfo(
     /// </summary>
     public bool IsDevelopmentBuild =>
         Version.StartsWith("0.0.0", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when this is an unsupported nightly build
+    /// (e.g. <c>0.25.2-nightly.20261021</c>); the About dialog labels it.
+    /// </summary>
+    public bool IsNightlyBuild => ReleaseVersion.IsNightly(Version);
 }
 
 /// <summary>

@@ -91,9 +91,27 @@
 
             <!-- Version -->
             <StackPanel Spacing="2">
-                <TextBlock Text="{Binding VersionLine}"
-                           FontSize="26"
-                           FontWeight="Bold" />
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="{Binding VersionLine}"
+                               FontSize="26"
+                               FontWeight="Bold" />
+                    <Border IsVisible="{Binding IsNightlyBuild}"
+                            AutomationProperties.AutomationId="About.NightlyBadge"
+                            AutomationProperties.Name="{x:Static loc:Strings.About_NightlyBadge}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.About_NightlyBadgeTooltip}"
+                            ToolTip.Tip="{x:Static loc:Strings.About_NightlyBadgeTooltip}"
+                            VerticalAlignment="Center"
+                            Background="#14D97706"
+                            BorderBrush="#55D97706"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="8,2">
+                        <TextBlock Text="{x:Static loc:Strings.About_NightlyBadge}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="#D97706" />
+                    </Border>
+                </StackPanel>
                 <SelectableTextBlock Text="{Binding BuildLine}"
                                      FontSize="12"
                                      Opacity="0.6"

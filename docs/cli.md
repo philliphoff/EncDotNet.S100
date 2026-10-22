@@ -105,7 +105,7 @@ These options work without a command:
 | Option | What it does |
 |---|---|
 | `--help` | Prints help. Add it after a command for that command's help, for example `s100 render --help`. |
-| `--version` | Prints the tool's version. |
+| `--version` | Prints the tool's version. Nightly builds add `(nightly build, unsupported)`. |
 | `--skill` | Prints a single Markdown document that describes every command, option, example, exit code and limitation. It's written for AI agents, has no ANSI styling, and skips the update check. |
 
 ### Update notices

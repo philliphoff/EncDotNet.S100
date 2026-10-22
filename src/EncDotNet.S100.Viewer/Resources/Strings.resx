@@ -2425,6 +2425,12 @@
   <data name="About_BuildFormat" xml:space="preserve">
     <value>build {0}</value>
   </data>
+  <data name="About_NightlyBadge" xml:space="preserve">
+    <value>Nightly build</value>
+  </data>
+  <data name="About_NightlyBadgeTooltip" xml:space="preserve">
+    <value>Nightly builds are untested previews of the next release and aren't supported.</value>
+  </data>
   <data name="About_Checking" xml:space="preserve">
     <value>Checking for updates…</value>
   </data>

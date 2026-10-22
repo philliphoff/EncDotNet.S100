@@ -109,6 +109,53 @@ public sealed class CliVersionAndUpdateTests
         Assert.Equal(expected, ReleaseVersion.IsNewer(candidate, current));
     }
 
+    [Theory]
+    [InlineData("0.25.2-nightly.20261021", true)]
+    [InlineData("0.25.2-nightly.20261021+abc1234", true)]
+    [InlineData("v0.25.2-Nightly.20261021", true)]
+    [InlineData("0.25.2", false)]
+    [InlineData("0.0.0-dev", false)]
+    [InlineData("0.0.0", false)]
+    [InlineData("1.0.0-rc.1", false)]
+    [InlineData("1.0.0-beta.nightly", false)]
+    [InlineData("garbage-nightly", false)]
+    [InlineData(null, false)]
+    public void ReleaseVersionDetectsNightlyBuilds(string? version, bool expected)
+    {
+        Assert.Equal(expected, ReleaseVersion.IsNightly(version));
+    }
+
+    [Fact]
+    public async Task VersionOptionMarksNightlyBuildsAsUnsupported()
+    {
+        var version = new CliVersionInfo("0.25.2-nightly.20261021", "0.25.2-nightly.20261021+abc1234");
+        var standardOut = new StringWriter();
+        var exitCode = await CliRunner.RunAsync(
+            ["--version"],
+            version,
+            new FixedUpdateChecker(null),
+            new StringWriter(),
+            CreateConsole(standardOut));
+
+        Assert.Equal(0, exitCode);
+        Assert.True(version.IsNightlyBuild);
+        Assert.Equal(
+            $"0.25.2-nightly.20261021+abc1234 (nightly build, unsupported){Environment.NewLine}",
+            standardOut.ToString());
+    }
+
+    [Theory]
+    [InlineData("2.4.1", "2.4.1+abc1234")]
+    [InlineData("0.0.0-dev", "0.0.0-dev")]
+    [InlineData("1.0.0-rc.1", "1.0.0-rc.1+abc1234")]
+    public void DisplayVersionIsInformationalVersionForOtherBuilds(string releaseVersion, string informationalVersion)
+    {
+        var version = new CliVersionInfo(releaseVersion, informationalVersion);
+
+        Assert.False(version.IsNightlyBuild);
+        Assert.Equal(informationalVersion, version.DisplayVersion);
+    }
+
     [Fact]
     public async Task DevelopmentBuildSkipsCacheAndNetwork()
     {
