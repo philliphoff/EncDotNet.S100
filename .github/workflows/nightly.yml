@@ -1,0 +1,156 @@
+name: Nightly
+
+# Publishes unsupported nightly builds of SoundCharts and the s100 CLI from
+# main to a rolling `nightly` prerelease (#1020). Nightlies are not releases:
+# no NuGet packages, no What's New entry and no update notices (every update
+# check reads releases/latest, which never returns a prerelease).
+#
+# Each run builds the newest main commit whose CI push run passed, and skips
+# when that commit already has a nightly. The version is the next patch after
+# the highest vX.Y.Z tag plus the UTC date, e.g. 0.25.2-nightly.20261022, so
+# SemVer orders it after the last release and before the next one.
+#
+# The release is created once and then edited in place, and its assets carry
+# no version, so the download links stay the same. The tag is `nightly`, not
+# v*, so neither CI's release jobs nor the Docs site rebuild run for it.
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build even if the newest green commit already has a nightly.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      sha: ${{ steps.plan.outputs.sha }}
+      version: ${{ steps.plan.outputs.version }}
+      base-tag: ${{ steps.plan.outputs.base-tag }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Choose commit and version
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          # Newest main commit whose CI run (triggered by a push) passed.
+          SHA="$(gh run list --repo "$REPO" --workflow ci.yml --branch main \
+            --event push --status success --limit 1 --json headSha --jq '.[0].headSha // empty')"
+          if [ -z "$SHA" ]; then
+            echo "::error::No successful CI run on main to build from."
+            exit 1
+          fi
+
+          # The commit the last nightly was built from, if there is one.
+          LAST="$(gh api "repos/$REPO/git/ref/tags/nightly" --jq '.object.sha' 2>/dev/null)" || LAST=""
+          if [ "$SHA" = "$LAST" ] && [ "$FORCE" != "true" ]; then
+            echo "Nightly is already at $SHA; nothing to do."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BASE_TAG="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          if [ -z "$BASE_TAG" ]; then
+            echo "::error::No vX.Y.Z tag to version the nightly from."
+            exit 1
+          fi
+          IFS=. read -r MAJOR MINOR PATCH <<< "${BASE_TAG#v}"
+          VERSION="$MAJOR.$MINOR.$((PATCH + 1))-nightly.$(date -u +%Y%m%d)"
+
+          echo "Building $VERSION from $SHA (last nightly: ${LAST:-none})."
+          {
+            echo "build=true"
+            echo "sha=$SHA"
+            echo "version=$VERSION"
+            echo "base-tag=$BASE_TAG"
+          } >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/publish.yml
+    with:
+      version: ${{ needs.plan.outputs.version }}
+      asset-label: nightly
+      ref: ${{ needs.plan.outputs.sha }}
+    secrets: inherit
+
+  release:
+    needs: [plan, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Update the nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ needs.plan.outputs.sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          BASE_TAG: ${{ needs.plan.outputs.base-tag }}
+        run: |
+          mapfile -t FILES < <(find artifacts -type f \
+            \( -name 'SoundCharts-nightly*' -o -name 's100-nightly-*' \) | sort)
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "::error::No nightly assets were downloaded."
+            exit 1
+          fi
+          printf 'Asset: %s\n' "${FILES[@]}"
+
+          cat > notes.md <<EOF
+          **Unsupported nightly build** of SoundCharts and the \`s100\` CLI: \`$VERSION\`, built from [\`${SHA:0:7}\`](https://github.com/$REPO/commit/$SHA).
+
+          Nightlies are built automatically from \`main\` and aren't tested beyond CI. They can have bugs or unfinished features, and they get no support or What's New entry. They still tell you when a newer stable release ships.
+
+          Changes since $BASE_TAG: https://github.com/$REPO/compare/$BASE_TAG...$SHA
+
+          To go back to a stable build, install the [latest release](https://github.com/$REPO/releases/latest).
+          EOF
+
+          # Move the tag first, so the assets and notes always describe the
+          # commit the tag points at once this step finishes.
+          if gh api "repos/$REPO/git/ref/tags/nightly" > /dev/null 2>&1; then
+            gh api -X PATCH "repos/$REPO/git/refs/tags/nightly" -f sha="$SHA" -F force=true > /dev/null
+          fi
+
+          if gh release view nightly --repo "$REPO" > /dev/null 2>&1; then
+            gh release upload nightly "${FILES[@]}" --repo "$REPO" --clobber
+            gh release edit nightly --repo "$REPO" --prerelease --latest=false \
+              --title "Nightly build" --notes-file notes.md
+          else
+            # First run: create the release (and the `nightly` tag) once.
+            # Later runs only edit it, so release watchers aren't notified
+            # of a new release every night.
+            gh release create nightly "${FILES[@]}" --repo "$REPO" --target "$SHA" \
+              --prerelease --latest=false --title "Nightly build" --notes-file notes.md
+          fi
