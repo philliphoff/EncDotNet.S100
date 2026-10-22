@@ -165,9 +165,10 @@ dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn 
 
 ## Release signing
 
-The `publish` job in [`.github/workflows/ci.yml`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.github/workflows/ci.yml)
-code-signs the desktop viewer and the standalone `s100` CLI for macOS and
-Windows. Both are **gated to non-PR runs** (pushes to `main` and `v*` tags) and
+The reusable [`.github/workflows/publish.yml`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.github/workflows/publish.yml)
+workflow, which CI's `publish` job calls, code-signs the desktop viewer and the
+standalone `s100` CLI for macOS and Windows. It also stamps the version into the
+macOS bundle's `Info.plist`. Both are **gated to non-PR runs** (pushes to `main` and `v*` tags) and
 are skipped automatically when the required secrets are absent, so forks and
 pull requests build unsigned artifacts without failing.
 

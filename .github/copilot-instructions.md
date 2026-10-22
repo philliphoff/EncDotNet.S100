@@ -88,7 +88,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 | Testing | xunit v3, coverlet |
 | Package management | Central Package Management via `Directory.Packages.props` |
 | Documentation | DocFX (`docfx.json`) |
-| CI/CD | GitHub Actions (`.github/workflows/ci.yml`, `release.yml`, `docs.yml`) |
+| CI/CD | GitHub Actions (`.github/workflows/ci.yml`, `publish.yml`, `release.yml`, `docs.yml`) |
 
 ## Architecture patterns
 

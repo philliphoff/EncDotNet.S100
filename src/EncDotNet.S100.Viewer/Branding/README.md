@@ -36,13 +36,13 @@ These files are committed. Don't edit them by hand.
   `<ApplicationIcon>Branding\AppIcon.ico</ApplicationIcon>`, so
   `dotnet publish` for a `win-*` runtime embeds the icon in the executable.
 - **macOS app icon**: `Info.plist` sets `CFBundleIconFile` to `AppIcon`, and
-  the CI workflow copies `AppIcon.icns` into
+  the publish workflow copies `AppIcon.icns` into
   `SoundCharts.app/Contents/Resources/`.
-- **macOS DMG**: the CI workflow builds the DMG with
+- **macOS DMG**: the publish workflow builds the DMG with
   [create-dmg](https://github.com/create-dmg/create-dmg), using
   `dmg-background.png` as the window background and `AppIcon.icns` as the
   volume icon. The window size and icon positions in
-  [`ci.yml`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.github/workflows/ci.yml)
+  [`publish.yml`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.github/workflows/publish.yml)
   must match the layout drawn in `dmg-background.svg`.
 - **Documentation site**: `docfx.json` uses `icon.svg` as the site logo and
   favicon.

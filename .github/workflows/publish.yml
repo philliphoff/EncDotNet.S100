@@ -1,0 +1,490 @@
+name: Publish
+
+# Publishes, signs and notarizes the SoundCharts viewer and the standalone s100
+# CLI for every platform, and uploads them as workflow artifacts. Called by CI
+# (pushes, PRs and v* tags) and by Nightly, so both share the same Windows
+# Trusted Signing and macOS sign/notarize steps. Callers pass `secrets: inherit`.
+#
+# Signing runs only when the signing secrets are present and the calling run
+# is not a pull_request (the github context is the caller's).
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version stamped into the binaries, e.g. 0.25.1 or 0.25.2-nightly.20261021.
+        required: true
+        type: string
+      asset-label:
+        description: Replaces the version in asset file names (e.g. "nightly"). Empty keeps the versioned names.
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            rid: osx-arm64
+            artifact: SoundCharts-osx-arm64
+          - os: windows-latest
+            rid: win-x64
+            artifact: SoundCharts-win-x64
+          # win-arm64 is cross-published on the x64 runner (not windows-11-arm)
+          # because azure/trusted-signing-action does not support ARM64 runners
+          # — its x64 signing dlib fails under emulation with "SignTool failed
+          # with exit code 3" (Azure/trusted-signing-action#92). signtool on x64
+          # signs arm64 PE binaries fine, and a RID-targeted dotnet publish
+          # produces identical win-arm64 output regardless of host arch. Native
+          # arm64 build/test coverage is retained by the separate test-arm64 job.
+          - os: windows-latest
+            rid: win-arm64
+            artifact: SoundCharts-win-arm64
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact: SoundCharts-linux-x64
+          - os: ubuntu-22.04-arm
+            rid: linux-arm64
+            artifact: SoundCharts-linux-arm64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    env:
+      # macOS signing/notarization is expensive (notary upload + polling) and is
+      # not needed for PR validation — developers can clear the quarantine
+      # attribute on unsigned PR artifacts if they need to run them. Gate it to
+      # main CI runs (pushes to main and v* tags), i.e. skip on pull_request.
+      MACOS_SIGNING_ENABLED: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12 != '' && github.event_name != 'pull_request' }}
+      # Windows Authenticode signing via Azure Trusted Signing. Gated the same
+      # way as macOS: only when the signing service principal secret is present
+      # and the run is not a pull_request, so PRs produce unsigned win-* zips.
+      WINDOWS_SIGNING_ENABLED: ${{ secrets.AZURE_CLIENT_ID != '' && github.event_name != 'pull_request' }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Asset names
+        id: names
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          LABEL: ${{ inputs.asset-label }}
+          RID: ${{ matrix.rid }}
+        run: |
+          # Release builds name assets after the version (s100-1.2.3-linux-x64,
+          # SoundCharts-1.2.3.dmg). A caller-supplied label replaces the
+          # version (s100-nightly-linux-x64) so a rolling release keeps the
+          # same download links. The viewer archives carry no version.
+          if [ -n "$LABEL" ]; then
+            echo "cli=s100-$LABEL-$RID" >> "$GITHUB_OUTPUT"
+            echo "app=SoundCharts-$LABEL-$RID" >> "$GITHUB_OUTPUT"
+            echo "dmg=SoundCharts-$LABEL.dmg" >> "$GITHUB_OUTPUT"
+          else
+            echo "cli=s100-$VERSION-$RID" >> "$GITHUB_OUTPUT"
+            echo "app=SoundCharts-$RID" >> "$GITHUB_OUTPUT"
+            echo "dmg=SoundCharts-$VERSION.dmg" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish Viewer
+        run: >
+          dotnet publish src/EncDotNet.S100.Viewer/EncDotNet.S100.Viewer.csproj
+          --configuration Release
+          --runtime ${{ matrix.rid }}
+          -p:Version=${{ inputs.version }}
+          ${{ matrix.rid == 'osx-arm64' && '-p:PublishSingleFile=false' || '' }}
+
+      - name: Publish s100 CLI
+        # Publish the `s100` command-line tool self-contained into a `cli/`
+        # subfolder of the viewer's publish output. This single location flows
+        # into every platform archive and, for macOS, into the .app bundle's
+        # Contents/MacOS/cli/ where the recursive signing loop below signs it.
+        # Must run after "Publish Viewer" because dotnet publish cleans its
+        # own output directory; the cli/ subfolder is unaffected by that.
+        run: >
+          dotnet publish tools/EncDotNet.S100.Cli/EncDotNet.S100.Cli.csproj
+          --configuration Release
+          --runtime ${{ matrix.rid }}
+          --self-contained true
+          -p:Version=${{ inputs.version }}
+          --output src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/cli
+
+      - name: Disable NuGet source mapping for signing
+        # azure/trusted-signing-action installs its tooling (the `sign` CLI,
+        # Microsoft.Trusted.Signing.Client, SDK build tools) with
+        # `dotnet tool install --add-source`, which NuGet refuses to combine
+        # with package source mapping (our repo nuget.config maps all packages
+        # to nuget.org). Every project restore is already complete by this
+        # point, so move the config aside for the signing tool install; the
+        # "Restore NuGet config" step below puts it back.
+        if: startsWith(matrix.rid, 'win-') && env.WINDOWS_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        run: Move-Item nuget.config nuget.config.bak
+
+      - name: Sign Windows binaries (Azure Trusted Signing)
+        # Authenticode-sign the published Windows executables before they are
+        # archived, so both the viewer zip and the standalone s100 CLI zip
+        # contain signed binaries. Signing the viewer publish folder recursively
+        # also covers the bundled cli/s100.exe under it. Account-specific (but
+        # non-secret) endpoint/account/profile values come from repo variables;
+        # the service principal credentials come from secrets. Must run before
+        # the "Archive ..." steps below.
+        if: startsWith(matrix.rid, 'win-') && env.WINDOWS_SIGNING_ENABLED == 'true'
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_SIGNING_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\src\EncDotNet.S100.Viewer\bin\Release\net10.0\${{ matrix.rid }}\publish
+          files-folder-filter: exe
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Restore NuGet config
+        # Counterpart to "Disable NuGet source mapping for signing". Runs even
+        # if signing failed so the workspace is left in a consistent state.
+        if: always() && startsWith(matrix.rid, 'win-') && env.WINDOWS_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        run: if (Test-Path nuget.config.bak) { Move-Item -Force nuget.config.bak nuget.config }
+
+      - name: Verify Windows signatures
+        if: startsWith(matrix.rid, 'win-') && env.WINDOWS_SIGNING_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          $publish = "src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish"
+          $targets = @(
+            "$publish/SoundCharts.exe",
+            "$publish/cli/s100.exe"
+          )
+          foreach ($exe in $targets) {
+            $sig = Get-AuthenticodeSignature $exe
+            Write-Host "$exe => $($sig.Status)"
+            if ($sig.Status -ne 'Valid') {
+              Write-Error "Signature for $exe is $($sig.Status), expected Valid."
+              exit 1
+            }
+          }
+
+      - name: Archive standalone s100 CLI (Linux)
+        # Package the self-contained `s100` CLI as its own per-RID release
+        # asset so users can download just the command-line tool without the
+        # viewer. The osx-arm64 archive is produced later, after the CLI is
+        # code-signed and notarized.
+        if: startsWith(matrix.rid, 'linux-')
+        shell: bash
+        run: >
+          tar -czf "${{ steps.names.outputs.cli }}.tar.gz"
+          -C "src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/cli" .
+
+      - name: Archive standalone s100 CLI (Windows)
+        if: startsWith(matrix.rid, 'win-')
+        shell: pwsh
+        run: |
+          $cli = "src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/cli"
+          Compress-Archive -Path "$cli/*" -DestinationPath "${{ steps.names.outputs.cli }}.zip"
+
+      - name: Create macOS .app bundle
+        if: matrix.rid == 'osx-arm64'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          PUBLISH_DIR="src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish"
+          APP="SoundCharts.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp src/EncDotNet.S100.Viewer/Info.plist "$APP/Contents/"
+          # Bundle versions must be numeric (X.Y.Z), so drop any prerelease or
+          # build suffix: 0.25.2-nightly.20261021 becomes 0.25.2.
+          BUNDLE_VERSION="${VERSION%%[-+]*}"
+          plutil -replace CFBundleShortVersionString -string "$BUNDLE_VERSION" "$APP/Contents/Info.plist"
+          plutil -replace CFBundleVersion -string "$BUNDLE_VERSION" "$APP/Contents/Info.plist"
+          # AppIcon.icns is referenced from Info.plist via CFBundleIconFile.
+          cp src/EncDotNet.S100.Viewer/Branding/AppIcon.icns "$APP/Contents/Resources/"
+          cp -a "$PUBLISH_DIR"/. "$APP/Contents/MacOS/"
+          # Remove debug symbols; they are not needed in the release bundle
+          # and codesign treats them as unsigned code objects.
+          find "$APP" -name '*.pdb' -delete
+
+      - name: Import signing certificate
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          P12_BASE64: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$P12_BASE64" | base64 --decode > cert.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import cert.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+
+      - name: Sign macOS .app bundle
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          APP="SoundCharts.app"
+          ENTITLEMENTS="src/EncDotNet.S100.Viewer/entitlements.plist"
+          MAIN_EXE="SoundCharts"
+          # Sign all subcomponents individually before sealing the bundle.
+          # Exclude the main executable — it will be signed when we sign
+          # the bundle itself, which also validates all subcomponents.
+          find "$APP/Contents/MacOS" -type f ! -name "$MAIN_EXE" | while read -r f; do
+            if file "$f" | grep -q "Mach-O"; then
+              codesign --force --options runtime --timestamp \
+                --entitlements "$ENTITLEMENTS" \
+                --sign "$APPLE_SIGNING_IDENTITY" "$f"
+            else
+              codesign --force --timestamp \
+                --sign "$APPLE_SIGNING_IDENTITY" "$f"
+            fi
+          done
+          # Sign the bundle (signs main executable and seals everything)
+          codesign --force --options runtime --timestamp \
+            --entitlements "$ENTITLEMENTS" \
+            --sign "$APPLE_SIGNING_IDENTITY" \
+            "$APP"
+          # Verify the seal recursively. This fails the build before
+          # notarization if any nested Mach-O (e.g. the bundled s100 CLI
+          # or its native dylibs) was left unsigned.
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --verify --strict --verbose=2 "$APP/Contents/MacOS/cli/s100"
+
+      - name: Notarize macOS .app bundle
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          ditto -c -k --keepParent \
+            SoundCharts.app \
+            SoundCharts.zip
+          xcrun notarytool submit SoundCharts.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait \
+            --output-format json | tee notarization-result.json
+          STATUS=$(python3 -c "import json,sys; print(json.load(sys.stdin)['status'])" < notarization-result.json)
+          ID=$(python3 -c "import json,sys; print(json.load(sys.stdin)['id'])" < notarization-result.json)
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::Notarization failed with status: $STATUS"
+            xcrun notarytool log "$ID" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD"
+            exit 1
+          fi
+
+      - name: Staple notarization ticket
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
+        continue-on-error: true
+        run: |
+          # The notarization ticket may not be immediately available in
+          # CloudKit. Stapling is optional — Gatekeeper will verify the
+          # notarization online on first launch if the ticket is absent.
+          for i in 1 2 3 4 5; do
+            if xcrun stapler staple SoundCharts.app; then
+              exit 0
+            fi
+            echo "Staple attempt $i failed, waiting 30s..."
+            sleep 30
+          done
+          echo "::warning::Stapling failed after 5 attempts. The app is still notarized; Gatekeeper will verify online."
+          exit 1
+
+      - name: Sign standalone macOS s100 CLI
+        # The bundled CLI inside the .app is signed by the recursive loop above,
+        # but the standalone copy at .../publish/cli is a separate set of files
+        # and must be signed independently for its own release archive.
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          CLI="src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish/cli"
+          ENTITLEMENTS="src/EncDotNet.S100.Viewer/entitlements.plist"
+          MAIN_EXE="s100"
+          # Remove debug symbols; codesign treats .pdb as unsigned code objects.
+          find "$CLI" -name '*.pdb' -delete
+          # Sign every nested Mach-O (native dylibs such as libSkiaSharp.dylib)
+          # before the host executable.
+          find "$CLI" -type f ! -name "$MAIN_EXE" | while read -r f; do
+            if file "$f" | grep -q "Mach-O"; then
+              codesign --force --options runtime --timestamp \
+                --entitlements "$ENTITLEMENTS" \
+                --sign "$APPLE_SIGNING_IDENTITY" "$f"
+            fi
+          done
+          # Sign the host executable last with hardened runtime + entitlements.
+          codesign --force --options runtime --timestamp \
+            --entitlements "$ENTITLEMENTS" \
+            --sign "$APPLE_SIGNING_IDENTITY" "$CLI/s100"
+          codesign --verify --strict --verbose=2 "$CLI/s100"
+
+      - name: Notarize standalone macOS s100 CLI
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          CLI="src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish/cli"
+          # notarytool accepts .zip/.dmg/.pkg but not .tar.gz, so submit a
+          # throwaway .zip. The ticket is registered server-side against each
+          # binary's cdhash, so the distributed .tar.gz (identical signed
+          # binaries) passes Gatekeeper's online check on first run. A bare CLI
+          # cannot be stapled, so we rely on that online verification.
+          ditto -c -k --keepParent "$CLI" s100-cli-notarize.zip
+          xcrun notarytool submit s100-cli-notarize.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait \
+            --output-format json | tee cli-notarization-result.json
+          STATUS=$(python3 -c "import json,sys; print(json.load(sys.stdin)['status'])" < cli-notarization-result.json)
+          ID=$(python3 -c "import json,sys; print(json.load(sys.stdin)['id'])" < cli-notarization-result.json)
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::CLI notarization failed with status: $STATUS"
+            xcrun notarytool log "$ID" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD"
+            exit 1
+          fi
+
+      - name: Archive standalone macOS s100 CLI
+        if: matrix.rid == 'osx-arm64'
+        run: >
+          tar -czf "${{ steps.names.outputs.cli }}.tar.gz"
+          -C "src/EncDotNet.S100.Viewer/bin/Release/net10.0/osx-arm64/publish/cli" .
+
+      - name: Upload standalone s100 CLI
+        uses: actions/upload-artifact@v4
+        with:
+          name: s100-cli-${{ matrix.rid }}
+          path: ${{ steps.names.outputs.cli }}.*
+
+      - name: Build macOS DMG
+        if: matrix.rid == 'osx-arm64'
+        env:
+          DMG_NAME: ${{ steps.names.outputs.dmg }}
+        run: |
+          # Build a styled DMG with the branding background image, icon
+          # positions and Applications drop link. We delegate to
+          # `create-dmg` (https://github.com/create-dmg/create-dmg)
+          # because it bundles a battle-tested workaround for the
+          # `Finder got an error: Can't get disk (-1728)` failure that
+          # bare `osascript` hits on GitHub-hosted macOS runners.
+          # Geometry must match src/EncDotNet.S100.Viewer/Branding/dmg-background.svg.
+          STAGING="$(mktemp -d)/dmg"
+          BG="src/EncDotNet.S100.Viewer/Branding/dmg-background.png"
+          VOLICON="src/EncDotNet.S100.Viewer/Branding/AppIcon.icns"
+          VOLNAME="SoundCharts"
+
+          mkdir -p "$STAGING"
+          cp -R SoundCharts.app "$STAGING/"
+
+          brew install create-dmg
+
+          create-dmg \
+            --volname "$VOLNAME" \
+            --volicon "$VOLICON" \
+            --background "$BG" \
+            --window-pos 200 120 \
+            --window-size 540 380 \
+            --icon-size 96 \
+            --icon "SoundCharts.app" 140 200 \
+            --app-drop-link 400 200 \
+            --hdiutil-quiet \
+            "$DMG_NAME" \
+            "$STAGING"
+          echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_ENV"
+
+      - name: Sign macOS DMG
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          codesign --force --sign "$APPLE_SIGNING_IDENTITY" --timestamp "$DMG_NAME"
+
+      - name: Notarize macOS DMG
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit "$DMG_NAME" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait \
+            --output-format json | tee dmg-notarization-result.json
+          STATUS=$(python3 -c "import json,sys; print(json.load(sys.stdin)['status'])" < dmg-notarization-result.json)
+          ID=$(python3 -c "import json,sys; print(json.load(sys.stdin)['id'])" < dmg-notarization-result.json)
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::DMG notarization failed with status: $STATUS"
+            xcrun notarytool log "$ID" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD"
+            exit 1
+          fi
+
+      - name: Staple notarization ticket to DMG
+        if: matrix.rid == 'osx-arm64' && env.MACOS_SIGNING_ENABLED == 'true'
+        continue-on-error: true
+        run: |
+          # Same retry shape as the .app stapler step: the notarization
+          # ticket may not yet be available in CloudKit. The DMG is
+          # still notarized — Gatekeeper will verify online if the
+          # ticket is absent.
+          for i in 1 2 3 4 5; do
+            if xcrun stapler staple "$DMG_NAME"; then
+              exit 0
+            fi
+            echo "DMG staple attempt $i failed, waiting 30s..."
+            sleep 30
+          done
+          echo "::warning::DMG stapling failed after 5 attempts. The DMG is still notarized; Gatekeeper will verify online."
+          exit 1
+
+      - name: Archive macOS .app bundle
+        if: matrix.rid == 'osx-arm64'
+        run: tar -czf "${{ steps.names.outputs.app }}.tar.gz" SoundCharts.app
+
+      - name: Archive published app (Linux)
+        if: startsWith(matrix.rid, 'linux-')
+        shell: bash
+        run: tar -czf "${{ steps.names.outputs.app }}.tar.gz" -C "src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish" .
+
+      - name: Archive published app (Windows)
+        if: startsWith(matrix.rid, 'win-')
+        shell: pwsh
+        run: Compress-Archive -Path "src/EncDotNet.S100.Viewer/bin/Release/net10.0/${{ matrix.rid }}/publish/*" -DestinationPath "${{ steps.names.outputs.app }}.zip"
+
+      - name: Upload published app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ steps.names.outputs.app }}.*
+
+      - name: Upload macOS DMG
+        if: matrix.rid == 'osx-arm64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-dmg
+          path: ${{ env.DMG_NAME }}
