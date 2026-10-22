@@ -1,0 +1,122 @@
+---
+import Shot from './Shot.astro';
+import { docs, withBase } from '../data/content';
+
+const sizes = '(max-width: 900px) 100vw, 690px';
+const miniSizes = '(max-width: 900px) 100vw, 380px';
+---
+<section id="passage" aria-labelledby="passage-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Passage planning</span>
+      <h2 id="passage-title">Plan it, check it, stay warned.</h2>
+      <p class="lede">
+        A route in SoundCharts is checked against everything you've loaded: charts, depths, tides, regulated areas and
+        navigational warnings. Each point is judged at the time you'd get there, not just the time you leave.
+      </p>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Plan</span>
+          <h3>Sketch a passage.</h3>
+          <p>
+            Drop waypoints on the chart and drag them around. Each leg can be great-circle or rhumb-line, distance and
+            bearing update as you edit, and routes are stored in the S-421 route model. RTZ routes open too.
+          </p>
+        </div>
+        <Shot id="F4" alt="A route from Seattle to Bremerton with the leg table open" sizes={sizes} />
+      </div>
+
+      <div class="feature flip">
+        <div class="feature-copy">
+          <span class="eyebrow">Check</span>
+          <h3>See what's on the way.</h3>
+          <p>
+            Check route sweeps a corridor along every leg and lists what it finds, worst first. Findings are marked on the
+            map, and selecting one takes you to it.
+          </p>
+          <ul>
+            <li>Land, drying ground, the safety contour and charted dangers</li>
+            <li>Prohibited, caution, traffic and protected areas</li>
+            <li>Navigational warnings in force while you're there</li>
+            <li>Under-keel clearance along the route, with S-104 water levels</li>
+          </ul>
+        </div>
+        <Shot
+          id="F10"
+          alt="Check route findings for a passage past West Point, with markers and sleeves on the map"
+          title="Check route"
+          detail="Findings list + map sleeves, markers, corridor and legend"
+          sizes={sizes}
+        />
+      </div>
+
+      <div class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Warnings</span>
+          <h3>Warnings that know your route.</h3>
+          <p>
+            S-124 navigational warnings are drawn only while they're in force, stay marked NEW until you've read them, and
+            can be set to on chart, off chart or information, as S-98 asks. While you check a route, the list narrows to the
+            warnings on it and shows when you'll meet each one.
+          </p>
+          <ul>
+            <li>Warnings from files or live SECOM services</li>
+            <li>Each card links to its route finding, and back</li>
+          </ul>
+        </div>
+        <Shot
+          id="F11"
+          alt="The Navigational warnings panel showing the warnings on a route, with a warning card open"
+          title="Navigational warnings"
+          detail="On route scope · open Warning card · classification glyphs"
+          sizes={sizes}
+        />
+      </div>
+    </div>
+
+    <div class="minis three">
+      <div class="mini">
+        <Shot
+          id="F12"
+          alt="A warning card showing it crosses the route between legs 3 and 4"
+          title="Warning card"
+          detail="“Crosses route · leg 3 → 4”"
+          sizes={miniSizes}
+        />
+        <div class="body">
+          <h3>From warning to finding</h3>
+          <p>A warning's card says where it meets the route. Select it to open that finding.</p>
+        </div>
+      </div>
+      <div class="mini">
+        <Shot
+          id="F10-night"
+          alt="The same route check in the Night palette"
+          title="Check route, Night"
+          detail="Same view as F10, Night palette"
+          sizes={miniSizes}
+        />
+        <div class="body">
+          <h3>Tones for every light</h3>
+          <p>Finding colours are tuned for Day, Dusk and Night, and dimmed at night to protect night vision.</p>
+        </div>
+      </div>
+      <div class="mini">
+        <div class="body">
+          <h3>The same checks in CI</h3>
+          <p>
+            <code>s100 route check</code> runs the same checks on RTZ and S-421 routes, with the same findings, and fails
+            the build when something needs review.
+          </p>
+          <pre><span class="c"># exits 7 on a Must review finding</span>
+s100 route check route.rtz charts/ \
+  --draft 7 --safety-contour 10</pre>
+          <a class="more" href={withBase(docs.routeChecks)}>Route checks guide</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

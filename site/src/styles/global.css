@@ -181,7 +181,16 @@ section { padding: 104px 0; }
 .mini .body { padding: 20px 22px 24px; }
 .mini h3 { font-size: 20px; margin-bottom: 6px; }
 .mini p { margin: 0; color: var(--ink-2); font-size: 15px; }
-@media (max-width: 900px) { .minis { grid-template-columns: 1fr; } }
+.minis.three { grid-template-columns: repeat(3, 1fr); }
+.mini code { font-size: .9em; }
+.mini pre {
+  background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 14px; margin: 16px 0;
+  font-size: 12.5px; line-height: 1.6; overflow-x: auto;
+}
+.mini pre .c { color: #6f8aa0; }
+.mini .more { font-size: 14px; font-weight: 600; color: var(--accent); text-decoration: none; }
+.mini .more::after { content: " →"; }
+@media (max-width: 900px) { .minis, .minis.three { grid-template-columns: 1fr; } }
 
 /* ---------- palettes band ---------- */
 .palettes { background: var(--sea-deep); color: var(--hero-ink); }

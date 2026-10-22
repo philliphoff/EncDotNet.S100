@@ -221,6 +221,28 @@ as a desktop app.
 - ECDIS Display Controls panel open (display category, safety contour, four
   shades) next to a chart that shows the effect, e.g. a shallow harbour entrance.
 
+### F10 · Check route (Passage section)
+- **Not captured yet.** Reuse F4's route (Colman Dock → West Point → Shilshole
+  Bay Marina) over the NOAA `US5WA*` cells and S-102, with a draft so the UKC
+  check runs. The West Point shoal gives a real Must review finding.
+- **State:** Routes panel open on **Check route** with the Findings list, one
+  finding selected so its ring, ETA pill and leg corridor show, and the map
+  legend unfolded. Day palette, with a Light twin.
+- **F10-night:** the same view in Night, for the "Tones for every light" card.
+
+### F11 · Navigational warnings on the route
+- **Not captured yet.** Synthetic S-124 warnings placed across the F10 route
+  (written like P12's derived GML), so there's at least one on-route and one
+  near-route warning. Avoid live CCG SECOM warnings until their terms are
+  checked.
+- **State:** Navigational warnings panel in **On {route}** scope, rows showing
+  "On route · 06:08" / "Near route · 06:19" and the classification glyphs, with
+  a Warning card open. Pin `set_test_clock` so the times are repeatable.
+
+### F12 · From warning to finding (small card)
+- A crop of the Warning card's "Crosses route · leg 3 → 4" row, from the F11
+  session.
+
 ---
 
 ## D: Developer section
