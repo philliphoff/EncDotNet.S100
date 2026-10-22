@@ -112,6 +112,8 @@ public sealed class ClearanceTests : IDisposable
         Assert.Equal("11.0 m", vm.DraftText);
         Assert.StartsWith("Leg 6 → 7", vm.ReadoutLeg);
         Assert.Matches(@"^6\.\d NM · 08:1\dZ$", vm.ReadoutPosition);
+        Assert.Matches(@"^6\.\d NM$", vm.ReadoutDistance);
+        Assert.Matches(@"^08:1\dZ$", vm.ReadoutEta);
     }
 
     [Fact]
@@ -122,7 +124,8 @@ public sealed class ClearanceTests : IDisposable
         var sample = vm.ReadoutSample!.Index;
         var nm = vm.CursorX!.Value;
 
-        vm.Axis = ClearanceAxis.Time;
+        vm.AxisIndex = 1;
+        Assert.Equal(ClearanceAxis.Time, vm.Axis);
         Assert.Equal(sample, vm.ReadoutSample!.Index);
         Assert.InRange(vm.CursorX!.Value, 41, 43); // 0,07° ≈ 4,2 NM at 6 kn ≈ 42 min
 

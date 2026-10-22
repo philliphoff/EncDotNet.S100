@@ -579,10 +579,15 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         return new MRect(minX, minY, maxX, maxY);
     }
 
+    // The route being renamed: the name commits to it even after another
+    // route becomes active.
+    private Route? _renaming;
+
     private void BeginRename()
     {
         if (_routes.Routes.ActiveRoute is not { } route)
             return;
+        _renaming = route;
         RenameText = route.Name;
         IsRenamingActiveRoute = true;
     }
@@ -592,7 +597,9 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
         if (!IsRenamingActiveRoute)
             return;
         IsRenamingActiveRoute = false;
-        if (_routes.Routes.ActiveRoute is { } route && !string.IsNullOrWhiteSpace(RenameText))
+        var route = _renaming;
+        _renaming = null;
+        if (route is not null && _routes.Routes.Routes.Contains(route) && !string.IsNullOrWhiteSpace(RenameText))
         {
             var name = RenameText;
             route.History.Execute(RouteEditLabels.Rename, () => route.Name = name);
@@ -602,6 +609,7 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
     private void CancelRename()
     {
         IsRenamingActiveRoute = false;
+        _renaming = null;
     }
 
     private void SelectWaypoint(RouteWaypointRowViewModel? row)
@@ -784,6 +792,10 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
     private void Rebuild()
     {
+        // Choosing another route ends the rename, keeping the name typed so far.
+        if (IsRenamingActiveRoute && !ReferenceEquals(_renaming, _routes.Routes.ActiveRoute))
+            CommitRename();
+
         _suppressSync = true;
         try
         {

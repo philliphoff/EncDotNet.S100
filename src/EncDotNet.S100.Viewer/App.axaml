@@ -153,6 +153,70 @@
     <Application.Styles>
         <themes:ShadTheme />
 
+        <!--
+          Header-only pill tabs (Routes' Legs / Findings, the Clearance tab's
+          Distance / Time): ShadUI's pill track, as the Datasets panel's
+          tabs, with equal-width tabs. Stretched, it spans its container;
+          left-aligned, it sizes to its widest tab. The template keeps the
+          ShadUI parts (PART_SelectionPill, PART_ItemsPresenter) so the base
+          theme still slides the pill. The content goes outside the control.
+        -->
+        <Style Selector="TabControl.pillTabs">
+            <!-- The track's padding (the template shows no content); the
+                 tabs' own 4 px bottom margin balances the 4 px top. -->
+            <Setter Property="Padding" Value="2,4,2,0" />
+            <Setter Property="ItemsPanel">
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1" />
+                </ItemsPanelTemplate>
+            </Setter>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{DynamicResource TabItemsBackgroundColor}"
+                            CornerRadius="{DynamicResource LgCornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <Panel>
+                            <Canvas IsHitTestVisible="False">
+                                <Border Background="{DynamicResource TabItemSelectedColor}"
+                                        BoxShadow="{DynamicResource Shadow}"
+                                        Canvas.Left="0"
+                                        Canvas.Top="0"
+                                        CornerRadius="{DynamicResource MdCornerRadius}"
+                                        Height="0"
+                                        Opacity="0"
+                                        Width="0"
+                                        x:Name="PART_SelectionPill">
+                                    <Border.Transitions>
+                                        <Transitions>
+                                            <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Left)" />
+                                            <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="(Canvas.Top)" />
+                                            <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Width" />
+                                            <DoubleTransition Duration="0:0:0.30" Easing="CubicEaseOut" Property="Height" />
+                                            <DoubleTransition Duration="0:0:0.20" Easing="CubicEaseOut" Property="Opacity" />
+                                        </Transitions>
+                                    </Border.Transitions>
+                                </Border>
+                            </Canvas>
+                            <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
+                                            Name="PART_ItemsPresenter" />
+                        </Panel>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="TabControl.pillTabs > TabItem">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+        <!-- Compact, for a dock header beside 22 px buttons. The ShadUI tab
+             template keeps 4 px under each pill, which the track's 4 px top
+             padding balances. -->
+        <Style Selector="TabControl.pillTabs.compact > TabItem">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="12,2" />
+        </Style>
+
         <!-- Generic ApplicationPanel control template (title bar + content). -->
         <StyleInclude Source="avares://SoundCharts/Views/ApplicationPanel.axaml" />
 

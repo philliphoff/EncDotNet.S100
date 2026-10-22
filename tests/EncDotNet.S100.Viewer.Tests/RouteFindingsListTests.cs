@@ -174,7 +174,7 @@ public sealed class RouteFindingsListTests(WarningsScenarioFixture fixture) : IC
         Assert.NotEmpty(host.FindAll<Button>("Routes.Check.Leg"));
         Assert.Empty(host.FindAll<Panel>("Routes.Check.Leg.Badge"));
 
-        host.Click(host.Find<ToggleButton>("Routes.Check.FindingsTab"));
+        host.Click(host.Find<TabItem>("Routes.Check.FindingsTab"));
         Assert.True(host.IsShown("Routes.Check.Filter.All"));
         Assert.True(host.IsShown("Routes.Check.Filter.Warnings"));
         Assert.False(host.IsShown("Routes.Check.Filter.Route"));
@@ -187,8 +187,17 @@ public sealed class RouteFindingsListTests(WarningsScenarioFixture fixture) : IC
         Assert.Equal("×2", host.Find<TextBlock>("Routes.Check.Finding.Count").Text);
         Assert.True(host.IsShown("Routes.Check.Findings.InfoToggle"));
 
+        // Every row here opens into more (a Warning card, or the ×2 row's
+        // findings), so each shows the tree's disclosure triangle, closed.
+        static int Open(ViewHost host, bool open) =>
+            host.FindAll<ToggleButton>("Routes.Check.Finding.Disclosure").Count(t => t.IsChecked == open);
+        Assert.Equal(2, Open(host, open: false));
+        Assert.Equal(0, Open(host, open: true));
+
         host.Click(merged[0]);
         Assert.Equal(3, host.FindAll<Button>("Routes.Check.Finding").Count);
+        Assert.Equal(1, Open(host, open: true));
+        Assert.Equal(3, Open(host, open: false));
 
         host.Click(host.Find<Button>("Routes.Check.Findings.InfoToggle"));
         Assert.True(s.Findings.InfoOpen);
