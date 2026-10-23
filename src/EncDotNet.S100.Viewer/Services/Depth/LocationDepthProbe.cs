@@ -8,17 +8,19 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// <summary>
 /// Orchestrates the location depth-assimilation pipeline against the currently
 /// loaded datasets: it live-samples S-102 bathymetry, the nearest S-101
-/// sounding and every overlapping S-104 tide grid at a picked point, then runs
+/// sounding (S-101, S-401 or translated S-57) and every overlapping S-104 tide grid at a picked point, then runs
 /// the <see cref="WaterLandClassifier"/>, <see cref="BaseDepthResolver"/> and
 /// <see cref="DepthAssimilationService"/> to produce a single
 /// <see cref="LocationDepthResult"/> and a water/land classification.
 /// </summary>
 /// <remarks>
-/// Where S-101 cells overlap, only the finest cells whose <c>DataCoverage</c>
+/// Where chart cells overlap, only the finest cells whose <c>DataCoverage</c>
 /// contains the point supply the base depth (area hits and the nearest
 /// sounding), ranked with <see cref="CellScaleRanking"/> as the display ranks
 /// them; among cells of that scale the shoalest area wins. This is the same rule
-/// the passage check's depth source applies (issue #938).
+/// the passage check's depth source applies (issue #938). Translated S-57 cells
+/// take part through <see cref="IChartDepthCell"/>, ranked by their
+/// compilation scale (issue #1040).
 /// </remarks>
 internal sealed class LocationDepthProbe
 {
@@ -60,7 +62,7 @@ internal sealed class LocationDepthProbe
         string? soundingDatasetId = null;
         var tideCandidates = new List<S104TideCandidate>();
         var entries = processors as IReadOnlyCollection<KeyValuePair<DatasetEntry, IDatasetProcessor>> ?? processors.ToList();
-        var finest = FinestCoveringCells(entries.Select(p => p.Value).OfType<S101DatasetProcessor>(), latitude, longitude);
+        var finest = FinestCoveringCells(entries.Select(p => p.Value).OfType<IChartDepthCell>(), latitude, longitude);
 
         foreach (var (entry, processor) in entries)
         {
@@ -74,8 +76,8 @@ internal sealed class LocationDepthProbe
                     }
                     break;
 
-                case S101DatasetProcessor s101 when finest is null || finest.Contains(s101):
-                    var sounding = SafeSampleSounding(s101, latitude, longitude);
+                case IChartDepthCell cell when finest is null || finest.Contains(cell):
+                    var sounding = SafeSampleSounding(cell, latitude, longitude);
                     if (sounding is { } s && (nearestSounding is not { } best || s.DistanceMeters < best.DistanceMeters))
                     {
                         nearestSounding = s;
@@ -100,7 +102,7 @@ internal sealed class LocationDepthProbe
         var waterLand = _classifier.Classify(hits, s102CoversPoint: bathymetry is not null);
         var depthHits = finest is null
             ? hits
-            : hits.Where(h => h.OwningProcessor is not S101DatasetProcessor s101 || finest.Contains(s101)).ToList();
+            : hits.Where(h => h.OwningProcessor is not IChartDepthCell cell || finest.Contains(cell)).ToList();
         var baseDepth = _baseResolver.Resolve(
             bathymetry, depthHits, nearestSounding, bathymetryDatasetId, soundingDatasetId);
         var result = _assimilation.Assimilate(baseDepth, tideCandidates);
@@ -109,13 +111,13 @@ internal sealed class LocationDepthProbe
     }
 
     /// <summary>
-    /// The S-101 cells at the finest scale among those covering the point, or
+    /// The chart cells at the finest scale among those covering the point, or
     /// <see langword="null"/> when none covers it (no cell is then preferred).
     /// </summary>
-    internal static HashSet<S101DatasetProcessor>? FinestCoveringCells(
-        IEnumerable<S101DatasetProcessor> cells, double latitude, double longitude)
+    internal static HashSet<IChartDepthCell>? FinestCoveringCells(
+        IEnumerable<IChartDepthCell> cells, double latitude, double longitude)
     {
-        var covering = new List<(S101DatasetProcessor Cell, int? Rank)>();
+        var covering = new List<(IChartDepthCell Cell, int? Rank)>();
         foreach (var cell in cells)
         {
             try
@@ -151,7 +153,7 @@ internal sealed class LocationDepthProbe
         }
     }
 
-    private static S101SoundingSample? SafeSampleSounding(S101DatasetProcessor processor, double latitude, double longitude)
+    private static S101SoundingSample? SafeSampleSounding(IChartDepthCell processor, double latitude, double longitude)
     {
         try
         {

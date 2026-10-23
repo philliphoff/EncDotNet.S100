@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -35,7 +36,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// translation. The raw S-57 document is retained so validation can run
 /// S-57 pre-translation rules against fields the translation drops.
 /// </remarks>
-public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection
+public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell
 {
     // Serialises render calls so the catalogue's mutable palette / ECDIS
     // state is not mutated mid-build by a concurrent render.
@@ -56,6 +57,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// </summary>
     private readonly S57TranslationTarget _target;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
+    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
     private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
     private ValidationReport? _validationReport;
@@ -431,6 +433,67 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         // indexes, so each hit's Ordinal round-trips to the same feature.
         _featureIndex ??= BuildFeatureIndex();
         return FeatureHitTester.HitTest(_featureIndex.Values, latitude, longitude, radiusMeters);
+    }
+
+    /// <summary>
+    /// The cell's scale rank against overlapping cells (see
+    /// <see cref="CellScaleRanking"/>): its compilation
+    /// scale (DSPM CSCL), else the translated <c>DataCoverage</c> minimum
+    /// display scale, the same rank the display and the route check use.
+    /// Smaller is finer; <see langword="null"/> when the cell declares none.
+    /// </summary>
+    public int? CellRankingScale => CellExtent.RankingScale;
+
+    /// <summary>
+    /// Whether the cell's translated <c>DataCoverage</c> (from <c>M_COVR</c>
+    /// with <c>CATCOV</c> = 1) contains a WGS-84 point. A cell that declares
+    /// no coverage is treated as covering every point.
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
+    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <returns><see langword="true"/> when the cell covers the point.</returns>
+    public bool CoversPoint(double latitude, double longitude)
+    {
+        var coverage = CellExtent.Coverage;
+        if (coverage.Count == 0)
+            return true;
+
+        foreach (var area in coverage)
+        {
+            if (area.Contains(latitude, longitude))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Samples the nearest translated <c>Sounding</c> (from <c>SOUNDG</c>) to a
+    /// WGS-84 location, or <c>null</c> when the cell has none. Delegates to
+    /// <see cref="S101SoundingSampler.SampleNearest"/>.
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
+    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <returns>The nearest sounding sample, or <c>null</c>.</returns>
+    public S101SoundingSample? SampleNearestSounding(double latitude, double longitude)
+        => S101SoundingSampler.SampleNearest(_translatedDataset.Document, latitude, longitude);
+
+    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage) CellExtent
+    {
+        get
+        {
+            if (_cellExtent is { } extent)
+                return extent;
+
+            _featureIndex ??= BuildFeatureIndex();
+            extent = (
+                CellScaleRanking.RankingScale(
+                    S57Dataset.ResolveCompilationScale(_rawS57Document),
+                    S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(_featureIndex.Values)),
+                CoverageAreaResolver.Resolve(_featureIndex.Values));
+            _cellExtent = extent;
+            return extent;
+        }
     }
 
     private FeatureCatalogue RequireFeatureCatalogue()

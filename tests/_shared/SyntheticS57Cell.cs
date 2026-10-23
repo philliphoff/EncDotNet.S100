@@ -67,6 +67,24 @@ internal static class SyntheticS57Cell
     }
 
     /// <summary>
+    /// Writes a copy of the NOAA fixture into <paramref name="directory"/> whose
+    /// DSPM declares <paramref name="compilationScale"/> as its compilation
+    /// scale (CSCL), for tests that rank overlapping cells. Returns the cell's
+    /// full path.
+    /// </summary>
+    public static string WriteWithCompilationScale(string directory, string fileName, uint compilationScale)
+    {
+        var document = Iso8211DocumentReader.ReadFromFile(FixturePath());
+        // DSPM (binary): RCNM b11, RCID b14, HDAT b11, VDAT b11, SDAT b11, CSCL b14, …
+        var dspm = Writable(document.DataRecords.SelectMany(r => r.Fields).First(f => f.Tag == "DSPM"));
+        BitConverter.TryWriteBytes(dspm.Slice(8, 4), compilationScale);
+
+        var path = Path.Combine(directory, fileName);
+        Iso8211DocumentWriter.WriteToFile(path, document);
+        return path;
+    }
+
+    /// <summary>
     /// Locates <c>PRSP</c> in a binary-implementation DSID field (S-57 Edition 3.1
     /// Part 3 §7.3.1.1): RCNM (b11), RCID (b14), EXPP (b11), INTU (b11); the
     /// variable-length DSNM, EDTN and UPDN, each closed by a unit terminator;
