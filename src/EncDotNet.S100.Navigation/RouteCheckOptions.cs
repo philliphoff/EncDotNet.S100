@@ -1,33 +1,6 @@
 using System.Globalization;
-using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Navigation;
-
-/// <summary>
-/// One leg of a route to check against the chart: its points and its
-/// cross-track limits, which bound the corridor the check sweeps.
-/// </summary>
-/// <param name="Points">
-/// The leg's positions in order: at least two (its waypoints), or more when
-/// the caller has already densified the leg.
-/// </param>
-/// <param name="PortCrossTrackMeters">
-/// How far the corridor reaches to port of the track, in metres (S-421
-/// <c>routeWaypointLegPortXTDL</c>; RTZ <c>portsideXTD</c>), or <c>null</c>
-/// for <see cref="RouteCheckOptions.DefaultHalfWidthMeters"/>. This is one
-/// side only, not the corridor's full width.
-/// </param>
-/// <param name="StarboardCrossTrackMeters">
-/// How far the corridor reaches to starboard of the track, in metres, or
-/// <c>null</c> for <see cref="RouteCheckOptions.DefaultHalfWidthMeters"/>.
-/// </param>
-/// <param name="Geometry">Whether the leg is a rhumb line or a great circle.</param>
-public sealed record RouteCheckLeg(
-    IReadOnlyList<GeoPosition> Points,
-    double? PortCrossTrackMeters = null,
-    double? StarboardCrossTrackMeters = null,
-    LegGeometry Geometry = LegGeometry.Rhumb);
 
 /// <summary>Tuning for <see cref="RouteCheckEngine"/>.</summary>
 public sealed record RouteCheckOptions
@@ -57,14 +30,6 @@ public sealed record RouteCheckOptions
     /// further apart rather than exceeding this. Default 20 000.
     /// </summary>
     public int MaxStationsPerLeg { get; init; } = 20_000;
-
-    /// <summary>
-    /// The depths that charted dangers and the safety contour are checked
-    /// against (#955), or <c>null</c> (the default) to skip those checks.
-    /// Hosts fill it from the mariner's settings
-    /// (<see cref="RouteCheckDepths.FromMarinerSettings"/>).
-    /// </summary>
-    public RouteCheckDepths? Depths { get; init; }
 
     /// <summary>
     /// How far beyond a side's cross-track limit a charted danger is still
@@ -201,47 +166,22 @@ public sealed record RouteCheckText
 }
 
 /// <summary>
-/// The depths a route's charted dangers and safety contour are checked
-/// against (#955): the mariner's safety contour and safety depth, and, when
-/// the route has a draft, the depth the keel needs.
+/// The depths one leg's charted dangers and safety contour are checked
+/// against: the safety contour and safety depth from
+/// <see cref="RouteCheckSettings"/>, and the leg's keel
+/// (<see cref="PassageLeg"/> draft + squat + required UKC) when it has a
+/// draft.
 /// </summary>
 /// <remarks>
-/// <para>
 /// Dangers are judged against <see cref="SafetyDepthMeters"/>, as an ECDIS
-/// judges them. With a draft they are also judged against
-/// <see cref="KeelMeters"/> (draft + squat + required UKC) on the static
-/// charted depth, without the tide; the finding's meta line names the
-/// threshold that fired, the keel one when both do.
-/// </para>
-/// <para>
-/// Depth, dredged and drying areas are judged against
+/// judges them. With a draft they're also judged against
+/// <see cref="KeelMeters"/> on the static charted depth, without the tide;
+/// the finding's meta line names the threshold that fired, the keel one when
+/// both do. Depth, dredged and drying areas are judged against
 /// <see cref="SafetyContourMeters"/>, and soundings against
-/// <see cref="SafetyDepthMeters"/>. Per-leg S-421 safety contour and depth
-/// aren't used.
-/// </para>
+/// <see cref="SafetyDepthMeters"/>.
 /// </remarks>
-/// <param name="SafetyContourMeters">The safety contour (S-101 PC parameter <c>SafetyContour</c>), in metres.</param>
-/// <param name="SafetyDepthMeters">The safety depth (S-101 PC parameter <c>SafetyDepth</c>), in metres.</param>
-public sealed record RouteCheckDepths(double SafetyContourMeters, double SafetyDepthMeters)
-{
-    /// <summary>The route's draft in metres, or <c>null</c> when it has none.</summary>
-    public double? DraftMeters { get; init; }
-
-    /// <summary>The squat allowance in metres, used only with a draft.</summary>
-    public double SquatMeters { get; init; }
-
-    /// <summary>The required under-keel clearance in metres, used only with a draft.</summary>
-    public double RequiredUkcMeters { get; init; }
-
-    /// <summary>Draft + squat + required UKC, or <c>null</c> without a draft.</summary>
-    public double? KeelMeters => DraftMeters is { } draft ? draft + SquatMeters + RequiredUkcMeters : null;
-
-    /// <summary>The safety contour and safety depth from the mariner's settings, without a draft.</summary>
-    /// <param name="settings">The mariner's settings.</param>
-    /// <returns>The depths.</returns>
-    public static RouteCheckDepths FromMarinerSettings(MarinerSettings settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        return new RouteCheckDepths(settings.SafetyContour.TotalMetres, settings.SafetyDepth.TotalMetres);
-    }
-}
+/// <param name="SafetyContourMeters">The safety contour, in metres.</param>
+/// <param name="SafetyDepthMeters">The safety depth, in metres.</param>
+/// <param name="KeelMeters">The leg's draft + squat + required UKC, or <c>null</c> without a draft.</param>
+internal sealed record LegDepths(double SafetyContourMeters, double SafetyDepthMeters, double? KeelMeters);

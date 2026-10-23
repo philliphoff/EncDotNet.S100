@@ -117,7 +117,7 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
     public void A_slower_passage_reaches_the_survey_after_it_ends()
     {
         // At 0,5 kn the survey area, 2,1 km in, is reached after 08:00.
-        var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l with { SpeedKnots = 0.5 }).ToList();
+        var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l.WithSpeed(0.5)).ToList();
         var slow = Check(legs, Route.Departure, OracleOptions);
 
         Assert.Equal((RouteWarningCodes.NotInForce, RouteFindingGroup.Info), Kind(slow, 1));
@@ -127,12 +127,13 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
     [Fact]
     public void Without_speeds_warnings_are_judged_at_the_fallback_time()
     {
-        var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l with { SpeedKnots = null }).ToList();
+        // A plan without a departure or speeds is judged at the settings' time.
+        var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l.WithSpeed(null)).ToList();
         var viewTime = new DateTimeOffset(2026, 3, 1, 13, 0, 0, TimeSpan.Zero);
         var result = new RouteWarningCheck(OracleOptions).Check(
-            CheckLegs(legs),
+            Plan(legs, departure: null),
+            PassageLegs.Settings(viewTime),
             RouteWarningSources.FromDatasets(_catalog.Datasets),
-            new RouteWarningTiming(PassageSchedule.Compute(legs, Departure(Route.Departure)), viewTime),
             TestContext.Current.CancellationToken);
 
         var cable = Match(result, 2).Finding!;
@@ -141,15 +142,32 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
         Assert.Equal(viewTime, cable.Warning.From);
     }
 
-    private RouteWarningResult Check(IReadOnlyList<PassageLeg> legs, DateTime departure, RouteWarningOptions? options) =>
-        new RouteWarningCheck(options).Check(
-            CheckLegs(legs),
+    [Fact]
+    public void Without_speeds_warnings_are_judged_at_the_departure()
+    {
+        // With a departure, legs without a speed are judged at it, not at the settings' time.
+        var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l.WithSpeed(null)).ToList();
+        var departure = Departure(Route.Departure);
+        var result = new RouteWarningCheck(OracleOptions).Check(
+            Plan(legs, departure),
+            PassageLegs.Settings(new DateTimeOffset(2026, 3, 1, 13, 0, 0, TimeSpan.Zero)),
             RouteWarningSources.FromDatasets(_catalog.Datasets),
-            new RouteWarningTiming(PassageSchedule.Compute(legs, Departure(departure)), Departure(departure)),
             TestContext.Current.CancellationToken);
 
-    private static List<RouteCheckLeg> CheckLegs(IReadOnlyList<PassageLeg> legs) =>
-        legs.Select(l => new RouteCheckLeg(l.Points, S421RouteBuilder.CrossTrackLimitMeters, S421RouteBuilder.CrossTrackLimitMeters, l.Geometry)).ToList();
+        var cable = Match(result, 2).Finding!;
+        Assert.False(cable.Warning!.AtEta);
+        Assert.Equal(departure, cable.Warning.From);
+    }
+
+    private RouteWarningResult Check(IReadOnlyList<PassageLeg> legs, DateTime departure, RouteWarningOptions? options) =>
+        new RouteWarningCheck(options).Check(
+            Plan(legs, Departure(departure)),
+            PassageLegs.Settings(Departure(departure)),
+            RouteWarningSources.FromDatasets(_catalog.Datasets),
+            TestContext.Current.CancellationToken);
+
+    private static PassagePlan Plan(IReadOnlyList<PassageLeg> legs, DateTimeOffset? departure) =>
+        new(legs.Select(l => l.WithHalfWidth(S421RouteBuilder.CrossTrackLimitMeters)).ToList(), departure);
 
     private static DateTimeOffset Departure(DateTime utc) => new(utc, TimeSpan.Zero);
 

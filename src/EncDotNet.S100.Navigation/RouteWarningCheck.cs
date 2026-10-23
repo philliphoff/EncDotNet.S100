@@ -66,14 +66,6 @@ public sealed record RouteWarning(
     IReadOnlyList<S100FeatureGeometry> Shapes,
     RouteFindingFeature? Feature = null);
 
-/// <summary>
-/// The time a route's warnings are judged at: the ETA where the vessel
-/// meets each warning when the legs have speeds, otherwise one time.
-/// </summary>
-/// <param name="Schedule">The route's ETAs, or <c>null</c> when it has none; a leg without a speed has no ETA.</param>
-/// <param name="Fallback">The time used where there is no ETA, usually the view time.</param>
-public sealed record RouteWarningTiming(PassageSchedule? Schedule, DateTimeOffset Fallback);
-
 /// <summary>An S-124 finding's warning, and how it stands on the route.</summary>
 /// <param name="Info">The warning part's message.</param>
 /// <param name="Relation">How it relates to the route (never <see cref="RouteWarningRelation.Off"/>).</param>
@@ -254,7 +246,7 @@ public sealed record RouteWarningText
 /// </para>
 /// <para>
 /// The time is the ETA over the stretch where the vessel meets the warning
-/// when the legs have speeds, otherwise <see cref="RouteWarningTiming.Fallback"/>.
+/// when the legs have speeds, otherwise the departure (<see cref="PassageSchedule.TimeAt"/>).
 /// A warning is in force when a validity range overlaps that time (no range:
 /// in force until cancelled). It is cancelled when
 /// <see cref="NavigationalWarningSet.WithdrawnAt"/> withdraws it by the time
@@ -296,23 +288,23 @@ public sealed class RouteWarningCheck
         }
     }
 
-    /// <summary>Checks a route against warnings, resolving cancellations and in-force bulletins among them.</summary>
-    /// <param name="legs">The route's legs in order, with their cross-track limits; each starts where the previous one ends.</param>
+    /// <summary>Checks a plan against warnings, resolving cancellations and in-force bulletins among them.</summary>
+    /// <param name="plan">The plan: its legs with their cross-track limits and speeds, and its departure.</param>
+    /// <param name="settings">The corridor override and the time to judge at where the plan gives none.</param>
     /// <param name="warnings">The warning parts.</param>
-    /// <param name="timing">The ETAs, or the time to judge at without them.</param>
     /// <param name="cancellationToken">Cancels the check.</param>
     /// <returns>One match per warning, and the findings.</returns>
     public RouteWarningResult Check(
-        IReadOnlyList<RouteCheckLeg> legs,
+        PassagePlan plan,
+        RouteCheckSettings settings,
         IReadOnlyList<RouteWarning> warnings,
-        RouteWarningTiming timing,
         CancellationToken cancellationToken = default) =>
-        Check(legs, warnings, timing, null, cancellationToken);
+        Check(plan, settings, warnings, null, cancellationToken);
 
-    /// <summary>Checks a route against warnings, judged with every loaded warning.</summary>
-    /// <param name="legs">The route's legs in order, with their cross-track limits; each starts where the previous one ends.</param>
+    /// <summary>Checks a plan against warnings, judged with every loaded warning.</summary>
+    /// <param name="plan">The plan: its legs with their cross-track limits and speeds, and its departure.</param>
+    /// <param name="settings">The corridor override and the time to judge at where the plan gives none.</param>
     /// <param name="warnings">The warning parts to check.</param>
-    /// <param name="timing">The ETAs, or the time to judge at without them.</param>
     /// <param name="set">
     /// Every loaded warning, including cancellations and in-force bulletins
     /// with no parts, which may end the checked ones; <c>null</c> builds it
@@ -321,16 +313,17 @@ public sealed class RouteWarningCheck
     /// <param name="cancellationToken">Cancels the check.</param>
     /// <returns>One match per warning, and the findings.</returns>
     public RouteWarningResult Check(
-        IReadOnlyList<RouteCheckLeg> legs,
+        PassagePlan plan,
+        RouteCheckSettings settings,
         IReadOnlyList<RouteWarning> warnings,
-        RouteWarningTiming timing,
         NavigationalWarningSet? set,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(legs);
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(warnings);
-        ArgumentNullException.ThrowIfNull(timing);
-        var track = RouteCorridor.Track.Build(legs, _options.DefaultHalfWidthMeters, _options.SegmentLengthMeters, _options.MaxSegmentsPerLeg);
+        var schedule = PassageSchedule.Compute(plan, settings);
+        var track = RouteCorridor.Track.Build(plan, settings, _options.DefaultHalfWidthMeters, _options.SegmentLengthMeters, _options.MaxSegmentsPerLeg);
         var shapes = warnings
             .Select(w => new RouteCorridor.Shapes((w ?? throw new ArgumentException("A warning is null.", nameof(warnings))).Shapes))
             .ToList();
@@ -342,7 +335,7 @@ public sealed class RouteWarningCheck
         var findings = new List<RouteFinding>();
         for (var w = 0; w < warnings.Count; w++)
         {
-            var match = Match(warnings, w, shapes[w], accumulators[w], track, timing, set);
+            var match = Match(warnings, w, shapes[w], accumulators[w], track, schedule, set);
             matches.Add(match);
             if (match.Finding is { } finding)
             {
@@ -386,7 +379,7 @@ public sealed class RouteWarningCheck
             : (RouteWarningStatus.NotInForce, null);
     }
 
-    private RouteWarningMatch Match(IReadOnlyList<RouteWarning> warnings, int index, RouteCorridor.Shapes shapes, RouteCorridor.Accumulator acc, RouteCorridor.Track track, RouteWarningTiming timing, NavigationalWarningSet set)
+    private RouteWarningMatch Match(IReadOnlyList<RouteWarning> warnings, int index, RouteCorridor.Shapes shapes, RouteCorridor.Accumulator acc, RouteCorridor.Track track, PassageSchedule schedule, NavigationalWarningSet set)
     {
         var warning = warnings[index];
         RouteWarningRelation relation;
@@ -411,11 +404,11 @@ public sealed class RouteWarningCheck
 
         var startLeg = track.LegAt(start);
         var endLeg = track.LegAt(end);
-        var startEta = timing.Schedule?.EtaAt(startLeg, start - track.Legs[startLeg].Start);
-        var endEta = timing.Schedule?.EtaAt(endLeg, end - track.Legs[endLeg].Start);
+        var startEta = schedule.EtaAt(startLeg, start - track.Legs[startLeg].Start);
+        var endEta = schedule.EtaAt(endLeg, end - track.Legs[endLeg].Start);
         var atEta = startEta is not null && endEta is not null;
-        var from = atEta ? startEta!.Value : timing.Fallback;
-        var until = atEta ? endEta!.Value : timing.Fallback;
+        var from = atEta ? startEta!.Value : schedule.Departure;
+        var until = atEta ? endEta!.Value : schedule.Departure;
         var (status, withdrawal) = StatusOver(warning.Info, set, from, until);
 
         var text = _options.Text;

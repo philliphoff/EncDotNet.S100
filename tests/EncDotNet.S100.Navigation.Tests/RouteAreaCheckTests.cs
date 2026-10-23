@@ -13,8 +13,9 @@ public class RouteAreaCheckTests
 {
     private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
     private static readonly DateTimeOffset Departure = new(2026, 3, 1, 6, 0, 0, TimeSpan.Zero);
-    private static readonly RouteCheckLeg East = new([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
-    private static readonly PassageLeg EastPassage = new(East.Points, 0, SpeedKnots: 6);
+    private static readonly PassageLeg East = Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
+    private static readonly PassageLeg EastPassage = Fixture.Leg(East.Points, speed: 6);
+    private static readonly RouteCheckSettings AtDeparture = Fixture.Settings(Departure);
 
     private static IReadOnlyList<GeoPosition> Ring(double south, double west, double north, double east) =>
         [new(south, west), new(north, west), new(north, east), new(south, east), new(south, west)];
@@ -35,12 +36,14 @@ public class RouteAreaCheckTests
             Restrictions = restrictions ?? [],
         };
 
-    private static RouteAreaResult Check(RouteArea area, IReadOnlyList<RouteChartCell>? cells = null, PassageSchedule? schedule = null, DateTimeOffset? fallback = null) =>
+    // Checks East at 6 kn leaving at Departure, or the given plan, judged at
+    // the given time where the plan gives none.
+    private static RouteAreaResult Check(RouteArea area, IReadOnlyList<RouteChartCell>? cells = null, PassagePlan? plan = null, DateTimeOffset? at = null) =>
         new RouteAreaCheck(new RouteAreaOptions { Text = RouteAreaText.Default with { Culture = CultureInfo.InvariantCulture } }).Check(
-            [East],
+            plan ?? new PassagePlan([EastPassage], Departure),
+            Fixture.Settings(at ?? Departure),
             [area],
             cells ?? [],
-            new RouteWarningTiming(schedule ?? PassageSchedule.Compute([EastPassage], Departure), fallback ?? Departure),
             TestContext.Current.CancellationToken);
 
     [Fact]
@@ -132,10 +135,10 @@ public class RouteAreaCheckTests
         var area = Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, south: -0.002, north: 0.002, restrictions: [7], holes: [hole]);
 
         var inside = new RouteAreaCheck().Check(
-            [new RouteCheckLeg([new GeoPosition(0, 0.0046), new GeoPosition(0, 0.0054)], 10, 10)],
+            new PassagePlan([Fixture.Leg([new GeoPosition(0, 0.0046), new GeoPosition(0, 0.0054)], port: 10, starboard: 10)]),
+            AtDeparture,
             [area],
             [],
-            new RouteWarningTiming(null, Departure),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(RouteAreaRelation.Off, Assert.Single(inside.Matches).Relation);
@@ -157,20 +160,23 @@ public class RouteAreaCheckTests
     }
 
     [Fact]
-    public void Without_etas_an_area_is_judged_at_the_fallback_time()
+    public void Without_etas_an_area_is_judged_at_the_departure_or_without_one_at_the_check_time()
     {
         var area = Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, restrictions: [27]) with
         {
             FixedDateRange = new RouteAreaDateRange("2026-04-01", null),
         };
-        var noSpeed = PassageSchedule.Compute([EastPassage with { SpeedKnots = null }], Departure);
+        var may = new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero);
 
-        var march = Check(area, schedule: noSpeed, fallback: Departure).Findings.Single();
-        var may = Check(area, schedule: noSpeed, fallback: new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero)).Findings.Single();
+        // No speed, but a departure: judged at the departure, not the check time.
+        var atDeparture = Check(area, plan: new PassagePlan([East], Departure), at: may).Findings.Single();
 
-        Assert.Equal("Restricted area not in force at 2026-03-01 06:00 UTC", march.Title);
-        Assert.Equal((RouteAreaCodes.RestrictedArea, RouteFindingGroup.Check), (may.Code, may.Group));
-        Assert.Contains("from 1 Apr 2026", may.Meta, StringComparison.Ordinal);
+        // No speed and no departure: judged at the check time.
+        var atCheckTime = Check(area, plan: new PassagePlan([East]), at: may).Findings.Single();
+
+        Assert.Equal("Restricted area not in force at 2026-03-01 06:00 UTC", atDeparture.Title);
+        Assert.Equal((RouteAreaCodes.RestrictedArea, RouteFindingGroup.Check), (atCheckTime.Code, atCheckTime.Group));
+        Assert.Contains("from 1 Apr 2026", atCheckTime.Meta, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -212,10 +218,10 @@ public class RouteAreaCheckTests
         var inCoarse = Area(RouteAreaKind.CautionArea, 0.004, 0.006) with { Cell = coarse, Feature = new RouteFindingFeature("101COARSE", "1") };
 
         var result = new RouteAreaCheck().Check(
-            [East],
+            new PassagePlan([East]),
+            AtDeparture,
             [inFine, inCoarse],
             [fine, coarse],
-            new RouteWarningTiming(null, Departure),
             TestContext.Current.CancellationToken);
 
         var finding = Assert.Single(result.Findings);
@@ -225,10 +231,10 @@ public class RouteAreaCheckTests
         // Where the fine cell doesn't cover the place, the coarse cell's area counts.
         var patchy = new FakeCell("101FINE", 22_000, p => p.Longitude > 0.008);
         var coarseOnly = new RouteAreaCheck().Check(
-            [East],
+            new PassagePlan([East]),
+            AtDeparture,
             [inCoarse],
             [patchy, coarse],
-            new RouteWarningTiming(null, Departure),
             TestContext.Current.CancellationToken);
         Assert.Single(coarseOnly.Findings);
     }
@@ -238,9 +244,9 @@ public class RouteAreaCheckTests
     {
         var area = Area(RouteAreaKind.CautionArea, 0.004, 0.006);
         var source = new FakeAreas([area, area]);
-        var north = new RouteCheckLeg([new GeoPosition(0, 0.01), new GeoPosition(0.01, 0.01)]);
+        var north = Fixture.Leg([new GeoPosition(0, 0.01), new GeoPosition(0.01, 0.01)]);
 
-        var result = new RouteAreaCheck().Check([East, north], source, new RouteWarningTiming(null, Departure), TestContext.Current.CancellationToken);
+        var result = new RouteAreaCheck().Check(new PassagePlan([East, north]), AtDeparture, source, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, source.Queries);
         Assert.Single(result.Matches);

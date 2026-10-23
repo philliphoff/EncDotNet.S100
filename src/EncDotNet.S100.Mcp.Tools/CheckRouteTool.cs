@@ -8,6 +8,7 @@ using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Mcp.Tools;
 
@@ -18,8 +19,8 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="GreatCircle">For a polyline, run legs as great circles instead of rhumb lines.</param>
 /// <param name="SafetyContourMeters">The safety contour for the depth checks; with <paramref name="SafetyDepthMeters"/>, turns them on.</param>
 /// <param name="SafetyDepthMeters">The safety depth for the danger and sounding checks.</param>
-/// <param name="DraftMeters">A draft to judge dangers against as well; for a route, overrides the route's.</param>
-/// <param name="Time">The departure for a route's ETAs, and the time areas are judged at where legs have no speed.</param>
+/// <param name="DraftMeters">A draft to judge each leg's dangers against as well; for a route, replaces every leg's.</param>
+/// <param name="Time">The departure for the ETAs, and the time to judge at without one.</param>
 public sealed record CheckRouteRequest(
     [property: Description("Id of a host route to check (viewer only). Omit, with no polyline, for the active route.")] string? RouteId = null,
     [property: Description("A route given directly: each pair of consecutive vertices is a leg. Takes precedence over routeId. Its corridorWidthMeters, when set, is the half-width either side of the track.")] GeoPolyline? Polyline = null,
@@ -27,8 +28,8 @@ public sealed record CheckRouteRequest(
     [property: Description("For a polyline, run legs as great circles instead of rhumb lines.")] bool GreatCircle = false,
     [property: Description("Safety contour in metres. With safetyDepthMeters, turns on the depth checks: depth, dredged and drying areas and S-102 cells shallower than it, and charted dangers. SoundCharts' findings list uses the mariner's settings (get_mariner_settings).")] double? SafetyContourMeters = null,
     [property: Description("Safety depth in metres, for charted dangers and soundings. Goes with safetyContourMeters.")] double? SafetyDepthMeters = null,
-    [property: Description("Draft in metres: dangers are also judged against draft + squat + required UKC. For a route it overrides the route's draft; without either, dangers are judged against the safety depth only.")] double? DraftMeters = null,
-    [property: Description("ISO 8601 time. For a route, the departure its legs' speeds give ETAs from (default: the route's departure); restricted and protected areas' date ranges and seasons are judged at those ETAs. Where a leg has no speed, and for a polyline, areas are judged at this time (default: now).")] DateTimeOffset? Time = null);
+    [property: Description("Draft in metres: each leg's dangers are also judged against that leg's draft + squat + required UKC. For a route it replaces every leg's draft; a leg without a draft has its dangers judged against the safety depth only.")] double? DraftMeters = null,
+    [property: Description("ISO 8601 time: the departure the legs' speeds give ETAs from (default: the route's departure; a polyline has none). Areas' date ranges and seasons and S-124 warnings are judged at those ETAs; where a leg has no ETA, at the departure, or without one at this time (default: now).")] DateTimeOffset? Time = null);
 
 /// <summary>Result of <see cref="CheckRouteTool"/>.</summary>
 public sealed record CheckRouteResult(
@@ -171,15 +172,10 @@ public sealed class CheckRouteTool
             }
         }
 
-        RouteCheckDepths? depths = request.SafetyContourMeters is { } contour && request.SafetyDepthMeters is { } safetyDepth
-            ? new RouteCheckDepths(contour, safetyDepth) { DraftMeters = request.DraftMeters }
-            : null;
-
         string? routeId = null;
         string? routeName = null;
-        var legs = new List<RouteCheckLeg>();
-        var at = request.Time ?? _time.GetUtcNow();
-        PassageSchedule? schedule = null;
+        var legs = new List<PassageLeg>();
+        DateTimeOffset? departure = null;
         if (request.Polyline is { } polyline)
         {
             if (GeoQueryValidator.Validate(new GeoQuery.Polyline(polyline)) is { } geometryError)
@@ -187,15 +183,23 @@ public sealed class CheckRouteTool
                 return ToolResult<CheckRouteResult>.Err(geometryError);
             }
 
-            var half = request.CorridorHalfWidthMeters ?? polyline.CorridorWidthMeters;
+            var half = polyline.CorridorWidthMeters is { } width ? Length.FromMetres(width) : (Length?)null;
             var geometry = request.GreatCircle ? LegGeometry.GreatCircle : LegGeometry.Rhumb;
             for (var i = 1; i < polyline.Vertices.Count; i++)
             {
                 var a = polyline.Vertices[i - 1];
                 var b = polyline.Vertices[i];
-                legs.Add(new RouteCheckLeg(
-                    [new GeoPosition(a.Latitude, a.Longitude), new GeoPosition(b.Latitude, b.Longitude)], half, half, geometry));
+                legs.Add(new PassageLeg
+                {
+                    Points = [new GeoPosition(a.Latitude, a.Longitude), new GeoPosition(b.Latitude, b.Longitude)],
+                    Geometry = geometry,
+                    PortLimit = half,
+                    StarboardLimit = half,
+                    Draft = request.DraftMeters is { } draft ? Depth.FromMetres(draft) : null,
+                });
             }
+
+            departure = request.Time;
         }
         else
         {
@@ -216,41 +220,26 @@ public sealed class CheckRouteTool
                 return ToolResult<CheckRouteResult>.Err(new InvalidArgument("routeId", "the route needs at least two waypoints"));
             }
 
-            if (depths is not null && request.DraftMeters is null && route.Legs.All(l => l.DraftMeters is not null))
-            {
-                // The deepest keel on any leg, as SoundCharts' findings list judges it.
-                var keel = route.Legs.MaxBy(l => l.DraftMeters!.Value + (l.SquatMeters ?? 0) + (l.RequiredUkcMeters ?? 0))!;
-                depths = depths with { DraftMeters = keel.DraftMeters, SquatMeters = keel.SquatMeters ?? 0, RequiredUkcMeters = keel.RequiredUkcMeters ?? 0 };
-            }
-            else if (depths is not null && request.DraftMeters is not null && route.Legs.Count > 0)
-            {
-                depths = depths with { SquatMeters = route.Legs.Max(l => l.SquatMeters ?? 0), RequiredUkcMeters = route.Legs.Max(l => l.RequiredUkcMeters ?? 0) };
-            }
-
-            foreach (var leg in route.Legs)
-            {
-                legs.Add(new RouteCheckLeg(
-                    leg.Points,
-                    request.CorridorHalfWidthMeters ?? leg.PortCrossTrackMeters,
-                    request.CorridorHalfWidthMeters ?? leg.StarboardCrossTrackMeters,
-                    leg.Geometry));
-            }
-
+            // Each leg keeps its own squat and required UKC; a request draft
+            // replaces every leg's draft, so each leg's dangers are judged
+            // against its own keel.
+            legs.AddRange(route.Legs.Select(l => l.ToPassageLeg(request.DraftMeters)));
             routeId = route.RouteId;
             routeName = route.Name;
-            if (route.Legs.Any(l => l.SpeedKnots is > 0))
-            {
-                var departure = request.Time ?? route.DefaultDeparture;
-                schedule = PassageSchedule.Compute(
-                    route.Legs.Select(l => new PassageLeg(l.Points, l.DraftMeters ?? 0, l.SpeedKnots, Geometry: l.Geometry)).ToList(),
-                    departure);
-                at = departure;
-            }
+            departure = request.Time ?? route.DefaultDeparture;
         }
 
+        var plan = new PassagePlan(legs, departure);
+        var settings = new RouteCheckSettings
+        {
+            At = request.Time ?? _time.GetUtcNow(),
+            SafetyContour = request.SafetyContourMeters is { } contour ? Depth.FromMetres(contour) : null,
+            SafetyDepth = request.SafetyDepthMeters is { } safetyDepth ? Depth.FromMetres(safetyDepth) : null,
+            CorridorOverride = request.CorridorHalfWidthMeters is { } corridor ? Length.FromMetres(corridor) : null,
+        };
+
         var (sources, warnings, warningSet) = SourcesFor(_catalog.Datasets);
-        var engine = sources.CreateEngine(Options with { Depths = depths });
-        var timing = new RouteWarningTiming(schedule, at);
+        var engine = sources.CreateEngine(Options);
         RouteCheckResult result;
         RouteAreaResult areas;
         RouteWarningResult warningResult;
@@ -258,9 +247,9 @@ public sealed class CheckRouteTool
         {
             (result, areas, warningResult) = await Task.Run(
                 () => (
-                    engine.Check(legs, cancellationToken),
-                    sources.CheckAreas(legs, timing, AreaOptions, cancellationToken),
-                    new RouteWarningCheck(WarningOptions).Check(legs, warnings, timing, warningSet, cancellationToken)),
+                    engine.Check(plan, settings, cancellationToken),
+                    sources.CheckAreas(plan, settings, AreaOptions, cancellationToken),
+                    new RouteWarningCheck(WarningOptions).Check(plan, settings, warnings, warningSet, cancellationToken)),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (ArgumentException ex)

@@ -13,8 +13,9 @@ public class RouteWarningCheckTests
 {
     private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
     private static readonly DateTimeOffset Departure = new(2026, 3, 1, 6, 0, 0, TimeSpan.Zero);
-    private static readonly RouteCheckLeg East = new([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
-    private static readonly PassageLeg EastPassage = new(East.Points, 0, SpeedKnots: 6);
+    private static readonly PassageLeg East = Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
+    private static readonly PassageLeg EastPassage = Fixture.Leg(East.Points, speed: 6);
+    private static readonly RouteCheckSettings AtDeparture = Fixture.Settings(Departure);
 
     private static NavigationalWarningInfo Info(int number, DateTimeOffset? from = null, DateTimeOffset? to = null) => new()
     {
@@ -44,9 +45,9 @@ public class RouteWarningCheckTests
 
     private static RouteWarningResult Check(params RouteWarning[] warnings) =>
         new RouteWarningCheck().Check(
-            [East],
+            new PassagePlan([EastPassage], Departure),
+            AtDeparture,
             warnings,
-            new RouteWarningTiming(PassageSchedule.Compute([EastPassage], Departure), Departure),
             TestContext.Current.CancellationToken);
 
     private static RouteWarning Warning(NavigationalWarningInfo info, params S100FeatureGeometry[] shapes) =>
@@ -113,9 +114,9 @@ public class RouteWarningCheckTests
     public void The_near_distance_is_configurable()
     {
         var result = new RouteWarningCheck(new RouteWarningOptions { NearDistanceMeters = 100 }).Check(
-            [East],
+            new PassagePlan([East]),
+            AtDeparture,
             [Warning(Info(7), Point(800 / M, 0.005))],
-            new RouteWarningTiming(null, Departure),
             TestContext.Current.CancellationToken);
 
         Assert.Equal(RouteWarningRelation.Off, Assert.Single(result.Matches).Relation);
@@ -179,13 +180,13 @@ public class RouteWarningCheckTests
     {
         var legs = new[]
         {
-            new RouteCheckLeg([new GeoPosition(0, 0), new GeoPosition(0, 0.005)]),
-            new RouteCheckLeg([new GeoPosition(0, 0.005), new GeoPosition(0.005, 0.005)]),
+            Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.005)]),
+            Fixture.Leg([new GeoPosition(0, 0.005), new GeoPosition(0.005, 0.005)]),
         };
         var result = new RouteWarningCheck().Check(
-            legs,
+            new PassagePlan(legs),
+            AtDeparture,
             [Warning(Info(16), Box(-0.001, 0.004, 0.002, 0.006))],
-            new RouteWarningTiming(null, Departure),
             TestContext.Current.CancellationToken);
 
         var match = Assert.Single(result.Matches);
@@ -224,9 +225,9 @@ public class RouteWarningCheckTests
         var set = new NavigationalWarningSet([listed.Info, dropped.Info, later.Info, bulletin]);
 
         var result = new RouteWarningCheck().Check(
-            [East],
+            new PassagePlan([EastPassage], Departure),
+            AtDeparture,
             [listed, dropped, later],
-            new RouteWarningTiming(PassageSchedule.Compute([EastPassage], Departure), Departure),
             set,
             TestContext.Current.CancellationToken);
 

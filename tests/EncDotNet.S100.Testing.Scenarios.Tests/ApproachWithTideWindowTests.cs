@@ -34,9 +34,9 @@ public sealed class ApproachWithTideWindowTests(ApproachWithTideWindowFixture fi
         Assert.Equal(3, legs.Count);
         Assert.All(legs, leg =>
         {
-            Assert.Equal(RouteSpec.Passage.DraftMeters, leg.DraftMeters);
-            Assert.Equal(RouteSpec.Passage.SpeedKnots, leg.SpeedKnots);
-            Assert.Equal(RouteSpec.Passage.RequiredUkcMeters, leg.RequiredUkcMeters);
+            Assert.Equal(RouteSpec.Passage.DraftMeters, leg.Draft?.TotalMetres);
+            Assert.Equal(RouteSpec.Passage.SpeedKnots, leg.Speed!.Value.TotalKnots, 9);
+            Assert.Equal(RouteSpec.Passage.RequiredUkcMeters, leg.RequiredUkc?.TotalMetres);
         });
         Assert.Equal(S421RouteBuilder.Positions(Definition, RouteSpec), legs.Select(l => l.Points[0]).Append(legs[^1].Points[^1]));
     }
@@ -136,7 +136,7 @@ public sealed class ApproachWithTideWindowTests(ApproachWithTideWindowFixture fi
     private PassageCheckResult Check(DateTimeOffset departure)
     {
         var (engine, legs) = Engine();
-        return engine.Check(new PassagePlan(legs, departure), TestContext.Current.CancellationToken);
+        return engine.Check(new PassagePlan(legs, departure), PassageLegs.Settings(departure), TestContext.Current.CancellationToken);
     }
 
     /// <summary>
@@ -189,11 +189,11 @@ public static class ScenarioPassage
         var route = S421RoutePlan.From(dataset, out var diagnostics).Route;
         Assert.Empty(diagnostics);
         var elements = route.Schedules[0].Variants[0].Elements;
-        return route.Legs.Select((leg, i) => new PassageLeg(
+        return route.Legs.Select((leg, i) => PassageLegs.Leg(
             [leg.StartWaypoint!.Position, leg.EndWaypoint!.Position],
             leg.Draft!.Value,
-            SpeedKnots: elements.Single(e => e.WaypointNumber == leg.StartWaypoint.WaypointNumber).PlannedSpeedOverGround,
-            SquatMeters: spec.Passage.SquatMeters,
-            RequiredUkcMeters: leg.StaticUnderKeelClearance)).ToList();
+            speedKnots: elements.Single(e => e.WaypointNumber == leg.StartWaypoint.WaypointNumber).PlannedSpeedOverGround,
+            squat: spec.Passage.SquatMeters,
+            ukc: leg.StaticUnderKeelClearance)).ToList();
     }
 }

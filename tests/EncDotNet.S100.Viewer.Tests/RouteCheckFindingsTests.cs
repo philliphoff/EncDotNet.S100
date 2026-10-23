@@ -182,10 +182,10 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     {
         using var s = await Start(fixture.Import("421ZZ00SPITX"));
 
-        Assert.All(s.Check.Input!.CheckLegs, x =>
+        Assert.All(s.Check.Input!.Legs, x =>
         {
-            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.PortCrossTrackMeters);
-            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.StarboardCrossTrackMeters);
+            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.PortLimit!.Value.TotalMetres, 9);
+            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.StarboardLimit!.Value.TotalMetres, 9);
         });
     }
 
@@ -212,25 +212,26 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     }
 
     [Fact]
-    public void The_depth_checks_use_the_mariners_settings_and_the_deepest_keel()
+    public void The_depth_checks_use_the_mariners_settings()
     {
+        // Each leg's dangers are judged against that leg's own keel, so the
+        // settings carry only the mariner's depths and the time.
         var settings = new MarinerSettings { SafetyContour = Depth.FromMetres(10), SafetyDepth = Depth.FromMetres(8) };
         var producer = new RouteCheckFindingProducer(new Mariner(settings));
         PassageLeg[] legs =
         [
-            new([new(0, 0), new(0, 0.01)], DraftMeters: 5, SquatMeters: 0.2, RequiredUkcMeters: 1),
-            new([new(0, 0.01), new(0, 0.02)], DraftMeters: 6, SquatMeters: 0.3, RequiredUkcMeters: 0.5),
+            new() { Points = [new(0, 0), new(0, 0.01)], Draft = Depth.FromMetres(5), Squat = Depth.FromMetres(0.2), RequiredUkc = Depth.FromMetres(1) },
+            new() { Points = [new(0, 0.01), new(0, 0.02)], Draft = Depth.FromMetres(6), Squat = Depth.FromMetres(0.3), RequiredUkc = Depth.FromMetres(0.5) },
         ];
-        RouteFindingRequest Request(bool hasDraft) => new("r", legs, Now, hasDraft, [], null, DepthUnit.Metres, TimeFormat.Utc, Now, [], Now);
+        var request = new RouteFindingRequest("r", legs, Now, true, [], null, DepthUnit.Metres, TimeFormat.Utc, Now, Now);
 
-        var withDraft = producer.Options(Request(hasDraft: true)).Depths!;
-        var withoutDraft = producer.Options(Request(hasDraft: false)).Depths!;
+        var checkSettings = producer.Settings(request);
 
-        Assert.Equal((10.0, 8.0), (withDraft.SafetyContourMeters, withDraft.SafetyDepthMeters));
-        Assert.Equal(6.8, withDraft.KeelMeters!.Value, 6);
-        Assert.Null(withoutDraft.KeelMeters);
-        Assert.Null(new RouteCheckFindingProducer().Options(Request(hasDraft: true)).Depths);
-        Assert.Equal("Crosses land", producer.Options(Request(hasDraft: false)).Text.CrossesLand);
+        Assert.Equal((10.0, 8.0), (checkSettings.SafetyContour!.Value.TotalMetres, checkSettings.SafetyDepth!.Value.TotalMetres));
+        Assert.True(checkSettings.ChecksDepths);
+        Assert.Equal(Now, checkSettings.At);
+        Assert.False(new RouteCheckFindingProducer().Settings(request).ChecksDepths);
+        Assert.Equal("Crosses land", RouteCheckFindingProducer.Text().CrossesLand);
     }
 
     [Fact]

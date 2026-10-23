@@ -434,9 +434,9 @@ corridor is twice as wide. Any side without a limit uses 50 m.
 
 Pass `safetyContourMeters` and `safetyDepthMeters` (together) to add the
 depth and danger checks, as SoundCharts' findings list runs them with the
-mariner's settings (`get_mariner_settings`). `draftMeters` also judges dangers
-against draft + squat + required UKC; a route's own draft is used when you
-omit it.
+mariner's settings (`get_mariner_settings`). Each leg's dangers are also
+judged against that leg's draft + squat + required UKC. `draftMeters`
+replaces every leg's draft; without it, each leg's own draft is used.
 
 For a route, the legs' speeds give ETAs from `time` (default: the route's
 departure), and areas and warnings are judged at them. Where a leg has no

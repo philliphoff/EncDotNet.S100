@@ -35,18 +35,14 @@ internal sealed class AreaFindingProducer : IRouteFindingProducer
     public Task<IReadOnlyList<RouteFinding>> ProduceAsync(RouteFindingRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (request.CheckLegs.Count == 0)
+        if (request.Legs.Count == 0)
             return Task.FromResult<IReadOnlyList<RouteFinding>>([]);
 
         var options = _options ?? RouteAreaOptions.Default with { Text = Text(request) };
         return Task.Run<IReadOnlyList<RouteFinding>>(
-            () =>
-            {
-                var schedule = PassageSchedule.Compute(request.Legs, request.Departure);
-                return _sources.Get(request.Datasets)
-                    .CheckAreas(request.CheckLegs, new RouteWarningTiming(schedule, request.ViewTime), options, cancellationToken)
-                    .Findings;
-            },
+            () => _sources.Get(request.Datasets)
+                .CheckAreas(request.Plan, request.Settings, options, cancellationToken)
+                .Findings,
             cancellationToken);
     }
 

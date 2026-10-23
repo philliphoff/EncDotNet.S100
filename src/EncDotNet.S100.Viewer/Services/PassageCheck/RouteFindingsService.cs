@@ -384,7 +384,6 @@ internal sealed class RouteFindingsService : IDisposable
         DepthUnit,
         TimeFormat,
         _clock.GetUtcNow(),
-        input.CheckLegs,
         _routes.ViewTime.Current);
 
     // The check service raises Changed for cursor moves too; producers re-run

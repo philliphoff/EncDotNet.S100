@@ -13,7 +13,7 @@ public class PassageScheduleTests
         var a = new GeoPosition(0, 0);
         var b = new GeoPosition(0.5, 0);
         var c = new GeoPosition(1.0, 0);
-        var schedule = PassageSchedule.Compute([new PassageLeg([a, b], 5, SpeedKnots: 10), new PassageLeg([b, c], 5, SpeedKnots: 15)], Departure);
+        var schedule = PassageSchedule.Compute([Fixture.Leg([a, b], 5, speed: 10), Fixture.Leg([b, c], 5, speed: 15)], Departure);
 
         Assert.InRange(schedule.Legs[0].DistanceNauticalMiles, 29.97, 30.03);
         AssertClose(Departure.AddHours(3), Departure + schedule.Legs[0].Duration!.Value);
@@ -36,7 +36,7 @@ public class PassageScheduleTests
         var a = new GeoPosition(0, 0);
         var b = new GeoPosition(0.1, 0);
         var c = new GeoPosition(0.2, 0);
-        var schedule = PassageSchedule.Compute([new PassageLeg([a, b], 5), new PassageLeg([b, c], 5, SpeedKnots: 10)], Departure);
+        var schedule = PassageSchedule.Compute([Fixture.Leg([a, b], 5), Fixture.Leg([b, c], 5, speed: 10)], Departure);
 
         Assert.Null(schedule.Legs[0].Duration);
         Assert.Equal(Departure, schedule.Legs[0].Start);
@@ -49,9 +49,9 @@ public class PassageScheduleTests
     [Fact]
     public void Invalid_legs_are_rejected()
     {
-        Assert.Throws<ArgumentException>(() => PassageSchedule.Compute([new PassageLeg([new GeoPosition(0, 0)], 5)], Departure));
+        Assert.Throws<ArgumentException>(() => PassageSchedule.Compute([Fixture.Leg([new GeoPosition(0, 0)], 5)], Departure));
         Assert.Throws<ArgumentException>(() => PassageSchedule.Compute(
-            [new PassageLeg([new GeoPosition(0, 0), new GeoPosition(0, 1)], 5, SpeedKnots: -1)], Departure));
+            [Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 1)], 5, speed: -1)], Departure));
     }
 }
 

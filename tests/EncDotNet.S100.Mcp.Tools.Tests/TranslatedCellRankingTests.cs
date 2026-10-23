@@ -4,6 +4,7 @@ using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
@@ -28,13 +29,19 @@ public class TranslatedCellRankingTests
 
     private static RouteCheckResult Check(params LoadedDataset[] datasets)
     {
-        var legs = new List<RouteCheckLeg>
+        var leg = new PassageLeg
         {
-            new([new GeoPosition(0, 0), new GeoPosition(0, 0.1)], PortCrossTrackMeters: 50, StarboardCrossTrackMeters: 50),
+            Points = [new GeoPosition(0, 0), new GeoPosition(0, 0.1)],
+            PortLimit = Length.FromMetres(50),
+            StarboardLimit = Length.FromMetres(50),
         };
-        var engine = RouteCheckDataSources.FromDatasets(datasets)
-            .CreateEngine(new RouteCheckOptions { Depths = new RouteCheckDepths(10, 10) });
-        return engine.Check(legs, TestContext.Current.CancellationToken);
+        var settings = new RouteCheckSettings
+        {
+            At = DateTimeOffset.UnixEpoch,
+            SafetyContour = Depth.FromMetres(10),
+            SafetyDepth = Depth.FromMetres(10),
+        };
+        return RouteCheckDataSources.FromDatasets(datasets).CreateEngine().Check(new PassagePlan([leg]), settings, TestContext.Current.CancellationToken);
     }
 
     [Fact]

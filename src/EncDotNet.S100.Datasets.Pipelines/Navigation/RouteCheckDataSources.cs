@@ -65,14 +65,14 @@ public sealed record RouteCheckDataSources(IRouteChartSource Charts, IChartedDep
     /// <returns>The engine.</returns>
     public RouteCheckEngine CreateEngine(RouteCheckOptions? options = null) => new(Charts, options, Bathymetry);
 
-    /// <summary>Checks a route against <see cref="Areas"/>.</summary>
-    /// <param name="legs">The route's legs, with their cross-track limits.</param>
-    /// <param name="timing">The ETAs, or the time to judge at without them (usually the view time).</param>
+    /// <summary>Checks a plan against <see cref="Areas"/>.</summary>
+    /// <param name="plan">The plan: its legs with their cross-track limits and speeds, and its departure.</param>
+    /// <param name="settings">The corridor override and the time to judge at where the plan gives none.</param>
     /// <param name="options">Tuning, or <c>null</c> for <see cref="RouteAreaOptions.Default"/>.</param>
     /// <param name="cancellationToken">Cancels the check.</param>
     /// <returns>The matches and findings.</returns>
-    public RouteAreaResult CheckAreas(IReadOnlyList<RouteCheckLeg> legs, RouteWarningTiming timing, RouteAreaOptions? options = null, CancellationToken cancellationToken = default) =>
-        new RouteAreaCheck(options).Check(legs, Areas, timing, cancellationToken);
+    public RouteAreaResult CheckAreas(PassagePlan plan, RouteCheckSettings settings, RouteAreaOptions? options = null, CancellationToken cancellationToken = default) =>
+        new RouteAreaCheck(options).Check(plan, settings, Areas, cancellationToken);
 
     private sealed class NoAreas : IRouteAreaSource
     {

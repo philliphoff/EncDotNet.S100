@@ -94,7 +94,7 @@ public sealed partial class RouteCheckEngine
     {
         // The features reach DangerNearbyMeters beyond the corridor, and so
         // do the sweep's cells.
-        private void CheckDangers(IReadOnlyList<RouteChartFeature> features, RouteCheckDepths depths)
+        private void CheckDangers(IReadOnlyList<RouteChartFeature> features, LegDepths depths)
         {
             var nearby = Math.Max(0, _engine._options.DangerNearbyMeters);
             var areas = new List<RouteChartFeature>();
@@ -148,7 +148,7 @@ public sealed partial class RouteCheckEngine
 
         // Rules 1 and 2: whether the danger is one for these depths, and the
         // meta-line parts that say why, or null when it isn't.
-        private List<string>? Judge(RouteChartFeature danger, RouteCheckDepths depths, RouteCheckText text)
+        private List<string>? Judge(RouteChartFeature danger, LegDepths depths, RouteCheckText text)
         {
             if (danger.DepthMeters is not { } depth)
             {
