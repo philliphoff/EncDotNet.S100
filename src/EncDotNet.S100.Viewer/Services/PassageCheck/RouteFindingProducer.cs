@@ -58,7 +58,7 @@ internal interface IRouteFindingInputs
 /// One source of findings for a route's findings list (#953). The
 /// <see cref="RouteFindingsService"/> runs every producer for the checked
 /// route and merges what they find, sorted by group and then by distance
-/// (<see cref="PassageFindings.Sort"/>).
+/// (<see cref="RouteFinding.Sort"/>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -91,8 +91,9 @@ internal interface IRouteFindingProducer
 }
 
 /// <summary>
-/// The clearance findings (#905) as the first producer: built from the live
-/// clearance check, or from a one-off check of the route when there is none.
+/// The clearance findings (#905) as the first producer: the SDK's
+/// <see cref="ClearanceFindings"/> of the live clearance check, or of a
+/// one-off check of the route when there is none.
 /// Without a draft there is no clearance check, so it finds nothing.
 /// </summary>
 internal sealed class ClearanceFindingProducer : IRouteFindingProducer
@@ -129,9 +130,8 @@ internal sealed class ClearanceFindingProducer : IRouteFindingProducer
     }
 
     private static IReadOnlyList<RouteFinding> Build(PassageCheckSnapshot snapshot, RouteFindingRequest request) =>
-        PassageFindings.Build(
-            snapshot,
-            RouteFindingsService.ExpiredForecasts(request.Datasets, snapshot.Legs, request.Now),
-            request.DepthUnit,
-            request.TimeFormat);
+        ClearanceFindings.Build(
+            new PassagePlan(snapshot.Legs, snapshot.Result.Departure),
+            snapshot.Result,
+            new ViewerFindingFormatter(request.DepthUnit, request.TimeFormat, snapshot.Result.Departure));
 }

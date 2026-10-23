@@ -147,11 +147,11 @@ public sealed class RouteFindingProducerTests : IDisposable
             throw new InvalidOperationException("no chart");
     }
 
-    private static RouteFinding Finding(string id, RouteFindingGroup group, double distance, int leg = 1) => new(
+    private static RouteFinding Finding(string id, RouteFindingGroup group, double distance, int leg = 1) => TestFinding.Make(
         id,
         id[..id.LastIndexOf('.')],
         group,
-        RouteFindingSource.RouteCheck,
+        RouteFindingCategory.Chart,
         $"Finding {id}",
         $"Leg {leg + 1} → {leg + 2}",
         leg,
@@ -413,7 +413,7 @@ public sealed class RouteFindingProducerTests : IDisposable
             Finding("m.0", RouteFindingGroup.MustReview, 3000),
             Finding("c.0", RouteFindingGroup.Check, 1500),
             Finding("i.0", RouteFindingGroup.Info, 500),
-            new RouteFinding("u.0", "u", RouteFindingGroup.Info, RouteFindingSource.Data, "Unplaced", "", null, null, null)));
+            TestFinding.Make("u.0", "u", RouteFindingGroup.Info, RouteFindingCategory.Data, "Unplaced", "", null, null, null)));
         _ui.Run(() => f.Routes.IsCheckModeActive = true);
         await findings.WhenIdle();
         _ui.Run(() => findings.Select(findings.Findings.Single(x => x.Id == "c.0"), zoom: false));
@@ -479,7 +479,7 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.Equal(1, list.MustReview);
         Assert.Equal("1 to review", list.Summary);
         Assert.False(list.Stale);
-        Assert.Equal("route_check", list.Findings[0].Source);
+        Assert.Equal("chart", list.Findings[0].Category);
 
         var selected = Value(await new SelectFindingTool(f.Routes, invoker, f.Check, findings)
             .InvokeAsync(new SelectFindingRequest("route_check.warning.0", Zoom: false), ct));

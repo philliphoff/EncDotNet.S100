@@ -1,5 +1,5 @@
-using System.Globalization;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation;
 
@@ -40,10 +40,13 @@ public sealed partial class RouteCheckEngine
 
             if (shallow.Count > 0)
             {
-                var text = _findings.Text;
-                CheckAreas(shallow, RouteChartFeatureKind.DepthArea, RouteCheckCodes.CrossesSafetyContour, RouteCheckCodes.SafetyContourInCorridor,
-                    text.CrossesSafetyContour, text.SafetyContourInCorridor,
-                    f => [Format(text.LeastDepthFormat, f.DepthMeters!.Value), Format(text.BelowSafetyContourFormat, contour)]);
+                CheckAreas(shallow, RouteChartFeatureKind.DepthArea, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor,
+                    f => new ShoalDetails
+                    {
+                        LeastDepth = Depth.FromMetres(f.DepthMeters!.Value),
+                        ThresholdKind = RouteFindingThreshold.SafetyContour,
+                        Threshold = Depth.FromMetres(contour),
+                    });
             }
 
             return shallow;
@@ -78,24 +81,21 @@ public sealed partial class RouteCheckEngine
             }
 
             hits.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-            var text = _findings.Text;
             foreach (var group in Groups(hits, h => h.Distance, _engine._options.ShoalMergeGapMeters))
             {
                 var start = group[0].Distance;
                 var end = group[^1].Distance;
                 var least = group.MinBy(h => h.Feature.DepthMeters!.Value).Feature;
-                var details = new List<string>(3);
-                if (group.Count > 1)
-                {
-                    details.Add(Format(text.SoundingCountFormat, group.Count));
-                }
-
-                details.Add(Format(text.LeastDepthFormat, least.DepthMeters!.Value));
-                details.Add(Format(text.BelowSafetyDepthFormat, safetyDepth));
-                _findings.Add(RouteCheckCodes.SoundingsBelowSafetyDepth, RouteFindingGroup.Check, RouteFindingSource.RouteCheck,
-                    text.SoundingsBelowSafetyDepth, _legIndex, start,
+                _findings.Add(RouteFindingCodes.SoundingsBelowSafetyDepth, _legIndex, start,
                     group.Count == 1 ? RouteFindingLocation.Point(least.Points[0], start) : Location(start, end),
-                    least, least.FeatureType, end - start, details);
+                    least,
+                    new ShoalDetails
+                    {
+                        LeastDepth = Depth.FromMetres(least.DepthMeters!.Value),
+                        ThresholdKind = RouteFindingThreshold.SafetyDepth,
+                        Threshold = Depth.FromMetres(safetyDepth),
+                        SoundingCount = group.Count,
+                    });
             }
         }
 
@@ -183,14 +183,13 @@ public sealed partial class RouteCheckEngine
                 }
             }
 
-            var text = _findings.Text;
             var gap = Math.Max(options.ShoalMergeGapMeters, 2 * step);
             var crossings = new List<(double Start, double End)>();
             foreach (var group in Groups(onTrack, h => h.Distance, gap))
             {
                 var (start, end) = SampleSpan(group[0].Distance, group[^1].Distance, step);
                 crossings.Add((start, end));
-                AddBathymetry(RouteCheckCodes.CrossesS102Shoal, RouteFindingGroup.MustReview, text.CrossesS102Shoal, start, end, group, contour);
+                AddBathymetry(RouteFindingCodes.CrossesS102Shoal, start, end, group, contour);
             }
 
             // Off-track shoals next to a crossing are the same shoal seen from the limits.
@@ -198,19 +197,22 @@ public sealed partial class RouteCheckEngine
             foreach (var group in Groups(offTrack, h => h.Distance, gap))
             {
                 var (start, end) = SampleSpan(group[0].Distance, group[^1].Distance, step);
-                AddBathymetry(RouteCheckCodes.S102ShoalInCorridor, RouteFindingGroup.Check, text.S102ShoalInCorridor, start, end, group, contour);
+                AddBathymetry(RouteFindingCodes.S102ShoalInCorridor, start, end, group, contour);
             }
         }
 
-        private void AddBathymetry(string code, RouteFindingGroup group, string title, double start, double end, List<(double Distance, ChartedDepth Depth)> samples, double contour)
+        private void AddBathymetry(RouteFindingCode code, double start, double end, List<(double Distance, ChartedDepth Depth)> samples, double contour)
         {
-            var text = _findings.Text;
             var least = samples.MinBy(s => s.Depth.DepthMeters).Depth;
-            var cell = least.UncertaintyMeters is { } uncertainty
-                ? Format(text.S102CellWithUncertaintyFormat, least.DepthMeters, uncertainty, least.Reference, least.DatasetId)
-                : Format(text.S102CellFormat, least.DepthMeters, null, least.Reference, least.DatasetId);
-            _findings.Add(code, group, RouteFindingSource.RouteCheck, title, _legIndex, start, Location(start, end),
-                feature: null, featureType: null, end - start, [cell, Format(text.BelowSafetyContourFormat, contour)]);
+            _findings.Add(code, _legIndex, start, Location(start, end), feature: null, new ShoalDetails
+            {
+                LeastDepth = Depth.FromMetres(least.DepthMeters),
+                ThresholdKind = RouteFindingThreshold.SafetyContour,
+                Threshold = Depth.FromMetres(contour),
+                Uncertainty = least.UncertaintyMeters is { } uncertainty ? Depth.FromMetres(uncertainty) : null,
+                DatasetId = least.DatasetId,
+                Cell = least.Reference,
+            });
         }
 
         // A sample stands for half a step either side of it, within the leg.
@@ -242,9 +244,6 @@ public sealed partial class RouteCheckEngine
                 yield return group;
             }
         }
-
-        private string Format(string format, params object?[] args) =>
-            string.Format(_findings.Text.Culture ?? CultureInfo.CurrentCulture, format, args);
     }
 
     // How many samples the S-102 check takes across a corridor at most.

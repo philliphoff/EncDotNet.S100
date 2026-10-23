@@ -1896,7 +1896,6 @@ internal static partial class Strings
     public static string RouteCheck_ToPortFormat => Get(nameof(RouteCheck_ToPortFormat));
     public static string RouteCheck_ToStarboardFormat => Get(nameof(RouteCheck_ToStarboardFormat));
     public static string RouteCheck_OnTrack => Get(nameof(RouteCheck_OnTrack));
-    public static string RouteCheck_DepthFormat => Get(nameof(RouteCheck_DepthFormat));
     public static string RouteCheck_LeastDepthFormat => Get(nameof(RouteCheck_LeastDepthFormat));
     public static string RouteCheck_SoundingCountFormat => Get(nameof(RouteCheck_SoundingCountFormat));
     public static string RouteCheck_S102CellWithUncertaintyFormat => Get(nameof(RouteCheck_S102CellWithUncertaintyFormat));
@@ -1942,9 +1941,6 @@ internal static partial class Strings
     public static string Findings_DatumMismatch => Get(nameof(Findings_DatumMismatch));
     public static string Findings_NoChartedDepth => Get(nameof(Findings_NoChartedDepth));
     public static string Findings_NoDepthSource => Get(nameof(Findings_NoDepthSource));
-    public static string Findings_ForecastExpired => Get(nameof(Findings_ForecastExpired));
-    public static string Findings_ForecastsExpiredFormat => Get(nameof(Findings_ForecastsExpiredFormat));
-    public static string Findings_ForecastExpiredMetaFormat => Get(nameof(Findings_ForecastExpiredMetaFormat));
     public static string Findings_AndMoreFormat => Get(nameof(Findings_AndMoreFormat));
     public static string Findings_ZoomedChip => Get(nameof(Findings_ZoomedChip));
     public static string Findings_ChipLegFormat => Get(nameof(Findings_ChipLegFormat));

@@ -1,4 +1,3 @@
-using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
@@ -27,10 +26,7 @@ public class RouteCheckDepthsTests
         SafetyDepth = Depth.FromMetres(10),
     };
 
-    private static readonly RouteCheckOptions Options = new()
-    {
-        Text = RouteCheckText.Default with { Culture = CultureInfo.InvariantCulture },
-    };
+    private static readonly RouteCheckOptions Options = new();
 
     private static RouteCheckResult Check(IReadOnlyList<RouteChartFeature> features, IChartedDepthSource? bathymetry = null, params PassageLeg[] legs) =>
         new RouteCheckEngine(new FakeCharts([Harbour], features), Options, bathymetry)
@@ -64,24 +60,24 @@ public class RouteCheckDepthsTests
     {
         var finding = Assert.Single(Check([Danger("Wreck", "5", 0.004, 0, 3.2)]).Findings);
 
-        Assert.Equal(RouteCheckCodes.DangerInCorridor, finding.Code);
+        Assert.Equal(RouteFindingCodes.DangerInCorridor, finding.Code);
         Assert.Equal("route_check.danger_in_corridor.0", finding.Id);
         Assert.Equal(RouteFindingGroup.MustReview, finding.Group);
-        Assert.Equal(RouteFindingSource.RouteCheck, finding.Source);
+        Assert.Equal(RouteFindingCategory.Depth, finding.Category);
         Assert.Equal("Wreck in the corridor", finding.Title);
         Assert.Equal("Leg 1 → 2 · Wreck · on the track · 3.2 m · shallower than safety depth 10 m", finding.Meta);
-        Assert.Equal(0.004 * M, finding.DistanceMeters!.Value, 3);
+        Assert.Equal(0.004 * M, finding.Distance!.Value.TotalMetres, 3);
         Assert.True(finding.Location!.IsPoint);
         Assert.Equal(0.004, finding.Location.Path[0].Longitude, 9);
-        Assert.Equal(new RouteFindingFeature("101HARBOUR", "5"), finding.Feature);
+        Assert.Equal(new RouteFindingFeature("101HARBOUR", "5") { FeatureType = "Wreck" }, finding.Feature);
     }
 
     [Theory]
     // Port limit 50 m, then 185,2 m nearby.
-    [InlineData(40.0, RouteCheckCodes.DangerInCorridor, "40 m to port")]
-    [InlineData(-45.0, RouteCheckCodes.DangerInCorridor, "45 m to starboard")]
-    [InlineData(120.0, RouteCheckCodes.DangerNearRoute, "120 m to port")]
-    [InlineData(-230.0, RouteCheckCodes.DangerNearRoute, "230 m to starboard")]
+    [InlineData(40.0, "route_check.danger_in_corridor", "40 m to port")]
+    [InlineData(-45.0, "route_check.danger_in_corridor", "45 m to starboard")]
+    [InlineData(120.0, "route_check.danger_near_route", "120 m to port")]
+    [InlineData(-230.0, "route_check.danger_near_route", "230 m to starboard")]
     [InlineData(240.0, null, null)]
     public void Dangers_are_ranked_by_their_true_distance_from_the_centreline(double northMeters, string? code, string? where)
     {
@@ -94,11 +90,11 @@ public class RouteCheckDepthsTests
         }
 
         var finding = Assert.Single(findings);
-        Assert.Equal(code, finding.Code);
-        Assert.Equal(code == RouteCheckCodes.DangerInCorridor ? RouteFindingGroup.MustReview : RouteFindingGroup.Check, finding.Group);
-        Assert.Equal(code == RouteCheckCodes.DangerInCorridor ? "Obstruction in the corridor" : "Obstruction near the route", finding.Title);
+        Assert.Equal(code, finding.Code.Value);
+        Assert.Equal(code == RouteFindingCodes.DangerInCorridor.Value ? RouteFindingGroup.MustReview : RouteFindingGroup.Check, finding.Group);
+        Assert.Equal(code == RouteFindingCodes.DangerInCorridor.Value ? "Obstruction in the corridor" : "Obstruction near the route", finding.Title);
         Assert.Contains($" · {where} · ", finding.Meta, StringComparison.Ordinal);
-        Assert.Equal(0.005 * M, finding.DistanceMeters!.Value, 1);
+        Assert.Equal(0.005 * M, finding.Distance!.Value.TotalMetres, 1);
     }
 
     [Fact]
@@ -107,7 +103,7 @@ public class RouteCheckDepthsTests
         // 40 m to port: outside a 30 m port limit, so only nearby.
         var finding = Assert.Single(Check([Danger("Wreck", "1", 0.005, 40, 1)], legs: Fixture.Leg(East.Points, port: 30, starboard: 200)).Findings);
 
-        Assert.Equal(RouteCheckCodes.DangerNearRoute, finding.Code);
+        Assert.Equal(RouteFindingCodes.DangerNearRoute, finding.Code);
     }
 
     [Fact]
@@ -165,7 +161,7 @@ public class RouteCheckDepthsTests
 
         var findings = Check([shallow, deep, Danger("Wreck", "1", 0.005, 120, 3), Danger("Obstruction", "2", 0.005, -120, 3)]).Findings;
 
-        var danger = Assert.Single(findings, f => f.Code is RouteCheckCodes.DangerInCorridor or RouteCheckCodes.DangerNearRoute);
+        var danger = Assert.Single(findings, f => f.Code == RouteFindingCodes.DangerInCorridor || f.Code == RouteFindingCodes.DangerNearRoute);
         Assert.Equal("2", danger.Feature!.FeatureId);
     }
 
@@ -204,13 +200,13 @@ public class RouteCheckDepthsTests
             Area(RouteChartFeatureKind.DepthArea, "4", 15, 0.007, 0.01),
         ]).Findings;
 
-        var crossing = Assert.Single(findings, f => f.Code == RouteCheckCodes.CrossesSafetyContour);
+        var crossing = Assert.Single(findings, f => f.Code == RouteFindingCodes.CrossesSafetyContour);
         Assert.Equal(RouteFindingGroup.MustReview, crossing.Group);
         Assert.Equal(0.002 * M, crossing.Location!.StartDistanceMeters, 3);
         Assert.Equal(0.007 * M, crossing.Location.EndDistanceMeters, 3);
         Assert.Equal("1", crossing.Feature!.FeatureId);
         Assert.EndsWith(" · DepthArea · least -1.0 m · shallower than safety contour 10 m", crossing.Meta, StringComparison.Ordinal);
-        Assert.DoesNotContain(findings, f => f.Code == RouteCheckCodes.SafetyContourInCorridor);
+        Assert.DoesNotContain(findings, f => f.Code == RouteFindingCodes.SafetyContourInCorridor);
     }
 
     [Fact]
@@ -219,7 +215,7 @@ public class RouteCheckDepthsTests
         var findings = Check([Area(RouteChartFeatureKind.DepthArea, "1", 5, 0.004, 0.006, south: 30 / M, north: 0.002)]).Findings;
 
         var finding = Assert.Single(findings);
-        Assert.Equal(RouteCheckCodes.SafetyContourInCorridor, finding.Code);
+        Assert.Equal(RouteFindingCodes.SafetyContourInCorridor, finding.Code);
         Assert.Equal(RouteFindingGroup.Check, finding.Group);
         Assert.Contains("least 5.0 m · shallower than safety contour 10 m", finding.Meta, StringComparison.Ordinal);
     }
@@ -244,7 +240,7 @@ public class RouteCheckDepthsTests
             Sounding("7", 0.005, 0, 10.0),
             Sounding("7", 0.0095, 0, 1.0),
             Area(RouteChartFeatureKind.DepthArea, "8", 2, 0.009, 0.0098),
-        ]).Findings.Where(f => f.Code == RouteCheckCodes.SoundingsBelowSafetyDepth).ToList();
+        ]).Findings.Where(f => f.Code == RouteFindingCodes.SoundingsBelowSafetyDepth).ToList();
 
         Assert.Equal(2, findings.Count);
         Assert.All(findings, f => Assert.Equal(RouteFindingGroup.Check, f.Group));
@@ -270,7 +266,7 @@ public class RouteCheckDepthsTests
 
         var findings = Check([], bathymetry: bathymetry).Findings;
 
-        Assert.Equal([RouteCheckCodes.CrossesS102Shoal, RouteCheckCodes.S102ShoalInCorridor], findings.Select(f => f.Code));
+        Assert.Equal([RouteFindingCodes.CrossesS102Shoal, RouteFindingCodes.S102ShoalInCorridor], findings.Select(f => f.Code));
         var crossing = findings[0];
         Assert.Equal(RouteFindingGroup.MustReview, crossing.Group);
         Assert.Null(crossing.Feature);

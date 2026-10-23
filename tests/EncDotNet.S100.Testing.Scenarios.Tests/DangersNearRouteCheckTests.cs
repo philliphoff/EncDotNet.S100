@@ -73,7 +73,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
         var findings = Check();
 
         // The harbour cell contours at 25 m, from 5 m to 10 m on the shoal.
-        var crossing = Assert.Single(findings, f => f.Code == RouteCheckCodes.CrossesSafetyContour);
+        var crossing = Assert.Single(findings, f => f.Code == RouteFindingCodes.CrossesSafetyContour);
         Assert.Equal(RouteFindingGroup.MustReview, crossing.Group);
         Assert.Equal(Harbour, crossing.Feature!.DatasetId);
         Assert.Equal(shoal.Leg, crossing.LegIndex);
@@ -82,7 +82,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
         Assert.Contains("· DepthArea · least 5.0 m · shallower than safety contour 10 m", crossing.Meta, StringComparison.Ordinal);
 
         // The S-102 surface's 50 m cells.
-        var s102 = Assert.Single(findings, f => f.Code == RouteCheckCodes.CrossesS102Shoal);
+        var s102 = Assert.Single(findings, f => f.Code == RouteFindingCodes.CrossesS102Shoal);
         Assert.Equal(RouteFindingGroup.MustReview, s102.Group);
         Assert.InRange(s102.Location!.StartDistanceMeters, shoal.StartMeters - 60, shoal.StartMeters + 60);
         Assert.InRange(s102.Location.EndDistanceMeters, shoal.EndMeters - 60, shoal.EndMeters + 60);
@@ -93,7 +93,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
         // Nothing but the dangers and the shoal.
         Assert.All(findings, f => Assert.Contains(f.Code, new[]
         {
-            RouteCheckCodes.DangerInCorridor, RouteCheckCodes.DangerNearRoute, RouteCheckCodes.CrossesSafetyContour, RouteCheckCodes.CrossesS102Shoal,
+            RouteFindingCodes.DangerInCorridor, RouteFindingCodes.DangerNearRoute, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.CrossesS102Shoal,
         }));
     }
 
@@ -101,7 +101,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     public void Shoal_soundings_count_only_shallower_than_the_safety_depth_and_inside_the_limits()
     {
         // At 14 m the route's 13–14 m soundings count; at 10 m none does.
-        var findings = Check(safetyDepth: 14).Where(f => f.Code == RouteCheckCodes.SoundingsBelowSafetyDepth).ToList();
+        var findings = Check(safetyDepth: 14).Where(f => f.Code == RouteFindingCodes.SoundingsBelowSafetyDepth).ToList();
 
         Assert.NotEmpty(findings);
         Assert.All(findings, f =>
@@ -110,7 +110,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
             Assert.Equal(Harbour, f.Feature!.DatasetId);
             Assert.Contains("shallower than safety depth 14 m", f.Meta, StringComparison.Ordinal);
         });
-        Assert.DoesNotContain(Check(), f => f.Code == RouteCheckCodes.SoundingsBelowSafetyDepth);
+        Assert.DoesNotContain(Check(), f => f.Code == RouteFindingCodes.SoundingsBelowSafetyDepth);
     }
 
     // #947: the coastal cell charts a wreck the harbour cell doesn't, and
@@ -127,11 +127,11 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
         Assert.DoesNotContain(withBoth, f => Near(f, coastalWreck));
 
         var wreck = Assert.Single(coastalOnly, f => Near(f, coastalWreck));
-        Assert.Equal(RouteCheckCodes.DangerInCorridor, wreck.Code);
+        Assert.Equal(RouteFindingCodes.DangerInCorridor, wreck.Code);
         Assert.Equal(Coastal, wreck.Feature!.DatasetId);
 
-        var fine = withBoth.Single(f => f.Code == RouteCheckCodes.CrossesSafetyContour).Location!;
-        var coarse = coastalOnly.Single(f => f.Code == RouteCheckCodes.CrossesSafetyContour).Location!;
+        var fine = withBoth.Single(f => f.Code == RouteFindingCodes.CrossesSafetyContour).Location!;
+        var coarse = coastalOnly.Single(f => f.Code == RouteFindingCodes.CrossesSafetyContour).Location!;
         Assert.True(coarse.EndDistanceMeters - coarse.StartDistanceMeters > fine.EndDistanceMeters - fine.StartDistanceMeters + 100,
             $"The coastal cell's shoal is {coarse.EndDistanceMeters - coarse.StartDistanceMeters:0} m long and the harbour cell's {fine.EndDistanceMeters - fine.StartDistanceMeters:0} m.");
     }
@@ -140,18 +140,18 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     // with its side and threshold in the meta line; there are no others.
     private List<RouteFinding> AssertDangers(IReadOnlyList<RouteHazardTruth> truth, IReadOnlyList<RouteFinding> findings)
     {
-        var dangers = findings.Where(f => f.Code is RouteCheckCodes.DangerInCorridor or RouteCheckCodes.DangerNearRoute).ToList();
+        var dangers = findings.Where(f => f.Code == RouteFindingCodes.DangerInCorridor || f.Code == RouteFindingCodes.DangerNearRoute).ToList();
         var expected = truth.Where(t => t.Expected).ToList();
         Assert.Equal(expected.Count, dangers.Count);
         foreach (var t in expected)
         {
             var finding = Assert.Single(dangers, f => Near(f, t.Hazard));
             var inCorridor = t.Relation == HazardRouteRelation.InCorridor;
-            Assert.Equal(inCorridor ? RouteCheckCodes.DangerInCorridor : RouteCheckCodes.DangerNearRoute, finding.Code);
+            Assert.Equal(inCorridor ? RouteFindingCodes.DangerInCorridor : RouteFindingCodes.DangerNearRoute, finding.Code);
             Assert.Equal(inCorridor ? RouteFindingGroup.MustReview : RouteFindingGroup.Check, finding.Group);
             Assert.Equal(Harbour, finding.Feature!.DatasetId);
             Assert.Equal(t.Leg, finding.LegIndex);
-            Assert.InRange(finding.DistanceMeters!.Value, t.DistanceMeters - DistanceTolerance, t.DistanceMeters + DistanceTolerance);
+            Assert.InRange(finding.Distance!.Value.TotalMetres, t.DistanceMeters - DistanceTolerance, t.DistanceMeters + DistanceTolerance);
             Assert.Contains(" · " + t.Hazard.FeatureType + " · ", finding.Meta, StringComparison.Ordinal);
             var side = Math.Abs(t.OffsetMeters) < 0.5 ? "on the track"
                 : string.Format(CultureInfo.InvariantCulture, t.OffsetMeters > 0 ? "{0:0} m to port" : "{0:0} m to starboard", Math.Abs(t.OffsetMeters));
@@ -185,7 +185,6 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
             : CatalogRouteCheckSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)), new ProjNetCrsTransformFactory());
         var options = new RouteCheckOptions
         {
-            Text = RouteCheckText.Default with { Culture = CultureInfo.InvariantCulture },
         };
         return new RouteCheckEngine(sources.Charts!, options, sources.Depth).Check(new PassagePlan(Legs(withDraft)), PassageLegs.Settings(new DateTimeOffset(Spec.Departure, TimeSpan.Zero), Contour, safetyDepth), TestContext.Current.CancellationToken).Findings;
     }

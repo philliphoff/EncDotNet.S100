@@ -2,53 +2,9 @@ using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation;
-
-/// <summary>The codes of the findings <see cref="RouteAreaCheck"/> produces.</summary>
-public static class RouteAreaCodes
-{
-    /// <summary>
-    /// The track enters an S-101 area whose <c>restriction</c> is entry
-    /// prohibited (7) or entry restricted (8), in force while the vessel is
-    /// there. MUST REVIEW.
-    /// </summary>
-    public const string EntersProhibitedArea = "route_check.enters_prohibited_area";
-
-    /// <summary>Such an area reaches inside the cross-track limits, but the track doesn't enter it. CHECK.</summary>
-    public const string ProhibitedAreaInCorridor = "route_check.prohibited_area_in_corridor";
-
-    /// <summary>
-    /// An S-101 <c>RestrictedArea</c> or <c>MilitaryPracticeArea</c> with
-    /// other restrictions. CHECK, or INFO when its restrictions don't bear on
-    /// a passage (such as fishing or anchoring prohibited) or it only
-    /// reaches inside the cross-track limits.
-    /// </summary>
-    public const string RestrictedArea = "route_check.restricted_area";
-
-    /// <summary>An S-101 <c>CautionArea</c>. CHECK, or INFO when it only reaches inside the cross-track limits.</summary>
-    public const string CautionArea = "route_check.caution_area";
-
-    /// <summary>
-    /// An S-101 traffic area: a separation zone, precautionary area or
-    /// submarine transit lane (CHECK), or an inshore traffic zone (INFO).
-    /// INFO when it only reaches inside the cross-track limits.
-    /// </summary>
-    public const string TrafficArea = "route_check.traffic_area";
-
-    /// <summary>An S-101 <c>AnchorageArea</c>. CHECK, or INFO when it only reaches inside the cross-track limits.</summary>
-    public const string AnchorageArea = "route_check.anchorage_area";
-
-    /// <summary>
-    /// An S-122 <c>MarineProtectedArea</c> or <c>RestrictedArea</c>. CHECK,
-    /// or INFO when its restrictions don't bear on a passage or it only
-    /// reaches inside the cross-track limits.
-    /// </summary>
-    public const string ProtectedArea = "route_check.protected_area";
-
-    /// <summary>The track or corridor meets an area that isn't in force while the vessel is there. INFO.</summary>
-    public const string AreaNotInForce = "route_check.area_not_in_force";
-}
 
 /// <summary>The product an area comes from.</summary>
 public enum RouteAreaProduct
@@ -225,137 +181,8 @@ public sealed record RouteAreaOptions
     /// <summary>The most pieces per leg; a longer leg uses longer pieces. Default 20 000.</summary>
     public int MaxSegmentsPerLeg { get; init; } = 20_000;
 
-    /// <summary>The wording of the findings. Hosts with their own resources pass their own.</summary>
-    public RouteAreaText Text { get; init; } = RouteAreaText.Default;
-}
-
-/// <summary>The wording of the area findings: titles, the parts of the meta line, and the code labels.</summary>
-public sealed record RouteAreaText
-{
-    /// <summary>The English wording, formatted with the current culture, times in UTC.</summary>
-    public static RouteAreaText Default { get; } = new();
-
-    /// <summary>Title when the track enters an area where entry is prohibited or restricted ({0}: the area's name or kind).</summary>
-    public string EntersFormat { get; init; } = "Enters {0}";
-
-    /// <summary>Title when the track crosses any other area ({0}: the area's name or kind).</summary>
-    public string CrossesFormat { get; init; } = "Crosses {0}";
-
-    /// <summary>Title when the area only reaches inside the cross-track limits ({0}: the area's name or kind).</summary>
-    public string InCorridorFormat { get; init; } = "{0} inside the cross-track limits";
-
-    /// <summary>Title when the area isn't in force while the vessel is there, judged at ETAs ({0}: the area's name or kind).</summary>
-    public string NotInForceFormat { get; init; } = "{0} not in force during the passage";
-
-    /// <summary>Title when the area isn't in force at the fallback time ({0}: the area's name or kind; {1}: the time).</summary>
-    public string NotInForceAtFormat { get; init; } = "{0} not in force at {1}";
-
-    /// <summary>A restricted area, in a title or meta line.</summary>
-    public string RestrictedArea { get; init; } = "restricted area";
-
-    /// <summary>A military practice area.</summary>
-    public string MilitaryPracticeArea { get; init; } = "military practice area";
-
-    /// <summary>A caution area.</summary>
-    public string CautionArea { get; init; } = "caution area";
-
-    /// <summary>An anchorage area.</summary>
-    public string AnchorageArea { get; init; } = "anchorage area";
-
-    /// <summary>A traffic separation zone.</summary>
-    public string SeparationZone { get; init; } = "traffic separation zone";
-
-    /// <summary>A precautionary area.</summary>
-    public string PrecautionaryArea { get; init; } = "precautionary area";
-
-    /// <summary>An inshore traffic zone.</summary>
-    public string InshoreTrafficZone { get; init; } = "inshore traffic zone";
-
-    /// <summary>A submarine transit lane.</summary>
-    public string SubmarineTransitLane { get; init; } = "submarine transit lane";
-
-    /// <summary>A marine protected area.</summary>
-    public string MarineProtectedArea { get; init; } = "marine protected area";
-
-    /// <summary>An IUCN category of a marine protected area ({0}: the category, such as <c>IV</c>).</summary>
-    public string IucnCategoryFormat { get; init; } = "IUCN {0}";
-
-    /// <summary>A code with no label ({0}: the code).</summary>
-    public string UnknownCodeFormat { get; init; } = "code {0}";
-
-    /// <summary>A season or date range with both ends ({0} start, {1} end).</summary>
-    public string RangeFormat { get; init; } = "{0}–{1}";
-
-    /// <summary>A date range with no end ({0} start).</summary>
-    public string FromFormat { get; init; } = "from {0}";
-
-    /// <summary>A date range with no start ({0} end).</summary>
-    public string UntilFormat { get; init; } = "until {0}";
-
-    /// <summary>Joins the parts of a meta line.</summary>
-    public string Separator { get; init; } = " · ";
-
-    /// <summary>Joins several restrictions or categories.</summary>
-    public string ListSeparator { get; init; } = ", ";
-
-    /// <summary>A leg, from its first waypoint number ({0}) to its last ({1}).</summary>
-    public string LegFormat { get; init; } = "Leg {0} → {1}";
-
-    /// <summary>
-    /// Labels of the <c>restriction</c> codes (S-101 and S-122 Feature
-    /// Catalogues); a code without one reads as <see cref="UnknownCodeFormat"/>.
-    /// </summary>
-    public IReadOnlyDictionary<int, string> Restrictions { get; init; } = RouteAreaLabels.Restrictions;
-
-    /// <summary>Labels of the <c>categoryOfRestrictedArea</c> codes.</summary>
-    public IReadOnlyDictionary<int, string> RestrictedAreaCategories { get; init; } = RouteAreaLabels.RestrictedAreaCategories;
-
-    /// <summary>Labels of the <c>categoryOfMilitaryPracticeArea</c> codes.</summary>
-    public IReadOnlyDictionary<int, string> MilitaryPracticeAreaCategories { get; init; } = RouteAreaLabels.MilitaryPracticeAreaCategories;
-
-    /// <summary>Labels of the <c>categoryOfAnchorage</c> codes.</summary>
-    public IReadOnlyDictionary<int, string> AnchorageCategories { get; init; } = RouteAreaLabels.AnchorageCategories;
-
-    /// <summary>Formats an ETA; <c>null</c> writes it in UTC as <c>yyyy-MM-dd HH:mm UTC</c>.</summary>
-    public Func<DateTimeOffset, string>? FormatTime { get; init; }
-
-    /// <summary>Formats a day of a fixed date range; <c>null</c> writes <c>d MMM yyyy</c> in <see cref="Culture"/>.</summary>
-    public Func<DateOnly, string>? FormatDate { get; init; }
-
-    /// <summary>Formats a day of a season (month, day); <c>null</c> writes <c>d MMM</c> in <see cref="Culture"/>.</summary>
-    public Func<int, int, string>? FormatDayOfYear { get; init; }
-
-    /// <summary>The culture text is formatted in, or <c>null</c> for the current culture.</summary>
-    public CultureInfo? Culture { get; init; }
-
-    internal CultureInfo EffectiveCulture => Culture ?? CultureInfo.CurrentCulture;
-
-    internal string Time(DateTimeOffset time) =>
-        FormatTime?.Invoke(time) ?? time.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
-
-    internal string Date(DateOnly date) =>
-        FormatDate?.Invoke(date) ?? date.ToString("d MMM yyyy", EffectiveCulture);
-
-    internal string DayOfYear(int month, int day) =>
-        FormatDayOfYear?.Invoke(month, day) ?? new DateTime(2000, month, day).ToString("d MMM", EffectiveCulture);
-
-    internal string Format(string format, params object?[] args) => string.Format(EffectiveCulture, format, args);
-
-    internal string KindLabel(RouteAreaKind kind) => kind switch
-    {
-        RouteAreaKind.RestrictedArea => RestrictedArea,
-        RouteAreaKind.MilitaryPracticeArea => MilitaryPracticeArea,
-        RouteAreaKind.CautionArea => CautionArea,
-        RouteAreaKind.AnchorageArea => AnchorageArea,
-        RouteAreaKind.SeparationZone => SeparationZone,
-        RouteAreaKind.PrecautionaryArea => PrecautionaryArea,
-        RouteAreaKind.InshoreTrafficZone => InshoreTrafficZone,
-        RouteAreaKind.SubmarineTransitLane => SubmarineTransitLane,
-        _ => MarineProtectedArea,
-    };
-
-    internal string Label(IReadOnlyDictionary<int, string> labels, int code) =>
-        labels.TryGetValue(code, out var label) ? label : Format(UnknownCodeFormat, code);
+    /// <summary>Renders the findings' titles and meta lines. Hosts with their own resources pass their own.</summary>
+    public RouteFindingFormatter Formatter { get; init; } = RouteFindingFormatter.Default;
 }
 
 /// <summary>
@@ -478,7 +305,7 @@ public static class RouteAreaLabels
 /// year. An area with both must be in both; a date that can't be read
 /// counts as open, so an area is never dropped for want of a date. An area
 /// not in force while the vessel is there stays in the list as INFO
-/// <see cref="RouteAreaCodes.AreaNotInForce"/> rather than being dropped, as
+/// <see cref="RouteFindingCodes.AreaNotInForce"/> rather than being dropped, as
 /// S-124 warnings that aren't in force are (#957).
 /// </para>
 /// <para>
@@ -722,14 +549,7 @@ public sealed class RouteAreaCheck
             }
         }
 
-        var sorted = findings
-            .Select((f, i) => (f, i))
-            .OrderBy(x => x.f.Group)
-            .ThenBy(x => x.f.DistanceMeters ?? double.MaxValue)
-            .ThenBy(x => x.i)
-            .Select(x => x.f)
-            .ToList();
-        return new RouteAreaResult(matches, sorted);
+        return new RouteAreaResult(matches, RouteFinding.Sort(findings));
     }
 
     private RouteAreaMatch Match(RouteArea area, int index, RouteCorridor.Accumulator acc, RouteCorridor.Track track, List<RouteChartCell> cells, PassageSchedule schedule)
@@ -763,42 +583,49 @@ public sealed class RouteAreaCheck
         var until = atEta ? endEta!.Value : schedule.Departure;
         var inForce = InForceOver(area, from, until);
 
-        var text = _options.Text;
-        var subject = Subject(area, text);
-        string code, title;
+        RouteFindingCode code;
         RouteFindingGroup group;
         if (!inForce)
         {
-            (code, group) = (RouteAreaCodes.AreaNotInForce, RouteFindingGroup.Info);
-            title = atEta ? text.Format(text.NotInForceFormat, subject) : text.Format(text.NotInForceAtFormat, subject, text.Time(schedule.Departure));
+            (code, group) = (RouteFindingCodes.AreaNotInForce, RouteFindingGroup.Info);
         }
         else
         {
             (code, group) = Classify(area);
-            var entersProhibited = code == RouteAreaCodes.EntersProhibitedArea;
             if (relation == RouteAreaRelation.InCorridor)
             {
-                code = entersProhibited ? RouteAreaCodes.ProhibitedAreaInCorridor : code;
+                code = code == RouteFindingCodes.EntersProhibitedArea ? RouteFindingCodes.ProhibitedAreaInCorridor : code;
                 group = group == RouteFindingGroup.MustReview ? RouteFindingGroup.Check : RouteFindingGroup.Info;
-                title = text.Format(text.InCorridorFormat, subject);
-            }
-            else
-            {
-                title = text.Format(entersProhibited ? text.EntersFormat : text.CrossesFormat, subject);
             }
         }
 
-        var finding = new RouteFinding(
-            area.Feature is { } feature ? $"{code}.{feature.DatasetId}/{feature.FeatureId}" : $"{code}.{index}",
+        var finding = _options.Formatter.Render(new RouteFinding(
+            area.Feature is { } feature ? $"{code.Value}.{feature.DatasetId}/{feature.FeatureId}" : $"{code.Value}.{index}",
             code,
-            group,
-            RouteFindingSource.RouteCheck,
-            Sentence(title.Trim(), text.EffectiveCulture),
-            Meta(area, startLeg, atEta ? (from, until) : null, text),
-            startLeg,
-            start,
-            RouteCorridor.Location(track, start, end),
-            area.Feature);
+            group)
+        {
+            LegIndex = startLeg,
+            Distance = Length.FromMetres(start),
+            Location = RouteCorridor.Location(track, start, end),
+            Feature = area.Feature,
+            Details = new AreaDetails
+            {
+                Product = area.Product,
+                Kind = area.Kind,
+                FeatureType = area.FeatureType,
+                Name = area.Name,
+                Restrictions = area.Restrictions,
+                Categories = area.Categories,
+                CategoryOfMarineProtectedArea = area.CategoryOfMarineProtectedArea,
+                FixedDateRange = area.FixedDateRange,
+                PeriodicDateRanges = area.PeriodicDateRanges,
+                Relation = relation,
+                InForce = inForce,
+                From = from,
+                Until = until,
+                AtEta = atEta,
+            },
+        });
         return new RouteAreaMatch(area, relation, startLeg, start, end, inForce, finding);
     }
 
@@ -806,30 +633,30 @@ public sealed class RouteAreaCheck
         new(area, RouteAreaRelation.Off, null, double.NaN, double.NaN, false, null);
 
     // The code and group of an area the track enters, while it is in force.
-    private static (string Code, RouteFindingGroup Group) Classify(RouteArea area)
+    private static (RouteFindingCode Code, RouteFindingGroup Group) Classify(RouteArea area)
     {
         var entry = area.Restrictions.Any(r => r is 7 or 8);
         var bears = area.Restrictions.Count == 0 || area.Restrictions.Any(PassageRestrictions.Contains) || entry;
         if (area.Product == RouteAreaProduct.S122)
         {
-            return (RouteAreaCodes.ProtectedArea, bears ? RouteFindingGroup.Check : RouteFindingGroup.Info);
+            return (RouteFindingCodes.ProtectedArea, bears ? RouteFindingGroup.Check : RouteFindingGroup.Info);
         }
 
         if (entry)
         {
-            return (RouteAreaCodes.EntersProhibitedArea, RouteFindingGroup.MustReview);
+            return (RouteFindingCodes.EntersProhibitedArea, RouteFindingGroup.MustReview);
         }
 
         return area.Kind switch
         {
-            RouteAreaKind.RestrictedArea => (RouteAreaCodes.RestrictedArea,
+            RouteAreaKind.RestrictedArea => (RouteFindingCodes.RestrictedArea,
                 bears || area.Categories.Any(HazardCategories.Contains) ? RouteFindingGroup.Check : RouteFindingGroup.Info),
-            RouteAreaKind.MilitaryPracticeArea => (RouteAreaCodes.RestrictedArea, RouteFindingGroup.Check),
-            RouteAreaKind.CautionArea => (RouteAreaCodes.CautionArea, RouteFindingGroup.Check),
-            RouteAreaKind.AnchorageArea => (RouteAreaCodes.AnchorageArea, RouteFindingGroup.Check),
-            RouteAreaKind.InshoreTrafficZone => (RouteAreaCodes.TrafficArea, RouteFindingGroup.Info),
-            RouteAreaKind.MarineProtectedArea => (RouteAreaCodes.ProtectedArea, bears ? RouteFindingGroup.Check : RouteFindingGroup.Info),
-            _ => (RouteAreaCodes.TrafficArea, RouteFindingGroup.Check),
+            RouteAreaKind.MilitaryPracticeArea => (RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check),
+            RouteAreaKind.CautionArea => (RouteFindingCodes.CautionArea, RouteFindingGroup.Check),
+            RouteAreaKind.AnchorageArea => (RouteFindingCodes.AnchorageArea, RouteFindingGroup.Check),
+            RouteAreaKind.InshoreTrafficZone => (RouteFindingCodes.TrafficArea, RouteFindingGroup.Info),
+            RouteAreaKind.MarineProtectedArea => (RouteFindingCodes.ProtectedArea, bears ? RouteFindingGroup.Check : RouteFindingGroup.Info),
+            _ => (RouteFindingCodes.TrafficArea, RouteFindingGroup.Check),
         };
     }
 
@@ -840,99 +667,6 @@ public sealed class RouteAreaCheck
         return !covering.Contains(cell, ReferenceEqualityComparer.Instance)
             || CellScaleRanking.FinestBand(covering, c => c.RankingScale).Contains(cell, ReferenceEqualityComparer.Instance);
     }
-
-    private static string Subject(RouteArea area, RouteAreaText text) =>
-        string.IsNullOrWhiteSpace(area.Name) ? text.KindLabel(area.Kind) : area.Name.Trim();
-
-    // "Leg 1 → 2 · S-122 marine protected area · speed restricted · seal sanctuary · IUCN IV · 1 Mar–31 May · 06:11–06:14"
-    private static string Meta(RouteArea area, int leg, (DateTimeOffset From, DateTimeOffset Until)? at, RouteAreaText text)
-    {
-        var parts = new List<string>
-        {
-            text.Format(text.LegFormat, leg + 1, leg + 2),
-            area.Product == RouteAreaProduct.S122 ? "S-122" : "S-101",
-        };
-        if (!string.IsNullOrWhiteSpace(area.Name))
-        {
-            parts[^1] += " " + text.KindLabel(area.Kind);
-        }
-
-        if (area.Restrictions.Count > 0)
-        {
-            parts.Add(string.Join(text.ListSeparator, area.Restrictions.Select(r => text.Label(text.Restrictions, r))));
-        }
-
-        var categories = area.Kind switch
-        {
-            RouteAreaKind.MilitaryPracticeArea => text.MilitaryPracticeAreaCategories,
-            RouteAreaKind.AnchorageArea => text.AnchorageCategories,
-            _ => text.RestrictedAreaCategories,
-        };
-        var categoryLabels = area.Categories.Select(c => text.Label(categories, c)).ToList();
-        if (area.CategoryOfMarineProtectedArea is { } iucn)
-        {
-            categoryLabels.Add(text.Format(text.IucnCategoryFormat, Iucn(iucn) ?? iucn.ToString(CultureInfo.InvariantCulture)));
-        }
-
-        if (categoryLabels.Count > 0)
-        {
-            parts.Add(string.Join(text.ListSeparator, categoryLabels));
-        }
-
-        if (area.FixedDateRange is { } range && Range(range, text, yearly: false) is { } fixedText)
-        {
-            parts.Add(fixedText);
-        }
-
-        var seasons = area.PeriodicDateRanges.Select(r => Range(r, text, yearly: true)).OfType<string>().ToList();
-        if (seasons.Count > 0)
-        {
-            parts.Add(string.Join(text.ListSeparator, seasons));
-        }
-
-        if (at is { } eta)
-        {
-            parts.Add(eta.Until - eta.From < TimeSpan.FromSeconds(30)
-                ? text.Time(eta.From)
-                : text.Format(text.RangeFormat, text.Time(eta.From), text.Time(eta.Until)));
-        }
-
-        return string.Join(text.Separator, parts);
-    }
-
-    private static string? Range(RouteAreaDateRange range, RouteAreaText text, bool yearly)
-    {
-        string? Day(string? value)
-        {
-            if (yearly)
-            {
-                return DayOfYear(value) is { } d ? text.DayOfYear(d.Month, d.Day) : value;
-            }
-
-            return S100DateTimes.Combine(value, null) is { } moment ? text.Date(DateOnly.FromDateTime(moment.UtcDateTime)) : value;
-        }
-
-        return (Day(range.DateStart), Day(range.DateEnd)) switch
-        {
-            ({ } s, { } e) => text.Format(text.RangeFormat, s, e),
-            ({ } s, null) => text.Format(text.FromFormat, s),
-            (null, { } e) => text.Format(text.UntilFormat, e),
-            _ => null,
-        };
-    }
-
-    // The IUCN category of a categoryOfMarineProtectedArea code (1 Ia … 7 VI).
-    private static string? Iucn(int code) => code switch
-    {
-        1 => "Ia",
-        2 => "Ib",
-        3 => "II",
-        4 => "III",
-        5 => "IV",
-        6 => "V",
-        7 => "VI",
-        _ => null,
-    };
 
     // The end of a date range: its time of day, or the end of its day.
     private static DateTimeOffset? EndOf(string? date, string? timeOfDay)
@@ -946,6 +680,4 @@ public sealed class RouteAreaCheck
         return day is { } d && !date!.Contains('T', StringComparison.Ordinal) ? d.AddDays(1) : day;
     }
 
-    private static string Sentence(string text, CultureInfo culture) =>
-        text.Length == 0 || char.IsUpper(text[0]) ? text : char.ToUpper(text[0], culture) + text[1..];
 }

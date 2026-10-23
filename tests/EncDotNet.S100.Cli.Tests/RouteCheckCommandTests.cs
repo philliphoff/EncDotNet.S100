@@ -81,7 +81,7 @@ public sealed class RouteCheckCommandTests
         Assert.Contains("s124.on_route", codes);
         Assert.Contains("s124.not_in_force", codes);
         Assert.Contains("route_check.protected_area", codes);
-        Assert.Contains(json["check"]!["findings"]!.AsArray(), f => f!["source"]!.GetValue<string>() == "s124" && f["warning"] is not null);
+        Assert.Contains(json["check"]!["findings"]!.AsArray(), f => f!["category"]!.GetValue<string>() == "warning" && f["warning"] is not null);
         Snapshot("warnings-on-route.s421", scenario.Normalize(json));
     }
 

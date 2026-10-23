@@ -1,23 +1,7 @@
-using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation;
-
-/// <summary>The codes of the findings <see cref="RouteWarningCheck"/> produces.</summary>
-public static class RouteWarningCodes
-{
-    /// <summary>The warning's line or area crosses the corridor, and it is in force while the vessel is there. MUST REVIEW.</summary>
-    public const string OnRoute = "s124.on_route";
-
-    /// <summary>The warning is within the near distance of the track, and in force while the vessel is there. CHECK.</summary>
-    public const string NearRoute = "s124.near_route";
-
-    /// <summary>The warning is on or near the route, but not in force while the vessel is there. INFO.</summary>
-    public const string NotInForce = "s124.not_in_force";
-
-    /// <summary>The warning is on or near the route, but cancelled by the time the vessel is there. INFO.</summary>
-    public const string Cancelled = "s124.cancelled";
-}
 
 /// <summary>How a warning's geometry relates to a route.</summary>
 public enum RouteWarningRelation
@@ -47,7 +31,7 @@ public enum RouteWarningStatus
     /// <summary>
     /// Its cancellation date, a warning that cancels it, or an in-force
     /// bulletin that leaves it out comes before the vessel gets there
-    /// (see <see cref="RouteFindingWarning.Withdrawal"/> for which).
+    /// (see <see cref="WarningDetails.Withdrawal"/> for which).
     /// </summary>
     Cancelled,
 }
@@ -65,37 +49,6 @@ public sealed record RouteWarning(
     NavigationalWarningInfo Info,
     IReadOnlyList<S100FeatureGeometry> Shapes,
     RouteFindingFeature? Feature = null);
-
-/// <summary>An S-124 finding's warning, and how it stands on the route.</summary>
-/// <param name="Info">The warning part's message.</param>
-/// <param name="Relation">How it relates to the route (never <see cref="RouteWarningRelation.Off"/>).</param>
-/// <param name="Status">Whether it applies while the vessel is there.</param>
-/// <param name="From">When the vessel reaches it (UTC): the ETA, or the fallback time when <paramref name="AtEta"/> is false.</param>
-/// <param name="Until">When the vessel leaves it; equal to <paramref name="From"/> for a crossing point or a near warning.</param>
-/// <param name="AtEta">Whether <paramref name="From"/> and <paramref name="Until"/> are ETAs rather than the fallback time.</param>
-public sealed record RouteFindingWarning(
-    NavigationalWarningInfo Info,
-    RouteWarningRelation Relation,
-    RouteWarningStatus Status,
-    DateTimeOffset From,
-    DateTimeOffset Until,
-    bool AtEta)
-{
-    /// <summary>
-    /// Why the warning is <see cref="RouteWarningStatus.Cancelled"/>: its
-    /// cancellation date, the warning that cancels it, or the in-force
-    /// bulletin that leaves it out (<see cref="NavigationalWarningSet.WithdrawnAt"/>).
-    /// <c>null</c> for any other status.
-    /// </summary>
-    public NavigationalWarningState? Withdrawal { get; init; }
-
-    /// <summary>
-    /// The leg where the route leaves the warning, so a warning met on several
-    /// legs reads "Crosses route on 2 legs"; <c>null</c> when it is the
-    /// finding's <see cref="RouteFinding.LegIndex"/>.
-    /// </summary>
-    public int? EndLegIndex { get; init; }
-}
 
 /// <summary>One warning against the route, found or not.</summary>
 /// <param name="Warning">The warning.</param>
@@ -149,83 +102,8 @@ public sealed record RouteWarningOptions
     /// <summary>The most pieces per leg; a longer leg uses longer pieces. Default 20 000.</summary>
     public int MaxSegmentsPerLeg { get; init; } = 20_000;
 
-    /// <summary>The wording of the findings. Hosts with their own resources pass their own.</summary>
-    public RouteWarningText Text { get; init; } = RouteWarningText.Default;
-}
-
-/// <summary>The wording of the S-124 findings: titles and the parts of the meta line.</summary>
-public sealed record RouteWarningText
-{
-    /// <summary>The English wording, formatted with the current culture, times in UTC.</summary>
-    public static RouteWarningText Default { get; } = new();
-
-    /// <summary>Title when the route goes through the warning's area ({0}: the warning's number).</summary>
-    public string InsideArea { get; init; } = "Inside navigational warning {0}";
-
-    /// <summary>Title when the route crosses the warning's line ({0}: the warning's number).</summary>
-    public string CrossesLine { get; init; } = "Crosses navigational warning {0}";
-
-    /// <summary>Title when the warning is near the route ({0}: the warning's number).</summary>
-    public string Near { get; init; } = "Navigational warning {0} near the route";
-
-    /// <summary>Title when the warning isn't in force while the vessel is there ({0}: the warning's number).</summary>
-    public string NotInForce { get; init; } = "Navigational warning {0} not in force";
-
-    /// <summary>Title when the warning is cancelled by then ({0}: the warning's number).</summary>
-    public string Cancelled { get; init; } = "Navigational warning {0} cancelled";
-
-    /// <summary>The meta line's status when in force ({0}: the time).</summary>
-    public string InForceAt { get; init; } = "In force at {0}";
-
-    /// <summary>The meta line's status when not in force ({0}: the time).</summary>
-    public string NotInForceAt { get; init; } = "Not in force at {0}";
-
-    /// <summary>The meta line's status when cancelled.</summary>
-    public string CancelledStatus { get; init; } = "Cancelled";
-
-    /// <summary>
-    /// Title when the latest in-force bulletin leaves the warning out
-    /// ({0}: the warning's number, {1}: the bulletin's series and number).
-    /// </summary>
-    public string NotInBulletin { get; init; } = "Navigational warning {0} not in in-force bulletin {1}";
-
-    /// <summary>The meta line's status when the latest in-force bulletin leaves it out ({0}: the bulletin).</summary>
-    public string NotInBulletinStatus { get; init; } = "Cancelled — not in in-force bulletin {0}";
-
-    /// <summary>A validity range with both ends ({0} start, {1} end).</summary>
-    public string ValidityRange { get; init; } = "{0}–{1}";
-
-    /// <summary>A validity range with no end ({0} start).</summary>
-    public string ValidityFrom { get; init; } = "from {0}";
-
-    /// <summary>A validity range with no start ({0} end).</summary>
-    public string ValidityUntil { get; init; } = "until {0}";
-
-    /// <summary>The validity when the part gives no range.</summary>
-    public string ValidityOpen { get; init; } = "until cancelled";
-
-    /// <summary>Joins the parts of a meta line.</summary>
-    public string Separator { get; init; } = " · ";
-
-    /// <summary>Formats a time; <c>null</c> writes it in UTC as <c>yyyy-MM-dd HH:mm UTC</c>.</summary>
-    public Func<DateTimeOffset, string>? FormatTime { get; init; }
-
-    /// <summary>
-    /// Formats the time the status is judged at (an ETA, or the fallback);
-    /// <c>null</c> uses <see cref="FormatTime"/>.
-    /// </summary>
-    public Func<DateTimeOffset, string>? FormatAt { get; init; }
-
-    /// <summary>The culture text is formatted in, or <c>null</c> for the current culture.</summary>
-    public CultureInfo? Culture { get; init; }
-
-    internal string Time(DateTimeOffset time) =>
-        FormatTime?.Invoke(time) ?? time.UtcDateTime.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture);
-
-    internal string At(DateTimeOffset time) => FormatAt?.Invoke(time) ?? Time(time);
-
-    internal string Format(string format, params object?[] args) =>
-        string.Format(Culture ?? CultureInfo.CurrentCulture, format, args);
+    /// <summary>Renders the findings' titles and meta lines. Hosts with their own resources pass their own.</summary>
+    public RouteFindingFormatter Formatter { get; init; } = RouteFindingFormatter.Default;
 }
 
 /// <summary>
@@ -385,11 +263,7 @@ public sealed class RouteWarningCheck
             }
         }
 
-        var sorted = findings
-            .OrderBy(f => f.Group)
-            .ThenBy(f => f.DistanceMeters ?? double.MaxValue)
-            .ToList();
-        return new RouteWarningResult(matches, sorted);
+        return new RouteWarningResult(matches, RouteFinding.Sort(findings));
     }
 
     /// <summary>
@@ -453,66 +327,36 @@ public sealed class RouteWarningCheck
         var until = atEta ? endEta!.Value : schedule.Departure;
         var (status, withdrawal) = StatusOver(warning.Info, set, from, until);
 
-        var text = _options.Text;
-        var number = warning.Info.Number ?? warning.Info.Title ?? string.Empty;
-        var bulletin = withdrawal is { Reason: NavigationalWarningStatusReason.NotInBulletin, By: { } by }
-            ? by.Label ?? by.Title ?? string.Empty
-            : null;
-        var (code, group, title) = (status, relation) switch
+        var code = (status, relation) switch
         {
-            (RouteWarningStatus.InForce, RouteWarningRelation.Crosses) => (RouteWarningCodes.OnRoute, RouteFindingGroup.MustReview,
-                acc.CrossedArea || (acc.CrossStart is null && shapes.Areas.Count > 0) ? text.InsideArea : text.CrossesLine),
-            (RouteWarningStatus.InForce, _) => (RouteWarningCodes.NearRoute, RouteFindingGroup.Check, text.Near),
-            (RouteWarningStatus.Cancelled, _) => (RouteWarningCodes.Cancelled, RouteFindingGroup.Info, bulletin is null ? text.Cancelled : text.NotInBulletin),
-            _ => (RouteWarningCodes.NotInForce, RouteFindingGroup.Info, text.NotInForce),
+            (RouteWarningStatus.InForce, RouteWarningRelation.Crosses) => RouteFindingCodes.WarningOnRoute,
+            (RouteWarningStatus.InForce, _) => RouteFindingCodes.WarningNearRoute,
+            (RouteWarningStatus.Cancelled, _) => RouteFindingCodes.WarningCancelled,
+            _ => RouteFindingCodes.WarningNotInForce,
         };
 
-        var finding = new RouteFinding(
+        var finding = _options.Formatter.Render(new RouteFinding(
             warning.Feature is { } feature ? $"s124.{feature.DatasetId}/{feature.FeatureId}" : $"s124.{index}",
-            code,
-            group,
-            RouteFindingSource.S124,
-            text.Format(title, number, bulletin).Trim(),
-            Meta(warning.Info, status, from, text, bulletin),
-            startLeg,
-            start,
-            RouteCorridor.Location(track, start, end),
-            warning.Feature)
+            code)
         {
-            Warning = new RouteFindingWarning(warning.Info, relation, status, from, until, atEta) { Withdrawal = withdrawal, EndLegIndex = endLeg },
-        };
+            LegIndex = startLeg,
+            Distance = Length.FromMetres(start),
+            Location = RouteCorridor.Location(track, start, end),
+            Feature = warning.Feature,
+            Details = new WarningDetails
+            {
+                Info = warning.Info,
+                Relation = relation,
+                Status = status,
+                From = from,
+                Until = until,
+                AtEta = atEta,
+                InsideArea = acc.CrossedArea || (acc.CrossStart is null && shapes.Areas.Count > 0),
+                Withdrawal = withdrawal,
+                EndLegIndex = endLeg,
+            },
+        });
         return new RouteWarningMatch(warning, relation, startLeg, start, end, acc.Closest, finding);
     }
 
-    // "NAVAREA I 012/26 · Dover Strait · 1 Mar 05:00–08:00 · In force at 06:08"
-    private static string Meta(NavigationalWarningInfo info, RouteWarningStatus status, DateTimeOffset at, RouteWarningText text, string? bulletin)
-    {
-        var parts = new List<string>();
-        if (info.Label is { } label)
-        {
-            parts.Add(label);
-        }
-
-        if ((info.Locality ?? info.GeneralArea) is { } locality)
-        {
-            parts.Add(locality);
-        }
-
-        parts.Add(info.Validity.Count == 0
-            ? text.ValidityOpen
-            : string.Join(", ", info.Validity.Select(r => (r.Start, r.End) switch
-            {
-                ({ } s, { } e) => text.Format(text.ValidityRange, text.Time(s), text.Time(e)),
-                ({ } s, null) => text.Format(text.ValidityFrom, text.Time(s)),
-                (null, { } e) => text.Format(text.ValidityUntil, text.Time(e)),
-                _ => text.ValidityOpen,
-            })));
-        parts.Add(status switch
-        {
-            RouteWarningStatus.InForce => text.Format(text.InForceAt, text.At(at)),
-            RouteWarningStatus.NotInForce => text.Format(text.NotInForceAt, text.At(at)),
-            _ => bulletin is null ? text.CancelledStatus : text.Format(text.NotInBulletinStatus, bulletin),
-        });
-        return string.Join(text.Separator, parts);
-    }
 }

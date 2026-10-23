@@ -29,19 +29,19 @@ public class RouteCheckEngineTests
         var result = Check(new FakeCharts([Harbour], [land]));
 
         var finding = Assert.Single(result.Findings);
-        Assert.Equal(RouteCheckCodes.CrossesLand, finding.Code);
+        Assert.Equal(RouteFindingCodes.CrossesLand, finding.Code);
         Assert.Equal("route_check.crosses_land.0", finding.Id);
         Assert.Equal(RouteFindingGroup.MustReview, finding.Group);
-        Assert.Equal(RouteFindingSource.RouteCheck, finding.Source);
+        Assert.Equal(RouteFindingCategory.Chart, finding.Category);
         Assert.Equal(0, finding.LegIndex);
-        Assert.Equal(0.004 * M, finding.DistanceMeters!.Value, 3);
+        Assert.Equal(0.004 * M, finding.Distance!.Value.TotalMetres, 3);
         var location = Assert.IsType<RouteFindingLocation>(finding.Location);
         Assert.False(location.IsPoint);
         Assert.Equal(0.004 * M, location.StartDistanceMeters, 3);
         Assert.Equal(0.005 * M, location.EndDistanceMeters, 3);
         Assert.Equal(0.004, location.Path[0].Longitude, 9);
         Assert.Equal(0.005, location.Path[^1].Longitude, 9);
-        Assert.Equal(new RouteFindingFeature("101HARBOUR", "7"), finding.Feature);
+        Assert.Equal(new RouteFindingFeature("101HARBOUR", "7") { FeatureType = "LandArea" }, finding.Feature);
         Assert.Equal("Crosses land", finding.Title);
         Assert.StartsWith("Leg 1 → 2", finding.Meta, StringComparison.Ordinal);
     }
@@ -53,9 +53,9 @@ public class RouteCheckEngineTests
 
         var finding = Assert.Single(Check(new FakeCharts([Harbour], [drying])).Findings);
 
-        Assert.Equal(RouteCheckCodes.CrossesDrying, finding.Code);
+        Assert.Equal(RouteFindingCodes.CrossesDrying, finding.Code);
         Assert.Equal(RouteFindingGroup.MustReview, finding.Group);
-        Assert.Equal(0.002 * M, finding.DistanceMeters!.Value, 3);
+        Assert.Equal(0.002 * M, finding.Distance!.Value.TotalMetres, 3);
         Assert.Equal(0.003 * M, finding.Location!.EndDistanceMeters, 3);
     }
 
@@ -94,9 +94,9 @@ public class RouteCheckEngineTests
 
         var finding = Assert.Single(Check(new FakeCharts([Harbour], [land])).Findings);
 
-        Assert.Equal(RouteCheckCodes.LandInCorridor, finding.Code);
+        Assert.Equal(RouteFindingCodes.LandInCorridor, finding.Code);
         Assert.Equal(RouteFindingGroup.Check, finding.Group);
-        Assert.Equal(RouteFindingSource.RouteCheck, finding.Source);
+        Assert.Equal(RouteFindingCategory.Chart, finding.Category);
         Assert.InRange(finding.Location!.StartDistanceMeters, 0.004 * M, 0.004 * M + 10);
         Assert.InRange(finding.Location.EndDistanceMeters, 0.005 * M - 10, 0.005 * M);
     }
@@ -111,7 +111,7 @@ public class RouteCheckEngineTests
 
         var result = Check(new FakeCharts([Harbour], [land]), Fixture.Leg(East.Points, port: port, starboard: starboard));
 
-        Assert.Equal(found, result.Findings.Any(f => f.Code == RouteCheckCodes.LandInCorridor));
+        Assert.Equal(found, result.Findings.Any(f => f.Code == RouteFindingCodes.LandInCorridor));
         Assert.Equal(port, result.Corridors[0].PortHalfWidthMeters);
     }
 
@@ -125,7 +125,7 @@ public class RouteCheckEngineTests
             new RouteCheckSettings { At = Fixture.Departure, CorridorOverride = Length.FromMetres(45) },
             TestContext.Current.CancellationToken);
 
-        Assert.Contains(result.Findings, f => f.Code == RouteCheckCodes.LandInCorridor);
+        Assert.Contains(result.Findings, f => f.Code == RouteFindingCodes.LandInCorridor);
         Assert.Equal((45, 45), (result.Corridors[0].PortHalfWidthMeters, result.Corridors[0].StarboardHalfWidthMeters));
     }
 
@@ -137,11 +137,11 @@ public class RouteCheckEngineTests
 
         var finding = Assert.Single(Check(new FakeCharts([cell], [])).Findings);
 
-        Assert.Equal(RouteCheckCodes.OutsideChartCoverage, finding.Code);
+        Assert.Equal(RouteFindingCodes.OutsideChartCoverage, finding.Code);
         Assert.Equal(RouteFindingGroup.Check, finding.Group);
-        Assert.Equal(RouteFindingSource.Data, finding.Source);
+        Assert.Equal(RouteFindingCategory.Data, finding.Category);
         Assert.Null(finding.Feature);
-        Assert.InRange(finding.DistanceMeters!.Value, 0.006 * M - 10, 0.006 * M + 10);
+        Assert.InRange(finding.Distance!.Value.TotalMetres, 0.006 * M - 10, 0.006 * M + 10);
         Assert.Equal(0.01 * M, finding.Location!.EndDistanceMeters, 3);
     }
 
@@ -153,7 +153,7 @@ public class RouteCheckEngineTests
         var result = Check(new FakeCharts([], []), East, second);
 
         Assert.Equal([0, 1], result.Findings.Select(f => f.LegIndex!.Value));
-        Assert.All(result.Findings, f => Assert.Equal(RouteCheckCodes.OutsideChartCoverage, f.Code));
+        Assert.All(result.Findings, f => Assert.Equal(RouteFindingCodes.OutsideChartCoverage, f.Code));
         Assert.Equal(0.01 * M, result.Findings[1].Location!.StartDistanceMeters, 3);
         Assert.Equal(0.02 * M, result.Findings[1].Location!.EndDistanceMeters, 1);
         Assert.Equal("Leg 2 → 3", result.Findings[1].Meta.Split(" · ")[0]);
@@ -196,9 +196,9 @@ public class RouteCheckEngineTests
 
         var finding = Assert.Single(Check(new FakeCharts([Harbour], [coastline])).Findings);
 
-        Assert.Equal(RouteCheckCodes.CrossesLand, finding.Code);
+        Assert.Equal(RouteFindingCodes.CrossesLand, finding.Code);
         Assert.True(finding.Location!.IsPoint);
-        Assert.Equal(0.007 * M, finding.DistanceMeters!.Value, 3);
+        Assert.Equal(0.007 * M, finding.Distance!.Value.TotalMetres, 3);
         Assert.Equal("Coastline", finding.Meta.Split(" · ")[^1]);
     }
 
@@ -235,7 +235,7 @@ public class RouteCheckEngineTests
 
         var finding = Assert.Single(Check(new FakeCharts([Harbour], [land])).Findings);
 
-        Assert.Equal(0, finding.DistanceMeters);
+        Assert.Equal(0, finding.Distance?.TotalMetres);
         Assert.Equal(0.001 * M, finding.Location!.EndDistanceMeters, 3);
     }
 
@@ -248,17 +248,14 @@ public class RouteCheckEngineTests
 
         var codes = Check(new FakeCharts([cell], [drying, land])).Findings.Select(f => f.Code);
 
-        Assert.Equal([RouteCheckCodes.CrossesLand, RouteCheckCodes.CrossesDrying, RouteCheckCodes.OutsideChartCoverage], codes);
+        Assert.Equal([RouteFindingCodes.CrossesLand, RouteFindingCodes.CrossesDrying, RouteFindingCodes.OutsideChartCoverage], codes);
     }
 
     [Fact]
     public void Wording_can_be_replaced()
     {
         var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005);
-        var options = new RouteCheckOptions
-        {
-            Text = new RouteCheckText { CrossesLand = "Traverse la terre", LegFormat = "Segment {0}–{1}", Separator = " / " },
-        };
+        var options = new RouteCheckOptions { Formatter = new FrenchFormatter() };
 
         var finding = Assert.Single(new RouteCheckEngine(new FakeCharts([Harbour], [land]), options).Check(new PassagePlan([East]), Fixture.Settings(), TestContext.Current.CancellationToken).Findings);
 
@@ -334,4 +331,14 @@ internal sealed class FakeCharts(IReadOnlyList<RouteChartCell> cells, IReadOnlyL
         new(north, west),
         new(south, west),
     ];
+}
+
+/// <summary>A formatter with other wording, as a host with its own resources has.</summary>
+internal sealed class FrenchFormatter : RouteFindingFormatter
+{
+    protected override string CrossesLand => "Traverse la terre";
+
+    protected override string LegFormat => "Segment {0}–{1}";
+
+    protected override string Separator => " / ";
 }

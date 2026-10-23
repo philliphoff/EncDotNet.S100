@@ -29,7 +29,7 @@
         "id": "route_check.danger_in_corridor.1",
         "code": "route_check.danger_in_corridor",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Wreck in the corridor",
         "meta": "Leg 1 \u2192 2 \u00B7 Wreck \u00B7 on the track \u00B7 6.2 m \u00B7 shallower than draft \u002B squat \u002B UKC (12 m)",
         "legIndex": 0,
@@ -48,13 +48,24 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "133"
+        },
+        "details": {
+          "danger": {
+            "featureType": "Wreck",
+            "depthMeters": 6.2,
+            "waterLevelEffect": 3,
+            "threshold": "keel",
+            "thresholdMeters": 12,
+            "side": "on_track",
+            "offsetMeters": 0
+          }
         }
       },
       {
         "id": "route_check.danger_in_corridor.2",
         "code": "route_check.danger_in_corridor",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Obstruction in the corridor",
         "meta": "Leg 1 \u2192 2 \u00B7 Obstruction \u00B7 60 m to port \u00B7 11.0 m \u00B7 shallower than draft \u002B squat \u002B UKC (12 m)",
         "legIndex": 0,
@@ -73,13 +84,24 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "135"
+        },
+        "details": {
+          "danger": {
+            "featureType": "Obstruction",
+            "depthMeters": 11,
+            "waterLevelEffect": 3,
+            "threshold": "keel",
+            "thresholdMeters": 12,
+            "side": "port",
+            "offsetMeters": 59.9
+          }
         }
       },
       {
         "id": "route_check.danger_in_corridor.0",
         "code": "route_check.danger_in_corridor",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Rock in the corridor",
         "meta": "Leg 1 \u2192 2 \u00B7 UnderwaterAwashRock \u00B7 80 m to starboard \u00B7 awash",
         "legIndex": 0,
@@ -98,13 +120,21 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "137"
+        },
+        "details": {
+          "danger": {
+            "featureType": "UnderwaterAwashRock",
+            "waterLevelEffect": 5,
+            "side": "starboard",
+            "offsetMeters": 79.9
+          }
         }
       },
       {
         "id": "route_check.crosses_safety_contour.0",
         "code": "route_check.crosses_safety_contour",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Crosses the safety contour",
         "meta": "Leg 2 \u2192 3 \u00B7 0.06 NM \u00B7 DepthArea \u00B7 least 5.0 m \u00B7 shallower than safety contour 10 m",
         "legIndex": 1,
@@ -171,13 +201,20 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "52"
+        },
+        "details": {
+          "shoal": {
+            "leastDepthMeters": 5,
+            "threshold": "safety_contour",
+            "thresholdMeters": 10
+          }
         }
       },
       {
         "id": "route_check.crosses_s102_shoal.0",
         "code": "route_check.crosses_s102_shoal",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Crosses S-102 depths shallower than the safety contour",
         "meta": "Leg 2 \u2192 3 \u00B7 0.08 NM \u00B7 least 7.6 m \u00B1 0.3 m at cell 10,80 of S-102/DATASET_FILES/102ZZ00SPIT.h5 \u00B7 shallower than safety contour 10 m",
         "legIndex": 1,
@@ -260,13 +297,23 @@
               -134.95117
             ]
           ]
+        },
+        "details": {
+          "shoal": {
+            "leastDepthMeters": 7.63775,
+            "threshold": "safety_contour",
+            "thresholdMeters": 10,
+            "uncertaintyMeters": 0.33,
+            "datasetId": "S-102/DATASET_FILES/102ZZ00SPIT.h5",
+            "cell": "10,80"
+          }
         }
       },
       {
         "id": "route_check.danger_near_route.0",
         "code": "route_check.danger_near_route",
         "group": "check",
-        "source": "route_check",
+        "category": "depth",
         "title": "Wreck near the route",
         "meta": "Leg 2 \u2192 3 \u00B7 Wreck \u00B7 180 m to port \u00B7 depth unknown",
         "legIndex": 1,
@@ -285,6 +332,14 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "139"
+        },
+        "details": {
+          "danger": {
+            "featureType": "Wreck",
+            "waterLevelEffect": 3,
+            "side": "port",
+            "offsetMeters": 179.8
+          }
         }
       }
     ],

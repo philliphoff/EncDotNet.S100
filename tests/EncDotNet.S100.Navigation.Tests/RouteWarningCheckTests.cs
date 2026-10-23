@@ -63,7 +63,7 @@ public class RouteWarningCheckTests
         Assert.Equal(0.004 * M, match.StartDistanceMeters, 3);
         Assert.Equal(0.006 * M, match.EndDistanceMeters, 3);
         var finding = Assert.Single(result.Findings);
-        Assert.Equal((RouteWarningCodes.OnRoute, RouteFindingGroup.MustReview, RouteFindingSource.S124), (finding.Code, finding.Group, finding.Source));
+        Assert.Equal((RouteFindingCodes.WarningOnRoute, RouteFindingGroup.MustReview, RouteFindingCategory.Warning), (finding.Code, finding.Group, finding.Category));
         Assert.Equal("Inside navigational warning 001/26", finding.Title);
         Assert.Equal("s124.124TEST/part.1", finding.Id);
         Assert.Equal(new RouteFindingFeature("124TEST", "part.1"), finding.Feature);
@@ -78,7 +78,7 @@ public class RouteWarningCheckTests
 
         Assert.Equal("Crosses navigational warning 002/26", finding.Title);
         Assert.True(finding.Location!.IsPoint);
-        Assert.Equal(0.005 * M, finding.DistanceMeters!.Value, 3);
+        Assert.Equal(0.005 * M, finding.Distance!.Value.TotalMetres, 3);
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public class RouteWarningCheckTests
         Assert.Equal(RouteWarningRelation.Near, result.Matches[1].Relation);
         Assert.Equal(RouteWarningRelation.Off, result.Matches[2].Relation);
         Assert.Null(result.Matches[2].Finding);
-        Assert.All(result.Findings, f => Assert.Equal((RouteWarningCodes.NearRoute, RouteFindingGroup.Check), (f.Code, f.Group)));
+        Assert.All(result.Findings, f => Assert.Equal((RouteFindingCodes.WarningNearRoute, RouteFindingGroup.Check), (f.Code, f.Group)));
         Assert.Equal("Navigational warning 004/26 near the route", result.Findings[0].Title);
     }
 
@@ -162,9 +162,9 @@ public class RouteWarningCheckTests
 
         var result = Check(before, during);
 
-        Assert.Equal((RouteWarningCodes.NotInForce, RouteFindingGroup.Info), (result.Matches[0].Finding!.Code, result.Matches[0].Finding!.Group));
+        Assert.Equal((RouteFindingCodes.WarningNotInForce, RouteFindingGroup.Info), (result.Matches[0].Finding!.Code, result.Matches[0].Finding!.Group));
         Assert.Equal(RouteFindingGroup.MustReview, result.Matches[1].Finding!.Group);
-        Assert.True(result.Matches[1].Finding!.Warning!.AtEta);
+        Assert.True(((WarningDetails)result.Matches[1].Finding!.Details!).AtEta);
         Assert.StartsWith("Not in force at 2026-03-01 06:03", result.Matches[0].Finding!.Meta.Split(" · ")[^1], StringComparison.Ordinal);
     }
 
@@ -184,11 +184,11 @@ public class RouteWarningCheckTests
 
         var result = Check(selfCancelled, cancelled, cancels, lateCancelled, cancelsLate);
 
-        Assert.Equal(RouteWarningStatus.Cancelled, result.Matches[0].Finding!.Warning!.Status);
-        Assert.Equal((RouteWarningCodes.Cancelled, RouteFindingGroup.Info), (result.Matches[1].Finding!.Code, result.Matches[1].Finding!.Group));
+        Assert.Equal(RouteWarningStatus.Cancelled, ((WarningDetails)result.Matches[0].Finding!.Details!).Status);
+        Assert.Equal((RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info), (result.Matches[1].Finding!.Code, result.Matches[1].Finding!.Group));
         Assert.Equal("Navigational warning 012/26 cancelled", result.Matches[1].Finding!.Title);
         Assert.EndsWith(" · Cancelled", result.Matches[1].Finding!.Meta, StringComparison.Ordinal);
-        Assert.Equal(RouteWarningStatus.InForce, result.Matches[3].Finding!.Warning!.Status);
+        Assert.Equal(RouteWarningStatus.InForce, ((WarningDetails)result.Matches[3].Finding!.Details!).Status);
     }
 
     [Fact]
@@ -209,8 +209,8 @@ public class RouteWarningCheckTests
         Assert.Equal(0, match.LegIndex);
         Assert.Equal(0.004 * M, match.StartDistanceMeters, 1);
         Assert.Equal(0.007 * M, match.EndDistanceMeters, 1);
-        Assert.False(match.Finding!.Warning!.AtEta);
-        Assert.Equal(Departure, match.Finding.Warning.From);
+        Assert.False(((WarningDetails)match.Finding!.Details!).AtEta);
+        Assert.Equal(Departure, ((WarningDetails)match.Finding.Details!).From);
     }
 
     [Fact]
@@ -247,13 +247,13 @@ public class RouteWarningCheckTests
             set,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(RouteWarningStatus.InForce, result.Matches[0].Finding!.Warning!.Status);
-        Assert.Equal(RouteWarningStatus.InForce, result.Matches[2].Finding!.Warning!.Status);
+        Assert.Equal(RouteWarningStatus.InForce, ((WarningDetails)result.Matches[0].Finding!.Details!).Status);
+        Assert.Equal(RouteWarningStatus.InForce, ((WarningDetails)result.Matches[2].Finding!.Details!).Status);
         var finding = result.Matches[1].Finding!;
-        Assert.Equal((RouteWarningCodes.Cancelled, RouteFindingGroup.Info), (finding.Code, finding.Group));
+        Assert.Equal((RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info), (finding.Code, finding.Group));
         Assert.Equal("Navigational warning 021/26 not in in-force bulletin TEST 030/26", finding.Title);
         Assert.EndsWith(" · Cancelled — not in in-force bulletin TEST 030/26", finding.Meta, StringComparison.Ordinal);
-        Assert.Equal(NavigationalWarningStatusReason.NotInBulletin, finding.Warning!.Withdrawal!.Reason);
+        Assert.Equal(NavigationalWarningStatusReason.NotInBulletin, ((WarningDetails)finding.Details!).Withdrawal!.Reason);
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public class RouteWarningCheckTests
 
         var result = Check(cancelled, cancels);
 
-        Assert.Equal(NavigationalWarningStatusReason.Cancelled, result.Matches[0].Finding!.Warning!.Withdrawal!.Reason);
-        Assert.Null(result.Matches[1].Finding!.Warning!.Withdrawal);
+        Assert.Equal(NavigationalWarningStatusReason.Cancelled, ((WarningDetails)result.Matches[0].Finding!.Details!).Withdrawal!.Reason);
+        Assert.Null(((WarningDetails)result.Matches[1].Finding!.Details!).Withdrawal);
     }
 }

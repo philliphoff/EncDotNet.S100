@@ -159,7 +159,7 @@ internal sealed record RouteCheckMap(
             GeoPosition? feature = null;
             if (location.IsPoint)
             {
-                var distance = finding.DistanceMeters ?? location.StartDistanceMeters;
+                var distance = finding.Distance?.TotalMetres ?? location.StartDistanceMeters;
                 anchor = track.PositionAt(distance);
                 var at = location.Path[0];
                 var offset = PassageGeodesy.DistanceMeters(anchor, at, LegGeometry.GreatCircle);
@@ -191,9 +191,9 @@ internal sealed record RouteCheckMap(
     // "Wreck 9,4 m · 07:52": the finding's title and, when known, the ETA there.
     private static string PillText(RouteFinding finding, RouteTrack track, TimeFormat timeFormat)
     {
-        DateTimeOffset? eta = finding.Warning is { AtEta: true } warning
+        DateTimeOffset? eta = finding.Details is WarningDetails { AtEta: true } warning
             ? warning.From
-            : track.EtaAt(finding.DistanceMeters ?? finding.Location!.StartDistanceMeters);
+            : track.EtaAt(finding.Distance?.TotalMetres ?? finding.Location!.StartDistanceMeters);
         return eta is { } t
             ? string.Format(CultureInfo.CurrentCulture, "{0} · {1}", finding.Title, PassageFormatting.FormatEta(t, track.Departure, timeFormat))
             : finding.Title;

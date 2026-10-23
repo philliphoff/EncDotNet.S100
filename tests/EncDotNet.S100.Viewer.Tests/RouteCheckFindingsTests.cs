@@ -105,7 +105,7 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     private sealed record Setup(RoutesService Routes, Route Route, PassageCheckService Check, RouteFindingsService Findings, PassageCheckFixture.FixedCatalog Catalog) : IDisposable
     {
         public IReadOnlyList<RouteFinding> RouteChecks =>
-            Findings.Findings.Where(f => f.Source == RouteFindingSource.RouteCheck || f.Code == RouteCheckCodes.OutsideChartCoverage).ToList();
+            Findings.Findings.Where(f => f.Category == RouteFindingCategory.Chart || f.Code == RouteFindingCodes.OutsideChartCoverage).ToList();
 
         public void Dispose()
         {
@@ -138,7 +138,7 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
 
         var checks = s.RouteChecks;
         Assert.Equal(
-            [RouteCheckCodes.CrossesDrying, RouteCheckCodes.CrossesDrying, RouteCheckCodes.CrossesLand],
+            [RouteFindingCodes.CrossesDrying, RouteFindingCodes.CrossesDrying, RouteFindingCodes.CrossesLand],
             checks.Select(f => f.Code));
         Assert.All(checks, f =>
         {
@@ -193,15 +193,15 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     public async Task Moving_the_waypoint_off_the_shore_clears_the_land()
     {
         using var s = await Start(fixture.Import("421ZZ00SPITX"));
-        Assert.Contains(s.RouteChecks, f => f.Code == RouteCheckCodes.CrossesLand);
+        Assert.Contains(s.RouteChecks, f => f.Code == RouteFindingCodes.CrossesLand);
 
         // Pull "ashore" back north of the foreshore.
         var frame = fixture.Scenario.Definition.World.Frame;
         s.Route.MoveWaypoint(3, frame.ToGeo(3600, 1450));
         await s.Findings.WhenIdle();
 
-        Assert.DoesNotContain(s.RouteChecks, f => f.Code == RouteCheckCodes.CrossesLand);
-        Assert.Single(s.RouteChecks, f => f.Code == RouteCheckCodes.CrossesDrying);
+        Assert.DoesNotContain(s.RouteChecks, f => f.Code == RouteFindingCodes.CrossesLand);
+        Assert.Single(s.RouteChecks, f => f.Code == RouteFindingCodes.CrossesDrying);
     }
 
     private sealed class Mariner(MarinerSettings settings) : IMarinerSettingsProvider
@@ -231,7 +231,7 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
         Assert.True(checkSettings.ChecksDepths);
         Assert.Equal(Now, checkSettings.At);
         Assert.False(new RouteCheckFindingProducer().Settings(request).ChecksDepths);
-        Assert.Equal("Crosses land", RouteCheckFindingProducer.Text().CrossesLand);
+        Assert.Equal("Crosses land", new ViewerFindingFormatter(request).Title(new RouteFinding("x", RouteFindingCodes.CrossesLand)));
     }
 
     [Fact]
@@ -253,10 +253,10 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
         Assert.True(result.TryGetValue(out var value), result.TryGetError(out var e) ? e.Message : "");
         Assert.Equal(s.Route.Id, value!.RouteId);
         Assert.Equal("3 to review", value.Summary.Text);
-        Assert.Equal(s.RouteChecks.Select(f => (f.Id, f.Code, f.LegIndex)), value.Findings.Select(f => (f.Id, f.Code, f.LegIndex)));
+        Assert.Equal(s.RouteChecks.Select(f => (f.Id, f.Code.Value, f.LegIndex)), value.Findings.Select(f => (f.Id, f.Code, f.LegIndex)));
         for (var i = 0; i < value.Findings.Count; i++)
         {
-            Assert.Equal(s.RouteChecks[i].DistanceMeters!.Value / PassageGeodesy.MetersPerNauticalMile, value.Findings[i].DistanceNm!.Value, 3);
+            Assert.Equal(s.RouteChecks[i].Distance!.Value.TotalMetres / PassageGeodesy.MetersPerNauticalMile, value.Findings[i].DistanceNm!.Value, 3);
             Assert.Equal(s.RouteChecks[i].Feature!.FeatureId, value.Findings[i].Feature!.FeatureId);
         }
 

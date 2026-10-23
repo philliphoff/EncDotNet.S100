@@ -1,6 +1,6 @@
-using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation;
 
@@ -29,9 +29,10 @@ namespace EncDotNet.S100.Navigation;
 /// charts water, matching what the display shows.
 /// </para>
 /// <para>
-/// Findings are <see cref="RouteFinding"/>s with source
-/// <see cref="RouteFindingSource.RouteCheck"/> (or
-/// <see cref="RouteFindingSource.Data"/> for coverage). Consecutive crossings
+/// Findings are <see cref="RouteFinding"/>s in the
+/// <see cref="RouteFindingCategory.Chart"/> and <see cref="RouteFindingCategory.Depth"/>
+/// categories (and <see cref="RouteFindingCategory.Data"/> for coverage),
+/// with their text rendered by <see cref="RouteCheckOptions.Formatter"/>. Consecutive crossings
 /// of the same kind are merged into one finding, so adjacent depth areas that
 /// both dry make a single "Crosses drying ground"; its feature is the one at
 /// the start of the span.
@@ -97,7 +98,7 @@ public sealed partial class RouteCheckEngine
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(settings);
         var legs = plan.Legs;
-        var findings = new FindingList(_options.Text);
+        var findings = new FindingList(_options.Formatter);
         var corridors = new List<RouteCheckCorridor>(legs.Count);
         var dangers = new DangerList();
         var offset = 0.0;
@@ -212,11 +213,9 @@ public sealed partial class RouteCheckEngine
 
             CheckCoverage();
 
-            var land = CheckAreas(features, RouteChartFeatureKind.Land, RouteCheckCodes.CrossesLand, RouteCheckCodes.LandInCorridor,
-                _findings.Text.CrossesLand, _findings.Text.LandInCorridor);
+            var land = CheckAreas(features, RouteChartFeatureKind.Land, RouteFindingCodes.CrossesLand, RouteFindingCodes.LandInCorridor);
             CheckCoastlines(features, land);
-            CheckAreas(features, RouteChartFeatureKind.DryingArea, RouteCheckCodes.CrossesDrying, RouteCheckCodes.DryingInCorridor,
-                _findings.Text.CrossesDrying, _findings.Text.DryingInCorridor);
+            CheckAreas(features, RouteChartFeatureKind.DryingArea, RouteFindingCodes.CrossesDrying, RouteFindingCodes.DryingInCorridor);
             if (depths is not null)
             {
                 CheckDepths(features, depths);
@@ -243,23 +242,20 @@ public sealed partial class RouteCheckEngine
                 // From halfway to the covered station before to halfway to the one after.
                 var start = first == 0 ? _stations[0].Distance : (_stations[first - 1].Distance + _stations[first].Distance) / 2;
                 var end = k == _stations.Count ? _stations[^1].Distance : (_stations[k - 1].Distance + _stations[k].Distance) / 2;
-                _findings.Add(RouteCheckCodes.OutsideChartCoverage, RouteFindingGroup.Check, RouteFindingSource.Data,
-                    _findings.Text.OutsideChartCoverage, _legIndex, start, Location(start, end), feature: null, featureType: null, end - start);
+                _findings.Add(RouteFindingCodes.OutsideChartCoverage, _legIndex, start, Location(start, end), feature: null);
             }
         }
 
         // Finds the track's crossings of one kind of area, then the
         // cross-sections that touch it where the track doesn't; returns the
-        // merged crossings. Details, when given, add to a finding's meta
-        // line from the shoalest feature in it.
+        // merged crossings. Details, when given, are a finding's details
+        // from the shoalest feature in it.
         private List<Piece> CheckAreas(
             IReadOnlyList<RouteChartFeature> features,
             RouteChartFeatureKind kind,
-            string crossesCode,
-            string inCorridorCode,
-            string crossesTitle,
-            string inCorridorTitle,
-            Func<RouteChartFeature, IReadOnlyList<string>>? details = null)
+            RouteFindingCode crossesCode,
+            RouteFindingCode inCorridorCode,
+            Func<RouteChartFeature, RouteFindingDetails>? details = null)
         {
             var pieces = new List<Piece>();
             var touched = new RouteChartFeature?[_stations.Count];
@@ -352,8 +348,7 @@ public sealed partial class RouteCheckEngine
                     continue;
                 }
 
-                _findings.Add(crossesCode, RouteFindingGroup.MustReview, RouteFindingSource.RouteCheck, crossesTitle,
-                    _legIndex, piece.Start, Location(piece.Start, piece.End), piece.Feature, piece.Feature.FeatureType, piece.End - piece.Start,
+                _findings.Add(crossesCode, _legIndex, piece.Start, Location(piece.Start, piece.End), piece.Feature,
                     details?.Invoke(piece.Shoalest ?? piece.Feature));
             }
 
@@ -386,8 +381,7 @@ public sealed partial class RouteCheckEngine
                 var start = _stations[first].Distance;
                 var end = _stations[k2 - 1].Distance;
                 var feature = touched[first]!;
-                _findings.Add(inCorridorCode, RouteFindingGroup.Check, RouteFindingSource.RouteCheck, inCorridorTitle,
-                    _legIndex, start, Location(start, end), feature, feature.FeatureType, end - start,
+                _findings.Add(inCorridorCode, _legIndex, start, Location(start, end), feature,
                     details?.Invoke(runShoalest ?? feature));
             }
 
@@ -428,8 +422,7 @@ public sealed partial class RouteCheckEngine
                         }
 
                         found.Add(d);
-                        _findings.Add(RouteCheckCodes.CrossesLand, RouteFindingGroup.MustReview, RouteFindingSource.RouteCheck,
-                            _findings.Text.CrossesLand, _legIndex, d, Location(d, d), feature, feature.FeatureType, lengthMeters: null);
+                        _findings.Add(RouteFindingCodes.CrossesLand, _legIndex, d, Location(d, d), feature);
                     }
                 }
             }
@@ -822,69 +815,34 @@ public sealed partial class RouteCheckEngine
         }
     }
 
-    /// <summary>Collects findings with ids that are stable within one result.</summary>
-    private sealed class FindingList(RouteCheckText text)
+    /// <summary>Collects findings with ids that are stable within one result, rendered by a formatter.</summary>
+    private sealed class FindingList(RouteFindingFormatter formatter)
     {
         private readonly List<RouteFinding> _findings = new();
         private readonly Dictionary<string, int> _counts = new(StringComparer.Ordinal);
 
-        public RouteCheckText Text { get; } = text;
-
+        // Each code is in its own group: crossings and dangers in the
+        // corridor are MUST REVIEW, the rest CHECK.
         public void Add(
-            string code,
-            RouteFindingGroup group,
-            RouteFindingSource source,
-            string title,
+            RouteFindingCode code,
             int legIndex,
             double distance,
             RouteFindingLocation location,
             RouteChartFeature? feature,
-            string? featureType,
-            double? lengthMeters,
-            IReadOnlyList<string>? details = null)
+            RouteFindingDetails? details = null)
         {
-            _counts.TryGetValue(code, out var n);
-            _counts[code] = n + 1;
-            var culture = Text.Culture ?? CultureInfo.CurrentCulture;
-            var parts = new List<string>(3)
+            _counts.TryGetValue(code.Value, out var n);
+            _counts[code.Value] = n + 1;
+            _findings.Add(formatter.Render(new RouteFinding($"{code.Value}.{n}", code)
             {
-                string.Format(culture, Text.LegFormat, legIndex + 1, legIndex + 2),
-            };
-            if (lengthMeters is > 0)
-            {
-                parts.Add(string.Format(culture, Text.LengthFormat, lengthMeters.Value / PassageGeodesy.MetersPerNauticalMile));
-            }
-
-            if (featureType is not null)
-            {
-                parts.Add(featureType);
-            }
-
-            if (details is not null)
-            {
-                parts.AddRange(details);
-            }
-
-            _findings.Add(new RouteFinding(
-                $"{code}.{n}",
-                code,
-                group,
-                source,
-                title,
-                string.Join(Text.Separator, parts),
-                legIndex,
-                distance,
-                location,
-                feature is null ? null : new RouteFindingFeature(feature.Cell.DatasetId, feature.FeatureId)));
+                LegIndex = legIndex,
+                Distance = Length.FromMetres(distance),
+                Location = location,
+                Feature = feature is null ? null : new RouteFindingFeature(feature.Cell.DatasetId, feature.FeatureId) { FeatureType = feature.FeatureType },
+                Details = details,
+            }));
         }
 
-        public IReadOnlyList<RouteFinding> Sorted() =>
-            _findings
-                .Select((f, i) => (f, i))
-                .OrderBy(x => x.f.Group)
-                .ThenBy(x => x.f.DistanceMeters ?? double.MaxValue)
-                .ThenBy(x => x.i)
-                .Select(x => x.f)
-                .ToList();
+        public IReadOnlyList<RouteFinding> Sorted() => RouteFinding.Sort(_findings);
     }
 }

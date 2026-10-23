@@ -26,6 +26,21 @@ month. For package versions and release assets, see
   source interfaces take `GeoPosition` and `BoundingBox`, and every source,
   and `ICrsTransform`, is safe to call from several threads at once.
   SoundCharts, the MCP tools and `s100 route check` each share one cache.
+- **Route checks: structured findings.** Every finding code is in one
+  catalogue, `RouteFindingCodes`, as a `RouteFindingCode` with its
+  category, default group and headline rank; it replaces `RouteCheckCodes`,
+  `RouteAreaCodes` and `RouteWarningCodes`. A finding's `Category` (`Chart`,
+  `Depth`, `Area`, `Warning`, `Clearance`, `Confidence` or `Data`) replaces
+  `Source`, and its typed `Details` (`DangerDetails`, `ShoalDetails`,
+  `AreaDetails`, `WarningDetails`, `ClearanceDetails`) carry the numbers
+  behind it. A `RouteFindingFormatter` renders titles and meta lines in one
+  culture, depth unit and time zone, and replaces `RouteCheckText`,
+  `RouteAreaText` and `RouteWarningText`. `ClearanceFindings.Build` turns a
+  clearance result into findings. `check_route`, `get_findings` and
+  `s100 route check --format json` add `details` to each finding and report its
+  `category` instead of `source`. Codes and ids are unchanged. The expired
+  S-111 forecast notice (`data.s111_forecast_expired`) is gone: currents
+  aren't applied to ETAs (#1033).
 
 - **From a warning to its route finding.** While SoundCharts checks a
   route, the Warning card of a warning that crosses or is near it, in

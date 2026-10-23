@@ -194,7 +194,7 @@ var settings = RouteCheckSettings.FromMarinerSettings(marinerSettings, DateTimeO
 
 foreach (var finding in engine.Check(plan, settings).Findings)
 {
-    Console.WriteLine($"{finding.Group} {finding.Code} at {finding.DistanceMeters:F0} m: {finding.Meta}");
+    Console.WriteLine($"{finding.Group} {finding.Code} at {finding.Distance?.TotalMetres:F0} m: {finding.Meta}");
 }
 ```
 
@@ -236,7 +236,7 @@ long bank is one finding. `RouteCheckEngine.Dangers.cs` writes out the rules.
 Once the cells' indexes are built (the first check), checking the 24 NM Solent
 route against 17 UKHO trial cells takes about 50 ms, and re-checking the two
 legs either side of a dragged waypoint about 11 ms. The wording comes from
-`RouteCheckOptions.Text`, so hosts can pass their own resources.
+`RouteCheckOptions.Formatter`, so hosts can pass their own resources.
 
 `SkinOfTheEarth` holds the water, land and drying rules the route check and
 the viewer's pick report share.
@@ -276,7 +276,7 @@ there: its cancellation date passes, another warning cancels it
 bulletin for its series, published after it, leaves it out (S-124 Edition
 2.0.0 §9.2.1). Without a set, `Check` builds one from the checked warnings.
 The viewer's Warning card and Navigational warnings panel judge with the same
-set, so they agree. A finding's `Warning.Withdrawal` says why; one left out of
+set, so they agree. A finding's `WarningDetails.Withdrawal` says why; one left out of
 a bulletin reads "Navigational warning 105/26 not in in-force bulletin
 NAVAREA X 110/26".
 
@@ -287,11 +287,11 @@ NAVAREA X 110/26".
 | `s124.not_in_force` | Info | On or near the route, but no validity range overlaps the vessel's time there |
 | `s124.cancelled` | Info | On or near the route, but cancelled by then |
 
-Every finding has source `S124`, the part's feature, and a `Warning`
-(`RouteFindingWarning`) with the message, relation, status and the times it
-was judged at. `RouteWarningResult.Matches` also lists the warnings off the
+Every finding has category `Warning`, the part's feature, and
+`WarningDetails` with the message, relation, status and the times it was
+judged at. `RouteWarningResult.Matches` also lists the warnings off the
 route. The meta line names the series and number, the locality, the validity
-and the status; the wording comes from `RouteWarningOptions.Text`.
+and the status; the wording comes from `RouteWarningOptions.Formatter`.
 
 ## Check a route against restricted and protected areas
 
@@ -326,10 +326,10 @@ where a route is meant to go.
 | `route_check.area_not_in_force` | Info | The area's `fixedDateRange` or season doesn't cover the vessel's time there |
 
 An area that only reaches inside the limits is one group lighter (Check
-becomes Info). Findings have source `RouteCheck`, so the verdict ranks an
-entry-prohibited area with the chart checks, just after land and drying
-ground. The meta line names the leg, the product, the restrictions, the
-categories, the dates and the ETAs.
+becomes Info). Findings have category `Area` and `AreaDetails`, and the
+code catalogue ranks an entry-prohibited area just after land and drying
+ground when a verdict names the worst finding. The meta line names the leg,
+the product, the restrictions, the categories, the dates and the ETAs.
 
 Time works as for S-124 warnings: the ETAs over the stretch where the vessel
 is in the area; without them, the plan's departure; and without one,
@@ -343,21 +343,50 @@ dropped, so the navigator still sees it on the route.
 Holes are outside the area, and where S-101 cells overlap only the finest
 cell at the place the route meets an area counts, so a coarse cell's copy of
 an area gives no second finding. The wording, and the labels of the
-restriction and category codes, come from `RouteAreaOptions.Text`.
+restriction and category codes, come from `RouteAreaOptions.Formatter`.
 
 ## Findings
 
-`RouteFinding` is one entry in a route's findings list. Each check (under-keel
-clearance, the route check, S-124 warnings, and later charted dangers)
-produces these, so one list can show them all. A finding has:
+`RouteFinding` is one entry in a route's findings list. Each check (the
+chart and depth checks, areas, S-124 warnings, and under-keel clearance
+through `ClearanceFindings.Build`) produces these, so one list can show them
+all. A finding has:
 
+- a `Code` from `RouteFindingCodes`, the one catalogue of codes. Each
+  `RouteFindingCode` has its `Value` (such as `route_check.crosses_land`),
+  its `Category`, its default `Group`, and its `HeadlineRank`, the order in
+  which Must review findings name a verdict
 - a `Group`: `MustReview`, `Check` or `Info`
-- a `Source`, which names the check: `Clearance`, `RouteCheck`, `S124`,
-  `Confidence` or `Data`
-- a `Title` and a `Meta` line
-- the `LegIndex` and `DistanceMeters` along the route
+- a `Category`, what it's about: `Chart`, `Depth`, `Area`, `Warning`,
+  `Clearance`, `Confidence` or `Data`
+- the `LegIndex` and `Distance` along the route
 - a `Location`: a point, or a span of the route
-- an optional `Feature` (dataset and feature id) that pick and describe can open
+- an optional `Feature` (dataset, feature id and, for chart findings, feature
+  type) that pick and describe can open
+- typed `Details`, so a client gets the numbers without parsing text:
+  `DangerDetails`, `ShoalDetails`, `AreaDetails`, `WarningDetails` or
+  `ClearanceDetails`
+- a `Title` and a `Meta` line, rendered by a `RouteFindingFormatter`
+
+The formatter's wording is English by default, in the invariant culture,
+metres and UTC. Pass a culture, a depth unit or a time zone to its
+constructor, or subclass it and override its virtual phrases to use your own
+resources (SoundCharts reads its `Strings.resx`). `Render` renders a finding
+again, so a host can switch depth unit or time format without checking again.
+
+```csharp
+var formatter = new RouteFindingFormatter(CultureInfo.GetCultureInfo("fr-FR"), DepthUnit.Feet);
+var findings = new RouteCheckEngine(charts, RouteCheckOptions.Default with { Formatter = formatter })
+    .Check(plan, settings).Findings;
+
+foreach (var finding in findings)
+{
+    if (finding.Details is DangerDetails danger)
+    {
+        Console.WriteLine($"{danger.FeatureType}: {danger.Depth?.TotalMetres} m, {danger.ThresholdKind}");
+    }
+}
+```
 
 ## Rules shared with the pick report
 

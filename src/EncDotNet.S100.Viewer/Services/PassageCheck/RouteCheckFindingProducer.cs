@@ -1,8 +1,6 @@
-using System.Globalization;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
-using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 
@@ -44,7 +42,7 @@ internal sealed class RouteCheckFindingProducer : IRouteFindingProducer
     public Task<IReadOnlyList<RouteFinding>> ProduceAsync(RouteFindingRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var options = _options ?? RouteCheckOptions.Default with { Text = Text() };
+        var options = _options ?? RouteCheckOptions.Default with { Formatter = new ViewerFindingFormatter(request) };
         var settings = Settings(request);
         return Task.Run<IReadOnlyList<RouteFinding>>(
             () =>
@@ -70,43 +68,4 @@ internal sealed class RouteCheckFindingProducer : IRouteFindingProducer
                 SafetyDepth = mariner.SafetyDepth,
             }
             : request.Settings;
-
-    /// <summary>The engine's wording, from the viewer's resources.</summary>
-    internal static RouteCheckText Text() => new()
-    {
-        CrossesLand = Strings.RouteCheck_CrossesLand,
-        LandInCorridor = Strings.RouteCheck_LandInCorridor,
-        CrossesDrying = Strings.RouteCheck_CrossesDrying,
-        DryingInCorridor = Strings.RouteCheck_DryingInCorridor,
-        OutsideChartCoverage = Strings.RouteCheck_OutsideChartCoverage,
-        DangerInCorridorFormat = Strings.RouteCheck_DangerInCorridorFormat,
-        DangerNearRouteFormat = Strings.RouteCheck_DangerNearRouteFormat,
-        Wreck = Strings.RouteCheck_Wreck,
-        Obstruction = Strings.RouteCheck_Obstruction,
-        Rock = Strings.RouteCheck_Rock,
-        CrossesSafetyContour = Strings.RouteCheck_CrossesSafetyContour,
-        SafetyContourInCorridor = Strings.RouteCheck_SafetyContourInCorridor,
-        SoundingsBelowSafetyDepth = Strings.RouteCheck_SoundingsBelowSafetyDepth,
-        CrossesS102Shoal = Strings.RouteCheck_CrossesS102Shoal,
-        S102ShoalInCorridor = Strings.RouteCheck_S102ShoalInCorridor,
-        ToPortFormat = Strings.RouteCheck_ToPortFormat,
-        ToStarboardFormat = Strings.RouteCheck_ToStarboardFormat,
-        OnTrack = Strings.RouteCheck_OnTrack,
-        DepthFormat = Strings.RouteCheck_DepthFormat,
-        LeastDepthFormat = Strings.RouteCheck_LeastDepthFormat,
-        SoundingCountFormat = Strings.RouteCheck_SoundingCountFormat,
-        S102CellWithUncertaintyFormat = Strings.RouteCheck_S102CellWithUncertaintyFormat,
-        S102CellFormat = Strings.RouteCheck_S102CellFormat,
-        DepthUnknown = Strings.RouteCheck_DepthUnknown,
-        Awash = Strings.RouteCheck_Awash,
-        CoversAndUncovers = Strings.RouteCheck_CoversAndUncovers,
-        AboveWater = Strings.RouteCheck_AboveWater,
-        BelowSafetyDepthFormat = Strings.RouteCheck_BelowSafetyDepthFormat,
-        BelowKeelFormat = Strings.RouteCheck_BelowKeelFormat,
-        BelowSafetyContourFormat = Strings.RouteCheck_BelowSafetyContourFormat,
-        LegFormat = Strings.Check_LegFormat,
-        LengthFormat = Strings.RouteCheck_LengthFormat,
-        Separator = Strings.RouteCheck_Separator,
-        Culture = CultureInfo.CurrentCulture,
-    };
 }

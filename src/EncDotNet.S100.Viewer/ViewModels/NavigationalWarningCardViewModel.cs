@@ -45,7 +45,7 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
     private bool _isOpen = true;
     private IReadOnlyList<NavigationalWarningEntry> _linkTargets = [];
     private NavigationalWarningSet _set = NavigationalWarningSet.Empty;
-    private RouteFindingWarning? _onRoute;
+    private WarningDetails? _onRoute;
     private string? _onRouteText;
     private readonly RelayCommand _openRouteFindingCommand;
     private RouteFinding? _routeFinding;
@@ -211,14 +211,15 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
         _openRouteFindingCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>The route row's text for an S-124 finding, from the route check's legs (<see cref="RouteFindingWarning.EndLegIndex"/>).</summary>
+    /// <summary>The route row's text for an S-124 finding, from the route check's legs (<see cref="WarningDetails.EndLegIndex"/>).</summary>
     internal static string RouteRowText(RouteFinding finding)
     {
         ArgumentNullException.ThrowIfNull(finding);
-        var crosses = finding.Warning?.Relation != RouteWarningRelation.Near;
+        var warning = finding.Details as WarningDetails;
+        var crosses = warning?.Relation != RouteWarningRelation.Near;
         if (finding.LegIndex is not { } first)
             return crosses ? Strings.Pick_Warning_CrossesRoute : Strings.Pick_Warning_NearRoute;
-        var last = Math.Max(first, finding.Warning?.EndLegIndex ?? first);
+        var last = Math.Max(first, warning?.EndLegIndex ?? first);
         return last == first
             ? string.Format(CultureInfo.CurrentCulture, crosses ? Strings.Pick_Warning_CrossesRouteLegFormat : Strings.Pick_Warning_NearRouteLegFormat, first + 1, first + 2)
             : string.Format(CultureInfo.CurrentCulture, crosses ? Strings.Pick_Warning_CrossesRouteLegsFormat : Strings.Pick_Warning_NearRouteLegsFormat, last - first + 1);
@@ -294,7 +295,7 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
     /// pill ("In force at 06:08", "Not in force at 06:15", "Cancelled").
     /// <see langword="null"/> goes back to the view time.
     /// </summary>
-    public void SetStatusOnRoute(RouteFindingWarning? warning, string? text)
+    public void SetStatusOnRoute(WarningDetails? warning, string? text)
     {
         var before = State;
         var beforeText = StatusText;
@@ -308,7 +309,7 @@ internal sealed partial class NavigationalWarningCardViewModel : LongTextCardVie
 
     // The route check's status in the card's terms: not in force before a
     // validity range starts reads "not yet", any other end reads "ended".
-    private static NavigationalWarningState StateOnRoute(RouteFindingWarning warning) => warning.Status switch
+    private static NavigationalWarningState StateOnRoute(WarningDetails warning) => warning.Status switch
     {
         RouteWarningStatus.InForce => NavigationalWarningState.InForce,
         RouteWarningStatus.Cancelled => warning.Withdrawal
