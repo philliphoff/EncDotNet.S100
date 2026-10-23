@@ -11,9 +11,21 @@ namespace EncDotNet.S100.Viewer.Views;
 /// </summary>
 public partial class ClearanceView : UserControl
 {
+    // About the y labels' width, which the plot doesn't get.
+    private const double YLabelsWidth = 40;
+
     public ClearanceView()
     {
         InitializeComponent();
+        Chart.SizeChanged += (_, _) => UpdatePlotWidth();
+        DataContextChanged += (_, _) => UpdatePlotWidth();
+    }
+
+    // The time axis spaces its labels to the plot's width (#1038).
+    private void UpdatePlotWidth()
+    {
+        if (DataContext is ClearanceViewModel vm && Chart.Bounds.Width > YLabelsWidth)
+            vm.SetPlotWidth(Chart.Bounds.Width - YLabelsWidth);
     }
 
     // Hovering the profile moves the shared cursor, which moves the map ghost (D3).

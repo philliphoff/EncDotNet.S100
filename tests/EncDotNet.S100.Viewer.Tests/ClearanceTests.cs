@@ -90,6 +90,54 @@ public sealed class ClearanceTests : IDisposable
         Assert.InRange(dot.Values!.Single().X!.Value, 0.105 * 60.04 - 0.1, 0.115 * 60.04 + 0.1);
     }
 
+    [Theory]
+    [InlineData(15f, 5, 20)] // The handoff fixture: 5 m ticks, as before.
+    [InlineData(40f, 10, 50)]
+    [InlineData(120f, 25, 125)]
+    [InlineData(600f, 200, 800)]
+    public async Task The_elevation_ticks_coarsen_with_depth_and_keep_cd_on_a_tick(float deep, double step, double offset)
+    {
+        // #1038: 5 m ticks in 120 m of water made 25 labels in a short dock.
+        var (f, vm) = await CheckedAsync(new PassageCheckFixture(deepMeters: deep));
+        var profile = ClearanceProfile.Build(f.Check.Current!, ClearanceAxis.Distance);
+
+        Assert.Equal(step, profile.ElevationStep);
+        Assert.Equal(offset, profile.Offset);
+        Assert.Equal(0, profile.Offset % profile.ElevationStep); // CD is a tick.
+        Assert.InRange(profile.Top / profile.ElevationStep, 1, ClearanceProfile.MaxElevationIntervals + 1);
+        var y = Assert.IsType<Axis>(Assert.Single(vm.YAxes));
+        Assert.Equal(step, y.MinStep);
+        Assert.True(y.ForceStepToMin);
+    }
+
+    [Theory]
+    [InlineData(6, 300, 30)] // The handoff fixture: about 1,6 h at 6 kn, half-hour ticks.
+    [InlineData(0.2, 300, 1440)] // About two days at 0,2 kn.
+    [InlineData(0.2, 600, 720)]
+    [InlineData(0.2, 1200, 360)]
+    public async Task The_time_ticks_follow_the_passage_length_and_plot_width(double knots, double plotWidth, double step)
+    {
+        // #1038: 30-minute ticks on a two-day passage made 96 labels.
+        var fixture = new PassageCheckFixture(waterEnd: PassageCheckFixture.WaterStart.AddHours(60));
+        fixture.Route.SetPassageValue(Viewer.Routing.RoutePassageField.Speed, knots);
+        var (_, vm) = await CheckedAsync(fixture);
+        vm.SetPlotWidth(plotWidth);
+        vm.Axis = ClearanceAxis.Time;
+
+        var x = Assert.IsType<Axis>(Assert.Single(vm.XAxes));
+        Assert.Equal(step, x.MinStep);
+        Assert.True(x.ForceStepToMin);
+
+        // Every label gets its width and a gap.
+        var (from, to) = (x.MinLimit!.Value, x.MaxLimit!.Value);
+        var labelWidth = Math.Max(x.Labeler(from).Length, x.Labeler(to).Length) * 6;
+        Assert.True(Math.Floor((to - from) / step) * (labelWidth + 16) <= plotWidth, $"{(to - from) / step:0.#} labels at {step} min");
+
+        // A wider plot after the fact refines the ticks without a new check.
+        vm.SetPlotWidth(plotWidth * 4);
+        Assert.True(Assert.IsType<Axis>(Assert.Single(vm.XAxes)).MinStep <= step);
+    }
+
     [Fact]
     public async Task Every_readout_number_traces_to_get_passage_result()
     {

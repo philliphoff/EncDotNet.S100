@@ -25,21 +25,37 @@ internal sealed class ClearanceProfile
 {
     private readonly PassageCheckSnapshot _snapshot;
 
-    private ClearanceProfile(PassageCheckSnapshot snapshot, ClearanceAxis axis, double offset, double top)
+    /// <summary>The y tick steps, metres, smallest first (#1038).</summary>
+    private static readonly double[] ElevationSteps = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
+
+    /// <summary>The time-axis tick steps, minutes, smallest first (#1038): half-hours up to a week.</summary>
+    private static readonly double[] TimeSteps = [30, 60, 120, 180, 360, 720, 1440, 2880, 4320, 10080];
+
+    /// <summary>The most y intervals: about six labels whatever the depth.</summary>
+    public const int MaxElevationIntervals = 6;
+
+    private ClearanceProfile(PassageCheckSnapshot snapshot, ClearanceAxis axis, double offset, double top, double elevationStep)
     {
         _snapshot = snapshot;
         Axis = axis;
         Offset = offset;
         Top = top;
+        ElevationStep = elevationStep;
     }
 
     public ClearanceAxis Axis { get; }
 
-    /// <summary>The shift added to every elevation: a multiple of 5 m below the deepest seabed.</summary>
+    /// <summary>The shift added to every elevation: a multiple of <see cref="ElevationStep"/> below the deepest seabed, so CD is a tick.</summary>
     public double Offset { get; }
 
     /// <summary>The top of the chart in shifted units.</summary>
     public double Top { get; }
+
+    /// <summary>
+    /// The y tick step, metres: 5 m in shallow water, coarser as the range
+    /// grows, so the axis keeps to <see cref="MaxElevationIntervals"/> labels.
+    /// </summary>
+    public double ElevationStep { get; }
 
     public IReadOnlyList<UkcSample> Samples => _snapshot.Result.Samples;
 
@@ -65,8 +81,33 @@ internal sealed class ClearanceProfile
                 highest = Math.Max(highest, h);
         }
 
-        var offset = 5 * Math.Ceiling((deepest + 1) / 5);
-        return new ClearanceProfile(snapshot, axis, offset, offset + highest + 2);
+        var step = NiceStep(deepest + 1 + highest + 2, MaxElevationIntervals, ElevationSteps);
+        var offset = step * Math.Ceiling((deepest + 1) / step);
+        return new ClearanceProfile(snapshot, axis, offset, offset + highest + 2, step);
+    }
+
+    /// <summary>
+    /// The time-axis tick step, minutes, for a plot <paramref name="plotWidth"/>
+    /// pixels wide whose labels are about <paramref name="labelWidth"/> wide:
+    /// the smallest step that leaves each label its width and a gap (#1038).
+    /// </summary>
+    public double TimeStep(double plotWidth, double labelWidth)
+    {
+        var (from, to) = XRange();
+        var fit = (int)Math.Floor(plotWidth / (labelWidth + 16));
+        return NiceStep(to - from, Math.Max(1, fit), TimeSteps);
+    }
+
+    /// <summary>The smallest step in <paramref name="steps"/> that splits <paramref name="range"/> into at most <paramref name="maxIntervals"/>.</summary>
+    internal static double NiceStep(double range, int maxIntervals, IReadOnlyList<double> steps)
+    {
+        foreach (var step in steps)
+        {
+            if (range / step <= maxIntervals)
+                return step;
+        }
+
+        return steps[^1] * Math.Ceiling(range / maxIntervals / steps[^1]);
     }
 
     /// <summary>The x of a sample (its shoalest point).</summary>

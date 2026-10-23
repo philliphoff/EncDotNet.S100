@@ -525,6 +525,58 @@ internal sealed class ClearanceViewModel : ViewModelBase
         UpdateBand(force);
     }
 
+    // The x axis. Distance steps are LiveCharts' own (they follow the plot
+    // size); time steps are whole hours or days sized to the plot (#1038).
+    private Axis BuildXAxis(ClearanceProfile profile, SolidColorPaint labels)
+    {
+        var (from, to) = profile.XRange();
+        var departure = profile.Snapshot.Result.Departure;
+        var timeFormat = TimeFormat;
+        Func<double, string> labeler = profile.Axis == ClearanceAxis.Time
+            ? v => PassageFormatting.FormatEta(departure.AddMinutes(v), departure, timeFormat)
+            : v => v.ToString("0.#", CultureInfo.CurrentCulture);
+        return new Axis
+        {
+            MinLimit = from,
+            MaxLimit = to,
+            LabelsPaint = labels,
+            SeparatorsPaint = null,
+            TextSize = 10,
+            MinStep = profile.Axis == ClearanceAxis.Time ? TimeStep(profile, labeler) : 0.5,
+            ForceStepToMin = profile.Axis == ClearanceAxis.Time,
+            Labeler = labeler,
+        };
+    }
+
+    private double TimeStep(ClearanceProfile profile, Func<double, string> labeler)
+    {
+        var (from, to) = profile.XRange();
+        var chars = Math.Max(labeler(from).Length, labeler(to).Length);
+        return profile.TimeStep(_plotWidth, chars * TimeLabelCharWidth);
+    }
+
+    // About the width of a character at the axis's 10 px labels.
+    private const double TimeLabelCharWidth = 6;
+
+    private double _plotWidth = 600;
+
+    /// <summary>
+    /// The profile's plot width, pixels, from the view: the time axis spaces
+    /// its labels to fit it (#1038).
+    /// </summary>
+    public void SetPlotWidth(double width)
+    {
+        if (!double.IsFinite(width) || width <= 0 || Math.Abs(width - _plotWidth) < 1)
+            return;
+        _plotWidth = width;
+        if (_profile is { Axis: ClearanceAxis.Time } profile
+            && XAxes is [Axis { Labeler: { } labeler, MinStep: var step } axis]
+            && TimeStep(profile, labeler) != step)
+        {
+            XAxes = [BuildXAxis(profile, (SolidColorPaint)axis.LabelsPaint!)];
+        }
+    }
+
     private void BuildChart(ClearanceProfile profile)
     {
         var dark = _theme?.IsDarkTheme ?? false;
@@ -643,32 +695,14 @@ internal sealed class ClearanceViewModel : ViewModelBase
 
         var axisLabels = new SolidColorPaint(theme.AxisLabel);
         var separators = new SolidColorPaint(theme.Separator);
-        var (from, to) = profile.XRange();
-        var departure = profile.Snapshot.Result.Departure;
-        var timeFormat = TimeFormat;
-        XAxes =
-        [
-            new Axis
-            {
-                MinLimit = from,
-                MaxLimit = to,
-                LabelsPaint = axisLabels,
-                SeparatorsPaint = null,
-                TextSize = 10,
-                MinStep = profile.Axis == ClearanceAxis.Time ? 30 : 0.5,
-                ForceStepToMin = profile.Axis == ClearanceAxis.Time,
-                Labeler = profile.Axis == ClearanceAxis.Time
-                    ? v => PassageFormatting.FormatEta(departure.AddMinutes(v), departure, timeFormat)
-                    : v => v.ToString("0.#", CultureInfo.CurrentCulture),
-            },
-        ];
+        XAxes = [BuildXAxis(profile, axisLabels)];
         YAxes =
         [
             new Axis
             {
                 MinLimit = 0,
                 MaxLimit = profile.Top,
-                MinStep = 5,
+                MinStep = profile.ElevationStep,
                 ForceStepToMin = true,
                 LabelsPaint = axisLabels,
                 SeparatorsPaint = separators,
