@@ -9,13 +9,14 @@ internal enum ClearanceAxis
     /// <summary>Distance from departure, nautical miles.</summary>
     Distance,
 
-    /// <summary>ETA, as minutes after departure.</summary>
+    /// <summary>ETA, as minutes after midnight of the departure day (see <see cref="ClearanceProfile.TimeAt"/>).</summary>
     Time,
 }
 
 /// <summary>
 /// The numbers behind the Clearance profile (#902, handoff D2–D3), in chart
-/// units: x in nautical miles or minutes after departure, and elevations in
+/// units: x in nautical miles or minutes after midnight of the departure day,
+/// and elevations in
 /// metres relative to chart datum (CD), positive up. LiveCharts fills a line
 /// series down to y = 0, so every elevation is drawn shifted up by
 /// <see cref="Offset"/>, which puts the chart's floor at 0 and the seabed
@@ -34,9 +35,16 @@ internal sealed class ClearanceProfile
     /// <summary>The most y intervals: about six labels whatever the depth.</summary>
     public const int MaxElevationIntervals = 6;
 
-    private ClearanceProfile(PassageCheckSnapshot snapshot, ClearanceAxis axis, double offset, double top, double elevationStep)
+    // Midnight of the departure day where times are shown, so time ticks,
+    // multiples of their step from x = 0, fall on the clock (#1038).
+    private readonly DateTimeOffset _timeOrigin;
+
+    private ClearanceProfile(PassageCheckSnapshot snapshot, ClearanceAxis axis, double offset, double top, double elevationStep, TimeFormat timeFormat)
     {
         _snapshot = snapshot;
+        var departure = snapshot.Result.Departure;
+        var shown = timeFormat == TimeFormat.Utc ? departure.ToUniversalTime() : departure.ToLocalTime();
+        _timeOrigin = new DateTimeOffset(shown.Date, shown.Offset);
         Axis = axis;
         Offset = offset;
         Top = top;
@@ -65,7 +73,10 @@ internal sealed class ClearanceProfile
     public static bool HasTimes(PassageCheckSnapshot snapshot) =>
         snapshot.Result.Samples.Count > 0 && snapshot.Result.Samples.All(s => s.HasEta);
 
-    public static ClearanceProfile Build(PassageCheckSnapshot snapshot, ClearanceAxis axis)
+    /// <param name="snapshot">The check result to profile.</param>
+    /// <param name="axis">The x axis; Time falls back to Distance without ETAs.</param>
+    /// <param name="timeFormat">Where times are shown: the time axis's ticks fall on that zone's clock.</param>
+    public static ClearanceProfile Build(PassageCheckSnapshot snapshot, ClearanceAxis axis, TimeFormat timeFormat = TimeFormat.Local)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         if (axis == ClearanceAxis.Time && !HasTimes(snapshot))
@@ -83,7 +94,7 @@ internal sealed class ClearanceProfile
 
         var step = NiceStep(deepest + 1 + highest + 2, MaxElevationIntervals, ElevationSteps);
         var offset = step * Math.Ceiling((deepest + 1) / step);
-        return new ClearanceProfile(snapshot, axis, offset, offset + highest + 2, step);
+        return new ClearanceProfile(snapshot, axis, offset, offset + highest + 2, step, timeFormat);
     }
 
     /// <summary>
@@ -110,9 +121,14 @@ internal sealed class ClearanceProfile
         return steps[^1] * Math.Ceiling(range / maxIntervals / steps[^1]);
     }
 
+    /// <summary>The time at an x on the time axis.</summary>
+    public DateTimeOffset TimeAt(double x) => _timeOrigin.AddMinutes(x);
+
+    private double Minutes(DateTimeOffset t) => (t - _timeOrigin).TotalMinutes;
+
     /// <summary>The x of a sample (its shoalest point).</summary>
     public double X(UkcSample sample) => Axis == ClearanceAxis.Time
-        ? (sample.Time - _snapshot.Result.Departure).TotalMinutes
+        ? Minutes(sample.Time)
         : sample.DistanceMeters / PassageGeodesy.MetersPerNauticalMile;
 
     /// <summary>The x of a distance along the passage.</summary>
@@ -129,7 +145,7 @@ internal sealed class ClearanceProfile
                 if (leg.Start is not { } start || leg.End is not { } end)
                     return 0;
                 var f = leg.DistanceMeters > 0 ? Math.Clamp((meters - leg.StartDistanceMeters) / leg.DistanceMeters, 0, 1) : 0;
-                return (start - _snapshot.Result.Departure).TotalMinutes + (f * (end - start).TotalMinutes);
+                return Minutes(start) + (f * (end - start).TotalMinutes);
             }
         }
 
@@ -146,8 +162,8 @@ internal sealed class ClearanceProfile
         {
             if (leg.Start is not { } start || leg.End is not { } end)
                 continue;
-            var from = (start - _snapshot.Result.Departure).TotalMinutes;
-            var to = (end - _snapshot.Result.Departure).TotalMinutes;
+            var from = Minutes(start);
+            var to = Minutes(end);
             if (x <= to || ReferenceEquals(leg, _snapshot.Result.Legs[^1]))
             {
                 var f = to > from ? Math.Clamp((x - from) / (to - from), 0, 1) : 0;

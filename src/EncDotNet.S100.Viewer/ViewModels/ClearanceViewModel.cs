@@ -515,7 +515,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
             OnPropertyChanged(nameof(AxisIndex));
         }
 
-        var profile = ClearanceProfile.Build(snapshot, _axis);
+        var profile = ClearanceProfile.Build(snapshot, _axis, TimeFormat);
         _profile = profile;
         HasProfile = true;
         EmptyText = null;
@@ -526,14 +526,15 @@ internal sealed class ClearanceViewModel : ViewModelBase
     }
 
     // The x axis. Distance steps are LiveCharts' own (they follow the plot
-    // size); time steps are whole hours or days sized to the plot (#1038).
+    // size); time steps are whole hours or days sized to the plot, on the
+    // clock (#1038).
     private Axis BuildXAxis(ClearanceProfile profile, SolidColorPaint labels)
     {
         var (from, to) = profile.XRange();
         var departure = profile.Snapshot.Result.Departure;
         var timeFormat = TimeFormat;
         Func<double, string> labeler = profile.Axis == ClearanceAxis.Time
-            ? v => PassageFormatting.FormatEta(departure.AddMinutes(v), departure, timeFormat)
+            ? v => PassageFormatting.FormatEta(profile.TimeAt(v), departure, timeFormat)
             : v => v.ToString("0.#", CultureInfo.CurrentCulture);
         return new Axis
         {

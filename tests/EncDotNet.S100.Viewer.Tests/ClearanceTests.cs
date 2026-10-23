@@ -110,6 +110,21 @@ public sealed class ClearanceTests : IDisposable
         Assert.True(y.ForceStepToMin);
     }
 
+    [Fact]
+    public async Task The_time_axis_starts_at_midnight_where_times_are_shown()
+    {
+        var (f, _) = await CheckedAsync();
+        var departure = f.Check.Current!.Result.Departure;
+
+        var utc = ClearanceProfile.Build(f.Check.Current!, ClearanceAxis.Time, TimeFormat.Utc);
+        Assert.Equal(new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero), utc.TimeAt(0));
+        Assert.Equal(7 * 60 + 10, utc.XAtDistance(0), 6);
+
+        var local = ClearanceProfile.Build(f.Check.Current!, ClearanceAxis.Time, TimeFormat.Local);
+        Assert.Equal(TimeSpan.Zero, local.TimeAt(0).ToLocalTime().TimeOfDay);
+        Assert.Equal(departure, local.TimeAt(local.XAtDistance(0)));
+    }
+
     [Theory]
     [InlineData(6, 300, 30)] // The handoff fixture: about 1,6 h at 6 kn, half-hour ticks.
     [InlineData(0.2, 300, 1440)] // About two days at 0,2 kn.
@@ -132,6 +147,14 @@ public sealed class ClearanceTests : IDisposable
         var (from, to) = (x.MinLimit!.Value, x.MaxLimit!.Value);
         var labelWidth = Math.Max(x.Labeler(from).Length, x.Labeler(to).Length) * 6;
         Assert.True(Math.Floor((to - from) / step) * (labelWidth + 16) <= plotWidth, $"{(to - from) / step:0.#} labels at {step} min");
+
+        // Ticks fall on the clock, not on multiples of the step after the 07:10Z departure.
+        for (var tick = Math.Ceiling(from / step) * step; tick <= to; tick += step)
+        {
+            var label = x.Labeler(tick);
+            var clock = TimeOnly.ParseExact(label[^6..^1], "HH:mm", CultureInfo.InvariantCulture);
+            Assert.True(clock.ToTimeSpan().TotalMinutes % Math.Min(step, 1440) == 0, $"Tick '{label}' is off the {step}-minute clock.");
+        }
 
         // A wider plot after the fact refines the ticks without a new check.
         vm.SetPlotWidth(plotWidth * 4);
@@ -168,14 +191,14 @@ public sealed class ClearanceTests : IDisposable
     public async Task The_distance_and_time_toggle_keeps_the_cursor_on_the_same_sample()
     {
         var (f, vm) = await CheckedAsync();
-        f.Check.SetCursor(Meters(0.07));
+        f.Check.SetCursor(Meters(0.0705)); // Mid-sample: a boundary rounds either way through minutes.
         var sample = vm.ReadoutSample!.Index;
         var nm = vm.CursorX!.Value;
 
         vm.AxisIndex = 1;
         Assert.Equal(ClearanceAxis.Time, vm.Axis);
         Assert.Equal(sample, vm.ReadoutSample!.Index);
-        Assert.InRange(vm.CursorX!.Value, 41, 43); // 0,07° ≈ 4,2 NM at 6 kn ≈ 42 min
+        Assert.InRange(vm.CursorX!.Value, 430 + 41, 430 + 43); // 0,07° ≈ 4,2 NM at 6 kn ≈ 42 min after 07:10Z
 
         // Hovering at that time lands on the same sample.
         vm.SetCursorAtX(vm.CursorX!.Value);
