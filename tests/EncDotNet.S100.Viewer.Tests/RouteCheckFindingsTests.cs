@@ -253,12 +253,15 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
 
         Assert.True(result.TryGetValue(out var value), result.TryGetError(out var e) ? e.Message : "");
         Assert.Equal(s.Route.Id, value!.RouteId);
-        Assert.Equal("3 to review", value.Summary.Text);
-        Assert.Equal(s.RouteChecks.Select(f => (f.Id, f.Code.Value, f.LegIndex)), value.Findings.Select(f => (f.Id, f.Code, f.LegIndex)));
-        for (var i = 0; i < value.Findings.Count; i++)
+        // The route has a draft, so check_route also reports its clearance;
+        // the chart check's findings are the findings list's route checks.
+        var chart = value.Findings.Where(f => f.Category is "chart" or "depth" || f.Code == RouteFindingCodes.OutsideChartCoverage.Value).ToList();
+        Assert.Equal(s.RouteChecks.Count, value.Checks.Single(c => c.Name == "chart").FindingCount);
+        Assert.Equal(s.RouteChecks.Select(f => (f.Id, f.Code.Value, f.LegIndex)), chart.Select(f => (f.Id, f.Code, f.LegIndex)));
+        for (var i = 0; i < chart.Count; i++)
         {
-            Assert.Equal(s.RouteChecks[i].Distance!.Value.TotalMetres / PassageGeodesy.MetersPerNauticalMile, value.Findings[i].DistanceNm!.Value, 3);
-            Assert.Equal(s.RouteChecks[i].Feature!.FeatureId, value.Findings[i].Feature!.FeatureId);
+            Assert.Equal(s.RouteChecks[i].Distance!.Value.TotalMetres / PassageGeodesy.MetersPerNauticalMile, chart[i].DistanceNm!.Value, 3);
+            Assert.Equal(s.RouteChecks[i].Feature!.FeatureId, chart[i].Feature!.FeatureId);
         }
 
         Assert.All(value.Legs, l => Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, l.PortMeters));

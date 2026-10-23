@@ -102,6 +102,26 @@ The writer produces S-421 Edition 1.0.0 GML (namespace
 `S421WriteOptions.DatasetIdentifier` sets the dataset's `gml:id`. The same
 route always gives the same bytes. The writer needs at least two waypoints.
 
+## Check a route
+
+`ToPassagePlan` converts a typed route to the `PassagePlan` that the
+`EncDotNet.S100.Navigation` route and clearance checks take:
+
+```csharp
+using EncDotNet.S100.Datasets.S421;
+using EncDotNet.S100.Datasets.S421.DataModel;
+
+var route = S421RoutePlan.From(S421Dataset.Open("path/to/route.gml"), out _).Route;
+var plan = route.ToPassagePlan();
+```
+
+Leg `i` reads waypoint `i`'s outgoing `RouteWaypointLeg`: its draft, static
+UKC, cross-track distance limits (metres) and geometry type. Speeds and the
+departure come from the planning schedule variant
+(`S421Route.GetPlanningSchedule`): a leg's speed is its start waypoint's
+planned SOG, and the departure is the first element's ETD. S-421 has no squat
+allowance.
+
 ## Main types
 
 - **`S421Dataset`**: the parsed dataset, with its features, information types

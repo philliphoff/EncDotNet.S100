@@ -496,7 +496,7 @@ public sealed class RouteCheckReportTests : IDisposable
             .InvokeAsync(new SelectFindingRequest("route_check.warning.0", Zoom: false), ct));
         Assert.Equal("route_check.warning.0", selected.SelectedId);
 
-        // get_passage_result still needs a draft: Check passage has no clearance result.
+        // The clearance check still needs a draft: Check passage has no clearance result.
         Assert.Null(f.Check.Current);
     }
 

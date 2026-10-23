@@ -6,6 +6,19 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **One `check_route` for the whole route check.** The MCP `check_route`
+  tool now runs `RouteChecker` and returns the whole report: the `verdict`
+  (`must_review`, `water_level_ends_before_arrival`, `check` or `clear`,
+  with the finding that names it), each check's status (`checks`), every
+  finding, the clearance ones included, and the under-keel `clearance`.
+  `includeSamples` adds per-leg results and samples, and `includeWindow`
+  (with `windowFrom` and `windowTo`, or the S-104 range) adds the departure
+  sweep. `get_passage_result` is gone (a breaking change): its arguments
+  and result are now `check_route`'s, and `time` is now `departure`.
+  `s100 route check` runs `RouteChecker` itself: its JSON `check` is the
+  `check_route` result and `passage` is gone, and the exit code follows the
+  verdict, so `--fail-on check` also fails on a tight clearance. See
+  [Check a route](mcp-server.md#check-a-route).
 - **Route checks: one plan for every check.** In
   `EncDotNet.S100.Navigation`, the chart, area, S-124 and clearance checks
   all take a `PassagePlan` of `PassageLeg`s and a `RouteCheckSettings`.
@@ -404,7 +417,7 @@ month. For package versions and release assets, see
   checks a SoundCharts route or a polyline and draft, and can sweep departures
   to find a window. See the
   [package README](../src/EncDotNet.S100.Navigation/README.md) and
-  [Check a passage's clearance](mcp-server.md#check-a-passages-clearance).
+  [Under-keel clearance](mcp-server.md#under-keel-clearance).
 - **Raster tiles.** The new `s100 tiles export` command renders a dataset, a
   composite or an exchange set as XYZ Web Mercator tiles for MapLibre,
   Leaflet and OpenLayers, written as a `{z}/{x}/{y}` folder, a PMTiles

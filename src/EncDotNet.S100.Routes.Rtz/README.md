@@ -5,7 +5,8 @@ exchange format of IEC 61174 Annex S that ECDIS and route planning tools use.
 It handles RTZ 1.0 (IEC 61174 Ed. 4.0:2015), 1.1 (the STM extended Annex S)
 and 1.2 (IEC PAS 61174-1:2021).
 
-The package depends only on `EncDotNet.S100.Core`. RTZ isn't an S-100
+The package depends on `EncDotNet.S100.Core` and `EncDotNet.S100.Navigation`
+(for the passage plan conversion). RTZ isn't an S-100
 product, so it lives beside the S-421 package rather than in it. A tool that
 reads both formats installs both.
 
@@ -49,6 +50,25 @@ RtzWriter.Write(route, "Nab to Southampton.rtz", RtzVersions.V1_0);
 The writer uses the target version's spelling (`sheduleElement` in 1.0,
 `scheduleElement` later), time format (`xsd:time` windows in 1.0,
 `xsd:duration` later) and extension layout.
+
+## Check a route
+
+`ToPassagePlan` converts the route to the `PassagePlan` that the
+`EncDotNet.S100.Navigation` route and clearance checks take:
+
+```csharp
+using EncDotNet.S100.Routes.Rtz;
+
+var plan = RtzReader.Read("Nab to Southampton.rtz").ToPassagePlan();
+Console.WriteLine($"{plan.Legs.Count} legs, departs {plan.Departure:u}");
+```
+
+It applies RTZ's semantics. Leg `i` reads the `leg` of waypoint `i + 1`, with
+the default waypoint's values filled in. Cross-track limits are converted
+from nautical miles to metres, and the draft is the deeper of the forward and
+aft draughts. Speeds and the departure come from the planning schedule; a
+leg without a speed gets one implied by the previous departure and its ETA.
+RTZ has no squat allowance.
 
 ## What round-trips
 

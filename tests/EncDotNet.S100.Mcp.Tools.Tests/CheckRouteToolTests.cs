@@ -53,6 +53,9 @@ public class CheckRouteToolTests
         Assert.Equal([0, 1], value.Findings.Select(f => f.LegIndex!.Value));
         Assert.Equal("data.outside_chart_coverage.0", value.Findings[0].Id);
         Assert.Equal("Leg 1 → 2 · 0.60 NM", value.Findings[0].Meta);
+        Assert.Equal("check", value.Verdict.Kind);
+        Assert.Equal("data.outside_chart_coverage.0", value.Verdict.HeadlineId);
+        Assert.Null(value.Clearance);
         Assert.InRange(value.DistanceNm, 1.19, 1.21);
         Assert.Empty(value.Datasets);
         Assert.StartsWith("Not for navigation", value.Disclaimer, StringComparison.Ordinal);
@@ -133,12 +136,16 @@ public class CheckRouteToolTests
     }
 
     [Fact]
-    public async Task With_depths_and_no_charts_only_coverage_is_found()
+    public async Task With_depths_and_no_charts_only_missing_data_is_found()
     {
         var value = await Ok(new CheckRouteTool(new FakeDatasetCatalog()),
             new CheckRouteRequest(Polyline: Polyline, SafetyContourMeters: 10, SafetyDepthMeters: 8, DraftMeters: 5));
 
-        Assert.All(value.Findings, f => Assert.Equal(RouteFindingCodes.OutsideChartCoverage.Value, f.Code));
+        // The draft turns on the clearance check, which finds no depth or water level either.
+        Assert.Equal(
+            [RouteFindingCodes.NoChartedDepth.Value, RouteFindingCodes.NoWaterLevelCoverage.Value, RouteFindingCodes.OutsideChartCoverage.Value],
+            value.Findings.Select(f => f.Code).Distinct().Order(StringComparer.Ordinal));
+        Assert.Equal("ran", value.Checks.Single(c => c.Name == "chart").State);
     }
 
     [Theory]
@@ -147,16 +154,18 @@ public class CheckRouteToolTests
     [InlineData(0, 0, "No findings for your settings")]
     public void The_summary_names_the_worst_group(int mustReview, int check, string expected)
     {
-        Assert.Equal(expected, CheckRouteTool.SummaryText(mustReview, check));
+        Assert.Equal(expected, CheckRouteResult.SummaryText(mustReview, check));
     }
 
     // The contract suite picks up *Request / *Result / *Summary records;
-    // the finding, location, feature and leg records are checked here.
+    // every other CheckRoute* record is checked here.
     [Fact]
     public void Every_check_route_property_has_a_description()
     {
-        Type[] types = [typeof(CheckRouteRequest), typeof(CheckRouteResult), typeof(CheckRouteSummary), typeof(CheckRouteFinding),
-            typeof(CheckRouteLocation), typeof(CheckRouteFeature), typeof(CheckRouteLeg)];
+        var types = typeof(CheckRouteResult).Assembly.GetTypes()
+            .Where(t => t.IsPublic && t.Name.StartsWith("CheckRoute", StringComparison.Ordinal) && t != typeof(CheckRouteTool))
+            .ToList();
+        Assert.Contains(typeof(CheckRouteClearance), types);
 
         var missing = types
             .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly), (t, p) => (t, p))

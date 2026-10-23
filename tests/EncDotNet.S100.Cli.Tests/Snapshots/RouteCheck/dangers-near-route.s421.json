@@ -17,13 +17,40 @@
     "routeId": "ZZ00-DANGERS-1",
     "routeName": "Past the wrecks north of the channel (fictitious)",
     "distanceNm": 2.698,
+    "verdict": {
+      "kind": "must_review",
+      "title": "Wreck in the corridor",
+      "headlineId": "route_check.danger_in_corridor.1"
+    },
     "summary": {
-      "count": 6,
-      "mustReview": 5,
+      "count": 7,
+      "mustReview": 6,
       "check": 1,
       "info": 0,
-      "text": "5 to review"
+      "text": "6 to review"
     },
+    "checks": [
+      {
+        "name": "chart",
+        "state": "ran",
+        "findingCount": 6
+      },
+      {
+        "name": "areas",
+        "state": "ran",
+        "findingCount": 0
+      },
+      {
+        "name": "warnings",
+        "state": "ran",
+        "findingCount": 0
+      },
+      {
+        "name": "clearance",
+        "state": "ran",
+        "findingCount": 1
+      }
+    ],
     "findings": [
       {
         "id": "route_check.danger_in_corridor.1",
@@ -310,6 +337,45 @@
         }
       },
       {
+        "id": "clearance.below_setting.0",
+        "code": "clearance.below_setting",
+        "group": "must_review",
+        "category": "clearance",
+        "title": "Below your UKC setting for 1 min",
+        "meta": "Leg 2 \u2192 3 \u00B7 min -2.1 m at 2026-03-01 06:14 UTC",
+        "legIndex": 1,
+        "distanceNm": 1.9099,
+        "location": {
+          "kind": "span",
+          "startNm": 1.8498,
+          "endNm": 1.9567,
+          "path": [
+            [
+              -40.97036,
+              -134.95324
+            ],
+            [
+              -40.97036,
+              -134.95089
+            ]
+          ]
+        },
+        "details": {
+          "clearance": {
+            "stretch": "below_setting",
+            "firstLegIndex": 1,
+            "lastLegIndex": 1,
+            "lengthNm": 0.1069,
+            "startTime": "2026-03-01T06:14:01.443411\u002B00:00",
+            "minimumClearanceMeters": -2.08283,
+            "requiredUkcMeters": 1.5,
+            "marginMeters": -3.58283,
+            "minimumTime": "2026-03-01T06:14:19.474385\u002B00:00",
+            "minutesBelow": 0.8
+          }
+        }
+      },
+      {
         "id": "route_check.danger_near_route.0",
         "code": "route_check.danger_near_route",
         "group": "check",
@@ -359,139 +425,75 @@
         "starboardMeters": 100
       }
     ],
+    "clearance": {
+      "departure": "2026-03-01T06:00:00\u002B00:00",
+      "arrival": "2026-03-01T06:20:14.0835394\u002B00:00",
+      "verdict": "below_setting",
+      "verdictTitle": "Below your UKC setting in 1 place",
+      "confidence": [],
+      "noMarginSet": false,
+      "minimum": {
+        "leg": 1,
+        "sample": 72,
+        "latitude": -40.97036,
+        "longitude": -134.95192,
+        "distanceNm": 1.9099,
+        "time": "2026-03-01T06:14:19.474385\u002B00:00",
+        "hasEta": true,
+        "ukcMeters": -2.08,
+        "requiredUkcMeters": 1.5,
+        "state": "below_setting",
+        "confidence": []
+      },
+      "minutesBelow": 0.8,
+      "placesBelow": 1,
+      "sampleCount": 102,
+      "gaps": [],
+      "lowConfidence": [],
+      "sources": {
+        "bathymetryDatasets": [
+          "S-102/DATASET_FILES/102ZZ00SPIT.h5"
+        ],
+        "fallbackDatasets": [],
+        "waterLevels": [
+          {
+            "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
+            "kind": "station",
+            "station": "SYN-W"
+          },
+          {
+            "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
+            "kind": "station",
+            "station": "SYN-E"
+          },
+          {
+            "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_GRD.h5",
+            "kind": "grid"
+          }
+        ],
+        "depthDatums": [
+          {
+            "code": 23,
+            "label": "Lowest Astronomical Tide"
+          }
+        ],
+        "waterLevelDatums": [
+          {
+            "code": 23,
+            "label": "Lowest Astronomical Tide"
+          }
+        ],
+        "maxUncertaintyMeters": 0.38
+      },
+      "disclaimer": "computed from S-102, S-104 for your settings"
+    },
     "datasets": [
       "S-101/DATASET_FILES/101ZZ00SPIT3.000",
-      "S-101/DATASET_FILES/101ZZ00SPIT5.000"
+      "S-101/DATASET_FILES/101ZZ00SPIT5.000",
+      "S-102/DATASET_FILES/102ZZ00SPIT.h5",
+      "S-104/DATASET_FILES/104ZZ00SPIT_GRD.h5",
+      "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5"
     ],
-    "disclaimer": "Not for navigation \u00B7 checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only"
-  },
-  "passage": {
-    "routeId": "ZZ00-DANGERS-1",
-    "routeName": "Past the wrecks north of the channel (fictitious)",
-    "departure": "2026-03-01T06:00:00\u002B00:00",
-    "arrival": "2026-03-01T06:20:14.0835394\u002B00:00",
-    "verdict": "below_setting",
-    "verdictTitle": "Below your UKC setting in 1 place",
-    "confidence": [],
-    "noMarginSet": false,
-    "minimum": {
-      "leg": 1,
-      "sample": 72,
-      "latitude": -40.97036,
-      "longitude": -134.95192,
-      "distanceNm": 1.91,
-      "time": "2026-03-01T06:14:19.474385\u002B00:00",
-      "hasEta": true,
-      "ukcMeters": -2.08,
-      "requiredUkcMeters": 1.5,
-      "state": "below_setting",
-      "confidence": []
-    },
-    "minutesBelow": 0.8,
-    "placesBelow": 1,
-    "distanceNm": 2.698,
-    "sampleCount": 102,
-    "legs": [
-      {
-        "index": 0,
-        "name": "Leg 1 \u2192 2",
-        "startNm": 0,
-        "distanceNm": 1.349,
-        "start": "2026-03-01T06:00:00\u002B00:00",
-        "end": "2026-03-01T06:10:07.0407497\u002B00:00",
-        "draftMeters": 10,
-        "speedKnots": 8,
-        "squatMeters": 0.5,
-        "requiredUkcMeters": 1.5,
-        "minimum": {
-          "leg": 0,
-          "sample": 41,
-          "latitude": -40.97036,
-          "longitude": -134.96989,
-          "distanceNm": 1.095,
-          "time": "2026-03-01T06:08:12.8449651\u002B00:00",
-          "hasEta": true,
-          "ukcMeters": 3.5,
-          "requiredUkcMeters": 1.5,
-          "state": "meets_settings",
-          "confidence": []
-        },
-        "worstState": "meets_settings",
-        "minutesBelow": 0,
-        "placesBelow": 0,
-        "lowConfidence": false,
-        "confidence": [],
-        "noWaterLevel": false
-      },
-      {
-        "index": 1,
-        "name": "Leg 2 \u2192 3",
-        "startNm": 1.349,
-        "distanceNm": 1.349,
-        "start": "2026-03-01T06:10:07.0407497\u002B00:00",
-        "end": "2026-03-01T06:20:14.0835394\u002B00:00",
-        "draftMeters": 10,
-        "speedKnots": 8,
-        "squatMeters": 0.5,
-        "requiredUkcMeters": 1.5,
-        "minimum": {
-          "leg": 1,
-          "sample": 72,
-          "latitude": -40.97036,
-          "longitude": -134.95192,
-          "distanceNm": 1.91,
-          "time": "2026-03-01T06:14:19.474385\u002B00:00",
-          "hasEta": true,
-          "ukcMeters": -2.08,
-          "requiredUkcMeters": 1.5,
-          "state": "below_setting",
-          "confidence": []
-        },
-        "worstState": "below_setting",
-        "minutesBelow": 0.8,
-        "placesBelow": 1,
-        "lowConfidence": false,
-        "confidence": [],
-        "noWaterLevel": false
-      }
-    ],
-    "gaps": [],
-    "lowConfidence": [],
-    "sources": {
-      "bathymetryDatasets": [
-        "S-102/DATASET_FILES/102ZZ00SPIT.h5"
-      ],
-      "fallbackDatasets": [],
-      "waterLevels": [
-        {
-          "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
-          "kind": "station",
-          "station": "SYN-W"
-        },
-        {
-          "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
-          "kind": "station",
-          "station": "SYN-E"
-        },
-        {
-          "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_GRD.h5",
-          "kind": "grid"
-        }
-      ],
-      "depthDatums": [
-        {
-          "code": 23,
-          "label": "Lowest Astronomical Tide"
-        }
-      ],
-      "waterLevelDatums": [
-        {
-          "code": 23,
-          "label": "Lowest Astronomical Tide"
-        }
-      ],
-      "maxUncertaintyMeters": 0.38
-    },
-    "disclaimer": "Not for navigation \u00B7 computed from S-102, S-104 for your settings"
+    "disclaimer": "Not for navigation \u00B7 checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only \u00B7 clearance computed from S-102, S-104 for your settings"
   }
 }

@@ -739,19 +739,21 @@ one exchange set (a folder with `CATALOG.XML`, the `CATALOG.XML` file, or a
 `.zip`) and one folder of datasets. A route file among the datasets is
 skipped.
 
-It runs two checks:
+It reads the route into a `PassagePlan` and runs a `RouteChecker` from
+`EncDotNet.S100.Navigation`, with every check:
 
-- **The route check**: land, drying ground, chart coverage, regulated and
-  S-122 protected areas, S-124 navigational warnings, and, with the safety
+- **chart**: land, drying ground, chart coverage, and, with the safety
   contour and depth, depth areas, S-102 shoals, soundings and charted dangers.
-- **The under-keel clearance check**, when every leg has a draft, from the
-  file or `--draft`. Charted depth comes from S-102, or S-101 where there's
-  no S-102, and water level from S-104 at each point's ETA.
+- **areas**: regulated and S-122 protected areas.
+- **warnings**: S-124 navigational warnings.
+- **clearance**: the under-keel clearance, when every leg has a draft, from
+  the file or `--draft`. Charted depth comes from S-102, or S-101 where
+  there's no S-102, and water level from S-104 at each point's ETA.
 
 [Route checks and under-keel clearance](route-checks.md) explains every
-finding, its thresholds and confidence. `route check` uses the same code as
-the MCP `check_route` and `get_passage_result` tools, so the findings, codes
-and summary match. The results aren't for navigation.
+finding, its thresholds and confidence. The MCP `check_route` tool and
+SoundCharts run the same checker, so the verdict, findings, codes and ids
+match. The results aren't for navigation.
 
 The route's values come from the file: each leg's cross-track limits, draft
 and static UKC, and the speeds and departure of its planning schedule. RTZ and
@@ -788,29 +790,30 @@ s100 route check route.rtz exchange-set.zip --corridor 100 --fail-on check
 s100 route check route.gml exchange-set/ --departure 2026-03-01T06:00Z --speed 8 --window --format json
 ```
 
-The text output lists the findings by group, then the UKC verdict and its
-minimum. The JSON output is an object with:
+The text output gives the verdict, the checks that didn't run in full, the
+findings by group, then the clearance verdict and its minimum. The JSON output
+is an object with:
 
 - `route`: the `file`, `format` (`rtz` or `s421`), `version`, `routeId`
   (S-421 only), `name`, number of `waypoints` and the `departure` used.
 - `settings`: the safety contour and depth, and any options that replaced
   the file's values.
-- `check`: the `check_route` result: `findings`, `summary`, each leg's
-  corridor, the `datasets` read and the `disclaimer`.
-- `passage`: the `get_passage_result` result, with the verdict, the minimum,
-  each leg, gaps and confidence. Without a draft, `passageSkipped` says why
-  instead.
+- `check`: the report as the MCP `check_route` tool returns it: the
+  `verdict`, each check's status (`checks`), the `findings` with their
+  `details`, the `summary`, each leg's corridor, the `clearance` (null when
+  the clearance check was skipped; `checks` says why), the `datasets` read
+  and the `disclaimer`. See [Check a route](mcp-server.md#check-a-route).
 - `loadWarnings`: datasets that couldn't be loaded, when there are any.
 
 ### Exit codes for CI
 
-`route check` exits with code `0` when nothing reaches `--fail-on`, and with
-code `7` when something does:
+`route check` exits with code `0` when the verdict doesn't reach `--fail-on`,
+and with code `7` when it does:
 
-| `--fail-on` | Exits with `7` when |
+| `--fail-on` | Exits with `7` when the verdict is |
 |---|---|
-| `must-review` | There's a Must review finding, or the UKC verdict is below your UKC setting or water level ends before arrival. |
-| `check` | As `must-review`, or there's a Check finding, or the UKC data is incomplete. |
+| `must-review` | `must_review` (a Must review finding, or the clearance is below your UKC setting) or `water_level_ends_before_arrival`. |
+| `check` | Anything but `clear`: also Check findings, and a tight or incomplete clearance. |
 | `never` | Never. |
 
 A route file that can't be read, or datasets that can't be loaded, exit with
