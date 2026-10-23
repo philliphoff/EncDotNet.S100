@@ -7,7 +7,7 @@ using EncDotNet.S100.Routes.Rtz;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
 
-/// <summary>A route read from an RTZ or S-421 file, as the passage tools take it.</summary>
+/// <summary>A route read from an RTZ or S-421 file, as the route check takes it.</summary>
 /// <param name="Path">The file it was read from.</param>
 /// <param name="Format"><c>rtz</c> or <c>s421</c>.</param>
 /// <param name="Version">The RTZ version, or the S-421 route format version; <c>null</c> when the file gives none.</param>

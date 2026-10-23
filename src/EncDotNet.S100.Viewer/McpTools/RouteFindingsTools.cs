@@ -234,7 +234,7 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
             RouteFindingGroup.Check => "check",
             _ => "info",
         },
-        Mcp.Tools.CheckRouteTool.CategoryCode(f.Category),
+        Mcp.Tools.CheckRouteResult.CategoryCode(f.Category),
         RouteFindingRowViewModel.TagOf(f.Category),
         f.Title,
         f.Meta,

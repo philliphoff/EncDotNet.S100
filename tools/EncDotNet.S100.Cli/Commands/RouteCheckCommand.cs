@@ -6,9 +6,10 @@ using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
-using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.Tools;
+using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Quantities;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -16,16 +17,17 @@ namespace EncDotNet.S100.Cli.Commands;
 
 /// <summary>
 /// <c>s100 route check</c> checks an RTZ or S-421 route against datasets
-/// headlessly: the route check (land, drying ground, the safety contour,
-/// charted dangers, restricted and protected areas, S-124 warnings and chart
-/// coverage) and, when the route has a draft, the under-keel clearance check.
+/// headlessly: the chart check (land, drying ground, the safety contour,
+/// charted dangers and chart coverage), restricted and protected areas,
+/// S-124 warnings and, when the route has a draft, the under-keel clearance.
 /// </summary>
 /// <remarks>
-/// The command reads the route onto the same route snapshot the viewer hands
-/// its MCP tools, then runs the <c>check_route</c> (<see cref="CheckRouteTool"/>)
-/// and <c>get_passage_result</c> (<see cref="GetPassageResultTool"/>) tools
-/// over a headless catalog, so its findings, codes and summary are theirs.
-/// Not for navigation.
+/// The command reads the route into a <see cref="PassagePlan"/> with its
+/// format package's conversion, runs a <see cref="RouteChecker"/> over a
+/// headless catalog, and maps the verdict to the exit code. The JSON report
+/// is the <see cref="RouteCheckReport"/> as <c>check_route</c> returns it
+/// (<see cref="CheckRouteResult"/>), so its findings, codes and ids are the
+/// MCP tool's and SoundCharts'. Not for navigation.
 /// </remarks>
 internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
 {
@@ -86,7 +88,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         public string? Only { get; init; }
 
         [CommandOption("--fail-on <LEVEL>")]
-        [Description("When to exit with code 7: 'must-review' (default: a Must review finding, or a UKC verdict below the setting or with water level ending before arrival), 'check' (also Check findings and incomplete UKC data), or 'never'.")]
+        [Description("When to exit with code 7, by the verdict: 'must-review' (default: a Must review finding, a clearance below the UKC setting, or water level ending before arrival), 'check' (any verdict but clear: also Check findings and a tight or incomplete clearance), or 'never'.")]
         [DefaultValue("must-review")]
         public string FailOn { get; init; } = "must-review";
 
@@ -165,7 +167,6 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
 
             var transforms = new ProjNetCrsTransformFactory();
             var catalog = FileDatasetCatalog.Build(inputs, transforms);
-            var sources = new RouteCheckSourceCache(transforms);
             warnings.AddRange(catalog.Warnings);
             foreach (var warning in warnings)
                 Console.Error.WriteLine(warning);
@@ -177,39 +178,34 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
 
             DateTimeOffset? departureOverride = settings.Departure is { } text && TryParseTime(text, out var parsed) ? parsed : null;
             var departure = departureOverride ?? route.Departure ?? DateTimeOffset.UtcNow;
-            var snapshot = Snapshot(route, settings, departure);
-            var routes = new FileRouteProvider(snapshot);
-
-            var check = Unwrap(new CheckRouteTool(catalog, routes, sources).InvokeAsync(new CheckRouteRequest(
-                CorridorHalfWidthMeters: settings.CorridorMeters,
-                SafetyContourMeters: settings.SafetyContourMeters,
-                SafetyDepthMeters: settings.SafetyDepthMeters,
-                Time: departure)).GetAwaiter().GetResult());
-
-            GetPassageResultResult? passage = null;
-            string? passageSkipped = null;
-            if (snapshot.Legs.All(l => l.DraftMeters is > 0))
+            var plan = Plan(route, settings, departure);
+            var checkSettings = new RouteCheckSettings
             {
-                passage = Unwrap(new GetPassageResultTool(catalog, routes, sources).InvokeAsync(new GetPassageResultRequest(
-                    Departure: departure,
-                    IncludeWindow: settings.Window)).GetAwaiter().GetResult());
-            }
-            else
+                At = departure,
+                SafetyContour = Depth.FromMetres(settings.SafetyContourMeters),
+                SafetyDepth = Depth.FromMetres(settings.SafetyDepthMeters),
+                CorridorOverride = settings.CorridorMeters is { } corridor ? Length.FromMetres(corridor) : null,
+                DepartureWindow = settings.Window ? DepartureRange.WaterLevelData(WindowStep) : null,
+            };
+
+            var sources = new RouteCheckSourceCache(transforms).Get(catalog.Datasets);
+            RouteCheckReport report;
+            try
             {
-                passageSkipped = "The route has no draft on every leg; pass --draft for the under-keel clearance check.";
+                report = new RouteChecker(sources).Check(plan, checkSettings);
+            }
+            catch (ArgumentException ex)
+            {
+                Console.Error.WriteLine($"Route check failed: {ex.Message}");
+                return 2;
             }
 
-            var exitCode = Fails(ParseFailLevel(settings.FailOn)!.Value, check, passage) ? FindingsExitCode : 0;
+            var exitCode = Fails(ParseFailLevel(settings.FailOn)!.Value, report.Verdict.Kind) ? FindingsExitCode : 0;
             if (string.Equals(settings.Format, "json", StringComparison.OrdinalIgnoreCase))
-                Console.Out.WriteLine(ToJson(route, settings, departure, check, passage, passageSkipped, warnings).ToJsonString(IndentedJson));
+                Console.Out.WriteLine(ToJson(route, settings, departure, report, warnings).ToJsonString(IndentedJson));
             else
-                WriteText(route, departure, check, passage, passageSkipped);
+                WriteText(route, departure, report);
             return exitCode;
-        }
-        catch (ToolFailedException ex)
-        {
-            Console.Error.WriteLine($"Route check failed: {ex.Message}");
-            return 2;
         }
         catch (Exception ex)
         {
@@ -224,23 +220,26 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         }
     }
 
+    /// <summary>The time between swept departures for <c>--window</c>.</summary>
+    private static readonly TimeSpan WindowStep = TimeSpan.FromMinutes(5);
+
     /// <summary>
-    /// The route as the passage tools take it, with the command's overrides
-    /// applied to every leg so both checks see the same values.
+    /// The route's plan with the command's overrides applied to every leg
+    /// and the departure set.
     /// </summary>
-    internal static PassageRouteSnapshot Snapshot(RouteFile route, Settings settings, DateTimeOffset departure) => new(
-        route.RouteId ?? Path.GetFileName(route.Path),
-        route.Name,
-        route.Plan.Legs.Select(l => new PassageRouteLeg(
-            l.Points,
-            l.Geometry,
-            settings.DraftMeters ?? l.Draft?.TotalMetres,
-            settings.SpeedKnots ?? l.Speed?.TotalKnots,
-            settings.SquatMeters,
-            settings.RequiredUkcMeters ?? l.RequiredUkc?.TotalMetres,
-            l.Name,
-            l.PortLimit?.TotalMetres,
-            l.StarboardLimit?.TotalMetres)).ToList(),
+    internal static PassagePlan Plan(RouteFile route, Settings settings, DateTimeOffset departure) => new(
+        route.Plan.Legs.Select(l => new PassageLeg
+        {
+            Points = l.Points,
+            Geometry = l.Geometry,
+            PortLimit = l.PortLimit,
+            StarboardLimit = l.StarboardLimit,
+            Draft = settings.DraftMeters is { } draft ? Depth.FromMetres(draft) : l.Draft,
+            Speed = settings.SpeedKnots is { } knots ? Speed.FromKnots(knots) : l.Speed,
+            Squat = settings.SquatMeters is { } squat ? Depth.FromMetres(squat) : l.Squat,
+            RequiredUkc = settings.RequiredUkcMeters is { } ukc ? Depth.FromMetres(ukc) : l.RequiredUkc,
+            Name = l.Name,
+        }).ToList(),
         departure);
 
     private static bool TryResolveDatasets(
@@ -294,12 +293,11 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         return true;
     }
 
-    private static bool Fails(FailLevel level, CheckRouteResult check, GetPassageResultResult? passage) => level switch
+    private static bool Fails(FailLevel level, RouteCheckVerdictKind verdict) => level switch
     {
         FailLevel.Never => false,
-        FailLevel.MustReview => check.Summary.MustReview > 0 || passage?.Verdict is "below_setting" or "water_level_ends_before_arrival",
-        _ => check.Summary.MustReview > 0 || check.Summary.Check > 0
-            || passage?.Verdict is "below_setting" or "water_level_ends_before_arrival" or "incomplete_data",
+        FailLevel.MustReview => verdict is RouteCheckVerdictKind.MustReview or RouteCheckVerdictKind.WaterLevelEndsBeforeArrival,
+        _ => verdict != RouteCheckVerdictKind.Clear,
     };
 
     private static FailLevel? ParseFailLevel(string value) => value.ToLowerInvariant() switch
@@ -313,26 +311,14 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
     private static bool TryParseTime(string text, out DateTimeOffset value) =>
         DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out value);
 
-    private static T Unwrap<T>(ToolResult<T> result)
-    {
-        if (result.TryGetValue(out var value))
-            return value!;
-        result.TryGetError(out var error);
-        throw new ToolFailedException(error?.Message ?? "unknown error");
-    }
-
-    private sealed class ToolFailedException(string message) : Exception(message);
-
     private static readonly JsonSerializerOptions IndentedJson = new(McpJson.Options) { WriteIndented = true };
 
-    /// <summary>The JSON report: the route, the settings, and the two tools' results as the MCP tools return them.</summary>
+    /// <summary>The JSON report: the route, the settings, and the report as <c>check_route</c> returns it.</summary>
     internal static JsonObject ToJson(
         RouteFile route,
         Settings settings,
         DateTimeOffset departure,
-        CheckRouteResult check,
-        GetPassageResultResult? passage,
-        string? passageSkipped,
+        RouteCheckReport report,
         IReadOnlyList<string> warnings)
     {
         var options = McpJson.Options;
@@ -353,6 +339,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         Add("speedKnots", settings.SpeedKnots);
         Add("requiredUkcMeters", settings.RequiredUkcMeters);
 
+        var check = CheckRouteResult.From(report, route.RouteId ?? Path.GetFileName(route.Path), route.Name);
         var root = new JsonObject
         {
             ["route"] = new JsonObject
@@ -368,24 +355,24 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
             ["settings"] = settingsNode,
             ["check"] = JsonSerializer.SerializeToNode(check, options.GetTypeInfo(typeof(CheckRouteResult))),
         };
-        if (passage is not null)
-            root["passage"] = JsonSerializer.SerializeToNode(passage, options.GetTypeInfo(typeof(GetPassageResultResult)));
-        else
-            root["passageSkipped"] = passageSkipped;
         if (warnings.Count > 0)
             root["loadWarnings"] = new JsonArray(warnings.Select(w => (JsonNode)JsonValue.Create(w)).ToArray());
         return root;
     }
 
-    private static void WriteText(RouteFile route, DateTimeOffset departure, CheckRouteResult check, GetPassageResultResult? passage, string? passageSkipped)
+    private static void WriteText(RouteFile route, DateTimeOffset departure, RouteCheckReport report)
     {
         // Through Console.Out as it is now, so redirected output (and tests) see it.
         var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(Console.Out) });
+        var check = CheckRouteResult.From(report, route.RouteId, route.Name);
         var format = route.Format == "rtz" ? $"RTZ {route.Version}" : $"S-421{(route.Version is null ? "" : " " + route.Version)}";
         console.MarkupLineInterpolated($"[bold]{route.Name ?? Path.GetFileName(route.Path)}[/] ({format}, {route.Waypoints.Count} waypoints, {check.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM)");
         console.MarkupLineInterpolated($"Departure {departure.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture)}");
         console.WriteLine();
+        console.MarkupLineInterpolated($"[bold]Verdict:[/] {check.Verdict.Title} ({check.Verdict.Kind})");
         console.MarkupLineInterpolated($"[bold]Route check:[/] {check.Summary.Text} ({check.Summary.MustReview} must review, {check.Summary.Check} check, {check.Summary.Info} info)");
+        foreach (var status in check.Checks.Where(c => c.State != "ran"))
+            console.MarkupLineInterpolated($"  [grey]{status.Name}: {status.State} ({status.Reason})[/]");
 
         foreach (var (group, label, colour) in new[] { ("must_review", "MUST REVIEW", "red"), ("check", "CHECK", "yellow"), ("info", "INFO", "grey") })
         {
@@ -401,14 +388,14 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         }
 
         console.WriteLine();
-        if (passage is not null)
+        if (check.Clearance is { } clearance)
         {
-            console.MarkupLineInterpolated($"[bold]Under-keel clearance:[/] {passage.VerdictTitle} ({passage.Verdict})");
-            if (passage.Minimum is { } min)
+            console.MarkupLineInterpolated($"[bold]Under-keel clearance:[/] {clearance.VerdictTitle} ({clearance.Verdict})");
+            if (clearance.Minimum is { } min)
                 console.MarkupLineInterpolated($"  Minimum UKC {min.UkcMeters.ToString("0.00", CultureInfo.InvariantCulture)} m (required {min.RequiredUkcMeters.ToString("0.00", CultureInfo.InvariantCulture)} m) at {min.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM, leg {min.Leg + 1}");
-            if (passage.Confidence.Count > 0)
-                console.MarkupLineInterpolated($"  Lower confidence: {string.Join(", ", passage.Confidence)}");
-            if (passage.Window is { } window)
+            if (clearance.Confidence.Count > 0)
+                console.MarkupLineInterpolated($"  Lower confidence: {string.Join(", ", clearance.Confidence)}");
+            if (clearance.Window is { } window)
             {
                 var runs = window.Windows.Select(w => $"{w.First.ToUniversalTime():yyyy-MM-dd HH:mm}–{w.Last.ToUniversalTime():HH:mm} UTC").ToList();
                 console.MarkupLineInterpolated($"  Departure window: {(runs.Count == 0 ? "none" : string.Join(", ", runs))}");
@@ -416,17 +403,13 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         }
         else
         {
-            console.MarkupLineInterpolated($"[bold]Under-keel clearance:[/] not checked. {passageSkipped}");
+            var reason = report.Status(ClearanceCheck.CheckName)?.Reason == RouteCheckReasons.DraftMissing
+                ? "The route has no draft on every leg; pass --draft for the under-keel clearance check."
+                : $"No charted depth or water level to check against ({report.Status(ClearanceCheck.CheckName)?.Reason}).";
+            console.MarkupLineInterpolated($"[bold]Under-keel clearance:[/] not checked. {reason}");
         }
 
         console.WriteLine();
         console.MarkupLineInterpolated($"[grey]{check.Disclaimer}[/]");
-    }
-
-    /// <summary>Hands the one route read from a file to the passage tools.</summary>
-    private sealed class FileRouteProvider(PassageRouteSnapshot route) : IPassageRouteProvider
-    {
-        public Task<ToolResult<PassageRouteSnapshot>> GetRouteAsync(string? routeId, CancellationToken cancellationToken) =>
-            Task.FromResult(ToolResult<PassageRouteSnapshot>.Ok(route));
     }
 }

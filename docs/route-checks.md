@@ -8,8 +8,8 @@ hosts run the same checks and report the same findings and codes:
 
 - **SoundCharts**: **Check route** in the **Routes** panel. See the
   [SoundCharts README](../src/EncDotNet.S100.Viewer/README.md#check-a-route).
-- **MCP**: the `check_route` and `get_passage_result` tools. See
-  [Check a route against the chart](mcp-server.md#check-a-route-against-the-chart).
+- **MCP**: the `check_route` tool. See
+  [Check a route](mcp-server.md#check-a-route).
 - **The command line**: `s100 route check`, for batch runs and CI. See
   [route check](cli.md#route-check).
 
@@ -18,7 +18,8 @@ In your own code, the checks are in the `EncDotNet.S100.Navigation` package:
 (regulated and protected areas), `RouteWarningCheck` (S-124) and
 `PassageCheckEngine` (UKC). They read loaded data through one
 `RouteCheckSources` bundle, which `CatalogRouteCheckSources` in
-`EncDotNet.S100.Datasets.Pipelines` builds from loaded datasets.
+`EncDotNet.S100.Datasets.Pipelines` builds from loaded datasets. `RouteChecker` runs them all on one
+`PassagePlan` and returns one `RouteCheckReport`, as all three hosts do.
 
 The results are an aid for exploring the data, not for navigation.
 
@@ -179,7 +180,7 @@ arrival, below your UKC setting, incomplete data, meets your settings but
 tight, meets your settings. A departure window sweeps departures across the
 S-104 time range and lists the runs of departures that meet your settings.
 For how samples are spaced and what the result reports, see
-[Check a passage's clearance](mcp-server.md#check-a-passages-clearance).
+[Under-keel clearance](mcp-server.md#under-keel-clearance).
 
 ## Confidence
 

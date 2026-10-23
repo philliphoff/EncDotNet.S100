@@ -200,7 +200,7 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
         var points = s.Route.Waypoints.Select(w => new EncDotNet.S100.Datasets.Pipelines.Geometry.GeoPoint(w.Position.Latitude, w.Position.Longitude)).ToList();
 
         var summer = await tool.InvokeAsync(
-            new CheckRouteRequest(Polyline: new EncDotNet.S100.Datasets.Pipelines.Geometry.GeoPolyline(points), CorridorHalfWidthMeters: 100, Time: new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero)),
+            new CheckRouteRequest(Polyline: new EncDotNet.S100.Datasets.Pipelines.Geometry.GeoPolyline(points), CorridorHalfWidthMeters: 100, Departure: new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero)),
             TestContext.Current.CancellationToken);
 
         Assert.True(summer.TryGetValue(out var value), summer.TryGetError(out var e) ? e.Message : "");

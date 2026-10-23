@@ -53,7 +53,6 @@ internal static class S100McpServerToolFactory
         SampleCoverageAlongTool sampleCoverageAlong,
         ListSpecsTool listSpecs,
         ListTimeStepsTool listTimeSteps,
-        GetPassageResultTool getPassageResult,
         CheckRouteTool checkRoute)
     {
         yield return CreateListDatasetsTool(listDatasets);
@@ -69,7 +68,6 @@ internal static class S100McpServerToolFactory
         yield return CreateSampleCoverageAlongTool(sampleCoverageAlong);
         yield return CreateListSpecsTool(listSpecs);
         yield return CreateListTimeStepsTool(listTimeSteps);
-        yield return CreateGetPassageResultTool(getPassageResult);
         yield return CreateCheckRouteTool(checkRoute);
     }
 
@@ -497,76 +495,23 @@ internal static class S100McpServerToolFactory
         });
     }
 
-    private static McpServerTool CreateGetPassageResultTool(GetPassageResultTool inner)
-    {
-        var description =
-            "Checks under-keel clearance (UKC) along a passage: UKC = charted depth + water level − draft − squat at each " +
-            "sample's ETA, against the required UKC (0 m when unset). Charted depth is S-102, falling back to S-101 depth/dredged " +
-            "areas and soundings (low confidence); water level is S-104 at the ETA (no data outside its extent or time range). " +
-            "Datums must match: a mismatch is reported as a gap, never mixed. Returns the verdict, the minimum with where and when, " +
-            "per-leg results, gaps, low-confidence stretches, minutes below the setting and the sources; optionally per-sample " +
-            "values and a departure sweep (window: windowFrom/windowTo, or includeWindow for the S-104 range, with the runs that meet " +
-            "the settings and the departures arriving after the S-104 data ends). Pass a polyline with draftMeters, or (in the viewer) a routeId or nothing for the " +
-            "active route. SOG is the entered speed (S-111 is not applied); squat is a fixed allowance. Not for navigation.";
-
-        var del = ([Description("Id of a viewer route; omit with no polyline for the active route.")] string? routeId = null,
-                   [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]}; each pair of consecutive vertices is a leg. WGS-84 decimal degrees. Takes precedence over routeId.")] string? polyline = null,
-                   [Description("Draft in metres; required with a polyline, overrides the route's legs otherwise.")] double? draftMeters = null,
-                   [Description("Speed over ground in knots; overrides the route's legs. Without one, every sample uses the departure time.")] double? speedKnots = null,
-                   [Description("Fixed squat allowance in metres.")] double? squatMeters = null,
-                   [Description("Required UKC in metres; unset checks against 0 m.")] double? requiredUkcMeters = null,
-                   [Description("Departure time (ISO-8601); defaults to the viewer's view time for a route, or now.")] DateTimeOffset? departure = null,
-                   [Description("For a polyline, run legs as great circles instead of rhumb lines.")] bool greatCircle = false,
-                   [Description("Longest stretch one sample stands for, metres (default 50).")] double? sampleSpacingMeters = null,
-                   [Description("Include per-sample values.")] bool includeSamples = false,
-                   [Description("Most samples to return (default 500).")] int maxSamples = 500,
-                   [Description("With windowTo, sweep departures from this time (ISO-8601) for the departure window.")] DateTimeOffset? windowFrom = null,
-                   [Description("Last swept departure (ISO-8601).")] DateTimeOffset? windowTo = null,
-                   [Description("Minutes between swept departures (default 5).")] int windowStepMinutes = 5,
-                   [Description("Sweep departures across the whole S-104 range that covers the passage (as SoundCharts' departure band does); ignored with windowFrom/windowTo.")] bool includeWindow = false,
-                   CancellationToken ct = default) =>
-            DispatchAsync(() =>
-                inner.InvokeAsync(
-                    new GetPassageResultRequest(
-                        routeId,
-                        string.IsNullOrWhiteSpace(polyline) ? null : ParsePolyline(polyline),
-                        draftMeters,
-                        speedKnots,
-                        squatMeters,
-                        requiredUkcMeters,
-                        departure,
-                        greatCircle,
-                        sampleSpacingMeters,
-                        includeSamples,
-                        maxSamples,
-                        windowFrom,
-                        windowTo,
-                        windowStepMinutes,
-                        includeWindow),
-                    ct));
-
-        return McpServerTool.Create(del, new McpServerToolCreateOptions
-        {
-            Name = GetPassageResultTool.Name,
-            Description = description,
-            SerializerOptions = JsonOptions,
-        });
-    }
-
     private static McpServerTool CreateCheckRouteTool(CheckRouteTool inner)
     {
         var description =
-            "Checks a route against the loaded S-101 charts: where its track crosses land (LandArea, or a Coastline where no land " +
-            "area is charted) or drying ground (a DepthArea whose DRVAL1 is below the datum), both must_review; where either reaches " +
-            "inside the corridor between the cross-track limits (check); and where the track leaves the DataCoverage of every loaded " +
-            "cell (check, source data). With safetyContourMeters and safetyDepthMeters it also reports charted dangers and areas, " +
-            "soundings and S-102 cells shallower than the safety contour or depth. It also reports regulated areas the corridor meets: S-101 restricted and military " +
-            "practice areas (entry prohibited or restricted: must_review when the track enters), caution, anchorage and traffic areas, and S-122 marine protected and " +
-            "restricted areas (check, or info when their restrictions don't bear on a passage or they only reach inside the limits); an area whose fixed date range or " +
-            "season doesn't cover the ETAs (or 'time') is info route_check.area_not_in_force. Where cells overlap only the finest cell counts, so a coarse cell's generalised land doesn't " +
-            "fire where a finer cell charts water. Returns the findings (the same codes as get_findings), a summary and the corridor " +
-            "of each leg. Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which uses each leg's port and " +
-            "starboard XTD. Needs no draft. Not for navigation.";
+            "Checks a route against the loaded data in one run and returns the whole report: the verdict (must_review, " +
+            "water_level_ends_before_arrival, check or clear, with the finding that names it), whether each check ran (chart, areas, " +
+            "warnings, clearance, with a reason when skipped), every finding with its numbers in 'details', and the under-keel clearance. " +
+            "The chart check reports where the track crosses land (LandArea, or a Coastline where no land area is charted) or drying ground " +
+            "(must_review), where either reaches inside the corridor between the cross-track limits (check), and where the track leaves the " +
+            "DataCoverage of every loaded cell; with safetyContourMeters and safetyDepthMeters, also charted dangers and areas, soundings and " +
+            "S-102 cells shallower than the safety contour or depth. Where cells overlap only the finest cell counts. The area check reports " +
+            "S-101 restricted, military practice, caution, anchorage and traffic areas and S-122 protected areas the corridor meets; an area " +
+            "whose dates or season don't cover the ETAs is info route_check.area_not_in_force. The warning check reports S-124 warnings on or " +
+            "near the route at the ETAs. With a draft on every leg the clearance check computes UKC = charted depth (S-102, else S-101, low " +
+            "confidence) + S-104 water level at each sample's ETA − draft − squat, against the required UKC (0 m when unset); datums must match " +
+            "(a mismatch is a gap, never mixed). includeSamples adds per-leg results and samples; includeWindow adds a departure sweep " +
+            "(windowFrom/windowTo, or the S-104 range). Pass a polyline, or (in the viewer) a routeId or nothing for the active route, which " +
+            "uses each leg's XTDs, draft, speed and UKC. SOG is the entered speed (S-111 is not applied). Not for navigation.";
 
         var del = ([Description("Id of a viewer route; omit with no polyline for the active route.")] string? routeId = null,
                    [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]}; each pair of consecutive vertices is a leg. WGS-84 decimal degrees. Takes precedence over routeId.")] string? polyline = null,
@@ -574,8 +519,18 @@ internal static class S100McpServerToolFactory
                    [Description("For a polyline, run legs as great circles instead of rhumb lines.")] bool greatCircle = false,
                    [Description("Safety contour in metres; with safetyDepthMeters, turns on the depth checks (areas and S-102 shallower than it, charted dangers).")] double? safetyContourMeters = null,
                    [Description("Safety depth in metres, for charted dangers and soundings.")] double? safetyDepthMeters = null,
-                   [Description("Draft in metres: dangers are also judged against draft + squat + required UKC. Overrides a route's draft.")] double? draftMeters = null,
-                   [Description("ISO-8601 time: a route's departure for its ETAs (default: the route's departure); where legs have no speed, and for a polyline, the time areas' date ranges are judged at (default: now).")] DateTimeOffset? time = null,
+                   [Description("Draft in metres, for every leg (overrides a route's). With a draft on every leg the clearance check runs, and dangers are also judged against draft + squat + required UKC.")] double? draftMeters = null,
+                   [Description("Speed over ground in knots, for every leg (overrides a route's). Speeds give the ETAs.")] double? speedKnots = null,
+                   [Description("Fixed squat allowance in metres, for every leg (default 0).")] double? squatMeters = null,
+                   [Description("Required UKC in metres, for every leg; unset checks against 0 m.")] double? requiredUkcMeters = null,
+                   [Description("Departure time (ISO-8601): the ETAs count from it, and without speeds everything is judged at it. Default: the route's departure (the viewer's view time), else now.")] DateTimeOffset? departure = null,
+                   [Description("Longest stretch one clearance sample stands for, metres (default 50).")] double? sampleSpacingMeters = null,
+                   [Description("Include the clearance's per-leg results and per-sample values.")] bool includeSamples = false,
+                   [Description("Most samples to return (default 500).")] int maxSamples = 500,
+                   [Description("Sweep departures for the departure window: windowFrom to windowTo, else the whole S-104 range that covers the route (as SoundCharts' departure band does). Needs a draft.")] bool includeWindow = false,
+                   [Description("With includeWindow and windowTo, the first swept departure (ISO-8601).")] DateTimeOffset? windowFrom = null,
+                   [Description("With includeWindow and windowFrom, the last swept departure (ISO-8601).")] DateTimeOffset? windowTo = null,
+                   [Description("Minutes between swept departures (default 5).")] int windowStepMinutes = 5,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -587,7 +542,17 @@ internal static class S100McpServerToolFactory
                         safetyContourMeters,
                         safetyDepthMeters,
                         draftMeters,
-                        time),
+                        speedKnots,
+                        squatMeters,
+                        requiredUkcMeters,
+                        departure,
+                        sampleSpacingMeters,
+                        includeSamples,
+                        maxSamples,
+                        includeWindow,
+                        windowFrom,
+                        windowTo,
+                        windowStepMinutes),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions

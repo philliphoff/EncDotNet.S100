@@ -17,13 +17,40 @@
     "routeId": "ZZ00-CHANNEL-1",
     "routeName": "Synthetic Sound channel transit (fictitious)",
     "distanceNm": 2.9137,
+    "verdict": {
+      "kind": "must_review",
+      "title": "Inside navigational warning 001/26",
+      "headlineId": "s124.S-124/DATASET_FILES/124ZZ00W0001.gml/ZZ00.S124.0001.26.2"
+    },
     "summary": {
-      "count": 7,
+      "count": 9,
       "mustReview": 1,
-      "check": 3,
+      "check": 5,
       "info": 3,
       "text": "1 to review"
     },
+    "checks": [
+      {
+        "name": "chart",
+        "state": "ran",
+        "findingCount": 0
+      },
+      {
+        "name": "areas",
+        "state": "ran",
+        "findingCount": 1
+      },
+      {
+        "name": "warnings",
+        "state": "ran",
+        "findingCount": 6
+      },
+      {
+        "name": "clearance",
+        "state": "ran",
+        "findingCount": 2
+      }
+    ],
     "findings": [
       {
         "id": "s124.S-124/DATASET_FILES/124ZZ00W0001.gml/ZZ00.S124.0001.26.2",
@@ -146,6 +173,74 @@
           "text": [
             "SYNTHETIC. Channel buoy reported off station."
           ]
+        }
+      },
+      {
+        "id": "confidence.charted_depth_from_s101.0",
+        "code": "confidence.charted_depth_from_s101",
+        "group": "check",
+        "category": "confidence",
+        "title": "Charted depth from S-101 only",
+        "meta": "Leg 1 \u2192 2 \u00B7 2.9 NM outside S-102 coverage",
+        "legIndex": 0,
+        "distanceNm": 1.4569,
+        "location": {
+          "kind": "span",
+          "startNm": 0,
+          "endNm": 2.9137,
+          "path": [
+            [
+              -40.9726,
+              -134.99643
+            ],
+            [
+              -40.9726,
+              -134.93215
+            ]
+          ]
+        },
+        "details": {
+          "clearance": {
+            "stretch": "charted_depth_from_s101",
+            "firstLegIndex": 0,
+            "lastLegIndex": 0,
+            "lengthNm": 2.9137,
+            "startTime": "2026-03-01T06:00:00\u002B00:00"
+          }
+        }
+      },
+      {
+        "id": "data.no_water_level_coverage.0",
+        "code": "data.no_water_level_coverage",
+        "group": "check",
+        "category": "data",
+        "title": "Outside water-level coverage",
+        "meta": "Leg 1 \u2192 2 \u00B7 2.9 NM \u00B7 tide not applied",
+        "legIndex": 0,
+        "distanceNm": 1.4569,
+        "location": {
+          "kind": "span",
+          "startNm": 0,
+          "endNm": 2.9137,
+          "path": [
+            [
+              -40.9726,
+              -134.99643
+            ],
+            [
+              -40.9726,
+              -134.93215
+            ]
+          ]
+        },
+        "details": {
+          "clearance": {
+            "stretch": "no_water_level_coverage",
+            "firstLegIndex": 0,
+            "lastLegIndex": 0,
+            "lengthNm": 2.9137,
+            "startTime": "2026-03-01T06:00:00\u002B00:00"
+          }
         }
       },
       {
@@ -460,6 +555,60 @@
         "starboardMeters": 100
       }
     ],
+    "clearance": {
+      "departure": "2026-03-01T06:00:00\u002B00:00",
+      "arrival": "2026-03-01T06:21:51.1656728\u002B00:00",
+      "verdict": "incomplete_data",
+      "verdictTitle": "No data for part of the passage",
+      "confidence": [
+        "charted_depth_from_s101"
+      ],
+      "noMarginSet": false,
+      "minutesBelow": 0,
+      "placesBelow": 0,
+      "sampleCount": 109,
+      "gaps": [
+        {
+          "kind": "no_water_level_coverage",
+          "firstSample": 0,
+          "lastSample": 108,
+          "firstLeg": 0,
+          "lastLeg": 0,
+          "startNm": 0,
+          "endNm": 2.9137,
+          "from": "2026-03-01T06:00:00\u002B00:00",
+          "to": "2026-03-01T06:21:51.1656728\u002B00:00"
+        }
+      ],
+      "lowConfidence": [
+        {
+          "kind": "charted_depth_from_s101",
+          "firstSample": 0,
+          "lastSample": 108,
+          "firstLeg": 0,
+          "lastLeg": 0,
+          "startNm": 0,
+          "endNm": 2.9137,
+          "from": "2026-03-01T06:00:00\u002B00:00",
+          "to": "2026-03-01T06:21:51.1656728\u002B00:00"
+        }
+      ],
+      "sources": {
+        "bathymetryDatasets": [],
+        "fallbackDatasets": [
+          "S-101/DATASET_FILES/101ZZ00SPIT5.000"
+        ],
+        "waterLevels": [],
+        "depthDatums": [
+          {
+            "code": 23,
+            "label": "Lowest Astronomical Tide"
+          }
+        ],
+        "waterLevelDatums": []
+      },
+      "disclaimer": "computed from S-101 for your settings"
+    },
     "datasets": [
       "S-101/DATASET_FILES/101ZZ00SPIT3.000",
       "S-101/DATASET_FILES/101ZZ00SPIT5.000",
@@ -471,85 +620,6 @@
       "S-124/DATASET_FILES/124ZZ00W0006.gml",
       "S-124/DATASET_FILES/124ZZ00W0007.gml"
     ],
-    "disclaimer": "Not for navigation \u00B7 checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only"
-  },
-  "passage": {
-    "routeId": "ZZ00-CHANNEL-1",
-    "routeName": "Synthetic Sound channel transit (fictitious)",
-    "departure": "2026-03-01T06:00:00\u002B00:00",
-    "arrival": "2026-03-01T06:21:51.1656728\u002B00:00",
-    "verdict": "incomplete_data",
-    "verdictTitle": "No data for part of the passage",
-    "confidence": [
-      "charted_depth_from_s101"
-    ],
-    "noMarginSet": false,
-    "minutesBelow": 0,
-    "placesBelow": 0,
-    "distanceNm": 2.914,
-    "sampleCount": 109,
-    "legs": [
-      {
-        "index": 0,
-        "name": "Leg 1 \u2192 2",
-        "startNm": 0,
-        "distanceNm": 2.914,
-        "start": "2026-03-01T06:00:00\u002B00:00",
-        "end": "2026-03-01T06:21:51.1656728\u002B00:00",
-        "draftMeters": 7,
-        "speedKnots": 8,
-        "squatMeters": 0.4,
-        "requiredUkcMeters": 1,
-        "worstState": "no_data",
-        "minutesBelow": 0,
-        "placesBelow": 0,
-        "lowConfidence": true,
-        "confidence": [
-          "charted_depth_from_s101"
-        ],
-        "noWaterLevel": true
-      }
-    ],
-    "gaps": [
-      {
-        "kind": "no_water_level_coverage",
-        "firstSample": 0,
-        "lastSample": 108,
-        "firstLeg": 0,
-        "lastLeg": 0,
-        "startNm": 0,
-        "endNm": 2.914,
-        "from": "2026-03-01T06:00:00\u002B00:00",
-        "to": "2026-03-01T06:21:51.1656728\u002B00:00"
-      }
-    ],
-    "lowConfidence": [
-      {
-        "kind": "charted_depth_from_s101",
-        "firstSample": 0,
-        "lastSample": 108,
-        "firstLeg": 0,
-        "lastLeg": 0,
-        "startNm": 0,
-        "endNm": 2.914,
-        "from": "2026-03-01T06:00:00\u002B00:00",
-        "to": "2026-03-01T06:21:51.1656728\u002B00:00"
-      }
-    ],
-    "sources": {
-      "bathymetryDatasets": [],
-      "fallbackDatasets": [
-        "S-101/DATASET_FILES/101ZZ00SPIT5.000"
-      ],
-      "waterLevels": [],
-      "depthDatums": [
-        {
-          "code": 23,
-          "label": "Lowest Astronomical Tide"
-        }
-      ],
-      "waterLevelDatums": []
-    },
-    "disclaimer": "Not for navigation \u00B7 computed from S-101 for your settings"
+    "disclaimer": "Not for navigation \u00B7 checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only \u00B7 clearance computed from S-101 for your settings"
   }
 }
