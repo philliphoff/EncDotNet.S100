@@ -7,8 +7,6 @@ using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.PassageCheck;
 using EncDotNet.S100.Viewer.ViewModels;
 using ModelContextProtocol.Server;
-using RouteCheckVerdict = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdict;
-using RouteCheckVerdictKind = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdictKind;
 
 namespace EncDotNet.S100.Viewer.McpTools;
 
@@ -161,7 +159,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
     internal static CheckStateDto State(RoutesService routes, PassageCheckService check, RouteFindingsService? findings = null)
     {
         var current = check.IsActive && check.HasDraft ? check.Current : null;
-        var verdict = RouteCheckVerdict.For(check, findings, Pipelines.DepthUnit.Metres, TimeFormat.Utc);
+        var verdict = RouteCheckCard.For(check, findings, Pipelines.DepthUnit.Metres, TimeFormat.Utc);
         var result = current?.Result;
         var cursor = check.Cursor;
         var window = current is null ? null : check.Window;
@@ -200,7 +198,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
     internal static string VerdictKind(RouteCheckVerdictKind kind) => kind switch
     {
         RouteCheckVerdictKind.MustReview => "must_review",
-        RouteCheckVerdictKind.DataEnds => "data_ends",
+        RouteCheckVerdictKind.WaterLevelEndsBeforeArrival => "data_ends",
         RouteCheckVerdictKind.Check => "check",
         _ => "clear",
     };

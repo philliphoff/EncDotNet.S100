@@ -189,7 +189,7 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
         routes.Routes.SetActiveRoute(route);
 
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero);
+        var check = new PassageCheckService(routes, catalog, checks: () => [new ClearanceCheck()], debounce: TimeSpan.Zero);
 
         var time = new GlobalTimeService();
         var samples = CoverageWriters.Times(definition.WaterLevelStart, definition.WaterLevelEnd, TimeSpan.FromMinutes(10)).ToArray();
@@ -206,7 +206,7 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
             ],
         });
         var follow = new FollowPassageService(check, time);
-        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), clock: new FixedClock(departure));
+        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc());
 
         routes.IsCheckModeActive = true;
         await check.WhenIdle();

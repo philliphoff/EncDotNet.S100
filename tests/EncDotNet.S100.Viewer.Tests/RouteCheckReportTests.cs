@@ -13,24 +13,21 @@ using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
-using RouteCheckVerdict = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdict;
-using RouteCheckVerdictKind = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdictKind;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// The findings producers (#953): several producers merged into one list,
-/// their background runs, cancellation and stale handling, and Check passage
-/// on a route without a draft, on <see cref="PassageCheckFixture"/> with stub
-/// producers.
+/// Check route over one <see cref="RouteChecker"/> (#1034): the report's
+/// findings in one list with a host's own checks, background runs,
+/// cancellation and stale handling, and Check route on a route without a
+/// draft, on <see cref="PassageCheckFixture"/> with stub checks.
 /// </summary>
-public sealed class RouteFindingProducerTests : IDisposable
+public sealed class RouteCheckReportTests : IDisposable
 {
-    private static readonly DateTimeOffset Now = new(2024, 6, 1, 12, 0, 0, TimeSpan.Zero);
     private readonly CultureInfo _culture = CultureInfo.CurrentCulture;
     private readonly UiThread _ui = new();
 
-    public RouteFindingProducerTests() => CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+    public RouteCheckReportTests() => CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
 
     public void Dispose() => CultureInfo.CurrentCulture = _culture;
 
@@ -39,11 +36,6 @@ public sealed class RouteFindingProducerTests : IDisposable
         public TimeFormat Current => TimeFormat.Utc;
 
         public event Action<TimeFormat>? TimeFormatChanged { add { } remove { } }
-    }
-
-    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 
     /// <summary>
@@ -75,59 +67,53 @@ public sealed class RouteFindingProducerTests : IDisposable
         public Task<T> InvokeAsync<T>(Func<T> action) => Task.FromResult(ui.Run(action));
     }
 
-    /// <summary>Returns fixed findings and records each request.</summary>
-    private sealed class StubProducer(params RouteFinding[] findings) : IRouteFindingProducer
+    /// <summary>Returns fixed findings and records each run's context.</summary>
+    private sealed class StubCheck(string name, params RouteFinding[] findings) : IRouteCheck
     {
-        public ConcurrentQueue<RouteFindingRequest> Requests { get; } = new();
+        public ConcurrentQueue<RouteCheckContext> Runs { get; } = new();
 
-        public Task<IReadOnlyList<RouteFinding>> ProduceAsync(RouteFindingRequest request, CancellationToken cancellationToken)
+        public string Name => name;
+
+        public RouteCheckOutcome Run(RouteCheckContext context, CancellationToken cancellationToken)
         {
-            Requests.Enqueue(request);
-            return Task.FromResult<IReadOnlyList<RouteFinding>>(findings);
+            Runs.Enqueue(context);
+            return RouteCheckOutcome.Ran(findings);
         }
     }
 
-    /// <summary>Returns one finding per call, its id numbered by the call: <c>{prefix}.{n}</c>.</summary>
-    private sealed class CountingProducer(string prefix, RouteFindingGroup group = RouteFindingGroup.Check) : IRouteFindingProducer
-    {
-        private int _calls;
-
-        public Task<IReadOnlyList<RouteFinding>> ProduceAsync(RouteFindingRequest request, CancellationToken cancellationToken)
-        {
-            var n = Interlocked.Increment(ref _calls) - 1;
-            return Task.FromResult<IReadOnlyList<RouteFinding>>([Finding($"{prefix}.{n}", group, 1000)]);
-        }
-    }
-
-    /// <summary>Returns one finding whose id carries the request's departure: <c>departure.{unix seconds}</c>.</summary>
-    private sealed class DepartureProducer : IRouteFindingProducer
+    /// <summary>Returns one finding whose id carries the plan's departure: <c>departure.{unix seconds}</c>.</summary>
+    private sealed class DepartureCheck : IRouteCheck
     {
         public static string IdFor(DateTimeOffset departure) => $"departure.{departure.ToUnixTimeSeconds()}";
 
-        public Task<IReadOnlyList<RouteFinding>> ProduceAsync(RouteFindingRequest request, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<RouteFinding>>([Finding(IdFor(request.Departure), RouteFindingGroup.Check, 1000)]);
+        public string Name => "departure";
+
+        public RouteCheckOutcome Run(RouteCheckContext context, CancellationToken cancellationToken) =>
+            RouteCheckOutcome.Ran([Finding(IdFor(context.Plan.Departure!.Value), RouteFindingGroup.Check, 1000)]);
     }
 
-    /// <summary>Holds each call until the test releases it.</summary>
-    private sealed class HeldProducer(string prefix) : IRouteFindingProducer
+    /// <summary>Holds each run until the test releases it; finds <c>{name}.{n}</c> on run n.</summary>
+    private sealed class HeldCheck(string name) : IRouteCheck
     {
-        public List<(TaskCompletionSource Gate, CancellationToken Token)> Calls { get; } = [];
+        public List<(ManualResetEventSlim Gate, CancellationToken Token)> Calls { get; } = [];
 
-        public async Task<IReadOnlyList<RouteFinding>> ProduceAsync(RouteFindingRequest request, CancellationToken cancellationToken)
+        public string Name => name;
+
+        public RouteCheckOutcome Run(RouteCheckContext context, CancellationToken cancellationToken)
         {
             int n;
-            var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var gate = new ManualResetEventSlim();
             lock (Calls)
             {
                 n = Calls.Count;
                 Calls.Add((gate, cancellationToken));
             }
 
-            await gate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-            return [Finding($"{prefix}.{n}", RouteFindingGroup.Info, 2000)];
+            gate.Wait(cancellationToken);
+            return RouteCheckOutcome.Ran([Finding($"{name}.{n}", RouteFindingGroup.Info, 2000)]);
         }
 
-        public (TaskCompletionSource Gate, CancellationToken Token) Call(int n)
+        public (ManualResetEventSlim Gate, CancellationToken Token) Call(int n)
         {
             lock (Calls)
                 return Calls[n];
@@ -143,9 +129,11 @@ public sealed class RouteFindingProducerTests : IDisposable
         }
     }
 
-    private sealed class FailingProducer : IRouteFindingProducer
+    private sealed class FailingCheck : IRouteCheck
     {
-        public Task<IReadOnlyList<RouteFinding>> ProduceAsync(RouteFindingRequest request, CancellationToken cancellationToken) =>
+        public string Name => "failing";
+
+        public RouteCheckOutcome Run(RouteCheckContext context, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("no chart");
     }
 
@@ -160,14 +148,16 @@ public sealed class RouteFindingProducerTests : IDisposable
         distance,
         RouteFindingLocation.Point(new GeoPosition(0, distance / 111_320.0), distance));
 
-    private RouteFindingsService Findings(PassageCheckFixture f, params IRouteFindingProducer[] producers) =>
-        new(f.Check, f.Routes, f.Catalog, timeFormat: new Utc(), clock: new FixedClock(Now), producers: producers, post: _ui.Post);
+    private static RouteFindingsService Findings(PassageCheckFixture f) =>
+        new(f.Check, f.Routes, f.Catalog, timeFormat: new Utc());
 
-    private PassageCheckFixture WithDraft() => new(post: _ui.Post);
+    private PassageCheckFixture WithDraft(params IRouteCheck[] checks) => new(post: _ui.Post, checks: checks);
 
-    private PassageCheckFixture NoDraft(Action<Action>? post = null)
+    private PassageCheckFixture NoDraft(params IRouteCheck[] checks) => NoDraft(_ui.Post, checks);
+
+    private static PassageCheckFixture NoDraft(Action<Action>? post, params IRouteCheck[] checks)
     {
-        var f = new PassageCheckFixture(post: post ?? _ui.Post);
+        var f = new PassageCheckFixture(post: post, checks: checks);
         f.Route.SetPassageValue(RoutePassageField.Draft, null);
         return f;
     }
@@ -186,7 +176,7 @@ public sealed class RouteFindingProducerTests : IDisposable
         return value!;
     }
 
-    // Producers post from the thread pool; poll until their results land.
+    // The check posts from the thread pool; poll until its results land.
     private static async Task WaitUntil(RouteFindingsService findings, Func<RouteFindingsService, bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);
@@ -198,25 +188,42 @@ public sealed class RouteFindingProducerTests : IDisposable
     }
 
     [Fact]
-    public async Task The_clearance_findings_are_the_first_producer()
+    public async Task The_report_runs_every_check_and_lists_the_clearance_findings()
     {
-        var f = WithDraft();
+        var f = new PassageCheckFixture(post: _ui.Post, allChecks: true);
         using var findings = Findings(f);
         await CheckAsync(f);
 
-        Assert.IsType<ClearanceFindingProducer>(Assert.Single(findings.Producers));
-        Assert.True(findings.Producers[0].UsesClearance);
-        Assert.Equal("clearance.below_setting.0", Assert.Single(findings.Findings).Id);
+        var report = Assert.IsType<RouteCheckReport>(f.Check.Report);
+        Assert.Same(report, findings.Report);
+        Assert.Equal(
+            [ChartCheck.CheckName, AreaCheck.CheckName, WarningCheck.CheckName, ClearanceCheck.CheckName],
+            report.Checks.Select(c => c.Name));
+        // No mariner settings: the chart check runs without its depth checks.
+        Assert.Equal((RouteCheckState.Partial, RouteCheckReasons.SafetySettingsMissing),
+            (report.Status(ChartCheck.CheckName)!.State, report.Status(ChartCheck.CheckName)!.Reason));
+        Assert.Equal(RouteCheckState.Ran, report.Status(ClearanceCheck.CheckName)!.State);
+        Assert.Same(report.Clearance, f.Check.Current!.Result);
+        Assert.Equal(RouteCheckVerdictKind.MustReview, report.Verdict.Kind);
+        // The fixture's S-102 and S-104 aren't charts: every leg leaves chart coverage.
+        var below = Assert.Single(findings.Findings, x => x.Category == RouteFindingCategory.Clearance);
+        Assert.Equal("clearance.below_setting.0", below.Id);
+        Assert.Equal(report.Findings.Select(x => x.Id), findings.Findings.Select(x => x.Id));
+        // The list is worded from Strings.resx, not the SDK's default wording.
+        Assert.Equal("Below your UKC setting for 6 min", below.Title);
+        Assert.Equal("Leg 6 → 7 · min -1.5 m at 08:13Z", below.Meta);
+        Assert.NotEqual(below.Meta, report.Findings.Single(x => x.Id == below.Id).Meta);
     }
 
     [Fact]
-    public async Task A_route_without_a_draft_enters_check_mode_with_the_producers_findings_and_no_clearance()
+    public async Task A_route_without_a_draft_enters_check_mode_with_the_checks_findings_and_no_clearance()
     {
-        var f = NoDraft();
-        var stub = new StubProducer(
+        var stub = new StubCheck(
+            "stub",
             Finding("route_check.land.0", RouteFindingGroup.MustReview, 3000),
             Finding("route_check.warning.0", RouteFindingGroup.Check, 1500));
-        using var findings = Findings(f, stub);
+        var f = NoDraft(stub);
+        using var findings = Findings(f);
         var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings);
         var clearance = new ClearanceViewModel(f.Check);
 
@@ -231,16 +238,18 @@ public sealed class RouteFindingProducerTests : IDisposable
         Assert.Null(f.Check.Current);
         Assert.Null(f.Check.Window);
 
-        // The producer saw the route without a draft or a clearance result.
-        var request = Assert.Single(stub.Requests);
-        Assert.Equal(f.Route.Id, request.RouteId);
-        Assert.False(request.HasDraft);
-        Assert.Null(request.Clearance);
-        Assert.Equal(8, request.Legs.Count);
-        Assert.Equal("1 → 2", request.Legs[0].Name);
-        Assert.Equal(PassageCheckFixture.Departure, request.Departure);
+        // The check saw the route without a draft, at its departure; the
+        // clearance check was skipped for it.
+        var run = Assert.Single(stub.Runs);
+        Assert.Equal(8, run.Plan.Legs.Count);
+        Assert.All(run.Plan.Legs, l => Assert.Null(l.Draft));
+        Assert.Equal("1 → 2", run.Plan.Legs[0].Name);
+        Assert.Equal(PassageCheckFixture.Departure, run.Plan.Departure);
+        Assert.Equal(PassageCheckFixture.Departure, run.Settings.At);
+        Assert.Equal((RouteCheckState.Skipped, RouteCheckReasons.DraftMissing),
+            (f.Check.Report!.Status(ClearanceCheck.CheckName)!.State, f.Check.Report.Status(ClearanceCheck.CheckName)!.Reason));
 
-        // The findings list holds the producer's findings, grouped.
+        // The findings list holds the check's findings, grouped.
         Assert.Equal(["route_check.land.0", "route_check.warning.0"], findings.Findings.Select(x => x.Id));
         Assert.Equal("Findings 2", panel.Check!.FindingsLabel);
 
@@ -286,20 +295,22 @@ public sealed class RouteFindingProducerTests : IDisposable
     public void The_no_draft_summary_counts_the_worst_group(RouteFindingGroup[] groups, string title)
     {
         var list = groups.Select((g, i) => Finding($"x.{i}", g, i)).ToList();
-        Assert.Equal(title, RouteCheckVerdict.NoDraftTitle(list));
+        Assert.Equal(title, RouteCheckCard.NoDraftTitle(list));
     }
 
     [Fact]
-    public async Task Two_producers_merge_sorted_by_group_then_distance()
+    public async Task Two_checks_merge_sorted_by_group_then_distance()
     {
-        var f = NoDraft();
-        var a = new StubProducer(
+        var a = new StubCheck(
+            "a",
             Finding("a.info.0", RouteFindingGroup.Info, 100),
             Finding("a.must.0", RouteFindingGroup.MustReview, 5000));
-        var b = new StubProducer(
+        var b = new StubCheck(
+            "b",
             Finding("b.check.0", RouteFindingGroup.Check, 200),
             Finding("b.must.0", RouteFindingGroup.MustReview, 1000));
-        using var findings = Findings(f, a, b);
+        var f = NoDraft(a, b);
+        using var findings = Findings(f);
 
         _ui.Run(() => f.Routes.IsCheckModeActive = true);
         await findings.WhenIdle();
@@ -320,45 +331,41 @@ public sealed class RouteFindingProducerTests : IDisposable
         var oneOff = await findings.FindingsForAsync(other, TestContext.Current.CancellationToken);
         Assert.Equal(["b.must.0", "a.must.0", "b.check.0", "a.info.0"], oneOff!.Select(x => x.Id));
         // The active route's own debounced re-check may land after the
-        // one-off, so look for the one-off's request rather than the last one.
-        Assert.Contains(a.Requests, r => r.RouteId == other.Id);
+        // one-off, so look for the one-off's run rather than the last one.
+        Assert.Contains(a.Runs, r => r.Plan.Legs.Count == 1);
     }
 
     [Fact]
-    public async Task A_stale_or_cancelled_producer_keeps_its_findings_and_never_drops_the_others()
+    public async Task While_a_check_recomputes_its_findings_stay_marked_stale_and_a_newer_edit_cancels_it()
     {
-        var f = NoDraft();
-        var fast = new CountingProducer("fast");
-        var held = new HeldProducer("held");
-        using var findings = Findings(f, fast, held);
+        var held = new HeldCheck("held");
+        var f = NoDraft(held);
+        using var findings = Findings(f);
 
         _ui.Run(() => f.Routes.IsCheckModeActive = true);
         await WaitUntil(findings, _ => held.Count == 1);
-        await WaitUntil(findings, s => s.Findings.Any(x => x.Id == "fast.0"));
         Assert.True(findings.IsStale);
-        held.Call(0).Gate.SetResult();
+        Assert.Empty(findings.Findings);
+        held.Call(0).Gate.Set();
         await findings.WhenIdle();
-        Assert.Equal(["fast.0", "held.0"], findings.Findings.Select(x => x.Id));
+        Assert.Equal(["held.0"], findings.Findings.Select(x => x.Id));
         Assert.False(findings.IsStale);
 
-        // An edit: the fast producer lands while the held one is still running,
-        // so the held one's findings stay, marked stale.
+        // An edit: the previous findings stay, marked stale, until the run lands.
         _ui.Run(() => f.Route.SetPassageValue(RoutePassageField.Speed, 7));
         await WaitUntil(findings, _ => held.Count == 2);
-        await WaitUntil(findings, s => s.Findings.Any(x => x.Id == "fast.1"));
-        Assert.Equal(["fast.1", "held.0"], findings.Findings.Select(x => x.Id));
+        Assert.Equal(["held.0"], findings.Findings.Select(x => x.Id));
         Assert.True(findings.IsStale);
 
-        // Another edit cancels the held run; neither producer's findings go.
+        // Another edit cancels the held run; the findings still stay.
         _ui.Run(() => f.Route.SetPassageValue(RoutePassageField.Speed, 8));
         await WaitUntil(findings, _ => held.Count == 3);
         Assert.True(held.Call(1).Token.IsCancellationRequested);
-        await WaitUntil(findings, s => s.Findings.Any(x => x.Id == "fast.2"));
-        Assert.Equal(["fast.2", "held.0"], findings.Findings.Select(x => x.Id));
+        Assert.Equal(["held.0"], findings.Findings.Select(x => x.Id));
 
-        held.Call(2).Gate.SetResult();
+        held.Call(2).Gate.Set();
         await findings.WhenIdle();
-        Assert.Equal(["fast.2", "held.2"], findings.Findings.Select(x => x.Id));
+        Assert.Equal(["held.2"], findings.Findings.Select(x => x.Id));
         Assert.False(findings.IsStale);
 
         // Turning Check passage off cancels and clears everything.
@@ -376,46 +383,47 @@ public sealed class RouteFindingProducerTests : IDisposable
     {
         // No post: a run's findings land on the thread pool while the caller's
         // edit is still merging. Every edit's findings must survive that.
-        var f = new PassageCheckFixture();
-        f.Route.SetPassageValue(RoutePassageField.Draft, null);
-        using var findings = new RouteFindingsService(f.Check, f.Routes, f.Catalog, timeFormat: new Utc(), clock: new FixedClock(Now),
-            producers: [new DepartureProducer()]);
+        var f = NoDraft(post: null, new DepartureCheck());
+        using var findings = Findings(f);
         f.Routes.IsCheckModeActive = true;
         await findings.WhenIdle();
-        Assert.Equal(DepartureProducer.IdFor(PassageCheckFixture.Departure), Assert.Single(findings.Findings).Id);
+        Assert.Equal(DepartureCheck.IdFor(PassageCheckFixture.Departure), Assert.Single(findings.Findings).Id);
 
         for (var i = 1; i <= 500; i++)
         {
             var departure = PassageCheckFixture.Departure.AddMinutes(i);
             f.Route.SetDeparture(departure);
             await findings.WhenIdle();
-            Assert.Equal(DepartureProducer.IdFor(departure), Assert.Single(findings.Findings).Id);
+            Assert.Equal(DepartureCheck.IdFor(departure), Assert.Single(findings.Findings).Id);
             Assert.False(findings.IsStale);
         }
     }
 
     [Fact]
-    public async Task A_failing_producer_reports_its_error_and_keeps_the_others()
+    public async Task A_failing_check_reports_its_error()
     {
-        var f = WithDraft();
-        using var findings = Findings(f, new FailingProducer(), new StubProducer(Finding("ok.0", RouteFindingGroup.Info, 10)));
+        var f = WithDraft(new FailingCheck(), new StubCheck("ok", Finding("ok.0", RouteFindingGroup.Info, 10)));
+        using var findings = Findings(f);
 
-        await CheckAsync(f);
+        _ui.Run(() => f.Routes.IsCheckModeActive = true);
         await findings.WhenIdle();
 
-        Assert.Equal(["clearance.below_setting.0", "ok.0"], findings.Findings.Select(x => x.Id));
+        Assert.Null(f.Check.Report);
+        Assert.Empty(findings.Findings);
         Assert.Equal(["no chart"], findings.Errors);
+        Assert.Equal("no chart", f.Check.Error);
     }
 
     [Fact]
     public async Task The_map_marks_route_findings_toned_by_group_and_info_only_when_selected()
     {
-        var f = NoDraft();
-        using var findings = Findings(f, new StubProducer(
+        var f = NoDraft(new StubCheck(
+            "stub",
             Finding("m.0", RouteFindingGroup.MustReview, 3000),
             Finding("c.0", RouteFindingGroup.Check, 1500),
             Finding("i.0", RouteFindingGroup.Info, 500),
             TestFinding.Make("u.0", "u", RouteFindingGroup.Info, RouteFindingCategory.Data, "Unplaced", "", null, null, null)));
+        using var findings = Findings(f);
         _ui.Run(() => f.Routes.IsCheckModeActive = true);
         await findings.WhenIdle();
         _ui.Run(() => findings.Select(findings.Findings.Single(x => x.Id == "c.0"), zoom: false));
@@ -465,10 +473,11 @@ public sealed class RouteFindingProducerTests : IDisposable
     [Fact]
     public async Task Get_findings_and_select_finding_work_without_a_draft()
     {
-        var f = NoDraft();
-        using var findings = Findings(f, new StubProducer(
+        var f = NoDraft(new StubCheck(
+            "stub",
             Finding("route_check.land.0", RouteFindingGroup.MustReview, 3000),
             Finding("route_check.warning.0", RouteFindingGroup.Check, 1500)));
+        using var findings = Findings(f);
         var ct = TestContext.Current.CancellationToken;
         var invoker = new UiInvoker(_ui);
         var state = Value(await new SetCheckModeTool(f.Routes, invoker, f.Check).InvokeAsync(new SetCheckModeRequest(true), ct));
@@ -499,9 +508,8 @@ public sealed class RouteFindingProducerTests : IDisposable
         try
         {
             void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
-            var f = NoDraft(Post);
-            using var findings = new RouteFindingsService(f.Check, f.Routes, f.Catalog, timeFormat: new Utc(), clock: new FixedClock(Now),
-                producers: [new StubProducer(Finding("route_check.land.0", RouteFindingGroup.MustReview, 3000))], post: Post);
+            var f = NoDraft(Post, new StubCheck("stub", Finding("route_check.land.0", RouteFindingGroup.MustReview, 3000)));
+            using var findings = Findings(f);
             var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings);
             using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 

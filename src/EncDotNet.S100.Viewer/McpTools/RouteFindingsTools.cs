@@ -5,7 +5,6 @@ using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.PassageCheck;
 using EncDotNet.S100.Viewer.ViewModels;
 using ModelContextProtocol.Server;
-using RouteCheckVerdict = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdict;
 
 namespace EncDotNet.S100.Viewer.McpTools;
 
@@ -170,7 +169,7 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
 
     protected RouteFindingsService Findings { get; }
 
-    /// <summary>Waits for the check, then for the findings producers, as <see cref="PassageCheckToolBase.SettleAsync"/>.</summary>
+    /// <summary>Waits for the check to land, as <see cref="PassageCheckToolBase.SettleAsync"/>.</summary>
     protected async Task SettleFindingsAsync(CancellationToken cancellationToken)
     {
         await SettleAsync(cancellationToken).ConfigureAwait(false);
@@ -220,7 +219,7 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
         findings.Count(f => f.Group == RouteFindingGroup.MustReview),
         findings.Count(f => f.Group == RouteFindingGroup.Check),
         findings.Count(f => f.Group == RouteFindingGroup.Info),
-        RouteCheckVerdict.NoDraftTitle(findings),
+        RouteCheckCard.NoDraftTitle(findings),
         live && stale,
         live ? selected?.Id : null,
         findings.Select(f => ToDto(f, live && f.Id == selected?.Id, departure, format)).ToList());

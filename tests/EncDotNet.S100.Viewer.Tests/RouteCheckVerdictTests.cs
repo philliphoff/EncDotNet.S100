@@ -15,8 +15,6 @@ using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
-using RouteCheckVerdict = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdict;
-using RouteCheckVerdictKind = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdictKind;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -49,8 +47,9 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
     private static RouteFinding Finding(string id, RouteFindingCode code, RouteFindingGroup group, RouteFindingCategory category, string? title = null, string? meta = null) =>
         TestFinding.Make(id, code, group, category, title ?? id, meta ?? $"meta {id}", 0, 100, null);
 
-    private static RouteCheckVerdict Build(bool hasDraft, params RouteFinding[] findings) =>
-        RouteCheckVerdict.Build(hasDraft, null, findings, warningsChecked: true, ["S-101", "S-124"], DepthUnit.Metres, TimeFormat.Utc);
+    // The kind is the report's (RouteCheckVerdict.From); the card words it.
+    private static RouteCheckCard Build(bool hasDraft, params RouteFinding[] findings) =>
+        RouteCheckCard.Build(RouteCheckVerdict.From(findings, null).Kind, hasDraft, null, findings, warningsChecked: true, ["S-101", "S-124"], DepthUnit.Metres, TimeFormat.Utc);
 
     [Fact]
     public void Must_review_titles_name_the_worst_kind_in_order()
@@ -126,7 +125,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
         Assert.Equal(("2 in force on route · 1 near", "3", CheckTone.Destructive), (verdict.Rows[2].Text, verdict.Rows[2].Chip, verdict.Rows[2].ChipTone));
         Assert.Equal("Not for navigation · computed from S-101, S-124 for your settings", verdict.Footer);
 
-        var nothing = RouteCheckVerdict.Build(false, null, [], warningsChecked: false, [], DepthUnit.Metres, TimeFormat.Utc);
+        var nothing = RouteCheckCard.Build(RouteCheckVerdictKind.Clear, false, null, [], warningsChecked: false, [], DepthUnit.Metres, TimeFormat.Utc);
         Assert.Equal(2, nothing.Rows.Count); // no Warnings row when no warnings were checked
         Assert.Equal(("Nothing found", "0", CheckTone.Success), (nothing.Rows[1].Text, nothing.Rows[1].Chip, nothing.Rows[1].ChipTone));
         Assert.Equal("Not for navigation · no data loaded for this route", nothing.Footer);
@@ -298,9 +297,10 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
         };
         var warnings = new NavigationalWarningsService(loader);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero, post: post);
-        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(),
-            producers: [new WarningFindingProducer(warnings, options is null ? null : () => options)], post: post);
+        var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
+            checks: () => [new WarningCheck(), new ClearanceCheck()],
+            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post);
+        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
         return new WarningsRouteCheck(routes, route, check, findings) { Warnings = warnings };
     }
 

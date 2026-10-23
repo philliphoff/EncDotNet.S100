@@ -220,13 +220,13 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
         var counts = Enum.GetValues<FindingsFilter>().ToDictionary(f => f, _ => 0);
         counts[FindingsFilter.All] = findings.Count;
         foreach (var finding in findings)
-            counts[RouteCheckVerdict.FilterOf(finding)]++;
+            counts[RouteCheckCard.FilterOf(finding)]++;
         return counts;
     }
 
     /// <summary>Whether a finding passes a filter.</summary>
     internal static bool Passes(RouteFinding finding, FindingsFilter filter) =>
-        filter == FindingsFilter.All || RouteCheckVerdict.FilterOf(finding) == filter;
+        filter == FindingsFilter.All || RouteCheckCard.FilterOf(finding) == filter;
 
     /// <summary>The list's entries after <paramref name="filter"/>, by group, merged (D2).</summary>
     internal static IReadOnlyList<FindingsEntry> Entries(IReadOnlyList<RouteFinding> findings, FindingsFilter filter) =>

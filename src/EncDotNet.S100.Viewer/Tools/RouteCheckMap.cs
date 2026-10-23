@@ -6,7 +6,6 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.ViewModels;
 using SkiaSharp;
-using RouteCheckVerdict = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdict;
 
 namespace EncDotNet.S100.Viewer.Tools;
 
@@ -93,7 +92,7 @@ internal sealed record RouteCheckMap(
     /// warning) rather than by the UKC line and the dashed outline.
     /// </summary>
     internal static bool Draws(RouteFinding finding) =>
-        finding.Location is { Path.Count: > 0 } && RouteCheckVerdict.FilterOf(finding) != FindingsFilter.Clearance;
+        finding.Location is { Path.Count: > 0 } && RouteCheckCard.FilterOf(finding) != FindingsFilter.Clearance;
 
     /// <summary>Builds the layer for the checked route.</summary>
     /// <param name="route">The checked route; <c>null</c> draws nothing.</param>

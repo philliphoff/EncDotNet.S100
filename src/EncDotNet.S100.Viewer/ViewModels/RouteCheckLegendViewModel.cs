@@ -59,8 +59,16 @@ internal sealed class RouteCheckLegendViewModel : ViewModelBase, IDisposable
     /// <summary>Whether the legend is open; otherwise it's the "Legend" chip.</summary>
     public bool IsOpen => _state.IsOpen;
 
-    /// <summary>Whether the "UKC AT ETA" section shows: the route has a draft, so the line is coloured by clearance.</summary>
-    public bool HasClearance => _check?.HasDraft ?? false;
+    /// <summary>
+    /// Whether the "UKC AT ETA" section shows: the report's clearance check
+    /// ran, so the line is coloured by clearance. Until the checked route's
+    /// first report lands, whether it has a draft.
+    /// </summary>
+    public bool HasClearance =>
+        _check is { IsActive: true } check
+        && (check.Report is { } report && check.ReportRouteId == check.Input?.RouteId
+            ? report.Status(ClearanceCheck.CheckName) is { State: not RouteCheckState.Skipped }
+            : check.HasDraft);
 
     /// <summary>Whether the "No draft" note shows.</summary>
     public bool IsNoDraft => !HasClearance;
