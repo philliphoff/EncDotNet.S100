@@ -268,7 +268,7 @@ public sealed class CheckRouteTool
         : "No findings for your settings";
 
     // The default formatter: English, invariant culture, metres, UTC.
-    private static readonly RouteCheckOptions Options = RouteCheckOptions.Default;
+    private static readonly ChartCheckOptions Options = ChartCheckOptions.Default;
 
     private static readonly RouteAreaOptions AreaOptions = RouteAreaOptions.Default;
 

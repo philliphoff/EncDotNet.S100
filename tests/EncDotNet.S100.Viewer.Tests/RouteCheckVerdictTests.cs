@@ -15,6 +15,8 @@ using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
+using RouteCheckVerdict = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdict;
+using RouteCheckVerdictKind = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdictKind;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

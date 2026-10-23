@@ -255,7 +255,7 @@ public class RouteCheckEngineTests
     public void Wording_can_be_replaced()
     {
         var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005);
-        var options = new RouteCheckOptions { Formatter = new FrenchFormatter() };
+        var options = new ChartCheckOptions { Formatter = new FrenchFormatter() };
 
         var finding = Assert.Single(new RouteCheckEngine(new FakeCharts([Harbour], [land]), options).Check(new PassagePlan([East]), Fixture.Settings(), TestContext.Current.CancellationToken).Findings);
 

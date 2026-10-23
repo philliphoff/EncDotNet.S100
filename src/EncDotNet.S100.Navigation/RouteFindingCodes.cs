@@ -60,7 +60,7 @@ public static class RouteFindingCodes
 
     /// <summary>
     /// A charted danger shallower than the threshold within
-    /// <see cref="RouteCheckOptions.DangerNearbyMeters"/> beyond the cross-track limits. CHECK.
+    /// <see cref="ChartCheckOptions.DangerNearbyMeters"/> beyond the cross-track limits. CHECK.
     /// </summary>
     public static RouteFindingCode DangerNearRoute { get; } = new("route_check.danger_near_route", RouteFindingCategory.Depth, RouteFindingGroup.Check);
 

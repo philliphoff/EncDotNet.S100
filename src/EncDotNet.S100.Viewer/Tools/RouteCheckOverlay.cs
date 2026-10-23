@@ -106,7 +106,7 @@ internal sealed record RouteCheckOverlay(
             appearance.Palette,
             viewTime ?? snapshot?.Result.Departure ?? DateTimeOffset.UtcNow,
             timeFormat,
-            RouteCheckOptions.Default.DefaultHalfWidthMeters);
+            ChartCheckOptions.Default.DefaultHalfWidthMeters);
         if (!hasDraft)
             return new RouteCheckOverlay([], false, null, null, colors, Focus(null, selectedFinding, colors, markers), markers, HasClearance: false, NoDraft: true);
         if (snapshot is null)
