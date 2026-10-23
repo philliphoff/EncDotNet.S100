@@ -32,7 +32,6 @@ public class S100McpServerRoundTripTests
                 "describe_feature",
                 "describe_feature_type",
                 "find_at",
-                "get_passage_result",
                 "identify_features",
                 "list_datasets",
                 "list_specs",
@@ -933,7 +932,7 @@ public class S100McpServerRoundTripTests
     }
 
     [Fact]
-    public async Task GetPassageResult_round_trip_checks_a_polyline()
+    public async Task CheckRoute_round_trip_checks_a_polyline_with_its_clearance()
     {
         var catalog = McpTestHelpers.NewCatalog(
             LoadedDatasetFactory.S102("synth-bathy-1",
@@ -944,7 +943,7 @@ public class S100McpServerRoundTripTests
         await using var server = await McpTestHelpers.StartServerAsync(catalog);
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("get_passage_result", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("check_route", new Dictionary<string, object?>
         {
             ["polyline"] = """{"vertices":[[0.005,0.005],[0.005,0.025]]}""",
             ["draftMeters"] = 10.0,
@@ -954,8 +953,14 @@ public class S100McpServerRoundTripTests
             ["includeSamples"] = true,
         }, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.False(result.IsError ?? false, $"get_passage_result returned an error: {DumpText(result)}");
-        var payload = ParseSingleJson(result);
+        Assert.False(result.IsError ?? false, $"check_route returned an error: {DumpText(result)}");
+        var report = ParseSingleJson(result);
+        Assert.Equal("clearance", report["checks"]!.AsArray()[^1]!["name"]!.GetValue<string>());
+        Assert.Equal("ran", report["checks"]!.AsArray()[^1]!["state"]!.GetValue<string>());
+        Assert.NotNull(report["verdict"]!["kind"]);
+        Assert.StartsWith("Not for navigation", report["disclaimer"]!.GetValue<string>());
+        Assert.Contains(report["findings"]!.AsArray(), f => f!["code"]!.GetValue<string>() == "confidence.datum_unconfirmed" && f["details"]?["clearance"] is not null);
+        var payload = report["clearance"]!;
 
         // Neither synthetic dataset declares a vertical datum, so the water
         // level is applied but every sample is lower confidence; the state
@@ -967,16 +972,16 @@ public class S100McpServerRoundTripTests
         Assert.Equal("datum_unconfirmed", sample["confidence"]!.AsArray().Single()!.GetValue<string>());
         Assert.Contains("datum_unconfirmed", payload["confidence"]!.AsArray().Select(c => c!.GetValue<string>()));
         Assert.Single(payload["legs"]!.AsArray());
-        Assert.StartsWith("Not for navigation", payload["disclaimer"]!.GetValue<string>());
+        Assert.StartsWith("computed from S-102", payload["disclaimer"]!.GetValue<string>());
     }
 
     [Fact]
-    public async Task GetPassageResult_without_routes_needs_a_polyline()
+    public async Task CheckRoute_without_routes_needs_a_polyline()
     {
         await using var server = await McpTestHelpers.StartServerAsync(McpTestHelpers.NewCatalog());
         await using var client = await McpTestClient.ConnectAsync(server, TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("get_passage_result", new Dictionary<string, object?>
+        var result = await client.CallToolAsync("check_route", new Dictionary<string, object?>
         {
             ["draftMeters"] = 10.0,
         }, cancellationToken: TestContext.Current.CancellationToken);

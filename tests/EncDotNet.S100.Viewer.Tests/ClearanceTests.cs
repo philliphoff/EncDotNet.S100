@@ -162,15 +162,15 @@ public sealed class ClearanceTests : IDisposable
     }
 
     [Fact]
-    public async Task Every_readout_number_traces_to_get_passage_result()
+    public async Task Every_readout_number_traces_to_check_route()
     {
         var (f, vm) = await CheckedAsync();
         f.Check.SetCursor(Meters(0.11));
 
-        var tool = new GetPassageResultTool(f.Catalog, new ViewerPassageRouteProvider(f.Routes, new InlineInvoker()));
-        var result = await tool.InvokeAsync(new GetPassageResultRequest(IncludeSamples: true, MaxSamples: 10_000), TestContext.Current.CancellationToken);
+        var tool = new CheckRouteTool(f.Catalog, new ViewerPassageRouteProvider(f.Routes, new InlineInvoker()));
+        var result = await tool.InvokeAsync(new CheckRouteRequest(IncludeSamples: true, MaxSamples: 10_000), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetValue(out var value));
-        var sample = value!.Samples!.Single(s => s.Index == vm.ReadoutSample!.Index);
+        var sample = value!.Clearance!.Samples!.Single(s => s.Index == vm.ReadoutSample!.Index);
 
         Assert.Equal($"{sample.ChartedDepthMeters:0.0} m", vm.DepthText);
         Assert.Equal($"S-102 · {sample.DepthDataset} ({sample.DepthReference}) · ±{sample.UncertaintyMeters:0.0} m", vm.DepthSource);

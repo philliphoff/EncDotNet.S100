@@ -17,13 +17,40 @@
     "routeId": "ZZ00-SPIT-X",
     "routeName": "Across the spit and ashore (SYNTHETIC, runs aground on purpose)",
     "distanceNm": 1.8339,
-    "summary": {
-      "count": 6,
-      "mustReview": 6,
-      "check": 0,
-      "info": 0,
-      "text": "6 to review"
+    "verdict": {
+      "kind": "must_review",
+      "title": "Crosses land",
+      "headlineId": "route_check.crosses_land.0"
     },
+    "summary": {
+      "count": 10,
+      "mustReview": 8,
+      "check": 2,
+      "info": 0,
+      "text": "8 to review"
+    },
+    "checks": [
+      {
+        "name": "chart",
+        "state": "ran",
+        "findingCount": 6
+      },
+      {
+        "name": "areas",
+        "state": "ran",
+        "findingCount": 0
+      },
+      {
+        "name": "warnings",
+        "state": "ran",
+        "findingCount": 0
+      },
+      {
+        "name": "clearance",
+        "state": "ran",
+        "findingCount": 4
+      }
+    ],
     "findings": [
       {
         "id": "route_check.crosses_safety_contour.0",
@@ -791,6 +818,45 @@
         }
       },
       {
+        "id": "clearance.below_setting.0",
+        "code": "clearance.below_setting",
+        "group": "must_review",
+        "category": "clearance",
+        "title": "Below your UKC setting for 2 min",
+        "meta": "Leg 2 \u2192 3 \u00B7 min -5.1 m at 2026-03-01 06:08 UTC",
+        "legIndex": 1,
+        "distanceNm": 0.89,
+        "location": {
+          "kind": "span",
+          "startNm": 0.7417,
+          "endNm": 0.9844,
+          "path": [
+            [
+              -40.98563,
+              -134.96697
+            ],
+            [
+              -40.98563,
+              -134.96161
+            ]
+          ]
+        },
+        "details": {
+          "clearance": {
+            "stretch": "below_setting",
+            "firstLegIndex": 1,
+            "lastLegIndex": 1,
+            "lengthNm": 0.2428,
+            "startTime": "2026-03-01T06:07:33.0820523\u002B00:00",
+            "minimumClearanceMeters": -5.05113,
+            "requiredUkcMeters": 0.5,
+            "marginMeters": -5.55113,
+            "minimumTime": "2026-03-01T06:08:54.0022865\u002B00:00",
+            "minutesBelow": 2.4
+          }
+        }
+      },
+      {
         "id": "route_check.crosses_safety_contour.2",
         "code": "route_check.crosses_safety_contour",
         "group": "must_review",
@@ -1408,6 +1474,45 @@
         }
       },
       {
+        "id": "clearance.below_setting.1",
+        "code": "clearance.below_setting",
+        "group": "must_review",
+        "category": "clearance",
+        "title": "Below your UKC setting for 5 min",
+        "meta": "Leg 3 \u2192 4 \u00B7 min -5.0 m at 2026-03-01 06:16 UTC",
+        "legIndex": 2,
+        "distanceNm": 1.6452,
+        "location": {
+          "kind": "span",
+          "startNm": 1.2541,
+          "endNm": 1.7126,
+          "path": [
+            [
+              -40.98675,
+              -134.95715
+            ],
+            [
+              -40.99439,
+              -134.95715
+            ]
+          ]
+        },
+        "details": {
+          "clearance": {
+            "stretch": "below_setting",
+            "firstLegIndex": 2,
+            "lastLegIndex": 2,
+            "lengthNm": 0.4585,
+            "startTime": "2026-03-01T06:12:40.5686135\u002B00:00",
+            "minimumClearanceMeters": -5.04851,
+            "requiredUkcMeters": 0.5,
+            "marginMeters": -5.54851,
+            "minimumTime": "2026-03-01T06:16:27.0970691\u002B00:00",
+            "minutesBelow": 4.6
+          }
+        }
+      },
+      {
         "id": "route_check.crosses_land.0",
         "code": "route_check.crosses_land",
         "group": "must_review",
@@ -1563,6 +1668,86 @@
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "12"
         }
+      },
+      {
+        "id": "confidence.charted_depth_from_s101.0",
+        "code": "confidence.charted_depth_from_s101",
+        "group": "check",
+        "category": "confidence",
+        "title": "Charted depth from S-101 only",
+        "meta": "Legs 1 \u2192 4 \u00B7 1.7 NM outside S-102 coverage",
+        "legIndex": 0,
+        "distanceNm": 0.8563,
+        "location": {
+          "kind": "span",
+          "startNm": 0,
+          "endNm": 1.7126,
+          "path": [
+            [
+              -40.97664,
+              -134.97143
+            ],
+            [
+              -40.98563,
+              -134.97143
+            ],
+            [
+              -40.98563,
+              -134.95715
+            ],
+            [
+              -40.98563,
+              -134.95715
+            ],
+            [
+              -40.99439,
+              -134.95715
+            ]
+          ]
+        },
+        "details": {
+          "clearance": {
+            "stretch": "charted_depth_from_s101",
+            "firstLegIndex": 0,
+            "lastLegIndex": 2,
+            "lengthNm": 1.7126,
+            "startTime": "2026-03-01T06:00:00\u002B00:00"
+          }
+        }
+      },
+      {
+        "id": "data.no_charted_depth.0",
+        "code": "data.no_charted_depth",
+        "group": "check",
+        "category": "data",
+        "title": "No charted depth",
+        "meta": "Leg 3 \u2192 4 \u00B7 0.1 NM \u00B7 no S-102 or S-101 coverage",
+        "legIndex": 2,
+        "distanceNm": 1.7733,
+        "location": {
+          "kind": "span",
+          "startNm": 1.7126,
+          "endNm": 1.8339,
+          "path": [
+            [
+              -40.99439,
+              -134.95715
+            ],
+            [
+              -40.99641,
+              -134.95715
+            ]
+          ]
+        },
+        "details": {
+          "clearance": {
+            "stretch": "no_charted_depth",
+            "firstLegIndex": 2,
+            "lastLegIndex": 2,
+            "lengthNm": 0.1214,
+            "startTime": "2026-03-01T06:17:15.638881\u002B00:00"
+          }
+        }
       }
     ],
     "legs": [
@@ -1588,205 +1773,96 @@
         "starboardMeters": 100
       }
     ],
-    "datasets": [
-      "S-101/DATASET_FILES/101ZZ00SPIT3.000",
-      "S-101/DATASET_FILES/101ZZ00SPIT5.000"
-    ],
-    "disclaimer": "Not for navigation \u00B7 checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only"
-  },
-  "passage": {
-    "routeId": "ZZ00-SPIT-X",
-    "routeName": "Across the spit and ashore (SYNTHETIC, runs aground on purpose)",
-    "departure": "2026-03-01T06:00:00\u002B00:00",
-    "arrival": "2026-03-01T06:18:20.3612968\u002B00:00",
-    "verdict": "below_setting",
-    "verdictTitle": "Below your UKC setting in 2 places",
-    "confidence": [
-      "charted_depth_from_s101"
-    ],
-    "noMarginSet": false,
-    "minimum": {
-      "leg": 1,
-      "sample": 34,
-      "latitude": -40.98563,
-      "longitude": -134.9637,
-      "distanceNm": 0.89,
-      "time": "2026-03-01T06:08:54.0022865\u002B00:00",
-      "hasEta": true,
-      "ukcMeters": -5.05,
-      "requiredUkcMeters": 0.5,
-      "state": "below_setting",
+    "clearance": {
+      "departure": "2026-03-01T06:00:00\u002B00:00",
+      "arrival": "2026-03-01T06:18:20.3612968\u002B00:00",
+      "verdict": "below_setting",
+      "verdictTitle": "Below your UKC setting in 2 places",
       "confidence": [
         "charted_depth_from_s101"
-      ]
-    },
-    "minutesBelow": 7,
-    "placesBelow": 2,
-    "distanceNm": 1.834,
-    "sampleCount": 71,
-    "legs": [
-      {
-        "index": 0,
-        "name": "Leg 1 \u2192 2",
-        "startNm": 0,
-        "distanceNm": 0.539,
-        "start": "2026-03-01T06:00:00\u002B00:00",
-        "end": "2026-03-01T06:05:23.6096776\u002B00:00",
-        "draftMeters": 2,
-        "speedKnots": 6,
-        "squatMeters": 0.1,
+      ],
+      "noMarginSet": false,
+      "minimum": {
+        "leg": 1,
+        "sample": 34,
+        "latitude": -40.98563,
+        "longitude": -134.9637,
+        "distanceNm": 0.89,
+        "time": "2026-03-01T06:08:54.0022865\u002B00:00",
+        "hasEta": true,
+        "ukcMeters": -5.05,
         "requiredUkcMeters": 0.5,
-        "minimum": {
-          "leg": 0,
-          "sample": 20,
-          "latitude": -40.98563,
-          "longitude": -134.97143,
-          "distanceNm": 0.539,
-          "time": "2026-03-01T06:05:23.6096776\u002B00:00",
-          "hasEta": true,
-          "ukcMeters": 0.68,
-          "requiredUkcMeters": 0.5,
-          "state": "tight",
-          "confidence": [
-            "charted_depth_from_s101"
-          ]
-        },
-        "worstState": "tight",
-        "minutesBelow": 0,
-        "placesBelow": 0,
-        "lowConfidence": true,
+        "state": "below_setting",
         "confidence": [
           "charted_depth_from_s101"
-        ],
-        "noWaterLevel": false
+        ]
       },
-      {
-        "index": 1,
-        "name": "Leg 2 \u2192 3",
-        "startNm": 0.539,
-        "distanceNm": 0.647,
-        "start": "2026-03-01T06:05:23.6096776\u002B00:00",
-        "end": "2026-03-01T06:11:52.0268017\u002B00:00",
-        "draftMeters": 2,
-        "speedKnots": 6,
-        "squatMeters": 0.1,
-        "requiredUkcMeters": 0.5,
-        "minimum": {
-          "leg": 1,
-          "sample": 34,
-          "latitude": -40.98563,
-          "longitude": -134.9637,
-          "distanceNm": 0.89,
-          "time": "2026-03-01T06:08:54.0022865\u002B00:00",
-          "hasEta": true,
-          "ukcMeters": -5.05,
-          "requiredUkcMeters": 0.5,
-          "state": "below_setting",
-          "confidence": [
-            "charted_depth_from_s101"
-          ]
-        },
-        "worstState": "below_setting",
-        "minutesBelow": 2.4,
-        "placesBelow": 1,
-        "lowConfidence": true,
-        "confidence": [
-          "charted_depth_from_s101"
+      "minutesBelow": 7,
+      "placesBelow": 2,
+      "sampleCount": 71,
+      "gaps": [
+        {
+          "kind": "no_charted_depth",
+          "firstSample": 66,
+          "lastSample": 70,
+          "firstLeg": 2,
+          "lastLeg": 2,
+          "startNm": 1.7126,
+          "endNm": 1.8339,
+          "from": "2026-03-01T06:17:15.638881\u002B00:00",
+          "to": "2026-03-01T06:18:16.3161458\u002B00:00"
+        }
+      ],
+      "lowConfidence": [
+        {
+          "kind": "charted_depth_from_s101",
+          "firstSample": 0,
+          "lastSample": 65,
+          "firstLeg": 0,
+          "lastLeg": 2,
+          "startNm": 0,
+          "endNm": 1.7126,
+          "from": "2026-03-01T06:00:00\u002B00:00",
+          "to": "2026-03-01T06:16:59.458277\u002B00:00"
+        }
+      ],
+      "sources": {
+        "bathymetryDatasets": [],
+        "fallbackDatasets": [
+          "S-101/DATASET_FILES/101ZZ00SPIT5.000"
         ],
-        "noWaterLevel": false
+        "waterLevels": [
+          {
+            "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
+            "kind": "station",
+            "station": "SYN-W"
+          },
+          {
+            "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
+            "kind": "station",
+            "station": "SYN-E"
+          }
+        ],
+        "depthDatums": [
+          {
+            "code": 23,
+            "label": "Lowest Astronomical Tide"
+          }
+        ],
+        "waterLevelDatums": [
+          {
+            "code": 23,
+            "label": "Lowest Astronomical Tide"
+          }
+        ]
       },
-      {
-        "index": 2,
-        "name": "Leg 3 \u2192 4",
-        "startNm": 1.187,
-        "distanceNm": 0.647,
-        "start": "2026-03-01T06:11:52.0268017\u002B00:00",
-        "end": "2026-03-01T06:18:20.3612968\u002B00:00",
-        "draftMeters": 2,
-        "speedKnots": 6,
-        "squatMeters": 0.1,
-        "requiredUkcMeters": 0.5,
-        "minimum": {
-          "leg": 2,
-          "sample": 63,
-          "latitude": -40.99326,
-          "longitude": -134.95715,
-          "distanceNm": 1.645,
-          "time": "2026-03-01T06:16:27.0970691\u002B00:00",
-          "hasEta": true,
-          "ukcMeters": -5.05,
-          "requiredUkcMeters": 0.5,
-          "state": "below_setting",
-          "confidence": [
-            "charted_depth_from_s101"
-          ]
-        },
-        "worstState": "below_setting",
-        "minutesBelow": 4.6,
-        "placesBelow": 1,
-        "lowConfidence": true,
-        "confidence": [
-          "charted_depth_from_s101"
-        ],
-        "noWaterLevel": false
-      }
-    ],
-    "gaps": [
-      {
-        "kind": "no_charted_depth",
-        "firstSample": 66,
-        "lastSample": 70,
-        "firstLeg": 2,
-        "lastLeg": 2,
-        "startNm": 1.713,
-        "endNm": 1.834,
-        "from": "2026-03-01T06:17:15.638881\u002B00:00",
-        "to": "2026-03-01T06:18:16.3161458\u002B00:00"
-      }
-    ],
-    "lowConfidence": [
-      {
-        "kind": "charted_depth_from_s101",
-        "firstSample": 0,
-        "lastSample": 65,
-        "firstLeg": 0,
-        "lastLeg": 2,
-        "startNm": 0,
-        "endNm": 1.713,
-        "from": "2026-03-01T06:00:00\u002B00:00",
-        "to": "2026-03-01T06:16:59.458277\u002B00:00"
-      }
-    ],
-    "sources": {
-      "bathymetryDatasets": [],
-      "fallbackDatasets": [
-        "S-101/DATASET_FILES/101ZZ00SPIT5.000"
-      ],
-      "waterLevels": [
-        {
-          "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
-          "kind": "station",
-          "station": "SYN-W"
-        },
-        {
-          "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
-          "kind": "station",
-          "station": "SYN-E"
-        }
-      ],
-      "depthDatums": [
-        {
-          "code": 23,
-          "label": "Lowest Astronomical Tide"
-        }
-      ],
-      "waterLevelDatums": [
-        {
-          "code": 23,
-          "label": "Lowest Astronomical Tide"
-        }
-      ]
+      "disclaimer": "computed from S-101, S-104 for your settings"
     },
-    "disclaimer": "Not for navigation \u00B7 computed from S-101, S-104 for your settings"
+    "datasets": [
+      "S-101/DATASET_FILES/101ZZ00SPIT3.000",
+      "S-101/DATASET_FILES/101ZZ00SPIT5.000",
+      "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5"
+    ],
+    "disclaimer": "Not for navigation \u00B7 checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only \u00B7 clearance computed from S-101, S-104 for your settings"
   }
 }

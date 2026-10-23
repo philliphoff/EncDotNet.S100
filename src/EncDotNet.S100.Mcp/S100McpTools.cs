@@ -25,12 +25,12 @@ public static class S100McpTools
     /// </summary>
     /// <param name="catalog">The dataset catalog the tools read from.</param>
     /// <param name="passageRoutes">
-    /// The host's routes for <c>get_passage_result</c> and <c>check_route</c>,
-    /// or <c>null</c> when the host has none (the tools then take a polyline only).
+    /// The host's routes for <c>check_route</c>, or <c>null</c> when the host
+    /// has none (the tool then takes a polyline only).
     /// </param>
     /// <param name="routeCheckSources">
     /// The route-check sources shared with the host's own checks, or
-    /// <c>null</c> for one cache over ProjNet that the two tools share.
+    /// <c>null</c> for the tool's own cache over ProjNet.
     /// </param>
     /// <returns>
     /// The tools in a stable order. Tool names are the <c>Name</c> constants on
@@ -57,7 +57,6 @@ public static class S100McpTools
             new SampleCoverageAlongTool(catalog),
             new ListSpecsTool(catalog),
             new ListTimeStepsTool(catalog),
-            new GetPassageResultTool(catalog, passageRoutes, routeCheckSources),
             new CheckRouteTool(catalog, passageRoutes, routeCheckSources))
             .ToList();
     }

@@ -20,9 +20,9 @@ internal sealed record CheckStateDto(
     [property: Description("True when the checked route has a draft. Without one the clearance check doesn't run: there is no clearance verdict, minimum UKC, Clearance tab or departure window, and the summary's clearance row reads \"Not checked\" with the link \"+ Add draft\". The route checks and warnings run either way.")] bool HasDraft,
     [property: Description("True while a recompute is pending or running.")] bool Computing,
     [property: Description("True while the shown result is out of date (the route draws grey and dashed, the verdict is dimmed).")] bool Stale,
-    [property: Description("The clearance verdict code, as get_passage_result: water_level_ends_before_arrival, below_setting, incomplete_data, meets_settings_tight or meets_settings; null without a clearance result (no draft, or none yet). verdictKind is the card's overall verdict.")] string? Verdict,
+    [property: Description("The clearance verdict code, as check_route's clearance: water_level_ends_before_arrival, below_setting, incomplete_data, meets_settings_tight or meets_settings; null without a clearance result (no draft, or none yet). verdictKind is the card's overall verdict.")] string? Verdict,
     [property: Description("The verdict card's title, naming the worst finding from any check, e.g. \"Crosses drying ground\", \"Below your UKC setting in 1 place\", \"Meets your settings · 2 to check\", or without a draft \"2 to review\", \"1 to check\" or \"No findings for your settings\"; null when there is nothing to show yet.")] string? VerdictTitle,
-    [property: Description("Lower-confidence reasons anywhere on the passage, as get_passage_result: charted_depth_from_s101 and/or datum_unconfirmed; empty at full confidence or without a result.")] IReadOnlyList<string> Confidence,
+    [property: Description("Lower-confidence reasons anywhere on the passage, as check_route's clearance: charted_depth_from_s101 and/or datum_unconfirmed; empty at full confidence or without a result.")] IReadOnlyList<string> Confidence,
     [property: Description("The verdict card's confidence line, e.g. \"Vertical datums unconfirmed: depth and water level may not share a reference\" (one line per reason); null at full confidence.")] string? ConfidenceText,
     [property: Description("The minimum UKC in metres; null when none could be computed.")] double? MinUkcMeters,
     [property: Description("Zero-based leg of the minimum; null when none.")] int? MinUkcLeg,
@@ -173,7 +173,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
             check.IsStale,
             result is null ? null : Verdict(result.Verdict),
             verdict?.Title,
-            result is null ? [] : Mcp.Tools.GetPassageResultTool.ConfidenceCodes(result.Confidence),
+            result is null ? [] : Mcp.Tools.CheckRouteResult.ConfidenceCodes(result.Confidence),
             result is null ? null : PassageCheckViewModel.ConfidenceLine(result),
             result?.Minimum is { } min ? Math.Round(min.ClearanceMeters, 2) : null,
             result?.Minimum?.LegIndex,
@@ -237,7 +237,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
             window.To,
             window.Step.TotalMinutes,
             window.Windows.Select(w => new DepartureRangeDto(w.First, w.Last)).ToList(),
-            Mcp.Tools.GetPassageResultTool.ConfidenceCodes(window.Sweep.MeetingConfidence()),
+            Mcp.Tools.CheckRouteResult.ConfidenceCodes(window.Sweep.MeetingConfidence()),
             window.ArrivalAfterDataEnds is { } hatched ? new DepartureRangeDto(hatched.First, hatched.Last) : null,
             line?.IsInside ?? false,
             line?.Nearest,
@@ -476,7 +476,7 @@ internal static class PassageCheckMcpAdapters
                 "map colours the active route by UKC state at ETA, folds Object Information to its edge tab and shows " +
                 "the verdict card. The route needs at least two waypoints; without a draft (set_passage) only the route " +
                 "checks run and the clearance parts are hidden (hasDraft false). Returns the state get_check_state returns; " +
-                "use get_passage_result for the full numbers. Viewer-injected tool — mutates live state.",
+                "use check_route for the full numbers. Viewer-injected tool — mutates live state.",
             SerializerOptions = JsonOptions,
         });
     }
@@ -575,7 +575,7 @@ internal sealed record ClearanceStateDto(
     [property: Description("The profile's x axis: \"distance\" (NM) or \"time\" (ETA).")] string Axis,
     [property: Description("True when the Time axis is available (the passage has ETAs).")] bool CanShowTime,
     [property: Description("True when the Sources disclosure is open in place of the readout.")] bool SourcesOpen,
-    [property: Description("The readout's sample index (as in get_passage_result's samples), or null.")] int? ReadoutSample,
+    [property: Description("The readout's sample index (as in check_route's clearance.samples), or null.")] int? ReadoutSample,
     [property: Description("Readout position, \"{NM} · {ETA}\".")] string? ReadoutPosition,
     [property: Description("Readout leg and place name.")] string? ReadoutLeg,
     [property: Description("Charted depth, formatted.")] string? Depth,
@@ -585,7 +585,7 @@ internal sealed record ClearanceStateDto(
     [property: Description("Draft + squat, formatted.")] string? DraftSquat,
     [property: Description("UKC at the readout, formatted.")] string? Ukc,
     [property: Description("The verdict words for the readout's state, with \" · lower confidence\" when the sample is, e.g. \"Meets your settings · lower confidence\".")] string? State,
-    [property: Description("The readout's clearance state code: meets_settings, tight, below_setting or no_data (as get_passage_result's samples[].state); null without a readout.")] string? Band,
+    [property: Description("The readout's clearance state code: meets_settings, tight, below_setting or no_data (as check_route's clearance.samples[].state); null without a readout.")] string? Band,
     [property: Description("The readout sample's lower-confidence reasons: charted_depth_from_s101 and/or datum_unconfirmed; empty at full confidence or without a readout.")] IReadOnlyList<string> Confidence,
     [property: Description("The Sources groups: title and lines.")] IReadOnlyList<ClearanceSourcesGroupDto> Sources,
     [property: Description("The departure band under the profile; null when there is no departure window.")] DepartureBandDto? DepartureBand);
@@ -685,8 +685,8 @@ internal sealed class ClearanceTools
         c.HasReadout ? c.DraftText : null,
         c.HasReadout ? c.UkcText : null,
         c.HasReadout ? c.StateText : null,
-        c.HasReadout && c.ReadoutSample is { } band ? Mcp.Tools.GetPassageResultTool.State(band.State) : null,
-        c.HasReadout && c.ReadoutSample is { } sample ? Mcp.Tools.GetPassageResultTool.ConfidenceCodes(sample.Confidence) : [],
+        c.HasReadout && c.ReadoutSample is { } band ? Mcp.Tools.CheckRouteResult.StateCode(band.State) : null,
+        c.HasReadout && c.ReadoutSample is { } sample ? Mcp.Tools.CheckRouteResult.ConfidenceCodes(sample.Confidence) : [],
         c.SourceGroups.Select(g => new ClearanceSourcesGroupDto(g.Title, g.Items)).ToList(),
         c.HasBand
             ? new DepartureBandDto(
