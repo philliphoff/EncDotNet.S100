@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **How a route check works.** A new page,
+  [How a route check works](how-a-route-check-works.md), explains which
+  dataset feeds each check, the time and keel rules, the verdict and each
+  check's status. [Route checks and under-keel clearance](route-checks.md)
+  now lists every finding code, the clearance ones included. The
+  [route check sample](../samples/EncDotNet.S100.Samples.RouteCheck/README.md)
+  checks a passage end to end on synthetic data.
 - **One `check_route` for the whole route check.** The MCP `check_route`
   tool now runs `RouteChecker` and returns the whole report: the `verdict`
   (`must_review`, `water_level_ends_before_arrival`, `check` or `clear`,

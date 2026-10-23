@@ -66,7 +66,10 @@ File.WriteAllBytes("out.png", png);
 The runnable
 [`samples/EncDotNet.S100.Samples.Quickstart`](samples/EncDotNet.S100.Samples.Quickstart/README.md)
 console project demonstrates this end-to-end against a bundled synthetic
-fixture — `dotnet run` it with no setup.
+fixture — `dotnet run` it with no setup. The
+[`samples/EncDotNet.S100.Samples.RouteCheck`](samples/EncDotNet.S100.Samples.RouteCheck/README.md)
+checks a passage against synthetic charts, depths, water levels, areas and
+warnings with `RouteChecker`.
 
 ## Supported standards
 

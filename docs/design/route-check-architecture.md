@@ -1,12 +1,13 @@
 # Route check architecture — Design Note
 
-> Status: **Proposed, in review**. The first draft's open questions are
-> settled (§4). This note reviews the route and passage check engine
-> as it stands after the incremental work on clearance, chart, area and
-> S-124 checks, and proposes the API it should have before it's documented
-> for outside use. The library is in preview, and its only clients are
-> SoundCharts, the MCP tools and `s100`, so the proposal reshapes the
-> engine's own types rather than adding a facade over them.
+> Status: **Implemented** (#1034). Every step in §3 has landed, and
+> [How a route check works](../how-a-route-check-works.md) documents the
+> result for outside use. This note records why the engine has the shape
+> it does: it reviews the route and passage check engine as it stood after
+> the incremental work on clearance, chart, area and S-124 checks, and
+> proposes the API it then got. The library is in preview, and its only
+> clients were SoundCharts, the MCP tools and `s100`, so the proposal
+> reshaped the engine's own types rather than adding a facade over them.
 
 ## 0. Problem
 
