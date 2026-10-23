@@ -98,8 +98,8 @@ dotnet add package EncDotNet.S100.Routes.Rtz
 ## Next steps
 
 - [How a route check works](../../docs/how-a-route-check-works.md): which
-  dataset feeds each check, the verdict and every finding code.
-- [Route checks and under-keel clearance](../../docs/route-checks.md): what
-  each finding means and the thresholds behind it.
+  dataset feeds each check, the verdict and each check's status.
+- [Route checks and under-keel clearance](../../docs/route-checks.md): every
+  finding code, what it means and the thresholds behind it.
 - [route check](../../docs/cli.md#route-check): the same check from the
   command line, for CI.

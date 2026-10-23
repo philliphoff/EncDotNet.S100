@@ -1,29 +1,37 @@
 namespace EncDotNet.S100.Navigation.Tests;
 
 /// <summary>
-/// The finding codes table in docs/how-a-route-check-works.md lists every
-/// code in <see cref="RouteFindingCodes.All"/>, in order, with its category
-/// and default group.
+/// The finding code tables in docs/route-checks.md list every code in
+/// <see cref="RouteFindingCodes.All"/> once, each with its default group.
 /// </summary>
 public class RouteFindingCodesDocsTests
 {
     [Fact]
-    public void The_article_lists_every_code_with_its_category_and_group()
+    public void The_route_checks_page_lists_every_code_once_with_its_group()
     {
-        var article = Path.Combine(RepositoryRoot(), "docs", "how-a-route-check-works.md");
-        var rows = File.ReadLines(article)
+        var page = Path.Combine(RepositoryRoot(), "docs", "route-checks.md");
+        var rows = File.ReadLines(page)
             .Where(line => line.StartsWith("| `", StringComparison.Ordinal))
             .Select(line => line.Split('|', StringSplitOptions.TrimEntries))
-            .Where(cells => cells.Length == 7 && RouteFindingCodes.TryGet(cells[1].Trim('`'), out _))
-            .Select(cells => (Code: cells[1].Trim('`'), Category: cells[3], Group: cells[4]))
+            .Where(cells => cells.Length == 5 && RouteFindingCodes.TryGet(cells[1].Trim('`'), out _))
+            .Select(cells => (Code: cells[1].Trim('`'), Group: cells[2]))
             .ToList();
 
-        var expected = RouteFindingCodes.All
-            .Select(c => (Code: c.Value, Category: c.Category.ToString(), Group: c.DefaultGroup.ToString()))
-            .ToList();
-
-        Assert.Equal(expected, rows);
+        Assert.Equal(
+            RouteFindingCodes.All.Select(c => c.Value).Order(StringComparer.Ordinal),
+            rows.Select(r => r.Code).Order(StringComparer.Ordinal));
+        Assert.All(rows, row =>
+        {
+            RouteFindingCodes.TryGet(row.Code, out var code);
+            Assert.StartsWith(GroupText(code!.DefaultGroup), row.Group, StringComparison.Ordinal);
+        });
     }
+
+    private static string GroupText(RouteFindingGroup group) => group switch
+    {
+        RouteFindingGroup.MustReview => "Must review",
+        _ => group.ToString(),
+    };
 
     private static string RepositoryRoot()
     {

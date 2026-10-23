@@ -8,8 +8,8 @@ builds from loaded datasets. SoundCharts, the MCP `check_route` tool and
 `s100 route check` all call the same checker.
 
 This page explains which data each check reads, which time and keel it
-judges at, and how the report's verdict and check status are formed. For
-what each finding means to a navigator and the thresholds behind it, see
+judges at, and how the report's verdict and check status are formed. Every
+finding code, what it means and the thresholds behind it are in
 [Route checks and under-keel clearance](route-checks.md). The results are an
 aid for exploring the data, not for navigation.
 
@@ -109,7 +109,7 @@ once.
 |---|---|---|---|
 | S-101 cells, S-401 cells and S-57 cells translated to S-101 | `Charts` | chart | Land, coastline, drying ground, `DataCoverage`; with safety settings, depth and dredged areas, soundings, wrecks, obstructions and rocks |
 | The same cells | `Areas` | areas | Restricted, military practice, caution, anchorage and traffic areas |
-| The same cells | `Depth` | clearance | Charted depth where no S-102 covers the route: dredged area, then depth area, then a sounding within 250 m |
+| The same cells | `Depth` | clearance | Charted depth where no S-102 covers the route |
 | S-102 bathymetry | `Depth` | chart, clearance | The chart check's S-102 shoal test; the clearance check's charted depth, first choice |
 | S-104 water levels (grids and stations) | `WaterLevel` | clearance | The water level at each sample's ETA |
 | S-122 marine protected areas | `Areas` | areas | Marine protected and restricted areas |
@@ -118,9 +118,8 @@ once.
 Other products, including S-111 surface currents, S-127 and S-131, aren't
 read. Speeds are speeds over ground, and currents aren't applied to ETAs.
 
-Where S-101 cells overlap, only the finest cell at a place counts, so a
-coarse cell's generalised land or areas don't fire where a finer cell charts
-water.
+For the order in which charted depth and water level are chosen, see
+[Under-keel clearance](route-checks.md#under-keel-clearance).
 
 `CatalogRouteCheckSources` always fills every member, even when no dataset
 of that product is loaded. So with the catalog bundle a missing product
@@ -166,9 +165,8 @@ The vessel's values are per leg. A leg's keel is its
   on the static charted depth. A leg without a draft is judged against the
   safety depth only.
 - **Clearance.** The clearance check runs only when every leg has a draft.
-  It computes UKC = charted depth + water level − draft − squat at each
-  sample and compares it with that leg's required UKC, or 0 m when none is
-  set.
+  It compares each sample's UKC with that leg's required UKC, or 0 m when
+  none is set. See [Under-keel clearance](route-checks.md#under-keel-clearance).
 
 `RouteCheckSettings.CorridorOverride` replaces every leg's `PortLimit` and
 `StarboardLimit`. A side without a limit uses `RouteCheckOptions.DefaultLimit`
@@ -211,52 +209,29 @@ returns one check's status. A skipped check's detail is `null`:
 
 ## Finding codes
 
-Every finding's `Code` is one of the codes in `RouteFindingCodes`. Codes
-don't change, because MCP clients and CI runs of `s100 route check` depend
-on them. The group is each code's default; some checks move a finding one
-group lighter, such as an area that only reaches inside the cross-track
-limits.
+Every finding's `Code` is one of the codes in `RouteFindingCodes`. A
+`RouteFindingCode` has its `Value` (such as `route_check.crosses_land`), its
+`Category`, its `DefaultGroup` and its `HeadlineRank`. Codes don't change,
+because MCP clients and CI runs of `s100 route check` depend on them.
+[Route checks and under-keel clearance](route-checks.md) lists every code,
+its group and when it fires.
 
-| Code | Check | Category | Group | When |
-|---|---|---|---|---|
-| `route_check.crosses_land` | chart | Chart | MustReview | The track crosses land or a coastline. |
-| `route_check.land_in_corridor` | chart | Chart | Check | Land reaches inside the cross-track limits. |
-| `route_check.crosses_drying` | chart | Chart | MustReview | The track crosses drying ground. |
-| `route_check.drying_in_corridor` | chart | Chart | Check | Drying ground reaches inside the limits. |
-| `route_check.danger_in_corridor` | chart | Depth | MustReview | A danger shallower than the threshold, or of unknown depth, inside the limits. |
-| `route_check.danger_near_route` | chart | Depth | Check | Such a danger within 0.1 NM beyond the limits. |
-| `route_check.crosses_safety_contour` | chart | Depth | MustReview | The track crosses areas shallower than the safety contour. |
-| `route_check.safety_contour_in_corridor` | chart | Depth | Check | Such areas inside the limits. |
-| `route_check.soundings_below_safety_depth` | chart | Depth | Check | Soundings shallower than the safety depth inside the limits. |
-| `route_check.crosses_s102_shoal` | chart | Depth | MustReview | The track crosses S-102 cells shallower than the safety contour. |
-| `route_check.s102_shoal_in_corridor` | chart | Depth | Check | Such S-102 cells inside the limits. |
-| `route_check.enters_prohibited_area` | areas | Area | MustReview | The track enters an S-101 area where entry is prohibited or restricted. |
-| `route_check.prohibited_area_in_corridor` | areas | Area | Check | Such an area inside the limits. |
-| `route_check.restricted_area` | areas | Area | Check | Another S-101 restricted or military practice area. |
-| `route_check.caution_area` | areas | Area | Check | An S-101 caution area. |
-| `route_check.traffic_area` | areas | Area | Check | An S-101 separation zone, precautionary area, submarine transit lane or inshore traffic zone. |
-| `route_check.anchorage_area` | areas | Area | Check | An S-101 anchorage area. |
-| `route_check.protected_area` | areas | Area | Check | An S-122 marine protected or restricted area. |
-| `route_check.area_not_in_force` | areas | Area | Info | An area that isn't in force while the vessel is there. |
-| `s124.on_route` | warnings | Warning | MustReview | A warning crosses the corridor and is in force. |
-| `s124.near_route` | warnings | Warning | Check | A warning is near the route and in force. |
-| `s124.not_in_force` | warnings | Warning | Info | A warning on or near the route isn't in force then. |
-| `s124.cancelled` | warnings | Warning | Info | A warning on or near the route is cancelled by then. |
-| `clearance.below_setting` | clearance | Clearance | MustReview | A stretch where UKC is below the required UKC. |
-| `confidence.charted_depth_from_s101` | clearance | Confidence | Check | A stretch where the charted depth is from S-101. |
-| `confidence.datum_unconfirmed` | clearance | Confidence | Check | A stretch where a vertical datum isn't declared. |
-| `data.outside_chart_coverage` | chart | Data | Check | The track leaves the coverage of every loaded chart. |
-| `data.water_level_ends` | clearance | Data | Check | The water-level data ends before the vessel gets there. |
-| `data.water_level_starts_late` | clearance | Data | Check | The water-level data starts after the vessel has passed. |
-| `data.no_water_level_coverage` | clearance | Data | Check | A stretch outside every water-level dataset. |
-| `data.water_level_no_data` | clearance | Data | Check | A stretch where the water-level data has no value. |
-| `data.datum_mismatch` | clearance | Data | Check | The water level's datum differs from the charted depth's, so it isn't applied. |
-| `data.no_charted_depth` | clearance | Data | Check | A stretch with no charted depth from S-102 or S-101. |
+Each category comes from one check:
 
-Each finding also has its leg, its distance from departure, a location, the
-feature behind it when there is one, typed `Details` and a `Title` and `Meta`
-line rendered by `RouteFindingFormatter`. See the
-[Navigation package README](../src/EncDotNet.S100.Navigation/README.md#findings).
+| Category | Check | Codes |
+|---|---|---|
+| `Chart` | chart | Land and drying ground: `route_check.crosses_land`, `route_check.crosses_drying` and their `*_in_corridor` codes |
+| `Depth` | chart | Depth areas, soundings, S-102 shoals and dangers |
+| `Area` | areas | S-101 regulated areas and S-122 protected areas |
+| `Warning` | warnings | `s124.*` |
+| `Clearance` | clearance | `clearance.below_setting` |
+| `Confidence` | clearance | `confidence.*` |
+| `Data` | chart, clearance | `data.outside_chart_coverage` from the chart check; the other `data.*` codes from the clearance check |
+
+Besides its code, each finding has typed `Details` and a `Title` and `Meta`
+line rendered by `RouteFindingFormatter`. See
+[Findings](../src/EncDotNet.S100.Navigation/README.md#findings) in the
+Navigation package README.
 
 ## One checker, three hosts
 
