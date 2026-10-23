@@ -231,13 +231,16 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
     internal static PassageRouteSnapshot Snapshot(RouteFile route, Settings settings, DateTimeOffset departure) => new(
         route.RouteId ?? Path.GetFileName(route.Path),
         route.Name,
-        route.Legs.Select(l => l with
-        {
-            DraftMeters = settings.DraftMeters ?? l.DraftMeters,
-            SpeedKnots = settings.SpeedKnots ?? l.SpeedKnots,
-            SquatMeters = settings.SquatMeters ?? l.SquatMeters,
-            RequiredUkcMeters = settings.RequiredUkcMeters ?? l.RequiredUkcMeters,
-        }).ToList(),
+        route.Plan.Legs.Select(l => new PassageRouteLeg(
+            l.Points,
+            l.Geometry,
+            settings.DraftMeters ?? l.Draft?.TotalMetres,
+            settings.SpeedKnots ?? l.Speed?.TotalKnots,
+            settings.SquatMeters,
+            settings.RequiredUkcMeters ?? l.RequiredUkc?.TotalMetres,
+            l.Name,
+            l.PortLimit?.TotalMetres,
+            l.StarboardLimit?.TotalMetres)).ToList(),
         departure);
 
     private static bool TryResolveDatasets(
