@@ -32,6 +32,7 @@
 
   <ItemGroup>
     <Compile Include="..\_shared\MapsuiDependencyClosure.cs" Link="TestSupport\MapsuiDependencyClosure.cs" />
+    <Compile Include="..\_shared\SyntheticS57Cell.cs" Link="TestSupport\SyntheticS57Cell.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S101AreaSynth.cs" Link="TestSupport\S101AreaSynth.cs" />
   </ItemGroup>
 

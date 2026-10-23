@@ -43,7 +43,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// in-memory cache is used.
 /// </para>
 /// </remarks>
-public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection
+public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell
 {
     private readonly S101Dataset _dataset;
     private readonly S101UpdateReport? _updateReport;

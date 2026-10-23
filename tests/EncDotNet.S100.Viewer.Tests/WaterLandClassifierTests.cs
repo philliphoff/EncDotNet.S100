@@ -69,13 +69,24 @@ public class WaterLandClassifierTests
     }
 
     [Fact]
-    public void Classify_ignores_non_s101_areas_with_same_name()
+    public void Classify_ignores_non_chart_areas_with_same_name()
     {
         // A same-named area from another product must not drive S-101 group-1
         // classification; with no S-102 coverage the result is suppressed.
-        var result = _classifier.Classify([Hit("DepthArea", spec: "S-57")], s102CoversPoint: false);
+        var result = _classifier.Classify([Hit("DepthArea", spec: "S-127")], s102CoversPoint: false);
 
         Assert.Equal(WaterLandClass.Unknown, result);
+    }
+
+    [Theory]
+    [InlineData("S-57")]
+    [InlineData("S-401")]
+    public void Classify_translated_s57_and_s401_areas_like_s101(string spec)
+    {
+        // S-57 cells are translated into the S-101 (or S-401) model, so their
+        // hits carry the same feature types (issue #1040).
+        Assert.Equal(WaterLandClass.Water, _classifier.Classify([Hit("DepthArea", spec)], s102CoversPoint: false));
+        Assert.Equal(WaterLandClass.Land, _classifier.Classify([Hit("LandArea", spec)], s102CoversPoint: false));
     }
 
     [Fact]
