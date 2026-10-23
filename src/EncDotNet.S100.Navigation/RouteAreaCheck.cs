@@ -189,7 +189,7 @@ public sealed record RouteAreaOptions
 /// The English labels of the codes an area finding names, from the S-101
 /// Edition 2.0.0 Feature Catalogue (lower case, as they read in a meta line).
 /// </summary>
-public static class RouteAreaLabels
+internal static class RouteAreaLabels
 {
     /// <summary>The <c>restriction</c> codes (S-101 and S-122).</summary>
     public static IReadOnlyDictionary<int, string> Restrictions { get; } = new Dictionary<int, string>

@@ -52,4 +52,16 @@
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
   </ItemGroup>
 
+  <!--
+    Public API baselines. A test project sets
+    `<EnablePublicApiBaseline>true</EnablePublicApiBaseline>` to get the shared
+    PublicApiBaseline helper and the generator it uses, then adds one test that
+    calls PublicApiBaseline.Verify(typeof(SomeType).Assembly). The baseline is
+    src/<AssemblyName>/PublicApi.txt; see docs/design/api-conventions.md.
+  -->
+  <ItemGroup Condition="'$(EnablePublicApiBaseline)' == 'true'">
+    <PackageReference Include="PublicApiGenerator" />
+    <Compile Include="$(MSBuildThisFileDirectory)tests/_shared/PublicApiBaseline.cs" Link="TestSupport/PublicApiBaseline.cs" />
+  </ItemGroup>
+
 </Project>

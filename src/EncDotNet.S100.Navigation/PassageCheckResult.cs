@@ -8,8 +8,7 @@ namespace EncDotNet.S100.Navigation;
 /// <remarks>
 /// <para>
 /// The order runs from best to worst for display: a leg's worst state is the
-/// highest value among its samples, so <see cref="BelowSetting"/> always wins
-/// (see <see cref="UkcStates.Worst"/>).
+/// highest value among its samples, so <see cref="BelowSetting"/> always wins.
 /// </para>
 /// <para>
 /// Confidence is a separate dimension (<see cref="ConfidenceReasons"/>): a
@@ -34,7 +33,7 @@ public enum UkcState
 }
 
 /// <summary>Helpers for <see cref="UkcState"/>.</summary>
-public static class UkcStates
+internal static class UkcStates
 {
     /// <summary>
     /// The worse of two states. <see cref="UkcState.BelowSetting"/> beats

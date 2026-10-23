@@ -47,6 +47,11 @@ Test conventions:
 - **Never commit real ENC data files to the repository.** Use small synthetic
   test fixtures, or skip tests that require live data. Synthetic GML fixtures
   live under `tests/datasets/<SXXX>/`.
+- Some libraries lock their public API in a checked-in `PublicApi.txt`
+  (`EncDotNet.S100.Navigation` so far). If you change that API on purpose,
+  update the file with `S100_UPDATE_API_BASELINE=1 dotnet test tests/<Library>.Tests`
+  and commit it with the change. See
+  [API design conventions](docs/design/api-conventions.md), "Public API baselines".
 - Viewer UI behaviour is tested headlessly: show the real view with
   `ViewHost`, drive it with clicks and keys, and find controls by automation
   id. See [`tests/EncDotNet.S100.Viewer.Tests/README.md`](https://github.com/philliphoff/EncDotNet.S100/blob/main/tests/EncDotNet.S100.Viewer.Tests/README.md).
