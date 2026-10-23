@@ -33,6 +33,10 @@ internal static class S101AreaSynth
     public static AreaFeature DataCoverage(int minimumDisplayScale, (double Lat, double Lon)[] ring) =>
         new("DataCoverage", ring, new Dictionary<string, string> { ["minimumDisplayScale"] = minimumDisplayScale.ToString(CultureInfo.InvariantCulture) });
 
+    /// <summary>A coverage with no display scale, as a translated S-57 <c>M_COVR</c> has.</summary>
+    public static AreaFeature DataCoverage((double Lat, double Lon)[] ring) =>
+        new("DataCoverage", ring, new Dictionary<string, string>());
+
     /// <summary>A closed rectangle ring.</summary>
     public static (double Lat, double Lon)[] Box(double south, double west, double north, double east) =>
         [(south, west), (south, east), (north, east), (north, west), (south, west)];

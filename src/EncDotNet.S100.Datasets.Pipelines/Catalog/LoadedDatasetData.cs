@@ -41,8 +41,19 @@ public abstract record LoadedDatasetData;
 /// see the same referenced text the viewer shows. <c>null</c> when the
 /// dataset was loaded outside an exchange set.
 /// </para>
+/// <para>
+/// <c>CompilationScale</c> is the source cell's compilation scale
+/// denominator (S-57 DSPM CSCL) when the payload is a translated S-57 cell,
+/// and <c>null</c> for a native S-101 or S-401 cell. The translation drops it
+/// (S-101 has no compilation scale), so consumers that rank overlapping cells
+/// with <see cref="DataModel.CellScaleRanking"/> read it from here, as the
+/// display does from <c>VectorPortrayalResult.CellCompilationScale</c>.
+/// </para>
 /// </remarks>
-public sealed record S101DatasetData(S101Dataset Dataset, Func<string, string?>? ExternalTextResolver = null) : LoadedDatasetData;
+public sealed record S101DatasetData(
+    S101Dataset Dataset,
+    Func<string, string?>? ExternalTextResolver = null,
+    int? CompilationScale = null) : LoadedDatasetData;
 
 /// <summary>S-122 Marine Protected Areas typed model.</summary>
 public sealed record S122DatasetData(S122Dataset Model) : LoadedDatasetData;

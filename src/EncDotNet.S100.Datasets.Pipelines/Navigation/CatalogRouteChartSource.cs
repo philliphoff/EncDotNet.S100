@@ -31,9 +31,10 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// (<c>Wreck</c>, <c>Obstruction</c>, <c>UnderwaterAwashRock</c>) their
 /// <c>valueOfSounding</c> and <c>waterLevelEffect</c>, and each point of a
 /// <c>Sounding</c> becomes a feature with its own depth. Cells are ranked like
-/// the display ranks them (<see cref="CellScaleRanking"/> by the
-/// <c>DataCoverage</c> minimum display scale, since S-101 carries no
-/// compilation scale), the same as <see cref="CatalogChartedDepthSource"/>.
+/// the display ranks them (<see cref="CellScaleRanking"/> by a translated
+/// S-57 cell's compilation scale, else by the <c>DataCoverage</c> minimum
+/// display scale, since S-101 carries no compilation scale), the same as
+/// <see cref="CatalogChartedDepthSource"/>.
 /// </para>
 /// </remarks>
 internal sealed class CatalogRouteChartSource : IRouteChartSource
@@ -46,7 +47,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
         {
             if (dataset.Data is S101DatasetData s101)
             {
-                _cells.Add(new Cell(dataset.Id.Value, dataset.Bounds, s101.Dataset));
+                _cells.Add(new Cell(dataset.Id.Value, dataset.Bounds, s101.Dataset, s101.CompilationScale));
             }
         }
 
@@ -159,14 +160,16 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
     private sealed class Cell : RouteChartCell
     {
         private readonly S101Dataset _dataset;
+        private readonly int? _compilationScale;
         private readonly Lazy<Built> _built;
         private readonly Lazy<Dictionary<uint, S101FeatureRecord>> _records;
 
-        public Cell(string datasetId, BoundingBox bounds, S101Dataset dataset)
+        public Cell(string datasetId, BoundingBox bounds, S101Dataset dataset, int? compilationScale)
             : base(datasetId)
         {
             Bounds = bounds;
             _dataset = dataset;
+            _compilationScale = compilationScale;
             _built = new Lazy<Built>(Build, LazyThreadSafetyMode.ExecutionAndPublication);
             _records = new Lazy<Dictionary<uint, S101FeatureRecord>>(
                 () => dataset.Document.Features.GroupBy(f => f.RecordId).ToDictionary(g => g.Key, g => g.First()),
@@ -255,7 +258,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
             var features = source.GetFeatures();
             var index = source.TryGetIndex() ?? IVectorSpatialIndex.Build(features, "S-101");
             return new Built(
-                CellScaleRanking.RankingScale(null, S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features)),
+                CellScaleRanking.RankingScale(_compilationScale, S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features)),
                 CoverageAreaResolver.Resolve(features),
                 index,
                 ReadSoundings(_dataset.Document));

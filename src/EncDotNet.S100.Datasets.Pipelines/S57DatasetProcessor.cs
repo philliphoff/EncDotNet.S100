@@ -100,7 +100,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     public DatasetMetadata Metadata => _metadata ??= S57Dataset.ReadMetadata(_rawS57Document);
 
     /// <inheritdoc />
-    public LoadedDatasetData CreateLoadedData() => new S101DatasetData(_translatedDataset);
+    public LoadedDatasetData CreateLoadedData() =>
+        new S101DatasetData(_translatedDataset, CompilationScale: S57Dataset.ResolveCompilationScale(_rawS57Document));
 
     /// <summary>
     /// Initializes a new <see cref="S57DatasetProcessor"/> by reading the S-57
