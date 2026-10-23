@@ -156,6 +156,80 @@ public sealed class DepartureWindowViewTests
         Assert.Equal(At(6, 35), fixture.Route.Passage.Departure);
     });
 
+    [AvaloniaTheory]
+    [InlineData(360)]
+    [InlineData(480)]
+    [InlineData(640)]
+    [InlineData(900)]
+    [InlineData(1400)]
+    public void The_band_labels_never_overlap_in_the_Clearance_tab(double width) => InCulture(() =>
+    {
+        // #1038: the end label ran into the centred middle one at usual widths.
+        var fixture = Fixture();
+        var vm = new ClearanceViewModel(fixture.Check, timeFormat: new UtcTime());
+        using var host = ViewHost.Show(new ClearanceView { DataContext = vm }, width: width, height: 260);
+        fixture.Routes.IsCheckModeActive = true;
+        WaitForWindow(host, fixture);
+
+        var labels = new[] { "Start", "Middle", "End" }
+            .Select(id => host.Find<TextBlock>("Clearance.DepartureBand." + id))
+            .ToList();
+        AssertNoOverlap(host.Find<DepartureBandLabelsPanel>("DepartureBandLabels"), labels);
+        if (width >= 900)
+            Assert.True(host.Find<DepartureBandLabelsPanel>("DepartureBandLabels").IsMiddleShown);
+    });
+
+    [AvaloniaFact]
+    public void Two_day_band_labels_drop_the_middle_then_wrap_the_end_as_the_band_narrows()
+    {
+        // The labels from #1038's report, laid out from wide to narrow.
+        var labels = new[] { "Sat 16:00", "Sun 16:00", "Mon 16:00 · S-104 ends" }
+            .Select(text => new TextBlock { Text = text, FontSize = 9.5, ClipToBounds = true })
+            .ToList();
+        var panel = new DepartureBandLabelsPanel();
+        panel.Children.AddRange(labels);
+        var holder = new Border { Child = panel, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        using var host = ViewHost.Show(holder, width: 1000, height: 120);
+
+        var shownMiddle = false;
+        var hidMiddle = false;
+        for (var width = 600d; width >= 60; width -= 10)
+        {
+            holder.Width = width;
+            host.Settle();
+            AssertNoOverlap(panel, labels);
+            shownMiddle |= panel.IsMiddleShown;
+            hidMiddle |= !panel.IsMiddleShown && !panel.IsEndWrapped;
+            if (panel.IsEndWrapped)
+                Assert.True(labels[2].Bounds.Top >= labels[0].Bounds.Bottom);
+            else
+                Assert.Equal(width, labels[2].Bounds.Right, 3);
+        }
+
+        Assert.True(shownMiddle, "Wide bands show the middle label.");
+        Assert.True(hidMiddle, "Bands too narrow for the middle label drop it first.");
+        Assert.True(panel.IsEndWrapped, "The narrowest bands wrap the end label.");
+        Assert.Equal("Mon 16:00 · S-104 ends", labels[2].Text);
+    }
+
+    private static void AssertNoOverlap(DepartureBandLabelsPanel panel, IReadOnlyList<TextBlock> labels)
+    {
+        Assert.Equal(panel, labels[0].Parent);
+        var shown = labels.Where(l => l.Bounds.Width > 0 && l.Bounds.Height > 0).ToList();
+        Assert.Contains(labels[0], shown);
+        Assert.Contains(labels[2], shown);
+        Assert.Equal(panel.IsMiddleShown, shown.Contains(labels[1]));
+        for (var i = 0; i < shown.Count; i++)
+        {
+            for (var j = i + 1; j < shown.Count; j++)
+            {
+                Assert.False(
+                    shown[i].Bounds.Intersects(shown[j].Bounds),
+                    $"'{shown[i].Text}' {shown[i].Bounds} overlaps '{shown[j].Text}' {shown[j].Bounds} at {panel.Bounds.Width:0} px.");
+            }
+        }
+    }
+
     private sealed class UtcTime : Services.ITimeFormatProvider
     {
         public TimeFormat Current => TimeFormat.Utc;
