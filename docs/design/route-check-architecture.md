@@ -1,6 +1,7 @@
 # Route check architecture — Design Note
 
-> Status: **Proposed**. This note reviews the route and passage check engine
+> Status: **Proposed, in review**. The first draft's open questions are
+> settled (§4). This note reviews the route and passage check engine
 > as it stands after the incremental work on clearance, chart, area and
 > S-124 checks, and proposes the API it should have before it's documented
 > for outside use. The library is in preview, and its only clients are
@@ -200,8 +201,9 @@ public sealed class PassageLeg
 
 This removes `RouteCheckLeg`, MCP's `PassageRouteSnapshot` and
 `PassageRouteLeg`, and SoundCharts' `CheckInput`. Each host keeps exactly
-one conversion from its own route type. RTZ and S-421 conversions move
-next to their readers (see §4, open question 3).
+one conversion from its own route type. `Routes.Rtz` and `Datasets.S421`
+each convert their route to a `PassagePlan`, next to their readers (§4,
+decision 3).
 
 ### 2.2 Settings and options
 
@@ -345,8 +347,7 @@ The existing engines become the built-in checks:
 - `ClearanceCheck` wraps today's `PassageCheckEngine`. It also turns its
   result into findings: below setting, confidence and gaps, which moves
   `PassageFindings.Build` out of SoundCharts.
-- An optional `DataCurrencyCheck` covers out-of-date forecast data (see
-  §4, open question 4).
+  `data.s111_forecast_expired` is dropped (§4, decision 4).
 
 Four pieces of work stop being done once per check:
 
@@ -412,8 +413,9 @@ public sealed class ClearanceDetails : RouteFindingDetails { /* minimum, margin,
 | Package | Owns |
 |---|---|
 | `EncDotNet.S100.Navigation` | the plan, settings, options, sources interfaces, checker, checks, report, codes and formatter. Still Core-only. |
-| `EncDotNet.S100.Datasets.Pipelines` | `CatalogRouteCheckSources`, `RouteCheckSourceCache`, and (pending open question 3) conversions from S-421 and RTZ to `PassagePlan`. |
-| `EncDotNet.S100.Mcp.Tools` | projecting `RouteCheckReport` to DTOs. `check_route` returns the whole report, clearance included. `get_passage_result` keeps the detail (samples, window). |
+| `EncDotNet.S100.Datasets.Pipelines` | `CatalogRouteCheckSources` and `RouteCheckSourceCache`. |
+| `EncDotNet.S100.Routes.Rtz`, `EncDotNet.S100.Datasets.S421` | the conversion from their route to `PassagePlan`, with the format's quirks. Both now reference Navigation. |
+| `EncDotNet.S100.Mcp.Tools` | projecting `RouteCheckReport` to DTOs. One `check_route` returns the whole report, clearance included, with `includeSamples` and `includeWindow` for the detail. `get_passage_result` is removed. |
 | `s100 route check` | reads the file, builds the plan, calls `RouteChecker`, and maps `Verdict.Kind` to the exit code. It stops constructing MCP tools. The CLI still references the MCP packages for `s100 mcp`. |
 | SoundCharts | its route → `PassagePlan` conversion, the view time as `At`, a panel-backed `IRouteWarningSource`, a resx formatter, the verdict card, legend and follow. The producers, `PassageFindings` and `RouteCheckVerdict.Build` collapse into presentation code. |
 
@@ -442,8 +444,10 @@ CLI tests act as the regression net.
    - Add `RouteChecker`, `IRouteCheck`, `RouteTrack`, `RouteCheckReport`,
      the verdict, per-check status and checker-owned incremental caching.
 5. **Hosts.**
-   - Rewrite `check_route`, `get_passage_result` and `s100 route check`
-     over the checker.
+   - Merge `check_route` and `get_passage_result` into one `check_route`
+     over the checker, and rewrite `s100 route check` over it too.
+   - Move the RTZ and S-421 conversions into their format packages, and
+     drop the CLI's `RouteFileReader` mapping.
    - Collapse SoundCharts' producers.
    - Add a parity test that runs one scenario through the SDK, MCP and
      `s100` and compares their findings.
@@ -453,28 +457,53 @@ CLI tests act as the regression net.
 
 Steps 1 and 3 are the largest. Step 4 only makes sense after 1–3.
 
-## 4. Open questions
+## 4. Decisions
 
-1. **Quantity types in the public API.** This note proposes `Length`,
-   `Depth` and `Speed` throughout, since the API is breaking anyway.
-   Internals stay in metres as doubles.
-2. **Rendered text on findings.** This note keeps `Title`/`Meta` on the
-   finding, rendered by the configured formatter, so a host can show a
-   report without another call. The alternative is details only, with
-   hosts calling the formatter. That's purer, but every host would need
-   the same call.
-3. **Where RTZ and S-421 → `PassagePlan` conversion lives.** Pipelines
-   references S-421 but not `Routes.Rtz`. The options are a small
-   `Navigation.Routes` adapter package, or Pipelines taking a reference to
-   `Routes.Rtz`.
-4. **Data currency.** SoundCharts flags an expired S-111 forecast, but no
-   check reads S-111. Either generalise it into a `DataCurrencyCheck` for
-   every product that contributed (S-104 included), or drop it.
-5. **Merging `check_route` and `get_passage_result` in MCP.** With one
-   report, `check_route` could carry the clearance summary, leaving
-   `get_passage_result` for samples and the window. Or the two could become
-   one tool with detail flags.
-6. **Name of the umbrella.** "Route check" (the codes, the docs, `s100
-   route check`) versus "passage check" (`PassageCheckEngine`, the
-   SoundCharts services). This note uses route check for the whole and
-   clearance check for UKC.
+These were open questions in the first draft of this note. They're now
+settled, and the sections above reflect them.
+
+1. **Quantity types in the public API: yes.** The plan, settings,
+   options, finding details and clearance result use `Length`, `Depth`
+   and `Speed`. The internals stay in metres as doubles. MCP and `s100`
+   JSON convert at the edge, as they already do for `MarinerSettings`.
+2. **Rendered text on findings: kept.** The checker renders `Title` and
+   `Meta` with the configured `RouteFindingFormatter`, so a host can show
+   a report straight away. The formatter stays public, so a host can
+   re-render after a depth-unit or time-format change without
+   re-checking. The alternative was details only, with every host calling
+   the formatter. That's purer, but all three hosts would repeat the
+   call.
+3. **RTZ and S-421 → `PassagePlan`: in each format package.**
+   `Routes.Rtz` and `Datasets.S421` reference Navigation, which depends
+   only on Core and is small, and each exposes a conversion to
+   `PassagePlan`. Each format's quirks then live in one place, next to
+   its reader:
+   - RTZ reads leg `i` from waypoint `i+1`.
+   - RTZ cross-track limits are in nautical miles.
+   - The draft is the deeper of the forward and aft draughts.
+   - A missing speed is implied from the ETD and ETA.
+
+   Today those quirks are written twice: in the CLI's `RouteFileReader`
+   and in SoundCharts' `RouteRtzMapping`. The rejected alternatives were
+   a separate `Navigation.Routes` adapter package (one more package to
+   ship) and Pipelines taking a reference to `Routes.Rtz`.
+4. **Expired S-111 notice: dropped.** `data.s111_forecast_expired`
+   reported on data that no check reads, because S-111 currents aren't
+   applied to ETAs (a decision in #887). Applying them is now tracked in
+   #1033. That check will own forecast-currency reporting when it lands.
+   S-104 currency stays with the clearance check, through its `data.*`
+   gaps and the `WaterLevelEndsBeforeArrival` verdict. A general
+   `DataCurrencyCheck` was rejected because it would duplicate those.
+5. **MCP: one `check_route` tool with detail flags.** `check_route`
+   returns the whole report: every finding (clearance included), the
+   verdict, each check's status and the clearance summary.
+   `includeSamples` adds the thinned UKC samples and per-leg results.
+   `includeWindow` (with the window bounds) adds the departure sweep.
+   `get_passage_result` is removed.
+6. **Names: route check, with `PassagePlan` as the input.** The whole is
+   the route check (`RouteChecker`, `RouteCheckReport`,
+   `RouteCheckSettings`), matching the codes, the docs, `s100 route check`
+   and SoundCharts' **Check route**. UKC is the clearance check
+   (`ClearanceCheck`, `ClearanceResult`). The input stays `PassagePlan`,
+   which in IMO passage-planning terms is a route plus the vessel's
+   values and the departure.
