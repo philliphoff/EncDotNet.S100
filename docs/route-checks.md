@@ -34,10 +34,10 @@ The results are an aid for exploring the data, not for navigation.
   that also drive S-101 portrayal. SoundCharts uses **Mariner Settings**. MCP
   and the command line take them as arguments; the command line defaults to
   30 m, the S-101 portrayal default.
-- **The draft, squat and required UKC**, when the route has a draft. Dangers
-  are then also judged against draft + squat + required UKC. Without a
-  draft, dangers are judged against the safety depth only and there's no UKC
-  check.
+- **The draft, squat and required UKC** of each leg that has a draft. That
+  leg's dangers are then also judged against its own draft + squat +
+  required UKC. A leg without a draft has its dangers judged against the
+  safety depth only. The UKC check runs when every leg has a draft.
 - **The departure and speeds.** Speeds give each point an ETA. Warnings,
   seasonal areas and S-104 water levels are judged at the ETAs. Where a leg
   has no speed, they're judged at the departure (in SoundCharts, at the view
@@ -99,8 +99,8 @@ A danger is a `Wreck`, an `Obstruction` or an `UnderwaterAwashRock`:
 - One without a charted depth (above water, covering and uncovering, awash,
   or of unknown depth) always counts.
 - One with a depth (VALSOU) counts when it's shallower than the safety depth,
-  or, with a draft, than draft + squat + required UKC. The meta line names the
-  threshold that fired, the draft one when both do.
+  or, on a leg with a draft, than that leg's draft + squat + required UKC.
+  The meta line names the threshold that fired, the draft one when both do.
 - Only isolated dangers count. A danger inside water already shallower than
   the safety contour is covered by the safety-contour finding there.
 

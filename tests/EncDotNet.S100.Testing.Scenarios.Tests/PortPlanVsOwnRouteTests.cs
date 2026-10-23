@@ -124,7 +124,7 @@ public sealed class PortPlanVsOwnRouteTests(PortPlanVsOwnRouteFixture fixture) :
         var route = Definition.Routes.Single(r => r.DatasetName == Spec.Route);
         var legs = ScenarioPassage.Legs(_catalog, route);
         var result = new PassageCheckEngine(sources.Depth, sources.WaterLevel)
-            .Check(new PassagePlan(legs, new DateTimeOffset(route.Departure, TimeSpan.Zero)), TestContext.Current.CancellationToken);
+            .Check(new PassagePlan(legs, new DateTimeOffset(route.Departure, TimeSpan.Zero)), PassageLegs.Settings(new DateTimeOffset(route.Departure, TimeSpan.Zero)), TestContext.Current.CancellationToken);
 
         Assert.True(result.Verdict is PassageVerdict.MeetsSettings or PassageVerdict.MeetsSettingsTight, result.Verdict.ToString());
         var minimum = Assert.IsType<UkcMinimum>(result.Minimum);

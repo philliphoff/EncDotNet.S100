@@ -144,9 +144,11 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         var legs = Legs(local.Select(p => World.Frame.ToGeo(p.X, p.Y)).ToList());
 
         // With the depth checks (#955) and S-102, as the viewer runs it.
-        var engine = _sources.CreateEngine(new RouteCheckOptions { Depths = new RouteCheckDepths(10, 10) });
+        var engine = _sources.CreateEngine();
+        var plan = new PassagePlan(legs);
+        var settings = PassageLegs.Settings(DateTimeOffset.UnixEpoch, 10, 10);
         var first = Stopwatch.StartNew();
-        var result = engine.Check(legs, TestContext.Current.CancellationToken);
+        var result = engine.Check(plan, settings, TestContext.Current.CancellationToken);
         first.Stop();
 
         // The first checks run on tier-0 JIT code (about ten times slower);
@@ -159,7 +161,7 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         while (times.Count < 30 && (times.Count < 5 || budget.Elapsed < TimeSpan.FromSeconds(20)))
         {
             var run = Stopwatch.StartNew();
-            engine.Check(legs, TestContext.Current.CancellationToken);
+            engine.Check(plan, settings, TestContext.Current.CancellationToken);
             times.Add(run.Elapsed.TotalMilliseconds);
         }
 
@@ -180,33 +182,30 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         Assert.True(each < 2500, $"A check took {each:0} ms.");
     }
 
-    private RouteCheckResult Check(IReadOnlyList<RouteCheckLeg> legs, params string[] only)
+    private RouteCheckResult Check(IReadOnlyList<PassageLeg> legs, params string[] only)
     {
         var sources = only.Length == 0
             ? _sources
             : RouteCheckDataSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)));
-        return new RouteCheckEngine(sources.Charts).Check(legs, TestContext.Current.CancellationToken);
+        return new RouteCheckEngine(sources.Charts).Check(new PassagePlan(legs), PassageLegs.Settings(DateTimeOffset.UnixEpoch), TestContext.Current.CancellationToken);
     }
 
     private S421RouteSpec Spec(string datasetName) => Definition.Routes.Single(r => r.DatasetName == datasetName);
 
-    private List<RouteCheckLeg> Route(string datasetName) =>
+    private List<PassageLeg> Route(string datasetName) =>
         Legs(S421RouteBuilder.Positions(Definition, Spec(datasetName)));
 
-    private static List<RouteCheckLeg> Legs(IReadOnlyList<GeoPosition> positions) =>
-        positions.Zip(positions.Skip(1), (a, b) => new RouteCheckLeg(
-            [a, b],
-            PortCrossTrackMeters: S421RouteBuilder.CrossTrackLimitMeters,
-            StarboardCrossTrackMeters: S421RouteBuilder.CrossTrackLimitMeters)).ToList();
+    private static List<PassageLeg> Legs(IReadOnlyList<GeoPosition> positions) =>
+        positions.Zip(positions.Skip(1), (a, b) => PassageLegs.Leg([a, b], halfWidth: S421RouteBuilder.CrossTrackLimitMeters)).ToList();
 
-    private List<(double X, double Y)> Local(List<RouteCheckLeg> legs) =>
+    private List<(double X, double Y)> Local(List<PassageLeg> legs) =>
         legs.Select(l => l.Points[0]).Append(legs[^1].Points[^1])
             .Select(p => World.Frame.ToLocal(p.Latitude, p.Longitude))
             .ToList();
 
     // The distance the engine reports for a local point on the route: whole
     // legs before it, then along its own leg.
-    private double Distance(List<RouteCheckLeg> legs, (double X, double Y) point)
+    private double Distance(List<PassageLeg> legs, (double X, double Y) point)
     {
         var position = World.Frame.ToGeo(point.X, point.Y);
         var best = (Offset: double.MaxValue, Distance: 0.0);

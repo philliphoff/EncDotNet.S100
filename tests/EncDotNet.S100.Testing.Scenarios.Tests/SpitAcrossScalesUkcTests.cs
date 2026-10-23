@@ -211,9 +211,10 @@ public sealed class SpitAcrossScalesUkcTests(SpitAcrossScalesFixture fixture) : 
     private PassageCheckResult CheckRoute()
     {
         var points = Definition.RoutePositions;
-        var legs = points.Zip(points.Skip(1), (a, b) => new PassageLeg([a, b], Draft, SpeedKnots: 8, SquatMeters: Squat, RequiredUkcMeters: Required)).ToList();
+        var legs = points.Zip(points.Skip(1), (a, b) => PassageLegs.Leg([a, b], Draft, speedKnots: 8, squat: Squat, ukc: Required)).ToList();
+        var departure = new DateTimeOffset(new DateTime(2026, 3, 1, 4, 0, 0, DateTimeKind.Utc));
         return new PassageCheckEngine(_sources.Depth, _sources.WaterLevel)
-            .Check(new PassagePlan(legs, new DateTimeOffset(new DateTime(2026, 3, 1, 4, 0, 0, DateTimeKind.Utc))), TestContext.Current.CancellationToken);
+            .Check(new PassagePlan(legs, departure), PassageLegs.Settings(departure), TestContext.Current.CancellationToken);
     }
 
     /// <summary>
@@ -226,9 +227,9 @@ public sealed class SpitAcrossScalesUkcTests(SpitAcrossScalesFixture fixture) : 
         var (x, y) = Definition.Places[place];
         var start = World.Frame.ToGeo(x + 0.1, y + 0.1);
         var end = World.Frame.ToGeo(x + 1.1, y + 0.1);
-        var leg = new PassageLeg([start, end], Draft, SpeedKnots: 10, SquatMeters: Squat, RequiredUkcMeters: Required);
+        var leg = PassageLegs.Leg([start, end], Draft, speedKnots: 10, squat: Squat, ukc: Required);
         var result = new PassageCheckEngine(_sources.Depth, _sources.WaterLevel)
-            .Check(new PassagePlan([leg], new DateTimeOffset(At)), TestContext.Current.CancellationToken);
+            .Check(new PassagePlan([leg], new DateTimeOffset(At)), PassageLegs.Settings(new DateTimeOffset(At)), TestContext.Current.CancellationToken);
         return Assert.Single(result.Samples);
     }
 

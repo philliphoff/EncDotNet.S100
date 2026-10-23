@@ -521,13 +521,13 @@ public sealed class QuirkScenarioTests : IDisposable
         var definition = scenario.Definition;
         var (x, y) = definition.Places[place];
         var sources = Sources(scenario, stationsOnly ? d => d.Id.Value != QuirkScenarios.WaterLevelGrid : null);
-        var leg = new PassageLeg(
+        var leg = PassageLegs.Leg(
             [definition.World.Frame.ToGeo(x + 0.1, y + 0.1), definition.World.Frame.ToGeo(x + 1.1, y + 0.1)],
-            DraftMeters: 6.0,
-            SpeedKnots: 10,
-            SquatMeters: 0.3,
-            RequiredUkcMeters: 1.0);
-        var result = new PassageCheckEngine(sources.Depth, sources.WaterLevel).Check(new PassagePlan([leg], new DateTimeOffset(at)), TestContext.Current.CancellationToken);
+            draft: 6.0,
+            speedKnots: 10,
+            squat: 0.3,
+            ukc: 1.0);
+        var result = new PassageCheckEngine(sources.Depth, sources.WaterLevel).Check(new PassagePlan([leg], new DateTimeOffset(at)), PassageLegs.Settings(new DateTimeOffset(at)), TestContext.Current.CancellationToken);
         return Assert.Single(result.Samples);
     }
 }

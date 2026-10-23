@@ -101,11 +101,12 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
     [Fact]
     public void Without_speeds_areas_are_judged_at_the_view_time()
     {
-        var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l with { SpeedKnots = null }).ToList();
+        // A plan without a departure or speeds is judged at the settings' time.
+        var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l.WithSpeed(null)).ToList();
         var viewTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
         var result = RouteCheckDataSources.FromDatasets(_catalog.Datasets).CheckAreas(
-            CheckLegs(legs),
-            new RouteWarningTiming(PassageSchedule.Compute(legs, viewTime), viewTime),
+            Plan(legs, departure: null),
+            PassageLegs.Settings(viewTime),
             cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal((RouteAreaCodes.RestrictedArea, RouteFindingGroup.Check), Kind(result, "Summer Speed Zone (fictitious)"));
@@ -118,8 +119,8 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
         var legs = ScenarioPassage.Legs(_catalog, Route);
         var start = new DateTimeOffset(departure, TimeSpan.Zero);
         return RouteCheckDataSources.FromDatasets(_catalog.Datasets).CheckAreas(
-            CheckLegs(legs),
-            new RouteWarningTiming(PassageSchedule.Compute(legs, start), start),
+            Plan(legs, start),
+            PassageLegs.Settings(start),
             cancellationToken: TestContext.Current.CancellationToken);
     }
 
@@ -132,8 +133,8 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
         return PassageSchedule.Compute(legs, new DateTimeOffset(Route.Departure, TimeSpan.Zero)).TotalDistanceMeters / local;
     }
 
-    private static List<RouteCheckLeg> CheckLegs(IReadOnlyList<PassageLeg> legs) =>
-        legs.Select(l => new RouteCheckLeg(l.Points, S421RouteBuilder.CrossTrackLimitMeters, S421RouteBuilder.CrossTrackLimitMeters, l.Geometry)).ToList();
+    private static PassagePlan Plan(IReadOnlyList<PassageLeg> legs, DateTimeOffset? departure) =>
+        new(legs.Select(l => l.WithHalfWidth(S421RouteBuilder.CrossTrackLimitMeters)).ToList(), departure);
 
     private static RouteAreaMatch Match(RouteAreaResult result, string name) =>
         Assert.Single(result.Matches, m => m.Area.Name == name && m.Finding is not null);
@@ -160,8 +161,8 @@ public sealed class WarningsOnRouteAreaTests(WarningsOnRouteFixture fixture) : I
         var departure = new DateTimeOffset(route.Departure, TimeSpan.Zero);
         var schedule = PassageSchedule.Compute(legs, departure);
         var result = RouteCheckDataSources.FromDatasets(_catalog.Datasets).CheckAreas(
-            legs.Select(l => new RouteCheckLeg(l.Points, S421RouteBuilder.CrossTrackLimitMeters, S421RouteBuilder.CrossTrackLimitMeters, l.Geometry)).ToList(),
-            new RouteWarningTiming(schedule, departure),
+            new PassagePlan(legs.Select(l => l.WithHalfWidth(S421RouteBuilder.CrossTrackLimitMeters)).ToList(), departure),
+            PassageLegs.Settings(departure),
             cancellationToken: TestContext.Current.CancellationToken);
 
         var finding = Assert.Single(result.Findings);

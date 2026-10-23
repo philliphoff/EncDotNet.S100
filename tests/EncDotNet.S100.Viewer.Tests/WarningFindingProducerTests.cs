@@ -190,11 +190,12 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
     }
 
     [Fact]
-    public async Task Without_a_speed_the_warnings_are_judged_at_the_view_time()
+    public async Task Without_a_speed_or_departure_the_warnings_are_judged_at_the_view_time()
     {
         var viewTime = new DateTimeOffset(2026, 3, 1, 13, 0, 0, TimeSpan.Zero);
         using var s = Create(viewTime: viewTime);
         s.Route.SetPassageValue(RoutePassageField.Speed, null);
+        s.Route.SetDeparture(null);
         s.Routes.IsCheckModeActive = true;
         await s.Findings.WhenIdle();
 
@@ -204,6 +205,22 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
         Assert.Equal(viewTime, cable.Warning.From);
         Assert.Equal(RouteFindingGroup.MustReview, cable.Group);
         Assert.Equal(RouteFindingGroup.Info, Warning(s.Findings, 1).Group);
+    }
+
+    [Fact]
+    public async Task Without_a_speed_the_warnings_are_judged_at_the_departure()
+    {
+        using var s = Create(viewTime: new DateTimeOffset(2026, 3, 1, 13, 0, 0, TimeSpan.Zero));
+        s.Route.SetPassageValue(RoutePassageField.Speed, null);
+        s.Routes.IsCheckModeActive = true;
+        await s.Findings.WhenIdle();
+
+        // At the 06:00 departure the survey is in force and the cable laying hasn't begun.
+        var cable = Warning(s.Findings, 2);
+        Assert.False(cable.Warning!.AtEta);
+        Assert.Equal(Departure, cable.Warning.From);
+        Assert.Equal(RouteFindingGroup.Info, cable.Group);
+        Assert.Equal(RouteFindingGroup.MustReview, Warning(s.Findings, 1).Group);
     }
 
     [Fact]

@@ -60,13 +60,16 @@ public sealed class PassageCheckEngine
     }
 
     /// <summary>Samples the depths and evaluates the plan in one call.</summary>
-    /// <param name="plan">The passage.</param>
+    /// <param name="plan">The passage. Every leg needs a draft.</param>
+    /// <param name="settings">The time to judge at where the plan has no departure.</param>
     /// <param name="cancellationToken">Cancels the check.</param>
     /// <returns>The result.</returns>
-    public PassageCheckResult Check(PassagePlan plan, CancellationToken cancellationToken = default)
+    /// <exception cref="ArgumentException">A leg has no draft.</exception>
+    public PassageCheckResult Check(PassagePlan plan, RouteCheckSettings settings, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        return Evaluate(SampleDepths(plan.Legs, cancellationToken), plan, cancellationToken);
+        RequireDrafts(plan.Legs, nameof(plan));
+        return Evaluate(SampleDepths(plan.Legs, cancellationToken), plan, settings, cancellationToken);
     }
 
     /// <summary>
@@ -135,20 +138,23 @@ public sealed class PassageCheckEngine
     /// may differ).
     /// </summary>
     /// <param name="profile">The profile from <see cref="SampleDepths(IReadOnlyList{PassageLeg}, CancellationToken)"/>.</param>
-    /// <param name="plan">The passage.</param>
+    /// <param name="plan">The passage. Every leg needs a draft.</param>
+    /// <param name="settings">The time to judge at where the plan has no departure.</param>
     /// <param name="cancellationToken">Cancels the evaluation.</param>
     /// <returns>The result.</returns>
-    /// <exception cref="ArgumentException">The plan's leg geometry differs from the profile's.</exception>
-    public PassageCheckResult Evaluate(PassageDepthProfile profile, PassagePlan plan, CancellationToken cancellationToken = default)
+    /// <exception cref="ArgumentException">The plan's leg geometry differs from the profile's, or a leg has no draft.</exception>
+    public PassageCheckResult Evaluate(PassageDepthProfile profile, PassagePlan plan, RouteCheckSettings settings, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(settings);
         if (!profile.Matches(plan.Legs))
         {
             throw new ArgumentException("The plan's legs don't match the profile's points and geometry; sample the depths again.", nameof(plan));
         }
 
-        var schedule = PassageSchedule.Compute(plan.Legs, plan.Departure);
+        RequireDrafts(plan.Legs, nameof(plan));
+        var schedule = PassageSchedule.Compute(plan, settings);
         var samples = new UkcSample[profile.Points.Count];
         for (var i = 0; i < samples.Length; i++)
         {
@@ -160,7 +166,7 @@ public sealed class PassageCheckEngine
             var point = profile.Points[i];
             var leg = plan.Legs[point.LegIndex];
             var eta = schedule.EtaAt(point.LegIndex, point.AlongLeg);
-            var time = eta ?? plan.Departure;
+            var time = eta ?? schedule.Departure;
             var eval = EvaluatePoint(point, leg, time);
             var legStart = profile.LegStartDistances[point.LegIndex];
             samples[i] = new UkcSample(
@@ -174,8 +180,8 @@ public sealed class PassageCheckEngine
                 eta is not null,
                 point.Depth,
                 new UkcWaterLevel(eval.Status, eval.Height, eval.Series?.Source, eval.StepTime, eval.Agreement),
-                leg.DraftMeters,
-                leg.SquatMeters,
+                leg.Draft!.Value.TotalMetres,
+                leg.Squat.TotalMetres,
                 eval.Required,
                 eval.Clearance,
                 eval.Band,
@@ -217,6 +223,8 @@ public sealed class PassageCheckEngine
         {
             throw new ArgumentException("The legs don't match the profile's points and geometry; sample the depths again.", nameof(legs));
         }
+
+        RequireDrafts(legs, nameof(legs));
 
         var options = new List<DepartureOption>();
         for (var departure = from; departure <= to; departure += step)
@@ -421,7 +429,7 @@ public sealed class PassageCheckEngine
 
     private PointEvaluation EvaluatePoint(ProfilePoint point, PassageLeg leg, DateTimeOffset time)
     {
-        var required = leg.RequiredUkcMeters ?? 0;
+        var required = leg.RequiredUkc?.TotalMetres ?? 0;
         var utc = time.UtcDateTime;
         var depth = point.Depth;
 
@@ -495,7 +503,7 @@ public sealed class PassageCheckEngine
         }
 
         var charted = depth.DepthMeters - (_options.SubtractDepthUncertainty ? depth.UncertaintyMeters ?? 0 : 0);
-        var clearance = charted + h - leg.DraftMeters - leg.SquatMeters;
+        var clearance = charted + h - leg.Draft!.Value.TotalMetres - leg.Squat.TotalMetres;
         var band = clearance < required
             ? ClearanceBand.Below
             : clearance < required + _options.TightMarginMeters ? ClearanceBand.Tight : ClearanceBand.Meets;
@@ -507,6 +515,17 @@ public sealed class PassageCheckEngine
         };
 
         return new PointEvaluation(used, status, height, stepTime, agreement, required, clearance, band, state, confidence);
+    }
+
+    private static void RequireDrafts(IReadOnlyList<PassageLeg> legs, string paramName)
+    {
+        for (var i = 0; i < legs.Count; i++)
+        {
+            if (legs[i]?.Draft is null)
+            {
+                throw new ArgumentException($"Leg {i} has no draft; the clearance check needs a draft on every leg.", paramName);
+            }
+        }
     }
 
     private static double MinutesFor(ProfilePoint point, PassageLeg leg) =>
@@ -563,11 +582,11 @@ public sealed class PassageCheckEngine
         var noMarginSet = false;
         foreach (var leg in plan.Legs)
         {
-            noMarginSet |= leg.RequiredUkcMeters is null;
+            noMarginSet |= leg.RequiredUkc is null;
         }
 
         return new PassageCheckResult(
-            plan.Departure,
+            schedule.Departure,
             schedule.Arrival,
             tally.Verdict,
             noMarginSet,

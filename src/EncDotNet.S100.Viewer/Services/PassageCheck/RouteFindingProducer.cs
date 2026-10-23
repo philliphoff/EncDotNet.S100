@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 /// the check was scheduled, and the formats for titles and meta lines.
 /// </summary>
 /// <param name="RouteId">The route.</param>
-/// <param name="Legs">The route's effective legs, named "1 → 2". Without a draft, <see cref="PassageLeg.DraftMeters"/> is 0.</param>
+/// <param name="Legs">The route's effective legs, named "1 → 2", with their cross-track limits. A leg without a draft has no <see cref="PassageLeg.Draft"/>.</param>
 /// <param name="Departure">The route's departure, or the view time when it has none.</param>
 /// <param name="HasDraft">Whether every leg has a draft. Checks that need none (land, warnings, areas) run either way.</param>
 /// <param name="Datasets">The loaded datasets.</param>
@@ -19,8 +19,7 @@ namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 /// <param name="DepthUnit">The depth unit for depths and clearances.</param>
 /// <param name="TimeFormat">The time format for ETAs.</param>
 /// <param name="Now">The current time, for expired data.</param>
-/// <param name="CheckLegs">The legs with their cross-track limits, one per <paramref name="Legs"/> entry, for the corridor checks.</param>
-/// <param name="ViewTime">The view time, which time-dependent checks use where the legs give no ETA.</param>
+/// <param name="ViewTime">The view time.</param>
 internal sealed record RouteFindingRequest(
     string RouteId,
     IReadOnlyList<PassageLeg> Legs,
@@ -31,8 +30,18 @@ internal sealed record RouteFindingRequest(
     DepthUnit DepthUnit,
     TimeFormat TimeFormat,
     DateTimeOffset Now,
-    IReadOnlyList<RouteCheckLeg> CheckLegs,
-    DateTimeOffset ViewTime);
+    DateTimeOffset ViewTime)
+{
+    /// <summary>
+    /// The plan the checks take. Its departure is <see cref="Departure"/> (the
+    /// route's, or the view time when it has none), so a leg without an ETA is
+    /// judged at it.
+    /// </summary>
+    public PassagePlan Plan { get; } = new(Legs, Departure);
+
+    /// <summary>The settings the checks take, without the mariner's depths.</summary>
+    public RouteCheckSettings Settings { get; } = new() { At = Departure };
+}
 
 /// <summary>
 /// A findings producer whose inputs go beyond the request, such as the loaded
@@ -111,7 +120,7 @@ internal sealed class ClearanceFindingProducer : IRouteFindingProducer
         // A one-off check: sample and evaluate the route on the thread pool.
         return Task.Run(() =>
         {
-            var plan = new PassagePlan(request.Legs, request.Departure);
+            var plan = request.Plan;
             PassageCheckResult result;
             lock (_engineGate)
             {
@@ -123,7 +132,7 @@ internal sealed class ClearanceFindingProducer : IRouteFindingProducer
                 }
 
                 var profile = _engine.SampleDepths(plan.Legs, null, cancellationToken);
-                result = _engine.Evaluate(profile, plan, cancellationToken);
+                result = _engine.Evaluate(profile, plan, request.Settings, cancellationToken);
             }
 
             var oneOff = new PassageCheckSnapshot(request.RouteId, request.Legs, result, new string?[request.Legs.Count], null);

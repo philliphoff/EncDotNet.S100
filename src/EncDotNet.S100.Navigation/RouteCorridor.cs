@@ -266,28 +266,32 @@ internal static class RouteCorridor
         public double Length => Samples.Count == 0 ? 0 : Samples[^1].Distance;
 
         /// <summary>Cuts the legs into pieces.</summary>
-        /// <param name="legs">The legs.</param>
+        /// <param name="plan">The plan, whose legs give the track and the cross-track limits.</param>
+        /// <param name="settings">The corridor override.</param>
         /// <param name="defaultHalfWidthMeters">The half-width of a side whose cross-track limit isn't set.</param>
         /// <param name="segmentLengthMeters">The length of the pieces.</param>
         /// <param name="maxSegmentsPerLeg">The most pieces per leg.</param>
         /// <returns>The track.</returns>
-        public static Track Build(IReadOnlyList<RouteCheckLeg> legs, double defaultHalfWidthMeters, double segmentLengthMeters, int maxSegmentsPerLeg)
+        public static Track Build(PassagePlan plan, RouteCheckSettings settings, double defaultHalfWidthMeters, double segmentLengthMeters, int maxSegmentsPerLeg)
         {
+            ArgumentNullException.ThrowIfNull(plan);
+            ArgumentNullException.ThrowIfNull(settings);
+            var legs = plan.Legs;
             var samples = new List<Sample>();
             var infos = new List<LegInfo>(legs.Count);
             var offset = 0.0;
             for (var i = 0; i < legs.Count; i++)
             {
-                var leg = legs[i] ?? throw new ArgumentException($"Leg {i} is null.", nameof(legs));
+                var leg = legs[i] ?? throw new ArgumentException($"Leg {i} is null.", nameof(plan));
                 if (leg.Points is null || leg.Points.Count < 2)
                 {
-                    throw new ArgumentException($"Leg {i} needs at least two points.", nameof(legs));
+                    throw new ArgumentException($"Leg {i} needs at least two points.", nameof(plan));
                 }
 
                 infos.Add(new LegInfo(
                     offset,
-                    Math.Max(0, leg.PortCrossTrackMeters ?? defaultHalfWidthMeters),
-                    Math.Max(0, leg.StarboardCrossTrackMeters ?? defaultHalfWidthMeters)));
+                    settings.PortMeters(leg, defaultHalfWidthMeters),
+                    settings.StarboardMeters(leg, defaultHalfWidthMeters)));
                 var points = leg.Points;
                 var lengths = new double[points.Count - 1];
                 for (var p = 0; p < lengths.Length; p++)

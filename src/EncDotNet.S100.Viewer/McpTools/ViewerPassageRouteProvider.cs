@@ -49,9 +49,9 @@ internal sealed class ViewerPassageRouteProvider : IPassageRouteProvider
                 effective[i].Points,
                 effective[i].Geometry,
                 route.GetEffectiveLegValue(i, RoutePassageField.Draft),
-                effective[i].SpeedKnots,
+                effective[i].Speed?.TotalKnots,
                 route.Passage.SquatMeters,
-                effective[i].RequiredUkcMeters,
+                effective[i].RequiredUkc?.TotalMetres,
                 $"Leg {i + 1} → {i + 2}",
                 route.GetEffectiveLegValue(i, RoutePassageField.PortCrossTrack),
                 route.GetEffectiveLegValue(i, RoutePassageField.StarboardCrossTrack)));

@@ -8,8 +8,9 @@ namespace EncDotNet.S100.Navigation;
 /// Checks a route against charted features (#888, #954): where its track
 /// crosses land or drying ground, where either reaches into the corridor
 /// between its cross-track limits, and where it leaves the loaded charts.
-/// With <see cref="RouteCheckOptions.Depths"/> set it also checks charted
-/// dangers and the safety contour and depth (#955).
+/// When <see cref="RouteCheckSettings.ChecksDepths"/> it also checks
+/// charted dangers and the safety contour and depth (#955), judging each
+/// leg's dangers against that leg's keel when it has a draft.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -85,13 +86,16 @@ public sealed partial class RouteCheckEngine
         }
     }
 
-    /// <summary>Checks a route.</summary>
-    /// <param name="legs">The route's legs in order; each starts where the previous one ends.</param>
+    /// <summary>Checks a plan.</summary>
+    /// <param name="plan">The plan: its legs in order, each starting where the previous one ends, with their cross-track limits and vessel values.</param>
+    /// <param name="settings">The safety contour and depth, and the corridor override.</param>
     /// <param name="cancellationToken">Cancels the check, for example when the route changes again.</param>
     /// <returns>The findings and the corridor of each leg.</returns>
-    public RouteCheckResult Check(IReadOnlyList<RouteCheckLeg> legs, CancellationToken cancellationToken = default)
+    public RouteCheckResult Check(PassagePlan plan, RouteCheckSettings settings, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(legs);
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(settings);
+        var legs = plan.Legs;
         var findings = new FindingList(_options.Text);
         var corridors = new List<RouteCheckCorridor>(legs.Count);
         var dangers = new DangerList();
@@ -99,13 +103,16 @@ public sealed partial class RouteCheckEngine
         for (var i = 0; i < legs.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var leg = legs[i] ?? throw new ArgumentException($"Leg {i} is null.", nameof(legs));
+            var leg = legs[i] ?? throw new ArgumentException($"Leg {i} is null.", nameof(plan));
             if (leg.Points is null || leg.Points.Count < 2)
             {
-                throw new ArgumentException($"Leg {i} needs at least two points.", nameof(legs));
+                throw new ArgumentException($"Leg {i} needs at least two points.", nameof(plan));
             }
 
-            var sweep = new LegSweep(this, i, leg, offset, findings, dangers, cancellationToken);
+            var depths = settings is { SafetyContour: { } contour, SafetyDepth: { } safety }
+                ? new LegDepths(contour.TotalMetres, safety.TotalMetres, leg.KeelMetres)
+                : null;
+            var sweep = new LegSweep(this, i, leg, settings, depths, offset, findings, dangers, cancellationToken);
             sweep.Run();
             corridors.Add(sweep.Corridor);
             offset = sweep.EndDistance;
@@ -130,7 +137,8 @@ public sealed partial class RouteCheckEngine
     {
         private readonly RouteCheckEngine _engine;
         private readonly int _legIndex;
-        private readonly RouteCheckLeg _leg;
+        private readonly PassageLeg _leg;
+        private readonly LegDepths? _depths;
         private readonly FindingList _findings;
         private readonly DangerList _dangers;
         private readonly CancellationToken _cancellationToken;
@@ -147,17 +155,18 @@ public sealed partial class RouteCheckEngine
         private IReadOnlyList<int>?[] _portBands = [];
         private IReadOnlyList<int>?[] _starboardBands = [];
 
-        public LegSweep(RouteCheckEngine engine, int legIndex, RouteCheckLeg leg, double offset, FindingList findings, DangerList dangers, CancellationToken cancellationToken)
+        public LegSweep(RouteCheckEngine engine, int legIndex, PassageLeg leg, RouteCheckSettings settings, LegDepths? depths, double offset, FindingList findings, DangerList dangers, CancellationToken cancellationToken)
         {
             _engine = engine;
             _legIndex = legIndex;
             _leg = leg;
+            _depths = depths;
             _findings = findings;
             _dangers = dangers;
             _cancellationToken = cancellationToken;
             var options = engine._options;
-            _port = Math.Max(0, leg.PortCrossTrackMeters ?? options.DefaultHalfWidthMeters);
-            _starboard = Math.Max(0, leg.StarboardCrossTrackMeters ?? options.DefaultHalfWidthMeters);
+            _port = settings.PortMeters(leg, options.DefaultHalfWidthMeters);
+            _starboard = settings.StarboardMeters(leg, options.DefaultHalfWidthMeters);
             (_stations, _spacing) = BuildStations(leg, offset, options);
             _extent = Extent(_stations);
             _ring = Ring(_stations);
@@ -174,7 +183,7 @@ public sealed partial class RouteCheckEngine
             // wider query serves every check; the corridor checks test
             // geometry against the corridor itself, so the extra features
             // change nothing for them.
-            var depths = _engine._options.Depths;
+            var depths = _depths;
             var (ring, extent) = depths is null ? (_ring, _extent) : WideRing(Math.Max(0, _engine._options.DangerNearbyMeters));
             var features = _engine._charts.FeaturesInCorridor(ring, extent);
             _cells = new List<RouteChartCell>(_engine._charts.CellsNear(extent));
@@ -618,7 +627,7 @@ public sealed partial class RouteCheckEngine
                 a.Centre.Longitude + (b.Centre.Longitude - a.Centre.Longitude) * u);
         }
 
-        private (List<Station> Stations, double Spacing) BuildStations(RouteCheckLeg leg, double offset, RouteCheckOptions options)
+        private (List<Station> Stations, double Spacing) BuildStations(PassageLeg leg, double offset, RouteCheckOptions options)
         {
             var points = leg.Points;
             var lengths = new double[points.Count - 1];

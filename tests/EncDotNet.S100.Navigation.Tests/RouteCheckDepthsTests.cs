@@ -15,22 +15,30 @@ public class RouteCheckDepthsTests
 {
     private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
 
-    private static readonly RouteCheckLeg East = new([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
+    private static readonly PassageLeg East = Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
 
     private static readonly FakeCell Harbour = new("101HARBOUR", 22_000);
 
     // Safety contour and safety depth 10 m.
-    private static readonly RouteCheckDepths Ten = new(10, 10);
-
-    private static RouteCheckOptions Options(RouteCheckDepths depths) => new()
+    private static readonly RouteCheckSettings Ten = new()
     {
-        Depths = depths,
+        At = Fixture.Departure,
+        SafetyContour = Depth.FromMetres(10),
+        SafetyDepth = Depth.FromMetres(10),
+    };
+
+    private static readonly RouteCheckOptions Options = new()
+    {
         Text = RouteCheckText.Default with { Culture = CultureInfo.InvariantCulture },
     };
 
-    private static RouteCheckResult Check(IReadOnlyList<RouteChartFeature> features, RouteCheckDepths? depths = null, IChartedDepthSource? bathymetry = null, params RouteCheckLeg[] legs) =>
-        new RouteCheckEngine(new FakeCharts([Harbour], features), Options(depths ?? Ten), bathymetry)
-            .Check(legs.Length == 0 ? [East] : legs, TestContext.Current.CancellationToken);
+    private static RouteCheckResult Check(IReadOnlyList<RouteChartFeature> features, IChartedDepthSource? bathymetry = null, params PassageLeg[] legs) =>
+        new RouteCheckEngine(new FakeCharts([Harbour], features), Options, bathymetry)
+            .Check(new PassagePlan(legs.Length == 0 ? [East] : legs), Ten, TestContext.Current.CancellationToken);
+
+    // East, with a draft, squat and required UKC.
+    private static PassageLeg EastWithKeel(double draft, double squat, double required) =>
+        Fixture.Leg(East.Points, draft, squat: squat, required: required);
 
     // A point danger metres north (positive, to port) of the track at a longitude.
     private static RouteChartFeature Danger(string type, string id, double longitude, double northMeters, double? valueOfSounding, int? waterLevelEffect = 3, RouteChartCell? cell = null) =>
@@ -97,7 +105,7 @@ public class RouteCheckDepthsTests
     public void Each_side_has_its_own_limit_for_dangers()
     {
         // 40 m to port: outside a 30 m port limit, so only nearby.
-        var finding = Assert.Single(Check([Danger("Wreck", "1", 0.005, 40, 1)], legs: East with { PortCrossTrackMeters = 30, StarboardCrossTrackMeters = 200 }).Findings);
+        var finding = Assert.Single(Check([Danger("Wreck", "1", 0.005, 40, 1)], legs: Fixture.Leg(East.Points, port: 30, starboard: 200)).Findings);
 
         Assert.Equal(RouteCheckCodes.DangerNearRoute, finding.Code);
     }
@@ -113,21 +121,21 @@ public class RouteCheckDepthsTests
     {
         // 12,5 m clears the 10 m safety depth, but not 11 + 0,5 + 1,5 = 13 m.
         var wreck = Danger("Wreck", "1", 0.005, 0, 12.5);
-        var withDraft = Ten with { DraftMeters = 11, SquatMeters = 0.5, RequiredUkcMeters = 1.5 };
+        var withDraft = EastWithKeel(11, 0.5, 1.5);
 
         Assert.Empty(Check([wreck]).Findings);
-        var finding = Assert.Single(Check([wreck], withDraft).Findings);
+        var finding = Assert.Single(Check([wreck], legs: withDraft).Findings);
         Assert.EndsWith(" · 12.5 m · shallower than draft + squat + UKC (13 m)", finding.Meta, StringComparison.Ordinal);
-        Assert.Equal(13, withDraft.KeelMeters);
+        Assert.Equal(13, withDraft.KeelMetres);
     }
 
     [Fact]
     public void The_meta_line_names_the_keel_threshold_when_both_fire()
     {
-        var shallowDraft = Ten with { DraftMeters = 2, SquatMeters = 0.2, RequiredUkcMeters = 0.5 };
+        var shallowDraft = EastWithKeel(2, 0.2, 0.5);
 
         // 2 m is below both 10 m and 2,7 m; 5 m only below the safety depth.
-        var findings = Check([Danger("Wreck", "1", 0.003, 0, 2), Danger("Wreck", "2", 0.006, 0, 5)], shallowDraft).Findings;
+        var findings = Check([Danger("Wreck", "1", 0.003, 0, 2), Danger("Wreck", "2", 0.006, 0, 5)], legs: shallowDraft).Findings;
 
         Assert.Equal(2, findings.Count);
         Assert.EndsWith("shallower than draft + squat + UKC (2.7 m)", findings[0].Meta, StringComparison.Ordinal);
@@ -167,7 +175,7 @@ public class RouteCheckDepthsTests
         var coastal = new FakeCell("101COASTAL", 90_000);
         var charts = new FakeCharts([Harbour, coastal], [Danger("Wreck", "1", 0.005, 0, 3, cell: coastal)]);
 
-        var result = new RouteCheckEngine(charts, Options(Ten)).Check([East], TestContext.Current.CancellationToken);
+        var result = new RouteCheckEngine(charts, Options).Check(new PassagePlan([East]), Ten, TestContext.Current.CancellationToken);
 
         Assert.Empty(result.Findings);
     }
@@ -175,7 +183,7 @@ public class RouteCheckDepthsTests
     [Fact]
     public void A_danger_near_a_turn_is_reported_once_on_the_closer_leg()
     {
-        var north = new RouteCheckLeg([new GeoPosition(0, 0.01), new GeoPosition(0.01, 0.01)]);
+        var north = Fixture.Leg([new GeoPosition(0, 0.01), new GeoPosition(0.01, 0.01)]);
 
         // 30 m east of the second leg and 30 m north of the end of the first.
         var finding = Assert.Single(Check([Danger("Wreck", "1", 0.01 + 30 / M, 30, 3)], legs: [East, north]).Findings);
@@ -289,18 +297,37 @@ public class RouteCheckDepthsTests
     {
         var charts = new FakeCharts([Harbour], [Danger("Wreck", "1", 0.005, 0, 1), Area(RouteChartFeatureKind.DepthArea, "2", 1, 0.002, 0.003)]);
 
-        Assert.Empty(new RouteCheckEngine(charts).Check([East], TestContext.Current.CancellationToken).Findings);
+        Assert.Empty(new RouteCheckEngine(charts).Check(new PassagePlan([East]), Fixture.Settings(), TestContext.Current.CancellationToken).Findings);
     }
 
     [Fact]
     public void Depths_come_from_the_mariners_settings()
     {
-        var settings = new MarinerSettings { SafetyContour = Depth.FromMetres(12), SafetyDepth = Depth.FromMetres(8) };
+        var mariner = new MarinerSettings { SafetyContour = Depth.FromMetres(12), SafetyDepth = Depth.FromMetres(8) };
 
-        var depths = RouteCheckDepths.FromMarinerSettings(settings);
+        var settings = RouteCheckSettings.FromMarinerSettings(mariner, Fixture.Departure);
 
-        Assert.Equal(12, depths.SafetyContourMeters);
-        Assert.Equal(8, depths.SafetyDepthMeters);
-        Assert.Null(depths.KeelMeters);
+        Assert.Equal(12, settings.SafetyContour?.TotalMetres);
+        Assert.Equal(8, settings.SafetyDepth?.TotalMetres);
+        Assert.True(settings.ChecksDepths);
+        Assert.Equal(Fixture.Departure, settings.At);
+        Assert.Null(East.KeelMetres);
+    }
+
+    [Fact]
+    public void Each_leg_judges_its_dangers_against_its_own_keel()
+    {
+        // The same 12,5 m wreck beside each leg: under the deep leg's
+        // 11 + 0,5 + 1,5 = 13 m keel it's a danger; under the shallow leg's
+        // 5 m keel, and the 10 m safety depth, it isn't.
+        var deep = EastWithKeel(11, 0.5, 1.5);
+        var shallow = Fixture.Leg([new GeoPosition(0, 0.01), new GeoPosition(0, 0.02)], 4, squat: 0.5, required: 0.5);
+
+        var findings = Check([Danger("Wreck", "1", 0.005, 0, 12.5), Danger("Wreck", "2", 0.015, 0, 12.5)], legs: [deep, shallow]).Findings;
+
+        var finding = Assert.Single(findings);
+        Assert.Equal(0, finding.LegIndex);
+        Assert.Equal("1", finding.Feature?.FeatureId);
+        Assert.EndsWith("shallower than draft + squat + UKC (13 m)", finding.Meta, StringComparison.Ordinal);
     }
 }

@@ -53,7 +53,7 @@ public static class RouteWarningSources
     /// <summary>
     /// Every loaded S-124 warning as a whole, including cancellations and
     /// in-force bulletins with no parts, to judge the parts with (pass it to
-    /// <see cref="RouteWarningCheck.Check(IReadOnlyList{RouteCheckLeg}, IReadOnlyList{RouteWarning}, RouteWarningTiming, NavigationalWarningSet?, CancellationToken)"/>).
+    /// <see cref="RouteWarningCheck.Check(PassagePlan, RouteCheckSettings, IReadOnlyList{RouteWarning}, NavigationalWarningSet?, CancellationToken)"/>).
     /// </summary>
     /// <param name="datasets">The loaded datasets, such as <see cref="IDatasetCatalog.Datasets"/>.</param>
     /// <returns>The set.</returns>

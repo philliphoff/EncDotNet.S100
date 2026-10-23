@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation.Tests;
 
@@ -70,10 +71,36 @@ internal static class Fixture
     public static readonly GeoPosition End = new(0, 0.1);
 
     public static PassageLeg Leg(double draft = 10, double? speed = 6, double squat = 0, double? required = 2) =>
-        new([Start, End], draft, speed, squat, required, Name: "Leg 1 → 2");
+        Leg([Start, End], draft, speed, squat, required, name: "Leg 1 → 2");
+
+    /// <summary>A leg with its values in metres and knots; <c>null</c> leaves a value unset.</summary>
+    public static PassageLeg Leg(
+        IReadOnlyList<GeoPosition> points,
+        double? draft = null,
+        double? speed = null,
+        double squat = 0,
+        double? required = null,
+        LegGeometry geometry = LegGeometry.Rhumb,
+        double? port = null,
+        double? starboard = null,
+        string? name = null) => new()
+        {
+            Points = points,
+            Geometry = geometry,
+            PortLimit = port is { } p ? Length.FromMetres(p) : null,
+            StarboardLimit = starboard is { } s ? Length.FromMetres(s) : null,
+            Speed = speed is { } knots ? Speed.FromKnots(knots) : null,
+            Draft = draft is { } d ? Depth.FromMetres(d) : null,
+            Squat = Depth.FromMetres(squat),
+            RequiredUkc = required is { } r ? Depth.FromMetres(r) : null,
+            Name = name,
+        };
 
     public static PassagePlan Plan(PassageLeg? leg = null, DateTimeOffset? departure = null) =>
         new([leg ?? Leg()], departure ?? Departure);
+
+    /// <summary>Settings that judge at <paramref name="at"/> (default <see cref="Departure"/>), without depth checks.</summary>
+    public static RouteCheckSettings Settings(DateTimeOffset? at = null) => new() { At = at ?? Departure };
 
     public static PassageCheckEngine Engine(IChartedDepthSource depth, IWaterLevelSource water) =>
         new(depth, water);

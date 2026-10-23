@@ -146,7 +146,7 @@ internal static class PassageFindings
             for (; i < samples.Count && samples[i].State == UkcState.BelowSetting; i++)
             {
                 var s = samples[i];
-                var knots = snapshot.Legs[s.LegIndex].SpeedKnots;
+                var knots = snapshot.Legs[s.LegIndex].Speed?.TotalKnots;
                 if (knots is > 0)
                     minutes += (s.EndDistanceMeters - s.StartDistanceMeters) / (knots.Value * PassageGeodesy.MetersPerNauticalMile / 60.0);
                 hasEta &= s.HasEta;

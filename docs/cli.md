@@ -759,7 +759,7 @@ S-421 have no squat. These options replace the file's value on every leg:
 
 | Option | Default | Description |
 |---|---|---|
-| `--draft <metres>` | the file's | Draft. With a draft, the UKC check runs, and dangers are also judged against draft + squat + required UKC. |
+| `--draft <metres>` | the file's | Draft for every leg. With a draft on every leg, the UKC check runs; each leg's dangers are also judged against its draft + squat + required UKC. |
 | `--squat <metres>` | `0` | Squat allowance. |
 | `--speed <knots>` | the file's | Speed over ground. Speeds give the ETAs that warnings, seasonal areas and S-104 water levels are judged at. |
 | `--departure <iso8601>` | the file's, else now | Departure time. A time without an offset is UTC. |

@@ -196,7 +196,7 @@ public sealed record RouteAreaMatch(
     bool InForce,
     RouteFinding? Finding);
 
-/// <summary>The result of <see cref="RouteAreaCheck.Check(IReadOnlyList{RouteCheckLeg}, IReadOnlyList{RouteArea}, IReadOnlyList{RouteChartCell}, RouteWarningTiming, CancellationToken)"/>.</summary>
+/// <summary>The result of <see cref="RouteAreaCheck.Check(PassagePlan, RouteCheckSettings, IReadOnlyList{RouteArea}, IReadOnlyList{RouteChartCell}, CancellationToken)"/>.</summary>
 /// <param name="Matches">One entry per area, in input order.</param>
 /// <param name="Findings">The findings, sorted by group (MUST REVIEW, CHECK, INFO) and then by distance from departure.</param>
 public sealed record RouteAreaResult(
@@ -472,7 +472,7 @@ public static class RouteAreaLabels
 /// <para>
 /// Time: <c>fixedDateRange</c> and <c>periodicDateRange</c> are judged over
 /// the ETAs where the vessel is in the area when the legs have speeds,
-/// otherwise at <see cref="RouteWarningTiming.Fallback"/> (the view time). A
+/// otherwise at the departure (<see cref="PassageSchedule.TimeAt"/>). A
 /// season repeats each year by month and day and may run over the new
 /// year. An area with both must be in both; a date that can't be read
 /// counts as open, so an area is never dropped for want of a date. An area
@@ -517,17 +517,18 @@ public sealed class RouteAreaCheck
         }
     }
 
-    /// <summary>Checks a route against the areas a source has near it.</summary>
-    /// <param name="legs">The route's legs in order, with their cross-track limits.</param>
+    /// <summary>Checks a plan against the areas a source has near it.</summary>
+    /// <param name="plan">The plan: its legs with their cross-track limits and speeds, and its departure.</param>
+    /// <param name="settings">The corridor override and the time to judge at where the plan gives none.</param>
     /// <param name="source">The areas, and the cells for the finest-cell rule.</param>
-    /// <param name="timing">The ETAs, or the time to judge at without them.</param>
     /// <param name="cancellationToken">Cancels the check.</param>
     /// <returns>One match per area near the route, and the findings.</returns>
-    public RouteAreaResult Check(IReadOnlyList<RouteCheckLeg> legs, IRouteAreaSource source, RouteWarningTiming timing, CancellationToken cancellationToken = default)
+    public RouteAreaResult Check(PassagePlan plan, RouteCheckSettings settings, IRouteAreaSource source, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(legs);
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(source);
-        var track = BuildTrack(legs);
+        var track = BuildTrack(plan, settings);
         var areas = new List<RouteArea>();
         var cells = new List<RouteChartCell>();
         var seenAreas = new HashSet<object>();
@@ -552,28 +553,29 @@ public sealed class RouteAreaCheck
             }
         }
 
-        return Check(track, areas, cells, timing, cancellationToken);
+        return Check(track, areas, cells, PassageSchedule.Compute(plan, settings), cancellationToken);
     }
 
-    /// <summary>Checks a route against areas.</summary>
-    /// <param name="legs">The route's legs in order, with their cross-track limits; each starts where the previous one ends.</param>
+    /// <summary>Checks a plan against areas.</summary>
+    /// <param name="plan">The plan: its legs with their cross-track limits and speeds, and its departure.</param>
+    /// <param name="settings">The corridor override and the time to judge at where the plan gives none.</param>
     /// <param name="areas">The areas.</param>
     /// <param name="cells">
     /// The S-101 cells near the route, for the finest-cell rule; the cells
     /// of <paramref name="areas"/> are used too. Empty to count every area.
     /// </param>
-    /// <param name="timing">The ETAs, or the time to judge at without them.</param>
     /// <param name="cancellationToken">Cancels the check.</param>
     /// <returns>One match per area, and the findings.</returns>
     public RouteAreaResult Check(
-        IReadOnlyList<RouteCheckLeg> legs,
+        PassagePlan plan,
+        RouteCheckSettings settings,
         IReadOnlyList<RouteArea> areas,
         IReadOnlyList<RouteChartCell> cells,
-        RouteWarningTiming timing,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(legs);
-        return Check(BuildTrack(legs), areas, cells, timing, cancellationToken);
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(settings);
+        return Check(BuildTrack(plan, settings), areas, cells, PassageSchedule.Compute(plan, settings), cancellationToken);
     }
 
     /// <summary>
@@ -680,19 +682,18 @@ public sealed class RouteAreaCheck
         return (month, day);
     }
 
-    private RouteCorridor.Track BuildTrack(IReadOnlyList<RouteCheckLeg> legs) =>
-        RouteCorridor.Track.Build(legs, _options.DefaultHalfWidthMeters, _options.SegmentLengthMeters, _options.MaxSegmentsPerLeg);
+    private RouteCorridor.Track BuildTrack(PassagePlan plan, RouteCheckSettings settings) =>
+        RouteCorridor.Track.Build(plan, settings, _options.DefaultHalfWidthMeters, _options.SegmentLengthMeters, _options.MaxSegmentsPerLeg);
 
     private RouteAreaResult Check(
         RouteCorridor.Track track,
         IReadOnlyList<RouteArea> areas,
         IReadOnlyList<RouteChartCell> cells,
-        RouteWarningTiming timing,
+        PassageSchedule schedule,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(areas);
         ArgumentNullException.ThrowIfNull(cells);
-        ArgumentNullException.ThrowIfNull(timing);
         var shapes = areas
             .Select(a => new RouteCorridor.Shapes((a ?? throw new ArgumentException("An area is null.", nameof(areas))).Surfaces))
             .ToList();
@@ -712,7 +713,7 @@ public sealed class RouteAreaCheck
         var findings = new List<RouteFinding>();
         for (var i = 0; i < areas.Count; i++)
         {
-            var match = Match(areas[i], i, accumulators[i], track, ranked, timing);
+            var match = Match(areas[i], i, accumulators[i], track, ranked, schedule);
             matches.Add(match);
             if (match.Finding is { } finding)
             {
@@ -730,7 +731,7 @@ public sealed class RouteAreaCheck
         return new RouteAreaResult(matches, sorted);
     }
 
-    private RouteAreaMatch Match(RouteArea area, int index, RouteCorridor.Accumulator acc, RouteCorridor.Track track, List<RouteChartCell> cells, RouteWarningTiming timing)
+    private RouteAreaMatch Match(RouteArea area, int index, RouteCorridor.Accumulator acc, RouteCorridor.Track track, List<RouteChartCell> cells, PassageSchedule schedule)
     {
         RouteAreaRelation relation;
         double start, end;
@@ -754,11 +755,11 @@ public sealed class RouteAreaCheck
 
         var startLeg = track.LegAt(start);
         var endLeg = track.LegAt(end);
-        var startEta = timing.Schedule?.EtaAt(startLeg, start - track.Legs[startLeg].Start);
-        var endEta = timing.Schedule?.EtaAt(endLeg, end - track.Legs[endLeg].Start);
+        var startEta = schedule.EtaAt(startLeg, start - track.Legs[startLeg].Start);
+        var endEta = schedule.EtaAt(endLeg, end - track.Legs[endLeg].Start);
         var atEta = startEta is not null && endEta is not null;
-        var from = atEta ? startEta!.Value : timing.Fallback;
-        var until = atEta ? endEta!.Value : timing.Fallback;
+        var from = atEta ? startEta!.Value : schedule.Departure;
+        var until = atEta ? endEta!.Value : schedule.Departure;
         var inForce = InForceOver(area, from, until);
 
         var text = _options.Text;
@@ -768,7 +769,7 @@ public sealed class RouteAreaCheck
         if (!inForce)
         {
             (code, group) = (RouteAreaCodes.AreaNotInForce, RouteFindingGroup.Info);
-            title = atEta ? text.Format(text.NotInForceFormat, subject) : text.Format(text.NotInForceAtFormat, subject, text.Time(timing.Fallback));
+            title = atEta ? text.Format(text.NotInForceFormat, subject) : text.Format(text.NotInForceAtFormat, subject, text.Time(schedule.Departure));
         }
         else
         {

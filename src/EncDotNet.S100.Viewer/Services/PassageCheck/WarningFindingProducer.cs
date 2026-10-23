@@ -53,7 +53,7 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
     {
         ArgumentNullException.ThrowIfNull(request);
         var entries = _warnings.Warnings;
-        if (entries.Count == 0 || request.CheckLegs.Count == 0)
+        if (entries.Count == 0 || request.Legs.Count == 0)
             return Task.FromResult<IReadOnlyList<RouteFinding>>([]);
 
         var warnings = entries
@@ -66,12 +66,11 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
         if (warnings.Count == 0)
             return Task.FromResult<IReadOnlyList<RouteFinding>>([]);
 
-        var schedule = PassageSchedule.Compute(request.Legs, request.Departure);
         var options = _options() with { Text = Text(request) };
         var result = new RouteWarningCheck(options).Check(
-            request.CheckLegs,
+            request.Plan,
+            request.Settings,
             warnings,
-            new RouteWarningTiming(schedule, request.ViewTime),
             _warnings.Set,
             cancellationToken);
         return Task.FromResult<IReadOnlyList<RouteFinding>>([.. result.Findings.Select(Tag)]);

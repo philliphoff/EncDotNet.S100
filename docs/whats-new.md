@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Route checks: one plan for every check.** In
+  `EncDotNet.S100.Navigation`, the chart, area, S-124 and clearance checks
+  all take a `PassagePlan` of `PassageLeg`s and a `RouteCheckSettings`.
+  `RouteCheckLeg`, `RouteCheckDepths` and `RouteWarningTiming` are gone.
+  Legs carry `Length`, `Depth` and `Speed` values, and a leg without a draft
+  has none rather than 0. Each leg's dangers are judged against that leg's
+  own draft + squat + required UKC, rather than the deepest keel on the
+  route. Where a leg has no ETA, areas and warnings are judged at the
+  route's departure, and only without one at the view time (SoundCharts)
+  or `time` (MCP).
+
 - **From a warning to its route finding.** While SoundCharts checks a
   route, the Warning card of a warning that crosses or is near it, in
   **Object Information** or opened from the **Navigational warnings**

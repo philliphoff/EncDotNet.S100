@@ -19,14 +19,14 @@ public sealed class S102WithoutDatumUkcTests(SpitWithoutS102DatumFixture fixture
     {
         var definition = fixture.Definition;
         var (x, y) = definition.Places["channel-west"];
-        var leg = new PassageLeg(
+        var leg = PassageLegs.Leg(
             [definition.World.Frame.ToGeo(x + 0.1, y + 0.1), definition.World.Frame.ToGeo(x + 1.1, y + 0.1)],
-            DraftMeters: 6.0,
-            SpeedKnots: 10,
-            SquatMeters: 0.3,
-            RequiredUkcMeters: 1.0);
+            draft: 6.0,
+            speedKnots: 10,
+            squat: 0.3,
+            ukc: 1.0);
 
-        var result = new PassageCheckEngine(_sources.Depth, _sources.WaterLevel).Check(new PassagePlan([leg], At), TestContext.Current.CancellationToken);
+        var result = new PassageCheckEngine(_sources.Depth, _sources.WaterLevel).Check(new PassagePlan([leg], At), PassageLegs.Settings(At), TestContext.Current.CancellationToken);
         var sample = Assert.Single(result.Samples);
 
         Assert.Equal(ChartedDepthKind.Bathymetry, sample.Depth!.Kind);

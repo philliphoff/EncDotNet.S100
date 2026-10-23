@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
 using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
@@ -166,10 +167,17 @@ public class PassageDataSourcesTests
             Banded("harbour", 22_000, S101AreaSynth.Box(0, 0, 0.05, 0.05),
                 S101AreaSynth.DepthArea(8, S101AreaSynth.Box(0, 0, 0.05, 0.05)),
                 S101AreaSynth.SoundingDatum(Mllw, S101AreaSynth.Box(0, 0, 0.05, 0.05))));
-        var leg = new PassageLeg([new GeoPosition(0.01, 0.01), new GeoPosition(0.01, 0.04)], 5, 6, 0, 1);
-        var plan = new PassagePlan([leg], new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var leg = new PassageLeg
+        {
+            Points = [new GeoPosition(0.01, 0.01), new GeoPosition(0.01, 0.04)],
+            Draft = Depth.FromMetres(5),
+            Speed = Speed.FromKnots(6),
+            RequiredUkc = Depth.FromMetres(1),
+        };
+        var departure = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var plan = new PassagePlan([leg], departure);
 
-        var result = new PassageCheckEngine(sources.Depth, sources.WaterLevel).Check(plan, TestContext.Current.CancellationToken);
+        var result = new PassageCheckEngine(sources.Depth, sources.WaterLevel).Check(plan, new RouteCheckSettings { At = departure }, TestContext.Current.CancellationToken);
 
         Assert.Equal(["harbour"], result.Sources.FallbackDatasets);
         Assert.All(result.Samples, s => Assert.Equal(8, s.Depth!.DepthMeters));

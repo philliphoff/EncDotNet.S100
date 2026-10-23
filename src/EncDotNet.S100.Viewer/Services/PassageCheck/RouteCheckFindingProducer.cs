@@ -20,10 +20,10 @@ namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 /// <see cref="RouteCheckSourceCache"/> it shares with the area producer.
 /// </para>
 /// <para>
-/// The depth checks use the mariner's safety contour and safety depth and,
-/// when the route has a draft, its draft, squat and required UKC
-/// (<see cref="RouteCheckDepths"/>). The findings service re-runs producers
-/// when the mariner's settings change.
+/// The depth checks use the mariner's safety contour and safety depth
+/// (<see cref="RouteCheckSettings"/>) and, on each leg with a draft, that
+/// leg's draft, squat and required UKC. The findings service re-runs
+/// producers when the mariner's settings change.
 /// </para>
 /// </remarks>
 internal sealed class RouteCheckFindingProducer : IRouteFindingProducer
@@ -46,34 +46,28 @@ internal sealed class RouteCheckFindingProducer : IRouteFindingProducer
     public Task<IReadOnlyList<RouteFinding>> ProduceAsync(RouteFindingRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var options = Options(request);
+        var options = _options ?? RouteCheckOptions.Default with { Text = Text() };
+        var settings = Settings(request);
         return Task.Run<IReadOnlyList<RouteFinding>>(
-            () => _sources.Get(request.Datasets).CreateEngine(options).Check(request.CheckLegs, cancellationToken).Findings,
+            () => _sources.Get(request.Datasets).CreateEngine(options).Check(request.Plan, settings, cancellationToken).Findings,
             cancellationToken);
     }
 
-    /// <summary>The engine's options for a request: the wording, and the depths to check against.</summary>
-    internal RouteCheckOptions Options(RouteFindingRequest request)
-    {
-        var options = _options ?? RouteCheckOptions.Default with { Text = Text() };
-        if (_mariner?.Current is not { } settings)
-            return options;
-
-        var depths = RouteCheckDepths.FromMarinerSettings(settings);
-        if (request.HasDraft && request.Legs.Count > 0)
-        {
-            // The deepest keel on any leg, so no leg is judged too kindly.
-            var keel = request.Legs.MaxBy(l => l.DraftMeters + l.SquatMeters + (l.RequiredUkcMeters ?? 0))!;
-            depths = depths with
+    /// <summary>
+    /// The check settings for a request: the mariner's safety contour and
+    /// depth, or none (no depth checks) without mariner settings. Each leg's
+    /// dangers are judged against that leg's own keel.
+    /// </summary>
+    internal RouteCheckSettings Settings(RouteFindingRequest request) =>
+        _mariner?.Current is { } mariner
+            ? new RouteCheckSettings
             {
-                DraftMeters = keel.DraftMeters,
-                SquatMeters = keel.SquatMeters,
-                RequiredUkcMeters = keel.RequiredUkcMeters ?? 0,
-            };
-        }
-
-        return options with { Depths = depths };
-    }
+                At = request.Settings.At,
+                CorridorOverride = request.Settings.CorridorOverride,
+                SafetyContour = mariner.SafetyContour,
+                SafetyDepth = mariner.SafetyDepth,
+            }
+            : request.Settings;
 
     /// <summary>The engine's wording, from the viewer's resources.</summary>
     internal static RouteCheckText Text() => new()

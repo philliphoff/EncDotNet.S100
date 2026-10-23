@@ -494,7 +494,7 @@ internal sealed class PassageCheckService : IDisposable
 
             var profile = _engine.SampleDepths(input.Legs, _profile, token);
             _profile = profile;
-            var result = _engine.Evaluate(profile, new PassagePlan(input.Legs, input.Departure), token);
+            var result = _engine.Evaluate(profile, new PassagePlan(input.Legs, input.Departure), new EncDotNet.S100.Navigation.RouteCheckSettings { At = input.Departure }, token);
 
             var legNames = new string?[input.Legs.Count];
             for (var i = 0; i < legNames.Length; i++)
@@ -549,7 +549,7 @@ internal sealed class PassageCheckService : IDisposable
 
     /// <summary>The route values a check depends on, read on the UI thread.</summary>
     /// <param name="RouteId">The route.</param>
-    /// <param name="Legs">The effective legs, named "1 → 2"; a leg without a draft has <see cref="PassageLeg.DraftMeters"/> 0.</param>
+    /// <param name="Legs">The effective legs, named "1 → 2", with their cross-track limits; a leg without a draft has no <see cref="PassageLeg.Draft"/>.</param>
     /// <param name="Departure">The route's departure, or the view time when it has none.</param>
     /// <param name="HasDraft">Whether every leg has a draft, which the clearance check needs.</param>
     internal sealed record CheckInput(string RouteId, IReadOnlyList<PassageLeg> Legs, DateTimeOffset Departure, bool HasDraft)
@@ -565,25 +565,8 @@ internal sealed class PassageCheckService : IDisposable
                 return null;
 
             var legs = RouteEtas.ToPassageLegs(route);
-            var named = new PassageLeg[legs.Count];
-            var checkLegs = new RouteCheckLeg[legs.Count];
-            var hasDraft = true;
-            for (var i = 0; i < legs.Count; i++)
-            {
-                hasDraft &= route.GetEffectiveLegValue(i, RoutePassageField.Draft) is not null;
-                named[i] = legs[i] with { Name = $"{i + 1} → {i + 2}" };
-                checkLegs[i] = new RouteCheckLeg(
-                    legs[i].Points,
-                    route.GetEffectiveLegValue(i, RoutePassageField.PortCrossTrack),
-                    route.GetEffectiveLegValue(i, RoutePassageField.StarboardCrossTrack),
-                    legs[i].Geometry);
-            }
-
-            return new CheckInput(route.Id, named, route.Passage.Departure ?? viewTime, hasDraft) { CheckLegs = checkLegs };
+            return new CheckInput(route.Id, legs, route.Passage.Departure ?? viewTime, legs.All(l => l.Draft is not null));
         }
-
-        /// <summary>The legs with their cross-track limits, for the route checks (#888); one per <see cref="Legs"/> entry.</summary>
-        public IReadOnlyList<RouteCheckLeg> CheckLegs { get; init; } = [];
 
         public bool SameAs(CheckInput other) => Departure == other.Departure && SameLegs(other);
 
@@ -596,18 +579,10 @@ internal sealed class PassageCheckService : IDisposable
             {
                 var a = Legs[i];
                 var b = other.Legs[i];
-                if (a.DraftMeters != b.DraftMeters || a.SpeedKnots != b.SpeedKnots || a.SquatMeters != b.SquatMeters
-                    || a.RequiredUkcMeters != b.RequiredUkcMeters || a.Geometry != b.Geometry
+                if (a.Draft != b.Draft || a.Speed != b.Speed || a.Squat != b.Squat
+                    || a.RequiredUkc != b.RequiredUkc || a.Geometry != b.Geometry
+                    || a.PortLimit != b.PortLimit || a.StarboardLimit != b.StarboardLimit
                     || !a.Points.SequenceEqual(b.Points))
-                    return false;
-            }
-
-            if (CheckLegs.Count != other.CheckLegs.Count)
-                return false;
-            for (var i = 0; i < CheckLegs.Count; i++)
-            {
-                if (CheckLegs[i].PortCrossTrackMeters != other.CheckLegs[i].PortCrossTrackMeters
-                    || CheckLegs[i].StarboardCrossTrackMeters != other.CheckLegs[i].StarboardCrossTrackMeters)
                     return false;
             }
 

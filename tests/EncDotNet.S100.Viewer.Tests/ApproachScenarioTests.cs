@@ -216,12 +216,7 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
     {
         var sources = Datasets.Pipelines.Navigation.PassageDataSources.FromDatasets(fixture.Datasets, new ProjNetCrsTransformFactory());
         var engine = new PassageCheckEngine(sources.Depth, sources.WaterLevel);
-        var legs = route.Legs.Select((_, i) => new PassageLeg(
-            [route.Waypoints[i].Position, route.Waypoints[i + 1].Position],
-            route.GetEffectiveLegValue(i, RoutePassageField.Draft)!.Value,
-            route.GetEffectiveLegValue(i, RoutePassageField.Speed),
-            route.Passage.SquatMeters ?? 0,
-            route.GetEffectiveLegValue(i, RoutePassageField.RequiredUkc))).ToList();
+        var legs = RouteEtas.ToPassageLegs(route);
         var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
         return engine.SweepWaterLevelRange(profile, legs, PassageCheckService.WindowStep, PassageCheckService.MaxWindowDepartures, TestContext.Current.CancellationToken)!;
     }

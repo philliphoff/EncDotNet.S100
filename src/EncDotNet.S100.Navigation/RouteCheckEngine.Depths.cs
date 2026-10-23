@@ -10,7 +10,7 @@ public sealed partial class RouteCheckEngine
     {
         // The depth checks, run when the options carry depths. The features
         // reach DangerNearbyMeters beyond the corridor.
-        private void CheckDepths(IReadOnlyList<RouteChartFeature> features, RouteCheckDepths depths)
+        private void CheckDepths(IReadOnlyList<RouteChartFeature> features, LegDepths depths)
         {
             var shallow = CheckSafetyContour(features, depths);
             CheckSoundings(features, depths, shallow);
@@ -25,7 +25,7 @@ public sealed partial class RouteCheckEngine
         // corridor, is what matters. Drying ground is shallower than any
         // contour, so a bank with a drying core is one span. Returns the
         // shallow areas, for the soundings check.
-        private List<RouteChartFeature> CheckSafetyContour(IReadOnlyList<RouteChartFeature> features, RouteCheckDepths depths)
+        private List<RouteChartFeature> CheckSafetyContour(IReadOnlyList<RouteChartFeature> features, LegDepths depths)
         {
             var contour = depths.SafetyContourMeters;
             var shallow = new List<RouteChartFeature>();
@@ -55,7 +55,7 @@ public sealed partial class RouteCheckEngine
         // that area's finding, so only soundings in deeper water count.
         // Soundings closer together along the route than
         // ShoalMergeGapMeters make one finding.
-        private void CheckSoundings(IReadOnlyList<RouteChartFeature> features, RouteCheckDepths depths, List<RouteChartFeature> shallow)
+        private void CheckSoundings(IReadOnlyList<RouteChartFeature> features, LegDepths depths, List<RouteChartFeature> shallow)
         {
             var safetyDepth = depths.SafetyDepthMeters;
             var hits = new List<(double Distance, RouteChartFeature Feature)>();
@@ -121,7 +121,7 @@ public sealed partial class RouteCheckEngine
         // findings (CHECK). Shoal samples closer together along the route
         // than ShoalMergeGapMeters make one finding. Chunks of the leg that
         // no S-102 surface overlaps aren't sampled.
-        private void CheckBathymetry(RouteCheckDepths depths)
+        private void CheckBathymetry(LegDepths depths)
         {
             if (_engine._bathymetry is not { } bathymetry
                 || bathymetry.FinestGridSpacingMeters(_extent.SouthLatitude, _extent.WestLongitude, _extent.NorthLatitude, _extent.EastLongitude) is not { } grid

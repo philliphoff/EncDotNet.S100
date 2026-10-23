@@ -7,6 +7,7 @@ using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Mcp.Tools;
 
@@ -215,7 +216,24 @@ public sealed record PassageRouteLeg(
     double? RequiredUkcMeters,
     string? Name,
     double? PortCrossTrackMeters = null,
-    double? StarboardCrossTrackMeters = null);
+    double? StarboardCrossTrackMeters = null)
+{
+    /// <summary>The leg as the route checks take it, with the host's values.</summary>
+    /// <param name="draftMeters">A draft that replaces the leg's, or <c>null</c> to keep it.</param>
+    /// <returns>The leg.</returns>
+    public PassageLeg ToPassageLeg(double? draftMeters = null) => new()
+    {
+        Points = Points,
+        Geometry = Geometry,
+        PortLimit = PortCrossTrackMeters is { } port ? Length.FromMetres(port) : null,
+        StarboardLimit = StarboardCrossTrackMeters is { } starboard ? Length.FromMetres(starboard) : null,
+        Speed = SpeedKnots is { } knots ? Speed.FromKnots(knots) : null,
+        Draft = (draftMeters ?? DraftMeters) is { } draft ? Depth.FromMetres(draft) : null,
+        Squat = Depth.FromMetres(SquatMeters ?? 0),
+        RequiredUkc = RequiredUkcMeters is { } ukc ? Depth.FromMetres(ukc) : null,
+        Name = Name,
+    };
+}
 
 /// <summary>Supplies host routes (such as the viewer's) to <see cref="GetPassageResultTool"/> and <see cref="CheckRouteTool"/>.</summary>
 public interface IPassageRouteProvider
@@ -302,14 +320,16 @@ public sealed class GetPassageResultTool
             {
                 var a = polyline.Vertices[i - 1];
                 var b = polyline.Vertices[i];
-                legs.Add(new PassageLeg(
-                    [new GeoPosition(a.Latitude, a.Longitude), new GeoPosition(b.Latitude, b.Longitude)],
-                    request.DraftMeters.Value,
-                    request.SpeedKnots,
-                    request.SquatMeters ?? 0,
-                    request.RequiredUkcMeters,
-                    geometry,
-                    $"Leg {i} → {i + 1}"));
+                legs.Add(new PassageLeg
+                {
+                    Points = [new GeoPosition(a.Latitude, a.Longitude), new GeoPosition(b.Latitude, b.Longitude)],
+                    Geometry = geometry,
+                    Draft = Depth.FromMetres(request.DraftMeters.Value),
+                    Speed = request.SpeedKnots is { } speed ? Speed.FromKnots(speed) : null,
+                    Squat = Depth.FromMetres(request.SquatMeters ?? 0),
+                    RequiredUkc = request.RequiredUkcMeters is { } ukc ? Depth.FromMetres(ukc) : null,
+                    Name = $"Leg {i} → {i + 1}",
+                });
             }
 
             departure = request.Departure ?? DateTimeOffset.UtcNow;
@@ -344,14 +364,20 @@ public sealed class GetPassageResultTool
                         "draftMeters", $"leg {i} of the route has no draft; set one on the route or pass draftMeters"));
                 }
 
-                legs.Add(new PassageLeg(
-                    leg.Points,
-                    draft,
-                    request.SpeedKnots ?? leg.SpeedKnots,
-                    request.SquatMeters ?? leg.SquatMeters ?? 0,
-                    request.RequiredUkcMeters ?? leg.RequiredUkcMeters,
-                    leg.Geometry,
-                    leg.Name));
+                var speed = request.SpeedKnots ?? leg.SpeedKnots;
+                var ukc = request.RequiredUkcMeters ?? leg.RequiredUkcMeters;
+                legs.Add(new PassageLeg
+                {
+                    Points = leg.Points,
+                    Geometry = leg.Geometry,
+                    PortLimit = leg.PortCrossTrackMeters is { } port ? Length.FromMetres(port) : null,
+                    StarboardLimit = leg.StarboardCrossTrackMeters is { } starboard ? Length.FromMetres(starboard) : null,
+                    Draft = Depth.FromMetres(draft),
+                    Speed = speed is { } knots ? Speed.FromKnots(knots) : null,
+                    Squat = Depth.FromMetres(request.SquatMeters ?? leg.SquatMeters ?? 0),
+                    RequiredUkc = ukc is { } metres ? Depth.FromMetres(metres) : null,
+                    Name = leg.Name,
+                });
             }
 
             routeId = route.RouteId;
@@ -374,7 +400,7 @@ public sealed class GetPassageResultTool
 
             var plan = new PassagePlan(legs, departure);
             var profile = engine.SampleDepths(legs, cancellationToken);
-            result = engine.Evaluate(profile, plan, cancellationToken);
+            result = engine.Evaluate(profile, plan, new RouteCheckSettings { At = departure }, cancellationToken);
             if (request.WindowFrom is { } from && request.WindowTo is { } to)
             {
                 var sweep = engine.SweepDepartures(profile, legs, from, to, TimeSpan.FromMinutes(request.WindowStepMinutes), cancellationToken);
@@ -460,10 +486,10 @@ public sealed class GetPassageResultTool
             Nm(l.DistanceMeters),
             l.Start,
             l.End,
-            legs[l.LegIndex].DraftMeters,
-            legs[l.LegIndex].SpeedKnots,
-            legs[l.LegIndex].SquatMeters,
-            legs[l.LegIndex].RequiredUkcMeters,
+            legs[l.LegIndex].Draft!.Value.TotalMetres,
+            legs[l.LegIndex].Speed?.TotalKnots,
+            legs[l.LegIndex].Squat.TotalMetres,
+            legs[l.LegIndex].RequiredUkc?.TotalMetres,
             Minimum(l.Minimum),
             State(l.WorstState),
             Math.Round(l.MinutesBelow, 1),

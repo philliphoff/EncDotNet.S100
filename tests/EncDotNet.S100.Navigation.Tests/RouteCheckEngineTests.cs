@@ -1,6 +1,7 @@
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation.Tests;
 
@@ -13,12 +14,12 @@ public class RouteCheckEngineTests
 {
     private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
 
-    private static readonly RouteCheckLeg East = new([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
+    private static readonly PassageLeg East = Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
 
     private static readonly FakeCell Harbour = new("101HARBOUR", 22_000);
 
-    private static RouteCheckResult Check(FakeCharts charts, params RouteCheckLeg[] legs) =>
-        new RouteCheckEngine(charts).Check(legs.Length == 0 ? [East] : legs, TestContext.Current.CancellationToken);
+    private static RouteCheckResult Check(FakeCharts charts, params PassageLeg[] legs) =>
+        new RouteCheckEngine(charts).Check(new PassagePlan(legs.Length == 0 ? [East] : legs), Fixture.Settings(), TestContext.Current.CancellationToken);
 
     [Fact]
     public void Crossing_land_is_found_exactly_and_must_be_reviewed()
@@ -108,10 +109,24 @@ public class RouteCheckEngineTests
     {
         var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005, south: 40 / M, north: 0.002);
 
-        var result = Check(new FakeCharts([Harbour], [land]), East with { PortCrossTrackMeters = port, StarboardCrossTrackMeters = starboard });
+        var result = Check(new FakeCharts([Harbour], [land]), Fixture.Leg(East.Points, port: port, starboard: starboard));
 
         Assert.Equal(found, result.Findings.Any(f => f.Code == RouteCheckCodes.LandInCorridor));
         Assert.Equal(port, result.Corridors[0].PortHalfWidthMeters);
+    }
+
+    [Fact]
+    public void The_corridor_override_replaces_every_legs_limits()
+    {
+        // Land 40 m to port, beside a leg whose own port limit (30 m) misses it.
+        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005, south: 40 / M, north: 0.002);
+        var result = new RouteCheckEngine(new FakeCharts([Harbour], [land])).Check(
+            new PassagePlan([Fixture.Leg(East.Points, port: 30, starboard: 30)]),
+            new RouteCheckSettings { At = Fixture.Departure, CorridorOverride = Length.FromMetres(45) },
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(result.Findings, f => f.Code == RouteCheckCodes.LandInCorridor);
+        Assert.Equal((45, 45), (result.Corridors[0].PortHalfWidthMeters, result.Corridors[0].StarboardHalfWidthMeters));
     }
 
     [Fact]
@@ -133,7 +148,7 @@ public class RouteCheckEngineTests
     [Fact]
     public void A_route_with_no_charts_leaves_coverage_on_every_leg()
     {
-        var second = new RouteCheckLeg([new GeoPosition(0, 0.01), new GeoPosition(0.01, 0.01)]);
+        var second = Fixture.Leg([new GeoPosition(0, 0.01), new GeoPosition(0.01, 0.01)]);
 
         var result = Check(new FakeCharts([], []), East, second);
 
@@ -245,7 +260,7 @@ public class RouteCheckEngineTests
             Text = new RouteCheckText { CrossesLand = "Traverse la terre", LegFormat = "Segment {0}–{1}", Separator = " / " },
         };
 
-        var finding = Assert.Single(new RouteCheckEngine(new FakeCharts([Harbour], [land]), options).Check([East], TestContext.Current.CancellationToken).Findings);
+        var finding = Assert.Single(new RouteCheckEngine(new FakeCharts([Harbour], [land]), options).Check(new PassagePlan([East]), Fixture.Settings(), TestContext.Current.CancellationToken).Findings);
 
         Assert.Equal("Traverse la terre", finding.Title);
         Assert.StartsWith("Segment 1–2 / ", finding.Meta, StringComparison.Ordinal);
@@ -258,14 +273,14 @@ public class RouteCheckEngineTests
         cts.Cancel();
 
         Assert.ThrowsAny<OperationCanceledException>(() =>
-            new RouteCheckEngine(new FakeCharts([Harbour], [])).Check([East], cts.Token));
+            new RouteCheckEngine(new FakeCharts([Harbour], [])).Check(new PassagePlan([East]), Fixture.Settings(), cts.Token));
     }
 
     [Fact]
     public void A_leg_needs_two_points()
     {
         Assert.Throws<ArgumentException>(() =>
-            new RouteCheckEngine(new FakeCharts([], [])).Check([new RouteCheckLeg([new GeoPosition(0, 0)])], TestContext.Current.CancellationToken));
+            new RouteCheckEngine(new FakeCharts([], [])).Check(new PassagePlan([Fixture.Leg([new GeoPosition(0, 0)])]), Fixture.Settings(), TestContext.Current.CancellationToken));
     }
 
     [Theory]
