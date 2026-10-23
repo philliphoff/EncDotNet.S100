@@ -109,7 +109,7 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
                 g => (IDatasetProcessor)new WarningProcessor(g.ToList()));
 
     private static RouteFinding Warning(RouteFindingsService findings, int number) =>
-        Assert.Single(findings.Findings, f => f.Warning?.Info.Reference?.Number == number);
+        Assert.Single(findings.Findings, f => (f.Details as WarningDetails)?.Info.Reference?.Number == number);
 
     [Fact]
     public async Task The_warnings_on_the_route_are_findings_by_relation_and_time()
@@ -119,7 +119,7 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
         await s.Findings.WhenIdle();
 
         Assert.False(s.Check.HasDraft);
-        Assert.All(s.Findings.Findings, f => Assert.Equal(RouteFindingSource.S124, f.Source));
+        Assert.All(s.Findings.Findings, f => Assert.Equal(RouteFindingCategory.Warning, f.Category));
 
         // Survey area crossed in force; buoy off station 70 m off; moved diving area 550 m off (within 0,5 NM).
         Assert.Equal(RouteFindingGroup.MustReview, Warning(s.Findings, 1).Group);
@@ -127,10 +127,10 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
         Assert.Equal(RouteFindingGroup.Check, Warning(s.Findings, 6).Group);
 
         // Cable laying later in the day; diving cancelled by 006; tow cancelled at 05:30.
-        Assert.Equal((RouteWarningCodes.NotInForce, RouteFindingGroup.Info), (Warning(s.Findings, 2).Code, Warning(s.Findings, 2).Group));
-        Assert.Equal((RouteWarningCodes.Cancelled, RouteFindingGroup.Info), (Warning(s.Findings, 5).Code, Warning(s.Findings, 5).Group));
-        Assert.Equal((RouteWarningCodes.Cancelled, RouteFindingGroup.Info), (Warning(s.Findings, 7).Code, Warning(s.Findings, 7).Group));
-        Assert.DoesNotContain(s.Findings.Findings, f => f.Warning?.Info.Reference?.Number == 4);
+        Assert.Equal((RouteFindingCodes.WarningNotInForce, RouteFindingGroup.Info), (Warning(s.Findings, 2).Code, Warning(s.Findings, 2).Group));
+        Assert.Equal((RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info), (Warning(s.Findings, 5).Code, Warning(s.Findings, 5).Group));
+        Assert.Equal((RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info), (Warning(s.Findings, 7).Code, Warning(s.Findings, 7).Group));
+        Assert.DoesNotContain(s.Findings.Findings, f => (f.Details as WarningDetails)?.Info.Reference?.Number == 4);
 
         var survey = Warning(s.Findings, 1);
         Assert.Equal("Inside navigational warning 001/26", survey.Title);
@@ -177,7 +177,7 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
         // 13:00: the survey (05–08) has ended, the cable laying (12–18) has begun.
         s.Route.SetDeparture(Departure.AddHours(7));
         await s.Findings.WhenIdle();
-        Assert.Equal((RouteWarningCodes.NotInForce, RouteFindingGroup.Info), (Warning(s.Findings, 1).Code, Warning(s.Findings, 1).Group));
+        Assert.Equal((RouteFindingCodes.WarningNotInForce, RouteFindingGroup.Info), (Warning(s.Findings, 1).Code, Warning(s.Findings, 1).Group));
         Assert.Equal(RouteFindingGroup.MustReview, Warning(s.Findings, 2).Group);
         Assert.Equal("Crosses navigational warning 002/26", Warning(s.Findings, 2).Title);
 
@@ -186,7 +186,7 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
         s.Route.SetPassageValue(RoutePassageField.Speed, 0.5);
         await s.Findings.WhenIdle();
         Assert.Equal(RouteFindingGroup.Info, Warning(s.Findings, 1).Group);
-        Assert.True(Warning(s.Findings, 1).Warning!.From > new DateTimeOffset(2026, 3, 1, 8, 0, 0, TimeSpan.Zero));
+        Assert.True(((WarningDetails)Warning(s.Findings, 1).Details!).From > new DateTimeOffset(2026, 3, 1, 8, 0, 0, TimeSpan.Zero));
     }
 
     [Fact]
@@ -201,8 +201,8 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
 
         // At 13:00 the cable laying is in force and the survey has ended.
         var cable = Warning(s.Findings, 2);
-        Assert.False(cable.Warning!.AtEta);
-        Assert.Equal(viewTime, cable.Warning.From);
+        Assert.False(((WarningDetails)cable.Details!).AtEta);
+        Assert.Equal(viewTime, ((WarningDetails)cable.Details!).From);
         Assert.Equal(RouteFindingGroup.MustReview, cable.Group);
         Assert.Equal(RouteFindingGroup.Info, Warning(s.Findings, 1).Group);
     }
@@ -217,8 +217,8 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
 
         // At the 06:00 departure the survey is in force and the cable laying hasn't begun.
         var cable = Warning(s.Findings, 2);
-        Assert.False(cable.Warning!.AtEta);
-        Assert.Equal(Departure, cable.Warning.From);
+        Assert.False(((WarningDetails)cable.Details!).AtEta);
+        Assert.Equal(Departure, ((WarningDetails)cable.Details!).From);
         Assert.Equal(RouteFindingGroup.Info, cable.Group);
         Assert.Equal(RouteFindingGroup.MustReview, Warning(s.Findings, 1).Group);
     }
@@ -251,7 +251,7 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
         Assert.True(result.TryGetValue(out var dto), result.TryGetError(out var e) ? e.Message : "");
 
         var survey = Assert.Single(dto!.Findings, f => f.Warning?.Number == "ZZ00 LOCAL 001/26");
-        Assert.Equal(("must_review", "s124", "S-124"), (survey.Group, survey.Source, survey.Tag));
+        Assert.Equal(("must_review", "warning", "S-124"), (survey.Group, survey.Category, survey.Tag));
         var warning = survey.Warning!;
         Assert.Equal(("crosses", "in_force", true), (warning.Relation, warning.Status, warning.AtEta));
         Assert.InRange(warning.From, new DateTimeOffset(2026, 3, 1, 6, 8, 0, TimeSpan.Zero), new DateTimeOffset(2026, 3, 1, 6, 9, 0, TimeSpan.Zero));

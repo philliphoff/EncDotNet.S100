@@ -136,8 +136,8 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
 
         Assert.Equal(PassageVerdict.BelowSetting, s.Check.Current!.Result.Verdict);
         var finding = Assert.Single(s.Findings.Findings);
-        Assert.Equal((PassageFindings.Codes.BelowSetting, RouteFindingGroup.MustReview, RouteFindingSource.Clearance, 0),
-            (finding.Code, finding.Group, finding.Source, finding.LegIndex!.Value));
+        Assert.Equal((RouteFindingCodes.BelowSetting, RouteFindingGroup.MustReview, RouteFindingCategory.Clearance, 0),
+            (finding.Code, finding.Group, finding.Category, finding.LegIndex!.Value));
         var location = Assert.IsType<RouteFindingLocation>(finding.Location);
         Assert.InRange(crest.Latitude, location.Path.Min(p => p.Latitude), location.Path.Max(p => p.Latitude));
 

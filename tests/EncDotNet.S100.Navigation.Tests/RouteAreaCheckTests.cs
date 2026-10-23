@@ -39,7 +39,7 @@ public class RouteAreaCheckTests
     // Checks East at 6 kn leaving at Departure, or the given plan, judged at
     // the given time where the plan gives none.
     private static RouteAreaResult Check(RouteArea area, IReadOnlyList<RouteChartCell>? cells = null, PassagePlan? plan = null, DateTimeOffset? at = null) =>
-        new RouteAreaCheck(new RouteAreaOptions { Text = RouteAreaText.Default with { Culture = CultureInfo.InvariantCulture } }).Check(
+        new RouteAreaCheck(new RouteAreaOptions()).Check(
             plan ?? new PassagePlan([EastPassage], Departure),
             Fixture.Settings(at ?? Departure),
             [area],
@@ -56,10 +56,10 @@ public class RouteAreaCheckTests
         Assert.Equal(0.004 * M, match.StartDistanceMeters, 1.0);
         Assert.Equal(0.006 * M, match.EndDistanceMeters, 1.0);
         var finding = match.Finding!;
-        Assert.Equal((RouteAreaCodes.EntersProhibitedArea, RouteFindingGroup.MustReview), (finding.Code, finding.Group));
+        Assert.Equal((RouteFindingCodes.EntersProhibitedArea, RouteFindingGroup.MustReview), (finding.Code, finding.Group));
         Assert.Equal("Enters restricted area", finding.Title);
         Assert.StartsWith("Leg 1 → 2 · S-101 · entry prohibited · ", finding.Meta, StringComparison.Ordinal);
-        Assert.Equal(RouteFindingSource.RouteCheck, finding.Source);
+        Assert.Equal(RouteFindingCategory.Area, finding.Category);
         Assert.Equal("route_check.enters_prohibited_area.101TEST/RestrictedArea.0.004", finding.Id);
     }
 
@@ -76,18 +76,18 @@ public class RouteAreaCheckTests
     }
 
     [Theory]
-    [InlineData(RouteAreaKind.CautionArea, RouteAreaCodes.CautionArea, RouteFindingGroup.Check)]
-    [InlineData(RouteAreaKind.AnchorageArea, RouteAreaCodes.AnchorageArea, RouteFindingGroup.Check)]
-    [InlineData(RouteAreaKind.SeparationZone, RouteAreaCodes.TrafficArea, RouteFindingGroup.Check)]
-    [InlineData(RouteAreaKind.PrecautionaryArea, RouteAreaCodes.TrafficArea, RouteFindingGroup.Check)]
-    [InlineData(RouteAreaKind.SubmarineTransitLane, RouteAreaCodes.TrafficArea, RouteFindingGroup.Check)]
-    [InlineData(RouteAreaKind.InshoreTrafficZone, RouteAreaCodes.TrafficArea, RouteFindingGroup.Info)]
-    [InlineData(RouteAreaKind.MilitaryPracticeArea, RouteAreaCodes.RestrictedArea, RouteFindingGroup.Check)]
+    [InlineData(RouteAreaKind.CautionArea, "route_check.caution_area", RouteFindingGroup.Check)]
+    [InlineData(RouteAreaKind.AnchorageArea, "route_check.anchorage_area", RouteFindingGroup.Check)]
+    [InlineData(RouteAreaKind.SeparationZone, "route_check.traffic_area", RouteFindingGroup.Check)]
+    [InlineData(RouteAreaKind.PrecautionaryArea, "route_check.traffic_area", RouteFindingGroup.Check)]
+    [InlineData(RouteAreaKind.SubmarineTransitLane, "route_check.traffic_area", RouteFindingGroup.Check)]
+    [InlineData(RouteAreaKind.InshoreTrafficZone, "route_check.traffic_area", RouteFindingGroup.Info)]
+    [InlineData(RouteAreaKind.MilitaryPracticeArea, "route_check.restricted_area", RouteFindingGroup.Check)]
     public void Other_kinds_are_checked_or_noted(RouteAreaKind kind, string code, RouteFindingGroup group)
     {
         var finding = Check(Area(kind, 0.004, 0.006)).Findings.Single();
 
-        Assert.Equal((code, group), (finding.Code, finding.Group));
+        Assert.Equal((code, group), (finding.Code.Value, finding.Group));
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public class RouteAreaCheckTests
         var prohibited = Check(Area(RouteAreaKind.MarineProtectedArea, 0.004, 0.006, restrictions: [7], product: RouteAreaProduct.S122, name: "Reef Reserve")).Findings.Single();
         var fishing = Check(Area(RouteAreaKind.MarineProtectedArea, 0.004, 0.006, restrictions: [3], product: RouteAreaProduct.S122)).Findings.Single();
 
-        Assert.Equal((RouteAreaCodes.ProtectedArea, RouteFindingGroup.Check), (prohibited.Code, prohibited.Group));
+        Assert.Equal((RouteFindingCodes.ProtectedArea, RouteFindingGroup.Check), (prohibited.Code, prohibited.Group));
         Assert.Equal("Crosses Reef Reserve", prohibited.Title);
         Assert.StartsWith("Leg 1 → 2 · S-122 marine protected area · entry prohibited", prohibited.Meta, StringComparison.Ordinal);
         Assert.Equal(RouteFindingGroup.Info, fishing.Group);
@@ -111,7 +111,7 @@ public class RouteAreaCheckTests
 
         var match = Assert.Single(prohibited.Matches);
         Assert.Equal(RouteAreaRelation.InCorridor, match.Relation);
-        Assert.Equal((RouteAreaCodes.ProhibitedAreaInCorridor, RouteFindingGroup.Check), (match.Finding!.Code, match.Finding.Group));
+        Assert.Equal((RouteFindingCodes.ProhibitedAreaInCorridor, RouteFindingGroup.Check), (match.Finding!.Code, match.Finding.Group));
         Assert.Equal("Restricted area inside the cross-track limits", match.Finding.Title);
         Assert.Equal(0.004 * M, match.StartDistanceMeters, 30.0);
         Assert.Equal(0.006 * M, match.EndDistanceMeters, 30.0);
@@ -154,7 +154,7 @@ public class RouteAreaCheckTests
 
         var finding = Check(area).Findings.Single();
 
-        Assert.Equal((RouteAreaCodes.AreaNotInForce, RouteFindingGroup.Info), (finding.Code, finding.Group));
+        Assert.Equal((RouteFindingCodes.AreaNotInForce, RouteFindingGroup.Info), (finding.Code, finding.Group));
         Assert.Equal("Summer Zone not in force during the passage", finding.Title);
         Assert.Contains("speed restricted · 1 Jun–31 Aug · 2026-03-01 06:0", finding.Meta, StringComparison.Ordinal);
     }
@@ -175,7 +175,7 @@ public class RouteAreaCheckTests
         var atCheckTime = Check(area, plan: new PassagePlan([East]), at: may).Findings.Single();
 
         Assert.Equal("Restricted area not in force at 2026-03-01 06:00 UTC", atDeparture.Title);
-        Assert.Equal((RouteAreaCodes.RestrictedArea, RouteFindingGroup.Check), (atCheckTime.Code, atCheckTime.Group));
+        Assert.Equal((RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check), (atCheckTime.Code, atCheckTime.Group));
         Assert.Contains("from 1 Apr 2026", atCheckTime.Meta, StringComparison.Ordinal);
     }
 

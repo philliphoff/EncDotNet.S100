@@ -29,7 +29,7 @@
         "id": "route_check.crosses_safety_contour.0",
         "code": "route_check.crosses_safety_contour",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Crosses the safety contour",
         "meta": "Leg 1 \u2192 2 \u00B7 0.16 NM \u00B7 DepthArea \u00B7 least 2.0 m \u00B7 shallower than safety contour 5 m",
         "legIndex": 0,
@@ -168,13 +168,20 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "34"
+        },
+        "details": {
+          "shoal": {
+            "leastDepthMeters": 2,
+            "threshold": "safety_contour",
+            "thresholdMeters": 5
+          }
         }
       },
       {
         "id": "route_check.crosses_safety_contour.1",
         "code": "route_check.crosses_safety_contour",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Crosses the safety contour",
         "meta": "Leg 2 \u2192 3 \u00B7 0.65 NM \u00B7 DepthArea \u00B7 least -3.7 m \u00B7 shallower than safety contour 5 m",
         "legIndex": 1,
@@ -673,13 +680,20 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "34"
+        },
+        "details": {
+          "shoal": {
+            "leastDepthMeters": -3.7,
+            "threshold": "safety_contour",
+            "thresholdMeters": 5
+          }
         }
       },
       {
         "id": "route_check.crosses_drying.0",
         "code": "route_check.crosses_drying",
         "group": "must_review",
-        "source": "route_check",
+        "category": "chart",
         "title": "Crosses drying ground",
         "meta": "Leg 2 \u2192 3 \u00B7 0.10 NM \u00B7 DepthArea",
         "legIndex": 1,
@@ -780,7 +794,7 @@
         "id": "route_check.crosses_safety_contour.2",
         "code": "route_check.crosses_safety_contour",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Crosses the safety contour",
         "meta": "Leg 3 \u2192 4 \u00B7 0.47 NM \u00B7 DepthArea \u00B7 least -3.7 m \u00B7 shallower than safety contour 5 m",
         "legIndex": 2,
@@ -1151,13 +1165,20 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "34"
+        },
+        "details": {
+          "shoal": {
+            "leastDepthMeters": -3.7,
+            "threshold": "safety_contour",
+            "thresholdMeters": 5
+          }
         }
       },
       {
         "id": "route_check.crosses_drying.1",
         "code": "route_check.crosses_drying",
         "group": "must_review",
-        "source": "route_check",
+        "category": "chart",
         "title": "Crosses drying ground",
         "meta": "Leg 3 \u2192 4 \u00B7 0.27 NM \u00B7 DepthArea",
         "legIndex": 2,
@@ -1390,7 +1411,7 @@
         "id": "route_check.crosses_land.0",
         "code": "route_check.crosses_land",
         "group": "must_review",
-        "source": "route_check",
+        "category": "chart",
         "title": "Crosses land",
         "meta": "Leg 3 \u2192 4 \u00B7 0.18 NM \u00B7 LandArea",
         "legIndex": 2,

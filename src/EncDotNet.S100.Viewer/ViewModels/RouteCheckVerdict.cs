@@ -103,7 +103,7 @@ internal sealed record RouteCheckVerdict(
         var datasets = findings?.Datasets ?? [];
         var near = RouteFindingsService.Overlapping(datasets, input.Legs);
         var list = findings?.Findings ?? [];
-        var warningsChecked = near.Any(d => IsSpec(d, "S-124")) || list.Any(f => f.Source == RouteFindingSource.S124);
+        var warningsChecked = near.Any(d => IsSpec(d, "S-124")) || list.Any(f => f.Category == RouteFindingCategory.Warning);
         return Build(input.HasDraft, snapshot, list, warningsChecked, Products(snapshot?.Result.Sources, near), depthUnit, timeFormat);
     }
 
@@ -139,8 +139,8 @@ internal sealed record RouteCheckVerdict(
             tone = CheckTone.Destructive;
             if (hasDraft)
             {
-                var worst = review.OrderBy(MustReviewRank).FirstOrDefault();
-                var isBelow = (worst is null || worst.Code == PassageFindings.Codes.BelowSetting) && result is not null;
+                var worst = review.OrderBy(f => f.Code.HeadlineRank).FirstOrDefault();
+                var isBelow = (worst is null || worst.Code == RouteFindingCodes.BelowSetting) && result is not null;
                 title = isBelow ? PassageCheckViewModel.VerdictTitle(result!) : worst!.Title;
                 var where = isBelow ? Where(snapshot!, timeFormat) : worst!.Meta;
                 subtitle = review.Count > 1
@@ -150,7 +150,7 @@ internal sealed record RouteCheckVerdict(
             else
             {
                 title = Count(Strings.Check_ToReviewFormat, review.Count);
-                var named = review.OrderBy(MustReviewRank).Select(f => f.Title).ToList();
+                var named = review.OrderBy(f => f.Code.HeadlineRank).Select(f => f.Title).ToList();
                 var parts = named.Take(2).ToList();
                 if (named.Count > 2)
                     parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_MoreFormat, named.Count - 2));
@@ -202,7 +202,7 @@ internal sealed record RouteCheckVerdict(
             ? Strings.Check_FooterNoData
             : string.Format(CultureInfo.CurrentCulture, Strings.Check_FooterFormat, string.Join(", ", products));
         return new RouteCheckVerdict(kind, tone, title, subtitle, rows, footer,
-            findings.Any(f => f.Source == RouteFindingSource.RouteCheck));
+            findings.Any(f => f.Category is RouteFindingCategory.Chart or RouteFindingCategory.Depth or RouteFindingCategory.Area));
     }
 
     /// <summary>
@@ -218,37 +218,14 @@ internal sealed record RouteCheckVerdict(
         return check > 0 ? Count(Strings.Check_ToCheckFormat, check) : Strings.Check_NoDraftVerdictNone;
     }
 
-    /// <summary>Which filter chip a finding belongs to (D1).</summary>
-    internal static FindingsFilter FilterOf(RouteFinding finding) => finding.Source switch
+    /// <summary>Which filter chip a finding belongs to (D1): leaving chart coverage is the route's, the clearance check's data gaps are clearance.</summary>
+    internal static FindingsFilter FilterOf(RouteFinding finding) => finding.Category switch
     {
-        RouteFindingSource.S124 => FindingsFilter.Warnings,
-        RouteFindingSource.RouteCheck => FindingsFilter.Route,
-        _ when finding.Code.StartsWith("route_check.", StringComparison.Ordinal)
-            || finding.Code == RouteCheckCodes.OutsideChartCoverage => FindingsFilter.Route,
+        RouteFindingCategory.Warning => FindingsFilter.Warnings,
+        RouteFindingCategory.Chart or RouteFindingCategory.Depth or RouteFindingCategory.Area => FindingsFilter.Route,
+        _ when finding.Code == RouteFindingCodes.OutsideChartCoverage => FindingsFilter.Route,
         _ => FindingsFilter.Clearance,
     };
-
-    /// <summary>
-    /// The order in which Must review findings name the verdict (decision 3):
-    /// crosses land, crosses drying ground, enters a prohibited area, danger in
-    /// the corridor, below your UKC setting, warning in force on the route,
-    /// anything else.
-    /// </summary>
-    internal static int MustReviewRank(RouteFinding finding) => finding.Code switch
-    {
-        RouteCheckCodes.CrossesLand => 0,
-        RouteCheckCodes.CrossesDrying => 1,
-        var code when IsAreaCode(code) => 2,
-        RouteCheckCodes.DangerInCorridor => 3,
-        PassageFindings.Codes.BelowSetting => 4,
-        RouteWarningCodes.OnRoute => 5,
-        _ => 6,
-    };
-
-    // Restricted and prohibited areas (#956) are route_check.*_area codes.
-    private static bool IsAreaCode(string code) =>
-        code.StartsWith("route_check.", StringComparison.Ordinal)
-        && (code.Contains("area", StringComparison.Ordinal) || code.Contains("prohibited", StringComparison.Ordinal));
 
     /// <summary>
     /// The products the check used, in footer order: the clearance check's

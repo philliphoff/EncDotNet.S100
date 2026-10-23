@@ -42,7 +42,7 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
 
             Assert.Equal(expected.StartDistanceMeters * scale, match.StartDistanceMeters, 1.0);
             Assert.Equal(expected.EndDistanceMeters * scale, match.EndDistanceMeters, 1.0);
-            var warning = match.Finding!.Warning!;
+            var warning = (WarningDetails)match.Finding!.Details!;
             Assert.True(warning.AtEta);
             Assert.InRange((warning.From.UtcDateTime - expected.StartTime!.Value).Duration(), TimeSpan.Zero, TimeSpan.FromSeconds(2));
             Assert.InRange((warning.Until.UtcDateTime - expected.EndTime!.Value).Duration(), TimeSpan.Zero, TimeSpan.FromSeconds(2));
@@ -55,20 +55,20 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
     {
         var result = Check(ScenarioPassage.Legs(_catalog, Route), Route.Departure, OracleOptions);
 
-        Assert.Equal((RouteWarningCodes.OnRoute, RouteFindingGroup.MustReview), Kind(result, 1));
-        Assert.Equal((RouteWarningCodes.NotInForce, RouteFindingGroup.Info), Kind(result, 2));
-        Assert.Equal((RouteWarningCodes.NearRoute, RouteFindingGroup.Check), Kind(result, 3));
+        Assert.Equal((RouteFindingCodes.WarningOnRoute, RouteFindingGroup.MustReview), Kind(result, 1));
+        Assert.Equal((RouteFindingCodes.WarningNotInForce, RouteFindingGroup.Info), Kind(result, 2));
+        Assert.Equal((RouteFindingCodes.WarningNearRoute, RouteFindingGroup.Check), Kind(result, 3));
         Assert.Null(Match(result, 4).Finding);
-        Assert.Equal((RouteWarningCodes.Cancelled, RouteFindingGroup.Info), Kind(result, 5));
+        Assert.Equal((RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info), Kind(result, 5));
         Assert.Null(Match(result, 6).Finding);
 
         // Edition 1.0.0 has no cancellation date, so the tow stays in force.
         Assert.Equal(
-            edition == 1 ? (RouteWarningCodes.OnRoute, RouteFindingGroup.MustReview) : (RouteWarningCodes.Cancelled, RouteFindingGroup.Info),
+            edition == 1 ? (RouteFindingCodes.WarningOnRoute, RouteFindingGroup.MustReview) : (RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info),
             Kind(result, 7));
 
-        Assert.All(result.Findings, f => Assert.Equal(RouteFindingSource.S124, f.Source));
-        Assert.Equal(result.Findings.OrderBy(f => f.Group).ThenBy(f => f.DistanceMeters), result.Findings);
+        Assert.All(result.Findings, f => Assert.Equal(RouteFindingCategory.Warning, f.Category));
+        Assert.Equal(result.Findings.OrderBy(f => f.Group).ThenBy(f => f.Distance?.TotalMetres), result.Findings);
     }
 
     [Fact]
@@ -83,8 +83,8 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
         Assert.Equal("124ZZ00W0001", finding.Feature!.DatasetId);
         Assert.Equal(0, finding.LegIndex);
         Assert.False(finding.Location!.IsPoint);
-        Assert.Equal(finding.Location.StartDistanceMeters, finding.DistanceMeters);
-        Assert.Contains("SYNTHETIC. Survey vessel", finding.Warning!.Info.Texts[0].Text, StringComparison.Ordinal);
+        Assert.Equal(finding.Location.StartDistanceMeters, finding.Distance?.TotalMetres);
+        Assert.Contains("SYNTHETIC. Survey vessel", ((WarningDetails)finding.Details!).Info.Texts[0].Text, StringComparison.Ordinal);
 
         var cable = Match(Check(ScenarioPassage.Legs(_catalog, Route), Route.Departure, OracleOptions), 2).Finding!;
         Assert.Equal("Navigational warning 002/26 not in force", cable.Title);
@@ -97,7 +97,7 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
         var result = Check(ScenarioPassage.Legs(_catalog, Route), Route.Departure, options: null);
 
         // The moved diving area is 550 m north of the track: near at 0,5 NM, off at 100 m.
-        Assert.Equal((RouteWarningCodes.NearRoute, RouteFindingGroup.Check), Kind(result, 6));
+        Assert.Equal((RouteFindingCodes.WarningNearRoute, RouteFindingGroup.Check), Kind(result, 6));
         Assert.Null(Match(result, 4).Finding);
     }
 
@@ -108,8 +108,8 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
         var afternoon = Check(legs, Route.Departure.AddHours(7), OracleOptions);
 
         // 13:00: the survey (05–08) has ended and the cable laying (12–18) has begun.
-        Assert.Equal((RouteWarningCodes.NotInForce, RouteFindingGroup.Info), Kind(afternoon, 1));
-        Assert.Equal((RouteWarningCodes.OnRoute, RouteFindingGroup.MustReview), Kind(afternoon, 2));
+        Assert.Equal((RouteFindingCodes.WarningNotInForce, RouteFindingGroup.Info), Kind(afternoon, 1));
+        Assert.Equal((RouteFindingCodes.WarningOnRoute, RouteFindingGroup.MustReview), Kind(afternoon, 2));
         Assert.Equal("Crosses navigational warning 002/26", Match(afternoon, 2).Finding!.Title);
     }
 
@@ -120,7 +120,7 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
         var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l.WithSpeed(0.5)).ToList();
         var slow = Check(legs, Route.Departure, OracleOptions);
 
-        Assert.Equal((RouteWarningCodes.NotInForce, RouteFindingGroup.Info), Kind(slow, 1));
+        Assert.Equal((RouteFindingCodes.WarningNotInForce, RouteFindingGroup.Info), Kind(slow, 1));
         Assert.StartsWith("Not in force at 2026-03-01 08:", Match(slow, 1).Finding!.Meta.Split(" · ")[^1], StringComparison.Ordinal);
     }
 
@@ -138,8 +138,8 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
 
         var cable = Match(result, 2).Finding!;
         Assert.Equal(RouteFindingGroup.MustReview, cable.Group);
-        Assert.False(cable.Warning!.AtEta);
-        Assert.Equal(viewTime, cable.Warning.From);
+        Assert.False(((WarningDetails)cable.Details!).AtEta);
+        Assert.Equal(viewTime, ((WarningDetails)cable.Details!).From);
     }
 
     [Fact]
@@ -155,8 +155,8 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
             TestContext.Current.CancellationToken);
 
         var cable = Match(result, 2).Finding!;
-        Assert.False(cable.Warning!.AtEta);
-        Assert.Equal(departure, cable.Warning.From);
+        Assert.False(((WarningDetails)cable.Details!).AtEta);
+        Assert.Equal(departure, ((WarningDetails)cable.Details!).From);
     }
 
     private RouteWarningResult Check(IReadOnlyList<PassageLeg> legs, DateTime departure, RouteWarningOptions? options) =>
@@ -174,8 +174,8 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
     private static RouteWarningMatch Match(RouteWarningResult result, int number) =>
         Assert.Single(result.Matches, m => m.Warning.Info.Reference?.Number == number);
 
-    private static (string Code, RouteFindingGroup Group) Kind(RouteWarningResult result, int number) =>
-        Match(result, number).Finding is { } f ? (f.Code, f.Group) : ("none", RouteFindingGroup.Info);
+    private static (RouteFindingCode? Code, RouteFindingGroup Group) Kind(RouteWarningResult result, int number) =>
+        Match(result, number).Finding is { } f ? (f.Code, f.Group) : (null, RouteFindingGroup.Info);
 
     private static WarningRouteRelation Relation(RouteWarningRelation relation) => relation switch
     {

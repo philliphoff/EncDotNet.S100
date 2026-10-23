@@ -33,8 +33,8 @@ public sealed class RouteFindingsListTests(WarningsScenarioFixture fixture) : IC
         public Task<T> InvokeAsync<T>(Func<T> action) => Task.FromResult(action());
     }
 
-    private static RouteFinding Finding(string id, string code, RouteFindingGroup group, int leg, bool span = true) => new(
-        id, code, group, RouteFindingSource.Confidence, "Charted depth from S-101 only", $"meta {id}", leg, leg * 1000.0,
+    private static RouteFinding Finding(string id, string code, RouteFindingGroup group, int leg, bool span = true) => TestFinding.Make(
+        id, code, group, RouteFindingCategory.Confidence, "Charted depth from S-101 only", $"meta {id}", leg, leg * 1000.0,
         span
             ? new RouteFindingLocation([new GeoPosition(50, -1), new GeoPosition(50.01, -1)], leg * 1000.0, leg * 1000.0 + 500)
             : RouteFindingLocation.Point(new GeoPosition(50, -1), leg * 1000.0));
@@ -59,9 +59,9 @@ public sealed class RouteFindingsListTests(WarningsScenarioFixture fixture) : IC
         Assert.Equal(["merged.check." + code, "b.0"], entries.Select(e => e.Id));
         Assert.Equal(["a.0", "a.1", "a.2"], entries[0].Members.Select(m => m.Id));
         Assert.Equal("Legs 7 → 9 · 3 stretches", FindingsEntry.MergedMeta(entries[0].Members));
-        Assert.Equal("Leg 7 → 8 · 2 places", FindingsEntry.MergedMeta([check[1], check[1] with { Id = "b.1" }]));
+        Assert.Equal("Leg 7 → 8 · 2 places", FindingsEntry.MergedMeta([check[1], TestFinding.With(check[1], id: "b.1")]));
 
-        var review = check.Select(f => f with { Group = RouteFindingGroup.MustReview }).ToList();
+        var review = check.Select(f => TestFinding.With(f, group: RouteFindingGroup.MustReview)).ToList();
         Assert.All(FindingsEntry.For(RouteFindingGroup.MustReview, review), e => Assert.False(e.IsMerged));
 
         var row = new RouteFindingRowViewModel(entries[0].Members[0], entries[0].Id, entries[0].Members);
@@ -81,7 +81,7 @@ public sealed class RouteFindingsListTests(WarningsScenarioFixture fixture) : IC
         var check = list.Groups[1];
         var near = Assert.Single(check.Items);
         Assert.True(near.IsMerged);
-        Assert.Equal("merged.check." + RouteWarningCodes.NearRoute, near.Id);
+        Assert.Equal("merged.check." + RouteFindingCodes.WarningNearRoute, near.Id);
         Assert.Equal(2, near.Members.Count);
         Assert.Equal(2, check.Count);
         Assert.Equal("Navigational warning 003/26 near the route and 1 more", near.Title);
@@ -89,7 +89,7 @@ public sealed class RouteFindingsListTests(WarningsScenarioFixture fixture) : IC
         // D3: INFO is folded by default and its heading unfolds it, for this route.
         var info = list.Groups[2];
         Assert.Equal((3, false), (info.Count, info.IsOpen));
-        Assert.Contains(info.Items, r => r.IsMerged && r.Members.All(m => m.Finding.Code == RouteWarningCodes.Cancelled));
+        Assert.Contains(info.Items, r => r.IsMerged && r.Members.All(m => m.Finding.Code == RouteFindingCodes.WarningCancelled));
         list.ToggleInfoCommand.Execute(null);
         Assert.True(list.Groups[2].IsOpen);
         Assert.True(s.Findings.InfoOpen);
@@ -119,10 +119,10 @@ public sealed class RouteFindingsListTests(WarningsScenarioFixture fixture) : IC
         var list = Value(await get.InvokeAsync(null, cancellationToken: ct));
         Assert.Equal(("all", false, (string?)null), (list.Filter, list.InfoOpen, list.ExpandedId));
         Assert.Equal(new FindingsCountsDto(6, 0, 0, 6), list.Counts);
-        var near = Assert.Single(list.Merged, m => m.Code == RouteWarningCodes.NearRoute);
+        var near = Assert.Single(list.Merged, m => m.Code == RouteFindingCodes.WarningNearRoute.Value);
         Assert.Equal(("check", 2, false), (near.Group, near.Count, near.Expanded));
-        Assert.Equal(near.Ids, list.Findings.Where(f => f.Code == RouteWarningCodes.NearRoute).Select(f => f.Id));
-        Assert.Contains(list.Merged, m => m.Code == RouteWarningCodes.Cancelled && m.Group == "info");
+        Assert.Equal(near.Ids, list.Findings.Where(f => f.Code == RouteFindingCodes.WarningNearRoute.Value).Select(f => f.Id));
+        Assert.Contains(list.Merged, m => m.Code == RouteFindingCodes.WarningCancelled.Value && m.Group == "info");
 
         var view = Value(await set.InvokeAsync(new SetFindingsViewRequest("warnings", InfoOpen: true, ExpandedId: near.Id), ct));
         Assert.Equal(("warnings", true, near.Id), (view.Filter, view.InfoOpen, view.ExpandedId));

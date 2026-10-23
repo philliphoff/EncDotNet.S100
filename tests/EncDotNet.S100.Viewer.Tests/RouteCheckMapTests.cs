@@ -125,8 +125,8 @@ public sealed class RouteCheckMapTests(WarningsScenarioFixture fixture) : IClass
         var route = new Route("r", "Test");
         route.AppendWaypoint(new GeoPosition(50, -1));
         route.AppendWaypoint(new GeoPosition(50, -0.9));
-        RouteFinding Point(string id, double northMeters) => new(
-            id, RouteCheckCodes.DangerNearRoute, RouteFindingGroup.Check, RouteFindingSource.RouteCheck, "Wreck", "meta", 0, 1000,
+        RouteFinding Point(string id, double northMeters) => TestFinding.Make(
+            id, RouteFindingCodes.DangerNearRoute, RouteFindingGroup.Check, RouteFindingCategory.Chart, "Wreck", "meta", 0, 1000,
             RouteFindingLocation.Point(new GeoPosition(50 + (northMeters / 111_195), -1 + (1000 / (111_195 * Math.Cos(50 * Math.PI / 180)))), 1000));
 
         var map = RouteCheckMap.Build(route, [Point("near", 20), Point("far", 200)], null, RouteCheckColors.For(PaletteType.Day),
@@ -185,7 +185,7 @@ public sealed class RouteCheckMapTests(WarningsScenarioFixture fixture) : IClass
         Assert.False(focus.IsOutlined);
         Assert.StartsWith("Zoomed to finding", focus.ChipText, StringComparison.Ordinal);
 
-        var clearance = new RouteFinding("clearance.below_setting.0", "clearance.below_setting", RouteFindingGroup.MustReview, RouteFindingSource.Clearance,
+        var clearance = TestFinding.Make("clearance.below_setting.0", "clearance.below_setting", RouteFindingGroup.MustReview, RouteFindingCategory.Clearance,
             "Below your UKC setting", "meta", 0, 100, RouteFindingLocation.Point(s.Route.Waypoints[0].Position, 100));
         Assert.True(Overlay(s, clearance).Finding!.IsOutlined);
         Assert.Null(Overlay(s, clearance).Map.SelectedMark);

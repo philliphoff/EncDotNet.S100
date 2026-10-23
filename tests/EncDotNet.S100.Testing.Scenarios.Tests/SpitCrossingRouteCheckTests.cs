@@ -43,12 +43,12 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         {
             var expected = truth[i];
             var finding = result.Findings[i];
-            Assert.Equal(expected.Kind == Ground.Land ? RouteCheckCodes.CrossesLand : RouteCheckCodes.CrossesDrying, finding.Code);
-            Assert.Equal(RouteFindingSource.RouteCheck, finding.Source);
+            Assert.Equal(expected.Kind == Ground.Land ? RouteFindingCodes.CrossesLand : RouteFindingCodes.CrossesDrying, finding.Code);
+            Assert.Equal(RouteFindingCategory.Chart, finding.Category);
             Assert.Equal(expected.Leg, finding.LegIndex);
             Assert.Equal(Harbour, finding.Feature!.DatasetId);
             Assert.EndsWith(expected.Kind == Ground.Land ? " · LandArea" : " · DepthArea", finding.Meta, StringComparison.Ordinal);
-            Assert.InRange(finding.DistanceMeters!.Value, Distance(route, expected.Start) - Tolerance, Distance(route, expected.Start) + Tolerance);
+            Assert.InRange(finding.Distance!.Value.TotalMetres, Distance(route, expected.Start) - Tolerance, Distance(route, expected.Start) + Tolerance);
             Assert.InRange(finding.Location!.EndDistanceMeters, Distance(route, expected.End) - Tolerance, Distance(route, expected.End) + Tolerance);
         }
     }
@@ -81,11 +81,11 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         var result = Check(route);
 
         var finding = Assert.Single(result.Findings);
-        Assert.Equal(RouteCheckCodes.OutsideChartCoverage, finding.Code);
+        Assert.Equal(RouteFindingCodes.OutsideChartCoverage, finding.Code);
         Assert.Equal(RouteFindingGroup.Check, finding.Group);
-        Assert.Equal(RouteFindingSource.Data, finding.Source);
+        Assert.Equal(RouteFindingCategory.Data, finding.Category);
         var edge = Distance(route, (coastal.East, 3050));
-        Assert.InRange(finding.DistanceMeters!.Value, edge - Tolerance, edge + Tolerance);
+        Assert.InRange(finding.Distance!.Value.TotalMetres, edge - Tolerance, edge + Tolerance);
         Assert.Equal(result.LengthMeters, finding.Location!.EndDistanceMeters, 6);
     }
 
@@ -97,14 +97,14 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         var route = Route("421ZZ00SPITX");
         var land = GroundTruth.Along(World, Local(route)).Single(t => t.Kind == Ground.Land);
 
-        var withBoth = Check(route).Findings.Single(f => f.Code == RouteCheckCodes.CrossesLand);
-        var coastalOnly = Check(route, Coastal).Findings.Single(f => f.Code == RouteCheckCodes.CrossesLand);
+        var withBoth = Check(route).Findings.Single(f => f.Code == RouteFindingCodes.CrossesLand);
+        var coastalOnly = Check(route, Coastal).Findings.Single(f => f.Code == RouteFindingCodes.CrossesLand);
 
         Assert.Equal(Harbour, withBoth.Feature!.DatasetId);
-        Assert.InRange(withBoth.DistanceMeters!.Value, Distance(route, land.Start) - Tolerance, Distance(route, land.Start) + Tolerance);
+        Assert.InRange(withBoth.Distance!.Value.TotalMetres, Distance(route, land.Start) - Tolerance, Distance(route, land.Start) + Tolerance);
         Assert.Equal(Coastal, coastalOnly.Feature!.DatasetId);
-        Assert.True(withBoth.DistanceMeters - coastalOnly.DistanceMeters > 100,
-            $"The coastal cell's land starts at {coastalOnly.DistanceMeters:0} m and the harbour cell's at {withBoth.DistanceMeters:0} m.");
+        Assert.True(withBoth.Distance!.Value.TotalMetres - coastalOnly.Distance!.Value.TotalMetres > 100,
+            $"The coastal cell's land starts at {coastalOnly.Distance.Value.TotalMetres:0} m and the harbour cell's at {withBoth.Distance.Value.TotalMetres:0} m.");
     }
 
     [Fact]
@@ -125,11 +125,11 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         Assert.DoesNotContain(findings, f => f.Group == RouteFindingGroup.MustReview);
         Assert.All(findings, f =>
         {
-            Assert.Equal(RouteCheckCodes.DryingInCorridor, f.Code);
+            Assert.Equal(RouteFindingCodes.DryingInCorridor, f.Code);
             Assert.Equal(Harbour, f.Feature!.DatasetId);
         });
 
-        Assert.Contains(Check(Legs(route), Coastal).Findings, f => f.Code == RouteCheckCodes.CrossesDrying);
+        Assert.Contains(Check(Legs(route), Coastal).Findings, f => f.Code == RouteFindingCodes.CrossesDrying);
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
             string.Join(", ", result.Findings.GroupBy(f => f.Code).Select(g => $"{g.Key} ×{g.Count()}")) + ".");
 
         Assert.InRange(result.LengthMeters / PassageGeodesy.MetersPerNauticalMile, 20, 35);
-        Assert.Contains(result.Findings, f => f.Code == RouteCheckCodes.CrossesDrying);
+        Assert.Contains(result.Findings, f => f.Code == RouteFindingCodes.CrossesDrying);
 
         // About 120 ms on Apple silicon, but about 1 s on a 2-core GitHub
         // ubuntu runner, so the bound leaves room for CI; a regression that

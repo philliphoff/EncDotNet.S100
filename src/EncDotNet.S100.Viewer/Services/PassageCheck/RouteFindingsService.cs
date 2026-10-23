@@ -16,11 +16,11 @@ namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 /// <remarks>
 /// <para>
 /// The clearance findings (<see cref="ClearanceFindingProducer"/>, from
-/// <see cref="PassageFindings"/>) are the first producer; #888's route checks
+/// <see cref="ClearanceFindings"/>) are the first producer; #888's route checks
 /// add theirs as further producers. Each producer's findings are kept apart,
 /// so a producer that is recomputing (stale), cancelled or failed never
 /// drops another's, and the list is their merge sorted by
-/// <see cref="PassageFindings.Sort"/>.
+/// <see cref="RouteFinding.Sort"/>.
 /// </para>
 /// <para>
 /// Producers follow <see cref="PassageCheckService.Input"/>: a route,
@@ -213,8 +213,8 @@ internal sealed class RouteFindingsService : IDisposable
         Selected = finding;
         if (finding is not null)
         {
-            if (finding.DistanceMeters is { } distance)
-                _check.SetCursor(distance);
+            if (finding.Distance is { } distance)
+                _check.SetCursor(distance.TotalMetres);
             if (zoom && ResolveZoomExtent(finding) is { } extent)
                 _viewport?.Current?.ZoomToExtent(extent);
         }
@@ -294,19 +294,8 @@ internal sealed class RouteFindingsService : IDisposable
         var request = Request(input, clearance: null);
         var runs = _slots.Select(s => Task.Run(() => s.Producer.ProduceAsync(request, cancellationToken), cancellationToken));
         var found = await Task.WhenAll(runs).ConfigureAwait(true);
-        return PassageFindings.Sort(found.SelectMany(f => f));
+        return RouteFinding.Sort(found.SelectMany(f => f));
     }
-
-    /// <summary>
-    /// Names of the S-111 datasets that overlap the route and whose forecast
-    /// ended before <paramref name="now"/> (E4: shown for reference, not used in ETAs).
-    /// </summary>
-    internal static IReadOnlyList<string> ExpiredForecasts(IReadOnlyList<LoadedDataset> datasets, IReadOnlyList<PassageLeg> legs, DateTimeOffset now) =>
-        Overlapping(datasets, legs)
-            .Where(d => string.Equals(d.Spec.Name, "S-111", StringComparison.OrdinalIgnoreCase)
-                && d.TimeRange is { } range && range.End < now)
-            .Select(d => Path.GetFileNameWithoutExtension(d.Id.Value))
-            .ToList();
 
     /// <summary>Whether the checked route has a draft, so the clearance check ran.</summary>
     internal bool HasDraft => _check.HasDraft;
@@ -567,7 +556,7 @@ internal sealed class RouteFindingsService : IDisposable
     {
         lock (_gate)
         {
-            Findings = PassageFindings.Sort(_slots.SelectMany(s => s.Findings));
+            Findings = RouteFinding.Sort(_slots.SelectMany(s => s.Findings));
 
             // Keep the selection when the recompute found the same thing.
             if (Selected is { } selected)

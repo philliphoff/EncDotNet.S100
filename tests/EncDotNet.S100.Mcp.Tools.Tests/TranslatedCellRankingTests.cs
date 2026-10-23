@@ -52,8 +52,8 @@ public class TranslatedCellRankingTests
             Translated("US4", 45_000, CoastalBox, 0),
             Translated("US5", 12_000, HarbourBox, 15));
 
-        Assert.DoesNotContain(result.Findings, f => f.Code == RouteCheckCodes.CrossesSafetyContour);
-        Assert.DoesNotContain(result.Findings, f => f.Code == RouteCheckCodes.SafetyContourInCorridor);
+        Assert.DoesNotContain(result.Findings, f => f.Code == RouteFindingCodes.CrossesSafetyContour);
+        Assert.DoesNotContain(result.Findings, f => f.Code == RouteFindingCodes.SafetyContourInCorridor);
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class TranslatedCellRankingTests
             Translated("US4", null, CoastalBox, 0),
             Translated("US5", null, HarbourBox, 15));
 
-        Assert.Contains(result.Findings, f => f.Code == RouteCheckCodes.CrossesSafetyContour);
+        Assert.Contains(result.Findings, f => f.Code == RouteFindingCodes.CrossesSafetyContour);
     }
 
     [Fact]

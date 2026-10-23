@@ -53,14 +53,15 @@ public sealed record CheckRouteFinding(
     [property: Description("Id, unique within this result, e.g. \"route_check.crosses_land.0\".")] string Id,
     [property: Description("Kind of finding: route_check.crosses_land, route_check.crosses_drying, route_check.land_in_corridor, route_check.drying_in_corridor, route_check.danger_in_corridor, route_check.danger_near_route, route_check.crosses_safety_contour, route_check.safety_contour_in_corridor, route_check.soundings_below_safety_depth, route_check.crosses_s102_shoal, route_check.s102_shoal_in_corridor, data.outside_chart_coverage, route_check.enters_prohibited_area, route_check.prohibited_area_in_corridor, route_check.restricted_area, route_check.caution_area, route_check.traffic_area, route_check.anchorage_area, route_check.protected_area, route_check.area_not_in_force, s124.on_route, s124.near_route, s124.not_in_force or s124.cancelled.")] string Code,
     [property: Description("What to do: must_review, check or info.")] string Group,
-    [property: Description("The check that produced it: route_check, s124 for navigational warnings, or data for chart coverage.")] string Source,
+    [property: Description("What it's about: chart (land, drying ground), depth (safety contour, soundings, S-102 shoals, charted dangers), area (regulated and protected areas), warning (S-124 navigational warnings) or data (chart coverage).")] string Category,
     [property: Description("One line, e.g. \"Crosses drying ground\".")] string Title,
     [property: Description("Where and what, e.g. \"Leg 2 → 3 · 0.10 NM · DepthArea\".")] string Meta,
     [property: Description("Zero-based leg the finding is on.")] int? LegIndex,
     [property: Description("Distance from departure in nautical miles to where it starts.")] double? DistanceNm,
     [property: Description("Where it is: a point, or a span of the route.")] CheckRouteLocation? Location,
     [property: Description("The feature behind the finding (open it with describe_feature), or null.")] CheckRouteFeature? Feature,
-    [property: Description("For an s124 finding, the navigational warning and how it stands on the route at the ETA; null for other sources.")] CheckRouteWarning? Warning = null);
+    [property: Description("For an s124 finding, the navigational warning and how it stands on the route at the ETA; null for other categories.")] CheckRouteWarning? Warning = null,
+    [property: Description("The numbers behind the finding: a danger's depth, side and the threshold that fired, a shoal's least depth, an area's restrictions and dates. Null for land, drying ground and coverage, and for s124 findings (see warning).")] CheckRouteDetails? Details = null);
 
 /// <summary>The navigational warning behind an S-124 finding, and how it stands on the route.</summary>
 public sealed record CheckRouteWarning(
@@ -266,33 +267,17 @@ public sealed class CheckRouteTool
         : check > 0 ? $"{check} to check"
         : "No findings for your settings";
 
-    private static readonly RouteCheckOptions Options = RouteCheckOptions.Default with
-    {
-        Text = RouteCheckText.Default with { Culture = System.Globalization.CultureInfo.InvariantCulture },
-    };
+    // The default formatter: English, invariant culture, metres, UTC.
+    private static readonly RouteCheckOptions Options = RouteCheckOptions.Default;
 
-    private static readonly RouteAreaOptions AreaOptions = RouteAreaOptions.Default with
-    {
-        Text = RouteAreaText.Default with { Culture = System.Globalization.CultureInfo.InvariantCulture },
-    };
+    private static readonly RouteAreaOptions AreaOptions = RouteAreaOptions.Default;
 
-    private static readonly RouteWarningOptions WarningOptions = RouteWarningOptions.Default with
-    {
-        Text = RouteWarningText.Default with { Culture = System.Globalization.CultureInfo.InvariantCulture },
-    };
+    private static readonly RouteWarningOptions WarningOptions = RouteWarningOptions.Default;
 
     private static CheckRouteResult Project(RouteCheckResult result, RouteAreaResult areas, RouteWarningResult warnings, string? routeId, string? routeName, RouteCheckSources sources)
     {
         // One list, by group and then by distance, as get_findings sorts it.
-        var findings = result.Findings
-            .Concat(areas.Findings)
-            .Concat(warnings.Findings)
-            .Select((f, i) => (f, i))
-            .OrderBy(x => x.f.Group)
-            .ThenBy(x => x.f.DistanceMeters ?? double.MaxValue)
-            .ThenBy(x => x.i)
-            .Select(x => x.f)
-            .ToList();
+        var findings = RouteFinding.Sort(result.Findings.Concat(areas.Findings).Concat(warnings.Findings));
         var mustReview = findings.Count(f => f.Group == RouteFindingGroup.MustReview);
         var check = findings.Count(f => f.Group == RouteFindingGroup.Check);
         var info = findings.Count(f => f.Group == RouteFindingGroup.Info);
@@ -332,23 +317,18 @@ public sealed class CheckRouteTool
 
     private static CheckRouteFinding Project(RouteFinding f) => new(
         f.Id,
-        f.Code,
+        f.Code.Value,
         f.Group switch
         {
             RouteFindingGroup.MustReview => "must_review",
             RouteFindingGroup.Check => "check",
             _ => "info",
         },
-        f.Source switch
-        {
-            RouteFindingSource.RouteCheck => "route_check",
-            RouteFindingSource.S124 => "s124",
-            _ => "data",
-        },
+        CategoryCode(f.Category),
         f.Title,
         f.Meta,
         f.LegIndex,
-        f.DistanceMeters is { } d ? Nm(d) : null,
+        f.Distance is { } d ? Nm(d.TotalMetres) : null,
         f.Location is { } l
             ? new CheckRouteLocation(
                 l.IsPoint ? "point" : "span",
@@ -357,9 +337,24 @@ public sealed class CheckRouteTool
                 l.Path.Select(p => new[] { p.Latitude, p.Longitude }).ToList())
             : null,
         f.Feature is { } feature ? new CheckRouteFeature(feature.DatasetId, feature.FeatureId) : null,
-        f.Warning is { } warning ? Project(warning) : null);
+        f.Details is WarningDetails warning ? Project(warning) : null,
+        CheckRouteDetails.From(f.Details));
 
-    private static CheckRouteWarning Project(RouteFindingWarning w) => new(
+    /// <summary>The JSON name of a finding category, e.g. <c>chart</c> or <c>warning</c>.</summary>
+    /// <param name="category">The category.</param>
+    /// <returns>The name.</returns>
+    public static string CategoryCode(RouteFindingCategory category) => category switch
+    {
+        RouteFindingCategory.Chart => "chart",
+        RouteFindingCategory.Depth => "depth",
+        RouteFindingCategory.Area => "area",
+        RouteFindingCategory.Warning => "warning",
+        RouteFindingCategory.Clearance => "clearance",
+        RouteFindingCategory.Confidence => "confidence",
+        _ => "data",
+    };
+
+    private static CheckRouteWarning Project(WarningDetails w) => new(
         w.Info.Label,
         w.Info.Title,
         w.Info.Locality ?? w.Info.GeneralArea,

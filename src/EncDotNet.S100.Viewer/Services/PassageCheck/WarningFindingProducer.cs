@@ -1,8 +1,5 @@
-using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
-using EncDotNet.S100.Viewer.Resources;
-using EncDotNet.S100.Viewer.Routing;
 
 namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 
@@ -19,7 +16,7 @@ namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 /// It re-runs with the route, its departure and speeds (they are in the
 /// request), and when the listed warnings change (<see cref="IRouteFindingInputs"/>).
 /// Each finding refers to the warning part's feature, so the #976 Warning
-/// card can open it, and carries the warning in <see cref="RouteFinding.Warning"/>.
+/// card can open it, and carries the warning in its <see cref="WarningDetails"/>.
 /// <para>
 /// A warning the mariner classified Off chart or Information is still
 /// checked, since the classification only declutters the chart (S-98
@@ -66,7 +63,7 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
         if (warnings.Count == 0)
             return Task.FromResult<IReadOnlyList<RouteFinding>>([]);
 
-        var options = _options() with { Text = Text(request) };
+        var options = _options() with { Formatter = new ViewerFindingFormatter(request) };
         var result = new RouteWarningCheck(options).Check(
             request.Plan,
             request.Settings,
@@ -83,7 +80,7 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
         var classification = _warnings.ClassificationOf(entry);
         return classification == NavigationalWarningClassification.OnChart
             ? finding
-            : finding with { Meta = $"{finding.Meta} · {ViewModels.NavigationalWarningRowItem.NameOf(classification)}" };
+            : finding.WithText(finding.Title, $"{finding.Meta} · {ViewModels.NavigationalWarningRowItem.NameOf(classification)}");
     }
 
     // The warnings classified off the chart, so a change re-runs the check.
@@ -93,28 +90,6 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
             .Where(w => _warnings.ClassificationOf(w) != NavigationalWarningClassification.OnChart)
             .Select(w => $"{w.Key}={_warnings.ClassificationOf(w)}")
             .Distinct(StringComparer.Ordinal));
-
-    /// <summary>The finding wording from <c>Strings.resx</c>, times in the Local/UTC preference.</summary>
-    internal static RouteWarningText Text(RouteFindingRequest request) => new()
-    {
-        InsideArea = Strings.Findings_WarningInsideFormat,
-        CrossesLine = Strings.Findings_WarningCrossesFormat,
-        Near = Strings.Findings_WarningNearFormat,
-        NotInForce = Strings.Findings_WarningNotInForceFormat,
-        Cancelled = Strings.Findings_WarningCancelledFormat,
-        InForceAt = Strings.Findings_WarningInForceAtFormat,
-        NotInForceAt = Strings.Findings_WarningNotInForceAtFormat,
-        CancelledStatus = Strings.Findings_WarningCancelled,
-        NotInBulletin = Strings.Findings_WarningNotInBulletinFormat,
-        NotInBulletinStatus = Strings.Findings_WarningNotInBulletin,
-        ValidityRange = Strings.Findings_WarningRangeFormat,
-        ValidityFrom = Strings.Pick_Warning_ValidFrom,
-        ValidityUntil = Strings.Pick_Warning_ValidUntil,
-        ValidityOpen = Strings.Pick_Warning_ValidUntilCancelled,
-        FormatTime = time => TimeFormatting.Format(time, request.TimeFormat),
-        FormatAt = time => PassageFormatting.FormatEta(time, request.Departure, request.TimeFormat),
-        Culture = CultureInfo.CurrentCulture,
-    };
 
     // Changed also fires for loading state and seen marks; re-check only when the list does.
     private void OnWarningsChanged(object? sender, EventArgs e)

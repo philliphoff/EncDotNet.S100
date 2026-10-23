@@ -1,9 +1,6 @@
-using System.Globalization;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
-using EncDotNet.S100.Viewer.Resources;
-using EncDotNet.S100.Viewer.Routing;
 
 namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 
@@ -40,37 +37,11 @@ internal sealed class AreaFindingProducer : IRouteFindingProducer
         if (request.Legs.Count == 0)
             return Task.FromResult<IReadOnlyList<RouteFinding>>([]);
 
-        var options = _options ?? RouteAreaOptions.Default with { Text = Text(request) };
+        var options = _options ?? RouteAreaOptions.Default with { Formatter = new ViewerFindingFormatter(request) };
         return Task.Run<IReadOnlyList<RouteFinding>>(
             () => new RouteAreaCheck(options)
                 .Check(request.Plan, request.Settings, _sources.Get(request.Datasets).Areas!, cancellationToken)
                 .Findings,
             cancellationToken);
     }
-
-    /// <summary>The finding wording from <c>Strings.resx</c>, times in the Local/UTC preference.</summary>
-    internal static RouteAreaText Text(RouteFindingRequest request) => new()
-    {
-        EntersFormat = Strings.RouteArea_EntersFormat,
-        CrossesFormat = Strings.RouteArea_CrossesFormat,
-        InCorridorFormat = Strings.RouteArea_InCorridorFormat,
-        NotInForceFormat = Strings.RouteArea_NotInForceFormat,
-        NotInForceAtFormat = Strings.RouteArea_NotInForceAtFormat,
-        RestrictedArea = Strings.RouteArea_RestrictedArea,
-        MilitaryPracticeArea = Strings.RouteArea_MilitaryPracticeArea,
-        CautionArea = Strings.RouteArea_CautionArea,
-        AnchorageArea = Strings.RouteArea_AnchorageArea,
-        SeparationZone = Strings.RouteArea_SeparationZone,
-        PrecautionaryArea = Strings.RouteArea_PrecautionaryArea,
-        InshoreTrafficZone = Strings.RouteArea_InshoreTrafficZone,
-        SubmarineTransitLane = Strings.RouteArea_SubmarineTransitLane,
-        MarineProtectedArea = Strings.RouteArea_MarineProtectedArea,
-        RangeFormat = Strings.RouteArea_RangeFormat,
-        FromFormat = Strings.RouteArea_FromFormat,
-        UntilFormat = Strings.RouteArea_UntilFormat,
-        LegFormat = Strings.Check_LegFormat,
-        Separator = Strings.RouteCheck_Separator,
-        FormatTime = time => PassageFormatting.FormatEta(time, request.Departure, request.TimeFormat),
-        Culture = CultureInfo.CurrentCulture,
-    };
 }

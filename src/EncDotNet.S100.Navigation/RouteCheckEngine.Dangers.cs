@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Navigation;
 //    there's water over it.
 // 2. A danger with a depth is a danger to the route when it's shallower
 //    than the safety depth, or, with a draft, shallower than draft + squat +
-//    required UKC on the static charted depth. The meta line names the
+//    required UKC on the static charted depth. Its details name the
 //    threshold that fired: the keel one when both do, since it's the one
 //    the vessel would touch.
 // 3. Only isolated dangers count: one that lies in water already shallower
@@ -43,8 +43,7 @@ public sealed partial class RouteCheckEngine
         double Offset,
         GeoPosition Position,
         bool InCorridor,
-        string Title,
-        List<string> Details);
+        DangerDetails Details);
 
     /// <summary>The dangers found along the route: the closest leg's view of each.</summary>
     private sealed class DangerList
@@ -72,16 +71,11 @@ public sealed partial class RouteCheckEngine
             {
                 var c = _candidates[key];
                 findings.Add(
-                    c.InCorridor ? RouteCheckCodes.DangerInCorridor : RouteCheckCodes.DangerNearRoute,
-                    c.InCorridor ? RouteFindingGroup.MustReview : RouteFindingGroup.Check,
-                    RouteFindingSource.RouteCheck,
-                    c.Title,
+                    c.InCorridor ? RouteFindingCodes.DangerInCorridor : RouteFindingCodes.DangerNearRoute,
                     c.LegIndex,
                     c.Distance,
                     RouteFindingLocation.Point(c.Position, c.Distance),
                     c.Feature,
-                    c.Feature.FeatureType,
-                    lengthMeters: null,
                     c.Details);
             }
         }
@@ -107,7 +101,6 @@ public sealed partial class RouteCheckEngine
                 }
             }
 
-            var text = _findings.Text;
             foreach (var feature in features)
             {
                 if (feature.Kind != RouteChartFeatureKind.Danger)
@@ -116,7 +109,7 @@ public sealed partial class RouteCheckEngine
                 }
 
                 _cancellationToken.ThrowIfCancellationRequested();
-                if (Judge(feature, depths, text) is not { } reasons)
+                if (Judge(feature, depths) is not { } threshold)
                 {
                     continue;
                 }
@@ -134,44 +127,37 @@ public sealed partial class RouteCheckEngine
                     continue;
                 }
 
-                var details = new List<string>(4)
+                var details = new DangerDetails
                 {
-                    offset < 0.5 ? text.OnTrack
-                        : Format(projection.Offset > 0 ? text.ToPortFormat : text.ToStarboardFormat, offset),
+                    FeatureType = feature.FeatureType,
+                    Depth = feature.DepthMeters is { } depth ? Quantities.Depth.FromMetres(depth) : null,
+                    WaterLevelEffect = feature.WaterLevelEffect,
+                    ThresholdKind = threshold.Kind,
+                    Threshold = threshold.Value is { } value ? Quantities.Depth.FromMetres(value) : null,
+                    Side = offset < 0.5 ? RouteFindingSide.OnTrack : projection.Offset > 0 ? RouteFindingSide.Port : RouteFindingSide.Starboard,
+                    Offset = Quantities.Length.FromMetres(offset),
                 };
-                details.AddRange(reasons);
-                var inCorridor = offset <= limit;
-                var title = Format(inCorridor ? text.DangerInCorridorFormat : text.DangerNearRouteFormat, KindName(feature.FeatureType, text));
-                _dangers.Offer(new DangerCandidate(feature, _legIndex, projection.Distance, projection.Offset, position, inCorridor, title, details));
+                _dangers.Offer(new DangerCandidate(feature, _legIndex, projection.Distance, projection.Offset, position, offset <= limit, details));
             }
         }
 
         // Rules 1 and 2: whether the danger is one for these depths, and the
-        // meta-line parts that say why, or null when it isn't.
-        private List<string>? Judge(RouteChartFeature danger, LegDepths depths, RouteCheckText text)
+        // threshold that fired (none when its depth is unknown), or null when
+        // it isn't.
+        private static (RouteFindingThreshold? Kind, double? Value)? Judge(RouteChartFeature danger, LegDepths depths)
         {
             if (danger.DepthMeters is not { } depth)
             {
-                return
-                [
-                    danger.WaterLevelEffect switch
-                    {
-                        1 or 2 => text.AboveWater,
-                        4 => text.CoversAndUncovers,
-                        5 => text.Awash,
-                        _ => text.DepthUnknown,
-                    },
-                ];
+                return (null, null);
             }
 
-            var charted = Format(text.DepthFormat, depth);
             if (depths.KeelMeters is { } keel && depth < keel)
             {
-                return [charted, Format(text.BelowKeelFormat, keel)];
+                return (RouteFindingThreshold.Keel, keel);
             }
 
             return depth < depths.SafetyDepthMeters
-                ? [charted, Format(text.BelowSafetyDepthFormat, depths.SafetyDepthMeters)]
+                ? (RouteFindingThreshold.SafetyDepth, depths.SafetyDepthMeters)
                 : null;
         }
 
@@ -361,13 +347,5 @@ public sealed partial class RouteCheckEngine
             var (east, north) = Direction(from, to);
             return Offset(point, east, north, meters);
         }
-
-        private static string KindName(string featureType, RouteCheckText text) => featureType switch
-        {
-            "Wreck" => text.Wreck,
-            "Obstruction" => text.Obstruction,
-            "UnderwaterAwashRock" => text.Rock,
-            _ => featureType,
-        };
     }
 }

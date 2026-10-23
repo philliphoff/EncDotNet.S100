@@ -3,6 +3,7 @@ using System.Reflection;
 using Avalonia.Controls;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
@@ -120,7 +121,7 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
         var card = pick.WarningCard!;
         Assert.Equal("Crosses route on 2 legs", card.RouteFindingText);
         var finding = card.RouteFinding!;
-        Assert.Equal((0, 1), (finding.LegIndex, finding.Warning!.EndLegIndex));
+        Assert.Equal((0, 1), (finding.LegIndex, ((WarningDetails)finding.Details!).EndLegIndex));
 
         // A filter chip that hides it is cleared, so the selected finding is in the list.
         s.Findings.SetView(filter: FindingsFilter.Clearance);

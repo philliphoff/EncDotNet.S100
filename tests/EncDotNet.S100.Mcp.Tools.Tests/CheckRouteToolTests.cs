@@ -44,9 +44,9 @@ public class CheckRouteToolTests
         Assert.Equal("2 to check", value.Summary.Text);
         Assert.All(value.Findings, f =>
         {
-            Assert.Equal(RouteCheckCodes.OutsideChartCoverage, f.Code);
+            Assert.Equal(RouteFindingCodes.OutsideChartCoverage.Value, f.Code);
             Assert.Equal("check", f.Group);
-            Assert.Equal("data", f.Source);
+            Assert.Equal("data", f.Category);
             Assert.Equal("span", f.Location!.Kind);
             Assert.Null(f.Feature);
         });
@@ -138,7 +138,7 @@ public class CheckRouteToolTests
         var value = await Ok(new CheckRouteTool(new FakeDatasetCatalog()),
             new CheckRouteRequest(Polyline: Polyline, SafetyContourMeters: 10, SafetyDepthMeters: 8, DraftMeters: 5));
 
-        Assert.All(value.Findings, f => Assert.Equal(RouteCheckCodes.OutsideChartCoverage, f.Code));
+        Assert.All(value.Findings, f => Assert.Equal(RouteFindingCodes.OutsideChartCoverage.Value, f.Code));
     }
 
     [Theory]
