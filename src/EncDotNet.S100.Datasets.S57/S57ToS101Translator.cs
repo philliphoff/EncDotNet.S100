@@ -528,6 +528,7 @@ public sealed class S57ToS101Translator
     private const string S101AttrVerticalClearanceSafe = "verticalClearanceSafe";
     private const string S101AttrHorizontalDistanceUncertainty = "horizontalDistanceUncertainty";
     private const string S101AttrVerticalDatum = "verticalDatum";
+    private const string S101ClassSoundingDatum = "SoundingDatum";
     private const string S101AttrScaleMinimum = "scaleMinimum";
     private const string S101AttrCategoryOfLandmark = "categoryOfLandmark";
     private const string S101AttrVisualProminence = "visualProminence";
@@ -1082,6 +1083,12 @@ public sealed class S57ToS101Translator
                     archSpanPositions[featureIndex] = Features.Count - 1;
             }
 
+            // Coverage-available M_COVR objects and whether the cell carries an
+            // explicit M_SDAT, for the dataset-level sounding datum fallback.
+            // See EmitDatasetSoundingDatum.
+            var coverageFeatures = new List<(EncDotNet.S57.S57FeatureRecord Record, IReadOnlyList<S101SpatialAssociation> Spatials)>();
+            var emittedSoundingDatum = false;
+
             for (int fi = 0; fi < featureRecords.Count; fi++)
             {
                 var feat = featureRecords[fi];
@@ -1231,13 +1238,74 @@ public sealed class S57ToS101Translator
                     Features.Add(spanRecord);
                     RecordArchSpanPosition(fi, emittedSpan.SpanClass);
                 }
+
+                if (objl == MCovrObjl)
+                    coverageFeatures.Add((feat, spatials));
+                else if (resolved.S101Code == S101ClassSoundingDatum)
+                    emittedSoundingDatum = true;
             }
+
+            if (!emittedSoundingDatum)
+                EmitDatasetSoundingDatum(coverageFeatures);
 
             EmitBridgeAggregations(bridgePlan);
             EmitUnjoinedBridgeEquipment(bridgePlan);
             RecordUnlinkedTimeSchedules(schedulePlan);
             EmitBridgeArchAssociations(archGroups, archSpanPositions);
             EmitRangeSystems(pendingAggregations);
+        }
+
+        // ── Dataset sounding datum (DSPM SDAT) ──────────────────────────
+
+        // S-57 states a cell's sounding datum once, in the DSPM SDAT subfield
+        // (S-57 Part 3 §7.3.1.1), and uses M_SDAT meta objects only where the
+        // producer chooses to encode it as an area; most ENCs (NOAA's among
+        // them) carry no M_SDAT at all. S-101 has no dataset-level sounding
+        // datum: it is the verticalDatum of SoundingDatum meta features, which
+        // cover the dataset's data coverage. So when the cell has no M_SDAT,
+        // emit one SoundingDatum per coverage-available M_COVR, sharing its
+        // geometry and carrying SDAT, so the translated dataset still states
+        // the datum its depths are referred to. An explicit M_SDAT wins: the
+        // fallback is skipped as soon as one is translated.
+        private void EmitDatasetSoundingDatum(
+            IReadOnlyList<(EncDotNet.S57.S57FeatureRecord Record, IReadOnlyList<S101SpatialAssociation> Spatials)> coverage)
+        {
+            if (coverage.Count == 0
+                || !_featureBindings.Binds(S101ClassSoundingDatum, S101AttrVerticalDatum)
+                || _s57.DataSetParameters?.SoundingDatum is not { } sdat
+                || sdat <= 0)
+                return;
+
+            var value = sdat.ToString(CultureInfo.InvariantCulture);
+            if (_allowedEnumValues is not null && !_allowedEnumValues.IsAllowed(S101AttrVerticalDatum, value))
+            {
+                _diagnostics?.RecordDroppedEnumValue(S101AttrVerticalDatum, value);
+                return;
+            }
+
+            var typeCode = GetOrAssignFeatureTypeCode(S101ClassSoundingDatum);
+            IReadOnlyList<S101Attribute> attributes =
+                [new S101Attribute(GetOrAssignAttributeCode(S101AttrVerticalDatum), 1, value)];
+            foreach (var (record, spatials) in coverage)
+            {
+                if (_diagnostics is not null) _diagnostics.FeaturesEmitted++;
+                var recordId = _nextFeatureId++;
+
+                // Derived from the M_COVR: same agency and FIDN, a FIDS of its own.
+                _derivedFeatureIds.Add(recordId);
+                Features.Add(new S101FeatureRecord
+                {
+                    RecordId = recordId,
+                    FeatureTypeCode = typeCode,
+                    ProducingAgency = (ushort)record.RecordName.AgencyCode,
+                    FeatureIdentificationNumber = (uint)record.RecordName.FeatureId,
+                    FeatureIdentificationSubdivision = (ushort)record.RecordName.FeatureSubdivision,
+                    Attributes = attributes,
+                    SpatialAssociations = spatials,
+                    FeatureAssociations = [],
+                    InformationAssociations = [],
+                });
+            }
         }
 
         // ── Bridges (S-65 Annex B §4.8.10) ──────────────────────────────

@@ -16,7 +16,8 @@ public class S57ToS101TranslatorTests
         IEnumerable<EncDotNet.S57.S57VectorRecord>? vectorRecords = null,
         IEnumerable<EncDotNet.S57.S57FeatureRecord>? features = null,
         uint comf = 10_000_000,
-        uint somf = 10)
+        uint somf = 10,
+        int sdat = 0)
         => new()
         {
             DataSetIdentification = new EncDotNet.S57.S57DataSetIdentification
@@ -31,6 +32,7 @@ public class S57ToS101TranslatorTests
                 CompilationScale = 50_000,
                 CoordinateMultiplicationFactor = (int)comf,
                 SoundingMultiplicationFactor = (int)somf,
+                SoundingDatum = sdat,
             },
             VectorRecords = (vectorRecords ?? Array.Empty<EncDotNet.S57.S57VectorRecord>()).ToArray(),
             FeatureRecords = (features ?? Array.Empty<EncDotNet.S57.S57FeatureRecord>()).ToArray(),
@@ -320,6 +322,74 @@ public class S57ToS101TranslatorTests
 
         var feat = Assert.Single(s101.Features);
         Assert.Equal("DataCoverage", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
+    }
+
+    // ── DSPM SDAT → SoundingDatum when the cell has no M_SDAT ──
+
+    // A triangle cell with a coverage-available M_COVR, optional extra features.
+    private static EncDotNet.S57.S57Document CoveredCell(int sdat, params EncDotNet.S57.S57FeatureRecord[] extra)
+    {
+        var coverage = Feat(
+            recordId: 1, primitive: 3, objectClass: 302, // M_COVR
+            featureIdentificationNumber: 1,
+            attributes: new[] { Attr(18, "1") },
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+        return BuildDocument(
+            vectorRecords: new[] { Node(1, 0, 0), Node(2, 0, 100), Node(3, 100, 50), Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 1) },
+            features: new[] { coverage }.Concat(extra),
+            sdat: sdat);
+    }
+
+    private static List<S101FeatureRecord> FeaturesOf(S101Document doc, string featureType)
+        => doc.Features.Where(f => doc.FeatureTypeCatalogue[f.FeatureTypeCode] == featureType).ToList();
+
+    [Fact]
+    public void Translate_NoMSdat_DspmSdatBecomesSoundingDatumOverCoverage()
+    {
+        // NOAA ENCs state the sounding datum only in DSPM SDAT (12 = MLLW).
+        var s101 = new S57ToS101Translator().Translate(CoveredCell(sdat: 12));
+
+        var coverage = Assert.Single(FeaturesOf(s101, "DataCoverage"));
+        var datum = Assert.Single(FeaturesOf(s101, "SoundingDatum"));
+        Assert.Equal(["12"], AttributeValues(s101, datum)["verticalDatum"]);
+        Assert.Equal(coverage.SpatialAssociations, datum.SpatialAssociations);
+
+        // Same FIDN as the M_COVR it derives from, but its own FOID.
+        Assert.Equal(coverage.FeatureIdentificationNumber, datum.FeatureIdentificationNumber);
+        Assert.NotEqual(coverage.FeatureIdentificationSubdivision, datum.FeatureIdentificationSubdivision);
+    }
+
+    [Fact]
+    public void Translate_ExplicitMSdat_WinsOverDspmSdat()
+    {
+        var mSdat = Feat(
+            recordId: 2, primitive: 3, objectClass: 309, // M_SDAT
+            featureIdentificationNumber: 2,
+            attributes: new[] { Attr(185, "3") },         // VERDAT = MLWS
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+
+        var s101 = new S57ToS101Translator().Translate(CoveredCell(sdat: 12, mSdat));
+
+        var datum = Assert.Single(FeaturesOf(s101, "SoundingDatum"));
+        Assert.Equal(["3"], AttributeValues(s101, datum)["verticalDatum"]);
+    }
+
+    [Fact]
+    public void Translate_NoMSdat_NoDspmSdat_EmitsNoSoundingDatum()
+    {
+        var s101 = new S57ToS101Translator().Translate(CoveredCell(sdat: 0));
+
+        Assert.Empty(FeaturesOf(s101, "SoundingDatum"));
     }
 
     [Fact]
