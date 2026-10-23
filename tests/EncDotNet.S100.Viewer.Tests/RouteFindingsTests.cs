@@ -65,9 +65,7 @@ public sealed class RouteFindingsTests : IDisposable
     internal static RouteFindingsService Findings(PassageCheckFixture f, RecordingViewport? viewport = null, Action<Action>? post = null) =>
         new(f.Check, f.Routes, f.Catalog,
             viewport is null ? null : new StaticCapabilityAccessor<IMapViewportController>(viewport),
-            timeFormat: new Utc(),
-            clock: new FixedClock(Now),
-            post: post);
+            timeFormat: new Utc());
 
     private static T Value<T>(ToolResult<T> result)
     {

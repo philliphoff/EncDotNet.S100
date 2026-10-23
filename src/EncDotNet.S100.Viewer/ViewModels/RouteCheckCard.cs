@@ -24,22 +24,6 @@ internal enum FindingsFilter
     Warnings,
 }
 
-/// <summary>The verdict's kind, worst first (handoff decision 3).</summary>
-internal enum RouteCheckVerdictKind
-{
-    /// <summary>A Must review finding from any check.</summary>
-    MustReview,
-
-    /// <summary>Arrival is after the water-level data ends, and nothing is Must review.</summary>
-    DataEnds,
-
-    /// <summary>Check findings, a tight clearance or missing data, and nothing worse.</summary>
-    Check,
-
-    /// <summary>Nothing to review or check.</summary>
-    Clear,
-}
-
 /// <summary>
 /// One summary row of the verdict card (B3): Clearance, Route or Warnings,
 /// a value and an optional chip. Clicking it filters the findings list.
@@ -59,18 +43,19 @@ internal sealed record RouteCheckSummaryRow(
     bool AddDraft = false);
 
 /// <summary>
-/// The Check route verdict card (#959, handoff B1–B5): one verdict for the
-/// clearance check and every route check, worst group first, with the
-/// summary rows and the one "Not for navigation" footer.
+/// The Check route verdict card (#959, handoff B1–B5): the report's verdict
+/// (<see cref="RouteCheckReport.Verdict"/>) for the clearance check and every
+/// route check, worded for the card, with the summary rows and the one "Not
+/// for navigation" footer.
 /// </summary>
-/// <param name="Kind">The worst group.</param>
+/// <param name="Kind">The report's verdict.</param>
 /// <param name="Tone">The card's tone: destructive only for Must review.</param>
 /// <param name="Title">The title, naming the worst item, e.g. "Crosses drying ground" or "2 to review".</param>
 /// <param name="Subtitle">The line under the title (B2), or <c>null</c>.</param>
 /// <param name="Rows">The summary rows, Clearance, Route and (when warnings were checked) Warnings.</param>
 /// <param name="Footer">"Not for navigation · computed from {sources} for your settings".</param>
 /// <param name="HasRouteFindings">Whether any route-check finding exists (the window line then says they don't change with departure, B4).</param>
-internal sealed record RouteCheckVerdict(
+internal sealed record RouteCheckCard(
     RouteCheckVerdictKind Kind,
     CheckTone Tone,
     string Title,
@@ -83,31 +68,29 @@ internal sealed record RouteCheckVerdict(
     private static readonly string[] FooterProducts = ["S-101", "S-102", "S-104", "S-122", "S-124"];
 
     /// <summary>
-    /// The verdict for what Check route shows now, or <c>null</c> when it's
-    /// off, the route has no legs, or a draft is set and the clearance check
-    /// hasn't produced a result yet.
+    /// The card for what Check route shows now, or <c>null</c> when it's off,
+    /// the route has no legs, or the checked route's report hasn't landed yet.
     /// </summary>
-    /// <param name="check">The clearance check.</param>
-    /// <param name="findings">The findings list, or <c>null</c> (then only clearance counts).</param>
+    /// <param name="check">The route check.</param>
+    /// <param name="findings">The findings list in the viewer's wording, or <c>null</c> for the report's own.</param>
     /// <param name="depthUnit">The depth unit for the Clearance row.</param>
     /// <param name="timeFormat">Local or UTC, for the where line.</param>
-    public static RouteCheckVerdict? For(PassageCheckService check, RouteFindingsService? findings, DepthUnit depthUnit, TimeFormat timeFormat)
+    public static RouteCheckCard? For(PassageCheckService check, RouteFindingsService? findings, DepthUnit depthUnit, TimeFormat timeFormat)
     {
         ArgumentNullException.ThrowIfNull(check);
-        if (check.Input is not { } input)
+        if (check.Input is not { } input || check.Report is not { } report || check.ReportRouteId != input.RouteId)
             return null;
-        var snapshot = input.HasDraft ? check.Current : null;
-        if (input.HasDraft && snapshot is null)
-            return null;
+        var snapshot = input.HasDraft && check.Current is { } current && current.RouteId == input.RouteId ? current : null;
 
         var datasets = findings?.Datasets ?? [];
         var near = RouteFindingsService.Overlapping(datasets, input.Legs);
-        var list = findings?.Findings ?? [];
+        var list = findings?.Findings ?? report.Findings;
         var warningsChecked = near.Any(d => IsSpec(d, "S-124")) || list.Any(f => f.Category == RouteFindingCategory.Warning);
-        return Build(input.HasDraft, snapshot, list, warningsChecked, Products(snapshot?.Result.Sources, near), depthUnit, timeFormat);
+        return Build(report.Verdict.Kind, input.HasDraft, snapshot, list, warningsChecked, Products(snapshot?.Result.Sources, near), depthUnit, timeFormat);
     }
 
-    /// <summary>Builds the verdict from its parts (for tests).</summary>
+    /// <summary>Builds the card from its parts (for tests).</summary>
+    /// <param name="kind">The report's verdict (<see cref="RouteCheckVerdict.From"/>).</param>
     /// <param name="hasDraft">Whether the route has a draft, so clearance was checked.</param>
     /// <param name="snapshot">The clearance result; <c>null</c> without a draft.</param>
     /// <param name="findings">Every finding, in list order.</param>
@@ -115,7 +98,8 @@ internal sealed record RouteCheckVerdict(
     /// <param name="products">The products the check used, e.g. "S-101", "S-124".</param>
     /// <param name="depthUnit">The depth unit.</param>
     /// <param name="timeFormat">Local or UTC.</param>
-    internal static RouteCheckVerdict Build(
+    internal static RouteCheckCard Build(
+        RouteCheckVerdictKind kind,
         bool hasDraft,
         PassageCheckSnapshot? snapshot,
         IReadOnlyList<RouteFinding> findings,
@@ -128,14 +112,12 @@ internal sealed record RouteCheckVerdict(
         var review = findings.Where(f => f.Group == RouteFindingGroup.MustReview).ToList();
         var toCheck = findings.Where(f => f.Group == RouteFindingGroup.Check).ToList();
 
-        RouteCheckVerdictKind kind;
         CheckTone tone;
         string title;
         string? subtitle;
-        // Below your UKC setting is Must review even when no findings list is kept.
-        if (review.Count > 0 || result is { Verdict: PassageVerdict.BelowSetting })
+        // The report judged the kind; the card names it in the viewer's words.
+        if (kind == RouteCheckVerdictKind.MustReview)
         {
-            kind = RouteCheckVerdictKind.MustReview;
             tone = CheckTone.Destructive;
             if (hasDraft)
             {
@@ -159,16 +141,14 @@ internal sealed record RouteCheckVerdict(
                 subtitle = string.Join(Strings.RouteCheck_Separator, parts);
             }
         }
-        else if (result is { Verdict: PassageVerdict.WaterLevelEndsBeforeArrival })
+        else if (kind == RouteCheckVerdictKind.WaterLevelEndsBeforeArrival && result is not null)
         {
-            kind = RouteCheckVerdictKind.DataEnds;
             tone = CheckTone.Neutral;
             title = PassageCheckViewModel.VerdictTitle(result);
             subtitle = Where(snapshot!, timeFormat);
         }
-        else if (toCheck.Count > 0)
+        else if (kind == RouteCheckVerdictKind.Check && toCheck.Count > 0)
         {
-            kind = RouteCheckVerdictKind.Check;
             tone = CheckTone.Warning;
             title = !hasDraft ? Count(Strings.Check_ToCheckFormat, toCheck.Count)
                 : result is { Verdict: PassageVerdict.IncompleteData } ? PassageCheckViewModel.VerdictTitle(result)
@@ -178,13 +158,11 @@ internal sealed record RouteCheckVerdict(
         else if (result is not null)
         {
             tone = PassageCheckViewModel.ToneOf(result.Verdict);
-            kind = result.Verdict == PassageVerdict.MeetsSettings ? RouteCheckVerdictKind.Clear : RouteCheckVerdictKind.Check;
             title = PassageCheckViewModel.VerdictTitle(result);
             subtitle = Where(snapshot!, timeFormat);
         }
         else
         {
-            kind = RouteCheckVerdictKind.Clear;
             tone = CheckTone.Success;
             title = Strings.Check_NoDraftVerdictNone;
             subtitle = Strings.Check_ClearNoDraft;
@@ -201,7 +179,7 @@ internal sealed record RouteCheckVerdict(
         var footer = products.Count == 0
             ? Strings.Check_FooterNoData
             : string.Format(CultureInfo.CurrentCulture, Strings.Check_FooterFormat, string.Join(", ", products));
-        return new RouteCheckVerdict(kind, tone, title, subtitle, rows, footer,
+        return new RouteCheckCard(kind, tone, title, subtitle, rows, footer,
             findings.Any(f => f.Category is RouteFindingCategory.Chart or RouteFindingCategory.Depth or RouteFindingCategory.Area));
     }
 

@@ -48,7 +48,7 @@ internal sealed class FollowPassageService
     /// with ETAs and some time-aware data is loaded.
     /// </summary>
     public bool CanFollow =>
-        _time.IsActive && _check.IsActive && _check.Current is { Result.Arrival: not null };
+        _time.IsActive && _check.IsActive && _check.Report is { Clearance.Arrival: not null } && _check.Current is not null;
 
     /// <summary>The view time Follow passage last set, or <c>null</c>.</summary>
     public DateTime? FollowedTime => IsOn ? _applied : null;

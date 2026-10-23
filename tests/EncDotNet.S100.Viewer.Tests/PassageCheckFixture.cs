@@ -48,7 +48,9 @@ internal sealed class PassageCheckFixture
         Func<DateTime, float>? tide = null,
         IEnumerable<LoadedDataset>? extraDatasets = null,
         IViewTime? viewTime = null,
-        float deepMeters = 15f)
+        float deepMeters = 15f,
+        IEnumerable<EncDotNet.S100.Navigation.IRouteCheck>? checks = null,
+        bool allChecks = false)
     {
         var datasets = new List<LoadedDataset>
         {
@@ -68,7 +70,13 @@ internal sealed class PassageCheckFixture
         Route.SetPassageValue(RoutePassageField.Speed, 6);
         Route.SetPassageValue(RoutePassageField.RequiredUkc, 1);
         Route.SetDeparture(Departure);
-        Check = new PassageCheckService(Routes, Catalog, debounce: debounce ?? TimeSpan.Zero, post: post);
+        // The clearance check and the test's own; a test that wants every check passes allChecks.
+        Check = new PassageCheckService(
+            Routes,
+            Catalog,
+            checks: allChecks ? null : () => [new EncDotNet.S100.Navigation.ClearanceCheck(), .. checks ?? []],
+            debounce: debounce ?? TimeSpan.Zero,
+            post: post);
     }
 
     public FixedCatalog Catalog { get; }

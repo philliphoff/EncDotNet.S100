@@ -35,7 +35,7 @@ internal enum CheckTone
 /// </summary>
 /// <remarks>
 /// One verdict covers the clearance check and every route check, worst
-/// group first (<see cref="RouteCheckVerdict"/>). Without a draft (#953) the
+/// group first (<see cref="RouteCheckCard"/>). Without a draft (#953) the
 /// clearance check doesn't run: the Clearance row reads "Not checked · +
 /// Add draft", and there are no leg chips.
 /// </remarks>
@@ -300,7 +300,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         IsStale = (current is not null && _service.IsStale) || (input is not null && (_findings?.IsStale ?? false));
         HeaderMeta = BuildHeaderMeta(input, current);
 
-        var verdict = RouteCheckVerdict.For(_service, _findings, _depthUnit(), _timeFormat());
+        var verdict = RouteCheckCard.For(_service, _findings, _depthUnit(), _timeFormat());
         if (verdict is null)
         {
             HasVerdict = false;
@@ -338,7 +338,7 @@ internal sealed class PassageCheckViewModel : ViewModelBase
     {
         var route = findings
             .Where(f => f.LegIndex is not null && f.Group != RouteFindingGroup.Info
-                && RouteCheckVerdict.FilterOf(f) == FindingsFilter.Route)
+                && RouteCheckCard.FilterOf(f) == FindingsFilter.Route)
             .ToLookup(f => f.LegIndex!.Value);
         foreach (var leg in Legs)
         {

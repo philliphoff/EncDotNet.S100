@@ -122,10 +122,9 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero);
-        var ui = new UiThread();
-        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc(), clock: new FixedClock(Now),
-            producers: [new RouteCheckFindingProducer()], post: ui.Post);
+        var check = new PassageCheckService(routes, catalog,
+            checks: () => [new ChartCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post);
+        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc());
         routes.IsCheckModeActive = true;
         await findings.WhenIdle();
         return new Setup(routes, route, check, findings, catalog);
@@ -217,21 +216,23 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
         // Each leg's dangers are judged against that leg's own keel, so the
         // settings carry only the mariner's depths and the time.
         var settings = new MarinerSettings { SafetyContour = Depth.FromMetres(10), SafetyDepth = Depth.FromMetres(8) };
-        var producer = new RouteCheckFindingProducer(new Mariner(settings));
-        PassageLeg[] legs =
-        [
-            new() { Points = [new(0, 0), new(0, 0.01)], Draft = Depth.FromMetres(5), Squat = Depth.FromMetres(0.2), RequiredUkc = Depth.FromMetres(1) },
-            new() { Points = [new(0, 0.01), new(0, 0.02)], Draft = Depth.FromMetres(6), Squat = Depth.FromMetres(0.3), RequiredUkc = Depth.FromMetres(0.5) },
-        ];
-        var request = new RouteFindingRequest("r", legs, Now, true, [], null, DepthUnit.Metres, TimeFormat.Utc, Now, Now);
+        var route = new Route("r");
+        route.AppendWaypoint(new DataModel.GeoPosition(0, 0));
+        route.AppendWaypoint(new DataModel.GeoPosition(0, 0.01));
+        route.SetPassageValue(RoutePassageField.Draft, 5);
 
-        var checkSettings = producer.Settings(request);
+        var input = PassageCheckService.CheckInput.For(route, Now, settings)!;
+        var checkSettings = input.Settings;
 
         Assert.Equal((10.0, 8.0), (checkSettings.SafetyContour!.Value.TotalMetres, checkSettings.SafetyDepth!.Value.TotalMetres));
         Assert.True(checkSettings.ChecksDepths);
         Assert.Equal(Now, checkSettings.At);
-        Assert.False(new RouteCheckFindingProducer().Settings(request).ChecksDepths);
-        Assert.Equal("Crosses land", new ViewerFindingFormatter(request).Title(new RouteFinding("x", RouteFindingCodes.CrossesLand)));
+        Assert.False(PassageCheckService.CheckInput.For(route, Now)!.Settings.ChecksDepths);
+        // A change to the mariner's depths is a new input; the legs are the same.
+        var other = PassageCheckService.CheckInput.For(route, Now, settings with { SafetyDepth = Depth.FromMetres(9) })!;
+        Assert.False(input.SameAs(other));
+        Assert.True(input.SameLegs(other));
+        Assert.Equal("Crosses land", new ViewerFindingFormatter(DepthUnit.Metres, TimeFormat.Utc, Now).Title(new RouteFinding("x", RouteFindingCodes.CrossesLand)));
     }
 
     [Fact]

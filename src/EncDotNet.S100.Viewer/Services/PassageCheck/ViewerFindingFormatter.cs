@@ -31,12 +31,6 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
         _departure = departure;
     }
 
-    /// <summary>The formatter for a producer's request.</summary>
-    public ViewerFindingFormatter(RouteFindingRequest request)
-        : this(request.DepthUnit, request.TimeFormat, request.Departure)
-    {
-    }
-
     protected override string FormatTime(DateTimeOffset time) => TimeFormatting.Format(time, _timeFormat);
 
     protected override string FormatEta(DateTimeOffset time) => PassageFormatting.FormatEta(time, _departure, _timeFormat);

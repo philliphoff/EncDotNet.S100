@@ -21,10 +21,11 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// <summary>
 /// S-124 warnings in the findings list (#957): the generated "Warnings on
 /// route" scenario's warnings, listed by <see cref="NavigationalWarningsService"/>,
-/// checked against its imported S-421 route without a draft by
-/// <see cref="WarningFindingProducer"/>, and read back through <c>get_findings</c>.
+/// checked against its imported S-421 route without a draft by the route
+/// check's <see cref="WarningCheck"/> over <see cref="PanelRouteWarningSource"/>,
+/// and read back through <c>get_findings</c>.
 /// </summary>
-public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture) : IClassFixture<WarningsScenarioFixture>, IDisposable
+public sealed class WarningFindingsTests(WarningsScenarioFixture fixture) : IClassFixture<WarningsScenarioFixture>, IDisposable
 {
     private static readonly DateTimeOffset Departure = new(2026, 3, 1, 6, 0, 0, TimeSpan.Zero);
     private readonly CultureInfo _culture = CultureInfo.CurrentCulture;
@@ -95,9 +96,9 @@ public sealed class WarningFindingProducerTests(WarningsScenarioFixture fixture)
             loader.Processors = Processors();
         var warnings = new NavigationalWarningsService(loader);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero);
-        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(),
-            producers: [new WarningFindingProducer(warnings)]);
+        var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
+            checks: () => [new WarningCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero);
+        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
         return new Setup(routes, route, check, loader, warnings, findings);
     }
 
