@@ -26,7 +26,7 @@ public class RouteCheckDepthsTests
         SafetyDepth = Depth.FromMetres(10),
     };
 
-    private static readonly RouteCheckOptions Options = new();
+    private static readonly ChartCheckOptions Options = new();
 
     private static RouteCheckResult Check(IReadOnlyList<RouteChartFeature> features, IChartedDepthSource? bathymetry = null, params PassageLeg[] legs) =>
         new RouteCheckEngine(new FakeCharts([Harbour], features), Options, bathymetry)

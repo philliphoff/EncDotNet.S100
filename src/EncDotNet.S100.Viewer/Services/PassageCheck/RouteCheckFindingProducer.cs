@@ -26,13 +26,13 @@ internal sealed class RouteCheckFindingProducer : IRouteFindingProducer
 {
     private readonly IMarinerSettingsProvider? _mariner;
     private readonly RouteCheckSourceCache _sources;
-    private readonly RouteCheckOptions? _options;
+    private readonly ChartCheckOptions? _options;
 
     /// <summary>Creates the producer.</summary>
     /// <param name="mariner">The mariner's settings for the depth checks, or <c>null</c> to skip them.</param>
     /// <param name="sources">The sources shared with the area check (#956), or <c>null</c> for its own over ProjNet.</param>
     /// <param name="options">Engine tuning, or <c>null</c> for the defaults with the viewer's wording.</param>
-    public RouteCheckFindingProducer(IMarinerSettingsProvider? mariner = null, RouteCheckSourceCache? sources = null, RouteCheckOptions? options = null)
+    public RouteCheckFindingProducer(IMarinerSettingsProvider? mariner = null, RouteCheckSourceCache? sources = null, ChartCheckOptions? options = null)
     {
         _mariner = mariner;
         _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
@@ -42,7 +42,7 @@ internal sealed class RouteCheckFindingProducer : IRouteFindingProducer
     public Task<IReadOnlyList<RouteFinding>> ProduceAsync(RouteFindingRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var options = _options ?? RouteCheckOptions.Default with { Formatter = new ViewerFindingFormatter(request) };
+        var options = _options ?? ChartCheckOptions.Default with { Formatter = new ViewerFindingFormatter(request) };
         var settings = Settings(request);
         return Task.Run<IReadOnlyList<RouteFinding>>(
             () =>

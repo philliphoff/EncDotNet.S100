@@ -29,6 +29,56 @@ To check a passage against loaded datasets, also install
 `EncDotNet.S100.Datasets.Pipelines` and a CRS backend such as
 `EncDotNet.S100.Crs.ProjNet`.
 
+## Check a route
+
+`RouteChecker` runs every check on a plan and returns one `RouteCheckReport`:
+the findings of the chart, area, warning and clearance checks in one sorted
+list, a verdict, and whether each check ran. Create one checker per sources
+bundle and keep it while the data is loaded:
+
+```csharp
+var sources = CatalogRouteCheckSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
+var checker = new RouteChecker(sources);
+
+var report = checker.Check(plan, RouteCheckSettings.FromMarinerSettings(marinerSettings, DateTimeOffset.UtcNow));
+
+Console.WriteLine($"{report.Verdict.Kind}: {report.Verdict.Headline?.Title}");   // MustReview: Crosses land
+foreach (var check in report.Checks)
+{
+    Console.WriteLine($"{check.Name}: {check.State} {check.Reason}");             // clearance: Skipped draft_missing
+}
+```
+
+- **Verdict.** `MustReview` when any finding is Must review or the clearance
+  is below your setting; then `WaterLevelEndsBeforeArrival`; then `Check` for
+  Check findings or a tight or incomplete clearance; else `Clear`. The
+  headline is the Must review finding with the lowest
+  `RouteFindingCode.HeadlineRank`, or the first Check finding.
+- **Skipped checks.** A check that can't run says why rather than finding
+  nothing (`RouteCheckReasons`): no charts, areas, warnings, depth or water
+  level in the sources, or a leg without a draft (`draft_missing`). Without
+  a safety contour and safety depth the chart check runs `Partial`
+  (`safety_settings_missing`): land, drying ground and coverage only.
+- **Reuse.** The checks keep what the last run computed. The chart sweep is
+  reused while the legs, depth settings and corridor override are unchanged,
+  and the clearance check's depth profile is reused leg by leg, so changing
+  the departure resamples nothing and moving a waypoint resamples only the
+  legs that meet there. `RouteCheckSettings.DepartureWindow` adds a departure
+  sweep (`report.Departures`), which a departure change alone doesn't redo.
+- **Shared work.** `RouteTrack` (the legs' distances and corridor
+  half-widths, `PositionAt` and `PathBetween`) and the `PassageSchedule` are
+  built once per run and shared by every check through `RouteCheckContext`.
+- **Your own checks.** Implement `IRouteCheck` and pass it as
+  `additionalChecks`, or pass exactly the checks to run, such as
+  `new RouteChecker(sources, [new ClearanceCheck()])`.
+
+`RouteCheckOptions` tunes every check at once: `DefaultLimit` (50 m) and
+`Formatter` apply to all of them, and `Chart`, `Areas`, `Warnings` and
+`Clearance` tune each one. `Check` may be called from several threads at once.
+
+The engines below are what the checks run, and you can still run each one on
+its own.
+
 ## Check a passage
 
 This example builds the sources from a catalog of loaded datasets, describes a
@@ -186,7 +236,7 @@ var plan = new PassagePlan(
         Squat = Depth.FromMetres(0.3),
         RequiredUkc = Depth.FromMetres(1.0),
     },
-    new PassageLeg { Points = [b, c] },       // both sides use RouteCheckOptions.DefaultHalfWidthMeters (50 m)
+    new PassageLeg { Points = [b, c] },       // both sides use ChartCheckOptions.DefaultHalfWidthMeters (50 m)
 ]);
 
 // The mariner's safety contour and safety depth turn on the depth and danger checks.
@@ -221,7 +271,7 @@ leg's limits with one half-width.
 
 Crossings of the track are found exactly. Ground that only reaches into the
 corridor is found at cross-sections every
-`RouteCheckOptions.StationSpacingMeters` (default 10 m). Where cells overlap,
+`ChartCheckOptions.StationSpacingMeters` (default 10 m). Where cells overlap,
 only the finest cell at a place counts (`CellScaleRanking`), so a coarse cell's
 generalised land doesn't fire where a finer cell charts water.
 
@@ -236,7 +286,7 @@ long bank is one finding. `RouteCheckEngine.Dangers.cs` writes out the rules.
 Once the cells' indexes are built (the first check), checking the 24 NM Solent
 route against 17 UKHO trial cells takes about 50 ms, and re-checking the two
 legs either side of a dragged waypoint about 11 ms. The wording comes from
-`RouteCheckOptions.Formatter`, so hosts can pass their own resources.
+`ChartCheckOptions.Formatter`, so hosts can pass their own resources.
 
 `SkinOfTheEarth` holds the water, land and drying rules the route check and
 the viewer's pick report share.
@@ -376,7 +426,7 @@ again, so a host can switch depth unit or time format without checking again.
 
 ```csharp
 var formatter = new RouteFindingFormatter(CultureInfo.GetCultureInfo("fr-FR"), DepthUnit.Feet);
-var findings = new RouteCheckEngine(charts, RouteCheckOptions.Default with { Formatter = formatter })
+var findings = new RouteCheckEngine(charts, ChartCheckOptions.Default with { Formatter = formatter })
     .Check(plan, settings).Findings;
 
 foreach (var finding in findings)

@@ -4,6 +4,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Tools;
 using EncDotNet.S100.Viewer.ViewModels;
+using RouteCheckVerdictKind = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdictKind;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

@@ -35,7 +35,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     [Fact]
     public void Without_a_draft_the_dangers_are_the_ones_the_world_model_expects()
     {
-        var truth = RouteHazards.For(Definition, Spec, RouteCheckOptions.Default.DangerNearbyMeters, Contour, Contour, keelMeters: null);
+        var truth = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, Contour, keelMeters: null);
 
         AssertDangers(truth, Check());
 
@@ -51,8 +51,8 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     [Fact]
     public void With_the_draft_the_keel_threshold_fires_too()
     {
-        var without = RouteHazards.For(Definition, Spec, RouteCheckOptions.Default.DangerNearbyMeters, Contour, Contour, keelMeters: null);
-        var with = RouteHazards.For(Definition, Spec, RouteCheckOptions.Default.DangerNearbyMeters, Contour, Contour, Keel);
+        var without = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, Contour, keelMeters: null);
+        var with = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, Contour, Keel);
         Assert.Equal(12, Keel, 9);
 
         var findings = AssertDangers(with, Check(withDraft: true));
@@ -183,7 +183,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
         var sources = only.Length == 0
             ? _sources
             : CatalogRouteCheckSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)), new ProjNetCrsTransformFactory());
-        var options = new RouteCheckOptions
+        var options = new ChartCheckOptions
         {
         };
         return new RouteCheckEngine(sources.Charts!, options, sources.Depth).Check(new PassagePlan(Legs(withDraft)), PassageLegs.Settings(new DateTimeOffset(Spec.Departure, TimeSpan.Zero), Contour, safetyDepth), TestContext.Current.CancellationToken).Findings;

@@ -88,7 +88,7 @@ public sealed record RouteWarningOptions
 
     /// <summary>
     /// The corridor's half-width on a side whose cross-track limit isn't set,
-    /// in metres, as <see cref="RouteCheckOptions.DefaultHalfWidthMeters"/>. Default 50 m.
+    /// in metres, as <see cref="ChartCheckOptions.DefaultHalfWidthMeters"/>. Default 50 m.
     /// </summary>
     public double DefaultHalfWidthMeters { get; init; } = 50;
 
@@ -177,7 +177,15 @@ public sealed class RouteWarningCheck
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(source);
-        var track = BuildTrack(plan, settings);
+        return Check(BuildTrack(plan, settings), PassageSchedule.Compute(plan, settings), source, cancellationToken);
+    }
+
+    /// <summary>Checks a shared track against the warnings a source has near it (for <see cref="WarningCheck"/>).</summary>
+    internal RouteWarningResult Check(RouteTrack track, PassageSchedule schedule, IRouteWarningSource source, CancellationToken cancellationToken) =>
+        Check(track.Densified(_options.SegmentLengthMeters, _options.MaxSegmentsPerLeg), schedule, source, cancellationToken);
+
+    private RouteWarningResult Check(RouteCorridor.Track track, PassageSchedule schedule, IRouteWarningSource source, CancellationToken cancellationToken)
+    {
         var warnings = new List<RouteWarning>();
         var seen = new HashSet<object>();
         foreach (var extent in track.LegExtents(Reach(track)))
@@ -192,7 +200,7 @@ public sealed class RouteWarningCheck
             }
         }
 
-        return Check(track, PassageSchedule.Compute(plan, settings), warnings, source.Set, cancellationToken);
+        return Check(track, schedule, warnings, source.Set, cancellationToken);
     }
 
     /// <summary>Checks a plan against warnings, resolving cancellations and in-force bulletins among them.</summary>

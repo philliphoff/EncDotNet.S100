@@ -87,9 +87,10 @@ internal readonly record struct PassageCursor(
 /// <para>
 /// The route is read on the calling (UI) thread; sampling and evaluation
 /// run on the thread pool and are cancelled when a newer request arrives.
-/// Unchanged legs reuse their depth samples
-/// (<see cref="PassageCheckEngine.SampleDepths(IReadOnlyList{PassageLeg}, PassageDepthProfile?, CancellationToken)"/>),
-/// so dragging a waypoint resamples only the two legs that meet there.
+/// One <see cref="RouteChecker"/> with only the <see cref="ClearanceCheck"/>
+/// serves each set of loaded data; it keeps the last depth profile, so
+/// dragging a waypoint resamples only the two legs that meet there, and a
+/// departure change or the window sweep resamples nothing.
 /// Results and <see cref="Changed"/> are delivered through the
 /// <c>post</c> callback (the UI dispatcher in the app).
 /// </para>
@@ -119,8 +120,7 @@ internal sealed class PassageCheckService : IDisposable
     private CheckInput? _lastInput;
     private IReadOnlyList<LoadedDataset>? _sourcesSnapshot;
     private PassagePlaceNames? _placeNames;
-    private PassageDepthProfile? _profile;
-    private PassageCheckEngine? _engine;
+    private RouteChecker? _checker;
     private readonly Dictionary<(long, long), string?> _nameCache = new();
     private bool _disposed;
 
@@ -386,7 +386,7 @@ internal sealed class PassageCheckService : IDisposable
                 await hold(token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
 
-            var (snapshotResult, profile, engine) = await Task.Run(() => Compute(input, snapshot, token), token).ConfigureAwait(false);
+            var (snapshotResult, checker) = await Task.Run(() => Compute(input, snapshot, token), token).ConfigureAwait(false);
             _post(() =>
             {
                 if (token.IsCancellationRequested)
@@ -396,7 +396,7 @@ internal sealed class PassageCheckService : IDisposable
                 IsStale = IsComputing = false;
                 if (Cursor is { } cursor)
                     Cursor = CursorAt(snapshotResult, cursor.DistanceMeters);
-                ScheduleWindow(input, snapshot, profile, engine);
+                ScheduleWindow(input, snapshot, checker);
                 Changed?.Invoke(this, EventArgs.Empty);
             });
         }
@@ -419,7 +419,7 @@ internal sealed class PassageCheckService : IDisposable
 
     // On the UI thread, after a result lands: sweeps the departure window
     // when the legs, vessel values or datasets changed since the last sweep.
-    private void ScheduleWindow(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, PassageDepthProfile profile, PassageCheckEngine engine)
+    private void ScheduleWindow(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, RouteChecker checker)
     {
         var key = new WindowKey(input, snapshot);
         if (_windowKey is { } last && last.SameAs(key))
@@ -433,19 +433,25 @@ internal sealed class PassageCheckService : IDisposable
         if (Window is { } shown && shown.RouteId != input.RouteId)
             Window = null;
 
-        var task = SweepAsync(input, profile, engine, cts.Token);
+        var task = SweepAsync(input, checker, cts.Token);
         lock (_gate)
         {
             _windowIdle = task;
         }
     }
 
-    private async Task SweepAsync(CheckInput input, PassageDepthProfile profile, PassageCheckEngine engine, CancellationToken token)
+    private async Task SweepAsync(CheckInput input, RouteChecker checker, CancellationToken token)
     {
         try
         {
+            // The checker reuses the profile of the check that just landed.
+            var settings = new EncDotNet.S100.Navigation.RouteCheckSettings
+            {
+                At = input.Departure,
+                DepartureWindow = DepartureRange.WaterLevelData(WindowStep, MaxWindowDepartures),
+            };
             var sweep = await Task.Run(
-                () => engine.SweepWaterLevelRange(profile, input.Legs, WindowStep, MaxWindowDepartures, token),
+                () => checker.Check(new PassagePlan(input.Legs, input.Departure), settings, token).Departures,
                 token).ConfigureAwait(false);
             _post(() =>
             {
@@ -473,26 +479,24 @@ internal sealed class PassageCheckService : IDisposable
         }
     }
 
-    // Runs on the thread pool; the engine, profile and caches are touched
-    // only here, one computation at a time. The returned profile and engine
-    // are immutable and safe for the window sweep to use concurrently.
-    private (PassageCheckSnapshot Snapshot, PassageDepthProfile Profile, PassageCheckEngine Engine) Compute(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, CancellationToken token)
+    // Runs on the thread pool; the checker and name caches are replaced only
+    // here, one computation at a time. The checker is safe for the window
+    // sweep to use concurrently.
+    private (PassageCheckSnapshot Snapshot, RouteChecker Checker) Compute(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, CancellationToken token)
     {
         lock (_nameCache)
         {
-            if (!ReferenceEquals(snapshot, _sourcesSnapshot) || _engine is null)
+            if (!ReferenceEquals(snapshot, _sourcesSnapshot) || _checker is null)
             {
-                var sources = _sources.Get(snapshot);
                 _placeNames = PassagePlaceNames.FromDatasets(snapshot);
-                _engine = new PassageCheckEngine(sources.Depth!, sources.WaterLevel!);
+                _checker = new RouteChecker(_sources.Get(snapshot), [new ClearanceCheck()]);
                 _sourcesSnapshot = snapshot;
-                _profile = null;
                 _nameCache.Clear();
             }
 
-            var profile = _engine.SampleDepths(input.Legs, _profile, token);
-            _profile = profile;
-            var result = _engine.Evaluate(profile, new PassagePlan(input.Legs, input.Departure), new EncDotNet.S100.Navigation.RouteCheckSettings { At = input.Departure }, token);
+            var report = _checker.Check(new PassagePlan(input.Legs, input.Departure), new EncDotNet.S100.Navigation.RouteCheckSettings { At = input.Departure }, token);
+            var result = report.Clearance
+                ?? throw new InvalidOperationException($"The clearance check was skipped: {report.Status(ClearanceCheck.CheckName)?.Reason}.");
 
             var legNames = new string?[input.Legs.Count];
             for (var i = 0; i < legNames.Length; i++)
@@ -502,7 +506,7 @@ internal sealed class PassageCheckService : IDisposable
             }
 
             var minimumName = result.Minimum is { } min ? NameAt(min.Position) : null;
-            return (new PassageCheckSnapshot(input.RouteId, input.Legs, result, legNames, minimumName), profile, _engine);
+            return (new PassageCheckSnapshot(input.RouteId, input.Legs, result, legNames, minimumName), _checker);
         }
     }
 

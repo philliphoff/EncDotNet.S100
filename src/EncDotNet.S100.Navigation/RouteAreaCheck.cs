@@ -168,7 +168,7 @@ public sealed record RouteAreaOptions
 
     /// <summary>
     /// The corridor's half-width on a side whose cross-track limit isn't set,
-    /// in metres, as <see cref="RouteCheckOptions.DefaultHalfWidthMeters"/>. Default 50 m.
+    /// in metres, as <see cref="ChartCheckOptions.DefaultHalfWidthMeters"/>. Default 50 m.
     /// </summary>
     public double DefaultHalfWidthMeters { get; init; } = 50;
 
@@ -356,7 +356,15 @@ public sealed class RouteAreaCheck
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(source);
-        var track = BuildTrack(plan, settings);
+        return Check(BuildTrack(plan, settings), PassageSchedule.Compute(plan, settings), source, cancellationToken);
+    }
+
+    /// <summary>Checks a shared track against the areas a source has near it (for <see cref="AreaCheck"/>).</summary>
+    internal RouteAreaResult Check(RouteTrack track, PassageSchedule schedule, IRouteAreaSource source, CancellationToken cancellationToken) =>
+        Check(track.Densified(_options.SegmentLengthMeters, _options.MaxSegmentsPerLeg), schedule, source, cancellationToken);
+
+    private RouteAreaResult Check(RouteCorridor.Track track, PassageSchedule schedule, IRouteAreaSource source, CancellationToken cancellationToken)
+    {
         var areas = new List<RouteArea>();
         var cells = new List<RouteChartCell>();
         var seenAreas = new HashSet<object>();
@@ -381,7 +389,7 @@ public sealed class RouteAreaCheck
             }
         }
 
-        return Check(track, areas, cells, PassageSchedule.Compute(plan, settings), cancellationToken);
+        return Check(track, areas, cells, schedule, cancellationToken);
     }
 
     /// <summary>Checks a plan against areas.</summary>

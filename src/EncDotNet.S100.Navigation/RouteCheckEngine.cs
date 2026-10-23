@@ -15,7 +15,7 @@ namespace EncDotNet.S100.Navigation;
 /// <remarks>
 /// <para>
 /// Each leg is swept by cross-sections every
-/// <see cref="RouteCheckOptions.StationSpacingMeters"/>, each reaching from
+/// <see cref="ChartCheckOptions.StationSpacingMeters"/>, each reaching from
 /// the port limit to the starboard limit. Where the track itself crosses an
 /// area or a coastline, the crossing is found exactly, between cross-sections;
 /// an area that only reaches into the corridor is found at the cross-sections
@@ -32,7 +32,7 @@ namespace EncDotNet.S100.Navigation;
 /// Findings are <see cref="RouteFinding"/>s in the
 /// <see cref="RouteFindingCategory.Chart"/> and <see cref="RouteFindingCategory.Depth"/>
 /// categories (and <see cref="RouteFindingCategory.Data"/> for coverage),
-/// with their text rendered by <see cref="RouteCheckOptions.Formatter"/>. Consecutive crossings
+/// with their text rendered by <see cref="ChartCheckOptions.Formatter"/>. Consecutive crossings
 /// of the same kind are merged into one finding, so adjacent depth areas that
 /// both dry make a single "Crosses drying ground"; its feature is the one at
 /// the start of the span.
@@ -59,23 +59,23 @@ public sealed partial class RouteCheckEngine
     private const double MinimumCrossingMeters = 1.0;
 
     private readonly IRouteChartSource _charts;
-    private readonly RouteCheckOptions _options;
+    private readonly ChartCheckOptions _options;
     private readonly IChartedDepthSource? _bathymetry;
 
     /// <summary>Creates the engine.</summary>
     /// <param name="charts">The charted features to check against.</param>
-    /// <param name="options">Tuning, or <c>null</c> for <see cref="RouteCheckOptions.Default"/>.</param>
+    /// <param name="options">Tuning, or <c>null</c> for <see cref="ChartCheckOptions.Default"/>.</param>
     /// <param name="depth">
     /// Charted depth for the S-102 safety-contour check, or <c>null</c> when
     /// there is none. Only its S-102 surfaces are read
     /// (<see cref="IChartedDepthSource.SampleBathymetry"/>), so the
     /// clearance check's source, with its S-101 fallback, serves here too.
     /// </param>
-    public RouteCheckEngine(IRouteChartSource charts, RouteCheckOptions? options = null, IChartedDepthSource? depth = null)
+    public RouteCheckEngine(IRouteChartSource charts, ChartCheckOptions? options = null, IChartedDepthSource? depth = null)
     {
         ArgumentNullException.ThrowIfNull(charts);
         _charts = charts;
-        _options = options ?? RouteCheckOptions.Default;
+        _options = options ?? ChartCheckOptions.Default;
         _bathymetry = depth;
         if (!(_options.StationSpacingMeters > 0))
         {
@@ -621,7 +621,7 @@ public sealed partial class RouteCheckEngine
                 a.Centre.Longitude + (b.Centre.Longitude - a.Centre.Longitude) * u);
         }
 
-        private (List<Station> Stations, double Spacing) BuildStations(PassageLeg leg, double offset, RouteCheckOptions options)
+        private (List<Station> Stations, double Spacing) BuildStations(PassageLeg leg, double offset, ChartCheckOptions options)
         {
             var points = leg.Points;
             var lengths = new double[points.Count - 1];
