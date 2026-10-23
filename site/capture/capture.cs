@@ -90,9 +90,27 @@ var elliottBay = new Box(47.540, -122.560, 47.680, -122.320);
     (47.6520, -122.4420), (47.6700, -122.4330), (47.6795, -122.4105),
 ];
 var passageBox = new Box(47.590, -122.500, 47.690, -122.320);
-// The Check route shots depart at 06:00 Pacific on a fixed day, with the clock
-// pinned there, so ETAs and warning status come out the same on every run.
-var checkDeparture = new DateTimeOffset(2026, 10, 20, 13, 0, 0, TimeSpan.Zero);
+// The Check route shots (F10–F12): a deep-draft ship from the Fort Sumter Range,
+// inside the jetties, up the federal channel to the Wando River Turning Basin
+// (Wando Welch Terminal). The turns are where the reaches' dredged-area
+// centrelines meet. Harbour-scale cells only: the band-4 cell under them charts
+// the upper harbour as one 0–1.8 m depth area, which the route check would take
+// as crossing the safety contour along every leg. NOAA's S-104 pilot tile
+// 104US004SC1CO covers the whole route, so there is no tile seam on it.
+string[] charlestonEnc = ["US5CHSDD", "US5CHSDE", "US5CHSDF", "US5CHSED", "US5CHSEE", "US5CHSCE", "US5CHSCF"];
+(double Lat, double Lon)[] fortSumterToWando =
+[
+    (32.7229, -79.8110), (32.7398, -79.8464), (32.7582, -79.8660), (32.7720, -79.8875), (32.7818, -79.9106),
+    (32.7871, -79.9174), (32.8120, -79.9146), (32.8266, -79.8980), (32.8335, -79.8950),
+];
+// Rebellion Range round the 201 dredging area, close enough for the 1:12 000
+// cells to draw (they don't at the whole-route scale).
+var rebellionBox = new Box(32.754, -79.890, 32.778, -79.864);
+// They depart at 08:30 Eastern on a falling tide inside the S-104 run, with the
+// clock pinned there, so ETAs, water levels and warning status come out the same
+// on every run. At 14.5 m the shoalest stretch of Hog Island Reach dips below the
+// 1 m required UKC for a few minutes; departing two hours earlier clears it.
+var checkDeparture = new DateTimeOffset(2025, 12, 18, 13, 30, 0, TimeSpan.Zero);
 
 var shots = new List<Shot>
 {
@@ -131,28 +149,28 @@ var shots = new List<Shot>
         return await v.Window();
     }, Themed: true),
 
-    // F10: Check route on F4's route, with the findings list, the selected
-    // finding's ring and corridor, and the map legend open. The selected finding
-    // is the synthetic dredging warning that crosses leg 3 → 4.
-    new("F10", v => CheckRoute(v, "Day"), Themed: true),
-    new("F10-night", v => CheckRoute(v, "Night"), Chrome: "S100Night"),
+    // F10: Check route into Charleston with S-104 water levels, the verdict card,
+    // the Clearance profile, and the map legend open. The selected finding is the
+    // worst below-UKC stretch, and the map is zoomed to it. Times read in Eastern, as a
+    // planner in Charleston would see them.
+    new("F10", v => CheckRoute(v, "Day"), Themed: true, TimeZone: "America/New_York"),
 
     // F11: the Navigational warnings panel scoped to the checked route, with the
     // dredging warning's card open in Object Information.
     new("F11", async v =>
     {
         await OpenRouteWarning(v);
-        await v.Frame(passageBox);
+        await v.Frame(rebellionBox);
         return await v.Window();
-    }, Themed: true),
+    }, Themed: true, TimeZone: "America/New_York"),
 
     // F12: the same card, cropped around its "Crosses route · leg 3 → 4" row.
     new("F12", async v =>
     {
         await OpenRouteWarning(v);
-        await v.Frame(passageBox);
+        await v.Frame(rebellionBox);
         return await v.WindowCrop("PickReport.WarningCard.RouteFinding", "PickReport.WarningCard");
-    }, Themed: true),
+    }, Themed: true, TimeZone: "America/New_York"),
 
     // F2: the currents forecast on the Timeline, Live, with the clock pinned
     // nine hours into the latest cbofs run so the shot is repeatable.
@@ -347,18 +365,20 @@ if (selected.Count == 0)
     return 1;
 }
 
-// The chrome theme is a startup setting, so a shot that needs other chrome gets a fresh viewer.
+// The chrome theme and time zone are startup settings, so a shot that needs others gets a fresh viewer.
 Viewer.ChromeTheme = selected[0].Chrome ?? theme;
+Viewer.TimeZone = selected[0].TimeZone;
 var viewer = await Viewer.StartAsync(viewerExe, keepOpen);
 var failures = 0;
 try
 {
     foreach (var shot in selected)
     {
-        if ((shot.Chrome ?? theme) != Viewer.ChromeTheme)
+        if ((shot.Chrome ?? theme) != Viewer.ChromeTheme || shot.TimeZone != Viewer.TimeZone)
         {
             await viewer.DisposeAsync();
             Viewer.ChromeTheme = shot.Chrome ?? theme;
+            Viewer.TimeZone = shot.TimeZone;
             viewer = await Viewer.StartAsync(viewerExe, keepOpen);
         }
         for (var attempt = 1; ; attempt++)
@@ -582,19 +602,25 @@ async Task PlanRoute(Viewer v)
         await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
 }
 
-// F10–F12: the charts, S-102 depths and the synthetic warnings, F4's route with
-// a small-craft draft at 8 kn departing at the pinned clock, and Check route on.
+// F10–F12: the Charleston charts, NOAA's S-104 water levels and the synthetic
+// warnings, the Fort Sumter to Wando route for a 14.5 m draft at 10 kn departing
+// at the pinned clock, and Check route on.
 async Task CheckedRoute(Viewer v, string palette)
 {
     await v.Reset(palette);
-    await v.OpenAll(await data.Enc(seattleEnc));
-    await v.OpenAll(await data.S102(seattleS102));
+    await v.OpenAll(await data.Enc(charlestonEnc));
+    // Loaded hidden (as P04 notes), which keeps the chart clean; the check reads it anyway.
+    await v.OpenAll(Directory.GetFiles(Fixture("S104"), "104US004SC1CO*.h5"));
     await v.OpenAll(SyntheticWarnings.Write(Path.Combine(scriptDir, ".cache", "synthetic"), checkDeparture));
     await v.Call("set_test_clock", new() { ["now"] = checkDeparture.ToString("O"), ["freeze"] = true });
-    await PlanRoute(v);
+    // The S-104 makes the map time-aware and starts it at the run's first step.
+    await v.Call("set_view_time", new() { ["time"] = "now" });
+    await v.Call("create_route", new() { ["name"] = "Fort Sumter Range to Wando" });
+    foreach (var (lat, lon) in fortSumterToWando)
+        await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
     await v.Call("set_passage", new()
     {
-        ["draftMeters"] = 3.0, ["requiredUkcMeters"] = 1.0, ["speedKnots"] = 8.0, ["departure"] = checkDeparture.ToString("O"),
+        ["draftMeters"] = 14.5, ["requiredUkcMeters"] = 1.0, ["speedKnots"] = 10.0, ["departure"] = checkDeparture.ToString("O"),
     });
     await v.Call("set_check_mode", new() { ["on"] = true });
 }
@@ -615,12 +641,16 @@ async Task<byte[]> CheckRoute(Viewer v, string palette)
     await CheckedRoute(v, palette);
     await v.Panel("Routes");
     await v.Call("ui_toggle", new() { ["id"] = "Routes.Check.FindingsTab" });
-    var (_, _, findingId) = await CrossingWarning(v);
-    // The Warnings chip, so the selected row and its inline Warning card show.
-    await v.Call("set_findings_view", new() { ["filter"] = "warnings" });
-    await v.Call("select_finding", new() { ["id"] = findingId, ["zoom"] = false });
+    // The first below-UKC stretch (the list runs by distance), so the profile
+    // cursor sits there and the Clearance readout shows the S-104 water level at
+    // the ETA.
+    var findings = (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [];
+    var below = findings.FirstOrDefault(f => f?["code"]?.GetValue<string>() == "clearance.below_setting")
+        ?? throw new InvalidOperationException("no clearance.below_setting finding; check the draft and departure against the S-104 run");
+    // Zoomed to it, as clicking the row does: the harbour cells draw at that scale,
+    // and the profile below still shows the whole passage.
+    await v.Call("select_finding", new() { ["id"] = below["id"]!.GetValue<string>() });
     await v.Call("set_map_legend", new() { ["open"] = true });
-    await v.Frame(passageBox);
     return await v.Window();
 }
 
@@ -638,8 +668,11 @@ async Task OpenRouteWarning(Viewer v)
     await v.Panel("PickReport");
     try { await v.Call("ui_invoke", new() { ["id"] = "Dock.ObjectInformationEdge" }); }
     catch (InvalidOperationException e) when (e.Message.Contains("ui_element_not_found")) { }
-    // Check route opens the map legend, which would hide the route here.
+    // Check route opens the map legend and the Clearance dock; neither is about
+    // warnings, and the dock squeezes the profile under a narrower map.
     await v.Call("set_map_legend", new() { ["open"] = false });
+    foreach (var panel in (string[])["Clearance", "Timeline"])
+        await v.Call("set_panel", new() { ["panel"] = panel, ["visible"] = false });
 }
 
 static IEnumerable<string> Grid(string prefix, string rows, string cols) =>
@@ -651,7 +684,9 @@ record Box(double South, double West, double North, double East);
 // Themed: a window shot in the Day palette, which --theme light also captures
 // with Light chrome. Chrome: a fixed chrome theme whatever --theme says (the Dusk
 // and Night shots use the matching S-100 chrome). Map-only tiles have no chrome.
-record Shot(string Id, Func<Viewer, Task<byte[]>> Capture, bool Themed = false, string? Chrome = null);
+// TimeZone: an IANA zone the viewer runs in (it shows times in the machine's
+// zone), for shots of a place far from this machine; null keeps the machine's.
+record Shot(string Id, Func<Viewer, Task<byte[]>> Capture, bool Themed = false, string? Chrome = null, string? TimeZone = null);
 
 sealed class SkipShot(string message) : Exception(message);
 
@@ -793,6 +828,9 @@ sealed class Viewer : IAsyncDisposable
     /// <summary>The chrome theme for the next start: Dark (default), Light (--theme light), or a shot's own S100Dusk / S100Night.</summary>
     public static string ChromeTheme { get; set; } = "Dark";
 
+    /// <summary>The IANA time zone for the next start (the TZ variable), or null for the machine's.</summary>
+    public static string? TimeZone { get; set; }
+
     public static async Task<Viewer> StartAsync(string exe, bool keepOpen)
     {
         if (!File.Exists(exe)) throw new FileNotFoundException("Build the viewer first: dotnet build -c Release src/EncDotNet.S100.Viewer", exe);
@@ -815,7 +853,7 @@ sealed class Viewer : IAsyncDisposable
             }
             """);
         var portFile = Path.Combine(dataDir, "mcp.url");
-        var process = Process.Start(new ProcessStartInfo(exe)
+        var startInfo = new ProcessStartInfo(exe)
         {
             ArgumentList =
             {
@@ -826,7 +864,10 @@ sealed class Viewer : IAsyncDisposable
             RedirectStandardError = true,
             // Site captures use en-US number and date formats whatever this machine's locale.
             Environment = { ["LANG"] = "en_US.UTF-8", ["LC_ALL"] = "en_US.UTF-8" },
-        }) ?? throw new InvalidOperationException("Could not start the viewer.");
+        };
+        if (TimeZone is not null)
+            startInfo.Environment["TZ"] = TimeZone;
+        var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start the viewer.");
         // Keep the viewer's console output next to its crash log for diagnosis.
         var log = TextWriter.Synchronized(new StreamWriter(Path.Combine(dataDir, "viewer.log")) { AutoFlush = true });
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) log.WriteLine(e.Data); };
@@ -959,6 +1000,10 @@ sealed class Viewer : IAsyncDisposable
             catch (InvalidOperationException) when (tolerateFailures)
             {
             }
+            catch (InvalidOperationException e)
+            {
+                throw new InvalidOperationException($"{Path.GetFileName(path)}: {e.Message}", e);
+            }
         }
         return ids;
     }
@@ -1016,8 +1061,10 @@ sealed class Viewer : IAsyncDisposable
     /// </summary>
     public async Task<byte[]> WindowCrop(string focusId, string widthId)
     {
-        const double scale = 2, margin = 12;
-        var png = await Window();
+        // 3× rather than 2×: the crop fills a half-width card on the site.
+        const double scale = 3, margin = 12;
+        await Settle();
+        var png = await Image("capture_app_screenshot", new() { ["scale"] = scale });
         var focus = await BoundsOf(focusId);
         var frame = await BoundsOf(widthId);
         using var bitmap = SKBitmap.Decode(png);
@@ -1031,7 +1078,7 @@ sealed class Viewer : IAsyncDisposable
             throw new InvalidOperationException($"could not crop the window around {focusId}");
         using var image = SKImage.FromBitmap(cropped);
         using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
-        CaptureMode = $"window crop around {focusId} (capture_app_screenshot, scale 2)";
+        CaptureMode = $"window crop around {focusId} (capture_app_screenshot, scale {scale})";
         return encoded.ToArray();
     }
 
@@ -1382,24 +1429,27 @@ static class SyntheticWarnings
         int Number, string Title, int GeneralCode, string General, int DetailsCode, string Details,
         string Locality, string Text, int StartDays, int? EndDays, string Kind, (double Lat, double Lon)[] Points);
 
+    // Placed on the Fort Sumter to Wando route: 201 across leg 3 → 4 and 203 across
+    // leg 6 → 7 (Must review), 202 near leg 2 → 3 (Check), 204 across leg 1 → 2 but
+    // starting four days after the departure (Info).
     private static readonly Warning[] Warnings =
     [
-        new(201, "Dredging operations", 19, "Works", 89, "Dredging Operation", "Elliott Bay, off Magnolia",
-            "DREDGING OPERATIONS IN PROGRESS IN AREA BOUNDED BY 47-38.07N 122-26.04W, 47-38.55N 122-26.04W, 47-38.55N 122-25.20W AND 47-38.07N 122-25.20W. "
+        new(201, "Dredging operations", 19, "Works", 89, "Dredging Operation", "Rebellion Reach",
+            "DREDGING OPERATIONS IN PROGRESS IN AREA BOUNDED BY 32-45.82N 79-52.74W, 32-46.00N 79-52.74W, 32-46.00N 79-52.47W AND 32-45.82N 79-52.47W. "
             + "MARINERS ARE REQUESTED TO GIVE A WIDE BERTH. FICTITIOUS, FOR ILLUSTRATION.",
             StartDays: -2, EndDays: null, "surface",
-            [(47.6345, -122.4340), (47.6425, -122.4340), (47.6425, -122.4200), (47.6345, -122.4200), (47.6345, -122.4340)]),
-        new(202, "Log adrift", 3, "Drifting Hazards", 179, "Log Adrift", "Elliott Bay",
-            "LARGE LOG ADRIFT IN VICINITY 47-36.72N 122-23.42W. FICTITIOUS, FOR ILLUSTRATION.",
-            StartDays: -1, EndDays: null, "point", [(47.6120, -122.3903)]),
-        new(203, "Cable laying", 19, "Works", 64, "Cable Laying Operation", "Shilshole Bay",
-            "CABLE LAYING OPERATIONS ALONG LINE JOINING 47-40.77N 122-25.74W AND 47-40.20N 122-24.90W. "
+            [(32.7636, -79.8790), (32.7666, -79.8790), (32.7666, -79.8745), (32.7636, -79.8745), (32.7636, -79.8790)]),
+        new(202, "Log adrift", 3, "Drifting Hazards", 179, "Log Adrift", "Mount Pleasant Reach",
+            "LARGE LOG ADRIFT IN VICINITY 32-45.07N 79-51.22W. FICTITIOUS, FOR ILLUSTRATION.",
+            StartDays: -1, EndDays: null, "point", [(32.7512, -79.8536)]),
+        new(203, "Cable laying", 19, "Works", 64, "Cable Laying Operation", "Hog Island Reach",
+            "CABLE LAYING OPERATIONS ALONG LINE JOINING 32-48.00N 79-55.29W AND 32-47.94N 79-54.51W. "
             + "VESSEL RESTRICTED IN ABILITY TO MANOEUVRE. FICTITIOUS, FOR ILLUSTRATION.",
-            StartDays: -5, EndDays: 11, "curve", [(47.6795, -122.4290), (47.6700, -122.4150)]),
-        new(204, "Regatta", 17, "Special Operations", 235, "Regatta or Race", "Off West Point",
-            "SAILING REGATTA IN AREA OFF WEST POINT. FICTITIOUS, FOR ILLUSTRATION.",
+            StartDays: -5, EndDays: 11, "curve", [(32.8000, -79.9215), (32.7990, -79.9085)]),
+        new(204, "Regatta", 17, "Special Operations", 235, "Regatta or Race", "Off Sullivan's Island",
+            "SAILING REGATTA IN AREA OFF SULLIVAN'S ISLAND. FICTITIOUS, FOR ILLUSTRATION.",
             StartDays: 4, EndDays: 5, "surface",
-            [(47.6560, -122.4560), (47.6640, -122.4560), (47.6640, -122.4360), (47.6560, -122.4360), (47.6560, -122.4560)]),
+            [(32.7270, -79.8360), (32.7350, -79.8360), (32.7350, -79.8200), (32.7270, -79.8200), (32.7270, -79.8360)]),
     ];
 
     public static IEnumerable<string> Write(string dir, DateTimeOffset departure)
@@ -1408,15 +1458,16 @@ static class SyntheticWarnings
         var day = DateOnly.FromDateTime(departure.UtcDateTime);
         foreach (var w in Warnings)
         {
-            var id = $"ZZ.S124.SAMPLE.{w.Number}.26";
+            var yy = day.Year % 100;
+            var id = $"ZZ.S124.SAMPLE.{w.Number}.{yy:00}";
             var start = day.AddDays(w.StartDays);
-            var path = Path.Combine(dir, $"124ZZ_SAMPLE_{w.Number}_26.gml");
-            File.WriteAllText(path, Dataset(w, id, start, w.EndDays is { } end ? day.AddDays(end) : null));
+            var path = Path.Combine(dir, $"124ZZ_SAMPLE_{w.Number}_{yy:00}.gml");
+            File.WriteAllText(path, Dataset(w, id, day.Year, start, w.EndDays is { } end ? day.AddDays(end) : null));
             yield return path;
         }
     }
 
-    private static string Dataset(Warning w, string id, DateOnly start, DateOnly? end)
+    private static string Dataset(Warning w, string id, int year, DateOnly start, DateOnly? end)
     {
         static string Pos((double Lat, double Lon)[] points) => string.Join(" ", points.Select(p => $"{p.Lat:0.0000} {p.Lon:0.0000}"));
         const string srs = "srsName=\"https://www.opengis.net/def/crs/EPSG/0/4326\" srsDimension=\"2\"";
@@ -1442,7 +1493,7 @@ static class SyntheticWarnings
                     <S100:productIdentifier>S-124</S100:productIdentifier>
                     <S100:productEdition>2.0.0</S100:productEdition>
                     <S100:applicationProfile>1</S100:applicationProfile>
-                    <S100:datasetFileIdentifier>124ZZ_SAMPLE_{w.Number}_26.gml</S100:datasetFileIdentifier>
+                    <S100:datasetFileIdentifier>124ZZ_SAMPLE_{w.Number}_{year % 100:00}.gml</S100:datasetFileIdentifier>
                     <S100:datasetTitle>{w.Title}</S100:datasetTitle>
                     <S100:datasetReferenceDate>{start.AddDays(-1):yyyy-MM-dd}</S100:datasetReferenceDate>
                     <S100:datasetLanguage>eng</S100:datasetLanguage>
@@ -1453,7 +1504,7 @@ static class SyntheticWarnings
                 </S100:DatasetIdentificationInformation>
                 <S124:members>
                     <S124:NavwarnPreamble gml:id="{id}.0">
-                        <S124:generalArea><S124:locationName><S124:language>eng</S124:language><S124:text>Puget Sound</S124:text></S124:locationName></S124:generalArea>
+                        <S124:generalArea><S124:locationName><S124:language>eng</S124:language><S124:text>Charleston Harbor</S124:text></S124:locationName></S124:generalArea>
                         <S124:locality><S124:locationName><S124:language>eng</S124:language><S124:text>{w.Locality}</S124:text></S124:locationName></S124:locality>
                         <S124:messageSeriesIdentifier>
                             <S124:agencyResponsibleForProduction>Sample Hydrographic Office (fictitious)</S124:agencyResponsibleForProduction>
@@ -1461,7 +1512,7 @@ static class SyntheticWarnings
                             <S124:nationality>Zz</S124:nationality>
                             <S124:warningNumber>{w.Number}</S124:warningNumber>
                             <S124:warningType code="1">Local Navigational Warning</S124:warningType>
-                            <S124:year>2026</S124:year>
+                            <S124:year>{year}</S124:year>
                         </S124:messageSeriesIdentifier>
                         <S124:navwarnTitle><S124:language>eng</S124:language><S124:text>{w.Title}</S124:text></S124:navwarnTitle>
                         <S124:intService>false</S124:intService>
@@ -1471,7 +1522,7 @@ static class SyntheticWarnings
                     <S124:NavwarnPart gml:id="{id}.1">
                         <S124:fixedDateRange><S124:dateStart><S100:date>{start:yyyy-MM-dd}</S100:date></S124:dateStart>{dateEnd}</S124:fixedDateRange>
                         <S124:warningInformation>
-                            <S124:information><S124:language>eng</S124:language><S124:text>SAMPLE {w.Number}/26. {w.Locality.ToUpperInvariant()}. {w.Text}</S124:text></S124:information>
+                            <S124:information><S124:language>eng</S124:language><S124:text>SAMPLE {w.Number}/{year % 100:00}. {w.Locality.ToUpperInvariant()}. {w.Text}</S124:text></S124:information>
                             <S124:navwarnTypeDetails code="{w.DetailsCode}">{w.Details}</S124:navwarnTypeDetails>
                         </S124:warningInformation>
                         <S124:header xlink:href="#{id}.0"/>
@@ -1534,7 +1585,7 @@ static class ShotManifest
             ["hiddenViewingGroups"] = "S-101/S-57: 90020, 90021 (additional-information markers)",
             ["outOfScaleExtentIndicators"] = false,
             ["locale"] = "en_US, invariant number formatting",
-            ["timeZone"] = TimeZoneInfo.Local.Id,
+            ["timeZone"] = $"{TimeZoneInfo.Local.Id} unless a shot names its own",
         };
 
         var datasets = new JsonArray();
@@ -1568,6 +1619,7 @@ static class ShotManifest
             // record, so live data (forecast runs, chart editions) may differ from it.
             ["imageMatchesRecord"] = recapturedImage,
             ["chromeTheme"] = Viewer.ChromeTheme,
+            ["timeZone"] = Viewer.TimeZone,
             ["capture"] = v.CaptureMode,
             ["datasets"] = datasets,
             ["timeline"] = timeline,

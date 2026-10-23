@@ -222,38 +222,52 @@ as a desktop app.
   shades) next to a chart that shows the effect, e.g. a shallow harbour entrance.
 
 ### F10 · Check route (Passage section)
-- **Captured (2026-10-22)**, with the Light twin and F10-night. F4's route
-  (Colman Dock → West Point → Shilshole Bay Marina) over the NOAA `US5WA*` cells and S-102,
-  with a 3 m draft, 1 m required UKC and 8 kn, departing 06:00 Pacific on
-  2026-10-20 with the clock pinned there. The West Point shoal gives a real
-  Must review finding.
-- **State:** Routes panel on **Check route** with the Findings tab on the
-  **Warnings** chip (so the selected row shows in the list), the SAMPLE 201/26
-  dredging finding selected (`zoom: false`) so its ring, pill and
-  leg corridor show, the map legend open, framed on the whole route. Day
-  palette, with a Light twin.
-- **F10-night:** the same in Night, with S100Night chrome.
+- **Captured (2026-10-22)**, with the Light twin. A deep-draft passage into
+  Charleston Harbor: Fort Sumter Range (inside the jetties) up the federal
+  channel to the Wando River Turning Basin, 9 waypoints and 9.8 NM. The turns are
+  where the reaches' `DRGARE` centrelines meet. 14.5 m draft, 1 m required UKC,
+  10 kn, departing 08:30 Eastern on 2025-12-18 on a falling tide, with the clock
+  pinned there and the viewer run with `TZ=America/New_York`.
+- **Data:** the NOAA harbour-scale cells `US5CHS*` (public domain) and NOAA's
+  S-104 pilot tile `104US004SC1CO` (repo fixture, 2025-12-17 12Z run, public
+  domain), which covers the whole route, so there is no tile seam on it.
+  Band-4 cells are left out: `US4SC1CO` charts the upper harbour as one 0–1.8 m
+  depth area, which the route check counts as crossing the safety contour along
+  every leg (filed as a follow-up). `US5CHSED` needs the pattern-clip fix on
+  branch `fix/pattern-clip-duplicate-rings`; without it the cell doesn't load.
+- **State:** Routes panel on **Check route** showing "Below your UKC setting in 3
+  places" (min 0.5 m) with the departure windows, the first below-UKC finding
+  selected and zoomed to (the turn into Hog Island Reach, 1:9 000), the
+  Clearance profile with the S-104 water level and the departure strip, and
+  the map legend open. Depth comes from the translated S-57 cells, which carry
+  no SoundingDatum feature, so the band is dashed (datums unconfirmed); also a
+  follow-up.
 - **Warnings:** `SyntheticWarnings` in capture.cs writes four fictitious
   S-124 Ed 2.0 datasets (series SAMPLE, "Sample Hydrographic Office
-  (fictitious)") to `.cache/synthetic/`, dated around the departure: 201/26
-  dredging area across leg 3 → 4 and 203/26 cable laying across leg 5 → 6
-  (Must review), 202/26 log adrift near leg 2 → 3 (Check), 204/26 regatta off
-  West Point that starts four days later (Info). Checked with `s100 route
-  check` on 2026-10-22. No live CCG SECOM warnings, so no licence question.
+  (fictitious)", numbered for the departure's year) to `.cache/synthetic/`,
+  dated around the departure: 201/25 dredging area across leg 3 → 4 (Rebellion
+  Reach) and 203/25 cable laying across leg 6 → 7 (Hog Island Reach), both
+  Must review; 202/25 log adrift near leg 2 → 3 (Check); 204/25 regatta off
+  Sullivan's Island that starts four days later (Info). No live
+  warnings, so no licence question.
+- **F10-night was dropped (2026-10-22):** the Palettes section right below
+  already shows Night, so F12 and the CI card are two wider minis instead.
 
 ### F11 · Navigational warnings on the route
 - **Captured (2026-10-22)**, with the Light twin. The F10 set-up, then the
-  Navigational warnings panel in **On {route}** scope and SAMPLE 201/26
+  Navigational warnings panel in **On {route}** scope and SAMPLE 201/25
   selected, so Object Information opens its card with the "Crosses route ·
-  leg 3 → 4" row. Framed on the whole route, map legend closed. Check route
-  folds Object Information to an edge tab, so the recipe opens the PickReport
-  panel and invokes `Dock.ObjectInformationEdge`.
+  leg 3 → 4" row. Framed on Rebellion Range around the dredging area (the
+  1:12 000 cells don't draw at the whole-route scale), map legend and the
+  bottom dock closed. Check route folds Object Information to an edge tab, so
+  the recipe opens the PickReport panel and invokes
+  `Dock.ObjectInformationEdge`.
 
 ### F12 · From warning to finding (small card)
 - **Captured (2026-10-22)**, with the Light twin. The F11 state, cropped to
-  16:9 from the window capture: as wide as the Warning card, from its top
-  (bounds from `ui_tree`, which line up with the scale-2 capture), so the
-  header, the route row and the classification all show.
+  16:9 from a 3× window capture (it fills a half-width card): as wide as the
+  Warning card, from its top (bounds from `ui_tree`, which line up with the
+  capture), so the header, the route row and the classification all show.
 
 ---
 

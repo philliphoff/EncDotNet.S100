@@ -3,7 +3,7 @@ import Shot from './Shot.astro';
 import { docs, withBase } from '../data/content';
 
 const sizes = '(max-width: 900px) 100vw, 690px';
-const miniSizes = '(max-width: 900px) 100vw, 380px';
+const miniSizes = '(max-width: 900px) 100vw, 540px';
 ---
 <section id="passage" aria-labelledby="passage-title">
   <div class="wrap">
@@ -26,7 +26,7 @@ const miniSizes = '(max-width: 900px) 100vw, 380px';
             bearing update as you edit, and routes are stored in the S-421 route model. RTZ routes open too.
           </p>
         </div>
-        <Shot id="F4" alt="A route from Seattle to Bremerton with the leg table open" sizes={sizes} />
+        <Shot id="F4" alt="A route from Colman Dock round West Point to Shilshole Bay Marina, with the leg table open" sizes={sizes} />
       </div>
 
       <div class="feature flip">
@@ -41,14 +41,14 @@ const miniSizes = '(max-width: 900px) 100vw, 380px';
             <li>Land, drying ground, the safety contour and charted dangers</li>
             <li>Prohibited, caution, traffic and protected areas</li>
             <li>Navigational warnings in force while you're there</li>
-            <li>Under-keel clearance along the route, with S-104 water levels</li>
+            <li>Under-keel clearance along the route with S-104 water levels, and the departures that meet it</li>
           </ul>
         </div>
         <Shot
           id="F10"
-          alt="Check route findings for a passage past West Point, with markers and sleeves on the map"
+          alt="Check route for a deep-draft passage into Charleston Harbor: the verdict, the clearance profile with tide, and the map zoomed to a stretch below the UKC setting"
           title="Check route"
-          detail="Findings list + map sleeves, markers, corridor and legend"
+          detail="Verdict + clearance profile with S-104 tide + departure window + map legend"
           sizes={sizes}
         />
       </div>
@@ -77,7 +77,7 @@ const miniSizes = '(max-width: 900px) 100vw, 380px';
       </div>
     </div>
 
-    <div class="minis three">
+    <div class="minis">
       <div class="mini">
         <Shot
           id="F12"
@@ -89,19 +89,6 @@ const miniSizes = '(max-width: 900px) 100vw, 380px';
         <div class="body">
           <h3>From warning to finding</h3>
           <p>A warning's card says where it meets the route. Select it to open that finding.</p>
-        </div>
-      </div>
-      <div class="mini">
-        <Shot
-          id="F10-night"
-          alt="The same route check in the Night palette"
-          title="Check route, Night"
-          detail="Same view as F10, Night palette"
-          sizes={miniSizes}
-        />
-        <div class="body">
-          <h3>Tones for every light</h3>
-          <p>Finding colours are tuned for Day, Dusk and Night, and dimmed at night to protect night vision.</p>
         </div>
       </div>
       <div class="mini">
