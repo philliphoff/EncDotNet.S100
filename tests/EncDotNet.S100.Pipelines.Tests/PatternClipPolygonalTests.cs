@@ -168,18 +168,60 @@ public class PatternClipPolygonalTests
     }
 
     [Fact]
-    public void SimplifyForClip_DuplicateRings_ReturnsInputInsteadOfThrowing()
+    public void SimplifyForClip_DuplicatePolygons_SimplifiesInsteadOfThrowing()
     {
         // NOAA ENC US5CHSED (Charleston Harbor) gave a dense pattern area with
-        // the same ring twice. TopologyPreservingSimplifier keys rings by value
-        // and threw "An item with the same key has already been added", which
-        // failed the whole cell's portrayal.
+        // the same polygon twice. TopologyPreservingSimplifier keys rings by
+        // value and threw "An item with the same key has already been added",
+        // which failed the whole cell's portrayal.
         var dense = DenseCircle(0, 0, 100, PatternPriorityClipper.MinPointsToSimplify);
         var duplicated = Factory.CreateMultiPolygon([dense, (Polygon)dense.Copy()]);
 
         var result = PatternPriorityClipper.SimplifyForClip(duplicated);
 
-        Assert.Same(duplicated, result);
+        Assert.NotSame(duplicated, result);
+        Assert.Equal(1, result.NumGeometries);
+        Assert.True(result.NumPoints < dense.NumPoints);
+        // Simplifying cuts at most the tolerance off every part of the outline.
+        var maxLoss = dense.Length * PatternPriorityClipper.SimplifyToleranceMetres;
+        Assert.InRange(result.Area, dense.Area - maxLoss, dense.Area);
+    }
+
+    [Fact]
+    public void SimplifyForClip_ShellRepeatingAnotherPolygonsHole_ReturnsInputInsteadOfThrowing()
+    {
+        // A ring shared between two different polygons isn't a duplicate
+        // component, so the simplifier still sees the same ring twice.
+        var island = DenseCircle(0, 0, 100, PatternPriorityClipper.MinPointsToSimplify);
+        var hole = Factory.CreateLinearRing(island.Shell.Coordinates);
+        var lagoon = Factory.CreatePolygon(Square(-500, -500, 1000).Shell, [hole]);
+        var geometry = Factory.CreateMultiPolygon([lagoon, island]);
+
+        var result = PatternPriorityClipper.SimplifyForClip(geometry);
+
+        Assert.Same(geometry, result);
+    }
+
+    [Fact]
+    public void RemoveDuplicateComponents_NoDuplicates_ReturnsSameInstance()
+    {
+        var geometry = Factory.CreateMultiPolygon([Square(0, 0, 10), Square(20, 0, 10)]);
+
+        Assert.Same(geometry, PatternPriorityClipper.RemoveDuplicateComponents(geometry));
+    }
+
+    [Fact]
+    public void RemoveDuplicateComponents_KeepsTheFirstOfEachDistinctComponent()
+    {
+        var a = Square(0, 0, 10);
+        var b = Square(20, 0, 10);
+        var geometry = Factory.CreateMultiPolygon([a, b, (Polygon)a.Copy(), (Polygon)b.Copy(), a]);
+
+        var result = Assert.IsType<MultiPolygon>(PatternPriorityClipper.RemoveDuplicateComponents(geometry));
+
+        Assert.Equal(2, result.NumGeometries);
+        Assert.Same(a, result.GetGeometryN(0));
+        Assert.Same(b, result.GetGeometryN(1));
     }
 
     private static Polygon DenseCircle(double cx, double cy, double radius, int points)

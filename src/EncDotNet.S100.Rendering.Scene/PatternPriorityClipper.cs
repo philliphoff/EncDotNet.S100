@@ -238,8 +238,9 @@ public static class PatternPriorityClipper
     /// topological validity so the result is safe for subsequent NetTopologySuite
     /// overlay operations. Geometries below <see cref="MinPointsToSimplify"/>
     /// vertices are returned unchanged (the overlay is already inexpensive at that
-    /// size). Returns the original geometry if simplification fails or degenerates
-    /// to empty.
+    /// size). Exact duplicate components are dropped first (see
+    /// <see cref="RemoveDuplicateComponents"/>). Returns the original geometry if
+    /// simplification fails or degenerates to empty.
     /// </summary>
     /// <param name="geometry">The geometry to generalize.</param>
     /// <returns>The generalized (or original) geometry.</returns>
@@ -253,7 +254,7 @@ public static class PatternPriorityClipper
         try
         {
             var simplified = TopologyPreservingSimplifier.Simplify(
-                geometry, SimplifyToleranceMetres);
+                RemoveDuplicateComponents(geometry), SimplifyToleranceMetres);
 
             if (simplified is null || simplified.IsEmpty)
                 return geometry;
@@ -279,11 +280,49 @@ public static class PatternPriorityClipper
         }
         catch (ArgumentException)
         {
-            // The simplifier keys its rings by value, so a geometry holding two
-            // identical rings (e.g. a duplicated polygon) fails with a duplicate
-            // key. Simplifying is only an optimization: clip it as it is.
+            // The simplifier keys its rings by value, so two identical rings that
+            // RemoveDuplicateComponents can't drop (one polygon's shell repeating
+            // another's hole) still fail with a duplicate key. Simplifying is only
+            // an optimization: clip it as it is.
             return geometry;
         }
+    }
+
+    /// <summary>
+    /// Drops exact duplicate components (equal vertex sequences) from a
+    /// collection, keeping the first of each. A duplicate adds nothing to a fill
+    /// or clip area, and <see cref="TopologyPreservingSimplifier"/> keys rings by
+    /// value, so it throws on a repeated ring. NOAA ENCs give such areas in 14 of
+    /// 7,184 cells, among them pattern areas of over 80,000 vertices that would
+    /// otherwise skip simplification.
+    /// </summary>
+    /// <param name="geometry">The geometry to deduplicate.</param>
+    /// <returns>
+    /// <paramref name="geometry"/> itself when it has no duplicates or isn't a
+    /// collection; otherwise a new collection of the distinct components.
+    /// </returns>
+    public static Geometry RemoveDuplicateComponents(Geometry geometry)
+    {
+        ArgumentNullException.ThrowIfNull(geometry);
+
+        if (geometry is not GeometryCollection { NumGeometries: > 1 } collection)
+            return geometry;
+
+        // Geometry equality is EqualsExact, hashed by envelope.
+        var seen = new HashSet<Geometry>(collection.NumGeometries);
+        var distinct = new List<Geometry>(collection.NumGeometries);
+        foreach (var component in collection.Geometries)
+        {
+            if (seen.Add(component))
+                distinct.Add(component);
+        }
+
+        if (distinct.Count == collection.NumGeometries)
+            return geometry;
+
+        return geometry is MultiPolygon
+            ? geometry.Factory.CreateMultiPolygon([.. distinct.Cast<Polygon>()])
+            : geometry.Factory.CreateGeometryCollection([.. distinct]);
     }
 
     /// <summary>
