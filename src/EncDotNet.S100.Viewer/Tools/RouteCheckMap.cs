@@ -5,8 +5,8 @@ using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.ViewModels;
-using RouteCheckVerdict = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdict;
 using SkiaSharp;
+using RouteCheckVerdict = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdict;
 
 namespace EncDotNet.S100.Viewer.Tools;
 

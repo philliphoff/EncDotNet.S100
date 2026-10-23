@@ -4,8 +4,8 @@ using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.PassageCheck;
 using EncDotNet.S100.Viewer.ViewModels;
-using RouteCheckVerdict = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdict;
 using ModelContextProtocol.Server;
+using RouteCheckVerdict = EncDotNet.S100.Viewer.ViewModels.RouteCheckVerdict;
 
 namespace EncDotNet.S100.Viewer.McpTools;
 
