@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// A synthetic stand-in for the handoff's fixture route: nine waypoints due
 /// east along the equator, 0,02° (about 1,2 NM) apart, run at 6 kn from
 /// 07:10, with an 11 m draft and 1 m required UKC. The S-102 grid is 15 m
-/// deep except a 9 m shoal on leg 6 → 7 (0,105–0,115° E), and the S-104 grid
+/// deep (or <c>deepMeters</c>) except a 9 m shoal on leg 6 → 7 (0,105–0,115° E), and the S-104 grid
 /// holds 0,5 m every 30 minutes from 06:00 to 12:00. Both declare LAT
 /// unless a test says otherwise; a test can pass its own tide
 /// (<see cref="HighWaterUntil0750"/>, <see cref="TwoHighWaters"/>).
@@ -47,11 +47,12 @@ internal sealed class PassageCheckFixture
         double? s101FallbackUntilLon = null,
         Func<DateTime, float>? tide = null,
         IEnumerable<LoadedDataset>? extraDatasets = null,
-        IViewTime? viewTime = null)
+        IViewTime? viewTime = null,
+        float deepMeters = 15f)
     {
         var datasets = new List<LoadedDataset>
         {
-            Bathymetry(depthDatum, s101FallbackUntilLon),
+            Bathymetry(depthDatum, s101FallbackUntilLon, deepMeters),
             WaterLevel(waterEnd ?? WaterStart.AddHours(6), tide ?? (_ => 0.5f), tide is null ? TimeSpan.FromMinutes(30) : TimeSpan.FromMinutes(10)),
         };
         if (s101FallbackUntilLon is not null)
@@ -120,7 +121,7 @@ internal sealed class PassageCheckFixture
             new S101DatasetData(cell));
     }
 
-    private static LoadedDataset Bathymetry(int? datum, double? noDataUntilLon = null)
+    private static LoadedDataset Bathymetry(int? datum, double? noDataUntilLon = null, float deepMeters = 15f)
     {
         const int rows = 22;
         const int cols = 200;
@@ -132,7 +133,7 @@ internal sealed class PassageCheckFixture
                 var lon = -0.01 + ((c + 0.5) * 0.001);
                 values[(r * cols) + c] = noDataUntilLon is { } edge && lon < edge
                     ? new BathymetryValue(S102CoverageSource.FillValue, S102CoverageSource.FillValue)
-                    : new BathymetryValue(lon is >= 0.105 and < 0.115 ? 9f : 15f, 0.3f);
+                    : new BathymetryValue(lon is >= 0.105 and < 0.115 ? 9f : deepMeters, 0.3f);
             }
         }
 

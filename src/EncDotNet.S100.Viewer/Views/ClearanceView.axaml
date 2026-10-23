@@ -96,23 +96,20 @@
                                             Dragged="OnBandDragged"
                                             DragCompleted="OnBandDragCompleted"
                                             Nudged="OnBandNudged" />
-                    <Grid ColumnDefinitions="*,Auto,*">
-                        <TextBlock Grid.Column="0"
-                                   AutomationProperties.AutomationId="Clearance.DepartureBand.Start"
+                    <!-- Start, middle, end: the middle drops out (clipped to nothing)
+                         rather than run into the end label (#1038). -->
+                    <v:DepartureBandLabelsPanel x:Name="DepartureBandLabels">
+                        <TextBlock AutomationProperties.AutomationId="Clearance.DepartureBand.Start"
                                    Text="{Binding BandStartLabel}"
-                                   Classes="bandLabel"
-                                   HorizontalAlignment="Left" />
-                        <TextBlock Grid.Column="1"
-                                   AutomationProperties.AutomationId="Clearance.DepartureBand.Middle"
+                                   Classes="bandLabel" />
+                        <TextBlock AutomationProperties.AutomationId="Clearance.DepartureBand.Middle"
                                    Text="{Binding BandMiddleLabel}"
                                    Classes="bandLabel"
-                                   HorizontalAlignment="Center" />
-                        <TextBlock Grid.Column="2"
-                                   AutomationProperties.AutomationId="Clearance.DepartureBand.End"
+                                   ClipToBounds="True" />
+                        <TextBlock AutomationProperties.AutomationId="Clearance.DepartureBand.End"
                                    Text="{Binding BandEndLabel}"
-                                   Classes="bandLabel"
-                                   HorizontalAlignment="Right" />
-                    </Grid>
+                                   Classes="bandLabel" />
+                    </v:DepartureBandLabelsPanel>
                 </StackPanel>
             </Grid>
             </Grid>

@@ -90,6 +90,77 @@ public sealed class ClearanceTests : IDisposable
         Assert.InRange(dot.Values!.Single().X!.Value, 0.105 * 60.04 - 0.1, 0.115 * 60.04 + 0.1);
     }
 
+    [Theory]
+    [InlineData(15f, 5, 20)] // The handoff fixture: 5 m ticks, as before.
+    [InlineData(40f, 10, 50)]
+    [InlineData(120f, 25, 125)]
+    [InlineData(600f, 200, 800)]
+    public async Task The_elevation_ticks_coarsen_with_depth_and_keep_cd_on_a_tick(float deep, double step, double offset)
+    {
+        // #1038: 5 m ticks in 120 m of water made 25 labels in a short dock.
+        var (f, vm) = await CheckedAsync(new PassageCheckFixture(deepMeters: deep));
+        var profile = ClearanceProfile.Build(f.Check.Current!, ClearanceAxis.Distance);
+
+        Assert.Equal(step, profile.ElevationStep);
+        Assert.Equal(offset, profile.Offset);
+        Assert.Equal(0, profile.Offset % profile.ElevationStep); // CD is a tick.
+        Assert.InRange(profile.Top / profile.ElevationStep, 1, ClearanceProfile.MaxElevationIntervals + 1);
+        var y = Assert.IsType<Axis>(Assert.Single(vm.YAxes));
+        Assert.Equal(step, y.MinStep);
+        Assert.True(y.ForceStepToMin);
+    }
+
+    [Fact]
+    public async Task The_time_axis_starts_at_midnight_where_times_are_shown()
+    {
+        var (f, _) = await CheckedAsync();
+        var departure = f.Check.Current!.Result.Departure;
+
+        var utc = ClearanceProfile.Build(f.Check.Current!, ClearanceAxis.Time, TimeFormat.Utc);
+        Assert.Equal(new DateTimeOffset(2024, 6, 1, 0, 0, 0, TimeSpan.Zero), utc.TimeAt(0));
+        Assert.Equal(7 * 60 + 10, utc.XAtDistance(0), 6);
+
+        var local = ClearanceProfile.Build(f.Check.Current!, ClearanceAxis.Time, TimeFormat.Local);
+        Assert.Equal(TimeSpan.Zero, local.TimeAt(0).ToLocalTime().TimeOfDay);
+        Assert.Equal(departure, local.TimeAt(local.XAtDistance(0)));
+    }
+
+    [Theory]
+    [InlineData(6, 300, 30)] // The handoff fixture: about 1,6 h at 6 kn, half-hour ticks.
+    [InlineData(0.2, 300, 1440)] // About two days at 0,2 kn.
+    [InlineData(0.2, 600, 720)]
+    [InlineData(0.2, 1200, 360)]
+    public async Task The_time_ticks_follow_the_passage_length_and_plot_width(double knots, double plotWidth, double step)
+    {
+        // #1038: 30-minute ticks on a two-day passage made 96 labels.
+        var fixture = new PassageCheckFixture(waterEnd: PassageCheckFixture.WaterStart.AddHours(60));
+        fixture.Route.SetPassageValue(Viewer.Routing.RoutePassageField.Speed, knots);
+        var (_, vm) = await CheckedAsync(fixture);
+        vm.SetPlotWidth(plotWidth);
+        vm.Axis = ClearanceAxis.Time;
+
+        var x = Assert.IsType<Axis>(Assert.Single(vm.XAxes));
+        Assert.Equal(step, x.MinStep);
+        Assert.True(x.ForceStepToMin);
+
+        // Every label gets its width and a gap.
+        var (from, to) = (x.MinLimit!.Value, x.MaxLimit!.Value);
+        var labelWidth = Math.Max(x.Labeler(from).Length, x.Labeler(to).Length) * 6;
+        Assert.True(Math.Floor((to - from) / step) * (labelWidth + 16) <= plotWidth, $"{(to - from) / step:0.#} labels at {step} min");
+
+        // Ticks fall on the clock, not on multiples of the step after the 07:10Z departure.
+        for (var tick = Math.Ceiling(from / step) * step; tick <= to; tick += step)
+        {
+            var label = x.Labeler(tick);
+            var clock = TimeOnly.ParseExact(label[^6..^1], "HH:mm", CultureInfo.InvariantCulture);
+            Assert.True(clock.ToTimeSpan().TotalMinutes % Math.Min(step, 1440) == 0, $"Tick '{label}' is off the {step}-minute clock.");
+        }
+
+        // A wider plot after the fact refines the ticks without a new check.
+        vm.SetPlotWidth(plotWidth * 4);
+        Assert.True(Assert.IsType<Axis>(Assert.Single(vm.XAxes)).MinStep <= step);
+    }
+
     [Fact]
     public async Task Every_readout_number_traces_to_get_passage_result()
     {
@@ -120,14 +191,14 @@ public sealed class ClearanceTests : IDisposable
     public async Task The_distance_and_time_toggle_keeps_the_cursor_on_the_same_sample()
     {
         var (f, vm) = await CheckedAsync();
-        f.Check.SetCursor(Meters(0.07));
+        f.Check.SetCursor(Meters(0.0705)); // Mid-sample: a boundary rounds either way through minutes.
         var sample = vm.ReadoutSample!.Index;
         var nm = vm.CursorX!.Value;
 
         vm.AxisIndex = 1;
         Assert.Equal(ClearanceAxis.Time, vm.Axis);
         Assert.Equal(sample, vm.ReadoutSample!.Index);
-        Assert.InRange(vm.CursorX!.Value, 41, 43); // 0,07° ≈ 4,2 NM at 6 kn ≈ 42 min
+        Assert.InRange(vm.CursorX!.Value, 430 + 41, 430 + 43); // 0,07° ≈ 4,2 NM at 6 kn ≈ 42 min after 07:10Z
 
         // Hovering at that time lands on the same sample.
         vm.SetCursorAtX(vm.CursorX!.Value);
