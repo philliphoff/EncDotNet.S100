@@ -16,9 +16,9 @@ hosts run the same checks and report the same findings and codes:
 In your own code, the checks are in the `EncDotNet.S100.Navigation` package:
 `RouteCheckEngine` (land, depths, dangers and coverage), `RouteAreaCheck`
 (regulated and protected areas), `RouteWarningCheck` (S-124) and
-`PassageCheckEngine` (UKC). `EncDotNet.S100.Datasets.Pipelines` builds their
-inputs from loaded datasets (`RouteCheckDataSources`, `RouteWarningSources`,
-`PassageDataSources`).
+`PassageCheckEngine` (UKC). They read loaded data through one
+`RouteCheckSources` bundle, which `CatalogRouteCheckSources` in
+`EncDotNet.S100.Datasets.Pipelines` builds from loaded datasets.
 
 The results are an aid for exploring the data, not for navigation.
 

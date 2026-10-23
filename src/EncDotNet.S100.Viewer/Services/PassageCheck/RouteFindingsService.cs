@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Routing;
@@ -68,7 +69,7 @@ internal sealed class RouteFindingsService : IDisposable
         IMarinerSettingsProvider? mariner = null,
         ITimeFormatProvider? timeFormat = null,
         TimeProvider? clock = null,
-        ICrsTransformFactory? transforms = null,
+        RouteCheckSourceCache? sources = null,
         IEnumerable<IRouteFindingProducer>? producers = null,
         Action<Action>? post = null)
     {
@@ -83,7 +84,7 @@ internal sealed class RouteFindingsService : IDisposable
         _timeFormat = timeFormat;
         _clock = clock ?? TimeProvider.System;
         _post = post ?? (action => action());
-        IRouteFindingProducer[] all = [new ClearanceFindingProducer(transforms), .. producers ?? []];
+        IRouteFindingProducer[] all = [new ClearanceFindingProducer(sources), .. producers ?? []];
         _slots = all.Select(p => new Slot(p)).ToArray();
         foreach (var slot in _slots)
         {

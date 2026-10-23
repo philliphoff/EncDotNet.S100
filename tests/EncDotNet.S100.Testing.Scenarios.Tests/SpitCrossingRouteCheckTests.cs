@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
@@ -21,7 +22,7 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
     // nodes, so its boundaries sit within a few metres of the model's.
     private const double Tolerance = 15;
 
-    private readonly RouteCheckDataSources _sources = ScenarioLoading.RouteCheckSources(fixture.Scenario);
+    private readonly RouteCheckSources _sources = ScenarioLoading.Sources(fixture.Scenario);
 
     private ScenarioDefinition Definition => fixture.Definition;
 
@@ -144,7 +145,7 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         var legs = Legs(local.Select(p => World.Frame.ToGeo(p.X, p.Y)).ToList());
 
         // With the depth checks (#955) and S-102, as the viewer runs it.
-        var engine = _sources.CreateEngine();
+        var engine = new RouteCheckEngine(_sources.Charts!, null, _sources.Depth);
         var plan = new PassagePlan(legs);
         var settings = PassageLegs.Settings(DateTimeOffset.UnixEpoch, 10, 10);
         var first = Stopwatch.StartNew();
@@ -186,8 +187,8 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
     {
         var sources = only.Length == 0
             ? _sources
-            : RouteCheckDataSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)));
-        return new RouteCheckEngine(sources.Charts).Check(new PassagePlan(legs), PassageLegs.Settings(DateTimeOffset.UnixEpoch), TestContext.Current.CancellationToken);
+            : CatalogRouteCheckSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)), new ProjNetCrsTransformFactory());
+        return new RouteCheckEngine(sources.Charts!).Check(new PassagePlan(legs), PassageLegs.Settings(DateTimeOffset.UnixEpoch), TestContext.Current.CancellationToken);
     }
 
     private S421RouteSpec Spec(string datasetName) => Definition.Routes.Single(r => r.DatasetName == datasetName);

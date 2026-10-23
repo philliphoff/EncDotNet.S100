@@ -151,8 +151,9 @@ public sealed record RouteArea(
 /// <summary>
 /// Supplies the regulated areas a <see cref="RouteAreaCheck"/> checks a route
 /// against. <c>EncDotNet.S100.Datasets.Pipelines</c> implements it over loaded
-/// S-101 cells and S-122 datasets (<c>RouteCheckDataSources.Areas</c>).
+/// S-101 cells and S-122 datasets (<c>CatalogRouteCheckSources</c>).
 /// </summary>
+/// <remarks>Implementations must be safe to call from several threads at once.</remarks>
 public interface IRouteAreaSource
 {
     /// <summary>The areas whose extent overlaps a box, from every cell and dataset.</summary>
@@ -533,7 +534,7 @@ public sealed class RouteAreaCheck
         var cells = new List<RouteChartCell>();
         var seenAreas = new HashSet<object>();
         var seenCells = new HashSet<RouteChartCell>(ReferenceEqualityComparer.Instance);
-        foreach (var extent in LegExtents(track))
+        foreach (var extent in track.LegExtents(track.MaxHalfWidth))
         {
             cancellationToken.ThrowIfCancellationRequested();
             foreach (var area in source.AreasNear(extent))
@@ -947,21 +948,4 @@ public sealed class RouteAreaCheck
 
     private static string Sentence(string text, CultureInfo culture) =>
         text.Length == 0 || char.IsUpper(text[0]) ? text : char.ToUpper(text[0], culture) + text[1..];
-
-    // Each leg's box, widened by its cross-track limits.
-    private static IEnumerable<BoundingBox> LegExtents(RouteCorridor.Track track)
-    {
-        var pad = track.MaxHalfWidth / PassageGeodesy.MetersPerDegreeLatitude + 1e-6;
-        foreach (var group in track.Samples.GroupBy(s => s.Leg))
-        {
-            var south = group.Min(s => s.Position.Latitude);
-            var north = group.Max(s => s.Position.Latitude);
-            var cos = Math.Max(Math.Cos(Math.Max(Math.Abs(south), Math.Abs(north)) * Math.PI / 180), 1e-6);
-            yield return new BoundingBox(
-                south - pad,
-                group.Min(s => s.Position.Longitude) - pad / cos,
-                north + pad,
-                group.Max(s => s.Position.Longitude) + pad / cos);
-        }
-    }
 }

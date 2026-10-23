@@ -16,6 +16,16 @@ month. For package versions and release assets, see
   route. Where a leg has no ETA, areas and warnings are judged at the
   route's departure, and only without one at the view time (SoundCharts)
   or `time` (MCP).
+- **Route checks: one set of sources.** `CatalogRouteCheckSources` builds a
+  `RouteCheckSources` bundle (charts, depth, water level, areas and
+  warnings) that every check reads, and `RouteCheckSourceCache` keeps one
+  per set of loaded datasets. It replaces `RouteCheckDataSources` and
+  `PassageDataSources`. One depth source serves both the clearance check
+  and the chart check's S-102 test (`SampleBathymetry`). The warning check
+  reads an `IRouteWarningSource`; `RouteWarningList` wraps a list. The
+  source interfaces take `GeoPosition` and `BoundingBox`, and every source,
+  and `ICrsTransform`, is safe to call from several threads at once.
+  SoundCharts, the MCP tools and `s100 route check` each share one cache.
 
 - **From a warning to its route finding.** While SoundCharts checks a
   route, the Warning card of a warning that crosses or is near it, in

@@ -3,7 +3,6 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Routing;
 
 namespace EncDotNet.S100.Viewer.Services.PassageCheck;
@@ -108,7 +107,7 @@ internal sealed class PassageCheckService : IDisposable
 
     private readonly RoutesService _routes;
     private readonly IDatasetCatalog _catalog;
-    private readonly ICrsTransformFactory _transforms;
+    private readonly RouteCheckSourceCache _sources;
     private readonly Action<Action> _post;
     private readonly object _gate = new();
 
@@ -119,7 +118,6 @@ internal sealed class PassageCheckService : IDisposable
     private WindowKey? _windowKey;
     private CheckInput? _lastInput;
     private IReadOnlyList<LoadedDataset>? _sourcesSnapshot;
-    private PassageDataSources? _sources;
     private PassagePlaceNames? _placeNames;
     private PassageDepthProfile? _profile;
     private PassageCheckEngine? _engine;
@@ -129,7 +127,7 @@ internal sealed class PassageCheckService : IDisposable
     public PassageCheckService(
         RoutesService routes,
         IDatasetCatalog catalog,
-        ICrsTransformFactory? transforms = null,
+        RouteCheckSourceCache? sources = null,
         TimeSpan? debounce = null,
         Action<Action>? post = null)
     {
@@ -137,7 +135,7 @@ internal sealed class PassageCheckService : IDisposable
         ArgumentNullException.ThrowIfNull(catalog);
         _routes = routes;
         _catalog = catalog;
-        _transforms = transforms ?? new ProjNetCrsTransformFactory();
+        _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
         Debounce = debounce ?? DefaultDebounce;
         _post = post ?? (action => action());
 
@@ -482,11 +480,11 @@ internal sealed class PassageCheckService : IDisposable
     {
         lock (_nameCache)
         {
-            if (!ReferenceEquals(snapshot, _sourcesSnapshot) || _sources is null || _engine is null)
+            if (!ReferenceEquals(snapshot, _sourcesSnapshot) || _engine is null)
             {
-                _sources = PassageDataSources.FromDatasets(snapshot, _transforms);
+                var sources = _sources.Get(snapshot);
                 _placeNames = PassagePlaceNames.FromDatasets(snapshot);
-                _engine = new PassageCheckEngine(_sources.Depth, _sources.WaterLevel);
+                _engine = new PassageCheckEngine(sources.Depth!, sources.WaterLevel!);
                 _sourcesSnapshot = snapshot;
                 _profile = null;
                 _nameCache.Clear();

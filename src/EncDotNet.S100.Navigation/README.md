@@ -10,10 +10,12 @@ UKC = charted depth + water level − draft − squat
 
 and compares it with the required UKC. Charted depth comes from S-102, with
 S-101 as a low-confidence fallback; water level comes from S-104. The package
-depends only on `EncDotNet.S100.Core`. Data reaches it through two small
-interfaces, `IChartedDepthSource` and `IWaterLevelSource`, so it never loads a
-file itself. `EncDotNet.S100.Datasets.Pipelines` implements both over loaded
-datasets.
+depends only on `EncDotNet.S100.Core`. Data reaches it through small source
+interfaces, gathered in one `RouteCheckSources` bundle, so it never loads a
+file itself. `CatalogRouteCheckSources` in `EncDotNet.S100.Datasets.Pipelines`
+builds the bundle from loaded datasets, and `RouteCheckSourceCache` keeps one
+per set of loaded datasets. Every source is safe to call from several threads
+at once, so one bundle can serve concurrent checks.
 
 This is a calculation aid for exploring data. It isn't for navigation.
 
@@ -41,8 +43,8 @@ using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Quantities;
 
 IDatasetCatalog catalog = /* S-102, S-101 and S-104 datasets */;
-var sources = PassageDataSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
-var engine = new PassageCheckEngine(sources.Depth, sources.WaterLevel);
+var sources = CatalogRouteCheckSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
+var engine = new PassageCheckEngine(sources.Depth!, sources.WaterLevel!);
 
 var a = new GeoPosition(50.672, -0.978);
 var b = new GeoPosition(50.725, -1.040);
@@ -165,13 +167,13 @@ gives the ETA at any point along a leg.
 `RouteCheckEngine` checks a route against charted land, drying ground and the
 extent of the loaded charts, and, given the mariner's depths, against charted
 dangers and the safety contour. It reads charted features through
-`IRouteChartSource`, and S-102 through `IChartedDepthSource`;
-`RouteCheckDataSources` in `EncDotNet.S100.Datasets.Pipelines` implements them
-over loaded S-101 cells and S-102 surfaces:
+`IRouteChartSource` (`sources.Charts`), and S-102 through the same
+`IChartedDepthSource` the clearance check uses (`sources.Depth`), reading only
+its S-102 surfaces (`SampleBathymetry`):
 
 ```csharp
-var sources = RouteCheckDataSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
-var engine = sources.CreateEngine();
+var sources = CatalogRouteCheckSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
+var engine = new RouteCheckEngine(sources.Charts!, depth: sources.Depth);
 
 var plan = new PassagePlan(
 [
@@ -243,18 +245,18 @@ the viewer's pick report share.
 
 `RouteWarningCheck` checks a route against S-124 navigational warnings
 (Editions 1.0.0 and 2.0.0): which ones cross its corridor or come near it, and
-whether each is in force while the vessel is there. `RouteWarningSources` in
-`EncDotNet.S100.Datasets.Pipelines` builds the warnings from loaded S-124
-datasets, one per `NavwarnPart`, with its geometry and affected areas:
+whether each is in force while the vessel is there. It reads the warnings
+through `IRouteWarningSource` (`sources.Warnings`), which gives the parts near
+each leg and the set of every loaded warning, including cancellations and
+in-force bulletins. The catalog bundle has one part per S-124 `NavwarnPart`,
+with its geometry and affected areas; `RouteWarningList` wraps a list you
+already have:
 
 ```csharp
-var warnings = RouteWarningSources.FromDatasets(catalog.Datasets);
-var set = RouteWarningSources.SetFromDatasets(catalog.Datasets);   // cancellations and in-force bulletins
 var result = new RouteWarningCheck().Check(
     plan,                                          // legs with cross-track limits and speeds, and the departure
     new RouteCheckSettings { At = viewTime },      // used only when the plan has no departure
-    warnings,
-    set);
+    sources.Warnings!);
 
 foreach (var finding in result.Findings)
 {
@@ -297,13 +299,11 @@ and the status; the wording comes from `RouteWarningOptions.Text`.
 military practice, caution, anchorage and traffic areas, and S-122 marine
 protected and restricted areas. It finds which ones the track enters or which
 reach inside its cross-track limits, and whether each is in force while the
-vessel is there. It reads the areas through `IRouteAreaSource`;
-`RouteCheckDataSources.Areas` implements it over loaded S-101 cells and S-122
-datasets, and `CheckAreas` runs the check:
+vessel is there. It reads the areas through `IRouteAreaSource`
+(`sources.Areas`), over loaded S-101 cells and S-122 datasets:
 
 ```csharp
-var sources = RouteCheckDataSources.FromDatasets(catalog.Datasets);
-var result = sources.CheckAreas(plan, new RouteCheckSettings { At = viewTime });
+var result = new RouteAreaCheck().Check(plan, new RouteCheckSettings { At = viewTime }, sources.Areas!);
 ```
 
 The S-101 feature types it checks are `RestrictedArea` (and the 1.x

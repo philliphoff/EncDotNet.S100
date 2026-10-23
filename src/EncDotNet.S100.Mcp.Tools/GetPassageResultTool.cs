@@ -6,7 +6,6 @@ using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Mcp.Tools;
@@ -265,24 +264,23 @@ public sealed class GetPassageResultTool
     public const string DisclaimerPrefix = "Not for navigation · computed from ";
 
     private readonly IDatasetCatalog _catalog;
-    private readonly ICrsTransformFactory _transforms;
+    private readonly RouteCheckSourceCache _sources;
     private readonly IPassageRouteProvider? _routes;
     private const int MaxWindowDepartures = 2000;
-
-    private readonly SemaphoreSlim _run = new(1, 1);
-    private IReadOnlyList<LoadedDataset>? _cachedSnapshot;
-    private PassageDataSources? _cachedSources;
 
     /// <summary>Creates the tool.</summary>
     /// <param name="catalog">The loaded datasets.</param>
     /// <param name="routes">The host's routes, or <c>null</c> when the host has none (polylines only).</param>
-    /// <param name="transforms">CRS transforms, or <c>null</c> for ProjNet.</param>
-    public GetPassageResultTool(IDatasetCatalog catalog, IPassageRouteProvider? routes = null, ICrsTransformFactory? transforms = null)
+    /// <param name="sources">
+    /// The sources shared with the host's other route checks, or <c>null</c>
+    /// for the tool's own over ProjNet.
+    /// </param>
+    public GetPassageResultTool(IDatasetCatalog catalog, IPassageRouteProvider? routes = null, RouteCheckSourceCache? sources = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
         _routes = routes;
-        _transforms = transforms ?? new ProjNetCrsTransformFactory();
+        _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
     }
 
     /// <summary>Executes the tool.</summary>
@@ -385,18 +383,17 @@ public sealed class GetPassageResultTool
             departure = request.Departure ?? route.DefaultDeparture;
         }
 
-        // One check at a time: the cached sources share CRS transforms and
-        // lazily built S-101 indexes between calls.
-        await _run.WaitAsync(cancellationToken).ConfigureAwait(false);
         PassageCheckResult result;
         PassageWindowSummary? window = null;
         try
         {
-            var sources = SourcesFor(_catalog.Datasets);
+            // The catalog's sources always have depth and water level, and
+            // are safe to share with concurrent checks.
+            var sources = _sources.Get(_catalog.Datasets);
             var options = request.SampleSpacingMeters is { } spacing
                 ? PassageCheckOptions.Default with { SampleSpacingMeters = spacing }
                 : PassageCheckOptions.Default;
-            var engine = new PassageCheckEngine(sources.Depth, sources.WaterLevel, options);
+            var engine = new PassageCheckEngine(sources.Depth!, sources.WaterLevel!, options);
 
             var plan = new PassagePlan(legs, departure);
             var profile = engine.SampleDepths(legs, cancellationToken);
@@ -415,10 +412,6 @@ public sealed class GetPassageResultTool
         catch (ArgumentException ex)
         {
             return ToolResult<GetPassageResultResult>.Err(new InvalidArgument("polyline", ex.Message));
-        }
-        finally
-        {
-            _run.Release();
         }
 
         return ToolResult<GetPassageResultResult>.Ok(Project(result, legs, routeId, routeName, request, window));
@@ -446,19 +439,6 @@ public sealed class GetPassageResultTool
         if (request.IncludeWindow && request.WindowStepMinutes < 1) return new InvalidArgument("windowStepMinutes", "must be at least 1");
 
         return null;
-    }
-
-    // The sources index S-101 cells lazily, so they are kept while the catalog
-    // snapshot is unchanged (the catalog publishes a new list on every change).
-    private PassageDataSources SourcesFor(IReadOnlyList<LoadedDataset> snapshot)
-    {
-        if (!ReferenceEquals(snapshot, _cachedSnapshot) || _cachedSources is null)
-        {
-            _cachedSources = PassageDataSources.FromDatasets(snapshot, _transforms);
-            _cachedSnapshot = snapshot;
-        }
-
-        return _cachedSources;
     }
 
     private static GetPassageResultResult Project(

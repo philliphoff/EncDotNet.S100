@@ -1,13 +1,11 @@
 using System.ComponentModel;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Mcp.Tools;
@@ -126,25 +124,23 @@ public sealed class CheckRouteTool
 
     private readonly IDatasetCatalog _catalog;
     private readonly IPassageRouteProvider? _routes;
-    private readonly ICrsTransformFactory _transforms;
+    private readonly RouteCheckSourceCache _sources;
     private readonly TimeProvider _time;
-    private readonly object _gate = new();
-    private IReadOnlyList<LoadedDataset>? _cachedSnapshot;
-    private RouteCheckDataSources? _cachedSources;
-    private IReadOnlyList<RouteWarning>? _cachedWarnings;
-    private NavigationalWarningSet? _cachedWarningSet;
 
     /// <summary>Creates the tool.</summary>
     /// <param name="catalog">The loaded datasets.</param>
     /// <param name="routes">The host's routes, or <c>null</c> when the host has none (polylines only).</param>
-    /// <param name="transforms">CRS transforms for projected S-102 grids, or <c>null</c> for ProjNet.</param>
+    /// <param name="sources">
+    /// The sources shared with the host's other route checks, or <c>null</c>
+    /// for the tool's own over ProjNet.
+    /// </param>
     /// <param name="time">The clock for "now", or <c>null</c> for the system clock.</param>
-    public CheckRouteTool(IDatasetCatalog catalog, IPassageRouteProvider? routes = null, ICrsTransformFactory? transforms = null, TimeProvider? time = null)
+    public CheckRouteTool(IDatasetCatalog catalog, IPassageRouteProvider? routes = null, RouteCheckSourceCache? sources = null, TimeProvider? time = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
         _routes = routes;
-        _transforms = transforms ?? new ProjNetCrsTransformFactory();
+        _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
         _time = time ?? TimeProvider.System;
     }
 
@@ -238,8 +234,9 @@ public sealed class CheckRouteTool
             CorridorOverride = request.CorridorHalfWidthMeters is { } corridor ? Length.FromMetres(corridor) : null,
         };
 
-        var (sources, warnings, warningSet) = SourcesFor(_catalog.Datasets);
-        var engine = sources.CreateEngine(Options);
+        // The catalog's sources always have charts, areas and warnings.
+        var sources = _sources.Get(_catalog.Datasets);
+        var engine = new RouteCheckEngine(sources.Charts!, Options, sources.Depth);
         RouteCheckResult result;
         RouteAreaResult areas;
         RouteWarningResult warningResult;
@@ -248,8 +245,8 @@ public sealed class CheckRouteTool
             (result, areas, warningResult) = await Task.Run(
                 () => (
                     engine.Check(plan, settings, cancellationToken),
-                    sources.CheckAreas(plan, settings, AreaOptions, cancellationToken),
-                    new RouteWarningCheck(WarningOptions).Check(plan, settings, warnings, warningSet, cancellationToken)),
+                    new RouteAreaCheck(AreaOptions).Check(plan, settings, sources.Areas!, cancellationToken),
+                    new RouteWarningCheck(WarningOptions).Check(plan, settings, sources.Warnings!, cancellationToken)),
                 cancellationToken).ConfigureAwait(false);
         }
         catch (ArgumentException ex)
@@ -284,25 +281,7 @@ public sealed class CheckRouteTool
         Text = RouteWarningText.Default with { Culture = System.Globalization.CultureInfo.InvariantCulture },
     };
 
-    // The sources index S-101 cells lazily, so they are kept while the catalog
-    // snapshot is unchanged (the catalog publishes a new list on every change).
-    private (RouteCheckDataSources Sources, IReadOnlyList<RouteWarning> Warnings, NavigationalWarningSet WarningSet) SourcesFor(IReadOnlyList<LoadedDataset> snapshot)
-    {
-        lock (_gate)
-        {
-            if (!ReferenceEquals(snapshot, _cachedSnapshot) || _cachedSources is null)
-            {
-                _cachedSources = RouteCheckDataSources.FromDatasets(snapshot, _transforms);
-                _cachedWarnings = RouteWarningSources.FromDatasets(snapshot);
-                _cachedWarningSet = RouteWarningSources.SetFromDatasets(snapshot);
-                _cachedSnapshot = snapshot;
-            }
-
-            return (_cachedSources, _cachedWarnings!, _cachedWarningSet!);
-        }
-    }
-
-    private static CheckRouteResult Project(RouteCheckResult result, RouteAreaResult areas, RouteWarningResult warnings, string? routeId, string? routeName, RouteCheckDataSources sources)
+    private static CheckRouteResult Project(RouteCheckResult result, RouteAreaResult areas, RouteWarningResult warnings, string? routeId, string? routeName, RouteCheckSources sources)
     {
         // One list, by group and then by distance, as get_findings sorts it.
         var findings = result.Findings
@@ -321,7 +300,7 @@ public sealed class CheckRouteTool
         var datasets = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var corridor in result.Corridors)
         {
-            foreach (var cell in sources.Charts.CellsNear(Extent(corridor.Ring)))
+            foreach (var cell in sources.Charts?.CellsNear(Extent(corridor.Ring)) ?? [])
             {
                 datasets.Add(cell.DatasetId);
             }

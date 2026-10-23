@@ -1,6 +1,7 @@
 using System.Globalization;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.ExchangeSets;
@@ -214,8 +215,8 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
 
     private DepartureSweep EngineSweep(Route route)
     {
-        var sources = Datasets.Pipelines.Navigation.PassageDataSources.FromDatasets(fixture.Datasets, new ProjNetCrsTransformFactory());
-        var engine = new PassageCheckEngine(sources.Depth, sources.WaterLevel);
+        var sources = CatalogRouteCheckSources.FromDatasets(fixture.Datasets, new ProjNetCrsTransformFactory());
+        var engine = new PassageCheckEngine(sources.Depth!, sources.WaterLevel!);
         var legs = RouteEtas.ToPassageLegs(route);
         var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
         return engine.SweepWaterLevelRange(profile, legs, PassageCheckService.WindowStep, PassageCheckService.MaxWindowDepartures, TestContext.Current.CancellationToken)!;

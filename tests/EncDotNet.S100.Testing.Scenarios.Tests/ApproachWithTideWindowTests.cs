@@ -129,8 +129,8 @@ public sealed class ApproachWithTideWindowTests(ApproachWithTideWindowFixture fi
 
     private (PassageCheckEngine Engine, IReadOnlyList<PassageLeg> Legs) Engine()
     {
-        var sources = PassageDataSources.FromDatasets(_catalog.Datasets, new Crs.ProjNet.ProjNetCrsTransformFactory());
-        return (new PassageCheckEngine(sources.Depth, sources.WaterLevel), ScenarioPassage.Legs(_catalog, RouteSpec));
+        var sources = CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new Crs.ProjNet.ProjNetCrsTransformFactory());
+        return (new PassageCheckEngine(sources.Depth!, sources.WaterLevel!), ScenarioPassage.Legs(_catalog, RouteSpec));
     }
 
     private PassageCheckResult Check(DateTimeOffset departure)

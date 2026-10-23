@@ -1,3 +1,4 @@
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
@@ -104,10 +105,11 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
         // A plan without a departure or speeds is judged at the settings' time.
         var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l.WithSpeed(null)).ToList();
         var viewTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
-        var result = RouteCheckDataSources.FromDatasets(_catalog.Datasets).CheckAreas(
+        var result = new RouteAreaCheck().Check(
             Plan(legs, departure: null),
             PassageLegs.Settings(viewTime),
-            cancellationToken: TestContext.Current.CancellationToken);
+            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()).Areas!,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal((RouteAreaCodes.RestrictedArea, RouteFindingGroup.Check), Kind(result, "Summer Speed Zone (fictitious)"));
         var seal = Finding(result, "Synthetic Sound Seal Sanctuary (fictitious)");
@@ -118,10 +120,11 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
     {
         var legs = ScenarioPassage.Legs(_catalog, Route);
         var start = new DateTimeOffset(departure, TimeSpan.Zero);
-        return RouteCheckDataSources.FromDatasets(_catalog.Datasets).CheckAreas(
+        return new RouteAreaCheck().Check(
             Plan(legs, start),
             PassageLegs.Settings(start),
-            cancellationToken: TestContext.Current.CancellationToken);
+            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()).Areas!,
+            TestContext.Current.CancellationToken);
     }
 
     // Metres along the legs on the ellipsoid per local metre.
@@ -160,10 +163,11 @@ public sealed class WarningsOnRouteAreaTests(WarningsOnRouteFixture fixture) : I
         var legs = ScenarioPassage.Legs(_catalog, route);
         var departure = new DateTimeOffset(route.Departure, TimeSpan.Zero);
         var schedule = PassageSchedule.Compute(legs, departure);
-        var result = RouteCheckDataSources.FromDatasets(_catalog.Datasets).CheckAreas(
+        var result = new RouteAreaCheck().Check(
             new PassagePlan(legs.Select(l => l.WithHalfWidth(S421RouteBuilder.CrossTrackLimitMeters)).ToList(), departure),
             PassageLegs.Settings(departure),
-            cancellationToken: TestContext.Current.CancellationToken);
+            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()).Areas!,
+            TestContext.Current.CancellationToken);
 
         var finding = Assert.Single(result.Findings);
         Assert.Equal(RouteAreaCodes.ProtectedArea, finding.Code);

@@ -1,6 +1,7 @@
 using System.Globalization;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.ExchangeSets;
@@ -118,7 +119,7 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
         routes.Routes.SetActiveRoute(route);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero);
-        var sources = new RouteCheckSourceCache();
+        var sources = new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
         var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc(), clock: new FixedClock(Departure),
             producers: [new RouteCheckFindingProducer(sources: sources), new AreaFindingProducer(sources)], post: new UiThread().Post);
         routes.IsCheckModeActive = true;

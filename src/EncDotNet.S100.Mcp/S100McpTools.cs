@@ -1,4 +1,6 @@
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Mcp.Tools;
 using ModelContextProtocol.Server;
 
@@ -26,15 +28,20 @@ public static class S100McpTools
     /// The host's routes for <c>get_passage_result</c> and <c>check_route</c>,
     /// or <c>null</c> when the host has none (the tools then take a polyline only).
     /// </param>
+    /// <param name="routeCheckSources">
+    /// The route-check sources shared with the host's own checks, or
+    /// <c>null</c> for one cache over ProjNet that the two tools share.
+    /// </param>
     /// <returns>
     /// The tools in a stable order. Tool names are the <c>Name</c> constants on
     /// the corresponding <c>EncDotNet.S100.Mcp.Tools</c> types (e.g.
     /// <c>list_datasets</c>, <c>describe_feature</c>, <c>sample_coverage</c>);
     /// host-supplied tools must not collide with them.
     /// </returns>
-    public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog, IPassageRouteProvider? passageRoutes = null)
+    public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog, IPassageRouteProvider? passageRoutes = null, RouteCheckSourceCache? routeCheckSources = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
+        routeCheckSources ??= new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
 
         return S100McpServerToolFactory.CreateTools(
             new ListDatasetsTool(catalog),
@@ -50,8 +57,8 @@ public static class S100McpTools
             new SampleCoverageAlongTool(catalog),
             new ListSpecsTool(catalog),
             new ListTimeStepsTool(catalog),
-            new GetPassageResultTool(catalog, passageRoutes),
-            new CheckRouteTool(catalog, passageRoutes))
+            new GetPassageResultTool(catalog, passageRoutes, routeCheckSources),
+            new CheckRouteTool(catalog, passageRoutes, routeCheckSources))
             .ToList();
     }
 }

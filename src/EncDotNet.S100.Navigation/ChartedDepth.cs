@@ -1,4 +1,6 @@
 using System.Globalization;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Navigation;
 
@@ -62,26 +64,43 @@ public sealed record ChartedDepth(
     public bool IsLowConfidence => Kind != ChartedDepthKind.Bathymetry;
 }
 
-/// <summary>Supplies charted depth at a point.</summary>
+/// <summary>
+/// Supplies charted depth at a point: S-102 bathymetry, with S-101 as the
+/// fallback where no S-102 covers it. The clearance check reads the whole
+/// chain (<see cref="Sample"/>); the chart check's S-102 shoal test reads
+/// S-102 only (<see cref="SampleBathymetry"/>), so one source serves both.
+/// </summary>
+/// <remarks>
+/// Implementations must be safe to call from several threads at once: the
+/// checks of one route run concurrently over shared sources.
+/// </remarks>
 public interface IChartedDepthSource
 {
     /// <summary>
     /// The finest gridded-depth (S-102) cell size in metres among the
     /// surfaces that overlap the box, or <c>null</c> when none does. The
-    /// engine samples at this spacing so it doesn't step over grid cells.
+    /// checks sample at this spacing so they don't step over grid cells.
     /// </summary>
-    /// <param name="south">Southern latitude of the box.</param>
-    /// <param name="west">Western longitude of the box.</param>
-    /// <param name="north">Northern latitude of the box.</param>
-    /// <param name="east">Eastern longitude of the box.</param>
+    /// <param name="extent">The box, in WGS-84.</param>
     /// <returns>The finest cell size in metres, or <c>null</c>.</returns>
-    double? FinestGridSpacingMeters(double south, double west, double north, double east);
+    double? FinestGridSpacingMeters(BoundingBox extent);
 
-    /// <summary>The charted depth at a point, or <c>null</c> when no source covers it.</summary>
-    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
-    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <summary>
+    /// The charted depth at a point by the <see cref="ChartedDepthResolver"/>
+    /// priority, or <c>null</c> when no source covers it.
+    /// </summary>
+    /// <param name="position">The point, in WGS-84.</param>
     /// <returns>The depth, or <c>null</c>.</returns>
-    ChartedDepth? Sample(double latitude, double longitude);
+    ChartedDepth? Sample(GeoPosition position);
+
+    /// <summary>
+    /// The S-102 depth at a point (<see cref="ChartedDepthKind.Bathymetry"/>),
+    /// or <c>null</c> where no S-102 surface has a value, without falling
+    /// back to S-101.
+    /// </summary>
+    /// <param name="position">The point, in WGS-84.</param>
+    /// <returns>The depth, or <c>null</c>.</returns>
+    ChartedDepth? SampleBathymetry(GeoPosition position);
 }
 
 /// <summary>

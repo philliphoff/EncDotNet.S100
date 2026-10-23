@@ -106,7 +106,7 @@ public sealed class S100McpServer : IAsyncDisposable
         });
 
         // Register the read-only catalog tools as in-process singletons.
-        var tools = S100McpTools.Create(_catalog, _options.PassageRoutes).ToList();
+        var tools = S100McpTools.Create(_catalog, _options.PassageRoutes, _options.RouteCheckSources).ToList();
 
         if (_options.AdditionalTools is { Count: > 0 } extra)
         {

@@ -2,6 +2,7 @@ using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.ExchangeSets;
+using EncDotNet.S100.Navigation;
 
 namespace EncDotNet.S100.Testing.Scenarios.Tests;
 
@@ -88,10 +89,6 @@ public static class ScenarioLoading
         catalog.Datasets.Single(d => d.Id.Value == id);
 
     /// <summary>The route-check sources over the scenario's datasets.</summary>
-    public static RouteCheckDataSources RouteCheckSources(GeneratedScenario scenario) =>
-        RouteCheckDataSources.FromDatasets(Catalog(scenario).Datasets, new ProjNetCrsTransformFactory());
-
-    /// <summary>The passage-check sources over the scenario's datasets.</summary>
-    public static PassageDataSources Sources(GeneratedScenario scenario) =>
-        PassageDataSources.FromDatasets(Catalog(scenario).Datasets, new ProjNetCrsTransformFactory());
+    public static RouteCheckSources Sources(GeneratedScenario scenario) =>
+        CatalogRouteCheckSources.FromDatasets(Catalog(scenario).Datasets, new ProjNetCrsTransformFactory());
 }

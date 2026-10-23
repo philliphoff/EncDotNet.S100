@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.Tools;
@@ -164,6 +165,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
 
             var transforms = new ProjNetCrsTransformFactory();
             var catalog = FileDatasetCatalog.Build(inputs, transforms);
+            var sources = new RouteCheckSourceCache(transforms);
             warnings.AddRange(catalog.Warnings);
             foreach (var warning in warnings)
                 Console.Error.WriteLine(warning);
@@ -178,7 +180,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
             var snapshot = Snapshot(route, settings, departure);
             var routes = new FileRouteProvider(snapshot);
 
-            var check = Unwrap(new CheckRouteTool(catalog, routes, transforms).InvokeAsync(new CheckRouteRequest(
+            var check = Unwrap(new CheckRouteTool(catalog, routes, sources).InvokeAsync(new CheckRouteRequest(
                 CorridorHalfWidthMeters: settings.CorridorMeters,
                 SafetyContourMeters: settings.SafetyContourMeters,
                 SafetyDepthMeters: settings.SafetyDepthMeters,
@@ -188,7 +190,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
             string? passageSkipped = null;
             if (snapshot.Legs.All(l => l.DraftMeters is > 0))
             {
-                passage = Unwrap(new GetPassageResultTool(catalog, routes, transforms).InvokeAsync(new GetPassageResultRequest(
+                passage = Unwrap(new GetPassageResultTool(catalog, routes, sources).InvokeAsync(new GetPassageResultRequest(
                     Departure: departure,
                     IncludeWindow: settings.Window)).GetAwaiter().GetResult());
             }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Testing.Scenarios.Writers;
@@ -23,7 +24,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     // Local metres and the engine's geodesic metres differ a little over the route.
     private const double DistanceTolerance = 10;
 
-    private readonly RouteCheckDataSources _sources = ScenarioLoading.RouteCheckSources(fixture.Scenario);
+    private readonly RouteCheckSources _sources = ScenarioLoading.Sources(fixture.Scenario);
 
     private ScenarioDefinition Definition => fixture.Definition;
 
@@ -181,12 +182,12 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     {
         var sources = only.Length == 0
             ? _sources
-            : RouteCheckDataSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)));
+            : CatalogRouteCheckSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)), new ProjNetCrsTransformFactory());
         var options = new RouteCheckOptions
         {
             Text = RouteCheckText.Default with { Culture = CultureInfo.InvariantCulture },
         };
-        return sources.CreateEngine(options).Check(new PassagePlan(Legs(withDraft)), PassageLegs.Settings(new DateTimeOffset(Spec.Departure, TimeSpan.Zero), Contour, safetyDepth), TestContext.Current.CancellationToken).Findings;
+        return new RouteCheckEngine(sources.Charts!, options, sources.Depth).Check(new PassagePlan(Legs(withDraft)), PassageLegs.Settings(new DateTimeOffset(Spec.Departure, TimeSpan.Zero), Contour, safetyDepth), TestContext.Current.CancellationToken).Findings;
     }
 
     private List<PassageLeg> Legs(bool withDraft)

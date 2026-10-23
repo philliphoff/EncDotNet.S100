@@ -1,4 +1,6 @@
 using System.Globalization;
+using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Routing;
@@ -27,7 +29,7 @@ internal sealed class AreaFindingProducer : IRouteFindingProducer
     /// <param name="options">Tuning, or <c>null</c> for the defaults with the viewer's wording.</param>
     public AreaFindingProducer(RouteCheckSourceCache? sources = null, RouteAreaOptions? options = null)
     {
-        _sources = sources ?? new RouteCheckSourceCache();
+        _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
         _options = options;
     }
 
@@ -40,8 +42,8 @@ internal sealed class AreaFindingProducer : IRouteFindingProducer
 
         var options = _options ?? RouteAreaOptions.Default with { Text = Text(request) };
         return Task.Run<IReadOnlyList<RouteFinding>>(
-            () => _sources.Get(request.Datasets)
-                .CheckAreas(request.Plan, request.Settings, options, cancellationToken)
+            () => new RouteAreaCheck(options)
+                .Check(request.Plan, request.Settings, _sources.Get(request.Datasets).Areas!, cancellationToken)
                 .Findings,
             cancellationToken);
     }

@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation.Tests;
@@ -8,13 +9,16 @@ internal sealed class FakeDepth(Func<double, double, ChartedDepth?> depthAt, dou
 {
     public int Calls { get; private set; }
 
-    public double? FinestGridSpacingMeters(double south, double west, double north, double east) => gridSpacingMeters;
+    public double? FinestGridSpacingMeters(BoundingBox extent) => gridSpacingMeters;
 
-    public ChartedDepth? Sample(double latitude, double longitude)
+    public ChartedDepth? Sample(GeoPosition position)
     {
         Calls++;
-        return depthAt(latitude, longitude);
+        return depthAt(position.Latitude, position.Longitude);
     }
+
+    public ChartedDepth? SampleBathymetry(GeoPosition position) =>
+        Sample(position) is { Kind: ChartedDepthKind.Bathymetry } depth ? depth : null;
 
     public static ChartedDepth Bathymetry(double depth, int? datum = Fixture.Lat) =>
         new(depth, ChartedDepthKind.Bathymetry, 0.3, datum, "102TEST", "0,0");
@@ -41,10 +45,10 @@ internal sealed class FakeWater(Func<double, double, IReadOnlyList<IWaterLevelSe
 {
     public int Calls { get; private set; }
 
-    public IReadOnlyList<IWaterLevelSeries> Locate(double latitude, double longitude)
+    public IReadOnlyList<IWaterLevelSeries> Locate(GeoPosition position)
     {
         Calls++;
-        return locate(latitude, longitude);
+        return locate(position.Latitude, position.Longitude);
     }
 
     /// <summary>One series everywhere, constant height, covering the whole fixture day.</summary>

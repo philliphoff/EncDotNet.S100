@@ -1,6 +1,7 @@
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Navigation;
 
@@ -315,6 +316,25 @@ internal static class RouteCorridor
             }
 
             return new Track(samples, infos);
+        }
+
+        /// <summary>Each leg's box, widened by <paramref name="reach"/> metres on every side.</summary>
+        /// <param name="reach">How far beyond the track the box reaches, in metres.</param>
+        /// <returns>One box per leg, in route order.</returns>
+        public IEnumerable<BoundingBox> LegExtents(double reach)
+        {
+            var pad = reach / PassageGeodesy.MetersPerDegreeLatitude + 1e-6;
+            foreach (var group in Samples.GroupBy(s => s.Leg))
+            {
+                var south = group.Min(s => s.Position.Latitude);
+                var north = group.Max(s => s.Position.Latitude);
+                var cos = Math.Max(Math.Cos(Math.Max(Math.Abs(south), Math.Abs(north)) * Math.PI / 180), 1e-6);
+                yield return new BoundingBox(
+                    south - pad,
+                    group.Min(s => s.Position.Longitude) - pad / cos,
+                    north + pad,
+                    group.Max(s => s.Position.Longitude) + pad / cos);
+            }
         }
 
         /// <summary>The leg a distance from departure is on: the earlier leg at a waypoint.</summary>
