@@ -21,6 +21,18 @@ public sealed record S421RouteSpec(string DatasetName, string RouteId, string Na
 {
     /// <summary>The file name, with the <c>.gml</c> extension.</summary>
     public string FileName => DatasetName + ".gml";
+
+    /// <summary>
+    /// Whether the legs carry the draft and required UKC. <c>false</c> writes
+    /// a route with no draft, so only the route checks run on it.
+    /// </summary>
+    public bool WritesDraft { get; init; } = true;
+
+    /// <summary>
+    /// Whether the legs carry the required UKC (as the static UKC).
+    /// <c>false</c> leaves the clearance check with no margin to judge against.
+    /// </summary>
+    public bool WritesRequiredUkc { get; init; } = true;
 }
 
 /// <summary>
@@ -113,8 +125,8 @@ public static class S421RouteBuilder
                 StarboardCrossTrackDistanceLimit = CrossTrackLimitMeters,
                 PortCrossTrackDistanceLimit = CrossTrackLimitMeters,
                 GeometryTypeCode = 1,
-                Draft = spec.Passage.DraftMeters,
-                StaticUnderKeelClearance = spec.Passage.RequiredUkcMeters,
+                Draft = spec.WritesDraft ? spec.Passage.DraftMeters : null,
+                StaticUnderKeelClearance = spec.WritesDraft && spec.WritesRequiredUkc ? spec.Passage.RequiredUkcMeters : null,
                 ExtraAttributes = empty,
             });
         }

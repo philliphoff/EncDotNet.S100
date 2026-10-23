@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -22,6 +23,32 @@ public partial class RoutesView : UserControl
         // A waypoint's name or position commits on Enter (a key binding on the
         // field) and when the field loses focus, like any form field.
         AddHandler(LostFocusEvent, OnFieldLostFocus, RoutingStrategies.Bubble, handledEventsToo: true);
+    }
+
+    private MainViewModel? Main => TopLevel.GetTopLevel(this)?.DataContext as MainViewModel;
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (Main?.RoutesListHeight is { } height)
+            SetListHeight(height);
+    }
+
+    // The route list sizes to its routes, up to 200 px, until the splitter
+    // under it is dragged; from then on it keeps the dragged height.
+    private void OnSplitterDragStarted(object? sender, VectorEventArgs e) =>
+        SetListHeight(RoutesBody.RowDefinitions[0].ActualHeight);
+
+    private void OnSplitterDragCompleted(object? sender, VectorEventArgs e)
+    {
+        if (Main is { } main)
+            main.RoutesListHeight = RoutesBody.RowDefinitions[0].ActualHeight;
+    }
+
+    private void SetListHeight(double height)
+    {
+        RouteList.MaxHeight = double.PositiveInfinity;
+        RoutesBody.RowDefinitions[0].Height = new GridLength(height);
     }
 
     private RoutePassageCardViewModel? _passage;
@@ -92,6 +119,10 @@ public partial class RoutesView : UserControl
             && check.HoverLegCommand.CanExecute(row))
             check.HoverLegCommand.Execute(row);
     }
+
+    // The route name commits when its box loses focus, like any form field.
+    private void OnNameBoxLostFocus(object? sender, RoutedEventArgs e) =>
+        (DataContext as RoutesPanelViewModel)?.CommitRenameCommand.Execute(null);
 
     private static void OnFieldLostFocus(object? sender, RoutedEventArgs e)
     {

@@ -766,6 +766,12 @@ public sealed class PanelSizes
     /// share of vertical space occupied by the vessel list (top row).
     /// </summary>
     public double? VesselsInnerSplit { get; set; }
+
+    /// <summary>
+    /// Height of the Routes-tab route list, in device-independent pixels, once
+    /// the user has dragged its splitter; <c>null</c> sizes the list to its routes.
+    /// </summary>
+    public double? RoutesListHeight { get; set; }
 }
 
 /// <summary>

@@ -526,7 +526,7 @@ public sealed class RouteFindingProducerTests : IDisposable
             Assert.Equal("1", Avalonia.Automation.AutomationProperties.GetName(Assert.Single(host.FindAll<Panel>("Routes.Check.Leg.Badge"))));
             Assert.Empty(host.FindAll<Panel>("Routes.Check.Leg.Chip"));
 
-            host.Click(host.Find<Avalonia.Controls.Primitives.ToggleButton>("Routes.Check.FindingsTab"));
+            host.Click(host.Find<TabItem>("Routes.Check.FindingsTab"));
             Assert.False(host.IsShown("Routes.Check.Legs.NeedsDraft"));
             var row = Assert.Single(host.FindAll<Button>("Routes.Check.Finding"));
             Assert.Equal("Finding route_check.land.0", Avalonia.Automation.AutomationProperties.GetName(row));

@@ -266,7 +266,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
 
         host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));
         WaitFor(host, () => s.Findings.Findings.Count > 0);
-        host.Click(host.Find<ToggleButton>("Routes.Check.FindingsTab"));
+        host.Click(host.Find<TabItem>("Routes.Check.FindingsTab"));
         Assert.False(host.IsShown("Routes.Check.Finding.WarningCard"));
 
         // E1: the Must review row (001/26) expands into the card, status at the ETA (E2), no provider label (E4).

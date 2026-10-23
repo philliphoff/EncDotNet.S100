@@ -575,6 +575,16 @@ internal sealed class RouteFindingRowViewModel : ViewModelBase
     /// <summary>Whether to show the sub-rows under this row.</summary>
     public bool ShowMembers => IsMerged && IsExpanded;
 
+    /// <summary>
+    /// Whether the row opens into more: a merged row into its findings, an
+    /// S-124 finding into its Warning card when selected. It then shows the
+    /// tree's disclosure triangle.
+    /// </summary>
+    public bool IsExpandable => IsMerged || Finding.Warning is not null;
+
+    /// <summary>Whether an expandable row is open now (its triangle points down).</summary>
+    public bool IsOpen => ShowMembers || HasWarningCard;
+
     /// <summary>The row's AutomationId: <c>Routes.Check.Finding.Expand</c> for a merged row, else <c>Routes.Check.Finding</c>.</summary>
     public string AutomationId => IsMerged ? "Routes.Check.Finding.Expand" : "Routes.Check.Finding";
 
@@ -632,8 +642,10 @@ internal sealed class RouteFindingRowViewModel : ViewModelBase
         get => _warningCard;
         set
         {
-            if (SetProperty(ref _warningCard, value))
-                OnPropertyChanged(nameof(HasWarningCard));
+            if (!SetProperty(ref _warningCard, value))
+                return;
+            OnPropertyChanged(nameof(HasWarningCard));
+            OnPropertyChanged(nameof(IsOpen));
         }
     }
 

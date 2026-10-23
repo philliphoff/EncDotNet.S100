@@ -61,8 +61,6 @@ internal sealed class ClearanceViewModel : ViewModelBase
 
         _drag = new DepartureDrag(check);
         _cursorSection = new RectangularSection { Xi = double.NaN, Xj = double.NaN, ZIndex = 20 };
-        ShowDistanceCommand = new RelayCommand(() => Axis = ClearanceAxis.Distance);
-        ShowTimeCommand = new RelayCommand(() => Axis = ClearanceAxis.Time, () => CanShowTime);
         ToggleSourcesCommand = new RelayCommand(() => IsSourcesOpen = !IsSourcesOpen);
 
         _check.Changed += (_, _) => Refresh();
@@ -74,10 +72,6 @@ internal sealed class ClearanceViewModel : ViewModelBase
             _timeFormat.TimeFormatChanged += _ => Rebuild(force: true);
         Refresh();
     }
-
-    public ICommand ShowDistanceCommand { get; }
-
-    public ICommand ShowTimeCommand { get; }
 
     public ICommand ToggleSourcesCommand { get; }
 
@@ -93,8 +87,16 @@ internal sealed class ClearanceViewModel : ViewModelBase
                 return;
             OnPropertyChanged(nameof(IsDistanceAxis));
             OnPropertyChanged(nameof(IsTimeAxis));
+            OnPropertyChanged(nameof(AxisIndex));
             Rebuild(force: true);
         }
+    }
+
+    /// <summary>The selected axis tab, Distance (0) or Time (1).</summary>
+    public int AxisIndex
+    {
+        get => (int)Axis;
+        set => Axis = (ClearanceAxis)value;
     }
 
     public bool IsDistanceAxis => Axis == ClearanceAxis.Distance;
@@ -111,7 +113,6 @@ internal sealed class ClearanceViewModel : ViewModelBase
             if (SetProperty(ref _canShowTime, value))
             {
                 OnPropertyChanged(nameof(TimeTooltip));
-                ((RelayCommand)ShowTimeCommand).NotifyCanExecuteChanged();
             }
         }
     }
@@ -191,6 +192,22 @@ internal sealed class ClearanceViewModel : ViewModelBase
     {
         get => _readoutPosition;
         private set => SetProperty(ref _readoutPosition, value);
+    }
+
+    private string? _readoutDistance;
+    /// <summary>The head's left part: <c>{NM}</c>.</summary>
+    public string? ReadoutDistance
+    {
+        get => _readoutDistance;
+        private set => SetProperty(ref _readoutDistance, value);
+    }
+
+    private string? _readoutEta;
+    /// <summary>The head's right part: the ETA, or <c>null</c> without one.</summary>
+    public string? ReadoutEta
+    {
+        get => _readoutEta;
+        private set => SetProperty(ref _readoutEta, value);
     }
 
     private string? _readoutLeg;
@@ -495,6 +512,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
             OnPropertyChanged(nameof(Axis));
             OnPropertyChanged(nameof(IsDistanceAxis));
             OnPropertyChanged(nameof(IsTimeAxis));
+            OnPropertyChanged(nameof(AxisIndex));
         }
 
         var profile = ClearanceProfile.Build(snapshot, _axis);
@@ -756,10 +774,11 @@ internal sealed class ClearanceViewModel : ViewModelBase
         var result = profile.Snapshot.Result;
         var distance = (cursor?.DistanceMeters ?? sample.DistanceMeters) / PassageGeodesy.MetersPerNauticalMile;
         DateTimeOffset? eta = cursor is { } c ? c.Eta : sample.HasEta ? sample.Time : null;
-        ReadoutPosition = eta is { } t
-            ? string.Format(CultureInfo.CurrentCulture, Strings.Clearance_ReadoutPositionFormat, distance,
-                PassageFormatting.FormatEta(t, result.Departure, TimeFormat))
-            : string.Format(CultureInfo.CurrentCulture, Strings.Clearance_ReadoutDistanceFormat, distance);
+        ReadoutDistance = string.Format(CultureInfo.CurrentCulture, Strings.Clearance_ReadoutDistanceFormat, distance);
+        ReadoutEta = eta is { } t ? PassageFormatting.FormatEta(t, result.Departure, TimeFormat) : null;
+        ReadoutPosition = ReadoutEta is { } etaText
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Clearance_ReadoutPositionFormat, distance, etaText)
+            : ReadoutDistance;
         var legIndex = cursor?.LegIndex ?? sample.LegIndex;
         var place = legIndex < profile.Snapshot.LegPlaceNames.Count ? profile.Snapshot.LegPlaceNames[legIndex] : null;
         var legLabel = string.Format(CultureInfo.CurrentCulture, Strings.Check_LegFormat, legIndex + 1, legIndex + 2);

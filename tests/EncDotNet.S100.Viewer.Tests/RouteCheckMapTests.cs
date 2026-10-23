@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
@@ -273,6 +274,38 @@ public sealed class RouteCheckMapTests(WarningsScenarioFixture fixture) : IClass
         host.Settle();
         Assert.True(state.IsOpen);
         Assert.True(host.IsShown("Map.RouteCheckLegend.Findings"));
+    }
+
+    [AvaloniaFact]
+    public void The_legend_glyphs_sit_level_with_their_text()
+    {
+        var routes = new RoutesService();
+        var route = new Route("r", "Test");
+        route.AppendWaypoint(new GeoPosition(50, -1));
+        route.AppendWaypoint(new GeoPosition(50, -0.9));
+        route.SetPassageValue(RoutePassageField.Draft, 5);
+        routes.Routes.Add(route);
+        routes.Routes.SetActiveRoute(route);
+        using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), debounce: TimeSpan.Zero);
+        using var legend = new RouteCheckLegendViewModel(routes, check, null, new RouteCheckLegendState());
+        using var host = ViewHost.Show(new RouteCheckLegendView { DataContext = legend }, width: 400, height: 400);
+        routes.IsCheckModeActive = true;
+        host.Settle();
+        Assert.True(host.IsShown("Map.RouteCheckLegend.Ukc"));
+
+        // Every row: the glyph's centre line and the text's centre within a pixel.
+        var rows = host.All<StackPanel>()
+            .Where(r => r.Classes.Contains("row") && r.IsEffectivelyVisible).ToList();
+        Assert.Equal(10, rows.Count);
+        foreach (var row in rows)
+        {
+            var glyph = (Control)row.Children[0];
+            var text = Assert.IsType<TextBlock>(row.Children[1]);
+            var glyphMiddle = glyph is Line line
+                ? glyph.Bounds.Top + line.StartPoint.Y
+                : glyph.Bounds.Top + glyph.Bounds.Height / 2;
+            Assert.True(Math.Abs(glyphMiddle - (text.Bounds.Top + text.Bounds.Height / 2)) <= 1, text.Text);
+        }
     }
 
     /// <summary>

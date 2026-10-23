@@ -1869,6 +1869,7 @@ internal static partial class Strings
     public static string Clearance_BandEndFormat => Get(nameof(Clearance_BandEndFormat));
     public static string Tooltip_DepartureBand => Get(nameof(Tooltip_DepartureBand));
     public static string Check_TabLegs => Get(nameof(Check_TabLegs));
+    public static string Check_TabFindings => Get(nameof(Check_TabFindings));
     public static string Check_TabFindingsFormat => Get(nameof(Check_TabFindingsFormat));
     public static string Findings_Empty => Get(nameof(Findings_Empty));
     public static string Findings_GroupMustReview => Get(nameof(Findings_GroupMustReview));

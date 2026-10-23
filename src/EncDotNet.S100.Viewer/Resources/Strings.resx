@@ -4929,6 +4929,9 @@
   <data name="Check_TabLegs" xml:space="preserve">
     <value>Legs</value>
   </data>
+  <data name="Check_TabFindings" xml:space="preserve">
+    <value>Findings</value>
+  </data>
   <data name="Check_TabFindingsFormat" xml:space="preserve">
     <value>Findings {0}</value>
   </data>

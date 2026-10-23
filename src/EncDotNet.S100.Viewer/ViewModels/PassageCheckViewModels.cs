@@ -65,8 +65,6 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         Legs = new ObservableCollection<PassageCheckLegRowViewModel>();
         SummaryRows = new ObservableCollection<CheckSummaryRowViewModel>();
         Window = new DepartureWindowViewModel(service, timeFormat);
-        ShowLegsCommand = new RelayCommand(() => ShowFindings = false);
-        ShowFindingsCommand = new RelayCommand(() => ShowFindings = true);
         HoverLegCommand = new RelayCommand<PassageCheckLegRowViewModel>(row =>
         {
             if (row is not null)
@@ -84,7 +82,11 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         if (findings is not null)
         {
             Findings = new RouteFindingsViewModel(findings);
-            Findings.CountChanged += (_, _) => OnPropertyChanged(nameof(FindingsLabel));
+            Findings.CountChanged += (_, _) =>
+            {
+                OnPropertyChanged(nameof(FindingsLabel));
+                OnPropertyChanged(nameof(FindingsCount));
+            };
             findings.Changed += (_, _) => Refresh();
             // #959: a Warning card's "Crosses route" row opens its finding here.
             findings.OpenRequested += (_, _) => ShowFindings = true;
@@ -109,10 +111,6 @@ internal sealed class PassageCheckViewModel : ViewModelBase
 
     /// <summary>The verdict card's summary rows (B3): Clearance, Route and, when warnings were checked, Warnings.</summary>
     public ObservableCollection<CheckSummaryRowViewModel> SummaryRows { get; }
-
-    public ICommand ShowLegsCommand { get; }
-
-    public ICommand ShowFindingsCommand { get; }
 
     /// <summary>Moves the profile cursor and ghost to the middle of a leg (C5 hover).</summary>
     public ICommand HoverLegCommand { get; }
@@ -273,13 +271,24 @@ internal sealed class PassageCheckViewModel : ViewModelBase
                 return;
             OnPropertyChanged(nameof(ShowLegs));
             OnPropertyChanged(nameof(ShowLegsNeedsDraft));
+            OnPropertyChanged(nameof(SelectedTabIndex));
         }
+    }
+
+    /// <summary>The selected tab, Legs (0) or Findings (1), for the tab control.</summary>
+    public int SelectedTabIndex
+    {
+        get => ShowFindings ? 1 : 0;
+        set => ShowFindings = value == 1;
     }
 
     public bool ShowLegs => !ShowFindings;
 
     /// <summary>The Findings tab label, "Findings {N}" (C4).</summary>
     public string FindingsLabel => string.Format(CultureInfo.CurrentCulture, Strings.Check_TabFindingsFormat, Findings?.Count ?? 0);
+
+    /// <summary>The Findings tab's count, shown in the secondary colour after its label.</summary>
+    public string FindingsCount => (Findings?.Count ?? 0).ToString(CultureInfo.CurrentCulture);
 
     /// <summary>Re-reads the service state.</summary>
     public void Refresh()
