@@ -591,7 +591,6 @@ async Task CheckedRoute(Viewer v, string palette)
     await v.OpenAll(await data.S102(seattleS102));
     await v.OpenAll(SyntheticWarnings.Write(Path.Combine(scriptDir, ".cache", "synthetic"), checkDeparture));
     await v.Call("set_test_clock", new() { ["now"] = checkDeparture.ToString("O"), ["freeze"] = true });
-    await v.Call("set_view_time", new() { ["time"] = "now" });
     await PlanRoute(v);
     await v.Call("set_passage", new()
     {
@@ -615,8 +614,10 @@ async Task<byte[]> CheckRoute(Viewer v, string palette)
 {
     await CheckedRoute(v, palette);
     await v.Panel("Routes");
-    await v.Call("ui_select", new() { ["id"] = "Routes.Check.FindingsTab" });
+    await v.Call("ui_toggle", new() { ["id"] = "Routes.Check.FindingsTab" });
     var (_, _, findingId) = await CrossingWarning(v);
+    // The Warnings chip, so the selected row and its inline Warning card show.
+    await v.Call("set_findings_view", new() { ["filter"] = "warnings" });
     await v.Call("select_finding", new() { ["id"] = findingId, ["zoom"] = false });
     await v.Call("set_map_legend", new() { ["open"] = true });
     await v.Frame(passageBox);
@@ -632,6 +633,13 @@ async Task OpenRouteWarning(Viewer v)
     await v.Call("list_navigational_warnings", new() { ["scope"] = "route" });
     var (datasetId, featureId, _) = await CrossingWarning(v);
     await v.Call("select_navigational_warning", new() { ["datasetId"] = datasetId, ["featureId"] = featureId });
+    // Selecting doesn't reopen Object Information once Reset has hidden it, and
+    // Check route folds it to an edge tab, which a reused viewer may have unfolded.
+    await v.Panel("PickReport");
+    try { await v.Call("ui_invoke", new() { ["id"] = "Dock.ObjectInformationEdge" }); }
+    catch (InvalidOperationException e) when (e.Message.Contains("ui_element_not_found")) { }
+    // Check route opens the map legend, which would hide the route here.
+    await v.Call("set_map_legend", new() { ["open"] = false });
 }
 
 static IEnumerable<string> Grid(string prefix, string rows, string cols) =>
@@ -1003,7 +1011,8 @@ sealed class Viewer : IAsyncDisposable
 
     /// <summary>
     /// A window capture cropped to 16:9: as wide as the element <paramref name="widthId"/>
-    /// plus a margin, centred on the element <paramref name="focusId"/>.
+    /// plus a margin, from its top, or lower if needed to keep the element
+    /// <paramref name="focusId"/> in the frame.
     /// </summary>
     public async Task<byte[]> WindowCrop(string focusId, string widthId)
     {
@@ -1015,7 +1024,8 @@ sealed class Viewer : IAsyncDisposable
         var width = (int)Math.Min((frame.Width + 2 * margin) * scale, bitmap.Width);
         var height = Math.Min(width * 9 / 16, bitmap.Height);
         var left = (int)Math.Clamp((frame.X - margin) * scale, 0, bitmap.Width - width);
-        var top = (int)Math.Clamp((focus.Y + focus.Height / 2) * scale - height / 2.0, 0, bitmap.Height - height);
+        var top = (int)Math.Clamp(Math.Max((frame.Y - margin) * scale, (focus.Y + focus.Height + margin) * scale - height),
+            0, bitmap.Height - height);
         using var cropped = new SKBitmap();
         if (!bitmap.ExtractSubset(cropped, SKRectI.Create(left, top, width, height)))
             throw new InvalidOperationException($"could not crop the window around {focusId}");

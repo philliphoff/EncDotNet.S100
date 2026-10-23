@@ -222,13 +222,14 @@ as a desktop app.
   shades) next to a chart that shows the effect, e.g. a shallow harbour entrance.
 
 ### F10 · Check route (Passage section)
-- **Recipe written (2026-10-22), not captured yet.** F4's route (Colman Dock →
-  West Point → Shilshole Bay Marina) over the NOAA `US5WA*` cells and S-102,
+- **Captured (2026-10-22)**, with the Light twin and F10-night. F4's route
+  (Colman Dock → West Point → Shilshole Bay Marina) over the NOAA `US5WA*` cells and S-102,
   with a 3 m draft, 1 m required UKC and 8 kn, departing 06:00 Pacific on
   2026-10-20 with the clock pinned there. The West Point shoal gives a real
   Must review finding.
-- **State:** Routes panel on **Check route** with the Findings tab, the
-  SAMPLE 201/26 dredging finding selected (`zoom: false`) so its ring, pill and
+- **State:** Routes panel on **Check route** with the Findings tab on the
+  **Warnings** chip (so the selected row shows in the list), the SAMPLE 201/26
+  dredging finding selected (`zoom: false`) so its ring, pill and
   leg corridor show, the map legend open, framed on the whole route. Day
   palette, with a Light twin.
 - **F10-night:** the same in Night, with S100Night chrome.
@@ -241,15 +242,18 @@ as a desktop app.
   check` on 2026-10-22. No live CCG SECOM warnings, so no licence question.
 
 ### F11 · Navigational warnings on the route
-- **Recipe written, not captured yet.** The F10 set-up, then the
+- **Captured (2026-10-22)**, with the Light twin. The F10 set-up, then the
   Navigational warnings panel in **On {route}** scope and SAMPLE 201/26
   selected, so Object Information opens its card with the "Crosses route ·
-  leg 3 → 4" row. Framed on the whole route.
+  leg 3 → 4" row. Framed on the whole route, map legend closed. Check route
+  folds Object Information to an edge tab, so the recipe opens the PickReport
+  panel and invokes `Dock.ObjectInformationEdge`.
 
 ### F12 · From warning to finding (small card)
-- **Recipe written, not captured yet.** The F11 state, cropped to 16:9 from
-  the window capture: as wide as the Warning card, centred on its route row
-  (bounds from `ui_tree`).
+- **Captured (2026-10-22)**, with the Light twin. The F11 state, cropped to
+  16:9 from the window capture: as wide as the Warning card, from its top
+  (bounds from `ui_tree`, which line up with the scale-2 capture), so the
+  header, the route row and the classification all show.
 
 ---
 
