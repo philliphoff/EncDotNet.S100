@@ -70,8 +70,7 @@ internal sealed class WarningFindingProducer : IRouteFindingProducer, IRouteFind
         var result = new RouteWarningCheck(options).Check(
             request.Plan,
             request.Settings,
-            warnings,
-            _warnings.Set,
+            new RouteWarningList(warnings, _warnings.Set),
             cancellationToken);
         return Task.FromResult<IReadOnlyList<RouteFinding>>([.. result.Findings.Select(Tag)]);
     }

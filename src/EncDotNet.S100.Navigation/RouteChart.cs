@@ -118,8 +118,9 @@ public sealed record RouteChartFeature(
 /// <summary>
 /// Supplies the charted features a <see cref="RouteCheckEngine"/> checks a
 /// route against. <c>EncDotNet.S100.Datasets.Pipelines</c> implements it over
-/// loaded S-101 cells (<c>RouteCheckDataSources</c>).
+/// loaded S-101 cells (<c>CatalogRouteCheckSources</c>).
 /// </summary>
+/// <remarks>Implementations must be safe to call from several threads at once.</remarks>
 public interface IRouteChartSource
 {
     /// <summary>The cells whose extent overlaps a box.</summary>

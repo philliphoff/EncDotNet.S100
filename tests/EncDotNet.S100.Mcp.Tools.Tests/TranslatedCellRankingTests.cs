@@ -41,7 +41,8 @@ public class TranslatedCellRankingTests
             SafetyContour = Depth.FromMetres(10),
             SafetyDepth = Depth.FromMetres(10),
         };
-        return RouteCheckDataSources.FromDatasets(datasets).CreateEngine().Check(new PassagePlan([leg]), settings, TestContext.Current.CancellationToken);
+        var sources = CatalogRouteCheckSources.FromDatasets(datasets, new ProjNetCrsTransformFactory());
+        return new RouteCheckEngine(sources.Charts!, null, sources.Depth).Check(new PassagePlan([leg]), settings, TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -68,16 +69,16 @@ public class TranslatedCellRankingTests
     [Fact]
     public void Charted_depth_comes_from_the_finer_translated_cell()
     {
-        var sources = PassageDataSources.FromDatasets(
+        var sources = CatalogRouteCheckSources.FromDatasets(
             [Translated("US4", 45_000, CoastalBox, 0), Translated("US5", 12_000, HarbourBox, 15)],
             new ProjNetCrsTransformFactory());
 
-        var depth = sources.Depth.Sample(0, 0.05)!;
+        var depth = sources.Depth!.Sample(new GeoPosition(0, 0.05))!;
         Assert.Equal(15, depth.DepthMeters);
         Assert.Equal("US5", depth.DatasetId);
 
         // Outside the finer cell's coverage the coarser one still answers.
-        var outside = sources.Depth.Sample(0.18, 0.18)!;
+        var outside = sources.Depth!.Sample(new GeoPosition(0.18, 0.18))!;
         Assert.Equal(0, outside.DepthMeters);
         Assert.Equal("US4", outside.DatasetId);
     }

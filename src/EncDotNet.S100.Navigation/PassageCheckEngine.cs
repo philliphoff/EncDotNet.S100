@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Navigation;
 
@@ -329,7 +330,7 @@ public sealed class PassageCheckEngine
         }
 
         var step = _options.SampleSpacingMeters;
-        if (_depth.FinestGridSpacingMeters(south, west, north, east) is { } cell && cell > 0)
+        if (_depth.FinestGridSpacingMeters(new BoundingBox(south, west, north, east)) is { } cell && cell > 0)
         {
             step = Math.Clamp(cell * _options.GridStepFactor, _options.MinimumStepMeters, _options.SampleSpacingMeters);
         }
@@ -359,7 +360,7 @@ public sealed class PassageCheckEngine
                 ? Math.Clamp((along - segmentStart) / segmentLengths[segment], 0, 1)
                 : 0;
             var position = PassageGeodesy.Interpolate(leg.Points[segment], leg.Points[segment + 1], fraction, leg.Geometry);
-            var depth = _depth.Sample(position.Latitude, position.Longitude);
+            var depth = _depth.Sample(position);
             var kind = Classify(depth);
 
             var halfBefore = k == 0 ? 0 : step / 2;
@@ -402,7 +403,7 @@ public sealed class PassageCheckEngine
             position = PositionAlong(leg, along);
         }
 
-        var series = _waterLevel.Locate(position.Latitude, position.Longitude);
+        var series = _waterLevel.Locate(position);
         return new ProfilePoint(legIndex, position, along, bin.Start, end, bin.Best, series);
     }
 

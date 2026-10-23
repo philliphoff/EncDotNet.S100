@@ -1,9 +1,7 @@
 using System.Globalization;
 using EncDotNet.S100.Crs.ProjNet;
-using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.Services.PassageCheck;
@@ -16,7 +14,7 @@ namespace EncDotNet.S100.Viewer.Services.PassageCheck;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The <see cref="RouteCheckDataSources"/> come from a
+/// The <see cref="RouteCheckSources"/> come from a
 /// <see cref="RouteCheckSourceCache"/> it shares with the area producer.
 /// </para>
 /// <para>
@@ -39,7 +37,7 @@ internal sealed class RouteCheckFindingProducer : IRouteFindingProducer
     public RouteCheckFindingProducer(IMarinerSettingsProvider? mariner = null, RouteCheckSourceCache? sources = null, RouteCheckOptions? options = null)
     {
         _mariner = mariner;
-        _sources = sources ?? new RouteCheckSourceCache();
+        _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
         _options = options;
     }
 
@@ -49,7 +47,11 @@ internal sealed class RouteCheckFindingProducer : IRouteFindingProducer
         var options = _options ?? RouteCheckOptions.Default with { Text = Text() };
         var settings = Settings(request);
         return Task.Run<IReadOnlyList<RouteFinding>>(
-            () => _sources.Get(request.Datasets).CreateEngine(options).Check(request.Plan, settings, cancellationToken).Findings,
+            () =>
+            {
+                var sources = _sources.Get(request.Datasets);
+                return new RouteCheckEngine(sources.Charts!, options, sources.Depth).Check(request.Plan, settings, cancellationToken).Findings;
+            },
             cancellationToken);
     }
 
@@ -107,39 +109,4 @@ internal sealed class RouteCheckFindingProducer : IRouteFindingProducer
         Separator = Strings.RouteCheck_Separator,
         Culture = CultureInfo.CurrentCulture,
     };
-}
-
-/// <summary>
-/// The <see cref="RouteCheckDataSources"/> for the loaded data, kept per
-/// dataset snapshot and shared by the chart and area producers, so the
-/// cells' indexes are built once (on the first check after the data
-/// changes) and a waypoint drag only re-sweeps the route.
-/// </summary>
-internal sealed class RouteCheckSourceCache
-{
-    private readonly ICrsTransformFactory _transforms;
-    private readonly object _gate = new();
-    private IReadOnlyList<LoadedDataset>? _snapshot;
-    private RouteCheckDataSources? _sources;
-
-    /// <param name="transforms">CRS transforms for projected S-102 grids, or <c>null</c> for ProjNet.</param>
-    public RouteCheckSourceCache(ICrsTransformFactory? transforms = null)
-    {
-        _transforms = transforms ?? new ProjNetCrsTransformFactory();
-    }
-
-    /// <summary>The sources for a dataset snapshot, built on the first call after it changes.</summary>
-    public RouteCheckDataSources Get(IReadOnlyList<LoadedDataset> datasets)
-    {
-        lock (_gate)
-        {
-            if (_sources is null || !ReferenceEquals(datasets, _snapshot))
-            {
-                _sources = RouteCheckDataSources.FromDatasets(datasets, _transforms);
-                _snapshot = datasets;
-            }
-
-            return _sources;
-        }
-    }
 }

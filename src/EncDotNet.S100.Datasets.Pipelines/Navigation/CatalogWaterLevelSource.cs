@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// Water level from loaded S-104 datasets: regular grids (dcf2) first, in
 /// <see cref="WaterLevelPreference"/> order, then the nearest station of each
 /// station series (dcf8) within
-/// <see cref="PassageDataSourceOptions.MaxStationDistanceMeters"/>, nearest
+/// <see cref="RouteCheckSourceOptions.MaxStationDistanceMeters"/>, nearest
 /// first. Grids win over stations as in <c>sample_coverage</c>.
 /// </summary>
 /// <remarks>
@@ -29,7 +29,7 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
     private readonly List<(string DatasetId, S104StationSeriesDataset Dataset)> _stations = new();
     private readonly double _maxStationDistance;
 
-    public CatalogWaterLevelSource(IReadOnlyList<LoadedDataset> datasets, ICrsTransformFactory transforms, PassageDataSourceOptions options)
+    public CatalogWaterLevelSource(IReadOnlyList<LoadedDataset> datasets, ICrsTransformFactory transforms, RouteCheckSourceOptions options)
     {
         _maxStationDistance = options.MaxStationDistanceMeters;
         foreach (var dataset in datasets)
@@ -49,8 +49,9 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
         _grids.Sort((a, b) => WaterLevelPreference.Compare(a.Spacing, a.Issued, a.DatasetId, b.Spacing, b.Issued, b.DatasetId));
     }
 
-    public IReadOnlyList<IWaterLevelSeries> Locate(double latitude, double longitude)
+    public IReadOnlyList<IWaterLevelSeries> Locate(GeoPosition position)
     {
+        var (latitude, longitude) = (position.Latitude, position.Longitude);
         var result = new List<IWaterLevelSeries>();
         foreach (var grid in _grids)
         {

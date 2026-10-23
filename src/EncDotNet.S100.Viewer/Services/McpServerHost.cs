@@ -60,6 +60,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly ILoggerFactory? _loggers;
     private readonly EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel? _navigationalWarnings;
     private readonly NavigationalWarningsService? _navigationalWarningsService;
+    private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? _routeCheckSources;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private S100McpServer? _server;
@@ -99,8 +100,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel? navigationalWarnings = null,
         NavigationalWarningsService? navigationalWarningsService = null,
         RouteExchangeService? routeExchange = null,
-        EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? routeCheckLegend = null)
+        EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? routeCheckLegend = null,
+        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeCheckSources = null)
     {
+        _routeCheckSources = routeCheckSources;
         _routeCheckLegend = routeCheckLegend;
         _routeExchange = routeExchange;
         _navigationalWarnings = navigationalWarnings;
@@ -212,6 +215,7 @@ internal sealed class McpServerHost : IAsyncDisposable
             PassageRoutes = _routesService is null
                 ? null
                 : new ViewerPassageRouteProvider(_routesService, new DispatcherRouteEditInvoker()),
+            RouteCheckSources = _routeCheckSources,
         };
         var next = new S100McpServer(_catalog, options, _loggers);
         try

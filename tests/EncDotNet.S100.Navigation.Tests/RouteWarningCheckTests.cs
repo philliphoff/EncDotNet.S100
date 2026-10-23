@@ -94,6 +94,22 @@ public class RouteWarningCheckTests
     }
 
     [Fact]
+    public void A_source_gives_the_warnings_near_the_route_and_judges_with_its_set()
+    {
+        // 800 m aside is within the 0,5 NM near distance; 50 km aside is never asked about.
+        var aside = Warning(Info(5), Point(800 / M, 0.005));
+        var far = Warning(Info(6), Point(0.5, 0.005));
+        var source = new RouteWarningList([aside, far]);
+
+        var result = new RouteWarningCheck().Check(new PassagePlan([EastPassage], Departure), AtDeparture, source, TestContext.Current.CancellationToken);
+
+        var match = Assert.Single(result.Matches);
+        Assert.Same(aside, match.Warning);
+        Assert.Equal(RouteWarningRelation.Near, match.Relation);
+        Assert.Equal(Check(aside).Findings.Select(f => f.Id), result.Findings.Select(f => f.Id));
+    }
+
+    [Fact]
     public void A_point_in_the_corridor_or_within_half_a_mile_is_near()
     {
         var onTrack = Warning(Info(4), Point(0, 0.005));

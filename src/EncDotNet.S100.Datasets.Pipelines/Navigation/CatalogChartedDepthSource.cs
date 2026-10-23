@@ -26,7 +26,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// <para>
 /// The S-101 fallback reads <c>DredgedArea</c> and <c>DepthArea</c> minimum
 /// depths (DRVAL1), then the nearest <c>Sounding</c> within
-/// <see cref="PassageDataSourceOptions.MaxSoundingDistanceMeters"/>. The
+/// <see cref="RouteCheckSourceOptions.MaxSoundingDistanceMeters"/>. The
 /// depth's datum comes from the <c>SoundingDatum</c> meta-feature covering the
 /// point in the cell that supplied it.
 /// </para>
@@ -57,7 +57,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
     public CatalogChartedDepthSource(
         IReadOnlyList<LoadedDataset> datasets,
         ICrsTransformFactory transforms,
-        PassageDataSourceOptions options)
+        RouteCheckSourceOptions options)
     {
         _maxSoundingDistance = options.MaxSoundingDistanceMeters;
         foreach (var dataset in datasets)
@@ -78,11 +78,12 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             : string.CompareOrdinal(a.DatasetId, b.DatasetId));
     }
 
-    public double? FinestGridSpacingMeters(double south, double west, double north, double east)
+    public double? FinestGridSpacingMeters(BoundingBox extent)
     {
+        ArgumentNullException.ThrowIfNull(extent);
         foreach (var grid in _grids)
         {
-            if (grid.Intersects(south, west, north, east))
+            if (grid.Intersects(extent.SouthLatitude, extent.WestLongitude, extent.NorthLatitude, extent.EastLongitude))
             {
                 return grid.SpacingMeters;
             }
@@ -91,15 +92,27 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
         return null;
     }
 
-    public ChartedDepth? Sample(double latitude, double longitude)
+    public ChartedDepth? SampleBathymetry(GeoPosition position)
     {
         foreach (var grid in _grids)
         {
-            if (grid.Sample(latitude, longitude) is { } depth)
+            if (grid.Sample(position.Latitude, position.Longitude) is { } depth)
             {
                 return depth;
             }
         }
+
+        return null;
+    }
+
+    public ChartedDepth? Sample(GeoPosition position)
+    {
+        if (SampleBathymetry(position) is { } bathymetry)
+        {
+            return bathymetry;
+        }
+
+        var (latitude, longitude) = (position.Latitude, position.Longitude);
 
         var covering = new List<S101Index>();
         foreach (var cell in _cells)

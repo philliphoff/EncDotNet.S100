@@ -64,17 +64,18 @@ public sealed partial class RouteCheckEngine
     /// <summary>Creates the engine.</summary>
     /// <param name="charts">The charted features to check against.</param>
     /// <param name="options">Tuning, or <c>null</c> for <see cref="RouteCheckOptions.Default"/>.</param>
-    /// <param name="bathymetry">
-    /// S-102 bathymetry for the safety-contour check, or <c>null</c> when
-    /// none is loaded. Only <see cref="ChartedDepthKind.Bathymetry"/>
-    /// samples are used.
+    /// <param name="depth">
+    /// Charted depth for the S-102 safety-contour check, or <c>null</c> when
+    /// there is none. Only its S-102 surfaces are read
+    /// (<see cref="IChartedDepthSource.SampleBathymetry"/>), so the
+    /// clearance check's source, with its S-101 fallback, serves here too.
     /// </param>
-    public RouteCheckEngine(IRouteChartSource charts, RouteCheckOptions? options = null, IChartedDepthSource? bathymetry = null)
+    public RouteCheckEngine(IRouteChartSource charts, RouteCheckOptions? options = null, IChartedDepthSource? depth = null)
     {
         ArgumentNullException.ThrowIfNull(charts);
         _charts = charts;
         _options = options ?? RouteCheckOptions.Default;
-        _bathymetry = bathymetry;
+        _bathymetry = depth;
         if (!(_options.StationSpacingMeters > 0))
         {
             throw new ArgumentOutOfRangeException(nameof(options), "StationSpacingMeters must be positive.");

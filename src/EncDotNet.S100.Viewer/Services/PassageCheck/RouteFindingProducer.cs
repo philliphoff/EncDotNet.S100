@@ -97,14 +97,11 @@ internal interface IRouteFindingProducer
 /// </summary>
 internal sealed class ClearanceFindingProducer : IRouteFindingProducer
 {
-    private readonly ICrsTransformFactory _transforms;
-    private readonly object _engineGate = new();
-    private IReadOnlyList<LoadedDataset>? _engineSnapshot;
-    private PassageCheckEngine? _engine;
+    private readonly RouteCheckSourceCache _sources;
 
-    public ClearanceFindingProducer(ICrsTransformFactory? transforms = null)
+    public ClearanceFindingProducer(RouteCheckSourceCache? sources = null)
     {
-        _transforms = transforms ?? new ProjNetCrsTransformFactory();
+        _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
     }
 
     public bool UsesClearance => true;
@@ -121,19 +118,10 @@ internal sealed class ClearanceFindingProducer : IRouteFindingProducer
         return Task.Run(() =>
         {
             var plan = request.Plan;
-            PassageCheckResult result;
-            lock (_engineGate)
-            {
-                if (!ReferenceEquals(request.Datasets, _engineSnapshot) || _engine is null)
-                {
-                    var sources = PassageDataSources.FromDatasets(request.Datasets, _transforms);
-                    _engine = new PassageCheckEngine(sources.Depth, sources.WaterLevel);
-                    _engineSnapshot = request.Datasets;
-                }
-
-                var profile = _engine.SampleDepths(plan.Legs, null, cancellationToken);
-                result = _engine.Evaluate(profile, plan, request.Settings, cancellationToken);
-            }
+            var sources = _sources.Get(request.Datasets);
+            var engine = new PassageCheckEngine(sources.Depth!, sources.WaterLevel!);
+            var profile = engine.SampleDepths(plan.Legs, null, cancellationToken);
+            var result = engine.Evaluate(profile, plan, request.Settings, cancellationToken);
 
             var oneOff = new PassageCheckSnapshot(request.RouteId, request.Legs, result, new string?[request.Legs.Count], null);
             return Build(oneOff, request);

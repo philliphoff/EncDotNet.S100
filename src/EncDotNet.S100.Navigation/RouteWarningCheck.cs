@@ -288,6 +288,35 @@ public sealed class RouteWarningCheck
         }
     }
 
+    /// <summary>Checks a plan against the warnings a source has near it, judged with its <see cref="IRouteWarningSource.Set"/>.</summary>
+    /// <param name="plan">The plan: its legs with their cross-track limits and speeds, and its departure.</param>
+    /// <param name="settings">The corridor override and the time to judge at where the plan gives none.</param>
+    /// <param name="source">The warnings.</param>
+    /// <param name="cancellationToken">Cancels the check.</param>
+    /// <returns>One match per warning near the route, and the findings.</returns>
+    public RouteWarningResult Check(PassagePlan plan, RouteCheckSettings settings, IRouteWarningSource source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(source);
+        var track = BuildTrack(plan, settings);
+        var warnings = new List<RouteWarning>();
+        var seen = new HashSet<object>();
+        foreach (var extent in track.LegExtents(Reach(track)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            foreach (var warning in source.WarningsNear(extent))
+            {
+                if (seen.Add((object?)warning.Feature ?? warning))
+                {
+                    warnings.Add(warning);
+                }
+            }
+        }
+
+        return Check(track, PassageSchedule.Compute(plan, settings), warnings, source.Set, cancellationToken);
+    }
+
     /// <summary>Checks a plan against warnings, resolving cancellations and in-force bulletins among them.</summary>
     /// <param name="plan">The plan: its legs with their cross-track limits and speeds, and its departure.</param>
     /// <param name="settings">The corridor override and the time to judge at where the plan gives none.</param>
@@ -322,13 +351,26 @@ public sealed class RouteWarningCheck
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(warnings);
-        var schedule = PassageSchedule.Compute(plan, settings);
-        var track = RouteCorridor.Track.Build(plan, settings, _options.DefaultHalfWidthMeters, _options.SegmentLengthMeters, _options.MaxSegmentsPerLeg);
+        return Check(BuildTrack(plan, settings), PassageSchedule.Compute(plan, settings), warnings, set, cancellationToken);
+    }
+
+    private RouteCorridor.Track BuildTrack(PassagePlan plan, RouteCheckSettings settings) =>
+        RouteCorridor.Track.Build(plan, settings, _options.DefaultHalfWidthMeters, _options.SegmentLengthMeters, _options.MaxSegmentsPerLeg);
+
+    // How far from the track a warning can be and still be on or near the route.
+    private double Reach(RouteCorridor.Track track) => Math.Max(_options.NearDistanceMeters, track.MaxHalfWidth);
+
+    private RouteWarningResult Check(
+        RouteCorridor.Track track,
+        PassageSchedule schedule,
+        IReadOnlyList<RouteWarning> warnings,
+        NavigationalWarningSet? set,
+        CancellationToken cancellationToken)
+    {
         var shapes = warnings
             .Select(w => new RouteCorridor.Shapes((w ?? throw new ArgumentException("A warning is null.", nameof(warnings))).Shapes))
             .ToList();
-        var reach = Math.Max(_options.NearDistanceMeters, track.MaxHalfWidth);
-        var accumulators = RouteCorridor.Measure(track, shapes, reach, cancellationToken);
+        var accumulators = RouteCorridor.Measure(track, shapes, Reach(track), cancellationToken);
         set ??= new NavigationalWarningSet(warnings.Select(w => w.Info));
 
         var matches = new List<RouteWarningMatch>(warnings.Count);

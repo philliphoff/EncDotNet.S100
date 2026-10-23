@@ -60,4 +60,12 @@ public sealed class S100McpServerOptions
     /// <see langword="null"/> when the host has no routes.
     /// </summary>
     public EncDotNet.S100.Mcp.Tools.IPassageRouteProvider? PassageRoutes { get; init; }
+
+    /// <summary>
+    /// The route-check sources the host's own checks use, so the built-in
+    /// <c>get_passage_result</c> and <c>check_route</c> tools share the cells'
+    /// indexes and S-102 grids with them. May be <see langword="null"/>, and
+    /// the two tools then share a cache of their own.
+    /// </summary>
+    public EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? RouteCheckSources { get; init; }
 }

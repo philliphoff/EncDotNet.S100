@@ -124,7 +124,7 @@ public sealed partial class RouteCheckEngine
         private void CheckBathymetry(LegDepths depths)
         {
             if (_engine._bathymetry is not { } bathymetry
-                || bathymetry.FinestGridSpacingMeters(_extent.SouthLatitude, _extent.WestLongitude, _extent.NorthLatitude, _extent.EastLongitude) is not { } grid
+                || bathymetry.FinestGridSpacingMeters(_extent) is not { } grid
                 || !(grid > 0))
             {
                 return;
@@ -143,7 +143,7 @@ public sealed partial class RouteCheckEngine
                 _cancellationToken.ThrowIfCancellationRequested();
                 var chunk = k / ChunkSize;
                 var box = _chunks[chunk];
-                covered[chunk] ??= bathymetry.FinestGridSpacingMeters(box.SouthLatitude, box.WestLongitude, box.NorthLatitude, box.EastLongitude) is not null;
+                covered[chunk] ??= bathymetry.FinestGridSpacingMeters(box) is not null;
                 if (covered[chunk] != true)
                 {
                     continue;
@@ -218,7 +218,7 @@ public sealed partial class RouteCheckEngine
             (Math.Max(_stations[0].Distance, first - step / 2), Math.Min(_stations[^1].Distance, last + step / 2));
 
         private static ChartedDepth? Shoal(IChartedDepthSource bathymetry, GeoPosition position, double contour) =>
-            bathymetry.Sample(position.Latitude, position.Longitude) is { Kind: ChartedDepthKind.Bathymetry } depth && depth.DepthMeters < contour
+            bathymetry.SampleBathymetry(position) is { } depth && depth.DepthMeters < contour
                 ? depth
                 : null;
 

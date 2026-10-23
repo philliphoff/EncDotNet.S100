@@ -3,6 +3,11 @@ namespace EncDotNet.S100.Pipelines;
 /// <summary>
 /// Transforms coordinates from one CRS to another.
 /// </summary>
+/// <remarks>
+/// Implementations must be safe to call from several threads at once:
+/// coverage sources such as the route checks' S-102 and S-104 grids share one
+/// transform between concurrent checks.
+/// </remarks>
 public interface ICrsTransform
 {
     /// <summary>Transforms a coordinate pair from the source CRS to the target CRS.</summary>
