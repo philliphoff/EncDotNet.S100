@@ -3,6 +3,8 @@ using EncDotNet.S100.Core.Metadata;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S57;
+using EncDotNet.S100.Hdf5;
+using EncDotNet.S100.Hdf5.PureHdf;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -23,9 +25,10 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </para>
 /// <para>
 /// Only products with a cheap path-based metadata reader are supported:
-/// the S-101 / S-57 ENC cells that loose-cell folder framing sees, and the
+/// the S-101 / S-57 ENC cells that loose-cell folder framing sees, the
 /// GML products whose bounds the Library probes for loose datasets (S-122,
-/// S-124, S-125, S-127, S-129, S-201, S-411, S-421; #809). An unrecognised or unsupported product,
+/// S-124, S-125, S-127, S-129, S-201, S-411, S-421; #809), and the HDF5
+/// coverages (S-102, S-104, S-111; #1037). An unrecognised or unsupported product,
 /// or any parse failure, yields <see langword="null"/> and is not cached
 /// (there is no negative caching), so a transient error simply retries next
 /// time and never blocks loading.
@@ -87,6 +90,17 @@ internal sealed class CachingDatasetMetadataReader : IDatasetMetadataReader
         "S-201" => Datasets.S201.S201Dataset.ReadMetadata,
         "S-411" => Datasets.S411.S411Dataset.ReadMetadata,
         "S-421" => Datasets.S421.S421Dataset.ReadMetadata,
+        // Loose HDF5 coverages, e.g. a folder of S-102 or S-104 files with no
+        // exchange-set catalogue to describe them (#1037).
+        "S-102" => path => ReadHdf5(path, Datasets.S102.S102DatasetReader.ReadMetadata),
+        "S-104" => path => ReadHdf5(path, Datasets.S104.S104DatasetReader.ReadMetadata),
+        "S-111" => path => ReadHdf5(path, Datasets.S111.S111DatasetReader.ReadMetadata),
         _ => null,
     };
+
+    private static DatasetMetadata ReadHdf5(string path, Func<IHdf5File, DatasetMetadata> read)
+    {
+        using var file = PureHdfFile.Open(path);
+        return read(file);
+    }
 }
