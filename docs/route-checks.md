@@ -13,13 +13,10 @@ hosts run the same checks and report the same findings and codes:
 - **The command line**: `s100 route check`, for batch runs and CI. See
   [route check](cli.md#route-check).
 
-In your own code, the checks are in the `EncDotNet.S100.Navigation` package:
-`RouteCheckEngine` (land, depths, dangers and coverage), `RouteAreaCheck`
-(regulated and protected areas), `RouteWarningCheck` (S-124) and
-`PassageCheckEngine` (UKC). They read loaded data through one
-`RouteCheckSources` bundle, which `CatalogRouteCheckSources` in
-`EncDotNet.S100.Datasets.Pipelines` builds from loaded datasets. `RouteChecker` runs them all on one
-`PassagePlan` and returns one `RouteCheckReport`, as all three hosts do.
+In your own code, `RouteChecker` in the `EncDotNet.S100.Navigation` package
+runs every check on one `PassagePlan` and returns one `RouteCheckReport`, as
+all three hosts do. [How a route check works](how-a-route-check-works.md)
+explains which data each check reads, the verdict and every finding code.
 
 The results are an aid for exploring the data, not for navigation.
 

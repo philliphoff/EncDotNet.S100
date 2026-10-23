@@ -76,6 +76,12 @@ foreach (var check in report.Checks)
 `Formatter` apply to all of them, and `Chart`, `Areas`, `Warnings` and
 `Clearance` tune each one. `Check` may be called from several threads at once.
 
+[How a route check works](../../docs/how-a-route-check-works.md) explains
+which dataset feeds each check, the time and keel rules, and every finding
+code. The
+[route check sample](../../samples/EncDotNet.S100.Samples.RouteCheck/README.md)
+runs a check end to end.
+
 The engines below are what the checks run, and you can still run each one on
 its own.
 
