@@ -433,7 +433,7 @@ public class RouteFindingFormatter
         _ => "marine protected area",
     };
 
-    /// <summary>A <c>restriction</c> code's label (<see cref="RouteAreaLabels.Restrictions"/>).</summary>
+    /// <summary>A <c>restriction</c> code's label (from the S-101 Edition 2.0.0 Feature Catalogue).</summary>
     /// <param name="code">The code.</param>
     /// <returns>The label.</returns>
     protected virtual string RestrictionLabel(int code) => Label(RouteAreaLabels.Restrictions, code);
@@ -441,7 +441,7 @@ public class RouteFindingFormatter
     /// <summary>
     /// A category code's label: <c>categoryOfMilitaryPracticeArea</c>,
     /// <c>categoryOfAnchorage</c> or <c>categoryOfRestrictedArea</c>, by the
-    /// area's kind (<see cref="RouteAreaLabels"/>).
+    /// area's kind (from the S-101 Edition 2.0.0 Feature Catalogue).
     /// </summary>
     /// <param name="kind">The area's kind.</param>
     /// <param name="code">The code.</param>
