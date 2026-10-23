@@ -167,6 +167,34 @@ public class PatternClipPolygonalTests
         Assert.False(PatternPriorityClipper.IsOverlayFailure(new InvalidOperationException("x")));
     }
 
+    [Fact]
+    public void SimplifyForClip_DuplicateRings_ReturnsInputInsteadOfThrowing()
+    {
+        // NOAA ENC US5CHSED (Charleston Harbor) gave a dense pattern area with
+        // the same ring twice. TopologyPreservingSimplifier keys rings by value
+        // and threw "An item with the same key has already been added", which
+        // failed the whole cell's portrayal.
+        var dense = DenseCircle(0, 0, 100, PatternPriorityClipper.MinPointsToSimplify);
+        var duplicated = Factory.CreateMultiPolygon([dense, (Polygon)dense.Copy()]);
+
+        var result = PatternPriorityClipper.SimplifyForClip(duplicated);
+
+        Assert.Same(duplicated, result);
+    }
+
+    private static Polygon DenseCircle(double cx, double cy, double radius, int points)
+    {
+        var coordinates = new Coordinate[points + 1];
+        for (var i = 0; i < points; i++)
+        {
+            var angle = 2 * Math.PI * i / points;
+            coordinates[i] = new Coordinate(cx + radius * Math.Cos(angle), cy + radius * Math.Sin(angle));
+        }
+
+        coordinates[points] = coordinates[0];
+        return Factory.CreatePolygon(coordinates);
+    }
+
     private static LineString Line(double x0, double y0, double x1, double y1) =>
         Factory.CreateLineString([new Coordinate(x0, y0), new Coordinate(x1, y1)]);
 }

@@ -277,6 +277,13 @@ public static class PatternPriorityClipper
         {
             return geometry;
         }
+        catch (ArgumentException)
+        {
+            // The simplifier keys its rings by value, so a geometry holding two
+            // identical rings (e.g. a duplicated polygon) fails with a duplicate
+            // key. Simplifying is only an optimization: clip it as it is.
+            return geometry;
+        }
     }
 
     /// <summary>
