@@ -296,7 +296,7 @@ public sealed class S57S101Mapping
             }
         }
 
-        if (rule.DefaultS101Code is null) return null;
+        if (rule.DefaultS101Code is null || rule.DroppedPrimitives.Contains(primitive)) return null;
         return new ResolvedFeature(rule.DefaultS101Code, rule.AttributeOverrides);
     }
 

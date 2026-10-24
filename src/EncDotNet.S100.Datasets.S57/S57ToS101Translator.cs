@@ -80,6 +80,16 @@ public sealed class S57ToS101Translator
     private const string CatcovAcronym = "CATCOV";
     private const string CatcovNoCoverage = "2";
 
+    // Underwater hazard depths (see S57HazardDepths): the S-101 portrayal
+    // rules read surroundingDepth and, without valueOfSounding,
+    // defaultClearanceDepth, which S-52 derived at display time from the
+    // DEPARE / DRGARE objects under the hazard.
+    private const string S101AttrSurroundingDepth = "surroundingDepth";
+    private const string S101AttrDefaultClearanceDepth = "defaultClearanceDepth";
+    private const string S101AttrValueOfSounding = "valueOfSounding";
+    private const string S101ClassDepthArea = "DepthArea";
+    private const string S101ClassDredgedArea = "DredgedArea";
+
     // ── S-57 textual-info attribute codes (S-57 Appendix A Chapter 2) ──
     // Per IHO S-57→S-101 Conversion Guidance §2.3, these four attributes
     // do NOT pass through as simple S-101 attributes; instead they are
@@ -489,6 +499,7 @@ public sealed class S57ToS101Translator
     // links every emitted span, PylonBridgeSupport and Pontoon; the member
     // BRIDGE objects emit only their spans. See BuildBridgeAggregations.
     private const ushort BridgeObjl = 11;          // BRIDGE (S-57 object class)
+    private const ushort DamconObjl = 38;          // DAMCON (S-57 object class)
     private const string BridgeAcronym = "BRIDGE";
 
     // ── IENC c_brga → S-401 BridgeArchAssociation ───────────────────────
@@ -533,6 +544,7 @@ public sealed class S57ToS101Translator
     private const string S101AttrCategoryOfLandmark = "categoryOfLandmark";
     private const string S101AttrVisualProminence = "visualProminence";
     private const string CategoryOfLandmarkBridge = "26";
+    private const string CategoryOfLandmarkDam = "27";
     private const string VisualProminenceNotConspicuous = "2";
 
     // ── Vertical clearances on features other than bridge spans ─────────
@@ -927,6 +939,9 @@ public sealed class S57ToS101Translator
         // S-57 objects are source data and are left for validation to report.
         private readonly HashSet<uint> _derivedFeatureIds = new();
 
+        // Depth areas of the cell, indexed on first use by an underwater hazard.
+        private S57HazardDepths? _hazardDepths;
+
         public Dictionary<uint, S101PointRecord> Points { get; } = new();
         public Dictionary<uint, S101MultiPointRecord> MultiPoints { get; } = new();
         public Dictionary<uint, S101CurveSegmentRecord> CurveSegments { get; } = new();
@@ -1201,6 +1216,7 @@ public sealed class S57ToS101Translator
                 topmarkByMaster.TryGetValue(fi, out var topmarkSource);
                 var attributes = TranslateAttributes(
                     feat.Attributes, resolved, objl, out var infoAssociations, extraSectors, topmarkSource);
+                attributes = AppendHazardDepths(feat, resolved.S101Code, acronymView, attributes);
                 if (schedulePlan.SchedulesByFeature.TryGetValue(fi, out var schedules))
                     infoAssociations = [.. infoAssociations, .. TimeScheduleAssociations(resolved.S101Code, schedules, schedulePlan)];
 
@@ -1253,6 +1269,65 @@ public sealed class S57ToS101Translator
             RecordUnlinkedTimeSchedules(schedulePlan);
             EmitBridgeArchAssociations(archGroups, archSpanPositions);
             EmitRangeSystems(pendingAggregations);
+        }
+
+        // ── Underwater hazard depths ────────────────────────────────────
+
+        // Adds surroundingDepth and, when the hazard has no valueOfSounding,
+        // defaultClearanceDepth to a feature whose class binds them. See
+        // S57HazardDepths.
+        private IReadOnlyList<S101Attribute> AppendHazardDepths(
+            EncDotNet.S57.S57FeatureRecord feat,
+            string s101Code,
+            IReadOnlyDictionary<string, string> acronymView,
+            IReadOnlyList<S101Attribute> attributes)
+        {
+            bool bindsSurrounding = _featureBindings.Binds(s101Code, S101AttrSurroundingDepth);
+            bool bindsDefault = _featureBindings.Binds(s101Code, S101AttrDefaultClearanceDepth);
+            if (!bindsSurrounding && !bindsDefault) return attributes;
+
+            _hazardDepths ??= BuildHazardDepths();
+            var surrounding = _hazardDepths.SurroundingDepth(
+                S57Positions(feat), MapPrimitive(feat.Primitive) == S57GeometryPrimitive.Point);
+
+            bool hasSounding = _attributeByName.TryGetValue(S101AttrValueOfSounding, out var soundingCode)
+                && attributes.Any(a => a.NumericCode == soundingCode && !string.IsNullOrEmpty(a.Value));
+
+            // Simple attributes go first, ahead of any complex instance, as
+            // elsewhere in the translator.
+            var result = attributes.ToList();
+            if (bindsSurrounding && surrounding is { } depth)
+                result.Insert(0, new S101Attribute(
+                    GetOrAssignAttributeCode(S101AttrSurroundingDepth), 1, S57HazardDepths.Format(depth)));
+            if (bindsDefault && !hasSounding)
+            {
+                var clearance = S57HazardDepths.DefaultClearanceDepth(
+                    surrounding,
+                    acronymView.GetValueOrDefault("WATLEV")?.Trim(),
+                    acronymView.GetValueOrDefault("EXPSOU")?.Trim(),
+                    acronymView.GetValueOrDefault("CATOBS")?.Trim());
+                result.Insert(0, new S101Attribute(
+                    GetOrAssignAttributeCode(S101AttrDefaultClearanceDepth), 1, S57HazardDepths.Format(clearance)));
+            }
+            return result;
+        }
+
+        private S57HazardDepths BuildHazardDepths()
+        {
+            var areas = new List<(double, List<List<(double Lat, double Lon)>>)>();
+            foreach (var feat in _s57.FeatureRecords)
+            {
+                var primitive = MapPrimitive(feat.Primitive);
+                if (primitive != S57GeometryPrimitive.Surface) continue;
+                var acronymView = _mapping.BuildAcronymView(feat.Attributes);
+                if (!acronymView.TryGetValue("DRVAL1", out var drval1Text)
+                    || !double.TryParse(drval1Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var drval1))
+                    continue;
+                var code = _mapping.ResolveFeature((ushort)(int)feat.ObjectCode, acronymView, primitive)?.S101Code;
+                if (code is S101ClassDepthArea or S101ClassDredgedArea)
+                    areas.Add((drval1, S57Positions(feat)));
+            }
+            return new S57HazardDepths(areas);
         }
 
         // ── Dataset sounding datum (DSPM SDAT) ──────────────────────────
@@ -1656,15 +1731,12 @@ public sealed class S57ToS101Translator
         private List<List<(double Lat, double Lon)>> S57Positions(EncDotNet.S57.S57FeatureRecord feature)
         {
             double cmf = _s57.CoordinateMultiplicationFactor > 0 ? _s57.CoordinateMultiplicationFactor : 10_000_000;
-            (double, double)? Node(int rcid)
-            {
-                foreach (var rcnm in new[] { (int)S57RecordNameCodes.IsolatedNode, (int)S57RecordNameCodes.ConnectedNode })
-                {
-                    if (_vectorIndex.TryGetValue((rcnm, rcid), out var v) && v.Coordinates2D.Count > 0)
-                        return (v.Coordinates2D[0].Y / cmf, v.Coordinates2D[0].X / cmf);
-                }
-                return null;
-            }
+            // Isolated and connected nodes number their RCIDs separately, so a
+            // node is looked up by the pointer's RCNM as well.
+            (double, double)? Node(int rcnm, int rcid)
+                => _vectorIndex.TryGetValue((rcnm, rcid), out var v) && v.Coordinates2D.Count > 0
+                    ? (v.Coordinates2D[0].Y / cmf, v.Coordinates2D[0].X / cmf)
+                    : null;
 
             var parts = new List<List<(double Lat, double Lon)>>();
             foreach (var ptr in feature.SpatialPointers)
@@ -1673,7 +1745,7 @@ public sealed class S57ToS101Translator
                 var rcid = (int)ptr.Name.RecordId;
                 if (rcnm != (int)S57RecordNameCodes.Edge)
                 {
-                    if (Node(rcid) is { } n) parts.Add([n]);
+                    if (Node(rcnm, rcid) is { } n) parts.Add([n]);
                     continue;
                 }
                 if (!_vectorIndex.TryGetValue((rcnm, rcid), out var edge)) continue;
@@ -1681,8 +1753,8 @@ public sealed class S57ToS101Translator
                 (double, double)? begin = null, end = null;
                 foreach (var vp in edge.VectorPointers)
                 {
-                    if ((int)vp.Topology == TopologyBegin) begin = Node((int)vp.Name.RecordId);
-                    else if ((int)vp.Topology == TopologyEnd) end = Node((int)vp.Name.RecordId);
+                    if ((int)vp.Topology == TopologyBegin) begin = Node((int)vp.Name.RecordNameCode, (int)vp.Name.RecordId);
+                    else if ((int)vp.Topology == TopologyEnd) end = Node((int)vp.Name.RecordNameCode, (int)vp.Name.RecordId);
                 }
                 var part = new List<(double Lat, double Lon)>();
                 if (begin is { } b) part.Add(b);
@@ -2204,11 +2276,21 @@ public sealed class S57ToS101Translator
             }
         }
 
-        // Supplies the mandatory Landmark attributes for a point BRIDGE
-        // redirected to Landmark: categoryOfLandmark = 26 (bridge) and, when
+        // The categoryOfLandmark of a point object redirected to Landmark
+        // because its own S-101 class permits no point: 26 (bridge) for a
+        // BRIDGE, 27 (dam) for a DAMCON; null for any other feature.
+        private string? PointLandmarkCategory(ushort ownerObjl, string s101Code)
+        {
+            if (s101Code != S101ClassLandmark) return null;
+            if (IsBridgeObjl(ownerObjl)) return CategoryOfLandmarkBridge;
+            return ownerObjl == DamconObjl ? CategoryOfLandmarkDam : null;
+        }
+
+        // Supplies the mandatory Landmark attributes for a point BRIDGE or
+        // DAMCON redirected to Landmark: its categoryOfLandmark and, when
         // CONVIS did not provide one, visualProminence = 2 (not visually
         // conspicuous).
-        private void AppendPointBridgeLandmarkAttributes(List<S101Attribute> builder)
+        private void AppendPointLandmarkAttributes(List<S101Attribute> builder, string category)
         {
             var visualCode = GetOrAssignAttributeCode(S101AttrVisualProminence);
             if (!builder.Any(a => a.NumericCode == visualCode))
@@ -2216,7 +2298,7 @@ public sealed class S57ToS101Translator
 
             var categoryCode = GetOrAssignAttributeCode(S101AttrCategoryOfLandmark);
             if (!builder.Any(a => a.NumericCode == categoryCode))
-                builder.Insert(0, new S101Attribute(categoryCode, 1, CategoryOfLandmarkBridge));
+                builder.Insert(0, new S101Attribute(categoryCode, 1, category));
         }
 
         // Dissolves the geometries of the BRIDGE members of a bridge C_AGGR into
@@ -2839,7 +2921,7 @@ public sealed class S57ToS101Translator
         {
             informationAssociations = [];
             if (attrs.Count == 0 && topmarkSource is null
-                && !(IsBridgeObjl(ownerObjl) && feature.S101Code == S101ClassLandmark))
+                && PointLandmarkCategory(ownerObjl, feature.S101Code) is null)
                 return [];
 
             // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
@@ -3585,10 +3667,11 @@ public sealed class S57ToS101Translator
                 }
             }
 
-            // A point BRIDGE redirected to Landmark needs the Landmark's
-            // mandatory category and visual prominence (S-65 Annex B §4.8.10).
-            if (IsBridgeObjl(ownerObjl) && feature.S101Code == S101ClassLandmark)
-                AppendPointBridgeLandmarkAttributes(builder);
+            // A point BRIDGE or DAMCON redirected to Landmark needs the
+            // Landmark's mandatory category and visual prominence (S-65 Annex B
+            // §4.8.10, §4.8.5).
+            if (PointLandmarkCategory(ownerObjl, feature.S101Code) is { } landmarkCategory)
+                AppendPointLandmarkAttributes(builder, landmarkCategory);
 
             return builder;
         }

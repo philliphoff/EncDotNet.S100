@@ -71,6 +71,15 @@ public sealed record S57FeatureRule
     public IReadOnlyList<S57FeatureRedirect> Redirects { get; init; } = [];
 
     /// <summary>
+    /// Geometric primitives for which the feature is not converted, when no
+    /// redirect matches. Used where S-57 allows a primitive that the S-101
+    /// target does not, and the conversion guidance converts it to nothing —
+    /// e.g. an area <c>RECTRC</c> (S-101 <c>RecommendedTrack</c> is curve
+    /// only).
+    /// </summary>
+    public IReadOnlyList<S57GeometryPrimitive> DroppedPrimitives { get; init; } = [];
+
+    /// <summary>
     /// Attribute overrides applied whenever this rule is selected (default or
     /// redirect path). Keyed by S-57 attribute acronym.
     /// </summary>

@@ -326,7 +326,21 @@ internal static class DefaultRules
         yield return F(31, "CONZNE", "ContiguousZone");
         yield return F(34, "CONVYR", "Conveyor");
         yield return F(36, "CURENT", "CurrentNonGravitational");
-        yield return F(38, "DAMCON", "Dam");
+        // DAMCON — S-65 Annex B (Ed 2.0.0) § 4.8.5: point is not a permitted
+        // Dam primitive, so a point DAMCON converts to Landmark (the
+        // translator supplies categoryOfLandmark = 27 (dam) and, when CONVIS
+        // is absent, visualProminence = 2).
+        yield return new S57FeatureRule
+        {
+            Objl = 38,
+            S57Acronym = "DAMCON",
+            DefaultS101Code = "Dam",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                TargetS101Code = "Landmark",
+            }],
+        };
         yield return F(39, "DAYMAR", "Daymark");
         yield return F(40, "DWRTCL", "DeepWaterRouteCentreline");
         yield return F(41, "DWRTPT", "DeepWaterRoutePart");
@@ -399,7 +413,17 @@ internal static class DefaultRules
         yield return F(104, "RDOCAL", "RadioCallingInPoint");
         yield return F(105, "RDOSTA", "RadioStation");
         yield return F(108, "RCRTCL", "RecommendedRouteCentreline");
-        yield return F(109, "RECTRC", "RecommendedTrack");
+        // RECTRC — S-65 Annex B (Ed 2.0.0) § 10.1.1: surface is not a
+        // permitted RecommendedTrack primitive, and an area RECTRC is not
+        // converted (producers are to re-encode it as a routeing area or a
+        // line before conversion).
+        yield return new S57FeatureRule
+        {
+            Objl = 109,
+            S57Acronym = "RECTRC",
+            DefaultS101Code = "RecommendedTrack",
+            DroppedPrimitives = [S57GeometryPrimitive.Surface],
+        };
         yield return F(110, "RCTLPT", "RecommendedTrafficLanePart");
         yield return F(111, "RSCSTA", "RescueStation");
         yield return F(113, "RETRFL", "Retroreflector");
