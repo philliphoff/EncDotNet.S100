@@ -13,6 +13,7 @@
 // Data is downloaded once into site/capture/.cache/ (gitignored).
 #:package ModelContextProtocol
 #:package SkiaSharp
+#:project ../../tests/EncDotNet.S100.Testing.Scenarios/EncDotNet.S100.Testing.Scenarios.csproj
 #:property PublishAot=false
 
 using System.Diagnostics;
@@ -154,37 +155,14 @@ var shots = new List<Shot>
     // planner in Charleston would see them.
     new("F10", v => CheckRoute(v, "Day"), Themed: true, TimeZone: "America/New_York"),
 
-    // D3: the same passage with Check route on, then the departure scrubbed across
-    // the S-104 run, so the verdict, the route's colours and the Clearance profile
-    // follow the tide; it ends on the nearest departure that meets the settings.
-    // NOAA ENC and the NOAA S-104 pilot only (no synthetic warnings, so the verdict
-    // is the tide's). Encoded to site/public/clips/D3.{mp4,webm}; returns the poster.
-    new("D3", v => PassageClip(v), TimeZone: "America/New_York"),
+    // D3: Check route up the Duwamish Waterway, Seattle, with the departure
+    // scrubbed through one tide so the verdict, the route's colours and the
+    // Clearance profile follow the water level. NOAA ENC and S-102, and S-104
+    // encoded here from NOAA's tide predictions for Seattle (not a NOAA S-104
+    // product; its producer and title say so). Encoded to
+    // site/public/clips/D3.{mp4,webm}; returns the poster.
+    new("D3", v => PassageClip(v), TimeZone: "America/Los_Angeles"),
 
-    // Temporary probe: the Duwamish charts and channel areas, for picking D3's route.
-    new("PROBE-DUW", async v =>
-    {
-        await v.Reset();
-        var cells = new List<string>();
-        foreach (var cell in Grid("US5SEA", "EFG", "KLM"))
-            try { cells.AddRange(await data.Enc([cell])); } catch (Exception e) { Console.WriteLine($"  {cell}: {e.Message[..Math.Min(60, e.Message.Length)]}"); }
-        await v.OpenAll(cells, tolerateFailures: true);
-        foreach (var d in (await v.Call("list_datasets"))?["datasets"]?.AsArray() ?? [])
-            Console.WriteLine($"  DS {d!["id"]} {d["bounds"]?.ToJsonString()}");
-        Console.WriteLine($"  COUNT {(await v.Call("count_features", new() { ["query"] = new JsonObject { ["kind"] = "box", ["south"] = 47.50, ["west"] = -122.38, ["north"] = 47.61, ["east"] = -122.30 }.ToJsonString() }))?.ToJsonString()}");
-        var query = new JsonObject { ["kind"] = "box", ["south"] = 47.50, ["west"] = -122.38, ["north"] = 47.61, ["east"] = -122.30 };
-        foreach (var type in new[] { "DredgedArea", "Fairway", "RecommendedTrack", "NavigationLine", "Bridge", "SpanOpening", "SpanFixed" })
-        {
-            var hits = (await v.Call("query_features", new() { ["query"] = query.ToJsonString(), ["featureType"] = type, ["pageSize"] = 200 }))?["features"]?.AsArray() ?? [];
-            foreach (var f in hits)
-            {
-                var detail = (await v.Call("describe_feature", new() { ["datasetId"] = f!["datasetId"]!.GetValue<string>(), ["featureId"] = f["featureId"]!.ToString() }))?.ToJsonString() ?? "";
-                Console.WriteLine($"  {type} {f.ToJsonString()[..Math.Min(400, f.ToJsonString().Length)]}");
-                Console.WriteLine($"    {detail[..Math.Min(2500, detail.Length)]}");
-            }
-        }
-        throw new SkipShot("probe only");
-    }),
 
     // F11: the Navigational warnings panel scoped to the checked route, with the
     // dredging warning's card open in Object Information.
@@ -685,37 +663,59 @@ async Task<byte[]> CheckRoute(Viewer v, string palette)
     return await v.Window();
 }
 
-// D3: Check route, then the departure scrubbed across the S-104 window.
+// D3: Check route up the Duwamish, then the departure scrubbed through one tide.
 async Task<byte[]> PassageClip(Viewer v)
 {
     await v.Reset();
-    await v.OpenAll(await data.Enc(charlestonEnc));
-    // Shown, unlike F10, so the water level visibly moves with the ship's ETA.
-    foreach (var id in await v.OpenAll(Directory.GetFiles(Fixture("S104"), "104US004SC1CO*.h5")))
+    // Harbour-scale cells over Elliott Bay and the Duwamish (columns L and M).
+    await v.OpenAll(await data.Enc([.. Grid("US5SEA", "EF", "LM")]));
+    var s102 = new List<string>();
+    foreach (var tile in Grid("102US005SEA", "EF", "LM"))
+        try { s102.AddRange(await data.S102([tile])); } catch (InvalidOperationException) { }
+    Console.WriteLine($"  S-102 tiles: {s102.Count}");
+    await v.OpenAll(s102, tolerateFailures: true);
+
+    // S-104 from NOAA's predictions at Seattle (9447130, MLLW, the charts' datum),
+    // over the 48 hours with the largest range in the next 30 days.
+    var (levels, tideStart, _) = await data.SeattleTideS104(Path.Combine(scriptDir, ".cache", "tide"), DateTime.UtcNow.Date);
+    foreach (var id in await v.OpenAll([levels]))
         await v.Call("set_dataset_state", new() { ["datasetId"] = id, ["visible"] = true });
-    await v.Call("set_test_clock", new() { ["now"] = checkDeparture.ToString("O"), ["freeze"] = true });
+    await v.Call("set_test_clock", new() { ["now"] = tideStart.ToString("O"), ["freeze"] = true });
     await v.Call("set_view_time", new() { ["time"] = "now" });
-    await v.Call("create_route", new() { ["name"] = "Fort Sumter Range to Wando" });
-    foreach (var (lat, lon) in fortSumterToWando)
+
+    // The Duwamish Waterway's recommended track, from the Harbor Island junction
+    // to just short of the First Avenue South Bridge (read from US5SEAFL/EL).
+    (double Lat, double Lon)[] duwamish =
+    [
+        (47.5682, -122.3497), (47.5591, -122.3448), (47.5500, -122.3400), (47.5445, -122.3370),
+    ];
+    await v.Call("create_route", new() { ["name"] = "Duwamish Waterway" });
+    foreach (var (lat, lon) in duwamish)
         await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
     await v.Call("set_passage", new()
     {
-        ["draftMeters"] = 14.5, ["requiredUkcMeters"] = 1.0, ["speedKnots"] = 10.0, ["departure"] = checkDeparture.ToString("O"),
+        ["draftMeters"] = 6.0, ["requiredUkcMeters"] = 0.6, ["squatMeters"] = 0.2, ["speedKnots"] = 6.0,
+        ["departure"] = tideStart.AddHours(1).ToString("O"),
     });
 
-    // The draft is searched so about 40% of the departures across the S-104 run
-    // meet the settings: wide enough windows to see, still closing at low water.
+    var plain = await v.Call("check_route");
+    var aground = plain!["findings"]!.AsArray()
+        .Where(f => f!["code"]!.GetValue<string>() is "route_check.crosses_land" or "route_check.crosses_drying" or "data.outside_chart_coverage")
+        .Select(f => $"{f!["title"]} ({f!["meta"]})").ToList();
+    if (aground.Count > 0) throw new SkipShot("adjust the waypoints: " + string.Join("; ", aground));
+
+    // The draft is searched so about 40% of the departures meet the settings.
     async Task<(double Meeting, JsonNode Window)> Sweep(double draft)
     {
         var window = (await v.Call("check_route", new() { ["draftMeters"] = draft, ["includeWindow"] = true }))?["clearance"]?["window"]
-            ?? throw new InvalidOperationException("no departure window; check the route against the S-104 run");
+            ?? throw new InvalidOperationException("no departure window; check the route against the S-104");
         var all = window["departures"]!.AsArray();
         var meets = all.Count(d => d!["verdict"]!.GetValue<string>().StartsWith("meets_settings", StringComparison.Ordinal));
         return (all.Count == 0 ? 0 : (double)meets / all.Count, window);
     }
-    double low = 12, high = 14.5, draft = 14.5;
+    double low = 2, high = 14, draft = 6;
     JsonNode? sweep = null;
-    for (var i = 0; i < 8; i++)
+    for (var i = 0; i < 10; i++)
     {
         draft = Math.Round((low + high) / 2, 1);
         var (meeting, window) = await Sweep(draft);
@@ -727,8 +727,7 @@ async Task<byte[]> PassageClip(Viewer v)
     var chosen = sweep ?? throw new SkipShot("the draft search didn't run");
     await v.Call("set_passage", new() { ["draftMeters"] = draft });
 
-    // One tide cycle: the longest meeting run, with three hours either side, so the
-    // scrub goes closed → opening → open → closing → closed.
+    // One tide: the longest meeting run, with three hours either side.
     var runs = chosen["windows"]!.AsArray()
         .Select(w => (First: DateTimeOffset.Parse(w!["first"]!.GetValue<string>()), Last: DateTimeOffset.Parse(w!["last"]!.GetValue<string>())))
         .OrderByDescending(w => w.Last - w.First).ToList();
@@ -746,19 +745,16 @@ async Task<byte[]> PassageClip(Viewer v)
     await v.Panel("Routes");
     await v.Panel("Timeline");
     await v.Call("set_passage", new() { ["departure"] = scrub[0].ToString("O") });
-    // The upper harbour (waypoints 5 to 9): the shoal that sets the window is here,
-    // and at this scale the harbour cells draw.
-    var upper = fortSumterToWando[4..];
-    var lats = upper.Select(w => w.Lat).ToList();
-    var lons = upper.Select(w => w.Lon).ToList();
-    await v.Frame(new Box(lats.Min() - 0.004, lons.Min() - 0.010, lats.Max() + 0.004, lons.Max() + 0.010));
+    var lats = duwamish.Select(w => w.Lat).ToList();
+    var lons = duwamish.Select(w => w.Lon).ToList();
+    await v.Frame(new Box(lats.Min() - 0.003, lons.Min() - 0.008, lats.Max() + 0.003, lons.Max() + 0.008));
 
     var clip = new AgentClipBuilder(transcript: false);
     await clip.Frame(v, 1.5);                                      // the route as planned
     await v.Call("set_check_mode", new() { ["on"] = true });
     await v.Panel("Clearance");
     await v.Call("set_map_legend", new() { ["open"] = false });
-    await v.Call("set_follow_passage", new() { ["on"] = true });  // S-104 on the map at the ship's ETA
+    await v.Call("set_follow_passage", new() { ["on"] = true });  // S-104 at the ship's ETA
     await clip.Frame(v, 2.0);                                      // checked at the first departure
     foreach (var departure in scrub)
     {
@@ -838,6 +834,75 @@ sealed class Data(string cacheDir)
             paths.Add(cellFile);
         }
         return [.. paths];
+    }
+
+    /// <summary>
+    /// An S-104 station dataset (dcf8) of NOAA CO-OPS tide predictions at Seattle
+    /// (9447130), relative to MLLW, over the 48 hours with the largest range in the
+    /// 30 days from <paramref name="start"/>. Encoded here, not a NOAA S-104 product:
+    /// its producer code and title say so. Returns the file and the first and last
+    /// times.
+    /// </summary>
+    public async Task<(string Path, DateTimeOffset From, DateTimeOffset To)> SeattleTideS104(string directory, DateTime start)
+    {
+        var end = start.AddDays(30);
+        var url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=soundcharts-capture" +
+            $"&begin_date={start:yyyyMMdd}&end_date={end:yyyyMMdd}&datum=MLLW&station=9447130&time_zone=gmt&units=metric&interval=10&format=json";
+        var json = JsonNode.Parse(await Http.GetStringAsync(url))!;
+        var predictions = json["predictions"]?.AsArray() ?? throw new InvalidOperationException($"no predictions: {json.ToJsonString()[..Math.Min(200, json.ToJsonString().Length)]}");
+        var series = predictions.Select(p => (
+                Time: DateTime.SpecifyKind(DateTime.ParseExact(p!["t"]!.GetValue<string>(), "yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture), DateTimeKind.Utc),
+                Height: double.Parse(p!["v"]!.GetValue<string>(), System.Globalization.CultureInfo.InvariantCulture)))
+            .ToList();
+
+        // The 48 hours (288 ten-minute steps) with the largest range.
+        const int span = 288;
+        var best = Enumerable.Range(0, series.Count - span)
+            .Where(i => i % 6 == 0)
+            .MaxBy(i => series.Skip(i).Take(span).Max(x => x.Height) - series.Skip(i).Take(span).Min(x => x.Height));
+        var window = series.Skip(best).Take(span).ToList();
+        Console.WriteLine($"  Seattle tide {window[0].Time:u} – {window[^1].Time:u}: {window.Min(x => x.Height):0.00} to {window.Max(x => x.Height):0.00} m MLLW");
+
+        const double latitude = 47.6026, longitude = -122.3393;
+        var station = new EncDotNet.S100.Testing.Scenarios.Hdf5.S104Dcf8FixtureBuilder.Station<EncDotNet.S100.Testing.Scenarios.Hdf5.S104Dcf8FixtureBuilder.SpecValueRow>
+        {
+            Identifier = "9447130",
+            Latitude = (float)latitude,
+            Longitude = (float)longitude,
+            StartDateTime = window[0].Time.ToString("yyyyMMdd'T'HHmmss'Z'"),
+            EndDateTime = window[^1].Time.ToString("yyyyMMdd'T'HHmmss'Z'"),
+            TimeRecordInterval = 600,
+            Values = window.Select((x, i) =>
+            {
+                var rate = (window[Math.Min(i + 1, window.Count - 1)].Height - window[Math.Max(i - 1, 0)].Height) / (i == 0 || i == window.Count - 1 ? 1 / 6.0 : 2 / 6.0);
+                return new EncDotNet.S100.Testing.Scenarios.Hdf5.S104Dcf8FixtureBuilder.SpecValueRow
+                {
+                    WaterLevelHeight = (float)x.Height,
+                    WaterLevelTrend = rate > 0.2 ? (byte)2 : rate < -0.2 ? (byte)1 : (byte)3,
+                };
+            }).ToArray(),
+        };
+        Directory.CreateDirectory(directory);
+        var path = System.IO.Path.Combine(directory, $"104XX00SEATTLE_{window[0].Time:yyyyMMdd'T'HH}Z.h5");
+        var issued = DateTime.UtcNow;
+        EncDotNet.S100.Testing.Scenarios.Hdf5.S104Dcf8FixtureBuilder.WriteFile(path, [station], extraRootAttributes: new Dictionary<string, object>
+        {
+            ["productSpecification"] = "INT.IHO.S-104.2.0",
+            ["issueDate"] = issued.ToString("yyyyMMdd"),
+            ["issueTime"] = issued.ToString("HHmmss'Z'"),
+            ["horizontalCRS"] = 4326,
+            ["westBoundLongitude"] = longitude - 1e-4,
+            ["eastBoundLongitude"] = longitude + 1e-4,
+            ["southBoundLatitude"] = latitude - 1e-4,
+            ["northBoundLatitude"] = latitude + 1e-4,
+            ["geographicIdentifier"] = "Seattle: NOAA CO-OPS tide predictions (9447130), encoded by SoundCharts capture; not a NOAA S-104 product",
+            ["verticalCS"] = 6499,
+            ["verticalCoordinateBase"] = (byte)2,
+            ["verticalDatumReference"] = (byte)1,
+            ["verticalDatum"] = 12, // mean lower low water
+            ["waterLevelTrendThreshold"] = 0.2,
+        });
+        return (path, new DateTimeOffset(window[0].Time), new DateTimeOffset(window[^1].Time));
     }
 
     /// <summary>NOAA S-102 tiles by cell name (the edition suffix is looked up in the catalogue).</summary>
@@ -1401,11 +1466,34 @@ sealed class AgentClipBuilder(bool transcript = true)
         var listFile = Path.Combine(work, "frames.txt");
         await File.WriteAllTextAsync(listFile, list.ToString());
 
+        if (!FfmpegAvailable())
+        {
+            // Keep the frames and their durations so they can be encoded elsewhere.
+            var kept = Path.Combine(directory, name + "-frames");
+            if (Directory.Exists(kept)) Directory.Delete(kept, recursive: true);
+            Directory.Move(work, kept);
+            Console.WriteLine($"  ffmpeg not found: frames kept in {kept} (frames.txt has the durations)");
+            return;
+        }
         await Ffmpeg("-y", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", "fps=30,format=yuv420p",
             "-c:v", "libx264", "-crf", "23", "-preset", "slow", "-movflags", "+faststart", "-an", Path.Combine(directory, name + ".mp4"));
         await Ffmpeg("-y", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", "fps=30,format=yuv420p",
             "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "36", "-an", Path.Combine(directory, name + ".webm"));
         Directory.Delete(work, recursive: true);
+    }
+
+    private static bool FfmpegAvailable()
+    {
+        try
+        {
+            using var probe = Process.Start(new ProcessStartInfo("ffmpeg", "-version") { RedirectStandardOutput = true, RedirectStandardError = true });
+            probe?.WaitForExit();
+            return probe is { ExitCode: 0 };
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
     }
 
     private static async Task Ffmpeg(params string[] arguments)
