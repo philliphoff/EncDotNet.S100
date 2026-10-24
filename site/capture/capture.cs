@@ -678,29 +678,55 @@ async Task<byte[]> PassageClip(Viewer v)
         ["draftMeters"] = 14.5, ["requiredUkcMeters"] = 1.0, ["speedKnots"] = 10.0, ["departure"] = checkDeparture.ToString("O"),
     });
 
-    // Every departure the S-104 covers, from the same sweep as the departure band.
-    var window = (await v.Call("check_route", new() { ["includeWindow"] = true }))?["clearance"]?["window"]
-        ?? throw new InvalidOperationException("no departure window; check the route against the S-104 run");
-    var departures = window["departures"]!.AsArray()
-        .Where(d => d!["verdict"]!.GetValue<string>() != "water_level_ends_before_arrival")
-        .Select(d => (Time: DateTimeOffset.Parse(d!["departure"]!.GetValue<string>()),
-                      Meets: d!["verdict"]!.GetValue<string>().StartsWith("meets_settings", StringComparison.Ordinal)))
-        .ToList();
-    var meeting = departures.Count(d => d.Meets);
-    Console.WriteLine($"  {departures.Count} departures, {meeting} meet the settings");
-    if (meeting == 0 || meeting == departures.Count)
-        throw new SkipShot("the window doesn't both open and close; adjust the draft");
+    // The draft is searched so about 40% of the departures across the S-104 run
+    // meet the settings: wide enough windows to see, still closing at low water.
+    async Task<(double Meeting, JsonNode Window)> Sweep(double draft)
+    {
+        var window = (await v.Call("check_route", new() { ["draftMeters"] = draft, ["includeWindow"] = true }))?["clearance"]?["window"]
+            ?? throw new InvalidOperationException("no departure window; check the route against the S-104 run");
+        var all = window["departures"]!.AsArray();
+        var meets = all.Count(d => d!["verdict"]!.GetValue<string>().StartsWith("meets_settings", StringComparison.Ordinal));
+        return (all.Count == 0 ? 0 : (double)meets / all.Count, window);
+    }
+    double low = 12, high = 14.5, draft = 14.5;
+    JsonNode? sweep = null;
+    for (var i = 0; i < 8; i++)
+    {
+        draft = Math.Round((low + high) / 2, 1);
+        var (meeting, window) = await Sweep(draft);
+        sweep = window;
+        Console.WriteLine($"  draft {draft:0.0} m: {meeting:P0} of departures meet the settings");
+        if (Math.Abs(meeting - 0.4) < 0.06) break;
+        if (meeting > 0.4) low = draft; else high = draft;
+    }
+    var chosen = sweep ?? throw new SkipShot("the draft search didn't run");
+    await v.Call("set_passage", new() { ["draftMeters"] = draft });
+
+    // One tide cycle: the longest meeting run, with three hours either side, so the
+    // scrub goes closed → opening → open → closing → closed.
+    var runs = chosen["windows"]!.AsArray()
+        .Select(w => (First: DateTimeOffset.Parse(w!["first"]!.GetValue<string>()), Last: DateTimeOffset.Parse(w!["last"]!.GetValue<string>())))
+        .OrderByDescending(w => w.Last - w.First).ToList();
+    if (runs.Count == 0) throw new SkipShot($"no departure meets the settings at {draft:0.0} m");
+    var run = runs[0];
+    var departures = chosen["departures"]!.AsArray()
+        .Select(d => DateTimeOffset.Parse(d!["departure"]!.GetValue<string>()))
+        .Where(t => t >= run.First.AddHours(-3) && t <= run.Last.AddHours(3)).ToList();
+    Console.WriteLine($"  window {run.First:u} – {run.Last:u}, scrubbing {departures.Count} departures");
     const int steps = 60;
-    var scrub = Enumerable.Range(0, steps).Select(i => departures[i * (departures.Count - 1) / (steps - 1)].Time).Distinct().ToList();
+    var scrub = Enumerable.Range(0, steps).Select(i => departures[i * (departures.Count - 1) / (steps - 1)]).Distinct().ToList();
 
     // Routes panel on the left; the bottom dock open on the Timeline, where Check
     // route adds the Clearance tab, so switching to it doesn't move the map.
     await v.Panel("Routes");
     await v.Panel("Timeline");
     await v.Call("set_passage", new() { ["departure"] = scrub[0].ToString("O") });
-    var lats = fortSumterToWando.Select(w => w.Lat).ToList();
-    var lons = fortSumterToWando.Select(w => w.Lon).ToList();
-    await v.Frame(new Box(lats.Min() - 0.006, lons.Min() - 0.012, lats.Max() + 0.006, lons.Max() + 0.012));
+    // The upper harbour (waypoints 5 to 9): the shoal that sets the window is here,
+    // and at this scale the harbour cells draw.
+    var upper = fortSumterToWando[4..];
+    var lats = upper.Select(w => w.Lat).ToList();
+    var lons = upper.Select(w => w.Lon).ToList();
+    await v.Frame(new Box(lats.Min() - 0.004, lons.Min() - 0.010, lats.Max() + 0.004, lons.Max() + 0.010));
 
     var clip = new AgentClipBuilder(transcript: false);
     await clip.Frame(v, 1.5);                                      // the route as planned
@@ -715,9 +741,8 @@ async Task<byte[]> PassageClip(Viewer v)
         await clip.Frame(v, 0.15);
     }
 
-    // End as the verdict card's "Depart HH:MM" does, on the nearest departure that meets.
-    await v.Call("set_departure", new() { ["departure"] = checkDeparture.ToString("O") });
-    var state = await v.Call("set_departure", new() { ["nearestMeeting"] = true });
+    // End in the middle of the window, as a planner would choose.
+    var state = await v.Call("set_departure", new() { ["departure"] = (run.First + (run.Last - run.First) / 2).ToString("O") });
     Console.WriteLine($"  final: {state?["verdictTitle"]} · {state?["verdictSubtitle"]}");
     var poster = await clip.Frame(v, 3.5);
 
