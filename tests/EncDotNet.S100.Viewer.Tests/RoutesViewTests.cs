@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -29,6 +30,36 @@ public sealed class RoutesViewTests
         var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
         RouteEditorKeys.Attach(host.Window, service);
         return (service, route, host);
+    }
+
+    [AvaloniaFact]
+    public void A_long_route_name_trims_and_keeps_the_rename_pencil_in_view()
+    {
+        var (_, route, host) = Show();
+        using var _host = host;
+        route.Name = "A long coastal passage with twelve waypoints and a deliberately long name to test truncation";
+        host.Settle();
+
+        var name = host.Find<TextBlock>("Routes.Active.Name");
+        var pencil = host.Find<Button>("Routes.Active.Rename");
+        var right = pencil.TranslatePoint(new Point(pencil.Bounds.Width, 0), host.Window)!.Value.X;
+        Assert.True(right <= host.Window.Bounds.Width, $"pencil ends at {right}");
+        Assert.Contains(name.TextLayout.TextLines, l => l.HasCollapsed);
+    }
+
+    [AvaloniaFact]
+    public void The_route_name_box_commits_when_it_loses_focus()
+    {
+        var (_, route, host) = Show();
+        using var _host = host;
+        host.Click(host.Find<Button>("Routes.Active.Rename"));
+        var box = host.Find<TextBox>("Routes.Active.NameBox");
+        box.Focus();
+        box.Text = "Approach";
+        host.Click(host.FindAll<Button>("Routes.Leg")[0]);
+
+        Assert.Equal("Approach", route.Name);
+        Assert.False(host.IsShown("Routes.Active.NameBox"));
     }
 
     private static TextBox Field(ViewHost host, string id, int index)
@@ -122,15 +153,18 @@ public sealed class RoutesViewTests
             Assert.StartsWith("Not for navigation", host.Find<TextBlock>("Routes.Check.Footer").Text);
             Assert.True(host.IsShown("Routes.Check.HeaderMeta"));
             Assert.Equal(8, host.FindAll<Button>("Routes.Check.Leg").Count);
+            // A leg row fills the list's width, so its hover tint and chips reach the edge.
+            var leg = host.FindAll<Button>("Routes.Check.Leg")[0];
+            Assert.Equal(leg.Bounds.Width - leg.Padding.Left - leg.Padding.Right, ((Control)leg.Content!).Bounds.Width, 1);
             var chips = host.FindAll<Panel>("Routes.Check.Leg.Chip");
             Assert.Contains("destructive", chips[5].Classes);
             Assert.Contains("success", chips[0].Classes);
             Assert.False(host.IsShown("Routes.Waypoint"));
 
-            host.Click(host.Find<ToggleButton>("Routes.Check.FindingsTab"));
+            host.Click(host.Find<TabItem>("Routes.Check.FindingsTab"));
             Assert.True(host.IsShown("Routes.Check.Findings"));
             Assert.False(host.IsShown("Routes.Check.Leg"));
-            host.Click(host.Find<ToggleButton>("Routes.Check.LegsTab"));
+            host.Click(host.Find<TabItem>("Routes.Check.LegsTab"));
             Assert.True(host.IsShown("Routes.Check.Leg"));
 
             host.Click(check);
@@ -163,8 +197,12 @@ public sealed class RoutesViewTests
             host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));
             WaitForResult(host, fixture);
 
-            var tab = host.Find<ToggleButton>("Routes.Check.FindingsTab");
-            Assert.Equal($"Findings {findings.Findings.Count}", tab.Content);
+            var tab = host.Find<TabItem>("Routes.Check.FindingsTab");
+            Assert.Equal($"Findings {findings.Findings.Count}", Avalonia.Automation.AutomationProperties.GetName(tab));
+            var count = host.Find<TextBlock>("Routes.Check.FindingsTab.Count");
+            Assert.Equal($"{findings.Findings.Count}", count.Text);
+            var label = (TextBlock)((StackPanel)count.Parent!).Children[0];
+            Assert.NotEqual(label.Foreground?.ToString(), count.Foreground?.ToString());  // the secondary colour
             Assert.Equal(2, findings.Findings.Count);
             Assert.False(host.IsShown("Routes.Check.Findings"));
 
@@ -190,7 +228,7 @@ public sealed class RoutesViewTests
             Assert.Single(viewport.Zooms);
             Assert.Equal(5, fixture.Check.Cursor?.LegIndex);
 
-            host.Click(host.Find<ToggleButton>("Routes.Check.LegsTab"));
+            host.Click(host.Find<TabItem>("Routes.Check.LegsTab"));
             Assert.False(host.IsShown("Routes.Check.Findings"));
             Assert.True(host.IsShown("Routes.Check.Leg"));
         }

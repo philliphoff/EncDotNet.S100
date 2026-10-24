@@ -1,4 +1,5 @@
 using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Viewer.Routing;
 
@@ -89,8 +90,9 @@ internal sealed class RouteEtas
 
     /// <summary>
     /// The route's legs as Navigation <see cref="PassageLeg"/>s, with every
-    /// passage value resolved to the leg's effective one. An unset draft is 0:
-    /// the schedule doesn't use it, and the check needs a draft first.
+    /// passage value resolved to the leg's effective one: draft (none when
+    /// unset), speed, the route's squat, required UKC, and the cross-track
+    /// limits. Legs are named "1 → 2".
     /// </summary>
     public static IReadOnlyList<PassageLeg> ToPassageLegs(Route route)
     {
@@ -99,16 +101,24 @@ internal sealed class RouteEtas
         for (var i = 0; i < legs.Length; i++)
         {
             var speed = route.GetEffectiveLegValue(i, RoutePassageField.Speed);
-            legs[i] = new PassageLeg(
-                [route.Waypoints[i].Position, route.Waypoints[i + 1].Position],
-                DraftMeters: route.GetEffectiveLegValue(i, RoutePassageField.Draft) ?? 0,
-                SpeedKnots: speed > 0 ? speed : null,
-                SquatMeters: route.Passage.SquatMeters ?? 0,
-                RequiredUkcMeters: route.GetEffectiveLegValue(i, RoutePassageField.RequiredUkc),
-                Geometry: route.Legs[i].GeometryType == RouteLegGeometryType.Geodesic
+            legs[i] = new PassageLeg
+            {
+                Points = [route.Waypoints[i].Position, route.Waypoints[i + 1].Position],
+                Geometry = route.Legs[i].GeometryType == RouteLegGeometryType.Geodesic
                     ? LegGeometry.GreatCircle
-                    : LegGeometry.Rhumb);
+                    : LegGeometry.Rhumb,
+                PortLimit = Metres(route.GetEffectiveLegValue(i, RoutePassageField.PortCrossTrack)),
+                StarboardLimit = Metres(route.GetEffectiveLegValue(i, RoutePassageField.StarboardCrossTrack)),
+                Speed = speed > 0 ? Speed.FromKnots(speed.Value) : null,
+                Draft = DepthMetres(route.GetEffectiveLegValue(i, RoutePassageField.Draft)),
+                Squat = Depth.FromMetres(route.Passage.SquatMeters ?? 0),
+                RequiredUkc = DepthMetres(route.GetEffectiveLegValue(i, RoutePassageField.RequiredUkc)),
+                Name = $"{i + 1} → {i + 2}",
+            };
         }
         return legs;
+
+        static Length? Metres(double? metres) => metres is { } m ? Length.FromMetres(m) : null;
+        static Depth? DepthMetres(double? metres) => metres is { } m ? Depth.FromMetres(m) : null;
     }
 }

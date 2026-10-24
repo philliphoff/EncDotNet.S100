@@ -103,7 +103,7 @@ jobs:
     needs: [plan, publish]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Download build artifacts
@@ -113,7 +113,13 @@ jobs:
 
       - name: Update the nightly release
         env:
-          GH_TOKEN: ${{ github.token }}
+          # RELEASE_TOKEN (a PAT with Contents and Workflows write) rather than
+          # GITHUB_TOKEN: Actions tokens can't create or move a ref when that
+          # changes workflow files, which `nightly` does whenever .github/workflows
+          # changed since the last nightly (or the built commit is behind main).
+          # Pushing the `nightly` tag with a PAT triggers nothing: CI only builds
+          # v* tags and no workflow listens for release events.
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           REPO: ${{ github.repository }}
           SHA: ${{ needs.plan.outputs.sha }}
           VERSION: ${{ needs.plan.outputs.version }}

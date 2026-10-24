@@ -61,8 +61,6 @@ internal sealed class ClearanceViewModel : ViewModelBase
 
         _drag = new DepartureDrag(check);
         _cursorSection = new RectangularSection { Xi = double.NaN, Xj = double.NaN, ZIndex = 20 };
-        ShowDistanceCommand = new RelayCommand(() => Axis = ClearanceAxis.Distance);
-        ShowTimeCommand = new RelayCommand(() => Axis = ClearanceAxis.Time, () => CanShowTime);
         ToggleSourcesCommand = new RelayCommand(() => IsSourcesOpen = !IsSourcesOpen);
 
         _check.Changed += (_, _) => Refresh();
@@ -74,10 +72,6 @@ internal sealed class ClearanceViewModel : ViewModelBase
             _timeFormat.TimeFormatChanged += _ => Rebuild(force: true);
         Refresh();
     }
-
-    public ICommand ShowDistanceCommand { get; }
-
-    public ICommand ShowTimeCommand { get; }
 
     public ICommand ToggleSourcesCommand { get; }
 
@@ -93,8 +87,16 @@ internal sealed class ClearanceViewModel : ViewModelBase
                 return;
             OnPropertyChanged(nameof(IsDistanceAxis));
             OnPropertyChanged(nameof(IsTimeAxis));
+            OnPropertyChanged(nameof(AxisIndex));
             Rebuild(force: true);
         }
+    }
+
+    /// <summary>The selected axis tab, Distance (0) or Time (1).</summary>
+    public int AxisIndex
+    {
+        get => (int)Axis;
+        set => Axis = (ClearanceAxis)value;
     }
 
     public bool IsDistanceAxis => Axis == ClearanceAxis.Distance;
@@ -111,7 +113,6 @@ internal sealed class ClearanceViewModel : ViewModelBase
             if (SetProperty(ref _canShowTime, value))
             {
                 OnPropertyChanged(nameof(TimeTooltip));
-                ((RelayCommand)ShowTimeCommand).NotifyCanExecuteChanged();
             }
         }
     }
@@ -191,6 +192,22 @@ internal sealed class ClearanceViewModel : ViewModelBase
     {
         get => _readoutPosition;
         private set => SetProperty(ref _readoutPosition, value);
+    }
+
+    private string? _readoutDistance;
+    /// <summary>The head's left part: <c>{NM}</c>.</summary>
+    public string? ReadoutDistance
+    {
+        get => _readoutDistance;
+        private set => SetProperty(ref _readoutDistance, value);
+    }
+
+    private string? _readoutEta;
+    /// <summary>The head's right part: the ETA, or <c>null</c> without one.</summary>
+    public string? ReadoutEta
+    {
+        get => _readoutEta;
+        private set => SetProperty(ref _readoutEta, value);
     }
 
     private string? _readoutLeg;
@@ -495,9 +512,10 @@ internal sealed class ClearanceViewModel : ViewModelBase
             OnPropertyChanged(nameof(Axis));
             OnPropertyChanged(nameof(IsDistanceAxis));
             OnPropertyChanged(nameof(IsTimeAxis));
+            OnPropertyChanged(nameof(AxisIndex));
         }
 
-        var profile = ClearanceProfile.Build(snapshot, _axis);
+        var profile = ClearanceProfile.Build(snapshot, _axis, TimeFormat);
         _profile = profile;
         HasProfile = true;
         EmptyText = null;
@@ -505,6 +523,59 @@ internal sealed class ClearanceViewModel : ViewModelBase
         BuildSources(snapshot);
         UpdateCursor();
         UpdateBand(force);
+    }
+
+    // The x axis. Distance steps are LiveCharts' own (they follow the plot
+    // size); time steps are whole hours or days sized to the plot, on the
+    // clock (#1038).
+    private Axis BuildXAxis(ClearanceProfile profile, SolidColorPaint labels)
+    {
+        var (from, to) = profile.XRange();
+        var departure = profile.Snapshot.Result.Departure;
+        var timeFormat = TimeFormat;
+        Func<double, string> labeler = profile.Axis == ClearanceAxis.Time
+            ? v => PassageFormatting.FormatEta(profile.TimeAt(v), departure, timeFormat)
+            : v => v.ToString("0.#", CultureInfo.CurrentCulture);
+        return new Axis
+        {
+            MinLimit = from,
+            MaxLimit = to,
+            LabelsPaint = labels,
+            SeparatorsPaint = null,
+            TextSize = 10,
+            MinStep = profile.Axis == ClearanceAxis.Time ? TimeStep(profile, labeler) : 0.5,
+            ForceStepToMin = profile.Axis == ClearanceAxis.Time,
+            Labeler = labeler,
+        };
+    }
+
+    private double TimeStep(ClearanceProfile profile, Func<double, string> labeler)
+    {
+        var (from, to) = profile.XRange();
+        var chars = Math.Max(labeler(from).Length, labeler(to).Length);
+        return profile.TimeStep(_plotWidth, chars * TimeLabelCharWidth);
+    }
+
+    // About the width of a character at the axis's 10 px labels.
+    private const double TimeLabelCharWidth = 6;
+
+    private double _plotWidth = 600;
+
+    /// <summary>
+    /// The profile's plot width, pixels, from the view: the time axis spaces
+    /// its labels to fit it (#1038).
+    /// </summary>
+    public void SetPlotWidth(double width)
+    {
+        if (!double.IsFinite(width) || width <= 0 || Math.Abs(width - _plotWidth) < 1)
+            return;
+        _plotWidth = width;
+        if (_profile is { Axis: ClearanceAxis.Time } profile
+            && XAxes is [Axis { Labeler: { } labeler, MinStep: var step } axis]
+            && TimeStep(profile, labeler) != step)
+        {
+            XAxes = [BuildXAxis(profile, (SolidColorPaint)axis.LabelsPaint!)];
+        }
     }
 
     private void BuildChart(ClearanceProfile profile)
@@ -625,32 +696,14 @@ internal sealed class ClearanceViewModel : ViewModelBase
 
         var axisLabels = new SolidColorPaint(theme.AxisLabel);
         var separators = new SolidColorPaint(theme.Separator);
-        var (from, to) = profile.XRange();
-        var departure = profile.Snapshot.Result.Departure;
-        var timeFormat = TimeFormat;
-        XAxes =
-        [
-            new Axis
-            {
-                MinLimit = from,
-                MaxLimit = to,
-                LabelsPaint = axisLabels,
-                SeparatorsPaint = null,
-                TextSize = 10,
-                MinStep = profile.Axis == ClearanceAxis.Time ? 30 : 0.5,
-                ForceStepToMin = profile.Axis == ClearanceAxis.Time,
-                Labeler = profile.Axis == ClearanceAxis.Time
-                    ? v => PassageFormatting.FormatEta(departure.AddMinutes(v), departure, timeFormat)
-                    : v => v.ToString("0.#", CultureInfo.CurrentCulture),
-            },
-        ];
+        XAxes = [BuildXAxis(profile, axisLabels)];
         YAxes =
         [
             new Axis
             {
                 MinLimit = 0,
                 MaxLimit = profile.Top,
-                MinStep = 5,
+                MinStep = profile.ElevationStep,
                 ForceStepToMin = true,
                 LabelsPaint = axisLabels,
                 SeparatorsPaint = separators,
@@ -756,10 +809,11 @@ internal sealed class ClearanceViewModel : ViewModelBase
         var result = profile.Snapshot.Result;
         var distance = (cursor?.DistanceMeters ?? sample.DistanceMeters) / PassageGeodesy.MetersPerNauticalMile;
         DateTimeOffset? eta = cursor is { } c ? c.Eta : sample.HasEta ? sample.Time : null;
-        ReadoutPosition = eta is { } t
-            ? string.Format(CultureInfo.CurrentCulture, Strings.Clearance_ReadoutPositionFormat, distance,
-                PassageFormatting.FormatEta(t, result.Departure, TimeFormat))
-            : string.Format(CultureInfo.CurrentCulture, Strings.Clearance_ReadoutDistanceFormat, distance);
+        ReadoutDistance = string.Format(CultureInfo.CurrentCulture, Strings.Clearance_ReadoutDistanceFormat, distance);
+        ReadoutEta = eta is { } t ? PassageFormatting.FormatEta(t, result.Departure, TimeFormat) : null;
+        ReadoutPosition = ReadoutEta is { } etaText
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Clearance_ReadoutPositionFormat, distance, etaText)
+            : ReadoutDistance;
         var legIndex = cursor?.LegIndex ?? sample.LegIndex;
         var place = legIndex < profile.Snapshot.LegPlaceNames.Count ? profile.Snapshot.LegPlaceNames[legIndex] : null;
         var legLabel = string.Format(CultureInfo.CurrentCulture, Strings.Check_LegFormat, legIndex + 1, legIndex + 2);

@@ -342,8 +342,8 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
                             return;
                         }
 
-                        Interlocked.Exchange(ref received[index], n);
-                        UpdateProgress(done, failed, received, sizes);
+                        RaiseTo(ref received[index], n);
+                        UpdateProgress(Volatile.Read(ref done), Volatile.Read(ref failed), received, sizes);
                         RaiseProgress(force: false);
                     });
 
@@ -412,14 +412,37 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
         return new LibraryDownloadResult(done, failed, cancelled);
     }
 
+    // A late byte report (Progress<T> posts them) races the item's completion
+    // and the batch's end, so the progress only moves forward: counts and bytes
+    // never go down, and a batch's cleared progress is never written back.
     private void UpdateProgress(int done, int failed, long[] received, long[] sizes)
     {
-        if (Volatile.Read(ref _progress) is not { } current)
-            return;
         long bytes = 0;
         for (var i = 0; i < received.Length; i++)
             bytes += Math.Min(Interlocked.Read(ref received[i]), sizes[i] > 0 ? sizes[i] : long.MaxValue);
-        Volatile.Write(ref _progress, current with { Completed = done, Failed = failed, BytesDone = bytes });
+        while (Volatile.Read(ref _progress) is { } current)
+        {
+            var next = current with
+            {
+                Completed = Math.Max(current.Completed, done),
+                Failed = Math.Max(current.Failed, failed),
+                BytesDone = Math.Max(current.BytesDone, bytes),
+            };
+            if (ReferenceEquals(Interlocked.CompareExchange(ref _progress, next, current), current))
+                return;
+        }
+    }
+
+    private static void RaiseTo(ref long value, long candidate)
+    {
+        var current = Interlocked.Read(ref value);
+        while (candidate > current)
+        {
+            var seen = Interlocked.CompareExchange(ref value, candidate, current);
+            if (seen == current)
+                return;
+            current = seen;
+        }
     }
 
     private void RaiseChanged() => Changed?.Invoke(this, EventArgs.Empty);

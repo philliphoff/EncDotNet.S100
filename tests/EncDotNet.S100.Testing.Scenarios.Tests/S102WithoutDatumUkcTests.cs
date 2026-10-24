@@ -1,4 +1,3 @@
-using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
 
 namespace EncDotNet.S100.Testing.Scenarios.Tests;
@@ -12,21 +11,21 @@ public sealed class S102WithoutDatumUkcTests(SpitWithoutS102DatumFixture fixture
 {
     private static readonly DateTimeOffset At = new(new DateTime(2026, 3, 1, 6, 0, 0, DateTimeKind.Utc));
 
-    private readonly PassageDataSources _sources = ScenarioLoading.Sources(fixture.Scenario);
+    private readonly RouteCheckSources _sources = ScenarioLoading.Sources(fixture.Scenario);
 
     [Fact]
     public void A_channel_sample_meets_the_setting_but_its_datum_is_unconfirmed()
     {
         var definition = fixture.Definition;
         var (x, y) = definition.Places["channel-west"];
-        var leg = new PassageLeg(
+        var leg = PassageLegs.Leg(
             [definition.World.Frame.ToGeo(x + 0.1, y + 0.1), definition.World.Frame.ToGeo(x + 1.1, y + 0.1)],
-            DraftMeters: 6.0,
-            SpeedKnots: 10,
-            SquatMeters: 0.3,
-            RequiredUkcMeters: 1.0);
+            draft: 6.0,
+            speedKnots: 10,
+            squat: 0.3,
+            ukc: 1.0);
 
-        var result = new PassageCheckEngine(_sources.Depth, _sources.WaterLevel).Check(new PassagePlan([leg], At), TestContext.Current.CancellationToken);
+        var result = ScenarioChecks.Clearance(_sources, new PassagePlan([leg], At), PassageLegs.Settings(At));
         var sample = Assert.Single(result.Samples);
 
         Assert.Equal(ChartedDepthKind.Bathymetry, sample.Depth!.Kind);

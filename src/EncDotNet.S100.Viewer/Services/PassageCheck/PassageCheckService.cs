@@ -65,17 +65,25 @@ internal readonly record struct PassageCursor(
     DateTimeOffset? Eta);
 
 /// <summary>
-/// Runs Check passage (#901) for the active route while
-/// <see cref="RoutesService.IsCheckModeActive"/> is on, with the
-/// <see cref="PassageCheckEngine"/> from #900 over the loaded datasets.
+/// Runs Check route (#901, #953) for the active route while
+/// <see cref="RoutesService.IsCheckModeActive"/> is on: one
+/// <see cref="RouteChecker"/> with every check (chart, areas, warnings and
+/// clearance) over the loaded datasets and the Navigational warnings panel's
+/// list, publishing the <see cref="RouteCheckReport"/> (<see cref="Report"/>).
 /// </summary>
 /// <remarks>
 /// <para>
-/// Route edits, view-time changes (when the route has no departure) and
-/// dataset loads schedule a recompute after <see cref="Debounce"/>. The
-/// previous result stays in <see cref="Current"/> with
-/// <see cref="IsStale"/> set until the new one lands (handoff C10), so the
-/// map draws the route grey and dashed and the verdict dims meanwhile.
+/// Route edits, view-time changes (when the route has no departure), the
+/// mariner's safety contour and depth, and dataset loads schedule a
+/// recompute after <see cref="Debounce"/>; a change to the listed warnings
+/// recomputes at once. The previous report stays in <see cref="Report"/>
+/// (and its clearance in <see cref="Current"/>) with <see cref="IsStale"/>
+/// set until the new one lands (handoff C10), so the map draws the route
+/// grey and dashed and the verdict dims meanwhile.
+/// </para>
+/// <para>
+/// Without a draft the clearance check is skipped (<see cref="Current"/> is
+/// <c>null</c>); the other checks still run.
 /// </para>
 /// <para>
 /// A change to the departure alone needs no resampling, so it recomputes
@@ -86,11 +94,13 @@ internal readonly record struct PassageCursor(
 /// never re-sweeps, and a newer sweep cancels a stale one.
 /// </para>
 /// <para>
-/// The route is read on the calling (UI) thread; sampling and evaluation
-/// run on the thread pool and are cancelled when a newer request arrives.
-/// Unchanged legs reuse their depth samples
-/// (<see cref="PassageCheckEngine.SampleDepths(IReadOnlyList{PassageLeg}, PassageDepthProfile?, CancellationToken)"/>),
-/// so dragging a waypoint resamples only the two legs that meet there.
+/// The route is read on the calling (UI) thread; the checks run on the
+/// thread pool and are cancelled when a newer request arrives. One checker
+/// serves each set of loaded data, and the window sweep shares its
+/// <see cref="ClearanceCheck"/>: it keeps the last depth profile, so
+/// dragging a waypoint resamples only the two legs that meet there, and a
+/// departure change or the window sweep resamples nothing. The chart check
+/// keeps its result while only the departure changes.
 /// Results and <see cref="Changed"/> are delivered through the
 /// <c>post</c> callback (the UI dispatcher in the app).
 /// </para>
@@ -108,7 +118,11 @@ internal sealed class PassageCheckService : IDisposable
 
     private readonly RoutesService _routes;
     private readonly IDatasetCatalog _catalog;
-    private readonly ICrsTransformFactory _transforms;
+    private readonly RouteCheckSourceCache _sources;
+    private readonly PanelRouteWarningSource? _warnings;
+    private readonly IMarinerSettingsProvider? _mariner;
+    private readonly RouteCheckOptions? _options;
+    private readonly Func<IEnumerable<IRouteCheck>> _checks;
     private readonly Action<Action> _post;
     private readonly object _gate = new();
 
@@ -119,17 +133,34 @@ internal sealed class PassageCheckService : IDisposable
     private WindowKey? _windowKey;
     private CheckInput? _lastInput;
     private IReadOnlyList<LoadedDataset>? _sourcesSnapshot;
-    private PassageDataSources? _sources;
     private PassagePlaceNames? _placeNames;
-    private PassageDepthProfile? _profile;
-    private PassageCheckEngine? _engine;
+    private Checkers? _checkers;
     private readonly Dictionary<(long, long), string?> _nameCache = new();
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<RouteCheckSources, RouteCheckSources> _bundles = new();
     private bool _disposed;
 
+    /// <summary>Creates the service.</summary>
+    /// <param name="routes">The routes and check mode.</param>
+    /// <param name="catalog">The loaded datasets.</param>
+    /// <param name="sources">The route-check sources, shared with other checks, or <c>null</c> for its own over ProjNet.</param>
+    /// <param name="warnings">The panel's warnings, or <c>null</c> to check the loaded S-124 datasets' own.</param>
+    /// <param name="mariner">The mariner's safety contour and depth for the chart check's depth checks, or <c>null</c> to skip them.</param>
+    /// <param name="options">The checker's tuning, or <c>null</c> for the defaults.</param>
+    /// <param name="checks">
+    /// Creates the checks for each set of loaded data, in the order they run,
+    /// or <c>null</c> for every built-in check (<see cref="BuiltInChecks"/>).
+    /// The window sweep uses the <see cref="ClearanceCheck"/> among them.
+    /// </param>
+    /// <param name="debounce">The delay before a recompute, or <c>null</c> for <see cref="DefaultDebounce"/>.</param>
+    /// <param name="post">Delivers results and <see cref="Changed"/> (the UI dispatcher in the app), or <c>null</c> to run inline.</param>
     public PassageCheckService(
         RoutesService routes,
         IDatasetCatalog catalog,
-        ICrsTransformFactory? transforms = null,
+        RouteCheckSourceCache? sources = null,
+        PanelRouteWarningSource? warnings = null,
+        IMarinerSettingsProvider? mariner = null,
+        RouteCheckOptions? options = null,
+        Func<IEnumerable<IRouteCheck>>? checks = null,
         TimeSpan? debounce = null,
         Action<Action>? post = null)
     {
@@ -137,7 +168,11 @@ internal sealed class PassageCheckService : IDisposable
         ArgumentNullException.ThrowIfNull(catalog);
         _routes = routes;
         _catalog = catalog;
-        _transforms = transforms ?? new ProjNetCrsTransformFactory();
+        _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
+        _warnings = warnings;
+        _mariner = mariner;
+        _options = options;
+        _checks = checks ?? BuiltInChecks;
         Debounce = debounce ?? DefaultDebounce;
         _post = post ?? (action => action());
 
@@ -145,6 +180,10 @@ internal sealed class PassageCheckService : IDisposable
         _routes.Routes.Changed += OnInputsChanged;
         _routes.ViewTime.Changed += OnInputsChanged;
         _catalog.Changed += OnCatalogChanged;
+        if (_warnings is not null)
+            _warnings.Changed += OnWarningsChanged;
+        if (_mariner is not null)
+            _mariner.Changed += OnMarinerChanged;
     }
 
     /// <summary>The delay between the last change and a recompute.</summary>
@@ -154,10 +193,9 @@ internal sealed class PassageCheckService : IDisposable
     public bool IsActive => _routes.IsCheckModeActive;
 
     /// <summary>
-    /// The route being checked: its legs, departure and whether it has a
-    /// draft; <c>null</c> when Check passage is off or the active route has
-    /// no legs. A new instance means the inputs changed (#953: the findings
-    /// producers re-run on it).
+    /// The route being checked: its legs, departure, depth settings and
+    /// whether it has a draft; <c>null</c> when Check passage is off or the
+    /// active route has no legs. A new instance means the inputs changed.
     /// </summary>
     internal CheckInput? Input => IsActive ? _lastInput : null;
 
@@ -168,10 +206,16 @@ internal sealed class PassageCheckService : IDisposable
     /// </summary>
     public bool HasDraft => Input?.HasDraft ?? false;
 
-    /// <summary>The latest completed check for the active route, or <c>null</c>.</summary>
+    /// <summary>The latest report for the checked route: every check's findings, the verdict and each check's status; <c>null</c> before the first lands.</summary>
+    public RouteCheckReport? Report { get; private set; }
+
+    /// <summary>The route <see cref="Report"/> is for; while another route's check is pending, it isn't the checked route.</summary>
+    public string? ReportRouteId { get; private set; }
+
+    /// <summary>The latest clearance check of the checked route, or <c>null</c> (none yet, or no draft).</summary>
     public PassageCheckSnapshot? Current { get; private set; }
 
-    /// <summary>True while a recompute is pending or running and <see cref="Current"/> is out of date.</summary>
+    /// <summary>True while a recompute is pending or running and <see cref="Report"/> is out of date.</summary>
     public bool IsStale { get; private set; }
 
     /// <summary>True while a recompute is pending or running.</summary>
@@ -279,6 +323,10 @@ internal sealed class PassageCheckService : IDisposable
         _routes.Routes.Changed -= OnInputsChanged;
         _routes.ViewTime.Changed -= OnInputsChanged;
         _catalog.Changed -= OnCatalogChanged;
+        if (_warnings is not null)
+            _warnings.Changed -= OnWarningsChanged;
+        if (_mariner is not null)
+            _mariner.Changed -= OnMarinerChanged;
         _pending?.Cancel();
         _windowPending?.Cancel();
     }
@@ -287,7 +335,14 @@ internal sealed class PassageCheckService : IDisposable
 
     private void OnCatalogChanged(object? sender, DatasetCatalogChangedEventArgs e) => _post(Recompute);
 
-    private void Schedule()
+    // The listed warnings changed: the same inputs, checked again at once.
+    private void OnWarningsChanged(object? sender, EventArgs e) => _post(() => Schedule(force: true));
+
+    private void OnMarinerChanged(MarinerSettings settings) => _post(() => Schedule());
+
+    private void Schedule() => Schedule(force: false);
+
+    private void Schedule(bool force)
     {
         if (_disposed)
             return;
@@ -295,8 +350,10 @@ internal sealed class PassageCheckService : IDisposable
         if (!IsActive)
         {
             CancelPending();
-            var had = _lastInput is not null || Current is not null || IsComputing || Error is not null || Cursor is not null || Window is not null;
+            var had = _lastInput is not null || Report is not null || IsComputing || Error is not null || Cursor is not null || Window is not null;
             ClearWindow();
+            Report = null;
+            ReportRouteId = null;
             Current = null;
             Cursor = null;
             IsStale = IsComputing = false;
@@ -307,11 +364,13 @@ internal sealed class PassageCheckService : IDisposable
             return;
         }
 
-        var input = CheckInput.From(_routes);
+        var input = CheckInput.From(_routes, _mariner?.Current);
         if (input is null)
         {
             CancelPending();
             ClearWindow();
+            Report = null;
+            ReportRouteId = null;
             Current = null;
             Cursor = null;
             IsStale = IsComputing = false;
@@ -321,38 +380,26 @@ internal sealed class PassageCheckService : IDisposable
             return;
         }
 
-        if (!input.HasDraft)
-        {
-            // #953: no draft, no clearance check; the route checks still run
-            // on Input, so it changes only when the route does.
-            var changed = Current is not null || IsComputing || Error is not null || Cursor is not null || Window is not null
-                || _lastInput is not { } previousInput || !previousInput.SameAs(input);
-            CancelPending();
-            ClearWindow();
-            Current = null;
-            Cursor = null;
-            IsStale = IsComputing = false;
-            Error = null;
-            if (changed)
-            {
-                _lastInput = input;
-                Changed?.Invoke(this, EventArgs.Empty);
-            }
-
-            return;
-        }
-
-        if (_lastInput is { } last && last.SameAs(input) && !IsComputing && Error is null)
+        if (!force && _lastInput is { } last && last.SameAs(input) && !IsComputing && Error is null)
             return;
 
-        // Only the departure (or view time) moved: no resampling, so no debounce.
+        // Only the departure (or view time, or a depth setting) moved: no
+        // resampling, so no debounce.
         var delay = _lastInput is { } previous && previous.SameLegs(input) && Error is null ? TimeSpan.Zero : Debounce;
         _lastInput = input;
         CancelPending();
+        if (!input.HasDraft)
+        {
+            // #953: no draft, no clearance check or window; the other checks run.
+            ClearWindow();
+            Current = null;
+            Cursor = null;
+        }
+
         var cts = new CancellationTokenSource();
         _pending = cts;
         IsComputing = true;
-        IsStale = Current is not null;
+        IsStale = Report is not null;
         Changed?.Invoke(this, EventArgs.Empty);
 
         var snapshot = _catalog.Datasets;
@@ -388,17 +435,28 @@ internal sealed class PassageCheckService : IDisposable
                 await hold(token).ConfigureAwait(false);
             token.ThrowIfCancellationRequested();
 
-            var (snapshotResult, profile, engine) = await Task.Run(() => Compute(input, snapshot, token), token).ConfigureAwait(false);
+            var (report, clearance, sweeper) = await Task.Run(() => Compute(input, snapshot, token), token).ConfigureAwait(false);
             _post(() =>
             {
                 if (token.IsCancellationRequested)
                     return;
-                Current = snapshotResult;
+                Report = report;
+                ReportRouteId = input.RouteId;
+                Current = clearance;
                 Error = null;
                 IsStale = IsComputing = false;
-                if (Cursor is { } cursor)
-                    Cursor = CursorAt(snapshotResult, cursor.DistanceMeters);
-                ScheduleWindow(input, snapshot, profile, engine);
+                if (clearance is null)
+                {
+                    ClearWindow();
+                    Cursor = null;
+                }
+                else
+                {
+                    if (Cursor is { } cursor)
+                        Cursor = CursorAt(clearance, cursor.DistanceMeters);
+                    ScheduleWindow(input, snapshot, sweeper);
+                }
+
                 Changed?.Invoke(this, EventArgs.Empty);
             });
         }
@@ -421,7 +479,7 @@ internal sealed class PassageCheckService : IDisposable
 
     // On the UI thread, after a result lands: sweeps the departure window
     // when the legs, vessel values or datasets changed since the last sweep.
-    private void ScheduleWindow(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, PassageDepthProfile profile, PassageCheckEngine engine)
+    private void ScheduleWindow(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, RouteChecker checker)
     {
         var key = new WindowKey(input, snapshot);
         if (_windowKey is { } last && last.SameAs(key))
@@ -435,19 +493,22 @@ internal sealed class PassageCheckService : IDisposable
         if (Window is { } shown && shown.RouteId != input.RouteId)
             Window = null;
 
-        var task = SweepAsync(input, profile, engine, cts.Token);
+        var task = SweepAsync(input, checker, cts.Token);
         lock (_gate)
         {
             _windowIdle = task;
         }
     }
 
-    private async Task SweepAsync(CheckInput input, PassageDepthProfile profile, PassageCheckEngine engine, CancellationToken token)
+    private async Task SweepAsync(CheckInput input, RouteChecker checker, CancellationToken token)
     {
         try
         {
+            // The sweeper shares the clearance check, so it reuses the profile
+            // of the check that just landed.
+            var settings = input.SettingsWith(DepartureRange.WaterLevelData(WindowStep, MaxWindowDepartures));
             var sweep = await Task.Run(
-                () => engine.SweepWaterLevelRange(profile, input.Legs, WindowStep, MaxWindowDepartures, token),
+                () => checker.Check(input.Plan, settings, token).Departures,
                 token).ConfigureAwait(false);
             _post(() =>
             {
@@ -475,26 +536,65 @@ internal sealed class PassageCheckService : IDisposable
         }
     }
 
-    // Runs on the thread pool; the engine, profile and caches are touched
-    // only here, one computation at a time. The returned profile and engine
-    // are immutable and safe for the window sweep to use concurrently.
-    private (PassageCheckSnapshot Snapshot, PassageDepthProfile Profile, PassageCheckEngine Engine) Compute(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, CancellationToken token)
+    /// <summary>
+    /// Checks a route once with every check, apart from the live check and its
+    /// caches, as get_findings does for a route that isn't being checked.
+    /// </summary>
+    /// <param name="input">The route's inputs (<see cref="CheckInput.For"/>).</param>
+    /// <param name="cancellationToken">Cancels the check.</param>
+    /// <returns>The report.</returns>
+    /// <remarks>Call on the UI thread; the check runs on the thread pool.</remarks>
+    internal Task<RouteCheckReport> CheckOnceAsync(CheckInput input, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        var datasets = _catalog.Datasets;
+        return Task.Run(
+            () => new RouteChecker(SourcesFor(datasets), _checks(), _options).Check(input.Plan, input.Settings, cancellationToken),
+            cancellationToken);
+    }
+
+    // The loaded data with the panel's warnings in place of the datasets' own.
+    // One bundle per set of datasets, so the checkers' caches keep working.
+    private RouteCheckSources SourcesFor(IReadOnlyList<LoadedDataset> datasets)
+    {
+        var sources = _sources.Get(datasets);
+        if (_warnings is null)
+            return sources;
+        lock (_bundles)
+        {
+            if (_bundles.TryGetValue(sources, out var bundle))
+                return bundle;
+            bundle = new RouteCheckSources
+            {
+                Charts = sources.Charts,
+                Depth = sources.Depth,
+                WaterLevel = sources.WaterLevel,
+                Areas = sources.Areas,
+                Warnings = _warnings,
+            };
+            _bundles.AddOrUpdate(sources, bundle);
+            return bundle;
+        }
+    }
+
+    // Runs on the thread pool; the checkers and name caches are replaced only
+    // here, one computation at a time. The sweeper is safe for the window
+    // sweep to use concurrently.
+    private (RouteCheckReport Report, PassageCheckSnapshot? Clearance, RouteChecker Sweeper) Compute(CheckInput input, IReadOnlyList<LoadedDataset> snapshot, CancellationToken token)
     {
         lock (_nameCache)
         {
-            if (!ReferenceEquals(snapshot, _sourcesSnapshot) || _sources is null || _engine is null)
+            if (!ReferenceEquals(snapshot, _sourcesSnapshot) || _checkers is null)
             {
-                _sources = PassageDataSources.FromDatasets(snapshot, _transforms);
                 _placeNames = PassagePlaceNames.FromDatasets(snapshot);
-                _engine = new PassageCheckEngine(_sources.Depth, _sources.WaterLevel);
+                _checkers = Checkers.For(SourcesFor(snapshot), _checks(), _options);
                 _sourcesSnapshot = snapshot;
-                _profile = null;
                 _nameCache.Clear();
             }
 
-            var profile = _engine.SampleDepths(input.Legs, _profile, token);
-            _profile = profile;
-            var result = _engine.Evaluate(profile, new PassagePlan(input.Legs, input.Departure), token);
+            var report = _checkers.Checker.Check(input.Plan, input.Settings, token);
+            if (report.Clearance is not { } result)
+                return (report, null, _checkers.Sweeper);
 
             var legNames = new string?[input.Legs.Count];
             for (var i = 0; i < legNames.Length; i++)
@@ -504,7 +604,7 @@ internal sealed class PassageCheckService : IDisposable
             }
 
             var minimumName = result.Minimum is { } min ? NameAt(min.Position) : null;
-            return (new PassageCheckSnapshot(input.RouteId, input.Legs, result, legNames, minimumName), profile, _engine);
+            return (report, new PassageCheckSnapshot(input.RouteId, input.Legs, result, legNames, minimumName), _checkers.Sweeper);
         }
     }
 
@@ -547,45 +647,74 @@ internal sealed class PassageCheckService : IDisposable
         return new PassageCursor(d, index, position, bearing, eta);
     }
 
+    /// <summary>Every built-in check, in the order <see cref="RouteChecker"/> runs them: chart, areas, warnings and clearance.</summary>
+    public static IEnumerable<IRouteCheck> BuiltInChecks() => [new ChartCheck(), new AreaCheck(), new WarningCheck(), new ClearanceCheck()];
+
+    /// <summary>The live checker and the window sweeper for one set of loaded data, sharing one clearance check.</summary>
+    private sealed record Checkers(RouteChecker Checker, RouteChecker Sweeper)
+    {
+        public static Checkers For(RouteCheckSources sources, IEnumerable<IRouteCheck> checks, RouteCheckOptions? options)
+        {
+            var list = checks.ToArray();
+            var clearance = list.OfType<ClearanceCheck>().FirstOrDefault() ?? new ClearanceCheck();
+            return new Checkers(new RouteChecker(sources, list, options), new RouteChecker(sources, [clearance], options));
+        }
+    }
+
     /// <summary>The route values a check depends on, read on the UI thread.</summary>
     /// <param name="RouteId">The route.</param>
-    /// <param name="Legs">The effective legs, named "1 → 2"; a leg without a draft has <see cref="PassageLeg.DraftMeters"/> 0.</param>
+    /// <param name="Legs">The effective legs, named "1 → 2", with their cross-track limits; a leg without a draft has no <see cref="PassageLeg.Draft"/>.</param>
     /// <param name="Departure">The route's departure, or the view time when it has none.</param>
     /// <param name="HasDraft">Whether every leg has a draft, which the clearance check needs.</param>
-    internal sealed record CheckInput(string RouteId, IReadOnlyList<PassageLeg> Legs, DateTimeOffset Departure, bool HasDraft)
+    /// <param name="SafetyContour">The mariner's safety contour, or <c>null</c> (no depth checks).</param>
+    /// <param name="SafetyDepth">The mariner's safety depth, or <c>null</c> (no depth checks).</param>
+    internal sealed record CheckInput(
+        string RouteId,
+        IReadOnlyList<PassageLeg> Legs,
+        DateTimeOffset Departure,
+        bool HasDraft,
+        Quantities.Depth? SafetyContour = null,
+        Quantities.Depth? SafetyDepth = null)
     {
+        /// <summary>
+        /// The plan the checks take. Its departure is <see cref="Departure"/>
+        /// (the route's, or the view time when it has none), so a leg without
+        /// an ETA is judged at it.
+        /// </summary>
+        public PassagePlan Plan => new(Legs, Departure);
 
-        public static CheckInput? From(RoutesService routes) =>
-            routes.Routes.ActiveRoute is { } route ? For(route, routes.ViewTime.Current) : null;
+        /// <summary>The settings the checks take: the departure as <c>At</c>, and the mariner's depths.</summary>
+        public EncDotNet.S100.Navigation.RouteCheckSettings Settings => SettingsWith(null);
+
+        /// <summary><see cref="Settings"/> with a departure window to sweep.</summary>
+        public EncDotNet.S100.Navigation.RouteCheckSettings SettingsWith(DepartureRange? window) => new()
+        {
+            At = Departure,
+            SafetyContour = SafetyContour,
+            SafetyDepth = SafetyDepth,
+            DepartureWindow = window,
+        };
+
+        public static CheckInput? From(RoutesService routes, MarinerSettings? mariner = null) =>
+            routes.Routes.ActiveRoute is { } route ? For(route, routes.ViewTime.Current, mariner) : null;
 
         /// <summary>The inputs for <paramref name="route"/>, or <c>null</c> when it has no legs.</summary>
-        public static CheckInput? For(Route route, DateTimeOffset viewTime)
+        /// <param name="route">The route.</param>
+        /// <param name="viewTime">The view time, the departure when the route has none.</param>
+        /// <param name="mariner">The mariner's settings for the depth checks, or <c>null</c> to skip them.</param>
+        public static CheckInput? For(Route route, DateTimeOffset viewTime, MarinerSettings? mariner = null)
         {
             if (route.Legs.Count == 0)
                 return null;
 
             var legs = RouteEtas.ToPassageLegs(route);
-            var named = new PassageLeg[legs.Count];
-            var checkLegs = new RouteCheckLeg[legs.Count];
-            var hasDraft = true;
-            for (var i = 0; i < legs.Count; i++)
-            {
-                hasDraft &= route.GetEffectiveLegValue(i, RoutePassageField.Draft) is not null;
-                named[i] = legs[i] with { Name = $"{i + 1} → {i + 2}" };
-                checkLegs[i] = new RouteCheckLeg(
-                    legs[i].Points,
-                    route.GetEffectiveLegValue(i, RoutePassageField.PortCrossTrack),
-                    route.GetEffectiveLegValue(i, RoutePassageField.StarboardCrossTrack),
-                    legs[i].Geometry);
-            }
-
-            return new CheckInput(route.Id, named, route.Passage.Departure ?? viewTime, hasDraft) { CheckLegs = checkLegs };
+            return new CheckInput(
+                route.Id, legs, route.Passage.Departure ?? viewTime, legs.All(l => l.Draft is not null),
+                mariner?.SafetyContour, mariner?.SafetyDepth);
         }
 
-        /// <summary>The legs with their cross-track limits, for the route checks (#888); one per <see cref="Legs"/> entry.</summary>
-        public IReadOnlyList<RouteCheckLeg> CheckLegs { get; init; } = [];
-
-        public bool SameAs(CheckInput other) => Departure == other.Departure && SameLegs(other);
+        public bool SameAs(CheckInput other) =>
+            Departure == other.Departure && SafetyContour == other.SafetyContour && SafetyDepth == other.SafetyDepth && SameLegs(other);
 
         /// <summary>Same route, legs and vessel values; the departure may differ.</summary>
         public bool SameLegs(CheckInput other)
@@ -596,18 +725,10 @@ internal sealed class PassageCheckService : IDisposable
             {
                 var a = Legs[i];
                 var b = other.Legs[i];
-                if (a.DraftMeters != b.DraftMeters || a.SpeedKnots != b.SpeedKnots || a.SquatMeters != b.SquatMeters
-                    || a.RequiredUkcMeters != b.RequiredUkcMeters || a.Geometry != b.Geometry
+                if (a.Draft != b.Draft || a.Speed != b.Speed || a.Squat != b.Squat
+                    || a.RequiredUkc != b.RequiredUkc || a.Geometry != b.Geometry
+                    || a.PortLimit != b.PortLimit || a.StarboardLimit != b.StarboardLimit
                     || !a.Points.SequenceEqual(b.Points))
-                    return false;
-            }
-
-            if (CheckLegs.Count != other.CheckLegs.Count)
-                return false;
-            for (var i = 0; i < CheckLegs.Count; i++)
-            {
-                if (CheckLegs[i].PortCrossTrackMeters != other.CheckLegs[i].PortCrossTrackMeters
-                    || CheckLegs[i].StarboardCrossTrackMeters != other.CheckLegs[i].StarboardCrossTrackMeters)
                     return false;
             }
 

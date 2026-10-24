@@ -48,7 +48,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
         result.TryGetValue(out var value) ? value! : throw new Xunit.Sdk.XunitException(result.TryGetError(out var e) ? e.Message : "error");
 
     private static RouteFinding Warning(IReadOnlyList<RouteFinding> findings, int number) =>
-        Assert.Single(findings, f => f.Warning?.Info.Reference?.Number == number);
+        Assert.Single(findings, f => (f.Details as WarningDetails)?.Info.Reference?.Number == number);
 
     // Narrow no-break spaces from some ICU versions' time formats.
     private static string Normalise(string? text) => (text ?? "").Replace(' ', ' ').Replace(' ', ' ');
@@ -173,7 +173,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
         Assert.Equal(expected, listed);
         Assert.Equal(expected.Count, panel.OnRouteCount);
         Assert.Equal(
-            s.Findings.Findings.Where(f => f.Source == RouteFindingSource.S124).Select(f => f.Warning!.Info.Reference!.Number).Order(),
+            s.Findings.Findings.Where(f => f.Category == RouteFindingCategory.Warning).Select(f => ((WarningDetails)f.Details!).Info.Reference!.Number).Order(),
             listed);
         Assert.Equal($"On {s.Findings.CheckedRouteName} {expected.Count}", panel.RouteScopeText);
 
@@ -266,7 +266,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
 
         host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));
         WaitFor(host, () => s.Findings.Findings.Count > 0);
-        host.Click(host.Find<ToggleButton>("Routes.Check.FindingsTab"));
+        host.Click(host.Find<TabItem>("Routes.Check.FindingsTab"));
         Assert.False(host.IsShown("Routes.Check.Finding.WarningCard"));
 
         // E1: the Must review row (001/26) expands into the card, status at the ETA (E2), no provider label (E4).

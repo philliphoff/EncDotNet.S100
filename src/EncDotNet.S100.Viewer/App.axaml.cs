@@ -832,12 +832,21 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Viewer.Services.IViewTime>(sp => new EncDotNet.S100.Viewer.Services.TimelineViewTime(
             sp.GetRequiredService<GlobalTimeService>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutesService>();
-        // Check passage (#901): recomputes the active route's UKC off the UI
-        // thread and delivers results on it.
+        // One set of route-check sources per set of loaded datasets, shared by every route check.
+        services.AddSingleton(_ => new EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache(
+            new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory()));
+        // The Navigational warnings panel's list, as the warnings the route check reads (#957).
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.PassageCheck.PanelRouteWarningSource(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));
+        // Check route (#901, #1034): one RouteChecker over the loaded datasets and the panel's
+        // warnings, recomputed off the UI thread with its report delivered on it.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(sp =>
             new EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
                 sp.GetRequiredService<ViewerDatasetCatalog>(),
+                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PanelRouteWarningSource>(),
+                sp.GetService<IMarinerSettingsProvider>(),
                 post: action =>
                 {
                     if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
@@ -850,25 +859,8 @@ public partial class App : Application
             new EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
                 sp.GetRequiredService<GlobalTimeService>()));
-        // Findings producers (#953) after the clearance check, in list order.
-        // A new check registers one IRouteFindingProducer line here.
-        // The chart and area checks share one set of sources, so the cells' indexes are built once.
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckSourceCache>();
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(sp =>
-            new EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckFindingProducer(
-                sp.GetService<IMarinerSettingsProvider>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckSourceCache>()));
-        // Restricted, caution, anchorage and traffic areas (S-101) and protected areas (S-122) on the route (#956).
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(sp =>
-            new EncDotNet.S100.Viewer.Services.PassageCheck.AreaFindingProducer(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckSourceCache>()));
-        // S-124 warnings on the route (#957), from the Navigational warnings panel's list.
-        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(sp =>
-            new EncDotNet.S100.Viewer.Services.PassageCheck.WarningFindingProducer(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));
-        // Findings list (#905): merged from the findings producers (#953), the
-        // clearance check first, then the S-124 warnings (#957); selecting one zooms the map to it and moves
-        // the profile cursor there.
+        // Findings list (#905): the report's findings in the viewer's wording; selecting one
+        // zooms the map to it and moves the profile cursor there.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(sp =>
             new EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
@@ -877,15 +869,7 @@ public partial class App : Application
                 sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
                 sp.GetService<IMarinerSettingsProvider>(),
                 sp.GetService<ITimeFormatProvider>(),
-                sp.GetService<TimeProvider>(),
-                producers: sp.GetServices<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteFindingProducer>(),
-                post: action =>
-                {
-                    if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
-                        action();
-                    else
-                        Avalonia.Threading.Dispatcher.UIThread.Post(action);
-                }));
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));
         // The Check route map legend's fold, kept per user (#959, C8).
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState(
             sp.GetRequiredService<ViewerSettings>()));
@@ -1187,7 +1171,8 @@ public partial class App : Application
             sp.GetRequiredService<NavigationalWarningsViewModel>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
+            sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));

@@ -10,10 +10,12 @@ UKC = charted depth + water level − draft − squat
 
 and compares it with the required UKC. Charted depth comes from S-102, with
 S-101 as a low-confidence fallback; water level comes from S-104. The package
-depends only on `EncDotNet.S100.Core`. Data reaches it through two small
-interfaces, `IChartedDepthSource` and `IWaterLevelSource`, so it never loads a
-file itself. `EncDotNet.S100.Datasets.Pipelines` implements both over loaded
-datasets.
+depends only on `EncDotNet.S100.Core`. Data reaches it through small source
+interfaces, gathered in one `RouteCheckSources` bundle, so it never loads a
+file itself. `CatalogRouteCheckSources` in `EncDotNet.S100.Datasets.Pipelines`
+builds the bundle from loaded datasets, and `RouteCheckSourceCache` keeps one
+per set of loaded datasets. Every source is safe to call from several threads
+at once, so one bundle can serve concurrent checks.
 
 This is a calculation aid for exploring data. It isn't for navigation.
 
@@ -27,10 +29,90 @@ To check a passage against loaded datasets, also install
 `EncDotNet.S100.Datasets.Pipelines` and a CRS backend such as
 `EncDotNet.S100.Crs.ProjNet`.
 
+## Check a route
+
+`RouteChecker` runs every check on a plan and returns one `RouteCheckReport`:
+the findings of the chart, area, warning and clearance checks in one sorted
+list, a verdict, and whether each check ran. Create one checker per sources
+bundle and keep it while the data is loaded:
+
+```csharp
+var sources = CatalogRouteCheckSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
+var checker = new RouteChecker(sources);
+
+var report = checker.Check(plan, RouteCheckSettings.FromMarinerSettings(marinerSettings, DateTimeOffset.UtcNow));
+
+Console.WriteLine($"{report.Verdict.Kind}: {report.Verdict.Headline?.Title}");   // MustReview: Crosses land
+foreach (var check in report.Checks)
+{
+    Console.WriteLine($"{check.Name}: {check.State} {check.Reason}");             // clearance: Skipped draft_missing
+}
+```
+
+- **Verdict.** `MustReview` when any finding is Must review or the clearance
+  is below your setting; then `WaterLevelEndsBeforeArrival`; then `Check` for
+  Check findings or a tight or incomplete clearance; else `Clear`. The
+  headline is the Must review finding with the lowest
+  `RouteFindingCode.HeadlineRank`, or the first Check finding.
+- **Skipped checks.** A check that can't run says why rather than finding
+  nothing (`RouteCheckReasons`): no charts, areas, warnings, depth or water
+  level in the sources, or a leg without a draft (`draft_missing`). Without
+  a safety contour and safety depth the chart check runs `Partial`
+  (`safety_settings_missing`): land, drying ground and coverage only.
+- **Reuse.** The checks keep what the last run computed. The chart sweep is
+  reused while the legs, depth settings and corridor override are unchanged,
+  and the clearance check's depth profile is reused leg by leg, so changing
+  the departure resamples nothing and moving a waypoint resamples only the
+  legs that meet there. `RouteCheckSettings.DepartureWindow` adds a departure
+  sweep (`report.Departures`), which a departure change alone doesn't redo.
+- **Shared work.** `RouteTrack` (the legs' distances and corridor
+  half-widths, `PositionAt` and `PathBetween`) and the `PassageSchedule` are
+  built once per run and shared by every check through `RouteCheckContext`.
+- **Your own checks.** Implement `IRouteCheck` and pass it as
+  `additionalChecks`, or pass exactly the checks to run, such as
+  `new RouteChecker(sources, [new ClearanceCheck()])`.
+
+`RouteCheckOptions` tunes every check at once: `DefaultLimit` (50 m) and
+`Formatter` apply to all of them, and `Chart`, `Areas`, `Warnings` and
+`Clearance` tune each one. `Check` may be called from several threads at once.
+
+[How a route check works](../../docs/how-a-route-check-works.md) explains
+which dataset feeds each check, the time and keel rules, the verdict and
+each check's status. The
+[route check sample](../../samples/EncDotNet.S100.Samples.RouteCheck/README.md)
+runs a check end to end.
+
+## Run one check
+
+Each built-in check is an `IRouteCheck<TDetail>`, and its `Run` returns a
+`RouteCheckOutcome<TDetail>`: the findings, the state and reason, and the
+check's own result, typed, with no cast. Build a `RouteCheckContext` for the
+run and pass it:
+
+```csharp
+var context = new RouteCheckContext(plan, settings, sources);
+var chart = new ChartCheck().Run(context);
+
+Console.WriteLine($"{chart.State}: {chart.Findings.Count} findings");
+Console.WriteLine(chart.Detail?.LengthMeters);                    // null only when skipped
+```
+
+| Check | `Name` | `Detail` | In the report |
+|---|---|---|---|
+| `ChartCheck` | `chart` | `ChartCheckResult`: each leg's corridor | `report.Chart` |
+| `AreaCheck` | `areas` | `AreaCheckResult`: every area near the route | `report.Areas` |
+| `WarningCheck` | `warnings` | `WarningCheckResult`: every warning near the route | `report.Warnings` |
+| `ClearanceCheck` | `clearance` | `ClearanceCheckResult`: the `PassageCheckResult` and the departure sweep | `report.Clearance`, `report.Departures` |
+
+A check object keeps what its last run computed, as it does inside a
+checker, so keep one per sources bundle when you run it often. A check of
+your own can implement `IRouteCheck<TDetail>` too, and
+`report.Detail<TDetail>(name)` gives its result back.
+
 ## Check a passage
 
 This example builds the sources from a catalog of loaded datasets, describes a
-two-leg passage, and checks it:
+two-leg passage, and checks its under-keel clearance:
 
 ```csharp
 using EncDotNet.S100.Crs.ProjNet;
@@ -38,21 +120,27 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Quantities;
 
 IDatasetCatalog catalog = /* S-102, S-101 and S-104 datasets */;
-var sources = PassageDataSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
-var engine = new PassageCheckEngine(sources.Depth, sources.WaterLevel);
+var sources = CatalogRouteCheckSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
 
 var a = new GeoPosition(50.672, -0.978);
 var b = new GeoPosition(50.725, -1.040);
 var c = new GeoPosition(50.763, -1.105);
-var legs = new[]
+PassageLeg Leg(GeoPosition from, GeoPosition to, double knots) => new()
 {
-    new PassageLeg([a, b], DraftMeters: 11.5, SpeedKnots: 12, SquatMeters: 0.3, RequiredUkcMeters: 1.0),
-    new PassageLeg([b, c], DraftMeters: 11.5, SpeedKnots: 8, SquatMeters: 0.3, RequiredUkcMeters: 1.0),
+    Points = [from, to],
+    Speed = Speed.FromKnots(knots),
+    Draft = Depth.FromMetres(11.5),
+    Squat = Depth.FromMetres(0.3),
+    RequiredUkc = Depth.FromMetres(1.0),
 };
 
-var result = engine.Check(new PassagePlan(legs, DateTimeOffset.Parse("2021-04-01T07:10:00Z")));
+var plan = new PassagePlan([Leg(a, b, 12), Leg(b, c, 8)], DateTimeOffset.Parse("2021-04-01T07:10:00Z"));
+var settings = new RouteCheckSettings { At = DateTimeOffset.UtcNow };   // used only when the plan has no departure
+
+var result = new ClearanceCheck().Run(new RouteCheckContext(plan, settings, sources)).Detail!.Clearance;
 
 Console.WriteLine(result.Verdict);                        // BelowSetting, MeetsSettings, ...
 Console.WriteLine(result.Minimum?.ClearanceMeters);       // smallest margin's UKC
@@ -63,11 +151,14 @@ foreach (var gap in result.Gaps)
 }
 ```
 
-Each `PassageLeg` carries the effective values for that leg. Resolve route
-defaults and per-leg overrides before you build it. Every value is optional
-apart from the draft and the points:
+Each `PassageLeg` carries the effective values for that leg: its points,
+geometry, cross-track limits, speed, draft, squat and required UKC. Resolve
+route defaults and per-leg overrides before you build it. Every check reads
+the same legs. The clearance check needs a draft on every leg, and is
+skipped (`draft_missing`) without one; everything else is optional:
 
-- Without a speed, there are no ETAs, and every sample uses the departure time.
+- Without a speed, there are no ETAs, and every sample uses the departure
+  time. Without a departure, the plan leaves at `RouteCheckSettings.At`.
 - Without a required UKC, the check uses 0 m and sets `NoMarginSet`.
 - Squat is a fixed allowance; it isn't modelled from speed.
 - The speed is the speed over ground. S-111 currents aren't applied.
@@ -76,7 +167,7 @@ apart from the draft and the points:
 
 Each sample stands for a stretch of the leg of at most
 `PassageCheckOptions.SampleSpacingMeters` (default 50 m) and carries the
-shallowest depth found in it. Along S-102 the engine steps at half the finest
+shallowest depth found in it. Along S-102 the check steps at half the finest
 grid cell, so it doesn't skip any cell the leg crosses. A sample's `State` is
 one of:
 
@@ -118,31 +209,30 @@ stations and datums that were used.
 
 ## Recompute cheaply
 
-`Check` runs in two steps that you can call separately:
+The clearance check splits its work in two. Sampling walks the legs, reads
+the charted depths and finds the covering S-104 series: the slow, spatial
+step, which depends only on the legs' points and geometry. Evaluating
+applies times and vessel values to those samples. A `ClearanceCheck` keeps
+its last samples for the same sources bundle and options, so:
 
-- `SampleDepths(legs)` walks the legs, reads the charted depths and finds the
-  covering S-104 series. This is the slow step. It's spatial, so it depends
-  only on the legs' points.
-- `Evaluate(profile, plan)` applies times and vessel values. Call it again when
-  the departure, speed, draft, squat or required UKC changes.
+- changing the departure, speed, draft, squat or required UKC samples
+  nothing again
+- moving a waypoint samples only the legs whose points changed
 
-After you drag a waypoint, pass the previous profile to
-`SampleDepths(legs, previous)`. Legs whose points haven't changed are copied
-from it.
+`RouteCheckSettings.DepartureWindow` adds a departure sweep, evaluated over
+the same samples, in `ClearanceCheckResult.Departures` (`report.Departures`):
 
-`SweepDepartures(profile, legs, from, to, step)` evaluates a range of
-departures over the same profile and returns the verdict for each departure.
+- `DepartureRange.Between(from, to, step)` sweeps fixed departures.
+- `DepartureRange.WaterLevelData(step)` sweeps the whole time range of the
+  S-104 data that covers the route, starting at the first whole step. Over
+  a long forecast, the step widens so the sweep stays under `maxDepartures`
+  (default 2000). Without S-104 coverage there's no sweep.
+
 `DepartureSweep.Windows()` returns the runs of departures that meet the
 settings, `NearestMeeting(departure)` the meeting departure closest to one,
 and `ArrivalAfterDataEnds()` the departures that arrive after the water-level
-data ends.
-
-`SweepWaterLevelRange(profile, legs, step)` sweeps the whole time range of the
-S-104 data that covers the route (`profile.WaterLevelTimeRange()`), starting
-at the first whole step. Over a long forecast, the step widens so the sweep
-stays under `maxDepartures` (default 2000).
-
-Every method takes a `CancellationToken`.
+data ends. The check keeps its last sweep too, which a changed departure
+alone doesn't redo.
 
 ## ETAs on their own
 
@@ -152,37 +242,44 @@ gives the ETA at any point along a leg.
 
 ## Check a route against the chart
 
-`RouteCheckEngine` checks a route against charted land, drying ground and the
+`ChartCheck` checks a route against charted land, drying ground and the
 extent of the loaded charts, and, given the mariner's depths, against charted
 dangers and the safety contour. It reads charted features through
-`IRouteChartSource`, and S-102 through `IChartedDepthSource`;
-`RouteCheckDataSources` in `EncDotNet.S100.Datasets.Pipelines` implements them
-over loaded S-101 cells and S-102 surfaces:
+`IRouteChartSource` (`sources.Charts`), and S-102 through the same
+`IChartedDepthSource` the clearance check uses (`sources.Depth`), reading only
+its S-102 surfaces (`SampleBathymetry`):
 
 ```csharp
-var sources = RouteCheckDataSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
-var engine = sources.CreateEngine(new RouteCheckOptions
-{
-    // Safety contour and safety depth; a draft adds draft + squat + UKC for dangers.
-    Depths = RouteCheckDepths.FromMarinerSettings(settings) with { DraftMeters = 11.5, SquatMeters = 0.3, RequiredUkcMeters = 1.0 },
-});
+var sources = CatalogRouteCheckSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());
 
-var legs = new[]
-{
-    new RouteCheckLeg([a, b], PortCrossTrackMeters: 185, StarboardCrossTrackMeters: 185),
-    new RouteCheckLeg([b, c]), // both sides use RouteCheckOptions.DefaultHalfWidthMeters (50 m)
-};
+var plan = new PassagePlan(
+[
+    new PassageLeg
+    {
+        Points = [a, b],
+        PortLimit = Length.FromMetres(185),
+        StarboardLimit = Length.FromMetres(185),
+        Draft = Depth.FromMetres(11.5),       // this leg's dangers are also judged against draft + squat + UKC
+        Squat = Depth.FromMetres(0.3),
+        RequiredUkc = Depth.FromMetres(1.0),
+    },
+    new PassageLeg { Points = [b, c] },       // both sides use RouteCheckOptions.DefaultLimit (50 m)
+]);
 
-foreach (var finding in engine.Check(legs).Findings)
+// The mariner's safety contour and safety depth turn on the depth and danger checks.
+var settings = RouteCheckSettings.FromMarinerSettings(marinerSettings, DateTimeOffset.UtcNow);
+
+foreach (var finding in new ChartCheck().Run(new RouteCheckContext(plan, settings, sources)).Findings)
 {
-    Console.WriteLine($"{finding.Group} {finding.Code} at {finding.DistanceMeters:F0} m: {finding.Meta}");
+    Console.WriteLine($"{finding.Group} {finding.Code} at {finding.Distance?.TotalMetres:F0} m: {finding.Meta}");
 }
 ```
 
-Each leg's corridor reaches `PortCrossTrackMeters` to port of the track and
-`StarboardCrossTrackMeters` to starboard. Both are **half-widths**, measured
-from the track to one edge, the same as S-421 and RTZ cross-track limits, so
-the full corridor is their sum.
+Each leg's corridor reaches `PortLimit` to port of the track and
+`StarboardLimit` to starboard. Both are **half-widths**, measured from the
+track to one edge, the same as S-421 and RTZ cross-track limits, so the full
+corridor is their sum. `RouteCheckSettings.CorridorOverride` replaces every
+leg's limits with one half-width.
 
 | Code | Group | When |
 | --- | --- | --- |
@@ -201,45 +298,47 @@ the full corridor is their sum.
 
 Crossings of the track are found exactly. Ground that only reaches into the
 corridor is found at cross-sections every
-`RouteCheckOptions.StationSpacingMeters` (default 10 m). Where cells overlap,
+`ChartCheckOptions.StationSpacingMeters` (default 10 m). Where cells overlap,
 only the finest cell at a place counts (`CellScaleRanking`), so a coarse cell's
 generalised land doesn't fire where a finer cell charts water.
 
-The depth checks run only when `RouteCheckOptions.Depths` is set. Dangers are
-judged against the safety depth and, with a draft, against draft + squat +
-required UKC on the static charted depth; the meta line names the threshold
-that fired. A danger counts only when it's isolated: one inside water already
+The depth checks run only when the settings have both a safety contour and a
+safety depth. Dangers are judged against the safety depth and, on a leg with
+a draft, against that leg's draft + squat + required UKC on the static
+charted depth; the meta line names the threshold that fired. A danger counts only when it's isolated: one inside water already
 shallower than the safety contour is left to the safety-contour finding.
 Adjacent shallow areas, soundings and S-102 cells merge into one span, so a
-long bank is one finding. `RouteCheckEngine.Dangers.cs` writes out the rules.
+long bank is one finding. `ChartCheck.Dangers.cs` writes out the rules.
 
 Once the cells' indexes are built (the first check), checking the 24 NM Solent
 route against 17 UKHO trial cells takes about 50 ms, and re-checking the two
-legs either side of a dragged waypoint about 11 ms. The wording comes from
-`RouteCheckOptions.Text`, so hosts can pass their own resources.
+legs either side of a dragged waypoint about 11 ms. Its findings don't depend
+on time, so the check keeps its last sweep and reuses it while the legs, the
+depth settings, the corridor override, the options and the sources are
+unchanged. The wording comes from `RouteCheckOptions.Formatter`, so hosts can
+pass their own resources.
 
 `SkinOfTheEarth` holds the water, land and drying rules the route check and
 the viewer's pick report share.
 
 ## Check a route against navigational warnings
 
-`RouteWarningCheck` checks a route against S-124 navigational warnings
+`WarningCheck` checks a route against S-124 navigational warnings
 (Editions 1.0.0 and 2.0.0): which ones cross its corridor or come near it, and
-whether each is in force while the vessel is there. `RouteWarningSources` in
-`EncDotNet.S100.Datasets.Pipelines` builds the warnings from loaded S-124
-datasets, one per `NavwarnPart`, with its geometry and affected areas:
+whether each is in force while the vessel is there. It reads the warnings
+through `IRouteWarningSource` (`sources.Warnings`), which gives the parts near
+each leg and the set of every loaded warning, including cancellations and
+in-force bulletins. The catalog bundle has one part per S-124 `NavwarnPart`,
+with its geometry and affected areas; `RouteWarningList` wraps a list you
+already have:
 
 ```csharp
-var warnings = RouteWarningSources.FromDatasets(catalog.Datasets);
-var set = RouteWarningSources.SetFromDatasets(catalog.Datasets);   // cancellations and in-force bulletins
-var schedule = PassageSchedule.Compute(passageLegs, departure);
-var result = new RouteWarningCheck().Check(
-    legs,                                          // RouteCheckLegs, with cross-track limits
-    warnings,
-    new RouteWarningTiming(schedule, viewTime),    // view time where a leg has no speed
-    set);
+var outcome = new WarningCheck().Run(new RouteCheckContext(
+    plan,                                          // legs with cross-track limits and speeds, and the departure
+    new RouteCheckSettings { At = viewTime },      // used only when the plan has no departure
+    sources));
 
-foreach (var finding in result.Findings)
+foreach (var finding in outcome.Findings)
 {
     Console.WriteLine($"{finding.Group} {finding.Title}: {finding.Meta}");
 }
@@ -249,14 +348,15 @@ A line or area **crosses** when it touches the track or comes within the
 leg's cross-track limit on its side. A warning is **near** when it comes
 within `RouteWarningOptions.NearDistanceMeters` of the track (default 0,5 NM),
 or is a point inside the corridor. The time is the ETA where the vessel meets
-the warning, or the fallback time without speeds. A warning is cancelled when
+the warning; where a leg has no ETA, the plan's departure; and without one,
+`RouteCheckSettings.At`. A warning is cancelled when
 `NavigationalWarningSet.WithdrawnAt` withdraws it by the time the vessel gets
 there: its cancellation date passes, another warning cancels it
 (`References`, category 1) and was published by then, or the latest in-force
 bulletin for its series, published after it, leaves it out (S-124 Edition
-2.0.0 §9.2.1). Without a set, `Check` builds one from the checked warnings.
+2.0.0 §9.2.1). Without a set, `RouteWarningList` builds one from its warnings.
 The viewer's Warning card and Navigational warnings panel judge with the same
-set, so they agree. A finding's `Warning.Withdrawal` says why; one left out of
+set, so they agree. A finding's `WarningDetails.Withdrawal` says why; one left out of
 a bulletin reads "Navigational warning 105/26 not in in-force bulletin
 NAVAREA X 110/26".
 
@@ -267,26 +367,24 @@ NAVAREA X 110/26".
 | `s124.not_in_force` | Info | On or near the route, but no validity range overlaps the vessel's time there |
 | `s124.cancelled` | Info | On or near the route, but cancelled by then |
 
-Every finding has source `S124`, the part's feature, and a `Warning`
-(`RouteFindingWarning`) with the message, relation, status and the times it
-was judged at. `RouteWarningResult.Matches` also lists the warnings off the
-route. The meta line names the series and number, the locality, the validity
-and the status; the wording comes from `RouteWarningOptions.Text`.
+Every finding has category `Warning`, the part's feature, and
+`WarningDetails` with the message, relation, status and the times it was
+judged at. `WarningCheckResult.Matches` (`report.Warnings`) also lists the
+warnings near the route that give no finding. The meta line names the series
+and number, the locality, the validity and the status; the wording comes from
+`RouteCheckOptions.Formatter`.
 
 ## Check a route against restricted and protected areas
 
-`RouteAreaCheck` checks a route against regulated areas: S-101 restricted,
+`AreaCheck` checks a route against regulated areas: S-101 restricted,
 military practice, caution, anchorage and traffic areas, and S-122 marine
 protected and restricted areas. It finds which ones the track enters or which
 reach inside its cross-track limits, and whether each is in force while the
-vessel is there. It reads the areas through `IRouteAreaSource`;
-`RouteCheckDataSources.Areas` implements it over loaded S-101 cells and S-122
-datasets, and `CheckAreas` runs the check:
+vessel is there. It reads the areas through `IRouteAreaSource`
+(`sources.Areas`), over loaded S-101 cells and S-122 datasets:
 
 ```csharp
-var sources = RouteCheckDataSources.FromDatasets(catalog.Datasets);
-var schedule = PassageSchedule.Compute(passageLegs, departure);
-var result = sources.CheckAreas(legs, new RouteWarningTiming(schedule, viewTime));
+var outcome = new AreaCheck().Run(new RouteCheckContext(plan, new RouteCheckSettings { At = viewTime }, sources));
 ```
 
 The S-101 feature types it checks are `RestrictedArea` (and the 1.x
@@ -309,13 +407,14 @@ where a route is meant to go.
 | `route_check.area_not_in_force` | Info | The area's `fixedDateRange` or season doesn't cover the vessel's time there |
 
 An area that only reaches inside the limits is one group lighter (Check
-becomes Info). Findings have source `RouteCheck`, so the verdict ranks an
-entry-prohibited area with the chart checks, just after land and drying
-ground. The meta line names the leg, the product, the restrictions, the
-categories, the dates and the ETAs.
+becomes Info). Findings have category `Area` and `AreaDetails`, and the
+code catalogue ranks an entry-prohibited area just after land and drying
+ground when a verdict names the worst finding. The meta line names the leg,
+the product, the restrictions, the categories, the dates and the ETAs.
 
 Time works as for S-124 warnings: the ETAs over the stretch where the vessel
-is in the area, or the fallback time without speeds. A `periodicDateRange`
+is in the area; without them, the plan's departure; and without one,
+`RouteCheckSettings.At`. A `periodicDateRange`
 repeats each year by month and day (`--03-01`, `----0301`) and may run over
 the new year; an area with both a fixed range and seasons must be in both. A
 date that can't be read counts as open. An area that isn't in force stays in
@@ -325,21 +424,49 @@ dropped, so the navigator still sees it on the route.
 Holes are outside the area, and where S-101 cells overlap only the finest
 cell at the place the route meets an area counts, so a coarse cell's copy of
 an area gives no second finding. The wording, and the labels of the
-restriction and category codes, come from `RouteAreaOptions.Text`.
+restriction and category codes, come from `RouteCheckOptions.Formatter`.
 
 ## Findings
 
-`RouteFinding` is one entry in a route's findings list. Each check (under-keel
-clearance, the route check, S-124 warnings, and later charted dangers)
-produces these, so one list can show them all. A finding has:
+`RouteFinding` is one entry in a route's findings list. Each check (the
+chart and depth checks, areas, S-124 warnings, and under-keel clearance)
+produces these, so one list can show them
+all. A finding has:
 
+- a `Code` from `RouteFindingCodes`, the one catalogue of codes. Each
+  `RouteFindingCode` has its `Value` (such as `route_check.crosses_land`),
+  its `Category`, its default `Group`, and its `HeadlineRank`, the order in
+  which Must review findings name a verdict
 - a `Group`: `MustReview`, `Check` or `Info`
-- a `Source`, which names the check: `Clearance`, `RouteCheck`, `S124`,
-  `Confidence` or `Data`
-- a `Title` and a `Meta` line
-- the `LegIndex` and `DistanceMeters` along the route
+- a `Category`, what it's about: `Chart`, `Depth`, `Area`, `Warning`,
+  `Clearance`, `Confidence` or `Data`
+- the `LegIndex` and `Distance` along the route
 - a `Location`: a point, or a span of the route
-- an optional `Feature` (dataset and feature id) that pick and describe can open
+- an optional `Feature` (dataset, feature id and, for chart findings, feature
+  type) that pick and describe can open
+- typed `Details`, so a client gets the numbers without parsing text:
+  `DangerDetails`, `ShoalDetails`, `AreaDetails`, `WarningDetails` or
+  `ClearanceDetails`
+- a `Title` and a `Meta` line, rendered by a `RouteFindingFormatter`
+
+The formatter's wording is English by default, in the invariant culture,
+metres and UTC. Pass a culture, a depth unit or a time zone to its
+constructor, or subclass it and override its virtual phrases to use your own
+resources (SoundCharts reads its `Strings.resx`). `Render` renders a finding
+again, so a host can switch depth unit or time format without checking again.
+
+```csharp
+var formatter = new RouteFindingFormatter(CultureInfo.GetCultureInfo("fr-FR"), DepthUnit.Feet);
+var report = new RouteChecker(sources, new RouteCheckOptions { Formatter = formatter }).Check(plan, settings);
+
+foreach (var finding in report.Findings)
+{
+    if (finding.Details is DangerDetails danger)
+    {
+        Console.WriteLine($"{danger.FeatureType}: {danger.Depth?.TotalMetres} m, {danger.ThresholdKind}");
+    }
+}
+```
 
 ## Rules shared with the pick report
 

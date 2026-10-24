@@ -6,11 +6,11 @@ using EncDotNet.S100.Viewer.Services;
 namespace EncDotNet.S100.Viewer.McpTools;
 
 /// <summary>
-/// Hands viewer routes to the built-in <c>get_passage_result</c> and
-/// <c>check_route</c> tools with the same effective values Check route uses
-/// (#897 passage model: route values, leg overrides, squat and cross-track
-/// limits), and the route's departure, falling back to the view time, so the
-/// tools' numbers match what the panel shows.
+/// Hands viewer routes to the built-in <c>check_route</c> tool with the same
+/// effective values Check route uses (#897 passage model: route values, leg
+/// overrides, squat and cross-track limits), and the route's departure,
+/// falling back to the view time, so the tool's numbers match what the panel
+/// shows.
 /// </summary>
 internal sealed class ViewerPassageRouteProvider : IPassageRouteProvider
 {
@@ -49,9 +49,9 @@ internal sealed class ViewerPassageRouteProvider : IPassageRouteProvider
                 effective[i].Points,
                 effective[i].Geometry,
                 route.GetEffectiveLegValue(i, RoutePassageField.Draft),
-                effective[i].SpeedKnots,
+                effective[i].Speed?.TotalKnots,
                 route.Passage.SquatMeters,
-                effective[i].RequiredUkcMeters,
+                effective[i].RequiredUkc?.TotalMetres,
                 $"Leg {i + 1} → {i + 2}",
                 route.GetEffectiveLegValue(i, RoutePassageField.PortCrossTrack),
                 route.GetEffectiveLegValue(i, RoutePassageField.StarboardCrossTrack)));

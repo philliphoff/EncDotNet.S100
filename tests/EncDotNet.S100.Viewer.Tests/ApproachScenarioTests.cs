@@ -1,6 +1,7 @@
 using System.Globalization;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.ExchangeSets;
@@ -110,15 +111,15 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
         Assert.Null(route.Passage.SquatMeters); // S-421 has no squat
     }
 
-    // #903: the window the viewer sweeps is the engine's, which the scenario
-    // tests prove exact against the world model.
+    // #903: the window the viewer sweeps is the clearance check's, which the
+    // scenario tests prove exact against the world model.
     [Fact]
-    public async Task The_departure_window_is_the_engines_exact_sweep()
+    public async Task The_departure_window_is_the_clearance_checks_exact_sweep()
     {
         using var s = await CreateAsync(LowWaterDeparture);
 
         var window = Assert.IsType<PassageDepartureWindow>(s.Check.Window);
-        var expected = EngineSweep(s.Route);
+        var expected = SdkSweep(s.Route);
 
         Assert.Equal(PassageCheckService.WindowStep, window.Sweep.Step);
         Assert.Equal(expected.Options.Select(o => (o.Departure, o.Verdict)), window.Sweep.Options.Select(o => (o.Departure, o.Verdict)));
@@ -135,8 +136,8 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
 
         Assert.Equal(PassageVerdict.BelowSetting, s.Check.Current!.Result.Verdict);
         var finding = Assert.Single(s.Findings.Findings);
-        Assert.Equal((PassageFindings.Codes.BelowSetting, RouteFindingGroup.MustReview, RouteFindingSource.Clearance, 0),
-            (finding.Code, finding.Group, finding.Source, finding.LegIndex!.Value));
+        Assert.Equal((RouteFindingCodes.BelowSetting, RouteFindingGroup.MustReview, RouteFindingCategory.Clearance, 0),
+            (finding.Code, finding.Group, finding.Category, finding.LegIndex!.Value));
         var location = Assert.IsType<RouteFindingLocation>(finding.Location);
         Assert.InRange(crest.Latitude, location.Path.Min(p => p.Latitude), location.Path.Max(p => p.Latitude));
 
@@ -188,7 +189,7 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
         routes.Routes.SetActiveRoute(route);
 
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero);
+        var check = new PassageCheckService(routes, catalog, checks: () => [new ClearanceCheck()], debounce: TimeSpan.Zero);
 
         var time = new GlobalTimeService();
         var samples = CoverageWriters.Times(definition.WaterLevelStart, definition.WaterLevelEnd, TimeSpan.FromMinutes(10)).ToArray();
@@ -205,25 +206,23 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
             ],
         });
         var follow = new FollowPassageService(check, time);
-        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), clock: new FixedClock(departure));
+        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc());
 
         routes.IsCheckModeActive = true;
         await check.WhenIdle();
         return new Setup(routes, route, check, time, follow, findings);
     }
 
-    private DepartureSweep EngineSweep(Route route)
+    private DepartureSweep SdkSweep(Route route)
     {
-        var sources = Datasets.Pipelines.Navigation.PassageDataSources.FromDatasets(fixture.Datasets, new ProjNetCrsTransformFactory());
-        var engine = new PassageCheckEngine(sources.Depth, sources.WaterLevel);
-        var legs = route.Legs.Select((_, i) => new PassageLeg(
-            [route.Waypoints[i].Position, route.Waypoints[i + 1].Position],
-            route.GetEffectiveLegValue(i, RoutePassageField.Draft)!.Value,
-            route.GetEffectiveLegValue(i, RoutePassageField.Speed),
-            route.Passage.SquatMeters ?? 0,
-            route.GetEffectiveLegValue(i, RoutePassageField.RequiredUkc))).ToList();
-        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
-        return engine.SweepWaterLevelRange(profile, legs, PassageCheckService.WindowStep, PassageCheckService.MaxWindowDepartures, TestContext.Current.CancellationToken)!;
+        var sources = CatalogRouteCheckSources.FromDatasets(fixture.Datasets, new ProjNetCrsTransformFactory());
+        var settings = new Navigation.RouteCheckSettings
+        {
+            At = DateTimeOffset.UnixEpoch,
+            DepartureWindow = DepartureRange.WaterLevelData(PassageCheckService.WindowStep, PassageCheckService.MaxWindowDepartures),
+        };
+        var plan = new PassagePlan(RouteEtas.ToPassageLegs(route), DateTimeOffset.UnixEpoch);
+        return new ClearanceCheck().Run(new RouteCheckContext(plan, settings, sources), TestContext.Current.CancellationToken).Detail!.Departures!;
     }
 
     // The middle of the second window (the first starts with the data).

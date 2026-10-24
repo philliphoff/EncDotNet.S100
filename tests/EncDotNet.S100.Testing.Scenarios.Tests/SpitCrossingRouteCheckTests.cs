@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
@@ -9,7 +10,7 @@ namespace EncDotNet.S100.Testing.Scenarios.Tests;
 
 /// <summary>
 /// "Spit crossing" end to end (#954): generated S-101 cells, read by the real
-/// reader into the route-check adapter and <see cref="RouteCheckEngine"/>,
+/// reader into the route-check adapter and <see cref="ChartCheck"/>,
 /// give the land and drying ground the world model predicts.
 /// </summary>
 public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : IClassFixture<SpitCrossingFixture>
@@ -21,7 +22,7 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
     // nodes, so its boundaries sit within a few metres of the model's.
     private const double Tolerance = 15;
 
-    private readonly RouteCheckDataSources _sources = ScenarioLoading.RouteCheckSources(fixture.Scenario);
+    private readonly RouteCheckSources _sources = ScenarioLoading.Sources(fixture.Scenario);
 
     private ScenarioDefinition Definition => fixture.Definition;
 
@@ -42,12 +43,12 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         {
             var expected = truth[i];
             var finding = result.Findings[i];
-            Assert.Equal(expected.Kind == Ground.Land ? RouteCheckCodes.CrossesLand : RouteCheckCodes.CrossesDrying, finding.Code);
-            Assert.Equal(RouteFindingSource.RouteCheck, finding.Source);
+            Assert.Equal(expected.Kind == Ground.Land ? RouteFindingCodes.CrossesLand : RouteFindingCodes.CrossesDrying, finding.Code);
+            Assert.Equal(RouteFindingCategory.Chart, finding.Category);
             Assert.Equal(expected.Leg, finding.LegIndex);
             Assert.Equal(Harbour, finding.Feature!.DatasetId);
             Assert.EndsWith(expected.Kind == Ground.Land ? " · LandArea" : " · DepthArea", finding.Meta, StringComparison.Ordinal);
-            Assert.InRange(finding.DistanceMeters!.Value, Distance(route, expected.Start) - Tolerance, Distance(route, expected.Start) + Tolerance);
+            Assert.InRange(finding.Distance!.Value.TotalMetres, Distance(route, expected.Start) - Tolerance, Distance(route, expected.Start) + Tolerance);
             Assert.InRange(finding.Location!.EndDistanceMeters, Distance(route, expected.End) - Tolerance, Distance(route, expected.End) + Tolerance);
         }
     }
@@ -80,12 +81,12 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         var result = Check(route);
 
         var finding = Assert.Single(result.Findings);
-        Assert.Equal(RouteCheckCodes.OutsideChartCoverage, finding.Code);
+        Assert.Equal(RouteFindingCodes.OutsideChartCoverage, finding.Code);
         Assert.Equal(RouteFindingGroup.Check, finding.Group);
-        Assert.Equal(RouteFindingSource.Data, finding.Source);
+        Assert.Equal(RouteFindingCategory.Data, finding.Category);
         var edge = Distance(route, (coastal.East, 3050));
-        Assert.InRange(finding.DistanceMeters!.Value, edge - Tolerance, edge + Tolerance);
-        Assert.Equal(result.LengthMeters, finding.Location!.EndDistanceMeters, 6);
+        Assert.InRange(finding.Distance!.Value.TotalMetres, edge - Tolerance, edge + Tolerance);
+        Assert.Equal(result.Detail!.LengthMeters, finding.Location!.EndDistanceMeters, 6);
     }
 
     // #947: the coastal cell's generalised land reaches about 150 m further
@@ -96,14 +97,14 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         var route = Route("421ZZ00SPITX");
         var land = GroundTruth.Along(World, Local(route)).Single(t => t.Kind == Ground.Land);
 
-        var withBoth = Check(route).Findings.Single(f => f.Code == RouteCheckCodes.CrossesLand);
-        var coastalOnly = Check(route, Coastal).Findings.Single(f => f.Code == RouteCheckCodes.CrossesLand);
+        var withBoth = Check(route).Findings.Single(f => f.Code == RouteFindingCodes.CrossesLand);
+        var coastalOnly = Check(route, Coastal).Findings.Single(f => f.Code == RouteFindingCodes.CrossesLand);
 
         Assert.Equal(Harbour, withBoth.Feature!.DatasetId);
-        Assert.InRange(withBoth.DistanceMeters!.Value, Distance(route, land.Start) - Tolerance, Distance(route, land.Start) + Tolerance);
+        Assert.InRange(withBoth.Distance!.Value.TotalMetres, Distance(route, land.Start) - Tolerance, Distance(route, land.Start) + Tolerance);
         Assert.Equal(Coastal, coastalOnly.Feature!.DatasetId);
-        Assert.True(withBoth.DistanceMeters - coastalOnly.DistanceMeters > 100,
-            $"The coastal cell's land starts at {coastalOnly.DistanceMeters:0} m and the harbour cell's at {withBoth.DistanceMeters:0} m.");
+        Assert.True(withBoth.Distance!.Value.TotalMetres - coastalOnly.Distance!.Value.TotalMetres > 100,
+            $"The coastal cell's land starts at {coastalOnly.Distance.Value.TotalMetres:0} m and the harbour cell's at {withBoth.Distance.Value.TotalMetres:0} m.");
     }
 
     [Fact]
@@ -124,11 +125,11 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         Assert.DoesNotContain(findings, f => f.Group == RouteFindingGroup.MustReview);
         Assert.All(findings, f =>
         {
-            Assert.Equal(RouteCheckCodes.DryingInCorridor, f.Code);
+            Assert.Equal(RouteFindingCodes.DryingInCorridor, f.Code);
             Assert.Equal(Harbour, f.Feature!.DatasetId);
         });
 
-        Assert.Contains(Check(Legs(route), Coastal).Findings, f => f.Code == RouteCheckCodes.CrossesDrying);
+        Assert.Contains(Check(Legs(route), Coastal).Findings, f => f.Code == RouteFindingCodes.CrossesDrying);
     }
 
     [Fact]
@@ -144,9 +145,11 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         var legs = Legs(local.Select(p => World.Frame.ToGeo(p.X, p.Y)).ToList());
 
         // With the depth checks (#955) and S-102, as the viewer runs it.
-        var engine = _sources.CreateEngine(new RouteCheckOptions { Depths = new RouteCheckDepths(10, 10) });
+        // A fresh check each run, so none reuses the last sweep.
+        var plan = new PassagePlan(legs);
+        var settings = PassageLegs.Settings(DateTimeOffset.UnixEpoch, 10, 10);
         var first = Stopwatch.StartNew();
-        var result = engine.Check(legs, TestContext.Current.CancellationToken);
+        var result = ScenarioChecks.Chart(_sources, plan, settings);
         first.Stop();
 
         // The first checks run on tier-0 JIT code (about ten times slower);
@@ -159,20 +162,20 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         while (times.Count < 30 && (times.Count < 5 || budget.Elapsed < TimeSpan.FromSeconds(20)))
         {
             var run = Stopwatch.StartNew();
-            engine.Check(legs, TestContext.Current.CancellationToken);
+            ScenarioChecks.Chart(_sources, plan, settings);
             times.Add(run.Elapsed.TotalMilliseconds);
         }
 
         var settled = times.TakeLast(5).ToList();
         var each = settled.Min();
         TestContext.Current.TestOutputHelper?.WriteLine(
-            $"Route check, {result.LengthMeters / PassageGeodesy.MetersPerNauticalMile:0.0} NM in {legs.Count} legs: " +
+            $"Route check, {result.Detail!.LengthMeters / PassageGeodesy.MetersPerNauticalMile:0.0} NM in {legs.Count} legs: " +
             $"first {first.Elapsed.TotalMilliseconds:0} ms (builds the cells' indexes), settled {each:0.0}–{settled.Max():0.0} ms per check " +
             $"after {times.Count} checks (the second took {times[0]:0} ms); {result.Findings.Count} findings: " +
             string.Join(", ", result.Findings.GroupBy(f => f.Code).Select(g => $"{g.Key} ×{g.Count()}")) + ".");
 
-        Assert.InRange(result.LengthMeters / PassageGeodesy.MetersPerNauticalMile, 20, 35);
-        Assert.Contains(result.Findings, f => f.Code == RouteCheckCodes.CrossesDrying);
+        Assert.InRange(result.Detail!.LengthMeters / PassageGeodesy.MetersPerNauticalMile, 20, 35);
+        Assert.Contains(result.Findings, f => f.Code == RouteFindingCodes.CrossesDrying);
 
         // About 120 ms on Apple silicon, but about 1 s on a 2-core GitHub
         // ubuntu runner, so the bound leaves room for CI; a regression that
@@ -180,33 +183,30 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         Assert.True(each < 2500, $"A check took {each:0} ms.");
     }
 
-    private RouteCheckResult Check(IReadOnlyList<RouteCheckLeg> legs, params string[] only)
+    private RouteCheckOutcome<ChartCheckResult> Check(IReadOnlyList<PassageLeg> legs, params string[] only)
     {
         var sources = only.Length == 0
             ? _sources
-            : RouteCheckDataSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)));
-        return new RouteCheckEngine(sources.Charts).Check(legs, TestContext.Current.CancellationToken);
+            : CatalogRouteCheckSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)), new ProjNetCrsTransformFactory());
+        return ScenarioChecks.Chart(sources, new PassagePlan(legs), PassageLegs.Settings(DateTimeOffset.UnixEpoch));
     }
 
     private S421RouteSpec Spec(string datasetName) => Definition.Routes.Single(r => r.DatasetName == datasetName);
 
-    private List<RouteCheckLeg> Route(string datasetName) =>
+    private List<PassageLeg> Route(string datasetName) =>
         Legs(S421RouteBuilder.Positions(Definition, Spec(datasetName)));
 
-    private static List<RouteCheckLeg> Legs(IReadOnlyList<GeoPosition> positions) =>
-        positions.Zip(positions.Skip(1), (a, b) => new RouteCheckLeg(
-            [a, b],
-            PortCrossTrackMeters: S421RouteBuilder.CrossTrackLimitMeters,
-            StarboardCrossTrackMeters: S421RouteBuilder.CrossTrackLimitMeters)).ToList();
+    private static List<PassageLeg> Legs(IReadOnlyList<GeoPosition> positions) =>
+        positions.Zip(positions.Skip(1), (a, b) => PassageLegs.Leg([a, b], halfWidth: S421RouteBuilder.CrossTrackLimitMeters)).ToList();
 
-    private List<(double X, double Y)> Local(List<RouteCheckLeg> legs) =>
+    private List<(double X, double Y)> Local(List<PassageLeg> legs) =>
         legs.Select(l => l.Points[0]).Append(legs[^1].Points[^1])
             .Select(p => World.Frame.ToLocal(p.Latitude, p.Longitude))
             .ToList();
 
     // The distance the engine reports for a local point on the route: whole
     // legs before it, then along its own leg.
-    private double Distance(List<RouteCheckLeg> legs, (double X, double Y) point)
+    private double Distance(List<PassageLeg> legs, (double X, double Y) point)
     {
         var position = World.Frame.ToGeo(point.X, point.Y);
         var best = (Offset: double.MaxValue, Distance: 0.0);

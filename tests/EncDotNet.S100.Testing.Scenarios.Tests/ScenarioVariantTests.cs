@@ -29,7 +29,7 @@ public sealed class ScenarioVariantTests : IDisposable
         var scenario = ScenarioGenerator.Generate(definition, _root);
         var sources = ScenarioLoading.Sources(scenario);
 
-        var depth = sources.Depth.Sample(definition.Place("channel-west").Latitude, definition.Place("channel-west").Longitude);
+        var depth = sources.Depth!.Sample(definition.Place("channel-west"));
 
         Assert.Equal(ChartedDepthKind.DredgedArea, depth!.Kind);
         Assert.Equal(12.5, depth.DepthMeters);

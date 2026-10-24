@@ -44,11 +44,12 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
 
     private WarningsRouteCheck Create(Action<Action>? post = null) => WarningsRouteCheck.Create(fixture, post);
 
-    private static RouteFinding Finding(string id, string code, RouteFindingGroup group, RouteFindingSource source, string? title = null, string? meta = null) =>
-        new(id, code, group, source, title ?? id, meta ?? $"meta {id}", 0, 100, null);
+    private static RouteFinding Finding(string id, RouteFindingCode code, RouteFindingGroup group, RouteFindingCategory category, string? title = null, string? meta = null) =>
+        TestFinding.Make(id, code, group, category, title ?? id, meta ?? $"meta {id}", 0, 100, null);
 
-    private static RouteCheckVerdict Build(bool hasDraft, params RouteFinding[] findings) =>
-        RouteCheckVerdict.Build(hasDraft, null, findings, warningsChecked: true, ["S-101", "S-124"], DepthUnit.Metres, TimeFormat.Utc);
+    // The kind is the report's (RouteCheckVerdict.From); the card words it.
+    private static RouteCheckCard Build(bool hasDraft, params RouteFinding[] findings) =>
+        RouteCheckCard.Build(RouteCheckVerdict.From(findings, null).Kind, hasDraft, null, findings, warningsChecked: true, ["S-101", "S-124"], DepthUnit.Metres, TimeFormat.Utc);
 
     [Fact]
     public void Must_review_titles_name_the_worst_kind_in_order()
@@ -56,12 +57,12 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
         RouteFinding[] all =
         [
-            Finding("w", RouteWarningCodes.OnRoute, RouteFindingGroup.MustReview, RouteFindingSource.S124, "Inside navigational warning 001/26"),
-            Finding("b", PassageFindings.Codes.BelowSetting, RouteFindingGroup.MustReview, RouteFindingSource.Clearance, "Below your UKC setting for 12 min"),
-            Finding("x", RouteCheckCodes.DangerInCorridor, RouteFindingGroup.MustReview, RouteFindingSource.RouteCheck, "Wreck in the corridor"),
-            Finding("a", "route_check.enters_restricted_area", RouteFindingGroup.MustReview, RouteFindingSource.RouteCheck, "Enters restricted area: entry prohibited"),
-            Finding("d", RouteCheckCodes.CrossesDrying, RouteFindingGroup.MustReview, RouteFindingSource.RouteCheck, "Crosses drying ground", "Leg 6 → 7 · Calshot Spit"),
-            Finding("l", RouteCheckCodes.CrossesLand, RouteFindingGroup.MustReview, RouteFindingSource.RouteCheck, "Crosses land", "Leg 2 → 3"),
+            Finding("w", RouteFindingCodes.WarningOnRoute, RouteFindingGroup.MustReview, RouteFindingCategory.Warning, "Inside navigational warning 001/26"),
+            Finding("b", RouteFindingCodes.BelowSetting, RouteFindingGroup.MustReview, RouteFindingCategory.Clearance, "Below your UKC setting for 12 min"),
+            Finding("x", RouteFindingCodes.DangerInCorridor, RouteFindingGroup.MustReview, RouteFindingCategory.Chart, "Wreck in the corridor"),
+            Finding("a", RouteFindingCodes.EntersProhibitedArea, RouteFindingGroup.MustReview, RouteFindingCategory.Area, "Enters restricted area: entry prohibited"),
+            Finding("d", RouteFindingCodes.CrossesDrying, RouteFindingGroup.MustReview, RouteFindingCategory.Chart, "Crosses drying ground", "Leg 6 → 7 · Calshot Spit"),
+            Finding("l", RouteFindingCodes.CrossesLand, RouteFindingGroup.MustReview, RouteFindingCategory.Chart, "Crosses land", "Leg 2 → 3"),
         ];
 
         // Removing the worst each time names the next: land → drying → area → danger → below UKC → warning.
@@ -84,9 +85,9 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
     public void Must_review_wins_over_check_and_check_over_clear()
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
-        var check = Finding("c", RouteCheckCodes.LandInCorridor, RouteFindingGroup.Check, RouteFindingSource.RouteCheck, "Land inside the cross-track limits");
-        var info = Finding("i", RouteWarningCodes.Cancelled, RouteFindingGroup.Info, RouteFindingSource.S124);
-        var review = Finding("r", RouteCheckCodes.CrossesLand, RouteFindingGroup.MustReview, RouteFindingSource.RouteCheck, "Crosses land");
+        var check = Finding("c", RouteFindingCodes.LandInCorridor, RouteFindingGroup.Check, RouteFindingCategory.Chart, "Land inside the cross-track limits");
+        var info = Finding("i", RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info, RouteFindingCategory.Warning);
+        var review = Finding("r", RouteFindingCodes.CrossesLand, RouteFindingGroup.MustReview, RouteFindingCategory.Chart, "Crosses land");
 
         var noDraftReview = Build(false, check, info, review);
         Assert.Equal((RouteCheckVerdictKind.MustReview, "1 to review"), (noDraftReview.Kind, noDraftReview.Title));
@@ -112,11 +113,11 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
         var verdict = Build(
             false,
-            Finding("w1", RouteWarningCodes.OnRoute, RouteFindingGroup.MustReview, RouteFindingSource.S124),
-            Finding("w2", RouteWarningCodes.OnRoute, RouteFindingGroup.MustReview, RouteFindingSource.S124),
-            Finding("w3", RouteWarningCodes.NearRoute, RouteFindingGroup.Check, RouteFindingSource.S124),
-            Finding("w4", RouteWarningCodes.Cancelled, RouteFindingGroup.Info, RouteFindingSource.S124),
-            Finding("c", RouteCheckCodes.OutsideChartCoverage, RouteFindingGroup.Check, RouteFindingSource.Data));
+            Finding("w1", RouteFindingCodes.WarningOnRoute, RouteFindingGroup.MustReview, RouteFindingCategory.Warning),
+            Finding("w2", RouteFindingCodes.WarningOnRoute, RouteFindingGroup.MustReview, RouteFindingCategory.Warning),
+            Finding("w3", RouteFindingCodes.WarningNearRoute, RouteFindingGroup.Check, RouteFindingCategory.Warning),
+            Finding("w4", RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info, RouteFindingCategory.Warning),
+            Finding("c", RouteFindingCodes.OutsideChartCoverage, RouteFindingGroup.Check, RouteFindingCategory.Data));
 
         Assert.Equal([FindingsFilter.Clearance, FindingsFilter.Route, FindingsFilter.Warnings], verdict.Rows.Select(r => r.Filter));
         Assert.Equal(("Not checked", null, true), (verdict.Rows[0].Text, verdict.Rows[0].Chip, verdict.Rows[0].AddDraft));
@@ -124,7 +125,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
         Assert.Equal(("2 in force on route · 1 near", "3", CheckTone.Destructive), (verdict.Rows[2].Text, verdict.Rows[2].Chip, verdict.Rows[2].ChipTone));
         Assert.Equal("Not for navigation · computed from S-101, S-124 for your settings", verdict.Footer);
 
-        var nothing = RouteCheckVerdict.Build(false, null, [], warningsChecked: false, [], DepthUnit.Metres, TimeFormat.Utc);
+        var nothing = RouteCheckCard.Build(RouteCheckVerdictKind.Clear, false, null, [], warningsChecked: false, [], DepthUnit.Metres, TimeFormat.Utc);
         Assert.Equal(2, nothing.Rows.Count); // no Warnings row when no warnings were checked
         Assert.Equal(("Nothing found", "0", CheckTone.Success), (nothing.Rows[1].Text, nothing.Rows[1].Chip, nothing.Rows[1].ChipTone));
         Assert.Equal("Not for navigation · no data loaded for this route", nothing.Footer);
@@ -160,7 +161,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
         check.SelectSummaryCommand.Execute(check.SummaryRows[2]);
         Assert.True(check.ShowFindings);
         Assert.Equal(FindingsFilter.Warnings, check.Findings!.Filter);
-        Assert.All(check.Findings.Shown, f => Assert.Equal(RouteFindingSource.S124, f.Source));
+        Assert.All(check.Findings.Shown, f => Assert.Equal(RouteFindingCategory.Warning, f.Category));
         Assert.True(check.Findings.FilterChips.Single(c => c.Filter == FindingsFilter.Warnings).IsSelected);
     }
 
@@ -296,9 +297,10 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
         };
         var warnings = new NavigationalWarningsService(loader);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero, post: post);
-        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(),
-            producers: [new WarningFindingProducer(warnings, options is null ? null : () => options)], post: post);
+        var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
+            checks: () => [new WarningCheck(), new ClearanceCheck()],
+            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post);
+        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
         return new WarningsRouteCheck(routes, route, check, findings) { Warnings = warnings };
     }
 

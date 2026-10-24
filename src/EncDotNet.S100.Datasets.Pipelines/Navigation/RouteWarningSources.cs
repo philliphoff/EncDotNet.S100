@@ -5,7 +5,7 @@ using EncDotNet.S100.Navigation;
 namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 
 /// <summary>
-/// The navigational warnings a <see cref="RouteWarningCheck"/> reads, built
+/// The navigational warnings a <see cref="WarningCheck"/> reads, built
 /// from loaded S-124 datasets (Editions 1.0.0 and 2.0.0).
 /// </summary>
 public static class RouteWarningSources
@@ -53,7 +53,8 @@ public static class RouteWarningSources
     /// <summary>
     /// Every loaded S-124 warning as a whole, including cancellations and
     /// in-force bulletins with no parts, to judge the parts with (pass it to
-    /// <see cref="RouteWarningCheck.Check(IReadOnlyList{RouteCheckLeg}, IReadOnlyList{RouteWarning}, RouteWarningTiming, NavigationalWarningSet?, CancellationToken)"/>).
+    /// <see cref="RouteWarningList(IReadOnlyList{RouteWarning}, NavigationalWarningSet?)"/>
+    /// for the <see cref="WarningCheck"/>).
     /// </summary>
     /// <param name="datasets">The loaded datasets, such as <see cref="IDatasetCatalog.Datasets"/>.</param>
     /// <returns>The set.</returns>

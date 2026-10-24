@@ -1,12 +1,13 @@
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Navigation;
 
 /// <summary>
-/// The corridor geometry <see cref="RouteWarningCheck"/> and
-/// <see cref="RouteAreaCheck"/> share: the route cut into short pieces, and
+/// The corridor geometry <see cref="WarningCheck"/> and
+/// <see cref="AreaCheck"/> share: the route cut into short pieces, and
 /// how a set of points, lines and areas meets each piece and the corridor
 /// between its cross-track limits.
 /// </summary>
@@ -266,28 +267,32 @@ internal static class RouteCorridor
         public double Length => Samples.Count == 0 ? 0 : Samples[^1].Distance;
 
         /// <summary>Cuts the legs into pieces.</summary>
-        /// <param name="legs">The legs.</param>
+        /// <param name="plan">The plan, whose legs give the track and the cross-track limits.</param>
+        /// <param name="settings">The corridor override.</param>
         /// <param name="defaultHalfWidthMeters">The half-width of a side whose cross-track limit isn't set.</param>
         /// <param name="segmentLengthMeters">The length of the pieces.</param>
         /// <param name="maxSegmentsPerLeg">The most pieces per leg.</param>
         /// <returns>The track.</returns>
-        public static Track Build(IReadOnlyList<RouteCheckLeg> legs, double defaultHalfWidthMeters, double segmentLengthMeters, int maxSegmentsPerLeg)
+        public static Track Build(PassagePlan plan, RouteCheckSettings settings, double defaultHalfWidthMeters, double segmentLengthMeters, int maxSegmentsPerLeg)
         {
+            ArgumentNullException.ThrowIfNull(plan);
+            ArgumentNullException.ThrowIfNull(settings);
+            var legs = plan.Legs;
             var samples = new List<Sample>();
             var infos = new List<LegInfo>(legs.Count);
             var offset = 0.0;
             for (var i = 0; i < legs.Count; i++)
             {
-                var leg = legs[i] ?? throw new ArgumentException($"Leg {i} is null.", nameof(legs));
+                var leg = legs[i] ?? throw new ArgumentException($"Leg {i} is null.", nameof(plan));
                 if (leg.Points is null || leg.Points.Count < 2)
                 {
-                    throw new ArgumentException($"Leg {i} needs at least two points.", nameof(legs));
+                    throw new ArgumentException($"Leg {i} needs at least two points.", nameof(plan));
                 }
 
                 infos.Add(new LegInfo(
                     offset,
-                    Math.Max(0, leg.PortCrossTrackMeters ?? defaultHalfWidthMeters),
-                    Math.Max(0, leg.StarboardCrossTrackMeters ?? defaultHalfWidthMeters)));
+                    settings.PortMeters(leg, defaultHalfWidthMeters),
+                    settings.StarboardMeters(leg, defaultHalfWidthMeters)));
                 var points = leg.Points;
                 var lengths = new double[points.Count - 1];
                 for (var p = 0; p < lengths.Length; p++)
@@ -311,6 +316,25 @@ internal static class RouteCorridor
             }
 
             return new Track(samples, infos);
+        }
+
+        /// <summary>Each leg's box, widened by <paramref name="reach"/> metres on every side.</summary>
+        /// <param name="reach">How far beyond the track the box reaches, in metres.</param>
+        /// <returns>One box per leg, in route order.</returns>
+        public IEnumerable<BoundingBox> LegExtents(double reach)
+        {
+            var pad = reach / PassageGeodesy.MetersPerDegreeLatitude + 1e-6;
+            foreach (var group in Samples.GroupBy(s => s.Leg))
+            {
+                var south = group.Min(s => s.Position.Latitude);
+                var north = group.Max(s => s.Position.Latitude);
+                var cos = Math.Max(Math.Cos(Math.Max(Math.Abs(south), Math.Abs(north)) * Math.PI / 180), 1e-6);
+                yield return new BoundingBox(
+                    south - pad,
+                    group.Min(s => s.Position.Longitude) - pad / cos,
+                    north + pad,
+                    group.Max(s => s.Position.Longitude) + pad / cos);
+            }
         }
 
         /// <summary>The leg a distance from departure is on: the earlier leg at a waypoint.</summary>

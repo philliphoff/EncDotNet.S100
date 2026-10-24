@@ -274,7 +274,7 @@ internal abstract class NavigationalWarningsToolBase
     }
 
     private static NavigationalWarningRouteDto RouteDto(RouteFinding? finding, DateTimeOffset? departure, TimeFormat format) =>
-        finding?.Warning is not { } w
+        finding?.Details is not WarningDetails w
             ? new NavigationalWarningRouteDto("off", null, null, null, null, false, null)
             : new NavigationalWarningRouteDto(
                 w.Relation == RouteWarningRelation.Crosses ? "crosses" : "near",
@@ -600,10 +600,10 @@ internal abstract class WarningCardsToolBase : NavigationalWarningsToolBase
     {
         Route = card.RouteFinding is { } finding
             ? new WarningCardRouteDto(
-                finding.Warning?.Relation == RouteWarningRelation.Near ? "near" : "crosses",
+                (finding.Details as WarningDetails)?.Relation == RouteWarningRelation.Near ? "near" : "crosses",
                 finding.Id,
                 finding.LegIndex,
-                finding.LegIndex is { } first ? Math.Max(first, finding.Warning?.EndLegIndex ?? first) : null,
+                finding.LegIndex is { } first ? Math.Max(first, (finding.Details as WarningDetails)?.EndLegIndex ?? first) : null,
                 card.RouteFindingText!)
             : null,
     };

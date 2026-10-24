@@ -21,7 +21,8 @@ public sealed record LegSchedule(
 
 /// <summary>
 /// Distances, durations and ETAs for a passage at a constant speed over
-/// ground on each leg. Build one with <see cref="Compute"/>.
+/// ground on each leg. Build one with
+/// <see cref="Compute(PassagePlan, RouteCheckSettings)"/>.
 /// </summary>
 /// <remarks>
 /// ETAs are departure plus distance divided by the entered speed; S-111
@@ -84,9 +85,9 @@ public sealed class PassageSchedule
                 throw new ArgumentException($"Leg {i} needs at least two points.", nameof(legs));
             }
 
-            if (leg.SpeedKnots is { } s && (!double.IsFinite(s) || s < 0))
+            if (leg.Speed is { } s && (!double.IsFinite(s.TotalMetresPerSecond) || s.TotalMetresPerSecond < 0))
             {
-                throw new ArgumentException($"Leg {i} has an invalid speed ({s} kn).", nameof(legs));
+                throw new ArgumentException($"Leg {i} has an invalid speed ({s.TotalKnots} kn).", nameof(legs));
             }
 
             var starts = new double[leg.Points.Count];
@@ -111,6 +112,31 @@ public sealed class PassageSchedule
     }
 
     /// <summary>
+    /// Computes the schedule the checks use for a plan: it leaves at the
+    /// plan's departure, or at <see cref="RouteCheckSettings.At"/> when the
+    /// plan has none.
+    /// </summary>
+    /// <param name="plan">The plan.</param>
+    /// <param name="settings">The check settings.</param>
+    /// <returns>The schedule.</returns>
+    /// <exception cref="ArgumentException">A leg has fewer than two points, or a negative or non-finite speed.</exception>
+    public static PassageSchedule Compute(PassagePlan plan, RouteCheckSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return Compute(plan.Legs, plan.EffectiveDeparture(settings));
+    }
+
+    /// <summary>
+    /// The time a check judges a point at: its ETA, or the departure where
+    /// it has none (a leg without a speed, or after one).
+    /// </summary>
+    /// <param name="legIndex">Zero-based leg index.</param>
+    /// <param name="distanceAlongLegMeters">Distance from the start of the leg, in metres.</param>
+    /// <returns>The time.</returns>
+    public DateTimeOffset TimeAt(int legIndex, double distanceAlongLegMeters) =>
+        EtaAt(legIndex, distanceAlongLegMeters) ?? Departure;
+
+    /// <summary>
     /// The ETA at a point <paramref name="distanceAlongLegMeters"/> into leg
     /// <paramref name="legIndex"/>, or <c>null</c> when it is unknown.
     /// </summary>
@@ -131,6 +157,5 @@ public sealed class PassageSchedule
     /// <summary>Distance in metres from the start of leg <paramref name="legIndex"/> to the start of its segment <paramref name="segmentIndex"/>.</summary>
     internal double SegmentStart(int legIndex, int segmentIndex) => _segmentStarts[legIndex][segmentIndex];
 
-    internal static double? SpeedMetersPerSecond(PassageLeg leg) =>
-        leg.SpeedKnots is { } knots && knots > 0 ? knots * PassageGeodesy.MetersPerNauticalMile / 3600.0 : null;
+    internal static double? SpeedMetersPerSecond(PassageLeg leg) => leg.MetresPerSecond;
 }

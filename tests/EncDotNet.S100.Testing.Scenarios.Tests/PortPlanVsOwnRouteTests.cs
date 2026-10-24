@@ -120,11 +120,10 @@ public sealed class PortPlanVsOwnRouteTests(PortPlanVsOwnRouteFixture fixture) :
     [Fact]
     public void The_passage_check_agrees_with_the_plan_at_the_crest()
     {
-        var sources = PassageDataSources.FromDatasets(_catalog.Datasets, new Crs.ProjNet.ProjNetCrsTransformFactory());
+        var sources = CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new Crs.ProjNet.ProjNetCrsTransformFactory());
         var route = Definition.Routes.Single(r => r.DatasetName == Spec.Route);
         var legs = ScenarioPassage.Legs(_catalog, route);
-        var result = new PassageCheckEngine(sources.Depth, sources.WaterLevel)
-            .Check(new PassagePlan(legs, new DateTimeOffset(route.Departure, TimeSpan.Zero)), TestContext.Current.CancellationToken);
+        var result = ScenarioChecks.Clearance(sources, new PassagePlan(legs, new DateTimeOffset(route.Departure, TimeSpan.Zero)), PassageLegs.Settings(new DateTimeOffset(route.Departure, TimeSpan.Zero)));
 
         Assert.True(result.Verdict is PassageVerdict.MeetsSettings or PassageVerdict.MeetsSettingsTight, result.Verdict.ToString());
         var minimum = Assert.IsType<UkcMinimum>(result.Minimum);

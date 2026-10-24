@@ -157,8 +157,7 @@ Both hosts provide these tools.
 | `search_features` | No | Finds vector features by name. Searches the `OBJNAM`, `NOBJNM` and `objectName` attributes (including S-101) and the `name` and `displayName` of the repeatable `featureName` complex attribute (GML products). Matches case-insensitive substrings by default; `exact` matches whole names and `caseSensitive` matches case. Scope with `spec`, `datasetId` and a spatial `query`. Each match reports `matchedName` and `matchedAttribute`. Paged. |
 | `sample_coverage` | No | Samples a depth, water level or current at a point from an S-102, S-104 or S-111 dataset. For S-104 and S-111, `time` (or a `times` envelope) picks the nearest time step of a dataset whose range contains it. A time outside every covering dataset's range returns `time_out_of_range` by default; see [Times outside the data](#times-outside-the-data). |
 | `sample_coverage_along` | No | Samples a coverage at each vertex of a polyline, with the same time handling as `sample_coverage`. A vertex with no value has a `null` `result` and an `error` (`code`, `message`). When no vertex has a value because of the requested time, the call returns `time_out_of_range`. |
-| `get_passage_result` | No | Checks under-keel clearance along a passage. See [Check a passage's clearance](#check-a-passages-clearance). |
-| `check_route` | No | Checks a route against the loaded data: land, drying ground, chart coverage, restricted and S-122 protected areas, and S-124 warnings; with a safety contour and depth, also depths and charted dangers. Needs no draft. See [Check a route against the chart](#check-a-route-against-the-chart). |
+| `check_route` | No | Checks a route against the loaded data: land, drying ground, chart coverage, restricted and S-122 protected areas, and S-124 warnings; with a safety contour and depth, also depths and charted dangers; with a draft, the under-keel clearance. Returns the verdict, each check's status, the findings and the clearance. See [Check a route](#check-a-route). |
 
 ### Session tools
 
@@ -369,13 +368,13 @@ reports this as the dataset's `viewingGroups`.
 | `export_route` | No | **Export…**: writes a route in a `format`: `RTZ` (`version` `1.2`, `1.1` or `1.0`; 1.2 when omitted) or `S-421` (version `1.0`). Pass `includeCheckSettings: true` to also write your draft, required UKC and departure; RTZ writes the departure as a calculated schedule and the draft and required UKC on each leg. Writes to `path`, or returns the file's `content` when you omit it. Returns the `identity`, `cannotHold` (the fields of this route the format can't hold, empty when nothing is lost) and the dialog's `suggestedFileName`. |
 | `set_route_display_mode` | Yes | Sets how the map draws a route (`mode`): `native` draws a received S-421 route with its dataset's own portrayal, and `planning` hides the dataset and draws the route on the route overlay. The dataset's visibility in the Datasets panel follows the mode, and turning the dataset on or off there switches the mode. Only received S-421 routes have a Native mode. Returns the updated route. |
 | `set_check_mode` | Yes | Turns **Check route** on (`on: true`) or off for the active route, or for `routeId` (made active first), as the Routes panel's toggle does. The route needs at least two waypoints; without a draft only the route checks run, and the clearance parts (minimum UKC, Clearance tab, window) are absent (`hasDraft: false`) and the route keeps its normal colour. While it's on, the map colours the route by UKC state at ETA when a draft is set, Object Information folds to its edge tab, and the panel shows the verdict card and leg chips. By default it waits for the result (`wait: false` returns at once). Returns what `get_check_state` returns. |
-| `get_check_state` | No | Returns what Check route is showing: `on`, `routeId`, `hasDraft` (false when the clearance check doesn't run), `clearanceChecked`, `computing`, `stale` (the result is being recomputed after an edit, so the route draws grey and dashed), and the verdict card: one verdict over every check, worst first, as `verdictKind` (`must_review`, `data_ends`, `check` or `clear`), `verdictTone`, `verdictTitle` (naming the worst finding, such as "Crosses drying ground", or without a draft "2 to review"), `verdictSubtitle`, the `summary` rows (`clearance`, `route` and, when S-124 warnings were checked, `warnings`, each with `text`, `chip`, `chipTone` and a `link` such as "+ Add draft") and the `footer`. `verdict` is the clearance band (null without a draft), the `confidence` reasons and the verdict card's `confidenceText` (for example "Vertical datums unconfirmed: depth and water level may not share a reference"), `minUkcMeters` and `minUkcLeg`, any `error`, and the cursor (`cursorNm`, `cursorLatitude`, `cursorLongitude`, `cursorLeg`, `cursorEta`). It also returns the `departure` being checked (`departureIsViewTime` when the route has none) and the departure `window`: `from`, `to` and `stepMinutes` of the sweep across the S-104 range, the `windows` of departures that meet your settings (lower-confidence ones included) with their `confidence` caveat, `arrivalAfterDataEnds` (the departures that arrive after the S-104 data ends), `insideWindow`, `nearestMeetingDeparture`, the verdict card's `text` and its `departButton`. `windowComputing` is true while the window is swept again after an edit. Waits for a pending result unless `wait: false`. For the full numbers, call `get_passage_result`. |
+| `get_check_state` | No | Returns what Check route is showing: `on`, `routeId`, `hasDraft` (false when the clearance check doesn't run), `clearanceChecked`, `computing`, `stale` (the result is being recomputed after an edit, so the route draws grey and dashed), and the verdict card: one verdict over every check, worst first, as `verdictKind` (`must_review`, `data_ends`, `check` or `clear`), `verdictTone`, `verdictTitle` (naming the worst finding, such as "Crosses drying ground", or without a draft "2 to review"), `verdictSubtitle`, the `summary` rows (`clearance`, `route` and, when S-124 warnings were checked, `warnings`, each with `text`, `chip`, `chipTone` and a `link` such as "+ Add draft") and the `footer`. `verdict` is the clearance band (null without a draft), the `confidence` reasons and the verdict card's `confidenceText` (for example "Vertical datums unconfirmed: depth and water level may not share a reference"), `minUkcMeters` and `minUkcLeg`, any `error`, and the cursor (`cursorNm`, `cursorLatitude`, `cursorLongitude`, `cursorLeg`, `cursorEta`). It also returns the `departure` being checked (`departureIsViewTime` when the route has none) and the departure `window`: `from`, `to` and `stepMinutes` of the sweep across the S-104 range, the `windows` of departures that meet your settings (lower-confidence ones included) with their `confidence` caveat, `arrivalAfterDataEnds` (the departures that arrive after the S-104 data ends), `insideWindow`, `nearestMeetingDeparture`, the verdict card's `text` and its `departButton`. `windowComputing` is true while the window is swept again after an edit. Waits for a pending result unless `wait: false`. For the full numbers, call `check_route`. |
 | `set_departure` | Yes | Sets the route's `departure`, as dragging the Clearance tab's departure band does, or with `nearestMeeting: true` jumps to the departure nearest the current one that meets your settings, as the verdict card's **Depart {HH:MM}** does (Check route must be on). One undoable edit. Waits for the new result and window unless `wait: false`, and returns what `get_check_state` returns. |
 | `set_follow_passage` | Yes | Turns **Follow passage** on (`on: true`) or off, as the Timeline header's toggle does. While it's on, the view time is pinned to the ETA at the Clearance cursor (`set_passage_cursor`), or at the minimum UKC when there's no cursor, so S-104 and S-111 show what the ship meets. Turning it on pins the Timeline; when the route has no departure, it first sets the departure to the one being checked, as one undoable edit. Turning it off leaves the view time where it is. Choosing another time (`set_view_time`, `step_time`, Go live) or turning Check route off stops it. Needs Check route on with ETAs; otherwise returns `invalid_argument`. Returns what `get_timeline_state` returns. |
 | `set_passage_cursor` | Yes | Moves the Check route cursor and the ghost vessel to `distanceNm` along the checked route, as hovering a leg row does, or hides them when `distanceNm` is omitted. Returns the state, including the cursor's position and ETA. |
-| `get_clearance_state` | No | Returns what the **Clearance** tab shows while Check route is on: the profile's `axis` (`distance` or `time`), `canShowTime`, `sourcesOpen`, and the readout at the cursor (`readoutSample`, the sample index in `get_passage_result`; `readoutPosition`, `readoutLeg`, `depth` and `depthSource` with its cell, `waterLevel` and `waterLevelSource` with its station or grid and time step, `draftSquat`, `ukc` and `state`, such as "Meets your settings · lower confidence"). The readout's `band` (`meets_settings`, `tight`, `below_setting` or `no_data`) and `confidence` reasons are reported separately. It also returns the `sources` groups, and the `departureBand`: the `departure` beside it, the `knobFraction` (0 to 1 across the band), the `startLabel`, `middleLabel` and `endLabel` ("12:00 · S-104 ends"), `stale`, and the `segments`, each a run of departures with its `kind` (`meets_settings`, `below_setting`, `arrival_after_data_ends` or `no_data`). Without a cursor, the readout describes the minimum. Open the tab with `set_panel` `Clearance`. |
+| `get_clearance_state` | No | Returns what the **Clearance** tab shows while Check route is on: the profile's `axis` (`distance` or `time`), `canShowTime`, `sourcesOpen`, and the readout at the cursor (`readoutSample`, the sample index in `check_route`'s `clearance.samples`; `readoutPosition`, `readoutLeg`, `depth` and `depthSource` with its cell, `waterLevel` and `waterLevelSource` with its station or grid and time step, `draftSquat`, `ukc` and `state`, such as "Meets your settings · lower confidence"). The readout's `band` (`meets_settings`, `tight`, `below_setting` or `no_data`) and `confidence` reasons are reported separately. It also returns the `sources` groups, and the `departureBand`: the `departure` beside it, the `knobFraction` (0 to 1 across the band), the `startLabel`, `middleLabel` and `endLabel` ("12:00 · S-104 ends"), `stale`, and the `segments`, each a run of departures with its `kind` (`meets_settings`, `below_setting`, `arrival_after_data_ends` or `no_data`). Without a cursor, the readout describes the minimum. Open the tab with `set_panel` `Clearance`. |
 | `set_clearance_view` | Yes | Sets the Clearance profile's `axis` (`distance` or `time`; time needs ETAs) and opens or closes Sources (`sourcesOpen`), as the tab's header controls do. The cursor stays on the same sample. Returns what `get_clearance_state` returns. |
-| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check route mode: `count`, the counts per group (`mustReview`, `check`, `info`), the `summary` (such as "2 to review", the verdict card's title without a draft), `stale` while a check is recomputing, `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, `data.s111_forecast_expired`, or the route checks' `route_check.crosses_land`, `route_check.crosses_drying`, `route_check.land_in_corridor`, `route_check.drying_in_corridor`, `route_check.enters_prohibited_area`, `route_check.protected_area` and `data.outside_chart_coverage`; see `check_route`), its `group` (`must_review`, `check` or `info`), its `source` (`clearance`, `route_check`, `s124`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), and a `feature` reference (dataset and feature id) when one is behind it. An `s124` finding also has its `warning`: `number`, `title`, `locality`, `relation` (`crosses` or `near`), `status` at the ETA (`in_force`, `not_in_force` or `cancelled`; the view time when the route has no speed, see `atEta`), `from` and `until`, `validity`, `cancellationDate`, the full `text` per language, and the inline Warning card's `statusText` ("In force at 06:08", "Not in force at 06:15" or "Cancelled") and `statusReasonText` (why another warning ended it). Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs at least two waypoints; without a draft there are no clearance findings, but the route checks still run. It also reports the list's view: the `filter` chip (`all`, `clearance`, `route` or `warnings`) and the `counts` per chip, the `merged` rows (check and info findings that share a code show once with a count; each gives its `id`, `code`, `group`, `count`, `meta`, member `ids` and whether it's `expanded`), `infoOpen` (INFO is folded by default), `expandedId`, and `warningCardId`: the selected S-124 finding, whose row is expanded into its Warning card. |
+| `get_findings` | No | Returns a route's findings list, as the Routes panel's **Findings** tab shows it in Check route mode: `count`, the counts per group (`mustReview`, `check`, `info`), the `summary` (such as "2 to review", the verdict card's title without a draft), `stale` while a check is recomputing, `selectedId`, and `findings` in list order. Each finding has an `id`, a `code` (e.g. `clearance.below_setting`, `confidence.charted_depth_from_s101`, `data.water_level_ends`, or the route checks' `route_check.crosses_land`, `route_check.crosses_drying`, `route_check.land_in_corridor`, `route_check.drying_in_corridor`, `route_check.enters_prohibited_area`, `route_check.protected_area` and `data.outside_chart_coverage`; see `check_route`), its `group` (`must_review`, `check` or `info`), its `category` (`chart`, `depth`, `area`, `warning`, `clearance`, `confidence` or `data`) and display `tag`, the `title` and `meta` line, `legIndex`, `distanceNm` (where the profile cursor moves to), a `location` (`point` or `span`, with `startNm`, `endNm` and the `path`), a `feature` reference (dataset and feature id) when one is behind it, and the `details` behind it (as `check_route`'s, plus a clearance stretch's `minimumClearanceMeters`, `requiredUkcMeters`, `marginMeters` and `minutesBelow`). An `s124` finding also has its `warning`: `number`, `title`, `locality`, `relation` (`crosses` or `near`), `status` at the ETA (`in_force`, `not_in_force` or `cancelled`; the view time when the route has no speed, see `atEta`), `from` and `until`, `validity`, `cancellationDate`, the full `text` per language, and the inline Warning card's `statusText` ("In force at 06:08", "Not in force at 06:15" or "Cancelled") and `statusReasonText` (why another warning ended it). Pass `routeId` for another route; omit it for the active route. For the checked route (`live: true`) it's the live list; otherwise the route is checked once, without changing the view. The route needs at least two waypoints; without a draft there are no clearance findings, but the route checks still run. It also reports the list's view: the `filter` chip (`all`, `clearance`, `route` or `warnings`) and the `counts` per chip, the `merged` rows (check and info findings that share a code show once with a count; each gives its `id`, `code`, `group`, `count`, `meta`, member `ids` and whether it's `expanded`), `infoOpen` (INFO is folded by default), `expandedId`, and `warningCardId`: the selected S-124 finding, whose row is expanded into its Warning card. |
 | `select_finding` | Yes | Selects the finding `id` in the checked route's list, as clicking its row or its map marker does: the map zooms to it (unless `zoom: false`) with the chip "Zoomed to finding · leg 6 → 7 · 1:31 300", and the profile cursor and ghost vessel move to it. A route-check or S-124 finding's marker gets a ring in its tone and the one pill ("{title} · {ETA}"), a span's sleeve draws wider, and the leg's corridor is filled; a clearance-check finding is outlined dashed. Selecting an S-124 finding also expands its row into the warning's Warning card, with its status at the ETA and the text clipped at 5 lines (`warningCardId`; a folded INFO group or a collapsed merged row that holds it opens); selecting another finding or clearing the selection closes it. Omit `id` to clear the selection. Needs Check route on. Returns what `get_findings` returns, whose `highlight` says what the map shows: its `kind` (`marker`, `marker_and_sleeve`, `outline` or `none`), the marker `shape` (`octagon` for must review, `triangle` for check, `circle` for info), whether a dotted `leader` runs to an off-track feature, and `corridorFilledLegs`. |
 | `set_findings_view` | Yes | Sets the checked route's findings list view, as its controls do: the `filter` chip (`all`, `clearance`, `route` or `warnings`; the verdict card's summary rows set it too), `infoOpen` to unfold or fold the INFO group (remembered per route), and `expandedId` to expand a merged row from `get_findings`' `merged` (an empty string collapses it). Needs Check route on. Returns what `get_findings` returns. |
 | `get_map_legend` | No | Returns the Check route map legend at the map's bottom left: `shown` (Check route is on), `open` (otherwise it's folded to a "Legend" chip; remembered per user) and its `sections`, each with a `title` and `rows`: "UKC AT ETA" (only with a draft) and "FINDINGS" (the marker shapes for Must review, Check and Info, a sleeve for a stretch of the route, and the cross-track corridor's dotted edge). |
@@ -395,7 +394,7 @@ A typical sequence:
    particulars.
 5. `get_route` or `list_routes` reads back the result.
 6. `set_check_mode` turns on Check route to see the verdict on the map and
-   in the panel, and `get_passage_result` returns the numbers behind it.
+   in the panel, and `check_route` returns the numbers behind it.
 7. `get_findings` lists what to review, check or note along the route, and
    `select_finding` zooms the map to one and moves the profile cursor there.
 
@@ -411,22 +410,34 @@ do.
 | `ui_tree` | No | Lists the UI as an accessibility client sees it: one root per window and open popup (`kind` `window` or `popup`, such as context menus and flyouts), each a tree of elements. Each element has a `ref` (such as `e12`, valid while the element stays on screen), `id` (its automation id, such as `Datasets.DatasetsTab`, `Library.Tree` or `ActivityBar.Datasets`; see the convention in the [viewer tests README](https://github.com/philliphoff/EncDotNet.S100/blob/main/tests/EncDotNet.S100.Viewer.Tests/README.md)), `role` (`button`, `listItem`, `tabItem`, `treeItem`, `edit`, `checkBox`, `menuItem` and so on), `name`, `text` (a row's visible text, or an icon button's tooltip, when it has no name), `enabled`, `focused`, `patterns` (the actions it supports: `invoke`, `toggle`, `value`, `rangeValue`, `selectionItem`, `expandCollapse`) with their state (`toggle`, `value`, `selected`, `expanded`), and `bounds` in its window. `filter` `interactive` (default) keeps elements with an id or an action and lifts the children of the rest; `all` lists everything. `root` (an id or ref) lists one subtree. `depth` (default 30) and `maxNodes` (default 400; `truncated` says when it cut) limit the size. The map is one element; use the map tools for chart content. |
 | `ui_invoke`, `ui_set_value`, `ui_toggle`, `ui_select`, `ui_expand`, `ui_collapse`, `ui_focus`, `ui_context_menu` | Yes | Act on one element as the user does: click a button or menu item (`ui_invoke`); replace a text box's text or set a slider (`ui_set_value`, `value`); flip a check box or toggle button, or set it with `state` `on` or `off` (`ui_toggle`); select a list row, tab, tree node or radio button (`ui_select`); expand or collapse a tree node, expander, combo box or submenu; move keyboard focus (`ui_focus`; leaving a text box runs its lost-focus behaviour, so an in-place rename commits); or open a context menu as a right-click does, selecting the row or node first (`ui_context_menu`). Target an element by `id` or `ref`, not both. An id repeated in every row (such as `Datasets.Row.Remove`) is ambiguous alone: scope it with `within` (the row's ref or an ancestor's id), or use the ref. Returns the element afterwards. Errors: `ui_element_not_found` (with similar ids on screen), `ui_element_ambiguous` (each match's `ref` and row text), `ui_element_disabled` and `ui_action_not_supported` (with the element's `patterns`). A closing dialog or popup animates briefly after the call returns, so read `ui_tree` again before relying on it being gone. |
 
-## Check a route against the chart
+## Check a route
 
-`check_route` checks a route against the loaded S-101 cells (and S-401, and
-translated S-57), S-122 protected areas and S-124 navigational warnings, with
-the same checks as SoundCharts' findings list and `s100 route check`. It needs
-no draft. [Route checks and under-keel clearance](route-checks.md) lists every
-finding code, its group and when it fires. The result isn't for navigation;
-show its `disclaimer` once, with the findings.
+`check_route` checks a route against the loaded data in one run, with the
+same checks as SoundCharts' Check route and `s100 route check`:
+
+- **chart**: land, drying ground and chart coverage in the loaded S-101 cells
+  (and S-401, and translated S-57), and, with a safety contour and depth,
+  depth areas, S-102 shoals, soundings and charted dangers.
+- **areas**: S-101 regulated areas and S-122 protected areas.
+- **warnings**: S-124 navigational warnings.
+- **clearance**: the under-keel clearance, when every leg has a draft.
+
+It returns the whole report: the verdict, whether each check ran, every
+finding with the numbers behind it, and the clearance.
+[Route checks and under-keel clearance](route-checks.md) lists every finding
+code, its group and when it fires. The result isn't for navigation; show its
+`disclaimer` once, with the findings.
 
 Pass the route in one of two ways:
 
 - **A polyline.** `polyline` is `{"vertices":[[lat,lon],...]}`, and each pair
   of consecutive vertices is a leg. Both hosts accept this form.
 - **A route.** In SoundCharts, pass `routeId`, or neither `routeId` nor
-  `polyline` for the active route. Each leg uses its port and starboard
-  cross-track limits (XTD).
+  `polyline` for the active route. The values are the ones Check route
+  uses: each leg's port and starboard cross-track limits (XTD), and the
+  route's passage values with each leg's overrides (`get_passage`,
+  `set_passage`, `set_leg_attributes`). `s100 mcp serve` has no routes and
+  returns `invalid_argument` for this form.
 
 `corridorHalfWidthMeters` overrides every leg's limits. It's a **half-width**:
 how far the corridor reaches to port, and to starboard, of the track, so the
@@ -434,53 +445,60 @@ corridor is twice as wide. Any side without a limit uses 50 m.
 
 Pass `safetyContourMeters` and `safetyDepthMeters` (together) to add the
 depth and danger checks, as SoundCharts' findings list runs them with the
-mariner's settings (`get_mariner_settings`). `draftMeters` also judges dangers
-against draft + squat + required UKC; a route's own draft is used when you
-omit it.
-
-For a route, the legs' speeds give ETAs from `time` (default: the route's
-departure), and areas and warnings are judged at them. Where a leg has no
-speed, and for a polyline, they're judged at `time` (default: now).
-
-The result has the `findings` (with `id`, `code`, `group`, `source`, `title`,
-`meta`, `legIndex`, `distanceNm`, a `location`, the `feature` behind it and,
-for an S-124 finding, the `warning`: its number, title, locality, `relation`,
-`status`, `from`, `until`, `atEta`, validity, cancellation date and text), a
-`summary` with the counts per group and its `text` ("2 to review", "1 to
-check" or "No findings for your settings"), each leg's corridor (`legs`, with
-`portMeters` and `starboardMeters`), the `datasets` it read and the
-`disclaimer`. In SoundCharts, `get_findings` shows the same findings in the
-route's list.
-
-## Check a passage's clearance
-
-`get_passage_result` computes, at each sample's ETA, UKC = charted depth +
-water level − draft − squat, and compares it with the required UKC. It uses
-the same engine as SoundCharts' Check route (the `EncDotNet.S100.Navigation`
-package). The result isn't for navigation; show its `disclaimer` once, with
-the verdict.
-
-Pass the passage in one of two ways:
-
-- **A polyline and a draft.** `polyline` is `{"vertices":[[lat,lon],...]}`,
-  and each pair of consecutive vertices is a leg. `draftMeters` is required.
-  Both hosts accept this form.
-- **A route.** In SoundCharts, pass `routeId`, or neither `routeId` nor
-  `polyline` to check the active route. The values are the ones Check route
-  uses: the route's passage values with each leg's overrides (`get_passage`,
-  `set_passage`, `set_leg_attributes`), and the route's departure, or the
-  view time when it has none. `s100 mcp serve` has no routes and returns
-  `invalid_argument` for this form.
+mariner's settings (`get_mariner_settings`). Without them the chart check is
+`partial`. Each leg's dangers are also judged against that leg's draft +
+squat + required UKC.
 
 These arguments override every leg's value:
 
-- `draftMeters`
+- `draftMeters`. With a draft on every leg, the clearance check runs.
 - `speedKnots`: the speed over ground. S-111 currents aren't applied.
 - `squatMeters`: a fixed allowance; it isn't modelled from speed.
-- `requiredUkcMeters`: when unset, the check uses 0 m and sets `noMarginSet`.
+- `requiredUkcMeters`: when unset, the clearance check uses 0 m and sets
+  `noMarginSet`.
 
-`departure` defaults to the view time for a route, or the current time for a
-polyline. Without a speed, every sample uses the departure time.
+The legs' speeds give ETAs from `departure` (default: the route's departure,
+or SoundCharts' view time when it has none; for a polyline, now). Areas,
+warnings and water levels are judged at the ETAs, and where a leg has no
+speed, at the departure.
+
+The result has:
+
+- `verdict`: the one answer, worst first. Its `kind` is `must_review` (a
+  Must review finding, or the clearance is below your UKC setting),
+  `water_level_ends_before_arrival`, `check` (Check findings, or a tight or
+  incomplete clearance) or `clear`. `title` says it in the app's words, and
+  `headlineId` is the finding that names it.
+- `checks`: each check's `name` (`chart`, `areas`, `warnings`, `clearance`),
+  its `state` (`ran`, `partial` or `skipped`), the `reason` when it didn't
+  run in full (such as `safety_settings_missing` or `draft_missing`) and its
+  `findingCount`.
+- `findings`, sorted by group and then by distance. Each has an `id`, `code`,
+  `group`, `category` (`chart`, `depth`, `area`, `warning`, `clearance`,
+  `confidence` or `data`), `title`, `meta`, `legIndex`, `distanceNm`, a
+  `location` and the `feature` behind it. Its `details` carry the numbers,
+  so clients needn't parse the text: a danger's depth, side, offset and the
+  threshold that fired, a shoal's least depth and threshold, an area's
+  restrictions, categories, dates and whether it's in force, a clearance
+  stretch's minimum, margin and minutes below. An S-124 finding has its
+  `warning` instead: its number, title, locality, `relation`, `status`,
+  `from`, `until`, `atEta`, validity, cancellation date and text.
+- `summary`: the counts per group and its `text` ("2 to review", "1 to
+  check" or "No findings for your settings").
+- `legs`: each leg's corridor, with `portMeters` and `starboardMeters`.
+- `clearance`: the under-keel clearance (below), or null when the clearance
+  check didn't run.
+- `datasets`: the datasets behind the result, and the `disclaimer`.
+
+In SoundCharts, `get_findings` shows the same findings in the route's list.
+
+### Under-keel clearance
+
+The clearance check computes, at each sample's ETA, UKC = charted depth +
+water level − draft − squat, and compares it with the required UKC. It uses
+the same engine as SoundCharts' Check route (the `EncDotNet.S100.Navigation`
+package). Stretches below your UKC setting, of lower confidence or without
+data are also findings (`clearance.*`, `confidence.*` and `data.*` codes).
 
 How it samples and classifies:
 
@@ -521,33 +539,34 @@ How it samples and classifies:
   `verdictTitle` gives the same verdict in the app's words, such as "Below
   your UKC setting in 2 places".
 
-The result has:
+`clearance` has:
 
+- `departure` and `arrival`.
+- `verdict` and `verdictTitle`, as above.
 - `minimum`: the smallest margin over the required UKC, with where and when.
 - `minutesBelow` and `placesBelow`.
 - `confidence`: the lower-confidence reasons anywhere on the passage. The
   verdict follows the clearance band; confidence qualifies it.
-- `legs`: per leg, the values used, the minimum, the `worstState`, the
-  minutes below the setting, `lowConfidence`, its `confidence` reasons and
-  `noWaterLevel`.
 - `gaps` and `lowConfidence`: stretches by kind, with their distances and
   times.
 - `sources`: the S-102 and S-101 datasets, the S-104 datasets and stations,
   the datums and the largest S-102 uncertainty.
 
-Set `includeSamples` to get per-sample values. Each sample has its depth
-source, dataset and cell, uncertainty, water level, station, time step and
-datum agreement. `maxSamples` (default 500) caps the list, and the samples
-with the least clearance are kept.
+Set `includeSamples` to add `legs` and `samples`. Each leg has the values
+used, the minimum, the `worstState`, the minutes below the setting,
+`lowConfidence`, its `confidence` reasons and `noWaterLevel`. Each sample has
+its depth source, dataset and cell, uncertainty, water level, station, time
+step and datum agreement. `maxSamples` (default 500) caps the list, and the
+samples with the least clearance are kept.
 
-To find a departure window, set `windowFrom` and `windowTo` (and optionally
-`windowStepMinutes`, default 5), or set `includeWindow` to sweep the whole
-S-104 time range that covers the passage, as SoundCharts' departure band does.
-That sweep starts at the first whole step after the data starts and ends where
-it ends; over a long forecast the step widens to stay under 2000 departures.
-`window` then lists every departure's verdict and confidence, the runs of
-departures that meet your settings, the meeting departure nearest
-`departure`, `windowConfidence`, and
+To find a departure window, set `includeWindow`. It sweeps the whole S-104
+time range that covers the passage, as SoundCharts' departure band does, or
+from `windowFrom` to `windowTo` when you give them (`windowStepMinutes`,
+default 5, between departures). The S-104 sweep starts at the first whole
+step after the data starts and ends where it ends; over a long forecast the
+step widens to stay under 2000 departures. `window` then lists every
+departure's verdict and confidence, the runs of departures that meet your
+settings, the meeting departure nearest `departure`, `windowConfidence`, and
 `arrivalAfterDataEnds`: the departures that arrive after the S-104 data ends,
 which never meet your settings. A departure that meets your settings with
 lower confidence still counts as meeting them; `windowConfidence` lists the

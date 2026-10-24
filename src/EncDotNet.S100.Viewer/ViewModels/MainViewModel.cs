@@ -491,6 +491,21 @@ internal sealed class MainViewModel : ViewModelBase
         }
     }
 
+    private double? _routesListHeight;
+    /// <summary>Persisted height of the Routes-tab route list once its splitter is dragged; <c>null</c> sizes it to its routes.</summary>
+    public double? RoutesListHeight
+    {
+        get => _routesListHeight;
+        set
+        {
+            if (SetProperty(ref _routesListHeight, value) && _settingsInitialized)
+            {
+                _settings.Panels.RoutesListHeight = value;
+                _sizeSaver.RequestSave();
+            }
+        }
+    }
+
     private double? _vesselsInnerSplit;
     /// <summary>Persisted fraction <c>[0,1]</c> of the Vessels-tab master/detail splitter.</summary>
     public double? VesselsInnerSplit
@@ -1590,6 +1605,7 @@ internal sealed class MainViewModel : ViewModelBase
         _datasetsInnerSplit = settings.Panels.DatasetsInnerSplit;
         _catalogInnerSplit = settings.Panels.CatalogInnerSplit;
         _vesselsInnerSplit = settings.Panels.VesselsInnerSplit;
+        _routesListHeight = settings.Panels.RoutesListHeight;
 
         // Enable persistence write-backs only after hydration is complete.
         // Setters check this flag to avoid writing during initial assignment.

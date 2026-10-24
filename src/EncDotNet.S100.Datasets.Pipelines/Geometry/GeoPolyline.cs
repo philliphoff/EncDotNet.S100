@@ -13,7 +13,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Geometry;
 /// sides, so the corridor is twice this wide. A route's cross-track
 /// limits (port and starboard XTD) are already half-widths and map onto
 /// it directly; don't halve them (#555). The route check
-/// (<c>RouteCheckEngine</c>) takes port and starboard separately.
+/// (<c>ChartCheck</c>) takes port and starboard separately.
 /// </param>
 /// <remarks>
 /// Segments are treated as planar in lat/lon space — no great-circle

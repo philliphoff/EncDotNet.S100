@@ -7,7 +7,7 @@ using EncDotNet.S100.Viewer.Services;
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// The viewer's routes as seen by <c>get_passage_result</c>: the same
+/// The viewer's routes as seen by <c>check_route</c>: the same
 /// effective passage values Check passage uses, and the route's departure,
 /// falling back to the view time.
 /// </summary>

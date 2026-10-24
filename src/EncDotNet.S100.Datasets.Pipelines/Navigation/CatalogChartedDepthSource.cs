@@ -26,7 +26,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// <para>
 /// The S-101 fallback reads <c>DredgedArea</c> and <c>DepthArea</c> minimum
 /// depths (DRVAL1), then the nearest <c>Sounding</c> within
-/// <see cref="PassageDataSourceOptions.MaxSoundingDistanceMeters"/>. The
+/// <see cref="RouteCheckSourceOptions.MaxSoundingDistanceMeters"/>. The
 /// depth's datum comes from the <c>SoundingDatum</c> meta-feature covering the
 /// point in the cell that supplied it.
 /// </para>
@@ -57,7 +57,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
     public CatalogChartedDepthSource(
         IReadOnlyList<LoadedDataset> datasets,
         ICrsTransformFactory transforms,
-        PassageDataSourceOptions options)
+        RouteCheckSourceOptions options)
     {
         _maxSoundingDistance = options.MaxSoundingDistanceMeters;
         foreach (var dataset in datasets)
@@ -68,7 +68,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
                     _grids.Add(grid);
                     break;
                 case S101DatasetData s101:
-                    _cells.Add(new S101Index(dataset.Id.Value, dataset.Bounds, s101.Dataset));
+                    _cells.Add(new S101Index(dataset.Id.Value, dataset.Bounds, s101.Dataset, s101.CompilationScale));
                     break;
             }
         }
@@ -78,11 +78,12 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             : string.CompareOrdinal(a.DatasetId, b.DatasetId));
     }
 
-    public double? FinestGridSpacingMeters(double south, double west, double north, double east)
+    public double? FinestGridSpacingMeters(BoundingBox extent)
     {
+        ArgumentNullException.ThrowIfNull(extent);
         foreach (var grid in _grids)
         {
-            if (grid.Intersects(south, west, north, east))
+            if (grid.Intersects(extent.SouthLatitude, extent.WestLongitude, extent.NorthLatitude, extent.EastLongitude))
             {
                 return grid.SpacingMeters;
             }
@@ -91,15 +92,27 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
         return null;
     }
 
-    public ChartedDepth? Sample(double latitude, double longitude)
+    public ChartedDepth? SampleBathymetry(GeoPosition position)
     {
         foreach (var grid in _grids)
         {
-            if (grid.Sample(latitude, longitude) is { } depth)
+            if (grid.Sample(position.Latitude, position.Longitude) is { } depth)
             {
                 return depth;
             }
         }
+
+        return null;
+    }
+
+    public ChartedDepth? Sample(GeoPosition position)
+    {
+        if (SampleBathymetry(position) is { } bathymetry)
+        {
+            return bathymetry;
+        }
+
+        var (latitude, longitude) = (position.Latitude, position.Longitude);
 
         var covering = new List<S101Index>();
         foreach (var cell in _cells)
@@ -229,14 +242,16 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
         private const int Buckets = 32;
         private readonly string _datasetId;
         private readonly S101Dataset _dataset;
+        private readonly int? _compilationScale;
         private readonly object _gate = new();
         private Built? _built;
 
-        public S101Index(string datasetId, BoundingBox bounds, S101Dataset dataset)
+        public S101Index(string datasetId, BoundingBox bounds, S101Dataset dataset, int? compilationScale)
         {
             _datasetId = datasetId;
             Bounds = bounds;
             _dataset = dataset;
+            _compilationScale = compilationScale;
         }
 
         public BoundingBox Bounds { get; }
@@ -379,10 +394,11 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
                 }
             }
 
-            // Ranked like the display ranks S-101 cells: S-101 carries no
-            // compilation scale, so by the DataCoverage minimum display scale.
+            // Ranked like the display ranks cells: by a translated S-57 cell's
+            // compilation scale, else (S-101 carries none) by the DataCoverage
+            // minimum display scale.
             return new Built(
-                CellScaleRanking.RankingScale(null, S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features)),
+                CellScaleRanking.RankingScale(_compilationScale, S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features)),
                 CoverageAreaResolver.Resolve(features),
                 new AreaIndex(dredged, Bounds),
                 new AreaIndex(depth, Bounds),

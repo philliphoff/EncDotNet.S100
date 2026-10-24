@@ -81,9 +81,9 @@ internal sealed record SetFindingsViewRequest(
 [Description("One finding in a route's findings list.")]
 internal sealed record RouteFindingDto(
     [property: Description("Id, stable while a recompute finds the same thing, e.g. \"clearance.below_setting.0\"; pass it to select_finding.")] string Id,
-    [property: Description("Kind of finding, e.g. clearance.below_setting, confidence.charted_depth_from_s101, data.water_level_ends or data.s111_forecast_expired.")] string Code,
+    [property: Description("Kind of finding, e.g. clearance.below_setting, confidence.charted_depth_from_s101, data.water_level_ends or route_check.crosses_land.")] string Code,
     [property: Description("What to do: must_review, check or info.")] string Group,
-    [property: Description("The check that produced it: clearance, route_check, s124, confidence or data.")] string Source,
+    [property: Description("What it's about: chart, depth, area, warning (S-124), clearance, confidence or data.")] string Category,
     [property: Description("The tag the row shows, e.g. \"Clearance\" or \"Data\".")] string Tag,
     [property: Description("The row's title, e.g. \"Below your UKC setting for 12 min\".")] string Title,
     [property: Description("The row's meta line, e.g. \"Leg 6 → 7 · min 0.4 m at 07:52\".")] string Meta,
@@ -92,7 +92,8 @@ internal sealed record RouteFindingDto(
     [property: Description("Where the finding is, or null when it has no place on the map.")] RouteFindingLocationDto? Location,
     [property: Description("The feature behind the finding (open it with pick or describe), or null.")] RouteFindingFeatureDto? Feature,
     [property: Description("True when this is the selected finding.")] bool Selected,
-    [property: Description("For an s124 finding, the navigational warning and how it stands on the route at the ETA; null for other sources.")] RouteFindingWarningDto? Warning = null);
+    [property: Description("For an s124 finding, the navigational warning and how it stands on the route at the ETA; null for other categories.")] RouteFindingWarningDto? Warning = null,
+    [property: Description("The numbers behind the finding: a danger's depth and the threshold that fired, a shoal's least depth, an area's restrictions and dates, a clearance stretch's minimum and margin. Null for land, drying ground and coverage, and for s124 findings (see warning).")] Mcp.Tools.CheckRouteDetails? Details = null);
 
 /// <summary>An S-124 finding's warning.</summary>
 [Description("The navigational warning behind an s124 finding, and how it stands on the route.")]
@@ -168,7 +169,7 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
 
     protected RouteFindingsService Findings { get; }
 
-    /// <summary>Waits for the check, then for the findings producers, as <see cref="PassageCheckToolBase.SettleAsync"/>.</summary>
+    /// <summary>Waits for the check to land, as <see cref="PassageCheckToolBase.SettleAsync"/>.</summary>
     protected async Task SettleFindingsAsync(CancellationToken cancellationToken)
     {
         await SettleAsync(cancellationToken).ConfigureAwait(false);
@@ -197,7 +198,7 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
                 .Where(e => e.IsMerged)
                 .Select(e => new MergedFindingsDto(
                     e.Id,
-                    e.Members[0].Code,
+                    e.Members[0].Code.Value,
                     FindingsEntry.GroupCode(e.Group),
                     e.Members.Count,
                     FindingsEntry.MergedMeta(e.Members),
@@ -207,7 +208,7 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
             InfoOpen = live && (view?.InfoOpen ?? false),
             ExpandedId = expanded,
             // E1: the selected s124 finding's card is open under its row.
-            WarningCardId = live && selected?.Warning is not null ? selected.Id : null,
+            WarningCardId = live && selected?.Details is WarningDetails ? selected.Id : null,
         };
     }
 
@@ -218,33 +219,26 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
         findings.Count(f => f.Group == RouteFindingGroup.MustReview),
         findings.Count(f => f.Group == RouteFindingGroup.Check),
         findings.Count(f => f.Group == RouteFindingGroup.Info),
-        RouteCheckVerdict.NoDraftTitle(findings),
+        RouteCheckCard.NoDraftTitle(findings),
         live && stale,
         live ? selected?.Id : null,
         findings.Select(f => ToDto(f, live && f.Id == selected?.Id, departure, format)).ToList());
 
     private static RouteFindingDto ToDto(RouteFinding f, bool selected, DateTimeOffset? departure, TimeFormat format) => new(
         f.Id,
-        f.Code,
+        f.Code.Value,
         f.Group switch
         {
             RouteFindingGroup.MustReview => "must_review",
             RouteFindingGroup.Check => "check",
             _ => "info",
         },
-        f.Source switch
-        {
-            RouteFindingSource.Clearance => "clearance",
-            RouteFindingSource.RouteCheck => "route_check",
-            RouteFindingSource.S124 => "s124",
-            RouteFindingSource.Confidence => "confidence",
-            _ => "data",
-        },
-        RouteFindingRowViewModel.TagOf(f.Source),
+        Mcp.Tools.CheckRouteResult.CategoryCode(f.Category),
+        RouteFindingRowViewModel.TagOf(f.Category),
         f.Title,
         f.Meta,
         f.LegIndex,
-        f.DistanceMeters is { } d ? Nm(d) : null,
+        f.Distance is { } d ? Nm(d.TotalMetres) : null,
         f.Location is { } l
             ? new RouteFindingLocationDto(
                 l.IsPoint ? "point" : "span",
@@ -254,9 +248,10 @@ internal abstract class RouteFindingsToolBase : PassageCheckToolBase
             : null,
         f.Feature is { } feature ? new RouteFindingFeatureDto(feature.DatasetId, feature.FeatureId) : null,
         selected,
-        f.Warning is { } warning ? ToDto(warning, departure, format) : null);
+        f.Details is WarningDetails warning ? ToDto(warning, departure, format) : null,
+        Mcp.Tools.CheckRouteDetails.From(f.Details));
 
-    private static RouteFindingWarningDto ToDto(RouteFindingWarning w, DateTimeOffset? departure, TimeFormat format) => new(
+    private static RouteFindingWarningDto ToDto(WarningDetails w, DateTimeOffset? departure, TimeFormat format) => new(
         w.Info.Label,
         w.Info.Title,
         w.Info.Locality ?? w.Info.GeneralArea,

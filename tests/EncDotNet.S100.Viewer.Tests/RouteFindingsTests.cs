@@ -65,9 +65,7 @@ public sealed class RouteFindingsTests : IDisposable
     internal static RouteFindingsService Findings(PassageCheckFixture f, RecordingViewport? viewport = null, Action<Action>? post = null) =>
         new(f.Check, f.Routes, f.Catalog,
             viewport is null ? null : new StaticCapabilityAccessor<IMapViewportController>(viewport),
-            timeFormat: new Utc(),
-            clock: new FixedClock(Now),
-            post: post);
+            timeFormat: new Utc());
 
     private static T Value<T>(ToolResult<T> result)
     {
@@ -84,9 +82,9 @@ public sealed class RouteFindingsTests : IDisposable
 
         var finding = Assert.Single(findings.Findings);
         Assert.Equal("clearance.below_setting.0", finding.Id);
-        Assert.Equal(PassageFindings.Codes.BelowSetting, finding.Code);
+        Assert.Equal(RouteFindingCodes.BelowSetting, finding.Code);
         Assert.Equal(RouteFindingGroup.MustReview, finding.Group);
-        Assert.Equal(RouteFindingSource.Clearance, finding.Source);
+        Assert.Equal(RouteFindingCategory.Clearance, finding.Category);
         Assert.Matches(@"^Below your UKC setting for \d+ min$", finding.Title);
         Assert.StartsWith("Leg 6 → 7 · min -1.5 m at ", finding.Meta);
         Assert.Equal(5, finding.LegIndex);
@@ -96,7 +94,7 @@ public sealed class RouteFindingsTests : IDisposable
         Assert.False(location.IsPoint);
         Assert.InRange(location.Path[0].Longitude, 0.100, 0.106);
         Assert.InRange(location.Path[^1].Longitude, 0.114, 0.120);
-        Assert.Equal(f.Check.Current!.Result.Minimum!.DistanceMeters, finding.DistanceMeters);
+        Assert.Equal(f.Check.Current!.Result.Minimum!.DistanceMeters, finding.Distance?.TotalMetres);
     }
 
     [Fact]
@@ -115,10 +113,9 @@ public sealed class RouteFindingsTests : IDisposable
         await f.CheckAsync();
 
         var rows = findings.Findings.Select(x => new RouteFindingRowViewModel(x)).ToList();
-        var below = rows.Single(r => r.Finding.Code == PassageFindings.Codes.BelowSetting);
-        var s101 = rows.Single(r => r.Finding.Code == PassageFindings.Codes.ChartedDepthFromS101);
-        var ends = rows.Single(r => r.Finding.Code == PassageFindings.Codes.WaterLevelEnds);
-        var expired = rows.Single(r => r.Finding.Code == PassageFindings.Codes.ForecastExpired);
+        var below = rows.Single(r => r.Finding.Code == RouteFindingCodes.BelowSetting);
+        var s101 = rows.Single(r => r.Finding.Code == RouteFindingCodes.ChartedDepthFromS101);
+        var ends = rows.Single(r => r.Finding.Code == RouteFindingCodes.WaterLevelEnds);
 
         Assert.Equal(("Clearance", RouteFindingIcon.Octagon, CheckTone.Destructive), (below.Tag, below.Icon, below.Tone));
 
@@ -133,20 +130,16 @@ public sealed class RouteFindingsTests : IDisposable
         Assert.Equal(RouteFindingGroup.Check, ends.Finding.Group);
         Assert.Equal(("Data", RouteFindingIcon.Triangle, CheckTone.Warning), (ends.Tag, ends.Icon, ends.Tone));
 
-        Assert.Equal("S-111 forecast run has expired", expired.Title);
-        Assert.Equal("111EXPIRED · currents shown for reference; not used in ETAs", expired.Meta);
-        Assert.Null(expired.Finding.Location);
-        Assert.False(expired.HasLocation);
-        Assert.Equal(RouteFindingGroup.Info, expired.Finding.Group);
-        Assert.Equal(("Data", RouteFindingIcon.Info, CheckTone.Neutral), (expired.Tag, expired.Icon, expired.Tone));
+        // An expired S-111 forecast isn't reported: currents aren't applied to ETAs (#1033).
+        Assert.DoesNotContain(rows, r => r.Finding.Code.Value == "data.s111_forecast_expired");
 
         // F5: red only for must-review findings.
         Assert.All(rows.Where(r => r.Finding.Group != RouteFindingGroup.MustReview), r => Assert.NotEqual(CheckTone.Destructive, r.Tone));
 
         // F1: grouped MUST REVIEW, CHECK, INFO, then by distance along the route.
-        Assert.Equal(findings.Findings.OrderBy(x => x.Group).ThenBy(x => x.DistanceMeters ?? double.MaxValue), findings.Findings);
-        Assert.Equal(["Clearance", "Route check", "S-124", "Confidence", "Data"],
-            Enum.GetValues<RouteFindingSource>().Select(RouteFindingRowViewModel.TagOf));
+        Assert.Equal(findings.Findings.OrderBy(x => x.Group).ThenBy(x => x.Distance?.TotalMetres ?? double.MaxValue), findings.Findings);
+        Assert.Equal(["Route check", "Route check", "Route check", "S-124", "Clearance", "Confidence", "Data"],
+            Enum.GetValues<RouteFindingCategory>().Select(RouteFindingRowViewModel.TagOf));
     }
 
     [Fact]
@@ -154,8 +147,7 @@ public sealed class RouteFindingsTests : IDisposable
     {
         // The panel listens to both services, so their results are serialised as the UI thread would.
         var f = new PassageCheckFixture(waterEnd: PassageCheckFixture.WaterStart.AddHours(2.5),
-            post: PassageCheckFixture.SerialPost,
-            extraDatasets: [PassageCheckFixture.CurrentForecast("111EXPIRED", Now.AddDays(-2), Now.AddDays(-1))]);
+            post: PassageCheckFixture.SerialPost);
         using var findings = Findings(f, post: PassageCheckFixture.SerialPost);
         var panel = new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, findings: findings);
         Assert.Equal("Findings 0", panel.Check!.FindingsLabel);
@@ -163,7 +155,8 @@ public sealed class RouteFindingsTests : IDisposable
         await f.CheckAsync();
 
         var list = Assert.IsType<RouteFindingsViewModel>(panel.Check.Findings);
-        Assert.Equal(["MUST REVIEW", "CHECK", "INFO"], list.Groups.Select(g => g.Label));
+        // The clearance check has no Info findings, so only the groups with findings show.
+        Assert.Equal(["MUST REVIEW", "CHECK"], list.Groups.Select(g => g.Label));
         Assert.Equal(findings.Findings.Count, list.Count);
         Assert.Equal(list.Groups.Sum(g => g.Items.Count), list.Count);
         Assert.Equal($"Findings {list.Count}", panel.Check.FindingsLabel);
@@ -191,7 +184,7 @@ public sealed class RouteFindingsTests : IDisposable
         Assert.Same(row.Finding, findings.Selected);
         Assert.True(row.IsSelected);
         var cursor = Assert.IsType<PassageCursor>(f.Check.Cursor);
-        Assert.Equal(row.Finding.DistanceMeters!.Value, cursor.DistanceMeters, 3);
+        Assert.Equal(row.Finding.Distance!.Value.TotalMetres, cursor.DistanceMeters, 3);
         Assert.Equal(5, cursor.LegIndex);
 
         var zoom = Assert.Single(viewport.Zooms);
@@ -209,11 +202,11 @@ public sealed class RouteFindingsTests : IDisposable
     [Fact]
     public async Task A_point_finding_zooms_to_at_least_a_kilometre()
     {
-        var finding = new RouteFinding("x", "x", RouteFindingGroup.Check, RouteFindingSource.RouteCheck, "t", "m", 0, 0,
+        var finding = TestFinding.Make("x", "x", RouteFindingGroup.Check, RouteFindingCategory.Chart, "t", "m", 0, 0,
             RouteFindingLocation.Point(new GeoPosition(50, -1), 0));
         var extent = Assert.IsType<MRect>(RouteFindingsService.ResolveZoomExtent(finding));
         Assert.Equal(2 * RouteFindingsService.PointZoomHalfMetres, extent.Width, 6);
-        Assert.Null(RouteFindingsService.ResolveZoomExtent(finding with { Location = null }));
+        Assert.Null(RouteFindingsService.ResolveZoomExtent(TestFinding.With(finding, clearLocation: true)));
         await Task.CompletedTask;
     }
 
@@ -333,7 +326,7 @@ public sealed class RouteFindingsTests : IDisposable
         Assert.Equal((1, 1, 0, 0), (list.Count, list.MustReview, list.Check, list.Info));
         Assert.Null(list.SelectedId);
         var dto = Assert.Single(list.Findings);
-        Assert.Equal(("must_review", "clearance", "Clearance", 5), (dto.Group, dto.Source, dto.Tag, dto.LegIndex));
+        Assert.Equal(("must_review", "clearance", "Clearance", 5), (dto.Group, dto.Category, dto.Tag, dto.LegIndex));
         Assert.Equal("span", dto.Location!.Kind);
         Assert.True(dto.Location.StartNm < dto.DistanceNm && dto.DistanceNm < dto.Location.EndNm);
 

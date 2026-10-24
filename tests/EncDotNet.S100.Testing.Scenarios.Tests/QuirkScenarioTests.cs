@@ -135,7 +135,7 @@ public sealed class QuirkScenarioTests : IDisposable
         AssertGridsReadAsWithoutQuirks(scenario, "channel-west");
         AssertGridsReadAsWithoutQuirks(scenario, "channel-east");
         var place = scenario.Definition.Place("channel-east");
-        Assert.Contains(Sources(scenario).WaterLevel.Locate(place.Latitude, place.Longitude), s => s.Source.Kind == WaterLevelSourceKind.Grid);
+        Assert.Contains(Sources(scenario).WaterLevel!.Locate(new GeoPosition(place.Latitude, place.Longitude)), s => s.Source.Kind == WaterLevelSourceKind.Grid);
     }
 
     [Fact]
@@ -202,7 +202,7 @@ public sealed class QuirkScenarioTests : IDisposable
         var definition = scenario.Definition;
         var place = definition.Place("channel-east");
         var (x, y) = definition.Places["channel-east"];
-        var series = Sources(scenario).WaterLevel.Locate(place.Latitude, place.Longitude);
+        var series = Sources(scenario).WaterLevel!.Locate(new GeoPosition(place.Latitude, place.Longitude));
         var inGap = new DateTime(2026, 3, 1, 7, 30, 0, DateTimeKind.Utc);
 
         // The grid joins 05:00 and 10:00 with a straight line, however far apart.
@@ -227,7 +227,7 @@ public sealed class QuirkScenarioTests : IDisposable
         var scenario = Generate(QuirkScenarios.WaterLevelGapAndExpiredRun());
         var place = scenario.Definition.Place("channel-east");
 
-        Assert.All(Sources(scenario).WaterLevel.Locate(place.Latitude, place.Longitude), s => Assert.Equal(QuirkScenarios.RunEnd, s.End));
+        Assert.All(Sources(scenario).WaterLevel!.Locate(new GeoPosition(place.Latitude, place.Longitude)), s => Assert.Equal(QuirkScenarios.RunEnd, s.End));
 
         var sample = CheckAt(scenario, "channel-east", QuirkScenarios.RunEnd.AddHours(1));
         Assert.Equal(WaterLevelStatus.AfterEnd, sample.WaterLevel.Status);
@@ -259,11 +259,11 @@ public sealed class QuirkScenarioTests : IDisposable
         // −180…180, and the S-104 stations are still found.
         AssertGridsReadAsWithoutQuirks(scenario, "channel-east");
         var place = scenario.Definition.Place("channel-east");
-        var series = Sources(scenario).WaterLevel.Locate(place.Latitude, place.Longitude);
+        var series = Sources(scenario).WaterLevel!.Locate(new GeoPosition(place.Latitude, place.Longitude));
         Assert.Contains(series, s => s.Source.Kind == WaterLevelSourceKind.Station);
 
         // The finest-grid lookup finds the surface from −180…180 too.
-        Assert.NotNull(Sources(scenario).Depth.FinestGridSpacingMeters(place.Latitude - 0.001, place.Longitude - 0.001, place.Latitude + 0.001, place.Longitude + 0.001));
+        Assert.NotNull(Sources(scenario).Depth!.FinestGridSpacingMeters(new EncDotNet.S100.Pipelines.BoundingBox(place.Latitude - 0.001, place.Longitude - 0.001, place.Latitude + 0.001, place.Longitude + 0.001)));
     }
 
     public static TheoryData<string> GridQuirkNames() => new("quirk-swapped-axis-order", "quirk-unusual-crs", "quirk-longitude-0-360");
@@ -427,7 +427,7 @@ public sealed class QuirkScenarioTests : IDisposable
         // moves the depth into a shallower band.
         var (x, y, depth) = PointWhereBiasChangesBand(definition, contours);
         var position = definition.World.Frame.ToGeo(x, y);
-        var sampled = Sources(scenario).Depth.Sample(position.Latitude, position.Longitude);
+        var sampled = Sources(scenario).Depth!.Sample(position);
 
         Assert.Equal(ChartedDepthKind.DepthArea, sampled!.Kind);
         Assert.Equal(QuirkScenarios.OverlappingCell, sampled.DatasetId);
@@ -462,13 +462,13 @@ public sealed class QuirkScenarioTests : IDisposable
         var expected = Sources(plain);
         var actual = Sources(scenario);
 
-        var depth = actual.Depth.Sample(position.Latitude, position.Longitude);
+        var depth = actual.Depth!.Sample(position);
         Assert.Equal(ChartedDepthKind.Bathymetry, depth!.Kind);
         Assert.Equal(QuirkScenarios.Surface, depth.DatasetId);
-        Assert.Equal(expected.Depth.Sample(position.Latitude, position.Longitude), depth);
+        Assert.Equal(expected.Depth!.Sample(position), depth);
 
-        static IEnumerable<(WaterLevelSourceInfo Source, WaterLevelReading? Reading)> Grids(PassageDataSources sources, GeoPosition position) =>
-            sources.WaterLevel.Locate(position.Latitude, position.Longitude)
+        static IEnumerable<(WaterLevelSourceInfo Source, WaterLevelReading? Reading)> Grids(RouteCheckSources sources, GeoPosition position) =>
+            sources.WaterLevel!.Locate(position)
                 .Where(s => s.Source.Kind == WaterLevelSourceKind.Grid)
                 .Select(s => (s.Source, s.ValueAt(Morning)));
 
@@ -507,13 +507,13 @@ public sealed class QuirkScenarioTests : IDisposable
             new ProjNetCrsTransformFactory());
     }
 
-    private static PassageDataSources Sources(GeneratedScenario scenario, Func<LoadedDataset, bool>? include = null) =>
-        PassageDataSources.FromDatasets(Catalog(scenario).Datasets.Where(include ?? (_ => true)), new ProjNetCrsTransformFactory());
+    private static RouteCheckSources Sources(GeneratedScenario scenario, Func<LoadedDataset, bool>? include = null) =>
+        CatalogRouteCheckSources.FromDatasets(Catalog(scenario).Datasets.Where(include ?? (_ => true)), new ProjNetCrsTransformFactory());
 
     private static ChartedDepth? SampleDepth(GeneratedScenario scenario, string place)
     {
         var position = scenario.Definition.Place(place);
-        return Sources(scenario).Depth.Sample(position.Latitude, position.Longitude);
+        return Sources(scenario).Depth!.Sample(position);
     }
 
     private static UkcSample CheckAt(GeneratedScenario scenario, string place, DateTime at, bool stationsOnly = false)
@@ -521,13 +521,13 @@ public sealed class QuirkScenarioTests : IDisposable
         var definition = scenario.Definition;
         var (x, y) = definition.Places[place];
         var sources = Sources(scenario, stationsOnly ? d => d.Id.Value != QuirkScenarios.WaterLevelGrid : null);
-        var leg = new PassageLeg(
+        var leg = PassageLegs.Leg(
             [definition.World.Frame.ToGeo(x + 0.1, y + 0.1), definition.World.Frame.ToGeo(x + 1.1, y + 0.1)],
-            DraftMeters: 6.0,
-            SpeedKnots: 10,
-            SquatMeters: 0.3,
-            RequiredUkcMeters: 1.0);
-        var result = new PassageCheckEngine(sources.Depth, sources.WaterLevel).Check(new PassagePlan([leg], new DateTimeOffset(at)), TestContext.Current.CancellationToken);
+            draft: 6.0,
+            speedKnots: 10,
+            squat: 0.3,
+            ukc: 1.0);
+        var result = ScenarioChecks.Clearance(sources, new PassagePlan([leg], new DateTimeOffset(at)), PassageLegs.Settings(new DateTimeOffset(at)));
         return Assert.Single(result.Samples);
     }
 }

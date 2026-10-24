@@ -47,7 +47,8 @@ public sealed class RouteCheckCommandTests
         Assert.Equal("rtz", rtz["route"]!["format"]!.GetValue<string>());
         Assert.Equal("1.2", rtz["route"]!["version"]!.GetValue<string>());
         Assert.Equal(Findings(s421), Findings(rtz));
-        Assert.Equal(s421["passage"]!["verdict"]!.GetValue<string>(), rtz["passage"]!["verdict"]!.GetValue<string>());
+        Assert.Equal(s421["check"]!["verdict"]!["kind"]!.GetValue<string>(), rtz["check"]!["verdict"]!["kind"]!.GetValue<string>());
+        Assert.Equal(s421["check"]!["clearance"]!["verdict"]!.GetValue<string>(), rtz["check"]!["clearance"]!["verdict"]!.GetValue<string>());
     }
 
     [Fact]
@@ -81,7 +82,7 @@ public sealed class RouteCheckCommandTests
         Assert.Contains("s124.on_route", codes);
         Assert.Contains("s124.not_in_force", codes);
         Assert.Contains("route_check.protected_area", codes);
-        Assert.Contains(json["check"]!["findings"]!.AsArray(), f => f!["source"]!.GetValue<string>() == "s124" && f["warning"] is not null);
+        Assert.Contains(json["check"]!["findings"]!.AsArray(), f => f!["category"]!.GetValue<string>() == "warning" && f["warning"] is not null);
         Snapshot("warnings-on-route.s421", scenario.Normalize(json));
     }
 
@@ -112,8 +113,10 @@ public sealed class RouteCheckCommandTests
         using var scenario = new Scenario(SyntheticScenarios.WarningsOnRoute(), rtzDraft: false);
         var (_, json) = RunJson(scenario.RtzPath("421ZZ00WARN"), scenario.Root, "--fail-on", "never");
 
-        Assert.Null(json["passage"]);
-        Assert.NotNull(json["passageSkipped"]);
+        Assert.Null(json["check"]!["clearance"]);
+        var clearance = json["check"]!["checks"]!.AsArray().Single(c => c!["name"]!.GetValue<string>() == "clearance")!;
+        Assert.Equal("skipped", clearance["state"]!.GetValue<string>());
+        Assert.Equal("draft_missing", clearance["reason"]!.GetValue<string>());
     }
 
     [Fact]
@@ -122,6 +125,7 @@ public sealed class RouteCheckCommandTests
         using var scenario = new Scenario(SyntheticScenarios.WarningsOnRoute());
         var (_, stdout) = Run([scenario.S421Path("421ZZ00WARN"), scenario.Root, "--safety-contour", "5", "--safety-depth", "5"]);
 
+        Assert.Contains("Verdict:", stdout, StringComparison.Ordinal);
         Assert.Contains("Route check:", stdout, StringComparison.Ordinal);
         Assert.Contains("Under-keel clearance:", stdout, StringComparison.Ordinal);
         Assert.Contains("Not for navigation", stdout, StringComparison.Ordinal);

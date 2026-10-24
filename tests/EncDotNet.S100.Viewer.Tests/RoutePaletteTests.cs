@@ -59,16 +59,16 @@ public sealed class RoutePaletteTests : IDisposable
         const double metersPerDegree = 111_195;
         DataModel.GeoPosition At(double legs, double northMeters = 0) => new(northMeters / metersPerDegree, legs * leg);
         double Distance(double legs) => legs * leg * metersPerDegree;
-        RouteFinding Point(string id, string code, RouteFindingGroup group, RouteFindingSource source, string title, double legs, double north = 0) =>
-            new(id, code, group, source, title, "meta", (int)legs, Distance(legs), RouteFindingLocation.Point(At(legs, north), Distance(legs)));
+        RouteFinding Point(string id, RouteFindingCode code, RouteFindingGroup group, RouteFindingCategory category, string title, double legs, double north = 0) =>
+            TestFinding.Make(id, code, group, category, title, "meta", (int)legs, Distance(legs), RouteFindingLocation.Point(At(legs, north), Distance(legs)));
 
         return
         [
-            Point("danger", RouteCheckCodes.DangerInCorridor, RouteFindingGroup.MustReview, RouteFindingSource.RouteCheck, "Wreck 9,4 m", 1.6, 20),
-            new("area", RouteAreaCodes.RestrictedArea, RouteFindingGroup.Check, RouteFindingSource.RouteCheck, "Anchoring prohibited", "meta", 2,
+            Point("danger", RouteFindingCodes.DangerInCorridor, RouteFindingGroup.MustReview, RouteFindingCategory.Depth, "Wreck 9,4 m", 1.6, 20),
+            TestFinding.Make("area", RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check, RouteFindingCategory.Area, "Anchoring prohibited", "meta", 2,
                 Distance(2.2), new RouteFindingLocation([At(2.2), At(2.5), At(2.8)], Distance(2.2), Distance(2.8))),
-            Point("near", RouteWarningCodes.NearRoute, RouteFindingGroup.Check, RouteFindingSource.S124, "006/26 · 0,3 NM N", 3.5, 450),
-            Point("info", RouteWarningCodes.NotInForce, RouteFindingGroup.Info, RouteFindingSource.S124, "002/26 · not in force", 0.5),
+            Point("near", RouteFindingCodes.WarningNearRoute, RouteFindingGroup.Check, RouteFindingCategory.Warning, "006/26 · 0,3 NM N", 3.5, 450),
+            Point("info", RouteFindingCodes.WarningNotInForce, RouteFindingGroup.Info, RouteFindingCategory.Warning, "002/26 · not in force", 0.5),
         ];
     }
 

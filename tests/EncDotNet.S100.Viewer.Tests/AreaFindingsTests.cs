@@ -100,7 +100,7 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
     private sealed record Setup(RoutesService Routes, Route Route, PassageCheckService Check, RouteFindingsService Findings, PassageCheckFixture.FixedCatalog Catalog) : IDisposable
     {
         public IReadOnlyList<RouteFinding> Areas =>
-            Findings.Findings.Where(f => f.Code.StartsWith("route_check.", StringComparison.Ordinal) && f.Code.Contains("area", StringComparison.Ordinal)).ToList();
+            Findings.Findings.Where(f => f.Category == RouteFindingCategory.Area).ToList();
 
         public void Dispose()
         {
@@ -117,10 +117,9 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero);
-        var sources = new RouteCheckSourceCache();
-        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc(), clock: new FixedClock(Departure),
-            producers: [new RouteCheckFindingProducer(sources: sources), new AreaFindingProducer(sources)], post: new UiThread().Post);
+        var check = new PassageCheckService(routes, catalog,
+            checks: () => [new ChartCheck(), new AreaCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post);
+        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc());
         routes.IsCheckModeActive = true;
         await findings.WhenIdle();
         return new Setup(routes, route, check, findings, catalog);
@@ -134,16 +133,16 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
         var areas = s.Areas;
         Assert.Equal(
             [
-                (RouteAreaCodes.EntersProhibitedArea, RouteFindingGroup.MustReview),
-                (RouteAreaCodes.ProhibitedAreaInCorridor, RouteFindingGroup.Check),
-                (RouteAreaCodes.ProtectedArea, RouteFindingGroup.Check),
-                (RouteAreaCodes.CautionArea, RouteFindingGroup.Check),
-                (RouteAreaCodes.ProtectedArea, RouteFindingGroup.Check),
-                (RouteAreaCodes.RestrictedArea, RouteFindingGroup.Info),
-                (RouteAreaCodes.AreaNotInForce, RouteFindingGroup.Info),
+                (RouteFindingCodes.EntersProhibitedArea, RouteFindingGroup.MustReview),
+                (RouteFindingCodes.ProhibitedAreaInCorridor, RouteFindingGroup.Check),
+                (RouteFindingCodes.ProtectedArea, RouteFindingGroup.Check),
+                (RouteFindingCodes.CautionArea, RouteFindingGroup.Check),
+                (RouteFindingCodes.ProtectedArea, RouteFindingGroup.Check),
+                (RouteFindingCodes.RestrictedArea, RouteFindingGroup.Info),
+                (RouteFindingCodes.AreaNotInForce, RouteFindingGroup.Info),
             ],
             areas.Select(f => (f.Code, f.Group)));
-        Assert.All(areas, f => Assert.Equal(RouteFindingSource.RouteCheck, f.Source));
+        Assert.All(areas, f => Assert.Equal(RouteFindingCategory.Area, f.Category));
 
         var firing = areas[0];
         Assert.Equal("Enters Firing Range Alpha (fictitious)", firing.Title);
@@ -164,8 +163,8 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
         s.Route.SetDeparture(new DateTimeOffset(2026, 7, 1, 6, 0, 0, TimeSpan.Zero));
         await s.Findings.WhenIdle();
 
-        Assert.Contains(s.Areas, f => f.Code == RouteAreaCodes.RestrictedArea && f.Group == RouteFindingGroup.Check && f.Title.Contains("Summer Speed Zone", StringComparison.Ordinal));
-        Assert.Contains(s.Areas, f => f.Code == RouteAreaCodes.AreaNotInForce && f.Title.Contains("Seal Sanctuary", StringComparison.Ordinal));
+        Assert.Contains(s.Areas, f => f.Code == RouteFindingCodes.RestrictedArea && f.Group == RouteFindingGroup.Check && f.Title.Contains("Summer Speed Zone", StringComparison.Ordinal));
+        Assert.Contains(s.Areas, f => f.Code == RouteFindingCodes.AreaNotInForce && f.Title.Contains("Seal Sanctuary", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -177,14 +176,14 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
         var result = await tool.InvokeAsync(new CheckRouteRequest(), TestContext.Current.CancellationToken);
 
         Assert.True(result.TryGetValue(out var value), result.TryGetError(out var e) ? e.Message : "");
-        var areas = value!.Findings.Where(f => f.Code.Contains("area", StringComparison.Ordinal)).ToList();
-        Assert.Equal(s.Areas.Select(f => (f.Id, f.Code, f.Group switch
+        var areas = value!.Findings.Where(f => f.Category == "area").ToList();
+        Assert.Equal(s.Areas.Select(f => (f.Id, f.Code.Value, f.Group switch
         {
             RouteFindingGroup.MustReview => "must_review",
             RouteFindingGroup.Check => "check",
             _ => "info",
         })), areas.Select(f => (f.Id, f.Code, f.Group)));
-        Assert.All(areas, f => Assert.Equal("route_check", f.Source));
+        Assert.All(areas, f => Assert.Equal("area", f.Category));
         Assert.Equal("Enters Firing Range Alpha (fictitious)", areas[0].Title);
         Assert.Contains("122ZZ00SEAL", value.Datasets);
         Assert.Contains("122ZZ00BERTH", value.Datasets);
@@ -199,10 +198,10 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
         var points = s.Route.Waypoints.Select(w => new EncDotNet.S100.Datasets.Pipelines.Geometry.GeoPoint(w.Position.Latitude, w.Position.Longitude)).ToList();
 
         var summer = await tool.InvokeAsync(
-            new CheckRouteRequest(Polyline: new EncDotNet.S100.Datasets.Pipelines.Geometry.GeoPolyline(points), CorridorHalfWidthMeters: 100, Time: new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero)),
+            new CheckRouteRequest(Polyline: new EncDotNet.S100.Datasets.Pipelines.Geometry.GeoPolyline(points), CorridorHalfWidthMeters: 100, Departure: new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero)),
             TestContext.Current.CancellationToken);
 
         Assert.True(summer.TryGetValue(out var value), summer.TryGetError(out var e) ? e.Message : "");
-        Assert.Contains(value!.Findings, f => f.Code == RouteAreaCodes.AreaNotInForce && f.Title == "Synthetic Sound Seal Sanctuary (fictitious) not in force at 2026-07-01 12:00 UTC");
+        Assert.Contains(value!.Findings, f => f.Code == RouteFindingCodes.AreaNotInForce.Value && f.Title == "Synthetic Sound Seal Sanctuary (fictitious) not in force at 2026-07-01 12:00 UTC");
     }
 }

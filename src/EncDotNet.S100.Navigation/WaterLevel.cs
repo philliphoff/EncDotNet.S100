@@ -61,16 +61,19 @@ public interface IWaterLevelSeries
 }
 
 /// <summary>Finds the water-level series that apply at a point.</summary>
+/// <remarks>
+/// Implementations, and the series they return, must be safe to call from
+/// several threads at once.
+/// </remarks>
 public interface IWaterLevelSource
 {
     /// <summary>
     /// The series covering a point, most preferred first. Empty when the
     /// point is outside every S-104 dataset's extent.
     /// </summary>
-    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
-    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <param name="position">The point, in WGS-84.</param>
     /// <returns>The series, most preferred first.</returns>
-    IReadOnlyList<IWaterLevelSeries> Locate(double latitude, double longitude);
+    IReadOnlyList<IWaterLevelSeries> Locate(GeoPosition position);
 }
 
 /// <summary>

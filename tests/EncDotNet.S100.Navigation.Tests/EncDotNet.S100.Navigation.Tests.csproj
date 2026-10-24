@@ -3,6 +3,7 @@
   <PropertyGroup>
     <IsPackable>false</IsPackable>
     <OutputType>Exe</OutputType>
+    <EnablePublicApiBaseline>true</EnablePublicApiBaseline>
   </PropertyGroup>
 
   <ItemGroup>

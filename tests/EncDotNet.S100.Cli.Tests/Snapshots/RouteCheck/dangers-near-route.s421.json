@@ -17,19 +17,46 @@
     "routeId": "ZZ00-DANGERS-1",
     "routeName": "Past the wrecks north of the channel (fictitious)",
     "distanceNm": 2.698,
+    "verdict": {
+      "kind": "must_review",
+      "title": "Wreck in the corridor",
+      "headlineId": "route_check.danger_in_corridor.1"
+    },
     "summary": {
-      "count": 6,
-      "mustReview": 5,
+      "count": 7,
+      "mustReview": 6,
       "check": 1,
       "info": 0,
-      "text": "5 to review"
+      "text": "6 to review"
     },
+    "checks": [
+      {
+        "name": "chart",
+        "state": "ran",
+        "findingCount": 6
+      },
+      {
+        "name": "areas",
+        "state": "ran",
+        "findingCount": 0
+      },
+      {
+        "name": "warnings",
+        "state": "ran",
+        "findingCount": 0
+      },
+      {
+        "name": "clearance",
+        "state": "ran",
+        "findingCount": 1
+      }
+    ],
     "findings": [
       {
         "id": "route_check.danger_in_corridor.1",
         "code": "route_check.danger_in_corridor",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Wreck in the corridor",
         "meta": "Leg 1 \u2192 2 \u00B7 Wreck \u00B7 on the track \u00B7 6.2 m \u00B7 shallower than draft \u002B squat \u002B UKC (12 m)",
         "legIndex": 0,
@@ -48,13 +75,24 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "133"
+        },
+        "details": {
+          "danger": {
+            "featureType": "Wreck",
+            "depthMeters": 6.2,
+            "waterLevelEffect": 3,
+            "threshold": "keel",
+            "thresholdMeters": 12,
+            "side": "on_track",
+            "offsetMeters": 0
+          }
         }
       },
       {
         "id": "route_check.danger_in_corridor.2",
         "code": "route_check.danger_in_corridor",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Obstruction in the corridor",
         "meta": "Leg 1 \u2192 2 \u00B7 Obstruction \u00B7 60 m to port \u00B7 11.0 m \u00B7 shallower than draft \u002B squat \u002B UKC (12 m)",
         "legIndex": 0,
@@ -73,13 +111,24 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "135"
+        },
+        "details": {
+          "danger": {
+            "featureType": "Obstruction",
+            "depthMeters": 11,
+            "waterLevelEffect": 3,
+            "threshold": "keel",
+            "thresholdMeters": 12,
+            "side": "port",
+            "offsetMeters": 59.9
+          }
         }
       },
       {
         "id": "route_check.danger_in_corridor.0",
         "code": "route_check.danger_in_corridor",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Rock in the corridor",
         "meta": "Leg 1 \u2192 2 \u00B7 UnderwaterAwashRock \u00B7 80 m to starboard \u00B7 awash",
         "legIndex": 0,
@@ -98,13 +147,21 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "137"
+        },
+        "details": {
+          "danger": {
+            "featureType": "UnderwaterAwashRock",
+            "waterLevelEffect": 5,
+            "side": "starboard",
+            "offsetMeters": 79.9
+          }
         }
       },
       {
         "id": "route_check.crosses_safety_contour.0",
         "code": "route_check.crosses_safety_contour",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Crosses the safety contour",
         "meta": "Leg 2 \u2192 3 \u00B7 0.06 NM \u00B7 DepthArea \u00B7 least 5.0 m \u00B7 shallower than safety contour 10 m",
         "legIndex": 1,
@@ -171,13 +228,20 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "52"
+        },
+        "details": {
+          "shoal": {
+            "leastDepthMeters": 5,
+            "threshold": "safety_contour",
+            "thresholdMeters": 10
+          }
         }
       },
       {
         "id": "route_check.crosses_s102_shoal.0",
         "code": "route_check.crosses_s102_shoal",
         "group": "must_review",
-        "source": "route_check",
+        "category": "depth",
         "title": "Crosses S-102 depths shallower than the safety contour",
         "meta": "Leg 2 \u2192 3 \u00B7 0.08 NM \u00B7 least 7.6 m \u00B1 0.3 m at cell 10,80 of S-102/DATASET_FILES/102ZZ00SPIT.h5 \u00B7 shallower than safety contour 10 m",
         "legIndex": 1,
@@ -260,13 +324,62 @@
               -134.95117
             ]
           ]
+        },
+        "details": {
+          "shoal": {
+            "leastDepthMeters": 7.63775,
+            "threshold": "safety_contour",
+            "thresholdMeters": 10,
+            "uncertaintyMeters": 0.33,
+            "datasetId": "S-102/DATASET_FILES/102ZZ00SPIT.h5",
+            "cell": "10,80"
+          }
+        }
+      },
+      {
+        "id": "clearance.below_setting.0",
+        "code": "clearance.below_setting",
+        "group": "must_review",
+        "category": "clearance",
+        "title": "Below your UKC setting for 1 min",
+        "meta": "Leg 2 \u2192 3 \u00B7 min -2.1 m at 2026-03-01 06:14 UTC",
+        "legIndex": 1,
+        "distanceNm": 1.9099,
+        "location": {
+          "kind": "span",
+          "startNm": 1.8498,
+          "endNm": 1.9567,
+          "path": [
+            [
+              -40.97036,
+              -134.95324
+            ],
+            [
+              -40.97036,
+              -134.95089
+            ]
+          ]
+        },
+        "details": {
+          "clearance": {
+            "stretch": "below_setting",
+            "firstLegIndex": 1,
+            "lastLegIndex": 1,
+            "lengthNm": 0.1069,
+            "startTime": "2026-03-01T06:14:01.443411\u002B00:00",
+            "minimumClearanceMeters": -2.08283,
+            "requiredUkcMeters": 1.5,
+            "marginMeters": -3.58283,
+            "minimumTime": "2026-03-01T06:14:19.474385\u002B00:00",
+            "minutesBelow": 0.8
+          }
         }
       },
       {
         "id": "route_check.danger_near_route.0",
         "code": "route_check.danger_near_route",
         "group": "check",
-        "source": "route_check",
+        "category": "depth",
         "title": "Wreck near the route",
         "meta": "Leg 2 \u2192 3 \u00B7 Wreck \u00B7 180 m to port \u00B7 depth unknown",
         "legIndex": 1,
@@ -285,6 +398,14 @@
         "feature": {
           "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
           "featureId": "139"
+        },
+        "details": {
+          "danger": {
+            "featureType": "Wreck",
+            "waterLevelEffect": 3,
+            "side": "port",
+            "offsetMeters": 179.8
+          }
         }
       }
     ],
@@ -304,139 +425,75 @@
         "starboardMeters": 100
       }
     ],
+    "clearance": {
+      "departure": "2026-03-01T06:00:00\u002B00:00",
+      "arrival": "2026-03-01T06:20:14.0835394\u002B00:00",
+      "verdict": "below_setting",
+      "verdictTitle": "Below your UKC setting in 1 place",
+      "confidence": [],
+      "noMarginSet": false,
+      "minimum": {
+        "leg": 1,
+        "sample": 72,
+        "latitude": -40.97036,
+        "longitude": -134.95192,
+        "distanceNm": 1.9099,
+        "time": "2026-03-01T06:14:19.474385\u002B00:00",
+        "hasEta": true,
+        "ukcMeters": -2.08,
+        "requiredUkcMeters": 1.5,
+        "state": "below_setting",
+        "confidence": []
+      },
+      "minutesBelow": 0.8,
+      "placesBelow": 1,
+      "sampleCount": 102,
+      "gaps": [],
+      "lowConfidence": [],
+      "sources": {
+        "bathymetryDatasets": [
+          "S-102/DATASET_FILES/102ZZ00SPIT.h5"
+        ],
+        "fallbackDatasets": [],
+        "waterLevels": [
+          {
+            "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
+            "kind": "station",
+            "station": "SYN-W"
+          },
+          {
+            "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
+            "kind": "station",
+            "station": "SYN-E"
+          },
+          {
+            "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_GRD.h5",
+            "kind": "grid"
+          }
+        ],
+        "depthDatums": [
+          {
+            "code": 23,
+            "label": "Lowest Astronomical Tide"
+          }
+        ],
+        "waterLevelDatums": [
+          {
+            "code": 23,
+            "label": "Lowest Astronomical Tide"
+          }
+        ],
+        "maxUncertaintyMeters": 0.38
+      },
+      "disclaimer": "computed from S-102, S-104 for your settings"
+    },
     "datasets": [
       "S-101/DATASET_FILES/101ZZ00SPIT3.000",
-      "S-101/DATASET_FILES/101ZZ00SPIT5.000"
+      "S-101/DATASET_FILES/101ZZ00SPIT5.000",
+      "S-102/DATASET_FILES/102ZZ00SPIT.h5",
+      "S-104/DATASET_FILES/104ZZ00SPIT_GRD.h5",
+      "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5"
     ],
-    "disclaimer": "Not for navigation \u00B7 checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only"
-  },
-  "passage": {
-    "routeId": "ZZ00-DANGERS-1",
-    "routeName": "Past the wrecks north of the channel (fictitious)",
-    "departure": "2026-03-01T06:00:00\u002B00:00",
-    "arrival": "2026-03-01T06:20:14.0835394\u002B00:00",
-    "verdict": "below_setting",
-    "verdictTitle": "Below your UKC setting in 1 place",
-    "confidence": [],
-    "noMarginSet": false,
-    "minimum": {
-      "leg": 1,
-      "sample": 72,
-      "latitude": -40.97036,
-      "longitude": -134.95192,
-      "distanceNm": 1.91,
-      "time": "2026-03-01T06:14:19.474385\u002B00:00",
-      "hasEta": true,
-      "ukcMeters": -2.08,
-      "requiredUkcMeters": 1.5,
-      "state": "below_setting",
-      "confidence": []
-    },
-    "minutesBelow": 0.8,
-    "placesBelow": 1,
-    "distanceNm": 2.698,
-    "sampleCount": 102,
-    "legs": [
-      {
-        "index": 0,
-        "name": "Leg 1 \u2192 2",
-        "startNm": 0,
-        "distanceNm": 1.349,
-        "start": "2026-03-01T06:00:00\u002B00:00",
-        "end": "2026-03-01T06:10:07.0407497\u002B00:00",
-        "draftMeters": 10,
-        "speedKnots": 8,
-        "squatMeters": 0.5,
-        "requiredUkcMeters": 1.5,
-        "minimum": {
-          "leg": 0,
-          "sample": 41,
-          "latitude": -40.97036,
-          "longitude": -134.96989,
-          "distanceNm": 1.095,
-          "time": "2026-03-01T06:08:12.8449651\u002B00:00",
-          "hasEta": true,
-          "ukcMeters": 3.5,
-          "requiredUkcMeters": 1.5,
-          "state": "meets_settings",
-          "confidence": []
-        },
-        "worstState": "meets_settings",
-        "minutesBelow": 0,
-        "placesBelow": 0,
-        "lowConfidence": false,
-        "confidence": [],
-        "noWaterLevel": false
-      },
-      {
-        "index": 1,
-        "name": "Leg 2 \u2192 3",
-        "startNm": 1.349,
-        "distanceNm": 1.349,
-        "start": "2026-03-01T06:10:07.0407497\u002B00:00",
-        "end": "2026-03-01T06:20:14.0835394\u002B00:00",
-        "draftMeters": 10,
-        "speedKnots": 8,
-        "squatMeters": 0.5,
-        "requiredUkcMeters": 1.5,
-        "minimum": {
-          "leg": 1,
-          "sample": 72,
-          "latitude": -40.97036,
-          "longitude": -134.95192,
-          "distanceNm": 1.91,
-          "time": "2026-03-01T06:14:19.474385\u002B00:00",
-          "hasEta": true,
-          "ukcMeters": -2.08,
-          "requiredUkcMeters": 1.5,
-          "state": "below_setting",
-          "confidence": []
-        },
-        "worstState": "below_setting",
-        "minutesBelow": 0.8,
-        "placesBelow": 1,
-        "lowConfidence": false,
-        "confidence": [],
-        "noWaterLevel": false
-      }
-    ],
-    "gaps": [],
-    "lowConfidence": [],
-    "sources": {
-      "bathymetryDatasets": [
-        "S-102/DATASET_FILES/102ZZ00SPIT.h5"
-      ],
-      "fallbackDatasets": [],
-      "waterLevels": [
-        {
-          "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
-          "kind": "station",
-          "station": "SYN-W"
-        },
-        {
-          "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_STN.h5",
-          "kind": "station",
-          "station": "SYN-E"
-        },
-        {
-          "dataset": "S-104/DATASET_FILES/104ZZ00SPIT_GRD.h5",
-          "kind": "grid"
-        }
-      ],
-      "depthDatums": [
-        {
-          "code": 23,
-          "label": "Lowest Astronomical Tide"
-        }
-      ],
-      "waterLevelDatums": [
-        {
-          "code": 23,
-          "label": "Lowest Astronomical Tide"
-        }
-      ],
-      "maxUncertaintyMeters": 0.38
-    },
-    "disclaimer": "Not for navigation \u00B7 computed from S-102, S-104 for your settings"
+    "disclaimer": "Not for navigation \u00B7 checked against the loaded S-101 charts, S-122 protected areas and S-124 warnings only \u00B7 clearance computed from S-102, S-104 for your settings"
   }
 }

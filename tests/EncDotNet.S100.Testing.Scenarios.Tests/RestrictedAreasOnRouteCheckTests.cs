@@ -1,3 +1,4 @@
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
@@ -6,7 +7,7 @@ using EncDotNet.S100.Testing.Scenarios.Writers;
 namespace EncDotNet.S100.Testing.Scenarios.Tests;
 
 /// <summary>
-/// "Restricted areas on route" through <see cref="RouteAreaCheck"/> (#956):
+/// "Restricted areas on route" through <see cref="AreaCheck"/> (#956):
 /// the generated S-101 cells and S-122 datasets, read by the real readers
 /// into the area adapter, give one finding per area as the scenario places
 /// them.
@@ -22,14 +23,14 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
     {
         var result = Check(Route.Departure);
 
-        Assert.Equal((RouteAreaCodes.EntersProhibitedArea, RouteFindingGroup.MustReview), Kind(result, "Firing Range Alpha (fictitious)"));
-        Assert.Equal((RouteAreaCodes.RestrictedArea, RouteFindingGroup.Info), Kind(result, "Cable Landing Zone (fictitious)"));
-        Assert.Equal((RouteAreaCodes.ProhibitedAreaInCorridor, RouteFindingGroup.Check), Kind(result, "Range Danger Zone (fictitious)"));
-        Assert.Equal((RouteAreaCodes.CautionArea, RouteFindingGroup.Check), Kind(result, "Spit Shoal Caution (fictitious)"));
-        Assert.Equal((RouteAreaCodes.AreaNotInForce, RouteFindingGroup.Info), Kind(result, "Summer Speed Zone (fictitious)"));
-        Assert.Equal((RouteAreaCodes.ProtectedArea, RouteFindingGroup.Check), Kind(result, "Synthetic Sound Seal Sanctuary (fictitious)"));
-        Assert.Equal((RouteAreaCodes.ProtectedArea, RouteFindingGroup.Check), Kind(result, "Synthetic Sound Berth Reserve (fictitious)"));
-        Assert.All(result.Findings, f => Assert.Equal(RouteFindingSource.RouteCheck, f.Source));
+        Assert.Equal((RouteFindingCodes.EntersProhibitedArea, RouteFindingGroup.MustReview), Kind(result, "Firing Range Alpha (fictitious)"));
+        Assert.Equal((RouteFindingCodes.RestrictedArea, RouteFindingGroup.Info), Kind(result, "Cable Landing Zone (fictitious)"));
+        Assert.Equal((RouteFindingCodes.ProhibitedAreaInCorridor, RouteFindingGroup.Check), Kind(result, "Range Danger Zone (fictitious)"));
+        Assert.Equal((RouteFindingCodes.CautionArea, RouteFindingGroup.Check), Kind(result, "Spit Shoal Caution (fictitious)"));
+        Assert.Equal((RouteFindingCodes.AreaNotInForce, RouteFindingGroup.Info), Kind(result, "Summer Speed Zone (fictitious)"));
+        Assert.Equal((RouteFindingCodes.ProtectedArea, RouteFindingGroup.Check), Kind(result, "Synthetic Sound Seal Sanctuary (fictitious)"));
+        Assert.Equal((RouteFindingCodes.ProtectedArea, RouteFindingGroup.Check), Kind(result, "Synthetic Sound Berth Reserve (fictitious)"));
+        Assert.All(result.Findings, f => Assert.Equal(RouteFindingCategory.Area, f.Category));
     }
 
     [Fact]
@@ -45,7 +46,7 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
         }
 
         // An area only the coastal cell charts, where the harbour cell covers the place, doesn't count.
-        var exercise = Assert.Single(result.Matches, m => m.Area.Name == "Coastal Exercise Area (fictitious)");
+        var exercise = Assert.Single(result.Detail!.Matches, m => m.Area.Name == "Coastal Exercise Area (fictitious)");
         Assert.Equal(RouteAreaRelation.Off, exercise.Relation);
         Assert.Null(exercise.Finding);
     }
@@ -54,7 +55,7 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
     public void Spans_follow_the_areas_along_the_route()
     {
         var result = Check(Route.Departure);
-        var scale = result.Matches.Count == 0 ? 1 : LengthScale();
+        var scale = result.Detail!.Matches.Count == 0 ? 1 : LengthScale();
 
         var firing = Match(result, "Firing Range Alpha (fictitious)");
         Assert.Equal(RouteAreaRelation.Enters, firing.Relation);
@@ -92,35 +93,36 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
     {
         var summer = Check(new DateTime(2026, 7, 1, 6, 0, 0, DateTimeKind.Utc));
 
-        Assert.Equal((RouteAreaCodes.RestrictedArea, RouteFindingGroup.Check), Kind(summer, "Summer Speed Zone (fictitious)"));
+        Assert.Equal((RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check), Kind(summer, "Summer Speed Zone (fictitious)"));
 
         // The seal sanctuary's season (1 March to 31 May) is over by July.
-        Assert.Equal((RouteAreaCodes.AreaNotInForce, RouteFindingGroup.Info), Kind(summer, "Synthetic Sound Seal Sanctuary (fictitious)"));
+        Assert.Equal((RouteFindingCodes.AreaNotInForce, RouteFindingGroup.Info), Kind(summer, "Synthetic Sound Seal Sanctuary (fictitious)"));
     }
 
     [Fact]
     public void Without_speeds_areas_are_judged_at_the_view_time()
     {
-        var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l with { SpeedKnots = null }).ToList();
+        // A plan without a departure or speeds is judged at the settings' time.
+        var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l.WithSpeed(null)).ToList();
         var viewTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
-        var result = RouteCheckDataSources.FromDatasets(_catalog.Datasets).CheckAreas(
-            CheckLegs(legs),
-            new RouteWarningTiming(PassageSchedule.Compute(legs, viewTime), viewTime),
-            cancellationToken: TestContext.Current.CancellationToken);
+        var result = ScenarioChecks.Areas(
+            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()),
+            Plan(legs, departure: null),
+            PassageLegs.Settings(viewTime));
 
-        Assert.Equal((RouteAreaCodes.RestrictedArea, RouteFindingGroup.Check), Kind(result, "Summer Speed Zone (fictitious)"));
+        Assert.Equal((RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check), Kind(result, "Summer Speed Zone (fictitious)"));
         var seal = Finding(result, "Synthetic Sound Seal Sanctuary (fictitious)");
         Assert.Equal("Synthetic Sound Seal Sanctuary (fictitious) not in force at 2026-06-15 12:00 UTC", seal.Title);
     }
 
-    private RouteAreaResult Check(DateTime departure)
+    private RouteCheckOutcome<AreaCheckResult> Check(DateTime departure)
     {
         var legs = ScenarioPassage.Legs(_catalog, Route);
         var start = new DateTimeOffset(departure, TimeSpan.Zero);
-        return RouteCheckDataSources.FromDatasets(_catalog.Datasets).CheckAreas(
-            CheckLegs(legs),
-            new RouteWarningTiming(PassageSchedule.Compute(legs, start), start),
-            cancellationToken: TestContext.Current.CancellationToken);
+        return ScenarioChecks.Areas(
+            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()),
+            Plan(legs, start),
+            PassageLegs.Settings(start));
     }
 
     // Metres along the legs on the ellipsoid per local metre.
@@ -132,15 +134,15 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
         return PassageSchedule.Compute(legs, new DateTimeOffset(Route.Departure, TimeSpan.Zero)).TotalDistanceMeters / local;
     }
 
-    private static List<RouteCheckLeg> CheckLegs(IReadOnlyList<PassageLeg> legs) =>
-        legs.Select(l => new RouteCheckLeg(l.Points, S421RouteBuilder.CrossTrackLimitMeters, S421RouteBuilder.CrossTrackLimitMeters, l.Geometry)).ToList();
+    private static PassagePlan Plan(IReadOnlyList<PassageLeg> legs, DateTimeOffset? departure) =>
+        new(legs.Select(l => l.WithHalfWidth(S421RouteBuilder.CrossTrackLimitMeters)).ToList(), departure);
 
-    private static RouteAreaMatch Match(RouteAreaResult result, string name) =>
-        Assert.Single(result.Matches, m => m.Area.Name == name && m.Finding is not null);
+    private static RouteAreaMatch Match(RouteCheckOutcome<AreaCheckResult> result, string name) =>
+        Assert.Single(result.Detail!.Matches, m => m.Area.Name == name && m.Finding is not null);
 
-    private static RouteFinding Finding(RouteAreaResult result, string name) => Match(result, name).Finding!;
+    private static RouteFinding Finding(RouteCheckOutcome<AreaCheckResult> result, string name) => Match(result, name).Finding!;
 
-    private static (string Code, RouteFindingGroup Group) Kind(RouteAreaResult result, string name) =>
+    private static (RouteFindingCode Code, RouteFindingGroup Group) Kind(RouteCheckOutcome<AreaCheckResult> result, string name) =>
         Finding(result, name) is var f ? (f.Code, f.Group) : default;
 }
 
@@ -159,13 +161,13 @@ public sealed class WarningsOnRouteAreaTests(WarningsOnRouteFixture fixture) : I
         var legs = ScenarioPassage.Legs(_catalog, route);
         var departure = new DateTimeOffset(route.Departure, TimeSpan.Zero);
         var schedule = PassageSchedule.Compute(legs, departure);
-        var result = RouteCheckDataSources.FromDatasets(_catalog.Datasets).CheckAreas(
-            legs.Select(l => new RouteCheckLeg(l.Points, S421RouteBuilder.CrossTrackLimitMeters, S421RouteBuilder.CrossTrackLimitMeters, l.Geometry)).ToList(),
-            new RouteWarningTiming(schedule, departure),
-            cancellationToken: TestContext.Current.CancellationToken);
+        var result = ScenarioChecks.Areas(
+            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()),
+            new PassagePlan(legs.Select(l => l.WithHalfWidth(S421RouteBuilder.CrossTrackLimitMeters)).ToList(), departure),
+            PassageLegs.Settings(departure));
 
         var finding = Assert.Single(result.Findings);
-        Assert.Equal(RouteAreaCodes.ProtectedArea, finding.Code);
+        Assert.Equal(RouteFindingCodes.ProtectedArea, finding.Code);
         Assert.Equal(RouteFindingGroup.Check, finding.Group);
         Assert.Equal("Crosses Synthetic Sound Seal Sanctuary (fictitious)", finding.Title);
         Assert.Equal("Leg 1 → 2 · S-122 marine protected area · speed restricted · seal sanctuary, IUCN IV · 1 Mar–31 May · 2026-03-01 06:11 UTC–2026-03-01 06:13 UTC", finding.Meta);

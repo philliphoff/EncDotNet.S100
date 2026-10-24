@@ -119,7 +119,7 @@ internal static class MapHighlight
             return new MapHighlightDto("outline", null, false, []);
 
         var map = RouteCheckMap.Build(route, findings, selected, RouteCheckColors.For(PaletteType.Day), SKColors.Blue, PaletteType.Day,
-            viewTime, TimeFormat.Utc, RouteCheckOptions.Default.DefaultHalfWidthMeters);
+            viewTime, TimeFormat.Utc, RouteCheckOptions.Default.DefaultLimit.TotalMetres);
         if (map.SelectedMark is not { } mark)
             return new MapHighlightDto("none", null, false, []);
         var shape = mark.Group switch

@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Testing.Scenarios.Writers;
@@ -8,7 +9,7 @@ namespace EncDotNet.S100.Testing.Scenarios.Tests;
 /// <summary>
 /// "Dangers near route" end to end (#955): generated S-101 cells with point
 /// dangers and an S-102 surface, read by the real readers into the
-/// route-check adapter and <see cref="RouteCheckEngine"/>, give the dangers
+/// route-check adapter and <see cref="ChartCheck"/>, give the dangers
 /// and shoals the world model predicts (<see cref="RouteHazards"/>).
 /// </summary>
 public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) : IClassFixture<DangersNearRouteFixture>
@@ -23,7 +24,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     // Local metres and the engine's geodesic metres differ a little over the route.
     private const double DistanceTolerance = 10;
 
-    private readonly RouteCheckDataSources _sources = ScenarioLoading.RouteCheckSources(fixture.Scenario);
+    private readonly RouteCheckSources _sources = ScenarioLoading.Sources(fixture.Scenario);
 
     private ScenarioDefinition Definition => fixture.Definition;
 
@@ -34,9 +35,9 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     [Fact]
     public void Without_a_draft_the_dangers_are_the_ones_the_world_model_expects()
     {
-        var truth = RouteHazards.For(Definition, Spec, RouteCheckOptions.Default.DangerNearbyMeters, Contour, Contour, keelMeters: null);
+        var truth = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, Contour, keelMeters: null);
 
-        AssertDangers(truth, Check(new RouteCheckDepths(Contour, Contour)));
+        AssertDangers(truth, Check());
 
         // The scenario covers each case.
         Assert.Contains(truth, t => t.Expected && t.Relation == HazardRouteRelation.InCorridor && t.Threshold == HazardThreshold.SafetyDepth);
@@ -50,11 +51,11 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     [Fact]
     public void With_the_draft_the_keel_threshold_fires_too()
     {
-        var without = RouteHazards.For(Definition, Spec, RouteCheckOptions.Default.DangerNearbyMeters, Contour, Contour, keelMeters: null);
-        var with = RouteHazards.For(Definition, Spec, RouteCheckOptions.Default.DangerNearbyMeters, Contour, Contour, Keel);
+        var without = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, Contour, keelMeters: null);
+        var with = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, Contour, Keel);
         Assert.Equal(12, Keel, 9);
 
-        var findings = AssertDangers(with, Check(new RouteCheckDepths(Contour, Contour) { DraftMeters = Spec.Passage.DraftMeters, SquatMeters = Spec.Passage.SquatMeters, RequiredUkcMeters = Spec.Passage.RequiredUkcMeters }));
+        var findings = AssertDangers(with, Check(withDraft: true));
 
         // The 11 m obstruction to port is a danger only for the draft.
         var obstruction = with.Single(t => t.Hazard.Kind == HazardKind.Obstruction && t.Hazard.ValueOfSounding == 11);
@@ -69,10 +70,10 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     public void The_shoal_is_one_safety_contour_crossing_where_the_world_says()
     {
         var shoal = Assert.Single(RouteHazards.ShoalsAlong(Definition, Spec, Contour));
-        var findings = Check(new RouteCheckDepths(Contour, Contour));
+        var findings = Check();
 
         // The harbour cell contours at 25 m, from 5 m to 10 m on the shoal.
-        var crossing = Assert.Single(findings, f => f.Code == RouteCheckCodes.CrossesSafetyContour);
+        var crossing = Assert.Single(findings, f => f.Code == RouteFindingCodes.CrossesSafetyContour);
         Assert.Equal(RouteFindingGroup.MustReview, crossing.Group);
         Assert.Equal(Harbour, crossing.Feature!.DatasetId);
         Assert.Equal(shoal.Leg, crossing.LegIndex);
@@ -81,7 +82,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
         Assert.Contains("· DepthArea · least 5.0 m · shallower than safety contour 10 m", crossing.Meta, StringComparison.Ordinal);
 
         // The S-102 surface's 50 m cells.
-        var s102 = Assert.Single(findings, f => f.Code == RouteCheckCodes.CrossesS102Shoal);
+        var s102 = Assert.Single(findings, f => f.Code == RouteFindingCodes.CrossesS102Shoal);
         Assert.Equal(RouteFindingGroup.MustReview, s102.Group);
         Assert.InRange(s102.Location!.StartDistanceMeters, shoal.StartMeters - 60, shoal.StartMeters + 60);
         Assert.InRange(s102.Location.EndDistanceMeters, shoal.EndMeters - 60, shoal.EndMeters + 60);
@@ -92,7 +93,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
         // Nothing but the dangers and the shoal.
         Assert.All(findings, f => Assert.Contains(f.Code, new[]
         {
-            RouteCheckCodes.DangerInCorridor, RouteCheckCodes.DangerNearRoute, RouteCheckCodes.CrossesSafetyContour, RouteCheckCodes.CrossesS102Shoal,
+            RouteFindingCodes.DangerInCorridor, RouteFindingCodes.DangerNearRoute, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.CrossesS102Shoal,
         }));
     }
 
@@ -100,7 +101,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     public void Shoal_soundings_count_only_shallower_than_the_safety_depth_and_inside_the_limits()
     {
         // At 14 m the route's 13–14 m soundings count; at 10 m none does.
-        var findings = Check(new RouteCheckDepths(Contour, 14)).Where(f => f.Code == RouteCheckCodes.SoundingsBelowSafetyDepth).ToList();
+        var findings = Check(safetyDepth: 14).Where(f => f.Code == RouteFindingCodes.SoundingsBelowSafetyDepth).ToList();
 
         Assert.NotEmpty(findings);
         Assert.All(findings, f =>
@@ -109,7 +110,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
             Assert.Equal(Harbour, f.Feature!.DatasetId);
             Assert.Contains("shallower than safety depth 14 m", f.Meta, StringComparison.Ordinal);
         });
-        Assert.DoesNotContain(Check(new RouteCheckDepths(Contour, Contour)), f => f.Code == RouteCheckCodes.SoundingsBelowSafetyDepth);
+        Assert.DoesNotContain(Check(), f => f.Code == RouteFindingCodes.SoundingsBelowSafetyDepth);
     }
 
     // #947: the coastal cell charts a wreck the harbour cell doesn't, and
@@ -119,20 +120,18 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     public void Coarse_cell_generalisation_adds_nothing_where_the_harbour_cell_charts()
     {
         var coastalWreck = Definition.Hazards.Single(h => h.Cells is not null);
-        var depths = new RouteCheckDepths(Contour, Contour);
-
-        var withBoth = Check(depths);
-        var coastalOnly = Check(depths, Coastal);
+        var withBoth = Check();
+        var coastalOnly = Check(Contour, false, Coastal);
 
         Assert.All(withBoth.Where(f => f.Feature is not null), f => Assert.Equal(Harbour, f.Feature!.DatasetId));
         Assert.DoesNotContain(withBoth, f => Near(f, coastalWreck));
 
         var wreck = Assert.Single(coastalOnly, f => Near(f, coastalWreck));
-        Assert.Equal(RouteCheckCodes.DangerInCorridor, wreck.Code);
+        Assert.Equal(RouteFindingCodes.DangerInCorridor, wreck.Code);
         Assert.Equal(Coastal, wreck.Feature!.DatasetId);
 
-        var fine = withBoth.Single(f => f.Code == RouteCheckCodes.CrossesSafetyContour).Location!;
-        var coarse = coastalOnly.Single(f => f.Code == RouteCheckCodes.CrossesSafetyContour).Location!;
+        var fine = withBoth.Single(f => f.Code == RouteFindingCodes.CrossesSafetyContour).Location!;
+        var coarse = coastalOnly.Single(f => f.Code == RouteFindingCodes.CrossesSafetyContour).Location!;
         Assert.True(coarse.EndDistanceMeters - coarse.StartDistanceMeters > fine.EndDistanceMeters - fine.StartDistanceMeters + 100,
             $"The coastal cell's shoal is {coarse.EndDistanceMeters - coarse.StartDistanceMeters:0} m long and the harbour cell's {fine.EndDistanceMeters - fine.StartDistanceMeters:0} m.");
     }
@@ -141,18 +140,18 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     // with its side and threshold in the meta line; there are no others.
     private List<RouteFinding> AssertDangers(IReadOnlyList<RouteHazardTruth> truth, IReadOnlyList<RouteFinding> findings)
     {
-        var dangers = findings.Where(f => f.Code is RouteCheckCodes.DangerInCorridor or RouteCheckCodes.DangerNearRoute).ToList();
+        var dangers = findings.Where(f => f.Code == RouteFindingCodes.DangerInCorridor || f.Code == RouteFindingCodes.DangerNearRoute).ToList();
         var expected = truth.Where(t => t.Expected).ToList();
         Assert.Equal(expected.Count, dangers.Count);
         foreach (var t in expected)
         {
             var finding = Assert.Single(dangers, f => Near(f, t.Hazard));
             var inCorridor = t.Relation == HazardRouteRelation.InCorridor;
-            Assert.Equal(inCorridor ? RouteCheckCodes.DangerInCorridor : RouteCheckCodes.DangerNearRoute, finding.Code);
+            Assert.Equal(inCorridor ? RouteFindingCodes.DangerInCorridor : RouteFindingCodes.DangerNearRoute, finding.Code);
             Assert.Equal(inCorridor ? RouteFindingGroup.MustReview : RouteFindingGroup.Check, finding.Group);
             Assert.Equal(Harbour, finding.Feature!.DatasetId);
             Assert.Equal(t.Leg, finding.LegIndex);
-            Assert.InRange(finding.DistanceMeters!.Value, t.DistanceMeters - DistanceTolerance, t.DistanceMeters + DistanceTolerance);
+            Assert.InRange(finding.Distance!.Value.TotalMetres, t.DistanceMeters - DistanceTolerance, t.DistanceMeters + DistanceTolerance);
             Assert.Contains(" · " + t.Hazard.FeatureType + " · ", finding.Meta, StringComparison.Ordinal);
             var side = Math.Abs(t.OffsetMeters) < 0.5 ? "on the track"
                 : string.Format(CultureInfo.InvariantCulture, t.OffsetMeters > 0 ? "{0:0} m to port" : "{0:0} m to starboard", Math.Abs(t.OffsetMeters));
@@ -179,25 +178,20 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
         return Math.Abs(location.Path[0].Latitude - position.Latitude) < 1e-6 && Math.Abs(location.Path[0].Longitude - position.Longitude) < 1e-6;
     }
 
-    private IReadOnlyList<RouteFinding> Check(RouteCheckDepths depths, params string[] only)
+    private IReadOnlyList<RouteFinding> Check(double safetyDepth = Contour, bool withDraft = false, params string[] only)
     {
         var sources = only.Length == 0
             ? _sources
-            : RouteCheckDataSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)));
-        var options = new RouteCheckOptions
-        {
-            Depths = depths,
-            Text = RouteCheckText.Default with { Culture = CultureInfo.InvariantCulture },
-        };
-        return sources.CreateEngine(options).Check(Legs(), TestContext.Current.CancellationToken).Findings;
+            : CatalogRouteCheckSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)), new ProjNetCrsTransformFactory());
+        return ScenarioChecks.Chart(sources, new PassagePlan(Legs(withDraft)), PassageLegs.Settings(new DateTimeOffset(Spec.Departure, TimeSpan.Zero), Contour, safetyDepth)).Findings;
     }
 
-    private List<RouteCheckLeg> Legs()
+    private List<PassageLeg> Legs(bool withDraft)
     {
         var positions = S421RouteBuilder.Positions(Definition, Spec);
-        return positions.Zip(positions.Skip(1), (a, b) => new RouteCheckLeg(
-            [a, b],
-            PortCrossTrackMeters: S421RouteBuilder.CrossTrackLimitMeters,
-            StarboardCrossTrackMeters: S421RouteBuilder.CrossTrackLimitMeters)).ToList();
+        var passage = Spec.Passage;
+        return positions.Zip(positions.Skip(1), (a, b) => withDraft
+            ? PassageLegs.Leg([a, b], passage.DraftMeters, squat: passage.SquatMeters, ukc: passage.RequiredUkcMeters, halfWidth: S421RouteBuilder.CrossTrackLimitMeters)
+            : PassageLegs.Leg([a, b], halfWidth: S421RouteBuilder.CrossTrackLimitMeters)).ToList();
     }
 }

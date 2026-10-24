@@ -210,6 +210,23 @@ public class RoutesPanelViewModelTests
     }
 
     [Fact]
+    public void Choosing_another_route_ends_the_rename_on_the_route_being_renamed()
+    {
+        var (svc, vm) = Create();
+        var first = svc.Routes.CreateRoute("First");
+        var second = svc.Routes.CreateRoute("Second");
+        svc.Routes.SetActiveRoute(first);
+
+        vm.BeginRenameCommand.Execute(null);
+        vm.RenameText = "Renamed";
+        svc.Routes.SetActiveRoute(second);
+
+        Assert.False(vm.IsRenamingActiveRoute);
+        Assert.Equal("Renamed", first.Name);
+        Assert.Equal("Second", second.Name);
+    }
+
+    [Fact]
     public void CancelRename_LeavesRouteNameUnchanged()
     {
         var (svc, vm) = Create();

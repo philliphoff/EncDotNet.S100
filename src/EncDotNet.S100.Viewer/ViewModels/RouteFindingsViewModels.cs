@@ -32,16 +32,16 @@ internal sealed record FindingsEntry(string Id, RouteFindingGroup Group, IReadOn
         if (group == RouteFindingGroup.MustReview)
             return findings.Select(f => new FindingsEntry(f.Id, group, [f])).ToList();
 
-        var byCode = findings.GroupBy(f => f.Code).ToDictionary(g => g.Key, g => g.ToList());
+        var byCode = findings.GroupBy(f => f.Code.Value).ToDictionary(g => g.Key, g => g.ToList());
         var entries = new List<FindingsEntry>();
         var placed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var finding in findings)
         {
-            var members = byCode[finding.Code];
+            var members = byCode[finding.Code.Value];
             if (members.Count == 1)
                 entries.Add(new FindingsEntry(finding.Id, group, members));
-            else if (placed.Add(finding.Code))
-                entries.Add(new FindingsEntry(MergedId(group, finding.Code), group, members));
+            else if (placed.Add(finding.Code.Value))
+                entries.Add(new FindingsEntry(MergedId(group, finding.Code.Value), group, members));
         }
 
         return entries;
@@ -118,7 +118,7 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
         ToggleInfoCommand = new RelayCommand(() => _service.SetView(infoOpen: !_service.InfoOpen));
         CloseWarningCardCommand = new RelayCommand(() =>
         {
-            if (_service.Selected?.Warning is not null)
+            if (_service.Selected?.Details is WarningDetails)
                 _service.Select(null, zoom: false);
         });
         OpenInWarningsCommand = new RelayCommand(() =>
@@ -220,13 +220,13 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
         var counts = Enum.GetValues<FindingsFilter>().ToDictionary(f => f, _ => 0);
         counts[FindingsFilter.All] = findings.Count;
         foreach (var finding in findings)
-            counts[RouteCheckVerdict.FilterOf(finding)]++;
+            counts[RouteCheckCard.FilterOf(finding)]++;
         return counts;
     }
 
     /// <summary>Whether a finding passes a filter.</summary>
     internal static bool Passes(RouteFinding finding, FindingsFilter filter) =>
-        filter == FindingsFilter.All || RouteCheckVerdict.FilterOf(finding) == filter;
+        filter == FindingsFilter.All || RouteCheckCard.FilterOf(finding) == filter;
 
     /// <summary>The list's entries after <paramref name="filter"/>, by group, merged (D2).</summary>
     internal static IReadOnlyList<FindingsEntry> Entries(IReadOnlyList<RouteFinding> findings, FindingsFilter filter) =>
@@ -302,7 +302,7 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
     // selected it there), unfold that once; the mariner can fold it again.
     private bool Reveal(IReadOnlyList<FindingsEntry> entries, bool infoOpen, string? expanded)
     {
-        if (_service.Selected is not { Warning: not null } selected
+        if (_service.Selected is not { Details: WarningDetails } selected
             || entries.FirstOrDefault(e => e.Members.Any(m => m.Id == selected.Id)) is not { } entry)
         {
             _revealed = null;
@@ -326,7 +326,7 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
     // re-judges its status at the new ETA without closing it or losing Show all.
     private void UpdateWarningCard(RouteFinding? selected)
     {
-        if (selected?.Warning is not { } warning)
+        if (selected?.Details is not WarningDetails warning)
         {
             DetachCard();
             return;
@@ -369,7 +369,7 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
     /// "Not in force at 06:15" or "Cancelled"; the time in the Local/UTC
     /// preference, with the weekday when it isn't the departure's day.
     /// </summary>
-    internal static string StatusAtEta(RouteFindingWarning warning, DateTimeOffset? departure, TimeFormat format)
+    internal static string StatusAtEta(WarningDetails warning, DateTimeOffset? departure, TimeFormat format)
     {
         var at = PassageFormatting.FormatEta(warning.From, departure ?? warning.From, format);
         return warning.Status switch
@@ -389,7 +389,7 @@ internal sealed class RouteFindingsViewModel : ViewModelBase
     }
 
     private NavigationalWarningEntry? WarningEntry(RouteFinding? finding) =>
-        finding is { Warning: not null, Feature: { } feature } && _service.WarningNavigator is { } navigator
+        finding is { Details: WarningDetails, Feature: { } feature } && _service.WarningNavigator is { } navigator
             ? navigator.Find(feature.DatasetId, feature.FeatureId)
             : null;
 
@@ -575,6 +575,16 @@ internal sealed class RouteFindingRowViewModel : ViewModelBase
     /// <summary>Whether to show the sub-rows under this row.</summary>
     public bool ShowMembers => IsMerged && IsExpanded;
 
+    /// <summary>
+    /// Whether the row opens into more: a merged row into its findings, an
+    /// S-124 finding into its Warning card when selected. It then shows the
+    /// tree's disclosure triangle.
+    /// </summary>
+    public bool IsExpandable => IsMerged || Finding.Details is WarningDetails;
+
+    /// <summary>Whether an expandable row is open now (its triangle points down).</summary>
+    public bool IsOpen => ShowMembers || HasWarningCard;
+
     /// <summary>The row's AutomationId: <c>Routes.Check.Finding.Expand</c> for a merged row, else <c>Routes.Check.Finding</c>.</summary>
     public string AutomationId => IsMerged ? "Routes.Check.Finding.Expand" : "Routes.Check.Finding";
 
@@ -587,7 +597,7 @@ internal sealed class RouteFindingRowViewModel : ViewModelBase
     public string Meta => IsMerged ? FindingsEntry.MergedMeta(Members.Select(m => m.Finding).ToList()) : Finding.Meta;
 
     /// <summary>The check that produced it: "Clearance", "Route check", "S-124", "Confidence" or "Data".</summary>
-    public string Tag => TagOf(Finding.Source);
+    public string Tag => TagOf(Finding.Category);
 
     /// <summary>The severity icon: a confidence finding shows waves, otherwise its group's icon.</summary>
     public RouteFindingIcon Icon => IconOf(Finding);
@@ -632,25 +642,27 @@ internal sealed class RouteFindingRowViewModel : ViewModelBase
         get => _warningCard;
         set
         {
-            if (SetProperty(ref _warningCard, value))
-                OnPropertyChanged(nameof(HasWarningCard));
+            if (!SetProperty(ref _warningCard, value))
+                return;
+            OnPropertyChanged(nameof(HasWarningCard));
+            OnPropertyChanged(nameof(IsOpen));
         }
     }
 
     /// <summary>Whether the row shows its inline Warning card.</summary>
     public bool HasWarningCard => _warningCard is not null;
 
-    internal static string TagOf(RouteFindingSource source) => source switch
+    internal static string TagOf(RouteFindingCategory category) => category switch
     {
-        RouteFindingSource.Clearance => Strings.Findings_TagClearance,
-        RouteFindingSource.RouteCheck => Strings.Findings_TagRouteCheck,
-        RouteFindingSource.S124 => Strings.Findings_TagS124,
-        RouteFindingSource.Confidence => Strings.Findings_TagConfidence,
+        RouteFindingCategory.Clearance => Strings.Findings_TagClearance,
+        RouteFindingCategory.Chart or RouteFindingCategory.Depth or RouteFindingCategory.Area => Strings.Findings_TagRouteCheck,
+        RouteFindingCategory.Warning => Strings.Findings_TagS124,
+        RouteFindingCategory.Confidence => Strings.Findings_TagConfidence,
         _ => Strings.Findings_TagData,
     };
 
     internal static RouteFindingIcon IconOf(RouteFinding finding) =>
-        finding.Source == RouteFindingSource.Confidence ? RouteFindingIcon.Waves
+        finding.Category == RouteFindingCategory.Confidence ? RouteFindingIcon.Waves
         : finding.Group switch
         {
             RouteFindingGroup.MustReview => RouteFindingIcon.Octagon,

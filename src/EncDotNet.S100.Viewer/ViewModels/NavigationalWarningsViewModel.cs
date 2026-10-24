@@ -249,7 +249,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
     /// A part's line while Check route is on: "On route · 06:08" when it
     /// crosses, "Near route · 06:19" when near; without speeds, no time.
     /// </summary>
-    internal static string RouteText(RouteFindingWarning warning, DateTimeOffset? departure, TimeFormat format)
+    internal static string RouteText(WarningDetails warning, DateTimeOffset? departure, TimeFormat format)
     {
         var crosses = warning.Relation == RouteWarningRelation.Crosses;
         if (!warning.AtEta)
@@ -270,13 +270,13 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         var onRoute = new Dictionary<(string, string), RouteFinding>();
         foreach (var finding in findings)
         {
-            if (finding is { Source: RouteFindingSource.S124, Warning: not null, Feature: { } feature })
+            if (finding is { Category: RouteFindingCategory.Warning, Details: WarningDetails, Feature: { } feature })
                 onRoute.TryAdd((feature.DatasetId, feature.FeatureId), finding);
         }
 
         var key = string.Join(
             "|",
-            onRoute.Values.Select(f => $"{f.Id}:{f.Warning!.Relation}:{f.Warning.Status}:{f.Warning.From:O}:{f.Warning.AtEta}")
+            onRoute.Values.Select(f => f.Details is WarningDetails w ? $"{f.Id}:{w.Relation}:{w.Status}:{w.From:O}:{w.AtEta}" : f.Id)
                 .Prepend($"{IsRouteScopeAvailable}:{RouteName}:{_routeFindings?.Departure:O}"));
         if (!force && key == _onRouteKey)
             return;
@@ -828,7 +828,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         bool Listed(NavigationalWarningEntry w) =>
             (!_textOnlyFilter || w.IsTextOnly) && Matches(w, _query) && (!routeScope || RouteFindingFor(w) is not null);
         string? OnRouteText(NavigationalWarningEntry w) =>
-            RouteFindingFor(w)?.Warning is { } onRoute ? RouteText(onRoute, departure, format) : null;
+            RouteFindingFor(w)?.Details is WarningDetails onRoute ? RouteText(onRoute, departure, format) : null;
 
         var items = new List<NavigationalWarningListItem>();
         // A series appears once per source: a Library source by id (its name

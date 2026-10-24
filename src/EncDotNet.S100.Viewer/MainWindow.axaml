@@ -1191,21 +1191,20 @@
                                         x:DataType="vm:ClearanceViewModel"
                                         DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Clearance}"
                                         IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsClearanceTabSelected}">
-                                <StackPanel Orientation="Horizontal">
-                                    <ToggleButton Classes="dockSegment"
-                                                  AutomationProperties.AutomationId="Clearance.AxisDistance"
-                                                  Content="{x:Static loc:Strings.Clearance_Distance}"
-                                                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearanceDistance}"
-                                                  IsChecked="{Binding IsDistanceAxis, Mode=OneWay}"
-                                                  Command="{Binding ShowDistanceCommand}" />
-                                    <ToggleButton Classes="dockSegment last"
-                                                  AutomationProperties.AutomationId="Clearance.AxisTime"
-                                                  Content="{x:Static loc:Strings.Clearance_Time}"
-                                                  ToolTip.Tip="{Binding TimeTooltip}"
-                                                  ToolTip.ShowOnDisabled="True"
-                                                  IsChecked="{Binding IsTimeAxis, Mode=OneWay}"
-                                                  Command="{Binding ShowTimeCommand}" />
-                                </StackPanel>
+                                <TabControl Classes="pillTabs compact"
+                                            AutomationProperties.AutomationId="Clearance.Axis"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            SelectedIndex="{Binding AxisIndex, Mode=TwoWay}">
+                                    <TabItem AutomationProperties.AutomationId="Clearance.AxisDistance"
+                                             Header="{x:Static loc:Strings.Clearance_Distance}"
+                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearanceDistance}" />
+                                    <TabItem AutomationProperties.AutomationId="Clearance.AxisTime"
+                                             Header="{x:Static loc:Strings.Clearance_Time}"
+                                             ToolTip.Tip="{Binding TimeTooltip}"
+                                             ToolTip.ShowOnDisabled="True"
+                                             IsEnabled="{Binding CanShowTime}" />
+                                </TabControl>
                                 <ToggleButton Classes="Ghost"
                                               AutomationProperties.AutomationId="Clearance.SourcesToggle"
                                               AutomationProperties.Name="{x:Static loc:Strings.Clearance_Sources}"

@@ -8,17 +8,18 @@
              x:DataType="vm:ClearanceViewModel">
 
     <UserControl.Styles>
-        <Style Selector="TextBlock.readoutLabel">
-            <Setter Property="FontSize" Value="10.5" />
-            <Setter Property="Opacity" Value="0.6" />
+        <!-- D4 readout and Sources: one text size, as in the mock; the
+             secondary colour and weight carry the hierarchy. -->
+        <Style Selector="TextBlock.readout">
+            <Setter Property="FontSize" Value="12" />
         </Style>
         <Style Selector="TextBlock.readoutValue">
-            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontSize" Value="12" />
             <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
         </Style>
-        <Style Selector="TextBlock.readoutSource">
-            <Setter Property="FontSize" Value="10.5" />
-            <Setter Property="Opacity" Value="0.7" />
+        <Style Selector="TextBlock.readoutMuted">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
         <Style Selector="TextBlock.bandLabel">
@@ -95,30 +96,27 @@
                                             Dragged="OnBandDragged"
                                             DragCompleted="OnBandDragCompleted"
                                             Nudged="OnBandNudged" />
-                    <Grid ColumnDefinitions="*,Auto,*">
-                        <TextBlock Grid.Column="0"
-                                   AutomationProperties.AutomationId="Clearance.DepartureBand.Start"
+                    <!-- Start, middle, end: the middle drops out (clipped to nothing)
+                         rather than run into the end label (#1038). -->
+                    <v:DepartureBandLabelsPanel x:Name="DepartureBandLabels">
+                        <TextBlock AutomationProperties.AutomationId="Clearance.DepartureBand.Start"
                                    Text="{Binding BandStartLabel}"
-                                   Classes="bandLabel"
-                                   HorizontalAlignment="Left" />
-                        <TextBlock Grid.Column="1"
-                                   AutomationProperties.AutomationId="Clearance.DepartureBand.Middle"
+                                   Classes="bandLabel" />
+                        <TextBlock AutomationProperties.AutomationId="Clearance.DepartureBand.Middle"
                                    Text="{Binding BandMiddleLabel}"
                                    Classes="bandLabel"
-                                   HorizontalAlignment="Center" />
-                        <TextBlock Grid.Column="2"
-                                   AutomationProperties.AutomationId="Clearance.DepartureBand.End"
+                                   ClipToBounds="True" />
+                        <TextBlock AutomationProperties.AutomationId="Clearance.DepartureBand.End"
                                    Text="{Binding BandEndLabel}"
-                                   Classes="bandLabel"
-                                   HorizontalAlignment="Right" />
-                    </Grid>
+                                   Classes="bandLabel" />
+                    </v:DepartureBandLabelsPanel>
                 </StackPanel>
             </Grid>
             </Grid>
 
             <!-- D4: the readout at the cursor; D6: Sources in its place when open. -->
             <Border Grid.Column="1"
-                    Width="196"
+                    Width="216"
                     Margin="4,6,10,8"
                     Padding="10,8"
                     CornerRadius="8"
@@ -126,44 +124,54 @@
                     BorderBrush="{DynamicResource BorderColor}">
                 <Panel>
                     <ScrollViewer IsVisible="{Binding !IsSourcesOpen}" HorizontalScrollBarVisibility="Disabled">
+                        <!-- Right gutters keep the overlay scrollbars off the text. -->
                         <StackPanel AutomationProperties.AutomationId="Clearance.Readout"
+                                    Margin="0,0,8,0"
                                     Spacing="6"
                                     IsVisible="{Binding HasReadout}">
-                            <StackPanel>
-                                <TextBlock AutomationProperties.AutomationId="Clearance.Readout.Position"
-                                           Text="{Binding ReadoutPosition}"
-                                           FontSize="12"
-                                           FontWeight="SemiBold"
-                                           FontFamily="{DynamicResource LibraryMonoFont}" />
-                                <TextBlock Text="{Binding ReadoutLeg}"
-                                           FontSize="10.5"
-                                           Opacity="0.65"
+                            <StackPanel Spacing="2">
+                                <!-- The distance left and the ETA right, as in the mock. -->
+                                <Grid ColumnDefinitions="*,Auto"
+                                      AutomationProperties.AutomationId="Clearance.Readout.Position">
+                                    <TextBlock Classes="readoutValue"
+                                               AutomationProperties.AutomationId="Clearance.Readout.Distance"
+                                               Text="{Binding ReadoutDistance}"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="1"
+                                               Classes="readoutValue"
+                                               AutomationProperties.AutomationId="Clearance.Readout.Eta"
+                                               Text="{Binding ReadoutEta}"
+                                               FontWeight="SemiBold" />
+                                </Grid>
+                                <TextBlock Classes="readoutMuted"
+                                           Text="{Binding ReadoutLeg}"
+                                           TextWrapping="NoWrap"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
-                            <StackPanel>
+                            <StackPanel Spacing="2">
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Classes="readoutLabel" Text="{x:Static loc:Strings.Clearance_ChartedDepth}" />
+                                    <TextBlock Classes="readout" Text="{x:Static loc:Strings.Clearance_ChartedDepth}" />
                                     <TextBlock Grid.Column="1" Classes="readoutValue"
                                                AutomationProperties.AutomationId="Clearance.Readout.Depth"
                                                Text="{Binding DepthText}" />
                                 </Grid>
-                                <TextBlock Classes="readoutSource"
+                                <TextBlock Classes="readoutMuted"
                                            AutomationProperties.AutomationId="Clearance.Readout.DepthSource"
                                            Text="{Binding DepthSource}" />
                             </StackPanel>
-                            <StackPanel>
+                            <StackPanel Spacing="2">
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Classes="readoutLabel" Text="{x:Static loc:Strings.Clearance_WaterLevel}" />
+                                    <TextBlock Classes="readout" Text="{x:Static loc:Strings.Clearance_WaterLevel}" />
                                     <TextBlock Grid.Column="1" Classes="readoutValue"
                                                AutomationProperties.AutomationId="Clearance.Readout.WaterLevel"
                                                Text="{Binding WaterLevelText}" />
                                 </Grid>
-                                <TextBlock Classes="readoutSource"
+                                <TextBlock Classes="readoutMuted"
                                            AutomationProperties.AutomationId="Clearance.Readout.WaterLevelSource"
                                            Text="{Binding WaterLevelSource}" />
                             </StackPanel>
                             <Grid ColumnDefinitions="*,Auto">
-                                <TextBlock Classes="readoutLabel" Text="{x:Static loc:Strings.Clearance_DraftSquat}" />
+                                <TextBlock Classes="readout" Text="{x:Static loc:Strings.Clearance_DraftSquat}" />
                                 <TextBlock Grid.Column="1" Classes="readoutValue"
                                            AutomationProperties.AutomationId="Clearance.Readout.Draft"
                                            Text="{Binding DraftText}" />
@@ -173,22 +181,20 @@
                                    Classes.warning="{Binding IsWarning}"
                                    Classes.destructive="{Binding IsDestructive}"
                                    Classes.neutral="{Binding IsNeutral}">
-                                <StackPanel>
+                                <StackPanel Spacing="2">
                                     <Grid ColumnDefinitions="*,Auto">
-                                        <TextBlock Classes="readoutLabel" Text="{x:Static loc:Strings.Clearance_Ukc}" VerticalAlignment="Center" />
+                                        <TextBlock Classes="readout toneInk"
+                                                   Text="{x:Static loc:Strings.Clearance_Ukc}"
+                                                   FontWeight="SemiBold" />
                                         <TextBlock Grid.Column="1"
-                                                   Classes="toneInk"
+                                                   Classes="readoutValue toneInk"
                                                    AutomationProperties.AutomationId="Clearance.Readout.Ukc"
                                                    Text="{Binding UkcText}"
-                                                   FontSize="16"
-                                                   FontFamily="{DynamicResource LibraryMonoFont}" />
+                                                   FontWeight="SemiBold" />
                                     </Grid>
-                                    <TextBlock Classes="toneInk"
+                                    <TextBlock Classes="readoutMuted"
                                                AutomationProperties.AutomationId="Clearance.Readout.State"
-                                               Text="{Binding StateText}"
-                                               FontSize="11"
-                                               FontWeight="SemiBold"
-                                               TextWrapping="Wrap" />
+                                               Text="{Binding StateText}" />
                                 </StackPanel>
                             </Panel>
                         </StackPanel>
@@ -196,20 +202,18 @@
 
                     <ScrollViewer IsVisible="{Binding IsSourcesOpen}" HorizontalScrollBarVisibility="Disabled">
                         <ItemsControl AutomationProperties.AutomationId="Clearance.Sources"
+                                      Margin="0,0,8,0"
                                       ItemsSource="{Binding SourceGroups}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:ClearanceSourceGroup">
-                                    <StackPanel Margin="0,0,0,8">
-                                        <TextBlock Text="{Binding Title}"
-                                                   FontSize="10.5"
-                                                   FontWeight="SemiBold"
-                                                   Opacity="0.75" />
+                                    <StackPanel Margin="0,0,0,8" Spacing="2">
+                                        <TextBlock Classes="readout"
+                                                   Text="{Binding Title}"
+                                                   FontWeight="SemiBold" />
                                         <ItemsControl ItemsSource="{Binding Items}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="x:String">
-                                                    <TextBlock Text="{Binding}"
-                                                               FontSize="10.5"
-                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Classes="readoutMuted" Text="{Binding}" />
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>

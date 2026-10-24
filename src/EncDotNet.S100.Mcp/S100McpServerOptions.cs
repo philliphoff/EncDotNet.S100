@@ -49,15 +49,22 @@ public sealed class S100McpServerOptions
     /// with the built-ins (<c>list_datasets</c>, <c>describe_feature</c>,
     /// <c>sample_coverage</c>, <c>find_at</c>, <c>query_features</c>,
     /// <c>sample_coverage_along</c>, <c>list_specs</c>,
-    /// <c>list_time_steps</c>, <c>get_passage_result</c>, <c>check_route</c>).
+    /// <c>list_time_steps</c>, <c>check_route</c>).
     /// </remarks>
     public IReadOnlyList<McpServerTool>? AdditionalTools { get; init; }
 
     /// <summary>
-    /// The host's routes, so the built-in <c>get_passage_result</c> and
-    /// <c>check_route</c> tools can check the active or a named route as well
-    /// as a polyline. May be
+    /// The host's routes, so the built-in <c>check_route</c> tool can check
+    /// the active or a named route as well as a polyline. May be
     /// <see langword="null"/> when the host has no routes.
     /// </summary>
     public EncDotNet.S100.Mcp.Tools.IPassageRouteProvider? PassageRoutes { get; init; }
+
+    /// <summary>
+    /// The route-check sources the host's own checks use, so the built-in
+    /// <c>check_route</c> tool shares the cells' indexes and S-102 grids with
+    /// them. May be <see langword="null"/>, and the tool then has a cache of
+    /// its own.
+    /// </summary>
+    public EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? RouteCheckSources { get; init; }
 }

@@ -105,6 +105,13 @@ public sealed class CatalogProjectionTests
         Assert.Equal(
             ((S101DatasetData)fromProcessor.Data).Dataset.FeatureCount,
             ((S101DatasetData)fromStream.Data).Dataset.FeatureCount);
+
+        // The translation drops DSPM CSCL, so both payloads carry it for
+        // ranking overlapping cells.
+        var compilationScale = S57Dataset.ResolveCompilationScale(S57Dataset.Open(path).Document);
+        Assert.NotNull(compilationScale);
+        Assert.Equal(compilationScale, ((S101DatasetData)fromProcessor.Data).CompilationScale);
+        Assert.Equal(compilationScale, ((S101DatasetData)fromStream.Data).CompilationScale);
     }
 
     [Theory]

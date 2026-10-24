@@ -29,14 +29,15 @@ internal static class LoadedDatasetFactory
     public static LoadedDataset S101(
         string id,
         S101Dataset? dataset = null,
-        BoundingBox? bounds = null)
+        BoundingBox? bounds = null,
+        int? compilationScale = null)
     {
         return new LoadedDataset(
             new DatasetId(id),
             S101Spec,
             bounds ?? Box(),
             null,
-            new S101DatasetData(dataset ?? S101Synth.Dataset()));
+            new S101DatasetData(dataset ?? S101Synth.Dataset(), CompilationScale: compilationScale));
     }
 
     public static LoadedDataset S124(

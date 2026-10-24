@@ -4929,6 +4929,9 @@
   <data name="Check_TabLegs" xml:space="preserve">
     <value>Legs</value>
   </data>
+  <data name="Check_TabFindings" xml:space="preserve">
+    <value>Findings</value>
+  </data>
   <data name="Check_TabFindingsFormat" xml:space="preserve">
     <value>Findings {0}</value>
   </data>
@@ -5007,20 +5010,17 @@
   <data name="RouteCheck_OnTrack" xml:space="preserve">
     <value>on the track</value>
   </data>
-  <data name="RouteCheck_DepthFormat" xml:space="preserve">
-    <value>{0:0.0} m</value>
-  </data>
   <data name="RouteCheck_LeastDepthFormat" xml:space="preserve">
-    <value>least {0:0.0} m</value>
+    <value>least {0}</value>
   </data>
   <data name="RouteCheck_SoundingCountFormat" xml:space="preserve">
     <value>{0} soundings</value>
   </data>
   <data name="RouteCheck_S102CellWithUncertaintyFormat" xml:space="preserve">
-    <value>least {0:0.0} m ± {1:0.0} m at cell {2} of {3}</value>
+    <value>least {0} ± {1} at cell {2} of {3}</value>
   </data>
   <data name="RouteCheck_S102CellFormat" xml:space="preserve">
-    <value>least {0:0.0} m at cell {2} of {3}</value>
+    <value>least {0} at cell {2} of {3}</value>
   </data>
   <data name="RouteCheck_DepthUnknown" xml:space="preserve">
     <value>depth unknown</value>
@@ -5035,13 +5035,13 @@
     <value>above water</value>
   </data>
   <data name="RouteCheck_BelowSafetyDepthFormat" xml:space="preserve">
-    <value>shallower than safety depth {0:0.#} m</value>
+    <value>shallower than safety depth {0}</value>
   </data>
   <data name="RouteCheck_BelowKeelFormat" xml:space="preserve">
-    <value>shallower than draft + squat + UKC ({0:0.#} m)</value>
+    <value>shallower than draft + squat + UKC ({0})</value>
   </data>
   <data name="RouteCheck_BelowSafetyContourFormat" xml:space="preserve">
-    <value>shallower than safety contour {0:0.#} m</value>
+    <value>shallower than safety contour {0}</value>
   </data>
   <data name="RouteCheck_Separator" xml:space="preserve">
     <value> · </value>
@@ -5214,15 +5214,6 @@
   </data>
   <data name="Findings_NoDepthSource" xml:space="preserve">
     <value>no S-102 or S-101 coverage</value>
-  </data>
-  <data name="Findings_ForecastExpired" xml:space="preserve">
-    <value>S-111 forecast run has expired</value>
-  </data>
-  <data name="Findings_ForecastsExpiredFormat" xml:space="preserve">
-    <value>{0} S-111 forecast runs have expired</value>
-  </data>
-  <data name="Findings_ForecastExpiredMetaFormat" xml:space="preserve">
-    <value>{0} · currents shown for reference; not used in ETAs</value>
   </data>
   <data name="Findings_AndMoreFormat" xml:space="preserve">
     <value>{0} and {1} more</value>

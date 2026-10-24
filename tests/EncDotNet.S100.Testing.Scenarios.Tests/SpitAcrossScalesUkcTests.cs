@@ -1,4 +1,3 @@
-using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Testing.Scenarios.World;
 using EncDotNet.S100.Testing.Scenarios.Writers;
@@ -7,7 +6,7 @@ namespace EncDotNet.S100.Testing.Scenarios.Tests;
 
 /// <summary>
 /// "Spit across scales" end to end: generated files, read by the real
-/// readers into the passage-check adapters and <see cref="PassageCheckEngine"/>,
+/// readers into the passage-check adapters and <see cref="ClearanceCheck"/>,
 /// give the under-keel clearance the world model predicts.
 /// </summary>
 public sealed class SpitAcrossScalesUkcTests(SpitAcrossScalesFixture fixture) : IClassFixture<SpitAcrossScalesFixture>
@@ -21,7 +20,7 @@ public sealed class SpitAcrossScalesUkcTests(SpitAcrossScalesFixture fixture) : 
     // On a step of both the 10-minute station series and the hourly grid.
     private static readonly DateTime At = new(2026, 3, 1, 6, 0, 0, DateTimeKind.Utc);
 
-    private readonly PassageDataSources _sources = ScenarioLoading.Sources(fixture.Scenario);
+    private readonly RouteCheckSources _sources = ScenarioLoading.Sources(fixture.Scenario);
 
     private ScenarioDefinition Definition => fixture.Definition;
 
@@ -211,9 +210,9 @@ public sealed class SpitAcrossScalesUkcTests(SpitAcrossScalesFixture fixture) : 
     private PassageCheckResult CheckRoute()
     {
         var points = Definition.RoutePositions;
-        var legs = points.Zip(points.Skip(1), (a, b) => new PassageLeg([a, b], Draft, SpeedKnots: 8, SquatMeters: Squat, RequiredUkcMeters: Required)).ToList();
-        return new PassageCheckEngine(_sources.Depth, _sources.WaterLevel)
-            .Check(new PassagePlan(legs, new DateTimeOffset(new DateTime(2026, 3, 1, 4, 0, 0, DateTimeKind.Utc))), TestContext.Current.CancellationToken);
+        var legs = points.Zip(points.Skip(1), (a, b) => PassageLegs.Leg([a, b], Draft, speedKnots: 8, squat: Squat, ukc: Required)).ToList();
+        var departure = new DateTimeOffset(new DateTime(2026, 3, 1, 4, 0, 0, DateTimeKind.Utc));
+        return ScenarioChecks.Clearance(_sources, new PassagePlan(legs, departure), PassageLegs.Settings(departure));
     }
 
     /// <summary>
@@ -226,9 +225,8 @@ public sealed class SpitAcrossScalesUkcTests(SpitAcrossScalesFixture fixture) : 
         var (x, y) = Definition.Places[place];
         var start = World.Frame.ToGeo(x + 0.1, y + 0.1);
         var end = World.Frame.ToGeo(x + 1.1, y + 0.1);
-        var leg = new PassageLeg([start, end], Draft, SpeedKnots: 10, SquatMeters: Squat, RequiredUkcMeters: Required);
-        var result = new PassageCheckEngine(_sources.Depth, _sources.WaterLevel)
-            .Check(new PassagePlan([leg], new DateTimeOffset(At)), TestContext.Current.CancellationToken);
+        var leg = PassageLegs.Leg([start, end], Draft, speedKnots: 10, squat: Squat, ukc: Required);
+        var result = ScenarioChecks.Clearance(_sources, new PassagePlan([leg], new DateTimeOffset(At)), PassageLegs.Settings(new DateTimeOffset(At)));
         return Assert.Single(result.Samples);
     }
 

@@ -85,7 +85,7 @@ internal sealed record TimelinePassageDto(
     [property: Description("The checked departure, UTC.")] DateTimeOffset Departure,
     [property: Description("The arrival, UTC.")] DateTimeOffset Arrival,
     [property: Description("The ETA of the minimum UKC (the tick in the verdict colour), UTC; null when none was computed.")] DateTimeOffset? MinUkcTime,
-    [property: Description("Verdict code, as get_passage_result: water_level_ends_before_arrival, below_setting, incomplete_data, meets_settings_tight or meets_settings.")] string Verdict,
+    [property: Description("Verdict code, as check_route's clearance: water_level_ends_before_arrival, below_setting, incomplete_data, meets_settings_tight or meets_settings.")] string Verdict,
     [property: Description("True while the check is recomputing (the lanes are dimmed).")] bool Stale,
     [property: Description("The departure's position on the axis, 0 (left) to 1 (right), clamped.")] double Start,
     [property: Description("The arrival's position on the axis, 0–1, clamped.")] double End,

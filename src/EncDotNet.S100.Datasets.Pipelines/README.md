@@ -328,7 +328,7 @@ other:
 | `.Geometry` | Point, polyline and bounding box helpers for the pick services. |
 | `.Spec` | `FeatureDescriberRegistry`, which `DescribeFeatureService` uses to describe a feature per product, and the `FeatureAccessor`, `FeatureGeometryQuery` and `FeatureNames` helpers. |
 | `.Time` | `FeatureValidity` and the time window query helpers. |
-| `.Navigation` | `PassageDataSources`, which builds the charted-depth (S-102, with S-101 fallback) and S-104 water-level sources that `EncDotNet.S100.Navigation`'s passage check reads, from a catalog snapshot; and `PassagePlaceNames`, which labels a point on a passage from named S-101 water and land areas ("Thorn Channel · off Calshot"). |
+| `.Navigation` | `CatalogRouteCheckSources`, which builds the `RouteCheckSources` every route check in `EncDotNet.S100.Navigation` reads (S-101 charts and areas, S-102 depth with S-101 fallback, S-104 water level, S-122 protected areas and S-124 warnings) from a catalog snapshot, and `RouteCheckSourceCache`, which keeps one per snapshot; and `PassagePlaceNames`, which labels a point on a passage from named S-101 water and land areas ("Thorn Channel · off Calshot"). |
 
 SoundCharts' `ViewerDatasetCatalog` and the headless `FileDatasetCatalog` both
 use `LoadedDatasetProjector`, so a pick from `s100` produces the same catalog
@@ -482,7 +482,7 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   lists that aren't loaded (§9.2.2). A bulletin is recognised by a
   `References` with `referenceCategory` 3 (In-Force).
 - `Navigation/RouteWarningSources`: the S-124 warning parts of loaded datasets
-  as `RouteWarning`s for `RouteWarningCheck`, and `SetFromDatasets`, the
+  as `RouteWarning`s for the route check's `WarningCheck`, and `SetFromDatasets`, the
   `NavigationalWarningSet` to judge them with (see the Navigation package's
   README).
 - `AssetSourceHelpers`: set-up helpers for exchange sets and loose datasets.

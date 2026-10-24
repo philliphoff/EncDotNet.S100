@@ -105,7 +105,7 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     private sealed record Setup(RoutesService Routes, Route Route, PassageCheckService Check, RouteFindingsService Findings, PassageCheckFixture.FixedCatalog Catalog) : IDisposable
     {
         public IReadOnlyList<RouteFinding> RouteChecks =>
-            Findings.Findings.Where(f => f.Source == RouteFindingSource.RouteCheck || f.Code == RouteCheckCodes.OutsideChartCoverage).ToList();
+            Findings.Findings.Where(f => f.Category == RouteFindingCategory.Chart || f.Code == RouteFindingCodes.OutsideChartCoverage).ToList();
 
         public void Dispose()
         {
@@ -122,10 +122,9 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, debounce: TimeSpan.Zero);
-        var ui = new UiThread();
-        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc(), clock: new FixedClock(Now),
-            producers: [new RouteCheckFindingProducer()], post: ui.Post);
+        var check = new PassageCheckService(routes, catalog,
+            checks: () => [new ChartCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post);
+        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc());
         routes.IsCheckModeActive = true;
         await findings.WhenIdle();
         return new Setup(routes, route, check, findings, catalog);
@@ -138,7 +137,7 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
 
         var checks = s.RouteChecks;
         Assert.Equal(
-            [RouteCheckCodes.CrossesDrying, RouteCheckCodes.CrossesDrying, RouteCheckCodes.CrossesLand],
+            [RouteFindingCodes.CrossesDrying, RouteFindingCodes.CrossesDrying, RouteFindingCodes.CrossesLand],
             checks.Select(f => f.Code));
         Assert.All(checks, f =>
         {
@@ -182,10 +181,10 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     {
         using var s = await Start(fixture.Import("421ZZ00SPITX"));
 
-        Assert.All(s.Check.Input!.CheckLegs, x =>
+        Assert.All(s.Check.Input!.Legs, x =>
         {
-            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.PortCrossTrackMeters);
-            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.StarboardCrossTrackMeters);
+            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.PortLimit!.Value.TotalMetres, 9);
+            Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, x.StarboardLimit!.Value.TotalMetres, 9);
         });
     }
 
@@ -193,15 +192,15 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     public async Task Moving_the_waypoint_off_the_shore_clears_the_land()
     {
         using var s = await Start(fixture.Import("421ZZ00SPITX"));
-        Assert.Contains(s.RouteChecks, f => f.Code == RouteCheckCodes.CrossesLand);
+        Assert.Contains(s.RouteChecks, f => f.Code == RouteFindingCodes.CrossesLand);
 
         // Pull "ashore" back north of the foreshore.
         var frame = fixture.Scenario.Definition.World.Frame;
         s.Route.MoveWaypoint(3, frame.ToGeo(3600, 1450));
         await s.Findings.WhenIdle();
 
-        Assert.DoesNotContain(s.RouteChecks, f => f.Code == RouteCheckCodes.CrossesLand);
-        Assert.Single(s.RouteChecks, f => f.Code == RouteCheckCodes.CrossesDrying);
+        Assert.DoesNotContain(s.RouteChecks, f => f.Code == RouteFindingCodes.CrossesLand);
+        Assert.Single(s.RouteChecks, f => f.Code == RouteFindingCodes.CrossesDrying);
     }
 
     private sealed class Mariner(MarinerSettings settings) : IMarinerSettingsProvider
@@ -212,25 +211,28 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     }
 
     [Fact]
-    public void The_depth_checks_use_the_mariners_settings_and_the_deepest_keel()
+    public void The_depth_checks_use_the_mariners_settings()
     {
+        // Each leg's dangers are judged against that leg's own keel, so the
+        // settings carry only the mariner's depths and the time.
         var settings = new MarinerSettings { SafetyContour = Depth.FromMetres(10), SafetyDepth = Depth.FromMetres(8) };
-        var producer = new RouteCheckFindingProducer(new Mariner(settings));
-        PassageLeg[] legs =
-        [
-            new([new(0, 0), new(0, 0.01)], DraftMeters: 5, SquatMeters: 0.2, RequiredUkcMeters: 1),
-            new([new(0, 0.01), new(0, 0.02)], DraftMeters: 6, SquatMeters: 0.3, RequiredUkcMeters: 0.5),
-        ];
-        RouteFindingRequest Request(bool hasDraft) => new("r", legs, Now, hasDraft, [], null, DepthUnit.Metres, TimeFormat.Utc, Now, [], Now);
+        var route = new Route("r");
+        route.AppendWaypoint(new DataModel.GeoPosition(0, 0));
+        route.AppendWaypoint(new DataModel.GeoPosition(0, 0.01));
+        route.SetPassageValue(RoutePassageField.Draft, 5);
 
-        var withDraft = producer.Options(Request(hasDraft: true)).Depths!;
-        var withoutDraft = producer.Options(Request(hasDraft: false)).Depths!;
+        var input = PassageCheckService.CheckInput.For(route, Now, settings)!;
+        var checkSettings = input.Settings;
 
-        Assert.Equal((10.0, 8.0), (withDraft.SafetyContourMeters, withDraft.SafetyDepthMeters));
-        Assert.Equal(6.8, withDraft.KeelMeters!.Value, 6);
-        Assert.Null(withoutDraft.KeelMeters);
-        Assert.Null(new RouteCheckFindingProducer().Options(Request(hasDraft: true)).Depths);
-        Assert.Equal("Crosses land", producer.Options(Request(hasDraft: false)).Text.CrossesLand);
+        Assert.Equal((10.0, 8.0), (checkSettings.SafetyContour!.Value.TotalMetres, checkSettings.SafetyDepth!.Value.TotalMetres));
+        Assert.True(checkSettings.ChecksDepths);
+        Assert.Equal(Now, checkSettings.At);
+        Assert.False(PassageCheckService.CheckInput.For(route, Now)!.Settings.ChecksDepths);
+        // A change to the mariner's depths is a new input; the legs are the same.
+        var other = PassageCheckService.CheckInput.For(route, Now, settings with { SafetyDepth = Depth.FromMetres(9) })!;
+        Assert.False(input.SameAs(other));
+        Assert.True(input.SameLegs(other));
+        Assert.Equal("Crosses land", new ViewerFindingFormatter(DepthUnit.Metres, TimeFormat.Utc, Now).Title(new RouteFinding("x", RouteFindingCodes.CrossesLand)));
     }
 
     [Fact]
@@ -251,12 +253,15 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
 
         Assert.True(result.TryGetValue(out var value), result.TryGetError(out var e) ? e.Message : "");
         Assert.Equal(s.Route.Id, value!.RouteId);
-        Assert.Equal("3 to review", value.Summary.Text);
-        Assert.Equal(s.RouteChecks.Select(f => (f.Id, f.Code, f.LegIndex)), value.Findings.Select(f => (f.Id, f.Code, f.LegIndex)));
-        for (var i = 0; i < value.Findings.Count; i++)
+        // The route has a draft, so check_route also reports its clearance;
+        // the chart check's findings are the findings list's route checks.
+        var chart = value.Findings.Where(f => f.Category is "chart" or "depth" || f.Code == RouteFindingCodes.OutsideChartCoverage.Value).ToList();
+        Assert.Equal(s.RouteChecks.Count, value.Checks.Single(c => c.Name == "chart").FindingCount);
+        Assert.Equal(s.RouteChecks.Select(f => (f.Id, f.Code.Value, f.LegIndex)), chart.Select(f => (f.Id, f.Code, f.LegIndex)));
+        for (var i = 0; i < chart.Count; i++)
         {
-            Assert.Equal(s.RouteChecks[i].DistanceMeters!.Value / PassageGeodesy.MetersPerNauticalMile, value.Findings[i].DistanceNm!.Value, 3);
-            Assert.Equal(s.RouteChecks[i].Feature!.FeatureId, value.Findings[i].Feature!.FeatureId);
+            Assert.Equal(s.RouteChecks[i].Distance!.Value.TotalMetres / PassageGeodesy.MetersPerNauticalMile, chart[i].DistanceNm!.Value, 3);
+            Assert.Equal(s.RouteChecks[i].Feature!.FeatureId, chart[i].Feature!.FeatureId);
         }
 
         Assert.All(value.Legs, l => Assert.Equal(S421RouteBuilder.CrossTrackLimitMeters, l.PortMeters));

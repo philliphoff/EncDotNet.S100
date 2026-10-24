@@ -198,7 +198,7 @@ public static class LoadedDatasetProjector
             // Legacy S-57 is a different ISO 8211 profile: read it with the S-57
             // reader and translate to the S-101 / S-401 model, exactly as
             // S57DatasetProcessor does. Never open S-57 bytes with S101Dataset.
-            "S-57" => new S101DatasetData(OpenS57(stream), externalTextResolver),
+            "S-57" => OpenS57(stream, externalTextResolver),
             "S-102" => OpenS102(stream),
             "S-104" => OpenS104(stream),
             "S-111" => OpenS111(stream),
@@ -215,7 +215,7 @@ public static class LoadedDatasetProjector
             _ => null,
         };
 
-    private static S101Dataset OpenS57(Stream stream)
+    private static S101DatasetData OpenS57(Stream stream, Func<string, string?>? externalTextResolver)
     {
         // Translate into the product the cell declares (S-101 for a maritime
         // ENC, S-401 for an inland ENC, issue #608), as S57DatasetProcessor
@@ -223,7 +223,12 @@ public static class LoadedDatasetProjector
         // processor it does not fall back to S-101 when S-401 is unavailable.
         var s57 = S57Dataset.Open(stream);
         var translator = S57ToS101Translator.ForTarget(s57.TranslationTarget);
-        return S101Dataset.FromDocument(translator.Translate(s57));
+        // The translation drops the compilation scale, which ranks the cell
+        // against overlapping cells, so the payload carries it.
+        return new S101DatasetData(
+            S101Dataset.FromDocument(translator.Translate(s57)),
+            externalTextResolver,
+            S57Dataset.ResolveCompilationScale(s57.Document));
     }
 
     private static LoadedDatasetData OpenS102(Stream stream)

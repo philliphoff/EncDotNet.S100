@@ -6,6 +6,79 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Route checks: the engines are the checks.** In
+  `EncDotNet.S100.Navigation`, `RouteCheckEngine`, `RouteAreaCheck`,
+  `RouteWarningCheck` and `PassageCheckEngine` are gone (a breaking
+  change): `ChartCheck`, `AreaCheck`, `WarningCheck` and `ClearanceCheck`
+  hold their code. Run one check with `Run` on a `RouteCheckContext`, or
+  all of them with `RouteChecker`. Each check is an `IRouteCheck<TDetail>`
+  whose `RouteCheckOutcome<TDetail>.Detail` is typed: `ChartCheckResult`
+  (was `RouteCheckResult`), `AreaCheckResult` (was `RouteAreaResult`),
+  `WarningCheckResult` (was `RouteWarningResult`) and `ClearanceCheckResult`
+  (was `ClearanceOutcome`). The findings are on the outcome only. The
+  incremental clearance API (`SampleDepths`, `Evaluate`, `SweepDepartures`,
+  `SweepWaterLevelRange` and `PassageDepthProfile`) is internal to
+  `ClearanceCheck`; departure sweeps come from
+  `RouteCheckSettings.DepartureWindow`. The per-check `DefaultHalfWidthMeters`
+  and `Formatter` options are gone; set `RouteCheckOptions.DefaultLimit` and
+  `Formatter` once. Codes and finding ids are unchanged. See
+  [Run one check](../src/EncDotNet.S100.Navigation/README.md#run-one-check).
+- **How a route check works.** A new page,
+  [How a route check works](how-a-route-check-works.md), explains which
+  dataset feeds each check, the time and keel rules, the verdict and each
+  check's status. [Route checks and under-keel clearance](route-checks.md)
+  now lists every finding code, the clearance ones included. The
+  [route check sample](../samples/EncDotNet.S100.Samples.RouteCheck/README.md)
+  checks a passage end to end on synthetic data.
+- **One `check_route` for the whole route check.** The MCP `check_route`
+  tool now runs `RouteChecker` and returns the whole report: the `verdict`
+  (`must_review`, `water_level_ends_before_arrival`, `check` or `clear`,
+  with the finding that names it), each check's status (`checks`), every
+  finding, the clearance ones included, and the under-keel `clearance`.
+  `includeSamples` adds per-leg results and samples, and `includeWindow`
+  (with `windowFrom` and `windowTo`, or the S-104 range) adds the departure
+  sweep. `get_passage_result` is gone (a breaking change): its arguments
+  and result are now `check_route`'s, and `time` is now `departure`.
+  `s100 route check` runs `RouteChecker` itself: its JSON `check` is the
+  `check_route` result and `passage` is gone, and the exit code follows the
+  verdict, so `--fail-on check` also fails on a tight clearance. See
+  [Check a route](mcp-server.md#check-a-route).
+- **Route checks: one plan for every check.** In
+  `EncDotNet.S100.Navigation`, the chart, area, S-124 and clearance checks
+  all take a `PassagePlan` of `PassageLeg`s and a `RouteCheckSettings`.
+  `RouteCheckLeg`, `RouteCheckDepths` and `RouteWarningTiming` are gone.
+  Legs carry `Length`, `Depth` and `Speed` values, and a leg without a draft
+  has none rather than 0. Each leg's dangers are judged against that leg's
+  own draft + squat + required UKC, rather than the deepest keel on the
+  route. Where a leg has no ETA, areas and warnings are judged at the
+  route's departure, and only without one at the view time (SoundCharts)
+  or `time` (MCP).
+- **Route checks: one set of sources.** `CatalogRouteCheckSources` builds a
+  `RouteCheckSources` bundle (charts, depth, water level, areas and
+  warnings) that every check reads, and `RouteCheckSourceCache` keeps one
+  per set of loaded datasets. It replaces `RouteCheckDataSources` and
+  `PassageDataSources`. One depth source serves both the clearance check
+  and the chart check's S-102 test (`SampleBathymetry`). The warning check
+  reads an `IRouteWarningSource`; `RouteWarningList` wraps a list. The
+  source interfaces take `GeoPosition` and `BoundingBox`, and every source,
+  and `ICrsTransform`, is safe to call from several threads at once.
+  SoundCharts, the MCP tools and `s100 route check` each share one cache.
+- **Route checks: structured findings.** Every finding code is in one
+  catalogue, `RouteFindingCodes`, as a `RouteFindingCode` with its
+  category, default group and headline rank; it replaces `RouteCheckCodes`,
+  `RouteAreaCodes` and `RouteWarningCodes`. A finding's `Category` (`Chart`,
+  `Depth`, `Area`, `Warning`, `Clearance`, `Confidence` or `Data`) replaces
+  `Source`, and its typed `Details` (`DangerDetails`, `ShoalDetails`,
+  `AreaDetails`, `WarningDetails`, `ClearanceDetails`) carry the numbers
+  behind it. A `RouteFindingFormatter` renders titles and meta lines in one
+  culture, depth unit and time zone, and replaces `RouteCheckText`,
+  `RouteAreaText` and `RouteWarningText`. `ClearanceFindings.Build` turns a
+  clearance result into findings. `check_route`, `get_findings` and
+  `s100 route check --format json` add `details` to each finding and report its
+  `category` instead of `source`. Codes and ids are unchanged. The expired
+  S-111 forecast notice (`data.s111_forecast_expired`) is gone: currents
+  aren't applied to ETAs (#1033).
+
 - **From a warning to its route finding.** While SoundCharts checks a
   route, the Warning card of a warning that crosses or is near it, in
   **Object Information** or opened from the **Navigational warnings**
@@ -368,7 +441,7 @@ month. For package versions and release assets, see
   checks a SoundCharts route or a polyline and draft, and can sweep departures
   to find a window. See the
   [package README](../src/EncDotNet.S100.Navigation/README.md) and
-  [Check a passage's clearance](mcp-server.md#check-a-passages-clearance).
+  [Under-keel clearance](mcp-server.md#under-keel-clearance).
 - **Raster tiles.** The new `s100 tiles export` command renders a dataset, a
   composite or an exchange set as XYZ Web Mercator tiles for MapLibre,
   Leaflet and OpenLayers, written as a `{z}/{x}/{y}` folder, a PMTiles

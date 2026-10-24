@@ -8,17 +8,16 @@ hosts run the same checks and report the same findings and codes:
 
 - **SoundCharts**: **Check route** in the **Routes** panel. See the
   [SoundCharts README](../src/EncDotNet.S100.Viewer/README.md#check-a-route).
-- **MCP**: the `check_route` and `get_passage_result` tools. See
-  [Check a route against the chart](mcp-server.md#check-a-route-against-the-chart).
+- **MCP**: the `check_route` tool. See
+  [Check a route](mcp-server.md#check-a-route).
 - **The command line**: `s100 route check`, for batch runs and CI. See
   [route check](cli.md#route-check).
 
-In your own code, the checks are in the `EncDotNet.S100.Navigation` package:
-`RouteCheckEngine` (land, depths, dangers and coverage), `RouteAreaCheck`
-(regulated and protected areas), `RouteWarningCheck` (S-124) and
-`PassageCheckEngine` (UKC). `EncDotNet.S100.Datasets.Pipelines` builds their
-inputs from loaded datasets (`RouteCheckDataSources`, `RouteWarningSources`,
-`PassageDataSources`).
+In your own code, `RouteChecker` in the `EncDotNet.S100.Navigation` package
+runs every check on one `PassagePlan` and returns one `RouteCheckReport`, as
+all three hosts do. [How a route check works](how-a-route-check-works.md)
+explains which data each check reads, the time and keel rules, the verdict
+and each check's status.
 
 The results are an aid for exploring the data, not for navigation.
 
@@ -34,14 +33,13 @@ The results are an aid for exploring the data, not for navigation.
   that also drive S-101 portrayal. SoundCharts uses **Mariner Settings**. MCP
   and the command line take them as arguments; the command line defaults to
   30 m, the S-101 portrayal default.
-- **The draft, squat and required UKC**, when the route has a draft. Dangers
-  are then also judged against draft + squat + required UKC. Without a
-  draft, dangers are judged against the safety depth only and there's no UKC
-  check.
-- **The departure and speeds.** Speeds give each point an ETA. Warnings,
-  seasonal areas and S-104 water levels are judged at the ETAs. Where a leg
-  has no speed, they're judged at the departure (in SoundCharts, at the view
-  time when the route has no departure).
+- **The draft, squat and required UKC** of each leg. They set the depth a
+  leg's dangers are judged against, and the UKC check runs when every leg
+  has a draft. See [Keel](how-a-route-check-works.md#keel).
+- **The departure and speeds.** Speeds give each point an ETA, and
+  warnings, seasonal areas and S-104 water levels are judged at the ETAs.
+  See [Time](how-a-route-check-works.md#time) for the time used where there's
+  no ETA.
 
 ## Finding groups
 
@@ -99,8 +97,8 @@ A danger is a `Wreck`, an `Obstruction` or an `UnderwaterAwashRock`:
 - One without a charted depth (above water, covering and uncovering, awash,
   or of unknown depth) always counts.
 - One with a depth (VALSOU) counts when it's shallower than the safety depth,
-  or, with a draft, than draft + squat + required UKC. The meta line names the
-  threshold that fired, the draft one when both do.
+  or, on a leg with a draft, than that leg's draft + squat + required UKC.
+  The meta line names the threshold that fired, the draft one when both do.
 - Only isolated dangers count. A danger inside water already shallower than
   the safety contour is covered by the safety-contour finding there.
 
@@ -179,7 +177,7 @@ arrival, below your UKC setting, incomplete data, meets your settings but
 tight, meets your settings. A departure window sweeps departures across the
 S-104 time range and lists the runs of departures that meet your settings.
 For how samples are spaced and what the result reports, see
-[Check a passage's clearance](mcp-server.md#check-a-passages-clearance).
+[Under-keel clearance](mcp-server.md#under-keel-clearance).
 
 ## Confidence
 
@@ -194,6 +192,23 @@ settings and still be lower confidence. The reasons are:
 SoundCharts draws a lower-confidence stretch in its state's colour, dashed.
 The verdict follows the clearance; the confidence reasons qualify it and
 never replace it.
+
+## Clearance findings
+
+The UKC check turns the stretches behind its verdict and confidence into
+findings:
+
+| Code | Group | When |
+|---|---|---|
+| `clearance.below_setting` | Must review | A stretch where UKC is below the required UKC. |
+| `confidence.charted_depth_from_s101` | Check | A stretch where the charted depth is from S-101 because no S-102 covers it. |
+| `confidence.datum_unconfirmed` | Check | A stretch where a depth or water-level datum isn't declared, so they can't be confirmed to match. |
+| `data.water_level_ends` | Check | The water-level data ends before the vessel reaches a stretch, so the tide isn't applied there. |
+| `data.water_level_starts_late` | Check | The water-level data starts after the vessel passes a stretch. |
+| `data.no_water_level_coverage` | Check | A stretch outside every water-level dataset's coverage. |
+| `data.water_level_no_data` | Check | A stretch inside water-level coverage where the data has no value. |
+| `data.datum_mismatch` | Check | The water level's datum differs from the charted depth's, so it isn't applied. |
+| `data.no_charted_depth` | Check | A stretch with no charted depth from S-102 or S-101. |
 
 ## Received routes and Copy to edit
 

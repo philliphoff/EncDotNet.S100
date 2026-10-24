@@ -50,6 +50,8 @@
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
         </Style>
+        <!-- Each glyph fills a 22 x 18 box and draws on its centre line (y = 9),
+             so it sits level with the row's centred text. -->
         <Style Selector="StackPanel.row">
             <Setter Property="Orientation" Value="Horizontal" />
             <Setter Property="Spacing" Value="8" />
@@ -106,23 +108,23 @@
                 <StackPanel Spacing="2" IsVisible="{Binding HasClearance}"
                             AutomationProperties.AutomationId="Map.RouteCheckLegend.Ukc">
                     <StackPanel Classes="row">
-                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" Stroke="{Binding MeetsBrush}" VerticalAlignment="Center" />
+                        <Line Width="22" Height="18" StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" Stroke="{Binding MeetsBrush}" />
                         <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendMeets}" />
                     </StackPanel>
                     <StackPanel Classes="row">
-                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" Stroke="{Binding TightBrush}" VerticalAlignment="Center" />
+                        <Line Width="22" Height="18" StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" Stroke="{Binding TightBrush}" />
                         <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendTight}" />
                     </StackPanel>
                     <StackPanel Classes="row">
-                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="6" Stroke="{Binding BelowBrush}" VerticalAlignment="Center" />
+                        <Line Width="22" Height="18" StartPoint="0,9" EndPoint="22,9" StrokeThickness="6" Stroke="{Binding BelowBrush}" />
                         <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendBelow}" />
                     </StackPanel>
                     <StackPanel Classes="row">
-                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" StrokeDashArray="1.5,1" Stroke="{Binding MeetsBrush}" VerticalAlignment="Center" />
+                        <Line Width="22" Height="18" StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" StrokeDashArray="1.5,1" Stroke="{Binding MeetsBrush}" />
                         <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendLowConfidence}" />
                     </StackPanel>
                     <StackPanel Classes="row">
-                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" StrokeDashArray="0.375,0.875" Stroke="{Binding NoDataBrush}" VerticalAlignment="Center" />
+                        <Line Width="22" Height="18" StartPoint="0,9" EndPoint="22,9" StrokeThickness="4" StrokeDashArray="0.375,0.875" Stroke="{Binding NoDataBrush}" />
                         <TextBlock Classes="row" Text="{x:Static loc:Strings.Check_LegendNoData}" />
                     </StackPanel>
                     <TextBlock Classes="sectionTitle" Margin="0,6,0,2"
@@ -163,7 +165,7 @@
                         <TextBlock Classes="row" Text="{x:Static loc:Strings.Map_LegendSleeve}" />
                     </StackPanel>
                     <StackPanel Classes="row">
-                        <Line StartPoint="0,9" EndPoint="22,9" StrokeThickness="1.5" StrokeDashArray="1,2" Stroke="{Binding CorridorBrush}" VerticalAlignment="Center" />
+                        <Line Width="22" Height="18" StartPoint="0,9" EndPoint="22,9" StrokeThickness="1.5" StrokeDashArray="1,2" Stroke="{Binding CorridorBrush}" />
                         <TextBlock Classes="row" Text="{x:Static loc:Strings.Map_LegendCorridor}" />
                     </StackPanel>
                     <TextBlock FontSize="10" Margin="0,2,0,0"

@@ -401,3 +401,56 @@ reached through `IAssetSource` would still take the slow default path — the DI
 avoids that. The same DIM caveat as §10 applies: the convenience is reachable
 through the interface (or any concrete type that redeclares it), which is how
 these sources are consumed.
+
+## 12. Public API baselines
+
+A library whose surface is meant to hold still has its public API checked in
+as `src/<AssemblyName>/PublicApi.txt`: every public and protected type and
+member, written as C# declarations by
+[PublicApiGenerator](https://github.com/PublicApiGenerator/PublicApiGenerator).
+A test in the library's test project compares the built assembly with that
+file, so `dotnet test`, and CI with it, fails when the surface changes and
+the file doesn't. A change to the API then shows up in review as a diff of
+one file, next to the code that caused it.
+
+`EncDotNet.S100.Navigation` is the first library with a baseline.
+
+### Updating a baseline
+
+When you change the public API on purpose, rewrite the baseline and commit it
+with the change:
+
+```bash
+S100_UPDATE_API_BASELINE=1 dotnet test tests/EncDotNet.S100.Navigation.Tests
+```
+
+With `S100_UPDATE_API_BASELINE` set to `1`, the baseline test writes the
+current surface instead of failing. Read the diff of `PublicApi.txt` before
+you commit it: an unexpected line there is a type or member you made public
+by accident. The packages are in preview, so a breaking change is allowed;
+the baseline only makes it visible. Say so in the pull request.
+
+### Adding a baseline to another library
+
+1. In the library's test project, set the opt-in property. It references the
+   generator and links the shared helper in `tests/_shared/PublicApiBaseline.cs`:
+
+   ```xml
+   <PropertyGroup>
+     <EnablePublicApiBaseline>true</EnablePublicApiBaseline>
+   </PropertyGroup>
+   ```
+
+2. Add one test that names any public type of the library:
+
+   ```csharp
+   [Fact]
+   public void Public_api_matches_baseline() =>
+       PublicApiBaseline.Verify(typeof(SomeLibraryType).Assembly);
+   ```
+
+3. Run that test project once with `S100_UPDATE_API_BASELINE=1` to write
+   `src/<AssemblyName>/PublicApi.txt`, and review and commit it.
+
+The baseline is taken from the `net10.0` build, the target the tests run on.
+The libraries' `net8.0` build compiles the same sources.
