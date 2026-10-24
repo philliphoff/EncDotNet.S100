@@ -750,9 +750,18 @@ async Task<byte[]> PassageClip(Viewer v)
     await v.Panel("Routes");
     await v.Panel("Timeline");
     await v.Call("set_passage", new() { ["departure"] = scrub[0].ToString("O") });
-    var lats = duwamish.Select(w => w.Lat).ToList();
-    var lons = duwamish.Select(w => w.Lon).ToList();
-    await v.Frame(new Box(lats.Min() - 0.003, lons.Min() - 0.008, lats.Max() + 0.003, lons.Max() + 0.008));
+    // Framed on the stretch that sets the window (the least clearance at the first,
+    // low-water departure) at 1:3 000, so the channel, its depths and the piers
+    // either side read clearly; the rest of the route doesn't change with the tide.
+    var minimum = (await v.Call("check_route", new() { ["departure"] = scrub[0].ToString("O") }))?["clearance"]?["minimum"]
+        ?? throw new SkipShot("no clearance minimum to frame");
+    Console.WriteLine($"  framing the minimum at {minimum["latitude"]}, {minimum["longitude"]} ({minimum["ukcMeters"]} m UKC)");
+    await v.Call("set_viewport", new()
+    {
+        ["centerLat"] = minimum["latitude"]!.GetValue<double>(), ["centerLon"] = minimum["longitude"]!.GetValue<double>(),
+        ["scaleDenominator"] = 3000,
+    });
+    await v.Settle();
 
     var clip = new AgentClipBuilder(transcript: false);
     await clip.Frame(v, 1.5);                                      // the route as planned
