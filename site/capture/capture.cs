@@ -166,11 +166,12 @@ var shots = new List<Shot>
     {
         await v.Reset();
         var cells = new List<string>();
-        foreach (var cell in Grid("US5SEA", "BCDEFG", "HIJK"))
+        foreach (var cell in Grid("US5SEA", "EFG", "KLM"))
             try { cells.AddRange(await data.Enc([cell])); } catch (Exception e) { Console.WriteLine($"  {cell}: {e.Message[..Math.Min(60, e.Message.Length)]}"); }
         await v.OpenAll(cells, tolerateFailures: true);
         foreach (var d in (await v.Call("list_datasets"))?["datasets"]?.AsArray() ?? [])
-            Console.WriteLine($"  DS {d}");
+            Console.WriteLine($"  DS {d!["id"]} {d["bounds"]?.ToJsonString()}");
+        Console.WriteLine($"  COUNT {(await v.Call("count_features", new() { ["query"] = new JsonObject { ["kind"] = "box", ["south"] = 47.50, ["west"] = -122.38, ["north"] = 47.61, ["east"] = -122.30 }.ToJsonString() }))?.ToJsonString()}");
         var query = new JsonObject { ["kind"] = "box", ["south"] = 47.50, ["west"] = -122.38, ["north"] = 47.61, ["east"] = -122.30 };
         foreach (var type in new[] { "DredgedArea", "Fairway", "RecommendedTrack", "NavigationLine", "Bridge", "SpanOpening", "SpanFixed" })
         {
