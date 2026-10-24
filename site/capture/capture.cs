@@ -257,6 +257,18 @@ var shots = new List<Shot>
         return await v.Window();
     }, Themed: true),
 
+    // F13: the Add online catalogue directory, its known catalogues grouped by
+    // region, over a world view. It opens from the empty Library's quick button,
+    // so no data is needed.
+    new("F13", async v =>
+    {
+        await v.Reset();
+        await v.Panel("Library");
+        await v.Frame(new Box(-50, -170, 70, 170));
+        await v.Call("ui_invoke", new() { ["id"] = "Library.Quick.Online" });
+        return await v.Window();
+    }, Themed: true),
+
     // D2: an agent planning and checking a route over MCP. Every call and result
     // in the transcript is real; the frames are window captures after each step,
     // encoded to site/public/clips/D2.{mp4,webm}. The returned PNG is the poster.
