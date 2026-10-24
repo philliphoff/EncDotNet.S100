@@ -161,7 +161,10 @@ var shots = new List<Shot>
     // encoded here from NOAA's tide predictions for Seattle (not a NOAA S-104
     // product; its producer and title say so). Encoded to
     // site/public/clips/D3.{mp4,webm}; returns the poster.
-    new("D3", v => PassageClip(v), TimeZone: "America/Los_Angeles"),
+    // Its 5 m safety contour sits under the dredged channel's least charted depth
+    // (5.7 m), as a planner would set it for a passage that depends on the tide, so
+    // the verdict follows the tide rather than the chart's static depth findings.
+    new("D3", v => PassageClip(v), TimeZone: "America/Los_Angeles", SafetyContour: 5),
 
 
     // F11: the Navigational warnings panel scoped to the checked route, with the
@@ -383,11 +386,12 @@ try
 {
     foreach (var shot in selected)
     {
-        if ((shot.Chrome ?? theme) != Viewer.ChromeTheme || shot.TimeZone != Viewer.TimeZone)
+        if ((shot.Chrome ?? theme) != Viewer.ChromeTheme || shot.TimeZone != Viewer.TimeZone || shot.SafetyContour != Viewer.SafetyContour)
         {
             await viewer.DisposeAsync();
             Viewer.ChromeTheme = shot.Chrome ?? theme;
             Viewer.TimeZone = shot.TimeZone;
+            Viewer.SafetyContour = shot.SafetyContour;
             viewer = await Viewer.StartAsync(viewerExe, keepOpen);
         }
         for (var attempt = 1; ; attempt++)
@@ -695,6 +699,7 @@ async Task<byte[]> PassageClip(Viewer v)
     await v.Call("set_passage", new()
     {
         ["draftMeters"] = 6.0, ["requiredUkcMeters"] = 0.6, ["squatMeters"] = 0.2, ["speedKnots"] = 6.0,
+        ["crossTrackMeters"] = 20.0, // the channel is about 60 m wide
         ["departure"] = tideStart.AddHours(1).ToString("O"),
     });
 
@@ -765,6 +770,8 @@ async Task<byte[]> PassageClip(Viewer v)
     // End in the middle of the window, as a planner would choose.
     var state = await v.Call("set_departure", new() { ["departure"] = (run.First + (run.Last - run.First) / 2).ToString("O") });
     Console.WriteLine($"  final: {state?["verdictTitle"]} · {state?["verdictSubtitle"]}");
+    foreach (var f in (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [])
+        Console.WriteLine($"    {f!["group"]} {f!["code"]} {f!["title"]}");
     var poster = await clip.Frame(v, 3.5);
 
     if (!manifestOnly) await clip.EncodeAsync(Path.Combine(repoRoot, "site", "public", "clips"), "D3");
@@ -803,7 +810,7 @@ record Box(double South, double West, double North, double East);
 // and Night shots use the matching S-100 chrome). Map-only tiles have no chrome.
 // TimeZone: an IANA zone the viewer runs in (it shows times in the machine's
 // zone), for shots of a place far from this machine; null keeps the machine's.
-record Shot(string Id, Func<Viewer, Task<byte[]>> Capture, bool Themed = false, string? Chrome = null, string? TimeZone = null);
+record Shot(string Id, Func<Viewer, Task<byte[]>> Capture, bool Themed = false, string? Chrome = null, string? TimeZone = null, double SafetyContour = 10);
 
 sealed class SkipShot(string message) : Exception(message);
 
@@ -1011,6 +1018,9 @@ sealed class Viewer : IAsyncDisposable
     /// <summary>Whether to use the mariner's four-shade depth zones (default; --two-shades turns them off).</summary>
     public static bool FourShades { get; set; }
 
+    /// <summary>The mariner's safety contour and safety depth (metres) for the next start.</summary>
+    public static double SafetyContour { get; set; } = 10;
+
     /// <summary>The chrome theme for the next start: Dark (default), Light (--theme light), or a shot's own S100Dusk / S100Night.</summary>
     public static string ChromeTheme { get; set; } = "Dark";
 
@@ -1034,7 +1044,7 @@ sealed class Viewer : IAsyncDisposable
               "IsLeftDockOpen": false, "IsRightDockOpen": false, "IsBottomDockOpen": false,
               "EcdisHiddenViewingGroups": { "S-101": "90020,90021", "S-57": "90020,90021" },
               "ShowOutOfScaleExtentIndicators": false,
-              "SafetyContour": 10, "SafetyDepth": 10,
+              "SafetyContour": {{SafetyContour}}, "SafetyDepth": {{SafetyContour}},
               "FourShades": {{FourShades.ToString().ToLowerInvariant()}}
             }
             """);
