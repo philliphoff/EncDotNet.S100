@@ -161,6 +161,30 @@ var shots = new List<Shot>
     // is the tide's). Encoded to site/public/clips/D3.{mp4,webm}; returns the poster.
     new("D3", v => PassageClip(v), TimeZone: "America/New_York"),
 
+    // Temporary probe: the Duwamish charts and channel areas, for picking D3's route.
+    new("PROBE-DUW", async v =>
+    {
+        await v.Reset();
+        var cells = new List<string>();
+        foreach (var cell in Grid("US5SEA", "BCDEFG", "HIJK"))
+            try { cells.AddRange(await data.Enc([cell])); } catch (Exception e) { Console.WriteLine($"  {cell}: {e.Message[..Math.Min(60, e.Message.Length)]}"); }
+        await v.OpenAll(cells, tolerateFailures: true);
+        foreach (var d in (await v.Call("list_datasets"))?["datasets"]?.AsArray() ?? [])
+            Console.WriteLine($"  DS {d}");
+        var query = new JsonObject { ["kind"] = "box", ["south"] = 47.50, ["west"] = -122.38, ["north"] = 47.61, ["east"] = -122.30 };
+        foreach (var type in new[] { "DredgedArea", "Fairway", "RecommendedTrack", "NavigationLine", "Bridge", "SpanOpening", "SpanFixed" })
+        {
+            var hits = (await v.Call("query_features", new() { ["query"] = query.ToJsonString(), ["featureType"] = type, ["pageSize"] = 200 }))?["features"]?.AsArray() ?? [];
+            foreach (var f in hits)
+            {
+                var detail = (await v.Call("describe_feature", new() { ["datasetId"] = f!["datasetId"]!.GetValue<string>(), ["featureId"] = f["featureId"]!.ToString() }))?.ToJsonString() ?? "";
+                Console.WriteLine($"  {type} {f.ToJsonString()[..Math.Min(400, f.ToJsonString().Length)]}");
+                Console.WriteLine($"    {detail[..Math.Min(2500, detail.Length)]}");
+            }
+        }
+        throw new SkipShot("probe only");
+    }),
+
     // F11: the Navigational warnings panel scoped to the checked route, with the
     // dredging warning's card open in Object Information.
     new("F11", async v =>
