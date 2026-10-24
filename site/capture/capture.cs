@@ -154,6 +154,13 @@ var shots = new List<Shot>
     // planner in Charleston would see them.
     new("F10", v => CheckRoute(v, "Day"), Themed: true, TimeZone: "America/New_York"),
 
+    // D3: the same passage with Check route on, then the departure scrubbed across
+    // the S-104 run, so the verdict, the route's colours and the Clearance profile
+    // follow the tide; it ends on the nearest departure that meets the settings.
+    // NOAA ENC and the NOAA S-104 pilot only (no synthetic warnings, so the verdict
+    // is the tide's). Encoded to site/public/clips/D3.{mp4,webm}; returns the poster.
+    new("D3", v => PassageClip(v), TimeZone: "America/New_York"),
+
     // F11: the Navigational warnings panel scoped to the checked route, with the
     // dredging warning's card open in Object Information.
     new("F11", async v =>
@@ -653,6 +660,71 @@ async Task<byte[]> CheckRoute(Viewer v, string palette)
     return await v.Window();
 }
 
+// D3: Check route, then the departure scrubbed across the S-104 window.
+async Task<byte[]> PassageClip(Viewer v)
+{
+    await v.Reset();
+    await v.OpenAll(await data.Enc(charlestonEnc));
+    // Shown, unlike F10, so the water level visibly moves with the ship's ETA.
+    foreach (var id in await v.OpenAll(Directory.GetFiles(Fixture("S104"), "104US004SC1CO*.h5")))
+        await v.Call("set_dataset_state", new() { ["datasetId"] = id, ["visible"] = true });
+    await v.Call("set_test_clock", new() { ["now"] = checkDeparture.ToString("O"), ["freeze"] = true });
+    await v.Call("set_view_time", new() { ["time"] = "now" });
+    await v.Call("create_route", new() { ["name"] = "Fort Sumter Range to Wando" });
+    foreach (var (lat, lon) in fortSumterToWando)
+        await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
+    await v.Call("set_passage", new()
+    {
+        ["draftMeters"] = 14.5, ["requiredUkcMeters"] = 1.0, ["speedKnots"] = 10.0, ["departure"] = checkDeparture.ToString("O"),
+    });
+
+    // Every departure the S-104 covers, from the same sweep as the departure band.
+    var window = (await v.Call("check_route", new() { ["includeWindow"] = true }))?["clearance"]?["window"]
+        ?? throw new InvalidOperationException("no departure window; check the route against the S-104 run");
+    var departures = window["departures"]!.AsArray()
+        .Where(d => d!["verdict"]!.GetValue<string>() != "water_level_ends_before_arrival")
+        .Select(d => (Time: DateTimeOffset.Parse(d!["departure"]!.GetValue<string>()),
+                      Meets: d!["verdict"]!.GetValue<string>().StartsWith("meets_settings", StringComparison.Ordinal)))
+        .ToList();
+    var meeting = departures.Count(d => d.Meets);
+    Console.WriteLine($"  {departures.Count} departures, {meeting} meet the settings");
+    if (meeting == 0 || meeting == departures.Count)
+        throw new SkipShot("the window doesn't both open and close; adjust the draft");
+    const int steps = 60;
+    var scrub = Enumerable.Range(0, steps).Select(i => departures[i * (departures.Count - 1) / (steps - 1)].Time).Distinct().ToList();
+
+    // Routes panel on the left; the bottom dock open on the Timeline, where Check
+    // route adds the Clearance tab, so switching to it doesn't move the map.
+    await v.Panel("Routes");
+    await v.Panel("Timeline");
+    await v.Call("set_passage", new() { ["departure"] = scrub[0].ToString("O") });
+    var lats = fortSumterToWando.Select(w => w.Lat).ToList();
+    var lons = fortSumterToWando.Select(w => w.Lon).ToList();
+    await v.Frame(new Box(lats.Min() - 0.006, lons.Min() - 0.012, lats.Max() + 0.006, lons.Max() + 0.012));
+
+    var clip = new AgentClipBuilder(transcript: false);
+    await clip.Frame(v, 1.5);                                      // the route as planned
+    await v.Call("set_check_mode", new() { ["on"] = true });
+    await v.Panel("Clearance");
+    await v.Call("set_map_legend", new() { ["open"] = false });
+    await v.Call("set_follow_passage", new() { ["on"] = true });  // S-104 on the map at the ship's ETA
+    await clip.Frame(v, 2.0);                                      // checked at the first departure
+    foreach (var departure in scrub)
+    {
+        await v.Call("set_departure", new() { ["departure"] = departure.ToString("O") });
+        await clip.Frame(v, 0.15);
+    }
+
+    // End as the verdict card's "Depart HH:MM" does, on the nearest departure that meets.
+    await v.Call("set_departure", new() { ["departure"] = checkDeparture.ToString("O") });
+    var state = await v.Call("set_departure", new() { ["nearestMeeting"] = true });
+    Console.WriteLine($"  final: {state?["verdictTitle"]} · {state?["verdictSubtitle"]}");
+    var poster = await clip.Frame(v, 3.5);
+
+    if (!manifestOnly) await clip.EncodeAsync(Path.Combine(repoRoot, "site", "public", "clips"), "D3");
+    return poster;
+}
+
 // F11/F12: the warnings panel showing only the route's warnings, and the
 // crossing warning selected so its card (with the route row) opens.
 async Task OpenRouteWarning(Viewer v)
@@ -1147,10 +1219,16 @@ sealed class Viewer : IAsyncDisposable
     }
 }
 
-/// <summary>Builds the D2 clip: a transcript panel beside window captures, encoded with ffmpeg.</summary>
-sealed class AgentClipBuilder
+/// <summary>
+/// Builds a clip from window captures, encoded with ffmpeg: D2's transcript panel
+/// beside the viewer (1920×1080), or with <c>transcript: false</c> the window
+/// alone, full frame (1920×1200, the window's 16:10).
+/// </summary>
+sealed class AgentClipBuilder(bool transcript = true)
 {
-    private const int Width = 1920, Height = 1080, PanelWidth = 560, Margin = 40;
+    private const int Width = 1920, PanelWidth = 560, Margin = 40;
+    private readonly bool _transcript = transcript;
+    private readonly int Height = transcript ? 1080 : 1200;
     private readonly List<(string Kind, string Text, string? Detail)> _entries = [];
     private readonly List<(byte[] Png, double Seconds)> _frames = [];
     private static readonly SKTypeface Sans = SKTypeface.FromFile("/System/Library/Fonts/SFNS.ttf") ?? SKTypeface.Default;
@@ -1168,14 +1246,16 @@ sealed class AgentClipBuilder
         var canvas = surface.Canvas;
         canvas.Clear(new SKColor(0x0b, 0x12, 0x1b));
 
-        // Viewer on the right, scaled to fit.
-        var right = new SKRect(PanelWidth + Margin * 2, Margin, Width - Margin, Height - Margin);
+        // Viewer on the right, scaled to fit (or the whole frame without a transcript).
+        var right = _transcript
+            ? new SKRect(PanelWidth + Margin * 2, Margin, Width - Margin, Height - Margin)
+            : new SKRect(0, 0, Width, Height);
         var scale = Math.Min(right.Width / window.Width, right.Height / window.Height);
         var dest = SKRect.Create(right.Left, right.MidY - window.Height * scale / 2, window.Width * scale, window.Height * scale);
         using (var image = SKImage.FromBitmap(window))
             canvas.DrawImage(image, dest, new SKSamplingOptions(SKCubicResampler.Mitchell));
 
-        DrawTranscript(canvas, new SKRect(Margin, dest.Top, Margin + PanelWidth, dest.Bottom));
+        if (_transcript) DrawTranscript(canvas, new SKRect(Margin, dest.Top, Margin + PanelWidth, dest.Bottom));
 
         using var snapshot = surface.Snapshot();
         var png = snapshot.Encode(SKEncodedImageFormat.Png, 100).ToArray();
