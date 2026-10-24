@@ -1,0 +1,72 @@
+---
+import Shot from './Shot.astro';
+
+const sizes = '(max-width: 900px) 100vw, 690px';
+---
+<section id="library" aria-labelledby="library-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Library</span>
+      <h2 id="library-title">Find data, not files.</h2>
+      <p class="lede">
+        The Library indexes local folders, collection manifests and online catalogues, so everything you can load is in
+        one place. Whatever you load is checked against its product's rules and drawn with the display controls you'd
+        expect from an ECDIS.
+      </p>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Browse</span>
+          <h3>See coverage before you download.</h3>
+          <p>
+            Online catalogues include NOAA's charts, high-resolution bathymetry, and water-level and current forecasts.
+            You can browse coverage on the map before you download anything, and keep it up to date afterwards.
+          </p>
+        </div>
+        <Shot id="F5" alt="The Library panel browsing NOAA S-102 coverage areas" sizes={sizes} />
+      </div>
+
+      <div class="feature flip">
+        <div class="feature-copy">
+          <span class="eyebrow">Catalogues</span>
+          <h3>Charts from around the world.</h3>
+          <p>
+            Add online catalogue lists the sources SoundCharts knows, grouped by region: NOAA's charts, depths, water
+            levels and currents, USACE inland charts, Canada's navigational warnings over SECOM, and inland charts for
+            Europe's rivers from the Danube to the Rhine.
+          </p>
+          <ul>
+            <li>Browse the SECOM registry for more services</li>
+            <li>Paste any catalogue's URL and it's recognised</li>
+          </ul>
+        </div>
+        <Shot
+          id="F13"
+          alt="The Add online catalogue directory, with catalogues grouped by region"
+          title="Add online catalogue"
+          detail="Directory grouped by region · NOAA, USACE, Canada S-124 (SECOM), European inland ENC · SECOM registry"
+          sizes={sizes}
+        />
+      </div>
+    </div>
+
+    <div class="minis">
+      <div class="mini">
+        <Shot id="F8" alt="Validation findings with map markers" title="Validation panel" detail="Findings + map markers" sizes="(max-width: 900px) 100vw, 380px" />
+        <div class="body">
+          <h3>Validation built in</h3>
+          <p>Normative rule packs for every S-100 product. Click a finding to jump to it on the map.</p>
+        </div>
+      </div>
+      <div class="mini">
+        <Shot id="F9" alt="ECDIS display controls" title="ECDIS display controls" detail="Display category, safety contour" sizes="(max-width: 900px) 100vw, 380px" />
+        <div class="body">
+          <h3>ECDIS-style controls</h3>
+          <p>Display categories, viewing groups, safety contour, four-shade depths and simplified symbols.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

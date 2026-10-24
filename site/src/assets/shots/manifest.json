@@ -3068,6 +3068,90 @@
         }
       ]
     },
+    "F13": {
+      "image": "F13.png",
+      "imageCapturedUtc": "2026-10-24T21:18:26.6295938Z",
+      "recordedUtc": "2026-10-24T21:18:26.6727600Z",
+      "imageMatchesRecord": true,
+      "chromeTheme": "Dark",
+      "timeZone": null,
+      "capture": "window (capture_app_screenshot, scale 2)",
+      "datasets": [],
+      "timeline": null,
+      "steps": [
+        {
+          "tool": "reset",
+          "args": {
+            "palette": "Day",
+            "displayCategory": "Standard"
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Library",
+            "visible": true
+          }
+        },
+        {
+          "tool": "set_viewport",
+          "args": {
+            "south": -50,
+            "west": -170,
+            "north": 70,
+            "east": 170
+          }
+        },
+        {
+          "tool": "ui_select",
+          "args": {
+            "ref": "e6"
+          }
+        }
+      ]
+    },
+    "F13.light": {
+      "image": "F13.light.png",
+      "imageCapturedUtc": "2026-10-24T21:18:35.5610574Z",
+      "recordedUtc": "2026-10-24T21:18:35.6001870Z",
+      "imageMatchesRecord": true,
+      "chromeTheme": "Light",
+      "timeZone": null,
+      "capture": "window (capture_app_screenshot, scale 2)",
+      "datasets": [],
+      "timeline": null,
+      "steps": [
+        {
+          "tool": "reset",
+          "args": {
+            "palette": "Day",
+            "displayCategory": "Standard"
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Library",
+            "visible": true
+          }
+        },
+        {
+          "tool": "set_viewport",
+          "args": {
+            "south": -50,
+            "west": -170,
+            "north": 70,
+            "east": 170
+          }
+        },
+        {
+          "tool": "ui_select",
+          "args": {
+            "ref": "e6"
+          }
+        }
+      ]
+    },
     "F1a": {
       "image": "F1a.png",
       "imageCapturedUtc": "2026-10-04T04:37:36.9360638Z",

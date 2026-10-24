@@ -257,6 +257,20 @@ var shots = new List<Shot>
         return await v.Window();
     }, Themed: true),
 
+    // F13: the Add online catalogue directory, its known catalogues grouped by
+    // region, over a world view, with EuRIS (Europe's inland waterways) selected
+    // so the European catalogues show. It opens from the empty Library's quick
+    // button, so no data is needed.
+    new("F13", async v =>
+    {
+        await v.Reset();
+        await v.Panel("Library");
+        await v.Frame(new Box(-50, -170, 70, 170));
+        await v.Call("ui_invoke", new() { ["id"] = "Library.Quick.Online" });
+        await v.Call("ui_select", new() { ["ref"] = await CatalogueRow(v, "EuRIS") });
+        return await v.Window();
+    }, Themed: true),
+
     // D2: an agent planning and checking a route over MCP. Every call and result
     // in the transcript is real; the frames are window captures after each step,
     // encoded to site/public/clips/D2.{mp4,webm}. The returned PNG is the poster.
@@ -676,6 +690,23 @@ async Task OpenRouteWarning(Viewer v)
 
 static IEnumerable<string> Grid(string prefix, string rows, string cols) =>
     from r in rows from c in cols select $"{prefix}{r}{c}";
+
+// The ref of the catalogue directory's row whose name contains <name>. The list
+// is virtualised, so it scrolls down until the row has been realised.
+async Task<string> CatalogueRow(Viewer v, string name)
+{
+    for (var offset = 0; offset <= 5000; offset += 200)
+    {
+        var list = (await v.Call("ui_tree", new() { ["root"] = "Catalogues.List", ["depth"] = 2 }))!["roots"]![0]!["element"]!;
+        var rows = list["children"]?.AsArray() ?? [];
+        if (rows.FirstOrDefault(r => r?["role"]?.GetValue<string>() == "listItem"
+                && r["name"]?.GetValue<string>().Contains(name, StringComparison.Ordinal) == true) is { } row)
+            return row["ref"]!.GetValue<string>();
+        var scrollBar = rows.First(r => r?["role"]?.GetValue<string>() == "scrollBar")!["ref"]!.GetValue<string>();
+        await v.Call("ui_set_value", new() { ["ref"] = scrollBar, ["value"] = (offset + 200).ToString(System.Globalization.CultureInfo.InvariantCulture) });
+    }
+    throw new InvalidOperationException($"no catalogue row named like {name}");
+}
 
 // ── Types ──────────────────────────────────────────────────────────────
 record Box(double South, double West, double North, double East);

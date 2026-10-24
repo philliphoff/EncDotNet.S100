@@ -268,6 +268,14 @@ as a desktop app.
   Warning card, from its top (bounds from `ui_tree`, which line up with the
   capture), so the header, the route row and the classification all show.
 
+### F13 · Catalogues from around the world (Library section)
+- **State:** a world view with the Library panel open and empty, and the **Add
+  online catalogue** directory opened from its quick button: the known
+  catalogues grouped by region (NOAA, USACE, Canada's S-124 over SECOM, the
+  European inland ENC catalogues), the SECOM registry button and Add a
+  catalogue by URL. No data is downloaded.
+- **Light twin:** yes (`--theme light`).
+
 ---
 
 ## D: Developer section
