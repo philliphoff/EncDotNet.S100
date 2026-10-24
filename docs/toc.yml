@@ -2,21 +2,25 @@
   href: index.md
 - name: Getting started
   href: getting-started.md
-- name: Developer guides
+- name: What's new
+  href: whats-new.md
+- name: Working with data
   items:
     - name: Loading datasets
       href: loading-datasets.md
-    - name: Reading protected exchange sets
-      href: protected-exchange-sets.md
     - name: Reading product data
       href: reading-product-data.md
+    - name: Reading protected exchange sets
+      href: protected-exchange-sets.md
     - name: Custom catalogues and validation
       href: catalogues-and-validation.md
-    - name: S-100 feed format
-      href: s100-feed-format.md
-    - name: Local collection manifests
-      href: local-collection-manifest.md
-- name: Scenario guides
+    - name: Bringing S-57 into the pipeline
+      href: s57-to-s101.md
+    - name: Route checks and under-keel clearance
+      href: route-checks.md
+    - name: How a route check works
+      href: how-a-route-check-works.md
+- name: Tasks
   items:
     - name: Render S-102 to PNG
       href: scenarios/render-s102-to-png.md
@@ -24,30 +28,28 @@
       href: scenarios/inspect-s124-warnings.md
     - name: Compose S-101 and S-102
       href: scenarios/compose-s101-s102.md
-- name: Top APIs
-  href: top-apis.md
-- name: Typed data models
-  href: typed-data-models.md
-- name: Observability
-  href: observability.md
-- name: C# coding style
-  href: coding-style.md
-- name: Test scenario generator
-  href: scenario-generator.md
-- name: Documentation style
-  href: docs-style.md
-- name: MCP server
-  href: mcp-server.md
-- name: Route checks and under-keel clearance
-  href: route-checks.md
-- name: How a route check works
-  href: how-a-route-check-works.md
-- name: What's new
-  href: whats-new.md
-- name: Command-line rendering
-  href: cli.md
-- name: Bringing S-57 into the pipeline
-  href: s57-to-s101.md
+- name: Rendering and integration
+  items:
+    - name: Add S-100 data to a Mapsui app
+      href: mapsui-app.md
+    - name: Render images and map tiles
+      href: embedding-the-renderer.md
+    - name: Observability
+      href: observability.md
+    - name: MCP server
+      href: mcp-server.md
+- name: Reference
+  items:
+    - name: Top APIs
+      href: top-apis.md
+    - name: Typed data models
+      href: typed-data-models.md
+    - name: Command-line rendering
+      href: cli.md
+    - name: S-100 feed format
+      href: s100-feed-format.md
+    - name: Local collection manifests
+      href: local-collection-manifest.md
 - name: S-57 and ISO 8211 (EncDotNet)
   items:
     - name: Overview
@@ -66,25 +68,29 @@
       href: ../external/EncDotNet/docs/glossary.md
     - name: Versioning and compatibility
       href: ../external/EncDotNet/docs/versioning.md
-- name: Add S-100 data to a Mapsui app
-  href: mapsui-app.md
-- name: Render images and map tiles
-  href: embedding-the-renderer.md
-- name: Design notes
+- name: Contributing
   items:
-    - name: Dynamic feature sources
-      href: design/dynamic-feature-source.md
-    - name: Own-ship vessel symbology
-      href: design/own-ship-symbology.md
-    - name: AIS dynamic feature source
-      href: design/ais-source.md
-    - name: Dynamic source pick
-      href: design/dynamic-source-pick.md
-    - name: AIS zoom-gated subscription
-      href: design/ais-zoom-gated-subscription.md
-    - name: S-98 interoperability
-      href: design/s98-interoperability.md
-    - name: Rendering-backend contract
-      href: design/rendering-backend-contract.md
-    - name: Dataset collections
-      href: design/dataset-collections.md
+    - name: C# coding style
+      href: coding-style.md
+    - name: Documentation style
+      href: docs-style.md
+    - name: Test scenario generator
+      href: scenario-generator.md
+    - name: Design notes
+      items:
+        - name: Dynamic feature sources
+          href: design/dynamic-feature-source.md
+        - name: Own-ship vessel symbology
+          href: design/own-ship-symbology.md
+        - name: AIS dynamic feature source
+          href: design/ais-source.md
+        - name: Dynamic source pick
+          href: design/dynamic-source-pick.md
+        - name: AIS zoom-gated subscription
+          href: design/ais-zoom-gated-subscription.md
+        - name: S-98 interoperability
+          href: design/s98-interoperability.md
+        - name: Rendering-backend contract
+          href: design/rendering-backend-contract.md
+        - name: Dataset collections
+          href: design/dataset-collections.md
