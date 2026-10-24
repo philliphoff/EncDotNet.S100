@@ -66,9 +66,7 @@ public sealed class ApproachWithTideWindowTests(ApproachWithTideWindowFixture fi
     [Fact]
     public void The_departure_windows_are_exactly_where_every_sample_has_water()
     {
-        var (engine, legs) = Engine();
-        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
-        var sweep = engine.SweepDepartures(profile, legs, SweepFrom, SweepTo, Step, TestContext.Current.CancellationToken);
+        var sweep = Sweep();
         var expected = ExpectedMeets();
 
         Assert.Equal(expected.Count, sweep.Options.Count);
@@ -88,9 +86,7 @@ public sealed class ApproachWithTideWindowTests(ApproachWithTideWindowFixture fi
     [Fact]
     public void The_shoal_crest_bounds_every_window()
     {
-        var (engine, legs) = Engine();
-        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
-        var sweep = engine.SweepDepartures(profile, legs, SweepFrom, SweepTo, Step, TestContext.Current.CancellationToken);
+        var sweep = Sweep();
         var crest = Definition.Place("shoal-crest");
 
         foreach (var (first, last) in sweep.Windows())
@@ -107,9 +103,7 @@ public sealed class ApproachWithTideWindowTests(ApproachWithTideWindowFixture fi
     [Fact]
     public void The_windows_agree_with_the_continuous_tide_within_a_step()
     {
-        var (engine, legs) = Engine();
-        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
-        var sweep = engine.SweepDepartures(profile, legs, SweepFrom, SweepTo, Step, TestContext.Current.CancellationToken);
+        var sweep = Sweep();
         var crestSample = Check(SweepFrom).Samples.MinBy(s => s.Depth!.DepthMeters)!;
         var offset = crestSample.Time - SweepFrom;
         var station = Definition.World.Tide.Stations.Single(s => s.Identifier == "SYN-W");
@@ -127,17 +121,19 @@ public sealed class ApproachWithTideWindowTests(ApproachWithTideWindowFixture fi
 
     private const double WorldFrameMetres = World.WorldFrame.MetresPerDegreeLatitude;
 
-    private (PassageCheckEngine Engine, IReadOnlyList<PassageLeg> Legs) Engine()
+    private RouteCheckSources Sources() =>
+        CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new Crs.ProjNet.ProjNetCrsTransformFactory());
+
+    // The sweep from SweepFrom to SweepTo every Step, through the settings' departure window.
+    private DepartureSweep Sweep()
     {
-        var sources = CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new Crs.ProjNet.ProjNetCrsTransformFactory());
-        return (new PassageCheckEngine(sources.Depth!, sources.WaterLevel!), ScenarioPassage.Legs(_catalog, RouteSpec));
+        var settings = new RouteCheckSettings { At = SweepFrom, DepartureWindow = DepartureRange.Between(SweepFrom, SweepTo, Step) };
+        var outcome = ScenarioChecks.Run(new ClearanceCheck(), Sources(), new PassagePlan(ScenarioPassage.Legs(_catalog, RouteSpec), SweepFrom), settings);
+        return outcome.Detail!.Departures!;
     }
 
-    private PassageCheckResult Check(DateTimeOffset departure)
-    {
-        var (engine, legs) = Engine();
-        return engine.Check(new PassagePlan(legs, departure), PassageLegs.Settings(departure), TestContext.Current.CancellationToken);
-    }
+    private PassageCheckResult Check(DateTimeOffset departure) =>
+        ScenarioChecks.Clearance(Sources(), new PassagePlan(ScenarioPassage.Legs(_catalog, RouteSpec), departure), PassageLegs.Settings(departure));
 
     /// <summary>
     /// Whether each departure meets the settings, from the samples' S-102

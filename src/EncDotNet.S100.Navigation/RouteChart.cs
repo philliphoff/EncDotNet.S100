@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Navigation;
 /// <summary>
 /// What a charted feature means to the route check. Restricted and protected
 /// areas (#956) and S-124 warnings (#957) have their own checks
-/// (<see cref="RouteAreaCheck"/>, <see cref="RouteWarningCheck"/>).
+/// (<see cref="AreaCheck"/>, <see cref="WarningCheck"/>).
 /// </summary>
 public enum RouteChartFeatureKind
 {
@@ -116,7 +116,7 @@ public sealed record RouteChartFeature(
 }
 
 /// <summary>
-/// Supplies the charted features a <see cref="RouteCheckEngine"/> checks a
+/// Supplies the charted features a <see cref="ChartCheck"/> checks a
 /// route against. <c>EncDotNet.S100.Datasets.Pipelines</c> implements it over
 /// loaded S-101 cells (<c>CatalogRouteCheckSources</c>).
 /// </summary>
@@ -131,7 +131,7 @@ public interface IRouteChartSource
     /// <summary>
     /// The features of the kinds in <see cref="RouteChartFeatureKind"/> whose
     /// geometry truly intersects a leg's corridor, from every cell. The
-    /// engine applies the finest-cell rule itself, so a source returns the
+    /// check applies the finest-cell rule itself, so a source returns the
     /// features of every overlapping cell.
     /// </summary>
     /// <param name="corridor">The corridor's closed ring, in WGS-84.</param>

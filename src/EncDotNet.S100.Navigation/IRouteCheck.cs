@@ -28,6 +28,22 @@ public interface IRouteCheck
     RouteCheckOutcome Run(RouteCheckContext context, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// A check whose outcome carries its own typed result, such as
+/// <see cref="ChartCheck"/> with its <see cref="ChartCheckResult"/>, so a
+/// caller that runs it directly reads the result without a cast.
+/// </summary>
+/// <typeparam name="TDetail">The check's own result.</typeparam>
+public interface IRouteCheck<TDetail> : IRouteCheck
+    where TDetail : class
+{
+    /// <summary>Runs the check.</summary>
+    /// <param name="context">The plan, settings, sources and shared track.</param>
+    /// <param name="cancellationToken">Cancels the check.</param>
+    /// <returns>The findings and the check's own result, or why the check was skipped.</returns>
+    new RouteCheckOutcome<TDetail> Run(RouteCheckContext context, CancellationToken cancellationToken);
+}
+
 /// <summary>Whether a check ran.</summary>
 public enum RouteCheckState
 {
@@ -73,9 +89,12 @@ public static class RouteCheckReasons
 }
 
 /// <summary>What one check found, or why it didn't run.</summary>
-public sealed class RouteCheckOutcome
+/// <remarks>
+/// A check with a typed result returns a <see cref="RouteCheckOutcome{TDetail}"/>.
+/// </remarks>
+public class RouteCheckOutcome
 {
-    private RouteCheckOutcome(RouteCheckState state, string? reason, IReadOnlyList<RouteFinding> findings, object? detail)
+    private protected RouteCheckOutcome(RouteCheckState state, string? reason, IReadOnlyList<RouteFinding> findings, object? detail)
     {
         State = state;
         Reason = reason;
@@ -93,8 +112,9 @@ public sealed class RouteCheckOutcome
     public IReadOnlyList<RouteFinding> Findings { get; }
 
     /// <summary>
-    /// The check's own result, such as a <see cref="RouteCheckResult"/> for
-    /// the chart check, or <c>null</c>.
+    /// The check's own result, such as a <see cref="ChartCheckResult"/> for
+    /// the chart check, or <c>null</c>. <see cref="RouteCheckOutcome{TDetail}.Detail"/>
+    /// gives it typed.
     /// </summary>
     public object? Detail { get; }
 
@@ -124,6 +144,54 @@ public sealed class RouteCheckOutcome
     /// <param name="reason">Why, such as <see cref="RouteCheckReasons.DraftMissing"/>.</param>
     /// <returns>The outcome.</returns>
     public static RouteCheckOutcome Skipped(string reason)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(reason);
+        return new(RouteCheckState.Skipped, reason, [], null);
+    }
+}
+
+/// <summary>What one check found, with its own typed result, or why it didn't run.</summary>
+/// <typeparam name="TDetail">The check's own result, such as <see cref="ChartCheckResult"/>.</typeparam>
+public sealed class RouteCheckOutcome<TDetail> : RouteCheckOutcome
+    where TDetail : class
+{
+    private RouteCheckOutcome(RouteCheckState state, string? reason, IReadOnlyList<RouteFinding> findings, TDetail? detail)
+        : base(state, reason, findings, detail)
+    {
+        Detail = detail;
+    }
+
+    /// <summary>The check's own result; <c>null</c> only when the check was skipped.</summary>
+    public new TDetail? Detail { get; }
+
+    /// <summary>A check that ran in full.</summary>
+    /// <param name="findings">The findings.</param>
+    /// <param name="detail">The check's own result.</param>
+    /// <returns>The outcome.</returns>
+    public static RouteCheckOutcome<TDetail> Ran(IReadOnlyList<RouteFinding> findings, TDetail detail)
+    {
+        ArgumentNullException.ThrowIfNull(findings);
+        ArgumentNullException.ThrowIfNull(detail);
+        return new(RouteCheckState.Ran, null, findings, detail);
+    }
+
+    /// <summary>A check that ran, but part of it couldn't.</summary>
+    /// <param name="reason">Why part of it didn't run.</param>
+    /// <param name="findings">The findings of the part that ran.</param>
+    /// <param name="detail">The check's own result for the part that ran.</param>
+    /// <returns>The outcome.</returns>
+    public static RouteCheckOutcome<TDetail> Partial(string reason, IReadOnlyList<RouteFinding> findings, TDetail detail)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(reason);
+        ArgumentNullException.ThrowIfNull(findings);
+        ArgumentNullException.ThrowIfNull(detail);
+        return new(RouteCheckState.Partial, reason, findings, detail);
+    }
+
+    /// <summary>A check that didn't run.</summary>
+    /// <param name="reason">Why, such as <see cref="RouteCheckReasons.DraftMissing"/>.</param>
+    /// <returns>The outcome.</returns>
+    public static new RouteCheckOutcome<TDetail> Skipped(string reason)
     {
         ArgumentException.ThrowIfNullOrEmpty(reason);
         return new(RouteCheckState.Skipped, reason, [], null);

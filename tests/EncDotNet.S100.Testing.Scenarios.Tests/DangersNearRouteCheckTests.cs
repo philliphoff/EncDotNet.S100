@@ -9,7 +9,7 @@ namespace EncDotNet.S100.Testing.Scenarios.Tests;
 /// <summary>
 /// "Dangers near route" end to end (#955): generated S-101 cells with point
 /// dangers and an S-102 surface, read by the real readers into the
-/// route-check adapter and <see cref="RouteCheckEngine"/>, give the dangers
+/// route-check adapter and <see cref="ChartCheck"/>, give the dangers
 /// and shoals the world model predicts (<see cref="RouteHazards"/>).
 /// </summary>
 public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) : IClassFixture<DangersNearRouteFixture>
@@ -183,10 +183,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
         var sources = only.Length == 0
             ? _sources
             : CatalogRouteCheckSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)), new ProjNetCrsTransformFactory());
-        var options = new ChartCheckOptions
-        {
-        };
-        return new RouteCheckEngine(sources.Charts!, options, sources.Depth).Check(new PassagePlan(Legs(withDraft)), PassageLegs.Settings(new DateTimeOffset(Spec.Departure, TimeSpan.Zero), Contour, safetyDepth), TestContext.Current.CancellationToken).Findings;
+        return ScenarioChecks.Chart(sources, new PassagePlan(Legs(withDraft)), PassageLegs.Settings(new DateTimeOffset(Spec.Departure, TimeSpan.Zero), Contour, safetyDepth)).Findings;
     }
 
     private List<PassageLeg> Legs(bool withDraft)

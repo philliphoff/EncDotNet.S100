@@ -6,7 +6,7 @@ using EncDotNet.S100.Testing.Scenarios.Writers;
 namespace EncDotNet.S100.Testing.Scenarios.Tests;
 
 /// <summary>
-/// "Warnings on route" through <see cref="RouteWarningCheck"/> (#957): the
+/// "Warnings on route" through <see cref="WarningCheck"/> (#957): the
 /// S-124 files, read by the real readers into the route-warning adapter,
 /// give the answer <see cref="RouteWarnings.For"/> predicts, in both editions.
 /// </summary>
@@ -130,11 +130,10 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
         // A plan without a departure or speeds is judged at the settings' time.
         var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l.WithSpeed(null)).ToList();
         var viewTime = new DateTimeOffset(2026, 3, 1, 13, 0, 0, TimeSpan.Zero);
-        var result = new RouteWarningCheck(OracleOptions).Check(
+        var result = Run(
             Plan(legs, departure: null),
             PassageLegs.Settings(viewTime),
-            RouteWarningSources.FromDatasets(_catalog.Datasets),
-            TestContext.Current.CancellationToken);
+            OracleOptions);
 
         var cable = Match(result, 2).Finding!;
         Assert.Equal(RouteFindingGroup.MustReview, cable.Group);
@@ -148,33 +147,36 @@ public abstract class WarningsOnRouteCheckTests(GeneratedScenarioFixture fixture
         // With a departure, legs without a speed are judged at it, not at the settings' time.
         var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l.WithSpeed(null)).ToList();
         var departure = Departure(Route.Departure);
-        var result = new RouteWarningCheck(OracleOptions).Check(
+        var result = Run(
             Plan(legs, departure),
             PassageLegs.Settings(new DateTimeOffset(2026, 3, 1, 13, 0, 0, TimeSpan.Zero)),
-            RouteWarningSources.FromDatasets(_catalog.Datasets),
-            TestContext.Current.CancellationToken);
+            OracleOptions);
 
         var cable = Match(result, 2).Finding!;
         Assert.False(((WarningDetails)cable.Details!).AtEta);
         Assert.Equal(departure, ((WarningDetails)cable.Details!).From);
     }
 
-    private RouteWarningResult Check(IReadOnlyList<PassageLeg> legs, DateTime departure, RouteWarningOptions? options) =>
-        new RouteWarningCheck(options).Check(
-            Plan(legs, Departure(departure)),
-            PassageLegs.Settings(Departure(departure)),
-            RouteWarningSources.FromDatasets(_catalog.Datasets),
-            TestContext.Current.CancellationToken);
+    private RouteCheckOutcome<WarningCheckResult> Check(IReadOnlyList<PassageLeg> legs, DateTime departure, RouteWarningOptions? options) =>
+        Run(Plan(legs, Departure(departure)), PassageLegs.Settings(Departure(departure)), options);
+
+    // Every warning of the scenario, so those off the route get a match too.
+    private RouteCheckOutcome<WarningCheckResult> Run(PassagePlan plan, RouteCheckSettings settings, RouteWarningOptions? options) =>
+        ScenarioChecks.Warnings(
+            new RouteCheckSources { Warnings = new EveryWarning(RouteWarningSources.FromDatasets(_catalog.Datasets)) },
+            plan,
+            settings,
+            new RouteCheckOptions { Warnings = options ?? RouteWarningOptions.Default });
 
     private static PassagePlan Plan(IReadOnlyList<PassageLeg> legs, DateTimeOffset? departure) =>
         new(legs.Select(l => l.WithHalfWidth(S421RouteBuilder.CrossTrackLimitMeters)).ToList(), departure);
 
     private static DateTimeOffset Departure(DateTime utc) => new(utc, TimeSpan.Zero);
 
-    private static RouteWarningMatch Match(RouteWarningResult result, int number) =>
-        Assert.Single(result.Matches, m => m.Warning.Info.Reference?.Number == number);
+    private static RouteWarningMatch Match(RouteCheckOutcome<WarningCheckResult> result, int number) =>
+        Assert.Single(result.Detail!.Matches, m => m.Warning.Info.Reference?.Number == number);
 
-    private static (RouteFindingCode? Code, RouteFindingGroup Group) Kind(RouteWarningResult result, int number) =>
+    private static (RouteFindingCode? Code, RouteFindingGroup Group) Kind(RouteCheckOutcome<WarningCheckResult> result, int number) =>
         Match(result, number).Finding is { } f ? (f.Code, f.Group) : (null, RouteFindingGroup.Info);
 
     private static WarningRouteRelation Relation(RouteWarningRelation relation) => relation switch

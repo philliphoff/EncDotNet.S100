@@ -6,11 +6,11 @@ using EncDotNet.S100.Quantities;
 namespace EncDotNet.S100.Navigation.Tests;
 
 /// <summary>
-/// The route-check engine on synthetic squares near the equator: one leg due
+/// The chart check on synthetic squares near the equator: one leg due
 /// east from 0° to 0,01° E (about 1 112 m), where 1° of longitude is
 /// <see cref="PassageGeodesy.MetersPerDegreeLatitude"/> metres.
 /// </summary>
-public class RouteCheckEngineTests
+public class ChartCheckTests
 {
     private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
 
@@ -18,8 +18,8 @@ public class RouteCheckEngineTests
 
     private static readonly FakeCell Harbour = new("101HARBOUR", 22_000);
 
-    private static RouteCheckResult Check(FakeCharts charts, params PassageLeg[] legs) =>
-        new RouteCheckEngine(charts).Check(new PassagePlan(legs.Length == 0 ? [East] : legs), Fixture.Settings(), TestContext.Current.CancellationToken);
+    private static RouteCheckOutcome<ChartCheckResult> Check(FakeCharts charts, params PassageLeg[] legs) =>
+        Checks.Chart(charts, new PassagePlan(legs.Length == 0 ? [East] : legs), Fixture.Settings());
 
     [Fact]
     public void Crossing_land_is_found_exactly_and_must_be_reviewed()
@@ -80,10 +80,10 @@ public class RouteCheckEngineTests
         var result = Check(new FakeCharts([Harbour], [land]));
 
         Assert.Empty(result.Findings);
-        var corridor = Assert.Single(result.Corridors);
+        var corridor = Assert.Single(result.Detail!.Corridors);
         Assert.Equal(50, corridor.PortHalfWidthMeters);
         Assert.Equal(50, corridor.StarboardHalfWidthMeters);
-        Assert.Equal(0.01 * M, result.LengthMeters, 3);
+        Assert.Equal(0.01 * M, result.Detail!.LengthMeters, 3);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class RouteCheckEngineTests
         var result = Check(new FakeCharts([Harbour], [land]), Fixture.Leg(East.Points, port: port, starboard: starboard));
 
         Assert.Equal(found, result.Findings.Any(f => f.Code == RouteFindingCodes.LandInCorridor));
-        Assert.Equal(port, result.Corridors[0].PortHalfWidthMeters);
+        Assert.Equal(port, result.Detail!.Corridors[0].PortHalfWidthMeters);
     }
 
     [Fact]
@@ -120,13 +120,13 @@ public class RouteCheckEngineTests
     {
         // Land 40 m to port, beside a leg whose own port limit (30 m) misses it.
         var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005, south: 40 / M, north: 0.002);
-        var result = new RouteCheckEngine(new FakeCharts([Harbour], [land])).Check(
+        var result = Checks.Chart(
+            new FakeCharts([Harbour], [land]),
             new PassagePlan([Fixture.Leg(East.Points, port: 30, starboard: 30)]),
-            new RouteCheckSettings { At = Fixture.Departure, CorridorOverride = Length.FromMetres(45) },
-            TestContext.Current.CancellationToken);
+            new RouteCheckSettings { At = Fixture.Departure, CorridorOverride = Length.FromMetres(45) });
 
         Assert.Contains(result.Findings, f => f.Code == RouteFindingCodes.LandInCorridor);
-        Assert.Equal((45, 45), (result.Corridors[0].PortHalfWidthMeters, result.Corridors[0].StarboardHalfWidthMeters));
+        Assert.Equal((45, 45), (result.Detail!.Corridors[0].PortHalfWidthMeters, result.Detail!.Corridors[0].StarboardHalfWidthMeters));
     }
 
     [Fact]
@@ -255,9 +255,9 @@ public class RouteCheckEngineTests
     public void Wording_can_be_replaced()
     {
         var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005);
-        var options = new ChartCheckOptions { Formatter = new FrenchFormatter() };
+        var options = new RouteCheckOptions { Formatter = new FrenchFormatter() };
 
-        var finding = Assert.Single(new RouteCheckEngine(new FakeCharts([Harbour], [land]), options).Check(new PassagePlan([East]), Fixture.Settings(), TestContext.Current.CancellationToken).Findings);
+        var finding = Assert.Single(Checks.Chart(new FakeCharts([Harbour], [land]), new PassagePlan([East]), Fixture.Settings(), options: options).Findings);
 
         Assert.Equal("Traverse la terre", finding.Title);
         Assert.StartsWith("Segment 1–2 / ", finding.Meta, StringComparison.Ordinal);
@@ -270,14 +270,66 @@ public class RouteCheckEngineTests
         cts.Cancel();
 
         Assert.ThrowsAny<OperationCanceledException>(() =>
-            new RouteCheckEngine(new FakeCharts([Harbour], [])).Check(new PassagePlan([East]), Fixture.Settings(), cts.Token));
+            Checks.Chart(new FakeCharts([Harbour], []), new PassagePlan([East]), Fixture.Settings(), cancellationToken: cts.Token));
     }
 
     [Fact]
     public void A_leg_needs_two_points()
     {
         Assert.Throws<ArgumentException>(() =>
-            new RouteCheckEngine(new FakeCharts([], [])).Check(new PassagePlan([Fixture.Leg([new GeoPosition(0, 0)])]), Fixture.Settings(), TestContext.Current.CancellationToken));
+            Checks.Chart(new FakeCharts([], []), new PassagePlan([Fixture.Leg([new GeoPosition(0, 0)])]), Fixture.Settings()));
+    }
+
+    [Fact]
+    public void Without_charts_the_check_is_skipped()
+    {
+        var outcome = Checks.Run(new ChartCheck(), new PassagePlan([East]), Fixture.Settings(), RouteCheckSources.Empty);
+
+        Assert.Equal((RouteCheckState.Skipped, RouteCheckReasons.ChartsMissing), (outcome.State, outcome.Reason));
+        Assert.Empty(outcome.Findings);
+        Assert.Null(outcome.Detail);
+    }
+
+    [Fact]
+    public void The_untyped_run_gives_the_same_outcome_as_the_typed_one()
+    {
+        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005);
+        var context = new RouteCheckContext(new PassagePlan([East]), Fixture.Settings(), new RouteCheckSources { Charts = new FakeCharts([Harbour], [land]) });
+        IRouteCheck check = new ChartCheck();
+
+        var outcome = check.Run(context, TestContext.Current.CancellationToken);
+
+        var typed = Assert.IsType<RouteCheckOutcome<ChartCheckResult>>(outcome);
+        Assert.Same(typed.Detail, outcome.Detail);
+        Assert.Equal(RouteFindingCodes.CrossesLand, Assert.Single(outcome.Findings).Code);
+    }
+
+    [Fact]
+    public void The_last_sweep_is_kept_while_only_the_time_changes()
+    {
+        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005);
+        var charts = new CountingCharts(new FakeCharts([Harbour], [land]));
+        var sources = new RouteCheckSources { Charts = charts };
+        var check = new ChartCheck();
+
+        var first = Checks.Run(check, new PassagePlan([East], Fixture.Departure), Fixture.Settings(), sources);
+        var later = Checks.Run(check, new PassagePlan([East], Fixture.Departure.AddHours(2)), Fixture.Settings(Fixture.Departure.AddHours(2)), sources);
+        Assert.Equal(1, charts.Calls);
+        Assert.Same(first.Detail, later.Detail);
+
+        // Other options or a wider default limit sweep again.
+        Checks.Run(check, new PassagePlan([East]), Fixture.Settings(), sources, new RouteCheckOptions { Chart = new ChartCheckOptions { StationSpacingMeters = 5 } });
+        Checks.Run(check, new PassagePlan([East]), Fixture.Settings(), sources, new RouteCheckOptions { DefaultLimit = Length.FromMetres(80) });
+        Assert.Equal(3, charts.Calls);
+    }
+
+    [Fact]
+    public void Options_that_cant_sweep_are_refused()
+    {
+        var options = new RouteCheckOptions { Chart = new ChartCheckOptions { StationSpacingMeters = 0 } };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Checks.Chart(new FakeCharts([Harbour], []), new PassagePlan([East]), Fixture.Settings(), options: options));
     }
 
     [Theory]
@@ -312,7 +364,7 @@ internal sealed class FakeCell(string datasetId, int? rankingScale, Func<GeoPosi
     public override bool Covers(GeoPosition position) => covers?.Invoke(position) ?? true;
 }
 
-/// <summary>Charted features that are all "near" any corridor; the engine sorts them out.</summary>
+/// <summary>Charted features that are all "near" any corridor; the check sorts them out.</summary>
 internal sealed class FakeCharts(IReadOnlyList<RouteChartCell> cells, IReadOnlyList<RouteChartFeature> features) : IRouteChartSource
 {
     public IReadOnlyList<RouteChartCell> CellsNear(BoundingBox extent) => cells;
@@ -331,6 +383,20 @@ internal sealed class FakeCharts(IReadOnlyList<RouteChartCell> cells, IReadOnlyL
         new(north, west),
         new(south, west),
     ];
+}
+
+/// <summary>Counts the corridor queries of another chart source.</summary>
+internal sealed class CountingCharts(IRouteChartSource inner) : IRouteChartSource
+{
+    public int Calls { get; private set; }
+
+    public IReadOnlyList<RouteChartCell> CellsNear(BoundingBox extent) => inner.CellsNear(extent);
+
+    public IReadOnlyList<RouteChartFeature> FeaturesInCorridor(IReadOnlyList<GeoPosition> corridor, BoundingBox extent)
+    {
+        Calls++;
+        return inner.FeaturesInCorridor(corridor, extent);
+    }
 }
 
 /// <summary>A formatter with other wording, as a host with its own resources has.</summary>

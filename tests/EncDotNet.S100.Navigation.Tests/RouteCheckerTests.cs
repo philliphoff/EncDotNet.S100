@@ -1,5 +1,4 @@
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation.Tests;
@@ -342,20 +341,6 @@ public class RouteCheckerTests
         {
             Context = context;
             return outcome;
-        }
-    }
-
-    /// <summary>Counts the corridor queries of another chart source.</summary>
-    private sealed class CountingCharts(IRouteChartSource inner) : IRouteChartSource
-    {
-        public int Calls { get; private set; }
-
-        public IReadOnlyList<RouteChartCell> CellsNear(BoundingBox extent) => inner.CellsNear(extent);
-
-        public IReadOnlyList<RouteChartFeature> FeaturesInCorridor(IReadOnlyList<GeoPosition> corridor, BoundingBox extent)
-        {
-            Calls++;
-            return inner.FeaturesInCorridor(corridor, extent);
         }
     }
 }

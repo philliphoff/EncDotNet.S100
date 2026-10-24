@@ -127,12 +127,12 @@ public sealed class RouteCheckReport
         }
 
         _outcomes = byName;
-        Chart = Detail<RouteCheckResult>(ChartCheck.CheckName);
-        var clearance = Detail<ClearanceOutcome>(ClearanceCheck.CheckName);
-        Clearance = clearance?.Result;
+        Chart = Detail<ChartCheckResult>(ChartCheck.CheckName);
+        var clearance = Detail<ClearanceCheckResult>(ClearanceCheck.CheckName);
+        Clearance = clearance?.Clearance;
         Departures = clearance?.Departures;
-        Areas = Detail<RouteAreaResult>(AreaCheck.CheckName)?.Matches ?? [];
-        Warnings = Detail<RouteWarningResult>(WarningCheck.CheckName)?.Matches ?? [];
+        Areas = Detail<AreaCheckResult>(AreaCheck.CheckName)?.Matches ?? [];
+        Warnings = Detail<WarningCheckResult>(WarningCheck.CheckName)?.Matches ?? [];
         Verdict = RouteCheckVerdict.From(Findings, Clearance);
         DatasetsUsed = Datasets(context.Sources);
     }
@@ -162,7 +162,7 @@ public sealed class RouteCheckReport
     public IReadOnlyList<RouteCheckStatus> Checks { get; }
 
     /// <summary>The chart check's result, with each leg's corridor, or <c>null</c> when it didn't run.</summary>
-    public RouteCheckResult? Chart { get; }
+    public ChartCheckResult? Chart { get; }
 
     /// <summary>The clearance check's result, or <c>null</c> when it didn't run.</summary>
     public PassageCheckResult? Clearance { get; }

@@ -50,7 +50,7 @@ public sealed class RouteCheckSources
 }
 
 /// <summary>
-/// Supplies the navigational warnings a <see cref="RouteWarningCheck"/> checks
+/// Supplies the navigational warnings a <see cref="WarningCheck"/> checks
 /// a route against. <c>EncDotNet.S100.Datasets.Pipelines</c> implements it over
 /// loaded S-124 datasets; <see cref="RouteWarningList"/> implements it over a
 /// list a host already has.

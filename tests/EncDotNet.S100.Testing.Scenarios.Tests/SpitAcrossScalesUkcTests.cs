@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Testing.Scenarios.Tests;
 
 /// <summary>
 /// "Spit across scales" end to end: generated files, read by the real
-/// readers into the passage-check adapters and <see cref="PassageCheckEngine"/>,
+/// readers into the passage-check adapters and <see cref="ClearanceCheck"/>,
 /// give the under-keel clearance the world model predicts.
 /// </summary>
 public sealed class SpitAcrossScalesUkcTests(SpitAcrossScalesFixture fixture) : IClassFixture<SpitAcrossScalesFixture>
@@ -212,8 +212,7 @@ public sealed class SpitAcrossScalesUkcTests(SpitAcrossScalesFixture fixture) : 
         var points = Definition.RoutePositions;
         var legs = points.Zip(points.Skip(1), (a, b) => PassageLegs.Leg([a, b], Draft, speedKnots: 8, squat: Squat, ukc: Required)).ToList();
         var departure = new DateTimeOffset(new DateTime(2026, 3, 1, 4, 0, 0, DateTimeKind.Utc));
-        return new PassageCheckEngine(_sources.Depth!, _sources.WaterLevel!)
-            .Check(new PassagePlan(legs, departure), PassageLegs.Settings(departure), TestContext.Current.CancellationToken);
+        return ScenarioChecks.Clearance(_sources, new PassagePlan(legs, departure), PassageLegs.Settings(departure));
     }
 
     /// <summary>
@@ -227,8 +226,7 @@ public sealed class SpitAcrossScalesUkcTests(SpitAcrossScalesFixture fixture) : 
         var start = World.Frame.ToGeo(x + 0.1, y + 0.1);
         var end = World.Frame.ToGeo(x + 1.1, y + 0.1);
         var leg = PassageLegs.Leg([start, end], Draft, speedKnots: 10, squat: Squat, ukc: Required);
-        var result = new PassageCheckEngine(_sources.Depth!, _sources.WaterLevel!)
-            .Check(new PassagePlan([leg], new DateTimeOffset(At)), PassageLegs.Settings(new DateTimeOffset(At)), TestContext.Current.CancellationToken);
+        var result = ScenarioChecks.Clearance(_sources, new PassagePlan([leg], new DateTimeOffset(At)), PassageLegs.Settings(new DateTimeOffset(At)));
         return Assert.Single(result.Samples);
     }
 

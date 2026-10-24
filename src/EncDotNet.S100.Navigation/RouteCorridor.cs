@@ -6,8 +6,8 @@ using EncDotNet.S100.Pipelines;
 namespace EncDotNet.S100.Navigation;
 
 /// <summary>
-/// The corridor geometry <see cref="RouteWarningCheck"/> and
-/// <see cref="RouteAreaCheck"/> share: the route cut into short pieces, and
+/// The corridor geometry <see cref="WarningCheck"/> and
+/// <see cref="AreaCheck"/> share: the route cut into short pieces, and
 /// how a set of points, lines and areas meets each piece and the corridor
 /// between its cross-track limits.
 /// </summary>

@@ -25,7 +25,7 @@ public sealed class S102WithoutDatumUkcTests(SpitWithoutS102DatumFixture fixture
             squat: 0.3,
             ukc: 1.0);
 
-        var result = new PassageCheckEngine(_sources.Depth!, _sources.WaterLevel!).Check(new PassagePlan([leg], At), PassageLegs.Settings(At), TestContext.Current.CancellationToken);
+        var result = ScenarioChecks.Clearance(_sources, new PassagePlan([leg], At), PassageLegs.Settings(At));
         var sample = Assert.Single(result.Samples);
 
         Assert.Equal(ChartedDepthKind.Bathymetry, sample.Depth!.Kind);

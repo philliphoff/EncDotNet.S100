@@ -1,21 +1,13 @@
 namespace EncDotNet.S100.Navigation;
 
-/// <summary>Tuning for <see cref="RouteCheckEngine"/>.</summary>
+/// <summary>Tuning for <see cref="ChartCheck"/>.</summary>
 public sealed record ChartCheckOptions
 {
     /// <summary>The default options.</summary>
     public static ChartCheckOptions Default { get; } = new();
 
     /// <summary>
-    /// The corridor's half-width on a side whose cross-track limit isn't
-    /// set, in metres: how far it reaches to port, or to starboard, of the
-    /// track. The full corridor is twice this when neither side is set.
-    /// Default 50 m.
-    /// </summary>
-    public double DefaultHalfWidthMeters { get; init; } = 50;
-
-    /// <summary>
-    /// The spacing of the cross-sections the engine takes along a leg, in
+    /// The spacing of the cross-sections the check takes along a leg, in
     /// metres. Crossings of the track itself are found exactly; a feature
     /// that only reaches into the corridor is found at the nearest
     /// cross-section, so it is located to within this spacing, and a
@@ -43,12 +35,6 @@ public sealed record ChartCheckOptions
     /// bank is one finding rather than many. Default 100 m.
     /// </summary>
     public double ShoalMergeGapMeters { get; init; } = 100;
-
-    /// <summary>
-    /// Renders the findings' titles and meta lines. Hosts with their own
-    /// resources (the viewer's <c>Strings.resx</c>) pass their own.
-    /// </summary>
-    public RouteFindingFormatter Formatter { get; init; } = RouteFindingFormatter.Default;
 }
 
 /// <summary>

@@ -1,6 +1,6 @@
 namespace EncDotNet.S100.Navigation;
 
-/// <summary>Tuning for <see cref="PassageCheckEngine"/>.</summary>
+/// <summary>Tuning for <see cref="ClearanceCheck"/>.</summary>
 public sealed record PassageCheckOptions
 {
     /// <summary>The default options.</summary>

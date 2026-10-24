@@ -527,7 +527,7 @@ public sealed class QuirkScenarioTests : IDisposable
             speedKnots: 10,
             squat: 0.3,
             ukc: 1.0);
-        var result = new PassageCheckEngine(sources.Depth!, sources.WaterLevel!).Check(new PassagePlan([leg], new DateTimeOffset(at)), PassageLegs.Settings(new DateTimeOffset(at)), TestContext.Current.CancellationToken);
+        var result = ScenarioChecks.Clearance(sources, new PassagePlan([leg], new DateTimeOffset(at)), PassageLegs.Settings(new DateTimeOffset(at)));
         return Assert.Single(result.Samples);
     }
 }

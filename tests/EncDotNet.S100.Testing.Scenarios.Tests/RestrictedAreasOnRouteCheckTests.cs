@@ -7,7 +7,7 @@ using EncDotNet.S100.Testing.Scenarios.Writers;
 namespace EncDotNet.S100.Testing.Scenarios.Tests;
 
 /// <summary>
-/// "Restricted areas on route" through <see cref="RouteAreaCheck"/> (#956):
+/// "Restricted areas on route" through <see cref="AreaCheck"/> (#956):
 /// the generated S-101 cells and S-122 datasets, read by the real readers
 /// into the area adapter, give one finding per area as the scenario places
 /// them.
@@ -46,7 +46,7 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
         }
 
         // An area only the coastal cell charts, where the harbour cell covers the place, doesn't count.
-        var exercise = Assert.Single(result.Matches, m => m.Area.Name == "Coastal Exercise Area (fictitious)");
+        var exercise = Assert.Single(result.Detail!.Matches, m => m.Area.Name == "Coastal Exercise Area (fictitious)");
         Assert.Equal(RouteAreaRelation.Off, exercise.Relation);
         Assert.Null(exercise.Finding);
     }
@@ -55,7 +55,7 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
     public void Spans_follow_the_areas_along_the_route()
     {
         var result = Check(Route.Departure);
-        var scale = result.Matches.Count == 0 ? 1 : LengthScale();
+        var scale = result.Detail!.Matches.Count == 0 ? 1 : LengthScale();
 
         var firing = Match(result, "Firing Range Alpha (fictitious)");
         Assert.Equal(RouteAreaRelation.Enters, firing.Relation);
@@ -105,26 +105,24 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
         // A plan without a departure or speeds is judged at the settings' time.
         var legs = ScenarioPassage.Legs(_catalog, Route).Select(l => l.WithSpeed(null)).ToList();
         var viewTime = new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero);
-        var result = new RouteAreaCheck().Check(
+        var result = ScenarioChecks.Areas(
+            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()),
             Plan(legs, departure: null),
-            PassageLegs.Settings(viewTime),
-            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()).Areas!,
-            TestContext.Current.CancellationToken);
+            PassageLegs.Settings(viewTime));
 
         Assert.Equal((RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check), Kind(result, "Summer Speed Zone (fictitious)"));
         var seal = Finding(result, "Synthetic Sound Seal Sanctuary (fictitious)");
         Assert.Equal("Synthetic Sound Seal Sanctuary (fictitious) not in force at 2026-06-15 12:00 UTC", seal.Title);
     }
 
-    private RouteAreaResult Check(DateTime departure)
+    private RouteCheckOutcome<AreaCheckResult> Check(DateTime departure)
     {
         var legs = ScenarioPassage.Legs(_catalog, Route);
         var start = new DateTimeOffset(departure, TimeSpan.Zero);
-        return new RouteAreaCheck().Check(
+        return ScenarioChecks.Areas(
+            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()),
             Plan(legs, start),
-            PassageLegs.Settings(start),
-            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()).Areas!,
-            TestContext.Current.CancellationToken);
+            PassageLegs.Settings(start));
     }
 
     // Metres along the legs on the ellipsoid per local metre.
@@ -139,12 +137,12 @@ public sealed class RestrictedAreasOnRouteCheckTests(RestrictedAreasOnRouteFixtu
     private static PassagePlan Plan(IReadOnlyList<PassageLeg> legs, DateTimeOffset? departure) =>
         new(legs.Select(l => l.WithHalfWidth(S421RouteBuilder.CrossTrackLimitMeters)).ToList(), departure);
 
-    private static RouteAreaMatch Match(RouteAreaResult result, string name) =>
-        Assert.Single(result.Matches, m => m.Area.Name == name && m.Finding is not null);
+    private static RouteAreaMatch Match(RouteCheckOutcome<AreaCheckResult> result, string name) =>
+        Assert.Single(result.Detail!.Matches, m => m.Area.Name == name && m.Finding is not null);
 
-    private static RouteFinding Finding(RouteAreaResult result, string name) => Match(result, name).Finding!;
+    private static RouteFinding Finding(RouteCheckOutcome<AreaCheckResult> result, string name) => Match(result, name).Finding!;
 
-    private static (RouteFindingCode Code, RouteFindingGroup Group) Kind(RouteAreaResult result, string name) =>
+    private static (RouteFindingCode Code, RouteFindingGroup Group) Kind(RouteCheckOutcome<AreaCheckResult> result, string name) =>
         Finding(result, name) is var f ? (f.Code, f.Group) : default;
 }
 
@@ -163,11 +161,10 @@ public sealed class WarningsOnRouteAreaTests(WarningsOnRouteFixture fixture) : I
         var legs = ScenarioPassage.Legs(_catalog, route);
         var departure = new DateTimeOffset(route.Departure, TimeSpan.Zero);
         var schedule = PassageSchedule.Compute(legs, departure);
-        var result = new RouteAreaCheck().Check(
+        var result = ScenarioChecks.Areas(
+            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()),
             new PassagePlan(legs.Select(l => l.WithHalfWidth(S421RouteBuilder.CrossTrackLimitMeters)).ToList(), departure),
-            PassageLegs.Settings(departure),
-            CatalogRouteCheckSources.FromDatasets(_catalog.Datasets, new ProjNetCrsTransformFactory()).Areas!,
-            TestContext.Current.CancellationToken);
+            PassageLegs.Settings(departure));
 
         var finding = Assert.Single(result.Findings);
         Assert.Equal(RouteFindingCodes.ProtectedArea, finding.Code);

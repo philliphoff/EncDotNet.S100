@@ -33,7 +33,7 @@ namespace EncDotNet.S100.Navigation;
 //    cross-track limit it must be reviewed; within DangerNearbyMeters beyond
 //    it, it's worth checking. A danger near the turn between two legs is
 //    reported once, on the leg it's closest to.
-public sealed partial class RouteCheckEngine
+public sealed partial class ChartCheck
 {
     /// <summary>A danger found near a leg, kept until every leg is swept.</summary>
     private sealed record DangerCandidate(
@@ -90,7 +90,7 @@ public sealed partial class RouteCheckEngine
         // do the sweep's cells.
         private void CheckDangers(IReadOnlyList<RouteChartFeature> features, LegDepths depths)
         {
-            var nearby = Math.Max(0, _engine._options.DangerNearbyMeters);
+            var nearby = Math.Max(0, _run.Options.DangerNearbyMeters);
             var areas = new List<RouteChartFeature>();
             foreach (var feature in features)
             {

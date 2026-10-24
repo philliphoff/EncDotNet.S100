@@ -2,7 +2,11 @@ using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Navigation.Tests;
 
-public class PassageCheckEngineTests
+/// <summary>
+/// The clearance check on the synthetic passage of <see cref="Fixture"/>,
+/// each test on a fresh check unless it's about what the check reuses.
+/// </summary>
+public class ClearanceCheckTests
 {
     private static PassageCheckResult Check(
         Func<double, double, ChartedDepth?> depth,
@@ -10,8 +14,15 @@ public class PassageCheckEngineTests
         PassageLeg? leg = null,
         double? gridSpacing = null,
         DateTimeOffset? departure = null) =>
-        new PassageCheckEngine(new FakeDepth(depth, gridSpacing), water ?? FakeWater.Constant(0))
-            .Check(Fixture.Plan(leg, departure), Fixture.Settings(), TestContext.Current.CancellationToken);
+        Clearance(new FakeDepth(depth, gridSpacing), water ?? FakeWater.Constant(0), Fixture.Plan(leg, departure));
+
+    // Runs a fresh check, or the given one, and returns its clearance.
+    private static PassageCheckResult Clearance(IChartedDepthSource depth, IWaterLevelSource water, PassagePlan plan, RouteCheckSettings? settings = null, ClearanceCheck? check = null, RouteCheckSources? sources = null) =>
+        Checks.Run(check ?? new ClearanceCheck(), plan, settings ?? Fixture.Settings(), sources ?? new RouteCheckSources { Depth = depth, WaterLevel = water }).Detail!.Clearance;
+
+    // Runs a fresh check with a departure window and returns its sweep.
+    private static DepartureSweep? Sweep(IChartedDepthSource depth, IWaterLevelSource water, PassageLeg[] legs, DepartureRange window) =>
+        Checks.Clearance(depth, water, new PassagePlan(legs, Fixture.Departure), Fixture.Settings(window: window)).Detail!.Departures;
 
     [Fact]
     public void Clearance_is_depth_plus_water_level_minus_draft_and_squat()
@@ -109,16 +120,14 @@ public class PassageCheckEngineTests
     public void Steps_respect_the_s102_grid_and_samples_respect_the_spacing()
     {
         var depth = new FakeDepth((_, _) => FakeDepth.Bathymetry(20), gridSpacingMeters: 4);
-        var engine = new PassageCheckEngine(depth, FakeWater.Constant(0));
 
-        var profile = engine.SampleDepths([Fixture.Leg()], TestContext.Current.CancellationToken);
+        var result = Clearance(depth, FakeWater.Constant(0), Fixture.Plan());
 
         // About 11,1 km at half a 4 m cell = 2 m per step.
         Assert.InRange(depth.Calls, 5400, 5700);
-        var result = engine.Evaluate(profile, Fixture.Plan(), Fixture.Settings(), TestContext.Current.CancellationToken);
         Assert.All(result.Samples, s => Assert.True(s.EndDistanceMeters - s.StartDistanceMeters <= 50 + 1e-6));
         Assert.Equal(0, result.Samples[0].StartDistanceMeters);
-        Assert.Equal(profile.TotalDistanceMeters, result.Samples[^1].EndDistanceMeters, 6);
+        Assert.Equal(PassageGeodesy.DistanceMeters(Fixture.Start, Fixture.End, LegGeometry.Rhumb), result.Samples[^1].EndDistanceMeters, 6);
         for (var i = 1; i < result.Samples.Count; i++)
         {
             Assert.Equal(result.Samples[i - 1].EndDistanceMeters, result.Samples[i].StartDistanceMeters, 6);
@@ -398,17 +407,17 @@ public class PassageCheckEngineTests
     }
 
     [Fact]
-    public void Profiles_are_reused_for_new_times_and_vessel_values()
+    public void Depths_are_reused_for_new_times_and_vessel_values()
     {
         var depth = new FakeDepth((_, _) => FakeDepth.Bathymetry(13));
         var water = FakeWater.Constant(0);
-        var engine = new PassageCheckEngine(depth, water);
-        var profile = engine.SampleDepths([Fixture.Leg()], TestContext.Current.CancellationToken);
+        var check = new ClearanceCheck();
+        Clearance(depth, water, Fixture.Plan(), check: check, sources: Sources(depth, water, out var sources));
         var depthCalls = depth.Calls;
         var waterCalls = water.Calls;
 
-        var deep = engine.Evaluate(profile, Fixture.Plan(Fixture.Leg(draft: 8)), Fixture.Settings(), TestContext.Current.CancellationToken);
-        var shallow = engine.Evaluate(profile, Fixture.Plan(Fixture.Leg(draft: 12), Fixture.Departure.AddHours(1)), Fixture.Settings(), TestContext.Current.CancellationToken);
+        var deep = Clearance(depth, water, Fixture.Plan(Fixture.Leg(draft: 8)), check: check, sources: sources);
+        var shallow = Clearance(depth, water, Fixture.Plan(Fixture.Leg(draft: 12), Fixture.Departure.AddHours(1)), check: check, sources: sources);
 
         Assert.Equal(PassageVerdict.MeetsSettings, deep.Verdict);
         Assert.Equal(PassageVerdict.BelowSetting, shallow.Verdict);
@@ -417,51 +426,90 @@ public class PassageCheckEngineTests
     }
 
     [Fact]
+    public void Other_sources_are_sampled_again()
+    {
+        var depth = new FakeDepth((_, _) => FakeDepth.Bathymetry(13));
+        var water = FakeWater.Constant(0);
+        var check = new ClearanceCheck();
+        Clearance(depth, water, Fixture.Plan(), check: check);
+        var calls = depth.Calls;
+
+        // A new bundle over the same data is new loaded data, so nothing is reused.
+        Clearance(depth, water, Fixture.Plan(), check: check);
+
+        Assert.Equal(2 * calls, depth.Calls);
+    }
+
+    [Fact]
     public void Resampling_reuses_unchanged_legs()
     {
         var depth = new FakeDepth((_, _) => FakeDepth.Bathymetry(13));
-        var engine = new PassageCheckEngine(depth, FakeWater.Constant(0));
+        var water = FakeWater.Constant(0);
+        var check = new ClearanceCheck();
         var a = new GeoPosition(0, 0);
         var b = new GeoPosition(0, 0.05);
         var c = new GeoPosition(0, 0.1);
-        var first = engine.SampleDepths([Fixture.Leg([a, b], 10), Fixture.Leg([b, c], 10)], TestContext.Current.CancellationToken);
+        var first = Clearance(depth, water, new PassagePlan([Fixture.Leg([a, b], 10), Fixture.Leg([b, c], 10)], Fixture.Departure), check: check, sources: Sources(depth, water, out var sources));
         var calls = depth.Calls;
 
         var moved = new GeoPosition(0.001, 0.1);
-        var second = engine.SampleDepths([Fixture.Leg([a, b], 10), Fixture.Leg([b, moved], 10)], first, TestContext.Current.CancellationToken);
+        var second = Clearance(depth, water, new PassagePlan([Fixture.Leg([a, b], 10), Fixture.Leg([b, moved], 10)], Fixture.Departure), check: check, sources: sources);
 
         // Only the second leg was walked again: about half as many samples.
         var resampled = depth.Calls - calls;
         Assert.InRange(resampled, calls / 2 - 5, calls / 2 + 5);
-        Assert.Equal(first.LegFirstPoint[1], second.LegFirstPoint[1]);
+        Assert.Equal(first.Samples.Count(x => x.LegIndex == 0), second.Samples.Count(x => x.LegIndex == 0));
+        Assert.NotEqual(first.Samples[^1].Position, second.Samples[^1].Position);
     }
 
     [Fact]
-    public void Evaluate_rejects_a_plan_whose_geometry_differs_from_the_profile()
+    public void A_moved_waypoint_gives_the_same_result_as_a_fresh_check()
     {
-        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(13)), FakeWater.Constant(0));
-        var profile = engine.SampleDepths([Fixture.Leg()], TestContext.Current.CancellationToken);
-        var other = Fixture.Leg([Fixture.Start, new GeoPosition(0.01, 0.1)], 10);
+        var depth = new FakeDepth((lat, _) => FakeDepth.Bathymetry(lat > 0.005 ? 11 : 14));
+        var water = FakeWater.Constant(0);
+        var check = new ClearanceCheck();
+        Sources(depth, water, out var sources);
+        Clearance(depth, water, Fixture.Plan(), check: check, sources: sources);
+        var other = Fixture.Plan(Fixture.Leg([Fixture.Start, new GeoPosition(0.01, 0.1)], 10, speed: 6, required: 2));
 
-        Assert.Throws<ArgumentException>(() => engine.Evaluate(profile, new PassagePlan([other], Fixture.Departure), Fixture.Settings(), TestContext.Current.CancellationToken));
+        var reused = Clearance(depth, water, other, check: check, sources: sources);
+        var fresh = Clearance(depth, water, other);
+
+        Assert.Equal(fresh.Samples.Select(x => (x.Position, x.ClearanceMeters)), reused.Samples.Select(x => (x.Position, x.ClearanceMeters)));
+        Assert.Equal(fresh.Verdict, reused.Verdict);
     }
 
     [Fact]
-    public void Every_leg_needs_a_draft()
+    public void A_leg_without_a_draft_skips_the_check()
     {
-        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(13)), FakeWater.Constant(0));
         var noDraft = Fixture.Leg([Fixture.Start, Fixture.End], draft: null, speed: 6);
 
-        Assert.Throws<ArgumentException>(() => engine.Check(new PassagePlan([noDraft], Fixture.Departure), Fixture.Settings(), TestContext.Current.CancellationToken));
+        var outcome = Checks.Clearance(new FakeDepth((_, _) => FakeDepth.Bathymetry(13)), FakeWater.Constant(0), new PassagePlan([noDraft], Fixture.Departure), Fixture.Settings());
+
+        Assert.Equal(RouteCheckState.Skipped, outcome.State);
+        Assert.Equal(RouteCheckReasons.DraftMissing, outcome.Reason);
+        Assert.Empty(outcome.Findings);
+        Assert.Null(outcome.Detail);
+    }
+
+    [Fact]
+    public void Without_depth_or_water_level_the_check_is_skipped()
+    {
+        var depth = new FakeDepth((_, _) => FakeDepth.Bathymetry(13));
+        var noDepth = Checks.Run(new ClearanceCheck(), Fixture.Plan(), Fixture.Settings(), new RouteCheckSources { WaterLevel = FakeWater.Constant(0) });
+        var noWater = Checks.Run(new ClearanceCheck(), Fixture.Plan(), Fixture.Settings(), new RouteCheckSources { Depth = depth });
+
+        Assert.Equal((RouteCheckState.Skipped, RouteCheckReasons.DepthMissing), (noDepth.State, noDepth.Reason));
+        Assert.Equal((RouteCheckState.Skipped, RouteCheckReasons.WaterLevelMissing), (noWater.State, noWater.Reason));
+        Assert.Equal(0, depth.Calls);
     }
 
     [Fact]
     public void Without_a_departure_the_plan_leaves_at_the_check_time()
     {
-        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(13)), FakeWater.Constant(0));
         var at = Fixture.Departure.AddHours(3);
 
-        var result = engine.Check(new PassagePlan([Fixture.Leg()]), Fixture.Settings(at), TestContext.Current.CancellationToken);
+        var result = Clearance(new FakeDepth((_, _) => FakeDepth.Bathymetry(13)), FakeWater.Constant(0), new PassagePlan([Fixture.Leg()]), Fixture.Settings(at));
 
         Assert.Equal(at, result.Departure);
         Assert.Equal(at, result.Samples[0].Time);
@@ -470,11 +518,11 @@ public class PassageCheckEngineTests
     [Fact]
     public void Cancellation_stops_the_check()
     {
-        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(13), 1), FakeWater.Constant(0));
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        Assert.Throws<OperationCanceledException>(() => engine.Check(Fixture.Plan(), Fixture.Settings(), cts.Token));
+        Assert.Throws<OperationCanceledException>(() =>
+            Checks.Clearance(new FakeDepth((_, _) => FakeDepth.Bathymetry(13), 1), FakeWater.Constant(0), Fixture.Plan(), Fixture.Settings(), cancellationToken: cts.Token));
     }
 
     [Fact]
@@ -484,30 +532,52 @@ public class PassageCheckEngineTests
         var origin = Fixture.Departure.UtcDateTime;
         var water = new FakeWater((_, _) => [new FakeSeries(origin.AddHours(-6), origin.AddHours(8), t => (t - origin).TotalHours)]);
         var depth = new FakeDepth((_, _) => FakeDepth.Bathymetry(12));
-        var engine = new PassageCheckEngine(depth, water);
         var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
-        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
+        var check = new ClearanceCheck();
+        Sources(depth, water, out var sources);
+        Clearance(depth, water, new PassagePlan(legs, Fixture.Departure), check: check, sources: sources);
         var calls = (depth.Calls, water.Calls);
+        var window = DepartureRange.Between(Fixture.Departure.AddHours(-2), Fixture.Departure.AddHours(6), TimeSpan.FromMinutes(30));
 
-        var sweep = engine.SweepDepartures(profile, legs, Fixture.Departure.AddHours(-2), Fixture.Departure.AddHours(6), TimeSpan.FromMinutes(30), TestContext.Current.CancellationToken);
+        var sweep = Checks.Run(check, new PassagePlan(legs, Fixture.Departure), Fixture.Settings(window: window), sources).Detail!.Departures!;
 
         Assert.Equal(calls, (depth.Calls, water.Calls));
         Assert.Equal(17, sweep.Options.Count);
 
         // Clearance at a sample is (time since origin in hours); it must be ≥ 2 m everywhere, so the
         // departure (the earliest sample) needs ≥ +2 h. Arrival after +8 h runs past the data.
-        var window = Assert.Single(sweep.Windows());
-        Assert.Equal(Fixture.Departure.AddHours(2), window.First);
-        Assert.Equal(Fixture.Departure.AddHours(6), window.Last);
+        var meeting = Assert.Single(sweep.Windows());
+        Assert.Equal(Fixture.Departure.AddHours(2), meeting.First);
+        Assert.Equal(Fixture.Departure.AddHours(6), meeting.Last);
         Assert.Equal(PassageVerdict.BelowSetting, sweep.Options[0].Verdict);
         Assert.Equal(Fixture.Departure.AddHours(2), sweep.NearestMeeting(Fixture.Departure)!.Departure);
 
         // The sweep agrees with a full evaluation.
-        var full = engine.Evaluate(profile, new PassagePlan(legs, Fixture.Departure.AddHours(1)), Fixture.Settings(), TestContext.Current.CancellationToken);
+        var full = Clearance(depth, water, new PassagePlan(legs, Fixture.Departure.AddHours(1)), check: check, sources: sources);
         var option = sweep.Options.Single(o => o.Departure == Fixture.Departure.AddHours(1));
         Assert.Equal(full.Verdict, option.Verdict);
         Assert.Equal(full.Minimum!.ClearanceMeters, option.MinimumClearanceMeters!.Value, 9);
         Assert.Equal(full.MinutesBelow, option.MinutesBelow, 9);
+    }
+
+    [Fact]
+    public void The_departure_sweep_is_kept_while_only_the_departure_changes()
+    {
+        var origin = Fixture.Departure.UtcDateTime;
+        var water = new FakeWater((_, _) => [new FakeSeries(origin.AddHours(-6), origin.AddHours(8), t => (t - origin).TotalHours)]);
+        var depth = new FakeDepth((_, _) => FakeDepth.Bathymetry(12));
+        var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
+        var check = new ClearanceCheck();
+        Sources(depth, water, out var sources);
+        var settings = Fixture.Settings(window: DepartureRange.WaterLevelData(TimeSpan.FromMinutes(30)));
+
+        var first = Checks.Run(check, new PassagePlan(legs, Fixture.Departure), settings, sources).Detail!;
+        var later = Checks.Run(check, new PassagePlan(legs, Fixture.Departure.AddHours(1)), settings, sources).Detail!;
+        var deeper = Checks.Run(check, new PassagePlan([Fixture.Leg(draft: 13, required: 2)], Fixture.Departure), settings, sources).Detail!;
+
+        Assert.Same(first.Departures, later.Departures);
+        Assert.NotEqual(first.Clearance.Departure, later.Clearance.Departure);
+        Assert.NotSame(first.Departures, deeper.Departures);
     }
 
     [Fact]
@@ -516,11 +586,13 @@ public class PassageCheckEngineTests
         // As above, but the S-102 declares no datum (#939).
         var origin = Fixture.Departure.UtcDateTime;
         var water = new FakeWater((_, _) => [new FakeSeries(origin.AddHours(-6), origin.AddHours(8), t => (t - origin).TotalHours)]);
-        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(12, datum: null)), water);
         var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
-        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
 
-        var sweep = engine.SweepDepartures(profile, legs, Fixture.Departure.AddHours(-2), Fixture.Departure.AddHours(6), TimeSpan.FromMinutes(30), TestContext.Current.CancellationToken);
+        var sweep = Sweep(
+            new FakeDepth((_, _) => FakeDepth.Bathymetry(12, datum: null)),
+            water,
+            legs,
+            DepartureRange.Between(Fixture.Departure.AddHours(-2), Fixture.Departure.AddHours(6), TimeSpan.FromMinutes(30)))!;
 
         var window = Assert.Single(sweep.Windows());
         Assert.Equal(Fixture.Departure.AddHours(2), window.First);
@@ -535,12 +607,9 @@ public class PassageCheckEngineTests
         var start = origin.AddMinutes(2);
         var end = origin.AddHours(4);
         var water = new FakeWater((_, _) => [new FakeSeries(start, end, _ => 3)]);
-        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(12)), water);
         var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
-        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
 
-        Assert.Equal((start, end), profile.WaterLevelTimeRange());
-        var sweep = engine.SweepWaterLevelRange(profile, legs, TimeSpan.FromMinutes(5), cancellationToken: TestContext.Current.CancellationToken)!;
+        var sweep = Sweep(new FakeDepth((_, _) => FakeDepth.Bathymetry(12)), water, legs, DepartureRange.WaterLevelData(TimeSpan.FromMinutes(5)))!;
 
         Assert.Equal(TimeSpan.FromMinutes(5), sweep.Step);
         Assert.Equal(Fixture.Departure.AddMinutes(5), sweep.Options[0].Departure);
@@ -561,11 +630,9 @@ public class PassageCheckEngineTests
     {
         var origin = Fixture.Departure.UtcDateTime;
         var water = new FakeWater((_, _) => [new FakeSeries(origin.AddMinutes(2), origin.AddHours(4), _ => 3)]);
-        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(12)), water);
         var legs = new[] { Fixture.Leg(draft: 12, required: 2) };
-        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
 
-        var sweep = engine.SweepWaterLevelRange(profile, legs, TimeSpan.FromMinutes(5), maxDepartures: 10, TestContext.Current.CancellationToken)!;
+        var sweep = Sweep(new FakeDepth((_, _) => FakeDepth.Bathymetry(12)), water, legs, DepartureRange.WaterLevelData(TimeSpan.FromMinutes(5), maxDepartures: 10))!;
 
         Assert.Equal(TimeSpan.FromMinutes(30), sweep.Step);
         Assert.Equal(Fixture.Departure.AddMinutes(30), sweep.Options[0].Departure);
@@ -575,12 +642,15 @@ public class PassageCheckEngineTests
     [Fact]
     public void Without_water_level_coverage_there_is_no_range_to_sweep()
     {
-        var engine = new PassageCheckEngine(new FakeDepth((_, _) => FakeDepth.Bathymetry(12)), new FakeWater((_, _) => []));
         var legs = new[] { Fixture.Leg() };
-        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
 
-        Assert.Null(profile.WaterLevelTimeRange());
-        Assert.Null(engine.SweepWaterLevelRange(profile, legs, TimeSpan.FromMinutes(5), cancellationToken: TestContext.Current.CancellationToken));
-        Assert.Throws<ArgumentOutOfRangeException>(() => engine.SweepWaterLevelRange(profile, legs, TimeSpan.Zero, cancellationToken: TestContext.Current.CancellationToken));
+        var sweep = Sweep(new FakeDepth((_, _) => FakeDepth.Bathymetry(12)), new FakeWater((_, _) => []), legs, DepartureRange.WaterLevelData(TimeSpan.FromMinutes(5)));
+
+        Assert.Null(sweep);
+        Assert.Throws<ArgumentOutOfRangeException>(() => DepartureRange.WaterLevelData(TimeSpan.Zero));
     }
+
+    // One bundle over the sources, so the check may reuse what it computed for it.
+    private static RouteCheckSources Sources(IChartedDepthSource depth, IWaterLevelSource water, out RouteCheckSources sources) =>
+        sources = new RouteCheckSources { Depth = depth, WaterLevel = water };
 }

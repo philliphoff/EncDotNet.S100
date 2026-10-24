@@ -27,7 +27,7 @@ public class TranslatedCellRankingTests
             LoadedDatasetFactory.Box(-0.1, -0.1, 0.2, 0.2),
             compilationScale);
 
-    private static RouteCheckResult Check(params LoadedDataset[] datasets)
+    private static RouteCheckOutcome<ChartCheckResult> Check(params LoadedDataset[] datasets)
     {
         var leg = new PassageLeg
         {
@@ -42,7 +42,7 @@ public class TranslatedCellRankingTests
             SafetyDepth = Depth.FromMetres(10),
         };
         var sources = CatalogRouteCheckSources.FromDatasets(datasets, new ProjNetCrsTransformFactory());
-        return new RouteCheckEngine(sources.Charts!, null, sources.Depth).Check(new PassagePlan([leg]), settings, TestContext.Current.CancellationToken);
+        return new ChartCheck().Run(new RouteCheckContext(new PassagePlan([leg]), settings, sources), TestContext.Current.CancellationToken);
     }
 
     [Fact]

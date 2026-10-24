@@ -530,7 +530,7 @@ public class RouteFindingFormatter
         {
             if (yearly)
             {
-                return RouteAreaCheck.DayOfYear(value) is { } d ? FormatDayOfYear(d.Month, d.Day) : value;
+                return AreaCheck.DayOfYear(value) is { } d ? FormatDayOfYear(d.Month, d.Day) : value;
             }
 
             return S100DateTimes.Combine(value, null) is { } moment ? FormatDate(DateOnly.FromDateTime(moment.UtcDateTime)) : value;

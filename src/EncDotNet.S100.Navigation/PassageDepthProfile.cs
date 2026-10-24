@@ -5,11 +5,11 @@ namespace EncDotNet.S100.Navigation;
 /// <summary>
 /// The time-independent half of a passage check: where the samples are,
 /// their charted depths, and which water-level series cover each one. Build
-/// it once with <see cref="PassageCheckEngine.SampleDepths(IReadOnlyList{PassageLeg}, CancellationToken)"/> and evaluate it
+/// it once with <c>SampleDepths</c> and evaluate it
 /// for many departures, speeds, drafts or required UKCs; only a change to the
 /// legs' points or geometry needs a new profile.
 /// </summary>
-public sealed class PassageDepthProfile
+internal sealed class PassageDepthProfile
 {
     internal PassageDepthProfile(
         IReadOnlyList<PassageLeg> legs,
