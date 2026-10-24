@@ -11,7 +11,7 @@
     "hiddenViewingGroups": "S-101/S-57: 90020, 90021 (additional-information markers)",
     "outOfScaleExtentIndicators": false,
     "locale": "en_US, invariant number formatting",
-    "timeZone": "PST8PDT"
+    "timeZone": "US/Pacific unless a shot names its own"
   },
   "shots": {
     "D2": {
@@ -656,6 +656,2414 @@
           "args": {
             "spec": "S-102",
             "polyline": "{\"vertices\":[[47.602,-122.3415],[47.60254545454545,-122.34336363636363],[47.60309090909091,-122.34522727272727],[47.60363636363636,-122.34709090909091],[47.6…"
+          }
+        }
+      ]
+    },
+    "F10": {
+      "image": "F10.png",
+      "imageCapturedUtc": "2026-10-24T00:59:56.7400480Z",
+      "recordedUtc": "2026-10-24T00:59:56.7615830Z",
+      "imageMatchesRecord": true,
+      "chromeTheme": "Dark",
+      "timeZone": "America/New_York",
+      "capture": "window (capture_app_screenshot, scale 2)",
+      "datasets": [
+        {
+          "file": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDD.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.95,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.875
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.875,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.8,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSED.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.95,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.875
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSEE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.875,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.875,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.8,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5",
+          "source": "EncDotNet.S100 test fixture",
+          "licence": "repo fixture (MIT)",
+          "id": "104US004SC1CO_20251217T12Z.h5",
+          "spec": "S-104",
+          "bounds": {
+            "southLatitude": 32.70089820399079,
+            "westLongitude": -80.09893617011173,
+            "northLatitude": 32.999101796209686,
+            "eastLongitude": -79.80106382938958
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_201_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7636,
+            "westLongitude": -79.879,
+            "northLatitude": 32.7666,
+            "eastLongitude": -79.8745
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_202_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7512,
+            "westLongitude": -79.8536,
+            "northLatitude": 32.7512,
+            "eastLongitude": -79.8536
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_203_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.799,
+            "westLongitude": -79.9215,
+            "northLatitude": 32.8,
+            "eastLongitude": -79.9085
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_204_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.727,
+            "westLongitude": -79.836,
+            "northLatitude": 32.735,
+            "eastLongitude": -79.82
+          }
+        }
+      ],
+      "timeline": {
+        "mode": "live",
+        "viewTime": "2025-12-18T13:30:00Z",
+        "now": "2025-12-18T13:30:00Z",
+        "runs": [
+          "S-104 12:00Z"
+        ]
+      },
+      "steps": [
+        {
+          "tool": "reset",
+          "args": {
+            "palette": "Day",
+            "displayCategory": "Standard"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml"
+          }
+        },
+        {
+          "tool": "set_test_clock",
+          "args": {
+            "now": "2025-12-18T13:30:00.0000000+00:00",
+            "freeze": true
+          }
+        },
+        {
+          "tool": "set_view_time",
+          "args": {
+            "time": "now"
+          }
+        },
+        {
+          "tool": "create_route",
+          "args": {
+            "name": "Fort Sumter Range to Wando"
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7229,
+            "lon": -79.811
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7398,
+            "lon": -79.8464
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7582,
+            "lon": -79.866
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.772,
+            "lon": -79.8875
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7818,
+            "lon": -79.9106
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7871,
+            "lon": -79.9174
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.812,
+            "lon": -79.9146
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8266,
+            "lon": -79.898
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8335,
+            "lon": -79.895
+          }
+        },
+        {
+          "tool": "set_passage",
+          "args": {
+            "draftMeters": 14.5,
+            "requiredUkcMeters": 1,
+            "speedKnots": 10,
+            "departure": "2025-12-18T13:30:00.0000000+00:00"
+          }
+        },
+        {
+          "tool": "set_check_mode",
+          "args": {
+            "on": true
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Routes",
+            "visible": true
+          }
+        },
+        {
+          "tool": "ui_select",
+          "args": {
+            "id": "Routes.Check.FindingsTab"
+          }
+        },
+        {
+          "tool": "select_finding",
+          "args": {
+            "id": "clearance.below_setting.0"
+          }
+        },
+        {
+          "tool": "set_map_legend",
+          "args": {
+            "open": true
+          }
+        }
+      ]
+    },
+    "F10.light": {
+      "image": "F10.light.png",
+      "imageCapturedUtc": "2026-10-24T01:10:05.2698860Z",
+      "recordedUtc": "2026-10-24T01:10:05.2890960Z",
+      "imageMatchesRecord": true,
+      "chromeTheme": "Light",
+      "timeZone": "America/New_York",
+      "capture": "window (capture_app_screenshot, scale 2)",
+      "datasets": [
+        {
+          "file": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDD.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.95,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.875
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.875,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.8,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSED.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.95,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.875
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSEE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.875,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.875,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.8,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5",
+          "source": "EncDotNet.S100 test fixture",
+          "licence": "repo fixture (MIT)",
+          "id": "104US004SC1CO_20251217T12Z.h5",
+          "spec": "S-104",
+          "bounds": {
+            "southLatitude": 32.70089820399079,
+            "westLongitude": -80.09893617011173,
+            "northLatitude": 32.999101796209686,
+            "eastLongitude": -79.80106382938958
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_201_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7636,
+            "westLongitude": -79.879,
+            "northLatitude": 32.7666,
+            "eastLongitude": -79.8745
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_202_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7512,
+            "westLongitude": -79.8536,
+            "northLatitude": 32.7512,
+            "eastLongitude": -79.8536
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_203_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.799,
+            "westLongitude": -79.9215,
+            "northLatitude": 32.8,
+            "eastLongitude": -79.9085
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_204_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.727,
+            "westLongitude": -79.836,
+            "northLatitude": 32.735,
+            "eastLongitude": -79.82
+          }
+        }
+      ],
+      "timeline": {
+        "mode": "live",
+        "viewTime": "2025-12-18T13:30:00Z",
+        "now": "2025-12-18T13:30:00Z",
+        "runs": [
+          "S-104 12:00Z"
+        ]
+      },
+      "steps": [
+        {
+          "tool": "reset",
+          "args": {
+            "palette": "Day",
+            "displayCategory": "Standard"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml"
+          }
+        },
+        {
+          "tool": "set_test_clock",
+          "args": {
+            "now": "2025-12-18T13:30:00.0000000+00:00",
+            "freeze": true
+          }
+        },
+        {
+          "tool": "set_view_time",
+          "args": {
+            "time": "now"
+          }
+        },
+        {
+          "tool": "create_route",
+          "args": {
+            "name": "Fort Sumter Range to Wando"
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7229,
+            "lon": -79.811
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7398,
+            "lon": -79.8464
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7582,
+            "lon": -79.866
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.772,
+            "lon": -79.8875
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7818,
+            "lon": -79.9106
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7871,
+            "lon": -79.9174
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.812,
+            "lon": -79.9146
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8266,
+            "lon": -79.898
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8335,
+            "lon": -79.895
+          }
+        },
+        {
+          "tool": "set_passage",
+          "args": {
+            "draftMeters": 14.5,
+            "requiredUkcMeters": 1,
+            "speedKnots": 10,
+            "departure": "2025-12-18T13:30:00.0000000+00:00"
+          }
+        },
+        {
+          "tool": "set_check_mode",
+          "args": {
+            "on": true
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Routes",
+            "visible": true
+          }
+        },
+        {
+          "tool": "ui_select",
+          "args": {
+            "id": "Routes.Check.FindingsTab"
+          }
+        },
+        {
+          "tool": "select_finding",
+          "args": {
+            "id": "clearance.below_setting.0"
+          }
+        },
+        {
+          "tool": "set_map_legend",
+          "args": {
+            "open": true
+          }
+        }
+      ]
+    },
+    "F11": {
+      "image": "F11.png",
+      "imageCapturedUtc": "2026-10-24T01:04:39.8721311Z",
+      "recordedUtc": "2026-10-24T01:04:39.9778800Z",
+      "imageMatchesRecord": true,
+      "chromeTheme": "Dark",
+      "timeZone": "America/New_York",
+      "capture": "window (capture_app_screenshot, scale 2)",
+      "datasets": [
+        {
+          "file": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDD.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.95,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.875
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.875,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.8,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSED.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.95,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.875
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSEE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.875,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.875,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.8,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5",
+          "source": "EncDotNet.S100 test fixture",
+          "licence": "repo fixture (MIT)",
+          "id": "104US004SC1CO_20251217T12Z.h5",
+          "spec": "S-104",
+          "bounds": {
+            "southLatitude": 32.70089820399079,
+            "westLongitude": -80.09893617011173,
+            "northLatitude": 32.999101796209686,
+            "eastLongitude": -79.80106382938958
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_201_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7636,
+            "westLongitude": -79.879,
+            "northLatitude": 32.7666,
+            "eastLongitude": -79.8745
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_202_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7512,
+            "westLongitude": -79.8536,
+            "northLatitude": 32.7512,
+            "eastLongitude": -79.8536
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_203_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.799,
+            "westLongitude": -79.9215,
+            "northLatitude": 32.8,
+            "eastLongitude": -79.9085
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_204_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.727,
+            "westLongitude": -79.836,
+            "northLatitude": 32.735,
+            "eastLongitude": -79.82
+          }
+        }
+      ],
+      "timeline": {
+        "mode": "live",
+        "viewTime": "2025-12-18T13:30:00Z",
+        "now": "2025-12-18T13:30:00Z",
+        "runs": [
+          "S-104 12:00Z"
+        ]
+      },
+      "steps": [
+        {
+          "tool": "reset",
+          "args": {
+            "palette": "Day",
+            "displayCategory": "Standard"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml"
+          }
+        },
+        {
+          "tool": "set_test_clock",
+          "args": {
+            "now": "2025-12-18T13:30:00.0000000+00:00",
+            "freeze": true
+          }
+        },
+        {
+          "tool": "set_view_time",
+          "args": {
+            "time": "now"
+          }
+        },
+        {
+          "tool": "create_route",
+          "args": {
+            "name": "Fort Sumter Range to Wando"
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7229,
+            "lon": -79.811
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7398,
+            "lon": -79.8464
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7582,
+            "lon": -79.866
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.772,
+            "lon": -79.8875
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7818,
+            "lon": -79.9106
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7871,
+            "lon": -79.9174
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.812,
+            "lon": -79.9146
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8266,
+            "lon": -79.898
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8335,
+            "lon": -79.895
+          }
+        },
+        {
+          "tool": "set_passage",
+          "args": {
+            "draftMeters": 14.5,
+            "requiredUkcMeters": 1,
+            "speedKnots": 10,
+            "departure": "2025-12-18T13:30:00.0000000+00:00"
+          }
+        },
+        {
+          "tool": "set_check_mode",
+          "args": {
+            "on": true
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "NavigationalWarnings",
+            "visible": true
+          }
+        },
+        {
+          "tool": "list_navigational_warnings",
+          "args": {
+            "scope": "route"
+          }
+        },
+        {
+          "tool": "list_navigational_warnings",
+          "args": null
+        },
+        {
+          "tool": "select_navigational_warning",
+          "args": {
+            "datasetId": "124ZZ_SAMPLE_201_25.gml",
+            "featureId": "ZZ.S124.SAMPLE.201.25.1"
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "PickReport",
+            "visible": true
+          }
+        },
+        {
+          "tool": "set_map_legend",
+          "args": {
+            "open": false
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Clearance",
+            "visible": false
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Timeline",
+            "visible": false
+          }
+        },
+        {
+          "tool": "set_viewport",
+          "args": {
+            "south": 32.754,
+            "west": -79.89,
+            "north": 32.778,
+            "east": -79.864
+          }
+        }
+      ]
+    },
+    "F11.light": {
+      "image": "F11.light.png",
+      "imageCapturedUtc": "2026-10-24T01:14:32.5805604Z",
+      "recordedUtc": "2026-10-24T01:14:32.5838450Z",
+      "imageMatchesRecord": true,
+      "chromeTheme": "Light",
+      "timeZone": "America/New_York",
+      "capture": "window (capture_app_screenshot, scale 2)",
+      "datasets": [
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_204_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.727,
+            "westLongitude": -79.836,
+            "northLatitude": 32.735,
+            "eastLongitude": -79.82
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_203_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.799,
+            "westLongitude": -79.9215,
+            "northLatitude": 32.8,
+            "eastLongitude": -79.9085
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_202_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7512,
+            "westLongitude": -79.8536,
+            "northLatitude": 32.7512,
+            "eastLongitude": -79.8536
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_201_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7636,
+            "westLongitude": -79.879,
+            "northLatitude": 32.7666,
+            "eastLongitude": -79.8745
+          }
+        },
+        {
+          "file": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5",
+          "source": "EncDotNet.S100 test fixture",
+          "licence": "repo fixture (MIT)",
+          "id": "104US004SC1CO_20251217T12Z.h5",
+          "spec": "S-104",
+          "bounds": {
+            "southLatitude": 32.70089820399079,
+            "westLongitude": -80.09893617011173,
+            "northLatitude": 32.999101796209686,
+            "eastLongitude": -79.80106382938958
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.8,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.875,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSEE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.875,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSED.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.95,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.875
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.8,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.875,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDD.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.95,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.875
+          }
+        }
+      ],
+      "timeline": {
+        "mode": "live",
+        "viewTime": "2025-12-18T13:30:00Z",
+        "now": "2025-12-18T13:30:00Z",
+        "runs": [
+          "S-104 12:00Z"
+        ]
+      },
+      "steps": [
+        {
+          "tool": "reset",
+          "args": {
+            "palette": "Day",
+            "displayCategory": "Standard"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml"
+          }
+        },
+        {
+          "tool": "set_test_clock",
+          "args": {
+            "now": "2025-12-18T13:30:00.0000000+00:00",
+            "freeze": true
+          }
+        },
+        {
+          "tool": "set_view_time",
+          "args": {
+            "time": "now"
+          }
+        },
+        {
+          "tool": "create_route",
+          "args": {
+            "name": "Fort Sumter Range to Wando"
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7229,
+            "lon": -79.811
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7398,
+            "lon": -79.8464
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7582,
+            "lon": -79.866
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.772,
+            "lon": -79.8875
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7818,
+            "lon": -79.9106
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7871,
+            "lon": -79.9174
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.812,
+            "lon": -79.9146
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8266,
+            "lon": -79.898
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8335,
+            "lon": -79.895
+          }
+        },
+        {
+          "tool": "set_passage",
+          "args": {
+            "draftMeters": 14.5,
+            "requiredUkcMeters": 1,
+            "speedKnots": 10,
+            "departure": "2025-12-18T13:30:00.0000000+00:00"
+          }
+        },
+        {
+          "tool": "set_check_mode",
+          "args": {
+            "on": true
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "NavigationalWarnings",
+            "visible": true
+          }
+        },
+        {
+          "tool": "list_navigational_warnings",
+          "args": {
+            "scope": "route"
+          }
+        },
+        {
+          "tool": "list_navigational_warnings",
+          "args": null
+        },
+        {
+          "tool": "select_navigational_warning",
+          "args": {
+            "datasetId": "124ZZ_SAMPLE_201_25.gml",
+            "featureId": "ZZ.S124.SAMPLE.201.25.1"
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "PickReport",
+            "visible": true
+          }
+        },
+        {
+          "tool": "set_map_legend",
+          "args": {
+            "open": false
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Clearance",
+            "visible": false
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Timeline",
+            "visible": false
+          }
+        },
+        {
+          "tool": "set_viewport",
+          "args": {
+            "south": 32.754,
+            "west": -79.89,
+            "north": 32.778,
+            "east": -79.864
+          }
+        }
+      ]
+    },
+    "F12": {
+      "image": "F12.png",
+      "imageCapturedUtc": "2026-10-24T01:09:29.4826052Z",
+      "recordedUtc": "2026-10-24T01:09:29.4888940Z",
+      "imageMatchesRecord": true,
+      "chromeTheme": "Dark",
+      "timeZone": "America/New_York",
+      "capture": "window crop around PickReport.WarningCard.RouteFinding (capture_app_screenshot, scale 3)",
+      "datasets": [
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_204_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.727,
+            "westLongitude": -79.836,
+            "northLatitude": 32.735,
+            "eastLongitude": -79.82
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_203_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.799,
+            "westLongitude": -79.9215,
+            "northLatitude": 32.8,
+            "eastLongitude": -79.9085
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_202_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7512,
+            "westLongitude": -79.8536,
+            "northLatitude": 32.7512,
+            "eastLongitude": -79.8536
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_201_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7636,
+            "westLongitude": -79.879,
+            "northLatitude": 32.7666,
+            "eastLongitude": -79.8745
+          }
+        },
+        {
+          "file": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5",
+          "source": "EncDotNet.S100 test fixture",
+          "licence": "repo fixture (MIT)",
+          "id": "104US004SC1CO_20251217T12Z.h5",
+          "spec": "S-104",
+          "bounds": {
+            "southLatitude": 32.70089820399079,
+            "westLongitude": -80.09893617011173,
+            "northLatitude": 32.999101796209686,
+            "eastLongitude": -79.80106382938958
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.8,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.875,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSEE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.875,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSED.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.95,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.875
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.8,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.875,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDD.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.95,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.875
+          }
+        }
+      ],
+      "timeline": {
+        "mode": "live",
+        "viewTime": "2025-12-18T13:30:00Z",
+        "now": "2025-12-18T13:30:00Z",
+        "runs": [
+          "S-104 12:00Z"
+        ]
+      },
+      "steps": [
+        {
+          "tool": "reset",
+          "args": {
+            "palette": "Day",
+            "displayCategory": "Standard"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml"
+          }
+        },
+        {
+          "tool": "set_test_clock",
+          "args": {
+            "now": "2025-12-18T13:30:00.0000000+00:00",
+            "freeze": true
+          }
+        },
+        {
+          "tool": "set_view_time",
+          "args": {
+            "time": "now"
+          }
+        },
+        {
+          "tool": "create_route",
+          "args": {
+            "name": "Fort Sumter Range to Wando"
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7229,
+            "lon": -79.811
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7398,
+            "lon": -79.8464
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7582,
+            "lon": -79.866
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.772,
+            "lon": -79.8875
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7818,
+            "lon": -79.9106
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7871,
+            "lon": -79.9174
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.812,
+            "lon": -79.9146
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8266,
+            "lon": -79.898
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8335,
+            "lon": -79.895
+          }
+        },
+        {
+          "tool": "set_passage",
+          "args": {
+            "draftMeters": 14.5,
+            "requiredUkcMeters": 1,
+            "speedKnots": 10,
+            "departure": "2025-12-18T13:30:00.0000000+00:00"
+          }
+        },
+        {
+          "tool": "set_check_mode",
+          "args": {
+            "on": true
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "NavigationalWarnings",
+            "visible": true
+          }
+        },
+        {
+          "tool": "list_navigational_warnings",
+          "args": {
+            "scope": "route"
+          }
+        },
+        {
+          "tool": "list_navigational_warnings",
+          "args": null
+        },
+        {
+          "tool": "select_navigational_warning",
+          "args": {
+            "datasetId": "124ZZ_SAMPLE_201_25.gml",
+            "featureId": "ZZ.S124.SAMPLE.201.25.1"
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "PickReport",
+            "visible": true
+          }
+        },
+        {
+          "tool": "set_map_legend",
+          "args": {
+            "open": false
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Clearance",
+            "visible": false
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Timeline",
+            "visible": false
+          }
+        },
+        {
+          "tool": "set_viewport",
+          "args": {
+            "south": 32.754,
+            "west": -79.89,
+            "north": 32.778,
+            "east": -79.864
+          }
+        }
+      ]
+    },
+    "F12.light": {
+      "image": "F12.light.png",
+      "imageCapturedUtc": "2026-10-24T01:18:59.0434919Z",
+      "recordedUtc": "2026-10-24T01:18:59.0474820Z",
+      "imageMatchesRecord": true,
+      "chromeTheme": "Light",
+      "timeZone": "America/New_York",
+      "capture": "window crop around PickReport.WarningCard.RouteFinding (capture_app_screenshot, scale 3)",
+      "datasets": [
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_204_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.727,
+            "westLongitude": -79.836,
+            "northLatitude": 32.735,
+            "eastLongitude": -79.82
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_203_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.799,
+            "westLongitude": -79.9215,
+            "northLatitude": 32.8,
+            "eastLongitude": -79.9085
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_202_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7512,
+            "westLongitude": -79.8536,
+            "northLatitude": 32.7512,
+            "eastLongitude": -79.8536
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_201_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7636,
+            "westLongitude": -79.879,
+            "northLatitude": 32.7666,
+            "eastLongitude": -79.8745
+          }
+        },
+        {
+          "file": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5",
+          "source": "EncDotNet.S100 test fixture",
+          "licence": "repo fixture (MIT)",
+          "id": "104US004SC1CO_20251217T12Z.h5",
+          "spec": "S-104",
+          "bounds": {
+            "southLatitude": 32.70089820399079,
+            "westLongitude": -80.09893617011173,
+            "northLatitude": 32.999101796209686,
+            "eastLongitude": -79.80106382938958
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.8,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.875,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSEE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.875,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSED.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.95,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.875
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.8,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.875,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDD.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.95,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.875
+          }
+        }
+      ],
+      "timeline": {
+        "mode": "live",
+        "viewTime": "2025-12-18T13:30:00Z",
+        "now": "2025-12-18T13:30:00Z",
+        "runs": [
+          "S-104 12:00Z"
+        ]
+      },
+      "steps": [
+        {
+          "tool": "reset",
+          "args": {
+            "palette": "Day",
+            "displayCategory": "Standard"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_203_25.gml"
+          }
+        },
+        {
+          "tool": "open_dataset",
+          "args": {
+            "path": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml"
+          }
+        },
+        {
+          "tool": "set_test_clock",
+          "args": {
+            "now": "2025-12-18T13:30:00.0000000+00:00",
+            "freeze": true
+          }
+        },
+        {
+          "tool": "set_view_time",
+          "args": {
+            "time": "now"
+          }
+        },
+        {
+          "tool": "create_route",
+          "args": {
+            "name": "Fort Sumter Range to Wando"
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7229,
+            "lon": -79.811
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7398,
+            "lon": -79.8464
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7582,
+            "lon": -79.866
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.772,
+            "lon": -79.8875
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7818,
+            "lon": -79.9106
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.7871,
+            "lon": -79.9174
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.812,
+            "lon": -79.9146
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8266,
+            "lon": -79.898
+          }
+        },
+        {
+          "tool": "append_waypoint",
+          "args": {
+            "lat": 32.8335,
+            "lon": -79.895
+          }
+        },
+        {
+          "tool": "set_passage",
+          "args": {
+            "draftMeters": 14.5,
+            "requiredUkcMeters": 1,
+            "speedKnots": 10,
+            "departure": "2025-12-18T13:30:00.0000000+00:00"
+          }
+        },
+        {
+          "tool": "set_check_mode",
+          "args": {
+            "on": true
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "NavigationalWarnings",
+            "visible": true
+          }
+        },
+        {
+          "tool": "list_navigational_warnings",
+          "args": {
+            "scope": "route"
+          }
+        },
+        {
+          "tool": "list_navigational_warnings",
+          "args": null
+        },
+        {
+          "tool": "select_navigational_warning",
+          "args": {
+            "datasetId": "124ZZ_SAMPLE_201_25.gml",
+            "featureId": "ZZ.S124.SAMPLE.201.25.1"
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "PickReport",
+            "visible": true
+          }
+        },
+        {
+          "tool": "set_map_legend",
+          "args": {
+            "open": false
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Clearance",
+            "visible": false
+          }
+        },
+        {
+          "tool": "set_panel",
+          "args": {
+            "panel": "Timeline",
+            "visible": false
+          }
+        },
+        {
+          "tool": "set_viewport",
+          "args": {
+            "south": 32.754,
+            "west": -79.89,
+            "north": 32.778,
+            "east": -79.864
           }
         }
       ]
