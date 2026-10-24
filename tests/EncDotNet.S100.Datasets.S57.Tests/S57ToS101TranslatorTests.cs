@@ -324,6 +324,115 @@ public class S57ToS101TranslatorTests
         Assert.Equal("DataCoverage", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
     }
 
+    // ── Underwater hazard depths (surroundingDepth / defaultClearanceDepth) ──
+
+    private const ushort ObjlDepare = 42;
+    private const ushort ObjlObstrn = 86;
+    private const ushort ObjlUwtroc = 153;
+    private const ushort ObjlWrecks = 159;
+    private const int AttlCatobs = 42;
+    private const int AttlDrval1 = 87;
+    private const int AttlExpsou = 93;
+    private const int AttlValsou = 179;
+    private const int AttlWatlev = 187;
+
+    // A triangular 5 m DEPARE, an isolated node inside it (1) and one outside
+    // it (2), and a curve (edge 13) whose ends lie outside but which crosses
+    // the depth area.
+    private static EncDotNet.S57.S57Document HazardCell(params EncDotNet.S57.S57FeatureRecord[] hazards)
+    {
+        var depthArea = Feat(
+            recordId: 1, primitive: 3, objectClass: ObjlDepare,
+            featureIdentificationNumber: 1,
+            attributes: new[] { Attr(AttlDrval1, "5"), Attr(88, "10") },
+            spatialPointers: new[]
+            {
+                Sp(RcnmEdge, 10, 1, 1, 0),
+                Sp(RcnmEdge, 11, 1, 1, 0),
+                Sp(RcnmEdge, 12, 1, 1, 0),
+            });
+        return BuildDocument(
+            vectorRecords: new[]
+            {
+                Node(1, 0, 0), Node(2, 0, 100), Node(3, 100, 50),
+                Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 1),
+                Node(1, 30, 50, RcnmIsolatedNode), Node(2, 90, 10, RcnmIsolatedNode),
+                Node(4, 50, -10), Node(5, 50, 110), Edge(13, 4, 5),
+            },
+            features: new[] { depthArea }.Concat(hazards));
+    }
+
+    private static EncDotNet.S57.S57FeatureRecord HazardPoint(
+        ushort objectClass, uint node, params EncDotNet.S57.S57AttributeValue[] attributes)
+        => Feat(10, 1, objectClass, featureIdentificationNumber: 10,
+            attributes: attributes,
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, node, 1, 0, 0) });
+
+    private static S101FeatureRecord SingleHazard(S101Document doc)
+        => Assert.Single(doc.Features, f => ClassOf(doc, f) != "DepthArea");
+
+    [Theory]
+    [InlineData(ObjlUwtroc, "3", "1", null, "5")]     // always under water, within range: the surrounding depth
+    [InlineData(ObjlWrecks, "3", "3", null, "5")]     // always under water, deeper than range: the surrounding depth
+    [InlineData(ObjlUwtroc, "3", null, null, "0.01")] // always under water, exposition unknown
+    [InlineData(ObjlUwtroc, "5", null, null, "0")]    // awash
+    [InlineData(ObjlUwtroc, "4", null, null, "-15")]  // covers and uncovers
+    [InlineData(ObjlObstrn, null, null, null, "-15")] // water level unknown
+    [InlineData(ObjlObstrn, "4", null, "6", "0.01")]  // foul area
+    public void Translate_HazardWithoutValsou_GetsDefaultClearanceDepth(
+        ushort objectClass, string? watlev, string? expsou, string? catobs, string expected)
+    {
+        // S-101 OBSTRN07 / WRECKS05 raise an error, and the hazard is drawn
+        // with the "?" default symbol, when neither valueOfSounding nor
+        // defaultClearanceDepth is present.
+        var attributes = new List<EncDotNet.S57.S57AttributeValue>();
+        if (watlev is not null) attributes.Add(Attr(AttlWatlev, watlev));
+        if (expsou is not null) attributes.Add(Attr(AttlExpsou, expsou));
+        if (catobs is not null) attributes.Add(Attr(AttlCatobs, catobs));
+
+        var s101 = new S57ToS101Translator().Translate(
+            HazardCell(HazardPoint(objectClass, node: 1, attributes.ToArray())));
+
+        var hazard = SingleHazard(s101);
+        Assert.Equal(expected, TopLevelValue(s101, hazard, "defaultClearanceDepth"));
+        Assert.Equal("5", TopLevelValue(s101, hazard, "surroundingDepth"));
+    }
+
+    [Fact]
+    public void Translate_HazardWithValsou_GetsSurroundingDepthOnly()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            HazardCell(HazardPoint(ObjlUwtroc, node: 1, Attr(AttlValsou, "2.5"), Attr(AttlWatlev, "3"))));
+
+        var hazard = SingleHazard(s101);
+        Assert.Equal("2.5", TopLevelValue(s101, hazard, "valueOfSounding"));
+        Assert.Equal("5", TopLevelValue(s101, hazard, "surroundingDepth"));
+        Assert.DoesNotContain("defaultClearanceDepth", AttributeNames(s101, hazard));
+    }
+
+    [Fact]
+    public void Translate_HazardOutsideDepthAreas_HasNoSurroundingDepth()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            HazardCell(HazardPoint(ObjlUwtroc, node: 2, Attr(AttlWatlev, "3"), Attr(AttlExpsou, "1"))));
+
+        var hazard = SingleHazard(s101);
+        Assert.DoesNotContain("surroundingDepth", AttributeNames(s101, hazard));
+        Assert.Equal("0.01", TopLevelValue(s101, hazard, "defaultClearanceDepth"));
+    }
+
+    [Fact]
+    public void Translate_CurveHazardCrossingDepthArea_GetsItsDepth()
+    {
+        // Neither end of the curve lies in the depth area; its middle does.
+        var obstruction = Feat(10, 2, ObjlObstrn, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmEdge, 13, 1, 0, 0) });
+
+        var s101 = new S57ToS101Translator().Translate(HazardCell(obstruction));
+
+        Assert.Equal("5", TopLevelValue(s101, SingleHazard(s101), "surroundingDepth"));
+    }
+
     // ── DSPM SDAT → SoundingDatum when the cell has no M_SDAT ──
 
     // A triangle cell with a coverage-available M_COVR, optional extra features.
@@ -3254,6 +3363,60 @@ public class S57ToS101TranslatorTests
         Assert.Equal("26", TopLevelValue(s101, feat, "categoryOfLandmark"));
         Assert.Equal("1", Assert.Single(feat.Attributes, a =>
             s101.AttributeTypeCatalogue[a.NumericCode] == "visualProminence").Value);
+    }
+
+    // ── Primitives the S-101 class does not permit (S-65 Annex B) ──
+
+    private const ushort ObjlDamcon = 38;
+    private const ushort ObjlRectrc = 109;
+    private const int AttlCatdam = 20;
+
+    [Fact]
+    public void Translate_PointDam_BecomesLandmark()
+    {
+        // S-65 Annex B §4.8.5: Dam permits no point; a point DAMCON is a
+        // Landmark with categoryOfLandmark 27 (dam).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(ObjlDamcon, Attr(AttlCatdam, "2")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Landmark", ClassOf(s101, feat));
+        Assert.Equal("27", TopLevelValue(s101, feat, "categoryOfLandmark"));
+        Assert.Equal("2", TopLevelValue(s101, feat, "visualProminence"));
+        Assert.DoesNotContain("categoryOfDam", AttributeNames(s101, feat));
+    }
+
+    [Fact]
+    public void Translate_LineDam_StaysDam()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(ObjlDamcon, Attr(AttlCatdam, "2")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Dam", ClassOf(s101, feat));
+        Assert.DoesNotContain("categoryOfLandmark", AttributeNames(s101, feat));
+    }
+
+    [Fact]
+    public void Translate_AreaRecommendedTrack_IsNotConverted()
+    {
+        // S-65 Annex B §10.1.1: RecommendedTrack permits only curves, and an
+        // area RECTRC is not converted.
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            AreaFeatureWithS57Attributes(ObjlRectrc, Attr(AttlOrient, "45")), diag);
+
+        Assert.DoesNotContain(s101.Features, f => ClassOf(s101, f) == "RecommendedTrack");
+        Assert.Equal(1, diag.RuleDroppedObjectClasses[ObjlRectrc]);
+    }
+
+    [Fact]
+    public void Translate_LineRecommendedTrack_IsConverted()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(ObjlRectrc, Attr(AttlOrient, "45")));
+
+        Assert.Equal("RecommendedTrack", ClassOf(s101, Assert.Single(s101.Features)));
     }
 
     // Three nodes on a line, two edges joining them (1→2, 2→3), and a node for
