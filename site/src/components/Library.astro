@@ -1,0 +1,31 @@
+---
+import Shot from './Shot.astro';
+
+const sizes = '(max-width: 900px) 100vw, 690px';
+---
+<section id="library" aria-labelledby="library-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Library</span>
+      <h2 id="library-title">Find data, not files.</h2>
+      <p class="lede">
+        The Library indexes local folders, collection manifests and online catalogues, so everything you can load is in
+        one place.
+      </p>
+    </div>
+
+    <div class="features">
+      <div class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Browse</span>
+          <h3>See coverage before you download.</h3>
+          <p>
+            Online catalogues include NOAA's charts, high-resolution bathymetry, and water-level and current forecasts.
+            You can browse coverage on the map before you download anything, and keep it up to date afterwards.
+          </p>
+        </div>
+        <Shot id="F5" alt="The Library panel browsing NOAA S-102 coverage areas" sizes={sizes} />
+      </div>
+    </div>
+  </div>
+</section>
