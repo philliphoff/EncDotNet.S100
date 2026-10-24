@@ -216,6 +216,13 @@ var shots = new List<Shot>
     // encoded to site/public/clips/D2.{mp4,webm}. The returned PNG is the poster.
     new("D2", v => AgentClip(v)),
 
+    // D3: Check route on an outbound passage from Charleston Harbor, then the
+    // departure scrubbed across the S-104 window so the verdict, the route's
+    // colours and the clearance profile follow the tide. NOAA ENC, NOAA S-102
+    // (via the Library) and the NOAA S-104 pilot fixture. Encoded to
+    // site/public/clips/D3.{mp4,webm}; the returned PNG is the poster.
+    new("D3", v => PassageClip(v)),
+
     // F7: one harbour crop in each palette (window captures: render_to_image ignores the palette).
     new("F7-day", v => Palette(v, "Day"), Themed: true),
     new("F7-dusk", v => Palette(v, "Dusk"), Chrome: "S100Dusk"),
@@ -381,6 +388,126 @@ finally
 return failures == 0 ? 0 : 1;
 
 // ── Shot recipes ───────────────────────────────────────────────────────
+// ── D3: passage check clip ──────────────────────────────────────────────
+// Outbound from Charleston Harbor through the jetties, checked against the
+// NOAA ENC, NOAA S-102 and the NOAA S-104 pilot. The draft isn't guessed: it is
+// searched so that about half the departures across the S-104 run meet the
+// settings, so the scrub shows the window opening and closing with the tide.
+async Task<byte[]> PassageClip(Viewer v)
+{
+    await v.Reset();
+    await v.OpenAll(await data.Enc(["US4SC1BO", "US4SC1BP", "US4SC1CO", "US4SC1CP"]));
+    var levels = await v.OpenAll(Directory.GetFiles(Fixture("S104"), "104US004SC1*.h5"));
+    foreach (var id in levels)
+        await v.Call("set_dataset_state", new() { ["datasetId"] = id, ["visible"] = true });
+
+    // Pin "now" just after the pilot run's start, so it reads as current, not expired.
+    var runStart = DateTimeOffset.Parse((await v.Call("get_timeline_state"))!["minimum"]!.GetValue<string>());
+    await v.Call("set_test_clock", new() { ["now"] = runStart.AddHours(1).ToString("O"), ["freeze"] = true });
+
+    // NOAA S-102 through the Library, as a user would add it. Without it the check
+    // falls back to the ENC's depths (lower confidence, drawn dashed) and says so.
+    var area = new Box(32.690, -79.960, 32.810, -79.770);
+    await v.Call("add_library_source", new() { ["knownSourceId"] = "noaa-s102", ["preview"] = true });
+    await v.Call("add_library_source", new() { ["knownSourceId"] = "noaa-s102", ["includeAll"] = true });
+    var s102 = await v.Call("library_action", new()
+    {
+        ["action"] = "download", ["spec"] = "S-102", ["maxBytes"] = 1_000_000_000,
+        ["south"] = area.South, ["west"] = area.West, ["north"] = area.North, ["east"] = area.East,
+    });
+    await v.Call("await_library_idle", new() { ["timeoutMs"] = 900_000 });
+    await v.WaitForLoads();
+    Console.WriteLine($"  S-102 download: {s102?.ToJsonString()}");
+
+    // Main channel, Custom House Reach → between Fort Sumter and Fort Moultrie →
+    // through the jetties. Candidate coordinates: the land check below fails the
+    // shot (listing the findings) rather than film a route across land.
+    (double Lat, double Lon)[] waypoints =
+    [
+        (32.7780, -79.9120), (32.7640, -79.8930), (32.7560, -79.8670),
+        (32.7380, -79.8400), (32.7230, -79.8150),
+    ];
+    await v.Call("create_route", new() { ["name"] = "Charleston Harbor to sea" });
+    foreach (var (lat, lon) in waypoints)
+        await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
+    await v.Call("set_passage", new()
+    {
+        ["speedKnots"] = 10.0, ["squatMeters"] = 0.5, ["requiredUkcMeters"] = 1.0,
+        ["departure"] = runStart.AddHours(2).ToString("O"),
+    });
+
+    var plain = await v.Call("check_route");
+    var aground = plain!["findings"]!.AsArray()
+        .Where(f => f!["code"]!.GetValue<string>() is "route_check.crosses_land" or "route_check.crosses_drying" or "data.outside_chart_coverage")
+        .Select(f => $"{f!["title"]} ({f!["meta"]})").ToList();
+    if (aground.Count > 0) throw new SkipShot("adjust the waypoints: " + string.Join("; ", aground));
+
+    // Search the draft so about half the swept departures meet the settings.
+    async Task<(double Meeting, JsonNode Window)> Sweep(double draft)
+    {
+        var report = await v.Call("check_route", new() { ["draftMeters"] = draft, ["includeWindow"] = true });
+        var window = report!["clearance"]?["window"] ?? throw new SkipShot("no S-104 covers the passage (check the route against the pilot's tiles)");
+        var departures = window["departures"]!.AsArray();
+        var meeting = departures.Count(d => d!["verdict"]!.GetValue<string>().StartsWith("meets_settings", StringComparison.Ordinal));
+        return (departures.Count == 0 ? 0 : (double)meeting / departures.Count, window);
+    }
+    double low = 4, high = 20, draft = 12;
+    JsonNode? sweep = null;
+    for (var i = 0; i < 10; i++)
+    {
+        draft = Math.Round((low + high) / 2, 1);
+        var (meeting, window) = await Sweep(draft);
+        sweep = window;
+        Console.WriteLine($"  draft {draft:0.0} m: {meeting:P0} of departures meet the settings");
+        if (Math.Abs(meeting - 0.5) < 0.08) break;
+        if (meeting > 0.5) low = draft; else high = draft;
+    }
+    await v.Call("set_passage", new() { ["draftMeters"] = draft });
+    var chosen = sweep ?? throw new SkipShot("the draft search didn't run");
+
+    // Departures to scrub through: the whole sweep but the tail that arrives after the S-104 ends.
+    var swept = chosen["departures"]!.AsArray()
+        .Where(d => d!["verdict"]!.GetValue<string>() != "water_level_ends_before_arrival")
+        .Select(d => DateTimeOffset.Parse(d!["departure"]!.GetValue<string>())).ToList();
+    if (swept.Count < 10) throw new SkipShot($"only {swept.Count} departures to scrub");
+    const int steps = 48;
+    var scrub = Enumerable.Range(0, steps).Select(i => swept[i * (swept.Count - 1) / (steps - 1)]).Distinct().ToList();
+
+    // Layout: Routes panel (verdict card) on the left and the bottom dock open on
+    // the Timeline; Check route adds the Clearance tab (profile and departure band)
+    // to the same dock, so switching to it later doesn't move the map.
+    await v.Panel("Routes");
+    await v.Panel("Timeline");
+    var lats = waypoints.Select(w => w.Lat).ToList();
+    var lons = waypoints.Select(w => w.Lon).ToList();
+    await v.Frame(new Box(lats.Min() - 0.012, lons.Min() - 0.020, lats.Max() + 0.012, lons.Max() + 0.020));
+
+    var clip = new AgentClipBuilder(transcript: false);
+    await v.Call("set_departure", new() { ["departure"] = scrub[0].ToString("O") });
+    await clip.Frame(v, 1.5);                                   // the route as planned
+    await v.Call("set_check_mode", new() { ["on"] = true });
+    await v.Panel("Clearance");
+    await v.Call("set_follow_passage", new() { ["on"] = true }); // S-104 on the map follows the ship's ETA
+    await clip.Frame(v, 2.0);                                   // checked at the first departure
+
+    foreach (var departure in scrub)
+    {
+        await v.Call("set_departure", new() { ["departure"] = departure.ToString("O") });
+        await clip.Frame(v, 0.16);
+    }
+
+    // End as the verdict card's "Depart HH:MM" does: on the nearest departure that meets.
+    var nearest = chosen["nearestMeetingDeparture"]?.GetValue<string>() ?? throw new SkipShot("no departure meets the settings");
+    await v.Call("set_departure", new() { ["departure"] = nearest });
+    var state = await v.Call("get_check_state");
+    Console.WriteLine($"  final: {state?["verdictTitle"]} · {state?["verdictSubtitle"]}");
+    var poster = await clip.Frame(v, 3.5);
+
+    var clipsDir = Path.Combine(repoRoot, "site", "public", "clips");
+    if (!manifestOnly) await clip.EncodeAsync(clipsDir, "D3");
+    return poster;
+}
+
 // ── D2: agent clip ──────────────────────────────────────────────────────
 async Task<byte[]> AgentClip(Viewer v)
 {
@@ -962,10 +1089,16 @@ sealed class Viewer : IAsyncDisposable
     }
 }
 
-/// <summary>Builds the D2 clip: a transcript panel beside window captures, encoded with ffmpeg.</summary>
-sealed class AgentClipBuilder
+/// <summary>
+/// Builds a clip from window captures, encoded with ffmpeg: D2's transcript panel
+/// beside the viewer (1920×1080), or with <c>transcript: false</c> the window
+/// alone, full frame (1920×1200, the window's 16:10).
+/// </summary>
+sealed class AgentClipBuilder(bool transcript = true)
 {
-    private const int Width = 1920, Height = 1080, PanelWidth = 560, Margin = 40;
+    private const int Width = 1920, PanelWidth = 560, Margin = 40;
+    private readonly bool _transcript = transcript;
+    private readonly int Height = transcript ? 1080 : 1200;
     private readonly List<(string Kind, string Text, string? Detail)> _entries = [];
     private readonly List<(byte[] Png, double Seconds)> _frames = [];
     private static readonly SKTypeface Sans = SKTypeface.FromFile("/System/Library/Fonts/SFNS.ttf") ?? SKTypeface.Default;
@@ -983,14 +1116,16 @@ sealed class AgentClipBuilder
         var canvas = surface.Canvas;
         canvas.Clear(new SKColor(0x0b, 0x12, 0x1b));
 
-        // Viewer on the right, scaled to fit.
-        var right = new SKRect(PanelWidth + Margin * 2, Margin, Width - Margin, Height - Margin);
+        // Viewer on the right, scaled to fit (or the whole frame without a transcript).
+        var right = _transcript
+            ? new SKRect(PanelWidth + Margin * 2, Margin, Width - Margin, Height - Margin)
+            : new SKRect(0, 0, Width, Height);
         var scale = Math.Min(right.Width / window.Width, right.Height / window.Height);
         var dest = SKRect.Create(right.Left, right.MidY - window.Height * scale / 2, window.Width * scale, window.Height * scale);
         using (var image = SKImage.FromBitmap(window))
             canvas.DrawImage(image, dest, new SKSamplingOptions(SKCubicResampler.Mitchell));
 
-        DrawTranscript(canvas, new SKRect(Margin, dest.Top, Margin + PanelWidth, dest.Bottom));
+        if (_transcript) DrawTranscript(canvas, new SKRect(Margin, dest.Top, Margin + PanelWidth, dest.Bottom));
 
         using var snapshot = surface.Snapshot();
         var png = snapshot.Encode(SKEncodedImageFormat.Png, 100).ToArray();
