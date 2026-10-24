@@ -111,15 +111,15 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
         Assert.Null(route.Passage.SquatMeters); // S-421 has no squat
     }
 
-    // #903: the window the viewer sweeps is the engine's, which the scenario
-    // tests prove exact against the world model.
+    // #903: the window the viewer sweeps is the clearance check's, which the
+    // scenario tests prove exact against the world model.
     [Fact]
-    public async Task The_departure_window_is_the_engines_exact_sweep()
+    public async Task The_departure_window_is_the_clearance_checks_exact_sweep()
     {
         using var s = await CreateAsync(LowWaterDeparture);
 
         var window = Assert.IsType<PassageDepartureWindow>(s.Check.Window);
-        var expected = EngineSweep(s.Route);
+        var expected = SdkSweep(s.Route);
 
         Assert.Equal(PassageCheckService.WindowStep, window.Sweep.Step);
         Assert.Equal(expected.Options.Select(o => (o.Departure, o.Verdict)), window.Sweep.Options.Select(o => (o.Departure, o.Verdict)));
@@ -213,13 +213,16 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
         return new Setup(routes, route, check, time, follow, findings);
     }
 
-    private DepartureSweep EngineSweep(Route route)
+    private DepartureSweep SdkSweep(Route route)
     {
         var sources = CatalogRouteCheckSources.FromDatasets(fixture.Datasets, new ProjNetCrsTransformFactory());
-        var engine = new PassageCheckEngine(sources.Depth!, sources.WaterLevel!);
-        var legs = RouteEtas.ToPassageLegs(route);
-        var profile = engine.SampleDepths(legs, TestContext.Current.CancellationToken);
-        return engine.SweepWaterLevelRange(profile, legs, PassageCheckService.WindowStep, PassageCheckService.MaxWindowDepartures, TestContext.Current.CancellationToken)!;
+        var settings = new Navigation.RouteCheckSettings
+        {
+            At = DateTimeOffset.UnixEpoch,
+            DepartureWindow = DepartureRange.WaterLevelData(PassageCheckService.WindowStep, PassageCheckService.MaxWindowDepartures),
+        };
+        var plan = new PassagePlan(RouteEtas.ToPassageLegs(route), DateTimeOffset.UnixEpoch);
+        return new ClearanceCheck().Run(new RouteCheckContext(plan, settings, sources), TestContext.Current.CancellationToken).Detail!.Departures!;
     }
 
     // The middle of the second window (the first starts with the data).

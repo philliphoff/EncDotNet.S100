@@ -94,12 +94,13 @@ public class RouteFindingTests
     {
         // 11,5 m to 0,05°, then no charted depth: draft 10 leaves 1,5 m against a required 2 m.
         var plan = Fixture.Plan(Fixture.Leg(draft: 10, speed: 6, required: 2));
-        var result = new PassageCheckEngine(
-                new FakeDepth((_, lon) => lon < 0.05 ? FakeDepth.Bathymetry(11.5) : null),
-                FakeWater.Constant(0))
-            .Check(plan, Fixture.Settings(), TestContext.Current.CancellationToken);
+        var outcome = Checks.Clearance(
+            new FakeDepth((_, lon) => lon < 0.05 ? FakeDepth.Bathymetry(11.5) : null),
+            FakeWater.Constant(0),
+            plan,
+            Fixture.Settings());
 
-        var findings = ClearanceFindings.Build(plan, result);
+        var findings = outcome.Findings;
 
         var below = Assert.Single(findings, f => f.Code == RouteFindingCodes.BelowSetting);
         Assert.Equal(("clearance.below_setting.0", RouteFindingGroup.MustReview, RouteFindingCategory.Clearance), (below.Id, below.Group, below.Category));

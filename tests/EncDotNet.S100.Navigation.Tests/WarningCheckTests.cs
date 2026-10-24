@@ -9,7 +9,7 @@ namespace EncDotNet.S100.Navigation.Tests;
 /// due east from 0° to 0,01° E (about 1 112 m), 50 m limits either side, at
 /// 6 kn from 06:00.
 /// </summary>
-public class RouteWarningCheckTests
+public class WarningCheckTests
 {
     private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
     private static readonly DateTimeOffset Departure = new(2026, 3, 1, 6, 0, 0, TimeSpan.Zero);
@@ -43,12 +43,8 @@ public class RouteWarningCheckTests
         Points = [new GeoPosition(lat, lon)],
     };
 
-    private static RouteWarningResult Check(params RouteWarning[] warnings) =>
-        new RouteWarningCheck().Check(
-            new PassagePlan([EastPassage], Departure),
-            AtDeparture,
-            warnings,
-            TestContext.Current.CancellationToken);
+    private static RouteCheckOutcome<WarningCheckResult> Check(params RouteWarning[] warnings) =>
+        Checks.Warnings(new FakeWarnings(warnings), new PassagePlan([EastPassage], Departure), AtDeparture);
 
     private static RouteWarning Warning(NavigationalWarningInfo info, params S100FeatureGeometry[] shapes) =>
         new(info, shapes, new RouteFindingFeature("124TEST", $"part.{info.Reference!.Number}"));
@@ -58,7 +54,7 @@ public class RouteWarningCheckTests
     {
         var result = Check(Warning(Info(1), Box(-0.001, 0.004, 0.001, 0.006)));
 
-        var match = Assert.Single(result.Matches);
+        var match = Assert.Single(result.Detail!.Matches);
         Assert.Equal(RouteWarningRelation.Crosses, match.Relation);
         Assert.Equal(0.004 * M, match.StartDistanceMeters, 3);
         Assert.Equal(0.006 * M, match.EndDistanceMeters, 3);
@@ -86,7 +82,7 @@ public class RouteWarningCheckTests
     {
         // 30 m north of the track, inside the 50 m port limit.
         var north = 30 / M;
-        var match = Assert.Single(Check(Warning(Info(3), Box(north, 0.004, north + 0.001, 0.005))).Matches);
+        var match = Assert.Single(Check(Warning(Info(3), Box(north, 0.004, north + 0.001, 0.005))).Detail!.Matches);
 
         Assert.Equal(RouteWarningRelation.Crosses, match.Relation);
         Assert.Equal(30, match.ClosestMeters, 0.5);
@@ -101,9 +97,9 @@ public class RouteWarningCheckTests
         var far = Warning(Info(6), Point(0.5, 0.005));
         var source = new RouteWarningList([aside, far]);
 
-        var result = new RouteWarningCheck().Check(new PassagePlan([EastPassage], Departure), AtDeparture, source, TestContext.Current.CancellationToken);
+        var result = Checks.Warnings(source, new PassagePlan([EastPassage], Departure), AtDeparture);
 
-        var match = Assert.Single(result.Matches);
+        var match = Assert.Single(result.Detail!.Matches);
         Assert.Same(aside, match.Warning);
         Assert.Equal(RouteWarningRelation.Near, match.Relation);
         Assert.Equal(Check(aside).Findings.Select(f => f.Id), result.Findings.Select(f => f.Id));
@@ -118,10 +114,10 @@ public class RouteWarningCheckTests
 
         var result = Check(onTrack, aside, far);
 
-        Assert.Equal(RouteWarningRelation.Near, result.Matches[0].Relation);
-        Assert.Equal(RouteWarningRelation.Near, result.Matches[1].Relation);
-        Assert.Equal(RouteWarningRelation.Off, result.Matches[2].Relation);
-        Assert.Null(result.Matches[2].Finding);
+        Assert.Equal(RouteWarningRelation.Near, result.Detail!.Matches[0].Relation);
+        Assert.Equal(RouteWarningRelation.Near, result.Detail!.Matches[1].Relation);
+        Assert.Equal(RouteWarningRelation.Off, result.Detail!.Matches[2].Relation);
+        Assert.Null(result.Detail!.Matches[2].Finding);
         Assert.All(result.Findings, f => Assert.Equal((RouteFindingCodes.WarningNearRoute, RouteFindingGroup.Check), (f.Code, f.Group)));
         Assert.Equal("Navigational warning 004/26 near the route", result.Findings[0].Title);
     }
@@ -129,13 +125,13 @@ public class RouteWarningCheckTests
     [Fact]
     public void The_near_distance_is_configurable()
     {
-        var result = new RouteWarningCheck(new RouteWarningOptions { NearDistanceMeters = 100 }).Check(
+        var result = Checks.Warnings(
+            new FakeWarnings([Warning(Info(7), Point(800 / M, 0.005))]),
             new PassagePlan([East]),
             AtDeparture,
-            [Warning(Info(7), Point(800 / M, 0.005))],
-            TestContext.Current.CancellationToken);
+            new RouteCheckOptions { Warnings = new RouteWarningOptions { NearDistanceMeters = 100 } });
 
-        Assert.Equal(RouteWarningRelation.Off, Assert.Single(result.Matches).Relation);
+        Assert.Equal(RouteWarningRelation.Off, Assert.Single(result.Detail!.Matches).Relation);
     }
 
     [Fact]
@@ -146,7 +142,7 @@ public class RouteWarningCheckTests
             InteriorRings = [Box(-0.001, 0.003, 0.001, 0.007).ExteriorRing],
         };
 
-        var match = Assert.Single(Check(Warning(Info(8), area)).Matches);
+        var match = Assert.Single(Check(Warning(Info(8), area)).Detail!.Matches);
 
         // Enters at 0,002°, leaves for the last time at 0,008°: the span covers the hole.
         Assert.Equal(0.002 * M, match.StartDistanceMeters, 3);
@@ -162,10 +158,10 @@ public class RouteWarningCheckTests
 
         var result = Check(before, during);
 
-        Assert.Equal((RouteFindingCodes.WarningNotInForce, RouteFindingGroup.Info), (result.Matches[0].Finding!.Code, result.Matches[0].Finding!.Group));
-        Assert.Equal(RouteFindingGroup.MustReview, result.Matches[1].Finding!.Group);
-        Assert.True(((WarningDetails)result.Matches[1].Finding!.Details!).AtEta);
-        Assert.StartsWith("Not in force at 2026-03-01 06:03", result.Matches[0].Finding!.Meta.Split(" · ")[^1], StringComparison.Ordinal);
+        Assert.Equal((RouteFindingCodes.WarningNotInForce, RouteFindingGroup.Info), (result.Detail!.Matches[0].Finding!.Code, result.Detail!.Matches[0].Finding!.Group));
+        Assert.Equal(RouteFindingGroup.MustReview, result.Detail!.Matches[1].Finding!.Group);
+        Assert.True(((WarningDetails)result.Detail!.Matches[1].Finding!.Details!).AtEta);
+        Assert.StartsWith("Not in force at 2026-03-01 06:03", result.Detail!.Matches[0].Finding!.Meta.Split(" · ")[^1], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -184,11 +180,11 @@ public class RouteWarningCheckTests
 
         var result = Check(selfCancelled, cancelled, cancels, lateCancelled, cancelsLate);
 
-        Assert.Equal(RouteWarningStatus.Cancelled, ((WarningDetails)result.Matches[0].Finding!.Details!).Status);
-        Assert.Equal((RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info), (result.Matches[1].Finding!.Code, result.Matches[1].Finding!.Group));
-        Assert.Equal("Navigational warning 012/26 cancelled", result.Matches[1].Finding!.Title);
-        Assert.EndsWith(" · Cancelled", result.Matches[1].Finding!.Meta, StringComparison.Ordinal);
-        Assert.Equal(RouteWarningStatus.InForce, ((WarningDetails)result.Matches[3].Finding!.Details!).Status);
+        Assert.Equal(RouteWarningStatus.Cancelled, ((WarningDetails)result.Detail!.Matches[0].Finding!.Details!).Status);
+        Assert.Equal((RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info), (result.Detail!.Matches[1].Finding!.Code, result.Detail!.Matches[1].Finding!.Group));
+        Assert.Equal("Navigational warning 012/26 cancelled", result.Detail!.Matches[1].Finding!.Title);
+        Assert.EndsWith(" · Cancelled", result.Detail!.Matches[1].Finding!.Meta, StringComparison.Ordinal);
+        Assert.Equal(RouteWarningStatus.InForce, ((WarningDetails)result.Detail!.Matches[3].Finding!.Details!).Status);
     }
 
     [Fact]
@@ -199,13 +195,12 @@ public class RouteWarningCheckTests
             Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.005)]),
             Fixture.Leg([new GeoPosition(0, 0.005), new GeoPosition(0.005, 0.005)]),
         };
-        var result = new RouteWarningCheck().Check(
+        var result = Checks.Warnings(
+            new FakeWarnings([Warning(Info(16), Box(-0.001, 0.004, 0.002, 0.006))]),
             new PassagePlan(legs),
-            AtDeparture,
-            [Warning(Info(16), Box(-0.001, 0.004, 0.002, 0.006))],
-            TestContext.Current.CancellationToken);
+            AtDeparture);
 
-        var match = Assert.Single(result.Matches);
+        var match = Assert.Single(result.Detail!.Matches);
         Assert.Equal(0, match.LegIndex);
         Assert.Equal(0.004 * M, match.StartDistanceMeters, 1);
         Assert.Equal(0.007 * M, match.EndDistanceMeters, 1);
@@ -240,16 +235,11 @@ public class RouteWarningCheckTests
         };
         var set = new NavigationalWarningSet([listed.Info, dropped.Info, later.Info, bulletin]);
 
-        var result = new RouteWarningCheck().Check(
-            new PassagePlan([EastPassage], Departure),
-            AtDeparture,
-            [listed, dropped, later],
-            set,
-            TestContext.Current.CancellationToken);
+        var result = Checks.Warnings(new FakeWarnings([listed, dropped, later], set), new PassagePlan([EastPassage], Departure), AtDeparture);
 
-        Assert.Equal(RouteWarningStatus.InForce, ((WarningDetails)result.Matches[0].Finding!.Details!).Status);
-        Assert.Equal(RouteWarningStatus.InForce, ((WarningDetails)result.Matches[2].Finding!.Details!).Status);
-        var finding = result.Matches[1].Finding!;
+        Assert.Equal(RouteWarningStatus.InForce, ((WarningDetails)result.Detail!.Matches[0].Finding!.Details!).Status);
+        Assert.Equal(RouteWarningStatus.InForce, ((WarningDetails)result.Detail!.Matches[2].Finding!.Details!).Status);
+        var finding = result.Detail!.Matches[1].Finding!;
         Assert.Equal((RouteFindingCodes.WarningCancelled, RouteFindingGroup.Info), (finding.Code, finding.Group));
         Assert.Equal("Navigational warning 021/26 not in in-force bulletin TEST 030/26", finding.Title);
         Assert.EndsWith(" · Cancelled — not in in-force bulletin TEST 030/26", finding.Meta, StringComparison.Ordinal);
@@ -265,7 +255,17 @@ public class RouteWarningCheckTests
 
         var result = Check(cancelled, cancels);
 
-        Assert.Equal(NavigationalWarningStatusReason.Cancelled, ((WarningDetails)result.Matches[0].Finding!.Details!).Withdrawal!.Reason);
-        Assert.Null(((WarningDetails)result.Matches[1].Finding!.Details!).Withdrawal);
+        Assert.Equal(NavigationalWarningStatusReason.Cancelled, ((WarningDetails)result.Detail!.Matches[0].Finding!.Details!).Withdrawal!.Reason);
+        Assert.Null(((WarningDetails)result.Detail!.Matches[1].Finding!.Details!).Withdrawal);
+    }
+
+    [Fact]
+    public void Without_warnings_the_check_is_skipped()
+    {
+        var outcome = Checks.Run(new WarningCheck(), new PassagePlan([EastPassage], Departure), AtDeparture, RouteCheckSources.Empty);
+
+        Assert.Equal((RouteCheckState.Skipped, RouteCheckReasons.WarningsMissing), (outcome.State, outcome.Reason));
+        Assert.Empty(outcome.Findings);
+        Assert.Null(outcome.Detail);
     }
 }

@@ -482,7 +482,7 @@ For the design, see [S-98 interoperability](../../docs/design/s98-interoperabili
   lists that aren't loaded (§9.2.2). A bulletin is recognised by a
   `References` with `referenceCategory` 3 (In-Force).
 - `Navigation/RouteWarningSources`: the S-124 warning parts of loaded datasets
-  as `RouteWarning`s for `RouteWarningCheck`, and `SetFromDatasets`, the
+  as `RouteWarning`s for the route check's `WarningCheck`, and `SetFromDatasets`, the
   `NavigationalWarningSet` to judge them with (see the Navigation package's
   README).
 - `AssetSourceHelpers`: set-up helpers for exchange sets and loose datasets.

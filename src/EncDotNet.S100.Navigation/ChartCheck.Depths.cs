@@ -4,7 +4,7 @@ using EncDotNet.S100.Quantities;
 namespace EncDotNet.S100.Navigation;
 
 // The safety-contour and safety-depth checks (#955).
-public sealed partial class RouteCheckEngine
+public sealed partial class ChartCheck
 {
     private sealed partial class LegSweep
     {
@@ -81,7 +81,7 @@ public sealed partial class RouteCheckEngine
             }
 
             hits.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-            foreach (var group in Groups(hits, h => h.Distance, _engine._options.ShoalMergeGapMeters))
+            foreach (var group in Groups(hits, h => h.Distance, _run.Options.ShoalMergeGapMeters))
             {
                 var start = group[0].Distance;
                 var end = group[^1].Distance;
@@ -123,7 +123,7 @@ public sealed partial class RouteCheckEngine
         // no S-102 surface overlaps aren't sampled.
         private void CheckBathymetry(LegDepths depths)
         {
-            if (_engine._bathymetry is not { } bathymetry
+            if (_run.Bathymetry is not { } bathymetry
                 || bathymetry.FinestGridSpacingMeters(_extent) is not { } grid
                 || !(grid > 0))
             {
@@ -131,7 +131,7 @@ public sealed partial class RouteCheckEngine
             }
 
             var contour = depths.SafetyContourMeters;
-            var options = _engine._options;
+            var options = _run.Options;
             var length = _stations[^1].Distance - _stations[0].Distance;
             var step = Math.Max(grid / 2, length / Math.Max(1, options.MaxStationsPerLeg));
             var across = Math.Clamp((int)Math.Ceiling((_port + _starboard) / step), 1, MaxSamplesAcross);

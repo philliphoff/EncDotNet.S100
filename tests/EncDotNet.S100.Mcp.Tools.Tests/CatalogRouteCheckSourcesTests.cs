@@ -217,7 +217,7 @@ public class CatalogRouteCheckSourcesTests
         var departure = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var plan = new PassagePlan([leg], departure);
 
-        var result = new PassageCheckEngine(sources.Depth!, sources.WaterLevel!).Check(plan, new RouteCheckSettings { At = departure }, TestContext.Current.CancellationToken);
+        var result = new ClearanceCheck().Run(new RouteCheckContext(plan, new RouteCheckSettings { At = departure }, sources), TestContext.Current.CancellationToken).Detail!.Clearance;
 
         Assert.Equal(["harbour"], result.Sources.FallbackDatasets);
         Assert.All(result.Samples, s => Assert.Equal(8, s.Depth!.DepthMeters));

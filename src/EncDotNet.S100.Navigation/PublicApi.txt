@@ -1,11 +1,16 @@
 namespace EncDotNet.S100.Navigation
 {
-    public sealed class AreaCheck : EncDotNet.S100.Navigation.IRouteCheck
+    public sealed class AreaCheck : EncDotNet.S100.Navigation.IRouteCheck, EncDotNet.S100.Navigation.IRouteCheck<EncDotNet.S100.Navigation.AreaCheckResult>
     {
         public const string CheckName = "areas";
         public AreaCheck() { }
         public string Name { get; }
-        public EncDotNet.S100.Navigation.RouteCheckOutcome Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken) { }
+        public EncDotNet.S100.Navigation.RouteCheckOutcome<EncDotNet.S100.Navigation.AreaCheckResult> Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken = default) { }
+    }
+    public sealed class AreaCheckResult : System.IEquatable<EncDotNet.S100.Navigation.AreaCheckResult>
+    {
+        public AreaCheckResult(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteAreaMatch> Matches) { }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteAreaMatch> Matches { get; init; }
     }
     public sealed class AreaDetails : EncDotNet.S100.Navigation.RouteFindingDetails
     {
@@ -25,23 +30,27 @@ namespace EncDotNet.S100.Navigation
         public System.Collections.Generic.IReadOnlyList<int> Restrictions { get; init; }
         public System.DateTimeOffset Until { get; init; }
     }
-    public sealed class ChartCheck : EncDotNet.S100.Navigation.IRouteCheck
+    public sealed class ChartCheck : EncDotNet.S100.Navigation.IRouteCheck, EncDotNet.S100.Navigation.IRouteCheck<EncDotNet.S100.Navigation.ChartCheckResult>
     {
         public const string CheckName = "chart";
         public ChartCheck() { }
         public string Name { get; }
-        public EncDotNet.S100.Navigation.RouteCheckOutcome Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken) { }
+        public EncDotNet.S100.Navigation.RouteCheckOutcome<EncDotNet.S100.Navigation.ChartCheckResult> Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken = default) { }
     }
     public sealed class ChartCheckOptions : System.IEquatable<EncDotNet.S100.Navigation.ChartCheckOptions>
     {
         public ChartCheckOptions() { }
         public double DangerNearbyMeters { get; init; }
-        public double DefaultHalfWidthMeters { get; init; }
-        public EncDotNet.S100.Navigation.RouteFindingFormatter Formatter { get; init; }
         public int MaxStationsPerLeg { get; init; }
         public double ShoalMergeGapMeters { get; init; }
         public double StationSpacingMeters { get; init; }
         public static EncDotNet.S100.Navigation.ChartCheckOptions Default { get; }
+    }
+    public sealed class ChartCheckResult : System.IEquatable<EncDotNet.S100.Navigation.ChartCheckResult>
+    {
+        public ChartCheckResult(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteCheckCorridor> Corridors) { }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteCheckCorridor> Corridors { get; init; }
+        public double LengthMeters { get; }
     }
     public sealed class ChartedDepth : System.IEquatable<EncDotNet.S100.Navigation.ChartedDepth>
     {
@@ -75,12 +84,18 @@ namespace EncDotNet.S100.Navigation
         Tight = 1,
         Below = 2,
     }
-    public sealed class ClearanceCheck : EncDotNet.S100.Navigation.IRouteCheck
+    public sealed class ClearanceCheck : EncDotNet.S100.Navigation.IRouteCheck, EncDotNet.S100.Navigation.IRouteCheck<EncDotNet.S100.Navigation.ClearanceCheckResult>
     {
         public const string CheckName = "clearance";
         public ClearanceCheck() { }
         public string Name { get; }
-        public EncDotNet.S100.Navigation.RouteCheckOutcome Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken) { }
+        public EncDotNet.S100.Navigation.RouteCheckOutcome<EncDotNet.S100.Navigation.ClearanceCheckResult> Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken = default) { }
+    }
+    public sealed class ClearanceCheckResult : System.IEquatable<EncDotNet.S100.Navigation.ClearanceCheckResult>
+    {
+        public ClearanceCheckResult(EncDotNet.S100.Navigation.PassageCheckResult Clearance, EncDotNet.S100.Navigation.DepartureSweep? Departures) { }
+        public EncDotNet.S100.Navigation.PassageCheckResult Clearance { get; init; }
+        public EncDotNet.S100.Navigation.DepartureSweep? Departures { get; init; }
     }
     public sealed class ClearanceDetails : EncDotNet.S100.Navigation.RouteFindingDetails
     {
@@ -101,12 +116,6 @@ namespace EncDotNet.S100.Navigation
     {
         public static System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Build(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.PassageCheckResult result, EncDotNet.S100.Navigation.RouteFindingFormatter? formatter = null) { }
         public static EncDotNet.S100.Navigation.RouteFindingLocation Location(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.PassageCheckResult result, double fromMeters, double toMeters) { }
-    }
-    public sealed class ClearanceOutcome : System.IEquatable<EncDotNet.S100.Navigation.ClearanceOutcome>
-    {
-        public ClearanceOutcome(EncDotNet.S100.Navigation.PassageCheckResult Result, EncDotNet.S100.Navigation.DepartureSweep? Departures) { }
-        public EncDotNet.S100.Navigation.DepartureSweep? Departures { get; init; }
-        public EncDotNet.S100.Navigation.PassageCheckResult Result { get; init; }
     }
     [System.Flags]
     public enum ConfidenceReasons
@@ -191,6 +200,11 @@ namespace EncDotNet.S100.Navigation
         string Name { get; }
         EncDotNet.S100.Navigation.RouteCheckOutcome Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken);
     }
+    public interface IRouteCheck<TDetail> : EncDotNet.S100.Navigation.IRouteCheck
+        where TDetail :  class
+    {
+        EncDotNet.S100.Navigation.RouteCheckOutcome<TDetail> Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken);
+    }
     public interface IRouteWarningSource
     {
         EncDotNet.S100.Datasets.Pipelines.NavigationalWarningSet Set { get; }
@@ -242,16 +256,6 @@ namespace EncDotNet.S100.Navigation
         public double StartDistanceMeters { get; init; }
         public EncDotNet.S100.Navigation.UkcState WorstState { get; init; }
     }
-    public sealed class PassageCheckEngine
-    {
-        public PassageCheckEngine(EncDotNet.S100.Navigation.IChartedDepthSource depth, EncDotNet.S100.Navigation.IWaterLevelSource waterLevel, EncDotNet.S100.Navigation.PassageCheckOptions? options = null) { }
-        public EncDotNet.S100.Navigation.PassageCheckResult Check(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, System.Threading.CancellationToken cancellationToken = default) { }
-        public EncDotNet.S100.Navigation.PassageCheckResult Evaluate(EncDotNet.S100.Navigation.PassageDepthProfile profile, EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, System.Threading.CancellationToken cancellationToken = default) { }
-        public EncDotNet.S100.Navigation.PassageDepthProfile SampleDepths(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs, System.Threading.CancellationToken cancellationToken = default) { }
-        public EncDotNet.S100.Navigation.PassageDepthProfile SampleDepths(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs, EncDotNet.S100.Navigation.PassageDepthProfile? reuse, System.Threading.CancellationToken cancellationToken = default) { }
-        public EncDotNet.S100.Navigation.DepartureSweep SweepDepartures(EncDotNet.S100.Navigation.PassageDepthProfile profile, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs, System.DateTimeOffset from, System.DateTimeOffset to, System.TimeSpan step, System.Threading.CancellationToken cancellationToken = default) { }
-        public EncDotNet.S100.Navigation.DepartureSweep? SweepWaterLevelRange(EncDotNet.S100.Navigation.PassageDepthProfile profile, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs, System.TimeSpan step, int maxDepartures = 2000, System.Threading.CancellationToken cancellationToken = default) { }
-    }
     public sealed class PassageCheckOptions : System.IEquatable<EncDotNet.S100.Navigation.PassageCheckOptions>
     {
         public PassageCheckOptions() { }
@@ -281,17 +285,6 @@ namespace EncDotNet.S100.Navigation
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.UkcSample> Samples { get; init; }
         public EncDotNet.S100.Navigation.PassageSources Sources { get; init; }
         public EncDotNet.S100.Navigation.PassageVerdict Verdict { get; init; }
-    }
-    public sealed class PassageDepthProfile
-    {
-        public int LegCount { get; }
-        public int SampleCount { get; }
-        public double TotalDistanceMeters { get; }
-        public bool Matches(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs) { }
-        [return: System.Runtime.CompilerServices.TupleElementNames(new string[] {
-                "Start",
-                "End"})]
-        public System.ValueTuple<System.DateTime, System.DateTime>? WaterLevelTimeRange() { }
     }
     public static class PassageGeodesy
     {
@@ -398,17 +391,6 @@ namespace EncDotNet.S100.Navigation
         public System.Collections.Generic.IReadOnlyList<int> Restrictions { get; init; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Features.SurfacePart> Surfaces { get; init; }
     }
-    public sealed class RouteAreaCheck
-    {
-        public RouteAreaCheck(EncDotNet.S100.Navigation.RouteAreaOptions? options = null) { }
-        public EncDotNet.S100.Navigation.RouteAreaResult Check(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, EncDotNet.S100.Navigation.IRouteAreaSource source, System.Threading.CancellationToken cancellationToken = default) { }
-        public EncDotNet.S100.Navigation.RouteAreaResult Check(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteArea> areas, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartCell> cells, System.Threading.CancellationToken cancellationToken = default) { }
-        [return: System.Runtime.CompilerServices.TupleElementNames(new string[] {
-                "Month",
-                "Day"})]
-        public static System.ValueTuple<int, int>? DayOfYear(string? text) { }
-        public static bool InForceOver(EncDotNet.S100.Navigation.RouteArea area, System.DateTimeOffset from, System.DateTimeOffset until) { }
-    }
     public sealed class RouteAreaDateRange : System.IEquatable<EncDotNet.S100.Navigation.RouteAreaDateRange>
     {
         public RouteAreaDateRange(string? DateStart, string? DateEnd, string? TimeOfDayStart = null, string? TimeOfDayEnd = null) { }
@@ -443,8 +425,6 @@ namespace EncDotNet.S100.Navigation
     public sealed class RouteAreaOptions : System.IEquatable<EncDotNet.S100.Navigation.RouteAreaOptions>
     {
         public RouteAreaOptions() { }
-        public double DefaultHalfWidthMeters { get; init; }
-        public EncDotNet.S100.Navigation.RouteFindingFormatter Formatter { get; init; }
         public int MaxSegmentsPerLeg { get; init; }
         public double SegmentLengthMeters { get; init; }
         public static EncDotNet.S100.Navigation.RouteAreaOptions Default { get; }
@@ -459,12 +439,6 @@ namespace EncDotNet.S100.Navigation
         Enters = 0,
         InCorridor = 1,
         Off = 2,
-    }
-    public sealed class RouteAreaResult : System.IEquatable<EncDotNet.S100.Navigation.RouteAreaResult>
-    {
-        public RouteAreaResult(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteAreaMatch> Matches, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Findings) { }
-        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Findings { get; init; }
-        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteAreaMatch> Matches { get; init; }
     }
     public abstract class RouteChartCell
     {
@@ -516,11 +490,6 @@ namespace EncDotNet.S100.Navigation
         public double StarboardHalfWidthMeters { get; init; }
         public double StartDistanceMeters { get; init; }
     }
-    public sealed class RouteCheckEngine
-    {
-        public RouteCheckEngine(EncDotNet.S100.Navigation.IRouteChartSource charts, EncDotNet.S100.Navigation.ChartCheckOptions? options = null, EncDotNet.S100.Navigation.IChartedDepthSource? depth = null) { }
-        public EncDotNet.S100.Navigation.RouteCheckResult Check(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, System.Threading.CancellationToken cancellationToken = default) { }
-    }
     public sealed class RouteCheckOptions : System.IEquatable<EncDotNet.S100.Navigation.RouteCheckOptions>
     {
         public RouteCheckOptions() { }
@@ -532,7 +501,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Navigation.RouteWarningOptions Warnings { get; init; }
         public static EncDotNet.S100.Navigation.RouteCheckOptions Default { get; }
     }
-    public sealed class RouteCheckOutcome
+    public class RouteCheckOutcome
     {
         public object? Detail { get; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Findings { get; }
@@ -541,6 +510,14 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteCheckOutcome Partial(string reason, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> findings, object? detail = null) { }
         public static EncDotNet.S100.Navigation.RouteCheckOutcome Ran(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> findings, object? detail = null) { }
         public static EncDotNet.S100.Navigation.RouteCheckOutcome Skipped(string reason) { }
+    }
+    public sealed class RouteCheckOutcome<TDetail> : EncDotNet.S100.Navigation.RouteCheckOutcome
+        where TDetail :  class
+    {
+        public new TDetail Detail { get; }
+        public static EncDotNet.S100.Navigation.RouteCheckOutcome<TDetail> Partial(string reason, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> findings, TDetail detail) { }
+        public static EncDotNet.S100.Navigation.RouteCheckOutcome<TDetail> Ran(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> findings, TDetail detail) { }
+        public new static EncDotNet.S100.Navigation.RouteCheckOutcome<TDetail> Skipped(string reason) { }
     }
     public static class RouteCheckReasons
     {
@@ -555,7 +532,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class RouteCheckReport
     {
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteAreaMatch> Areas { get; }
-        public EncDotNet.S100.Navigation.RouteCheckResult? Chart { get; }
+        public EncDotNet.S100.Navigation.ChartCheckResult? Chart { get; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteCheckStatus> Checks { get; }
         public EncDotNet.S100.Navigation.PassageCheckResult? Clearance { get; }
         public EncDotNet.S100.Navigation.RouteFindingCounts Counts { get; }
@@ -571,13 +548,6 @@ namespace EncDotNet.S100.Navigation
         public T? Detail<T>(string name)
             where T :  class { }
         public EncDotNet.S100.Navigation.RouteCheckStatus? Status(string name) { }
-    }
-    public sealed class RouteCheckResult : System.IEquatable<EncDotNet.S100.Navigation.RouteCheckResult>
-    {
-        public RouteCheckResult(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Findings, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteCheckCorridor> Corridors) { }
-        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteCheckCorridor> Corridors { get; init; }
-        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Findings { get; init; }
-        public double LengthMeters { get; }
     }
     public sealed class RouteCheckSettings
     {
@@ -892,17 +862,6 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Datasets.Pipelines.NavigationalWarningInfo Info { get; init; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Datasets.Pipelines.S100FeatureGeometry> Shapes { get; init; }
     }
-    public sealed class RouteWarningCheck
-    {
-        public RouteWarningCheck(EncDotNet.S100.Navigation.RouteWarningOptions? options = null) { }
-        public EncDotNet.S100.Navigation.RouteWarningResult Check(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, EncDotNet.S100.Navigation.IRouteWarningSource source, System.Threading.CancellationToken cancellationToken = default) { }
-        public EncDotNet.S100.Navigation.RouteWarningResult Check(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteWarning> warnings, System.Threading.CancellationToken cancellationToken = default) { }
-        public EncDotNet.S100.Navigation.RouteWarningResult Check(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteWarning> warnings, EncDotNet.S100.Datasets.Pipelines.NavigationalWarningSet? set, System.Threading.CancellationToken cancellationToken = default) { }
-        [return: System.Runtime.CompilerServices.TupleElementNames(new string[] {
-                "Status",
-                "Withdrawal"})]
-        public static System.ValueTuple<EncDotNet.S100.Navigation.RouteWarningStatus, EncDotNet.S100.Datasets.Pipelines.NavigationalWarningState?> StatusOver(EncDotNet.S100.Datasets.Pipelines.NavigationalWarningInfo warning, EncDotNet.S100.Datasets.Pipelines.NavigationalWarningSet set, System.DateTimeOffset from, System.DateTimeOffset until) { }
-    }
     public sealed class RouteWarningList : EncDotNet.S100.Navigation.IRouteWarningSource
     {
         public RouteWarningList(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteWarning> warnings, EncDotNet.S100.Datasets.Pipelines.NavigationalWarningSet? set = null) { }
@@ -924,8 +883,6 @@ namespace EncDotNet.S100.Navigation
     public sealed class RouteWarningOptions : System.IEquatable<EncDotNet.S100.Navigation.RouteWarningOptions>
     {
         public RouteWarningOptions() { }
-        public double DefaultHalfWidthMeters { get; init; }
-        public EncDotNet.S100.Navigation.RouteFindingFormatter Formatter { get; init; }
         public int MaxSegmentsPerLeg { get; init; }
         public double NearDistanceMeters { get; init; }
         public double SegmentLengthMeters { get; init; }
@@ -936,12 +893,6 @@ namespace EncDotNet.S100.Navigation
         Crosses = 0,
         Near = 1,
         Off = 2,
-    }
-    public sealed class RouteWarningResult : System.IEquatable<EncDotNet.S100.Navigation.RouteWarningResult>
-    {
-        public RouteWarningResult(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteWarningMatch> Matches, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Findings) { }
-        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Findings { get; init; }
-        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteWarningMatch> Matches { get; init; }
     }
     public enum RouteWarningStatus
     {
@@ -1049,12 +1000,17 @@ namespace EncDotNet.S100.Navigation
     {
         public static EncDotNet.S100.Navigation.DatumAgreement Compare(int? depthDatum, int? waterLevelDatum) { }
     }
-    public sealed class WarningCheck : EncDotNet.S100.Navigation.IRouteCheck
+    public sealed class WarningCheck : EncDotNet.S100.Navigation.IRouteCheck, EncDotNet.S100.Navigation.IRouteCheck<EncDotNet.S100.Navigation.WarningCheckResult>
     {
         public const string CheckName = "warnings";
         public WarningCheck() { }
         public string Name { get; }
-        public EncDotNet.S100.Navigation.RouteCheckOutcome Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken) { }
+        public EncDotNet.S100.Navigation.RouteCheckOutcome<EncDotNet.S100.Navigation.WarningCheckResult> Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken = default) { }
+    }
+    public sealed class WarningCheckResult : System.IEquatable<EncDotNet.S100.Navigation.WarningCheckResult>
+    {
+        public WarningCheckResult(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteWarningMatch> Matches) { }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteWarningMatch> Matches { get; init; }
     }
     public sealed class WarningDetails : EncDotNet.S100.Navigation.RouteFindingDetails
     {

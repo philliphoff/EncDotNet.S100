@@ -1,6 +1,7 @@
 # Route check architecture — Design Note
 
-> Status: **Implemented** (#1034). Every step in §3 has landed, and
+> Status: **Implemented** (#1034). Every step in §3 has landed, the old
+> engines are folded into the checks (step 7), and
 > [How a route check works](../how-a-route-check-works.md) documents the
 > result for outside use. This note records why the engine has the shape
 > it does: it reviews the route and passage check engine as it stood after
@@ -350,6 +351,17 @@ The existing engines become the built-in checks:
   `PassageFindings.Build` out of SoundCharts.
   `data.s111_forecast_expired` is dropped (§4, decision 4).
 
+As landed (step 7 in §3), the engines are gone: their code is the checks'
+own, and the incremental clearance API (`SampleDepths`, `Evaluate`, the
+sweeps and `PassageDepthProfile`) is private to `ClearanceCheck`. Each
+check is an `IRouteCheck<TDetail>` whose `Run` returns a
+`RouteCheckOutcome<TDetail>`, so a caller that runs one check reads its
+result typed: `ChartCheckResult` (the corridors), `AreaCheckResult` and
+`WarningCheckResult` (the matches) and `ClearanceCheckResult` (the
+`PassageCheckResult` and the departure sweep). The findings live on the
+outcome alone. `DefaultLimit` and `Formatter` are set once, on
+`RouteCheckOptions`.
+
 Four pieces of work stop being done once per check:
 
 - `RouteTrack` is built once per run and shared. Today the chart, area
@@ -455,6 +467,12 @@ CLI tests act as the regression net.
 6. **Lock down.**
    - Add a public API baseline for Navigation.
    - Write the "How a route check works" article and a runnable sample.
+7. **Fold the engines into the checks.**
+   - Move `RouteCheckEngine`, `RouteAreaCheck`, `RouteWarningCheck` and
+     `PassageCheckEngine` into `ChartCheck`, `AreaCheck`, `WarningCheck`
+     and `ClearanceCheck`, and delete them.
+   - Give each check a typed result through `IRouteCheck<TDetail>`.
+   - Run the unit, scenario and host tests through the checks.
 
 Steps 1 and 3 are the largest. Step 4 only makes sense after 1–3.
 

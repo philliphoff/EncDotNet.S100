@@ -14,8 +14,9 @@ public sealed record RouteCheckOptions
 
     /// <summary>
     /// The corridor's half-width on a side whose cross-track limit isn't set:
-    /// how far it reaches to port, or to starboard, of the track. Every check
-    /// uses it, whatever its own options say. Default 50 m.
+    /// how far it reaches to port, or to starboard, of the track. The full
+    /// corridor is twice this when neither side is set. Every check uses it.
+    /// Default 50 m.
     /// </summary>
     public Length DefaultLimit { get; init; } = Length.FromMetres(50);
 
@@ -32,18 +33,8 @@ public sealed record RouteCheckOptions
     public PassageCheckOptions Clearance { get; init; } = PassageCheckOptions.Default;
 
     /// <summary>
-    /// Renders every finding's title and meta line, whatever each check's own
-    /// options say. Hosts with their own resources (the viewer's
-    /// <c>Strings.resx</c>) pass their own.
+    /// Renders every finding's title and meta line. Hosts with their own
+    /// resources (the viewer's <c>Strings.resx</c>) pass their own.
     /// </summary>
     public RouteFindingFormatter Formatter { get; init; } = RouteFindingFormatter.Default;
-
-    /// <summary>The chart check's options with <see cref="DefaultLimit"/> and <see cref="Formatter"/>.</summary>
-    internal ChartCheckOptions EffectiveChart => Chart with { DefaultHalfWidthMeters = DefaultLimit.TotalMetres, Formatter = Formatter };
-
-    /// <summary>The area check's options with <see cref="DefaultLimit"/> and <see cref="Formatter"/>.</summary>
-    internal RouteAreaOptions EffectiveAreas => Areas with { DefaultHalfWidthMeters = DefaultLimit.TotalMetres, Formatter = Formatter };
-
-    /// <summary>The warning check's options with <see cref="DefaultLimit"/> and <see cref="Formatter"/>.</summary>
-    internal RouteWarningOptions EffectiveWarnings => Warnings with { DefaultHalfWidthMeters = DefaultLimit.TotalMetres, Formatter = Formatter };
 }

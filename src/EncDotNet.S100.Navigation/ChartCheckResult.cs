@@ -17,15 +17,12 @@ public sealed record RouteCheckCorridor(
     double StarboardHalfWidthMeters,
     IReadOnlyList<GeoPosition> Ring);
 
-/// <summary>The result of <see cref="RouteCheckEngine.Check"/>.</summary>
-/// <param name="Findings">
-/// The findings, sorted by group (MUST REVIEW, CHECK, INFO) and then by
-/// distance from departure.
-/// </param>
+/// <summary>
+/// What <see cref="ChartCheck"/> found besides its findings: the corridor it
+/// swept along each leg.
+/// </summary>
 /// <param name="Corridors">The corridor of each leg, in route order.</param>
-public sealed record RouteCheckResult(
-    IReadOnlyList<RouteFinding> Findings,
-    IReadOnlyList<RouteCheckCorridor> Corridors)
+public sealed record ChartCheckResult(IReadOnlyList<RouteCheckCorridor> Corridors)
 {
     /// <summary>The route's length in metres.</summary>
     public double LengthMeters => Corridors.Count == 0 ? 0 : Corridors[^1].EndDistanceMeters;

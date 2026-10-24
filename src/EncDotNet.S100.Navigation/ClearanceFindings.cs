@@ -106,7 +106,7 @@ public static class ClearanceFindings
     }
 
     // One finding per run of consecutive samples below the setting, as the
-    // engine counts places below.
+    // clearance check counts places below.
     private static void AddBelowSetting(List<RouteFinding> findings, PassagePlan plan, PassageCheckResult result)
     {
         var samples = result.Samples;

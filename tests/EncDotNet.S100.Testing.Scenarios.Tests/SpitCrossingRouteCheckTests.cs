@@ -10,7 +10,7 @@ namespace EncDotNet.S100.Testing.Scenarios.Tests;
 
 /// <summary>
 /// "Spit crossing" end to end (#954): generated S-101 cells, read by the real
-/// reader into the route-check adapter and <see cref="RouteCheckEngine"/>,
+/// reader into the route-check adapter and <see cref="ChartCheck"/>,
 /// give the land and drying ground the world model predicts.
 /// </summary>
 public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : IClassFixture<SpitCrossingFixture>
@@ -86,7 +86,7 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         Assert.Equal(RouteFindingCategory.Data, finding.Category);
         var edge = Distance(route, (coastal.East, 3050));
         Assert.InRange(finding.Distance!.Value.TotalMetres, edge - Tolerance, edge + Tolerance);
-        Assert.Equal(result.LengthMeters, finding.Location!.EndDistanceMeters, 6);
+        Assert.Equal(result.Detail!.LengthMeters, finding.Location!.EndDistanceMeters, 6);
     }
 
     // #947: the coastal cell's generalised land reaches about 150 m further
@@ -145,11 +145,11 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         var legs = Legs(local.Select(p => World.Frame.ToGeo(p.X, p.Y)).ToList());
 
         // With the depth checks (#955) and S-102, as the viewer runs it.
-        var engine = new RouteCheckEngine(_sources.Charts!, null, _sources.Depth);
+        // A fresh check each run, so none reuses the last sweep.
         var plan = new PassagePlan(legs);
         var settings = PassageLegs.Settings(DateTimeOffset.UnixEpoch, 10, 10);
         var first = Stopwatch.StartNew();
-        var result = engine.Check(plan, settings, TestContext.Current.CancellationToken);
+        var result = ScenarioChecks.Chart(_sources, plan, settings);
         first.Stop();
 
         // The first checks run on tier-0 JIT code (about ten times slower);
@@ -162,19 +162,19 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         while (times.Count < 30 && (times.Count < 5 || budget.Elapsed < TimeSpan.FromSeconds(20)))
         {
             var run = Stopwatch.StartNew();
-            engine.Check(plan, settings, TestContext.Current.CancellationToken);
+            ScenarioChecks.Chart(_sources, plan, settings);
             times.Add(run.Elapsed.TotalMilliseconds);
         }
 
         var settled = times.TakeLast(5).ToList();
         var each = settled.Min();
         TestContext.Current.TestOutputHelper?.WriteLine(
-            $"Route check, {result.LengthMeters / PassageGeodesy.MetersPerNauticalMile:0.0} NM in {legs.Count} legs: " +
+            $"Route check, {result.Detail!.LengthMeters / PassageGeodesy.MetersPerNauticalMile:0.0} NM in {legs.Count} legs: " +
             $"first {first.Elapsed.TotalMilliseconds:0} ms (builds the cells' indexes), settled {each:0.0}–{settled.Max():0.0} ms per check " +
             $"after {times.Count} checks (the second took {times[0]:0} ms); {result.Findings.Count} findings: " +
             string.Join(", ", result.Findings.GroupBy(f => f.Code).Select(g => $"{g.Key} ×{g.Count()}")) + ".");
 
-        Assert.InRange(result.LengthMeters / PassageGeodesy.MetersPerNauticalMile, 20, 35);
+        Assert.InRange(result.Detail!.LengthMeters / PassageGeodesy.MetersPerNauticalMile, 20, 35);
         Assert.Contains(result.Findings, f => f.Code == RouteFindingCodes.CrossesDrying);
 
         // About 120 ms on Apple silicon, but about 1 s on a 2-core GitHub
@@ -183,12 +183,12 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         Assert.True(each < 2500, $"A check took {each:0} ms.");
     }
 
-    private RouteCheckResult Check(IReadOnlyList<PassageLeg> legs, params string[] only)
+    private RouteCheckOutcome<ChartCheckResult> Check(IReadOnlyList<PassageLeg> legs, params string[] only)
     {
         var sources = only.Length == 0
             ? _sources
             : CatalogRouteCheckSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)), new ProjNetCrsTransformFactory());
-        return new RouteCheckEngine(sources.Charts!).Check(new PassagePlan(legs), PassageLegs.Settings(DateTimeOffset.UnixEpoch), TestContext.Current.CancellationToken);
+        return ScenarioChecks.Chart(sources, new PassagePlan(legs), PassageLegs.Settings(DateTimeOffset.UnixEpoch));
     }
 
     private S421RouteSpec Spec(string datasetName) => Definition.Routes.Single(r => r.DatasetName == datasetName);

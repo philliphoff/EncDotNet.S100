@@ -6,6 +6,23 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Route checks: the engines are the checks.** In
+  `EncDotNet.S100.Navigation`, `RouteCheckEngine`, `RouteAreaCheck`,
+  `RouteWarningCheck` and `PassageCheckEngine` are gone (a breaking
+  change): `ChartCheck`, `AreaCheck`, `WarningCheck` and `ClearanceCheck`
+  hold their code. Run one check with `Run` on a `RouteCheckContext`, or
+  all of them with `RouteChecker`. Each check is an `IRouteCheck<TDetail>`
+  whose `RouteCheckOutcome<TDetail>.Detail` is typed: `ChartCheckResult`
+  (was `RouteCheckResult`), `AreaCheckResult` (was `RouteAreaResult`),
+  `WarningCheckResult` (was `RouteWarningResult`) and `ClearanceCheckResult`
+  (was `ClearanceOutcome`). The findings are on the outcome only. The
+  incremental clearance API (`SampleDepths`, `Evaluate`, `SweepDepartures`,
+  `SweepWaterLevelRange` and `PassageDepthProfile`) is internal to
+  `ClearanceCheck`; departure sweeps come from
+  `RouteCheckSettings.DepartureWindow`. The per-check `DefaultHalfWidthMeters`
+  and `Formatter` options are gone; set `RouteCheckOptions.DefaultLimit` and
+  `Formatter` once. Codes and finding ids are unchanged. See
+  [Run one check](../src/EncDotNet.S100.Navigation/README.md#run-one-check).
 - **How a route check works.** A new page,
   [How a route check works](how-a-route-check-works.md), explains which
   dataset feeds each check, the time and keel rules, the verdict and each

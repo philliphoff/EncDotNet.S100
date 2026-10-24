@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
 
@@ -56,6 +57,31 @@ internal sealed class FakeWater(Func<double, double, IReadOnlyList<IWaterLevelSe
         new((_, _) => [new FakeSeries(Fixture.Departure.UtcDateTime.AddHours(-12), Fixture.Departure.UtcDateTime.AddHours(12), _ => height, datum)]);
 }
 
+/// <summary>Areas and cells that are all "near" any extent; the check sorts them out. Counts the area queries.</summary>
+internal sealed class FakeAreas(IReadOnlyList<RouteArea> areas, IReadOnlyList<RouteChartCell>? cells = null) : IRouteAreaSource
+{
+    public int Queries { get; private set; }
+
+    public IReadOnlyList<RouteArea> AreasNear(BoundingBox extent)
+    {
+        Queries++;
+        return areas;
+    }
+
+    public IReadOnlyList<RouteChartCell> CellsNear(BoundingBox extent) => cells ?? [];
+}
+
+/// <summary>
+/// Warnings that are all "near" any extent, so every one gets a match; the
+/// check sorts them out. <see cref="RouteWarningList"/> filters by extent.
+/// </summary>
+internal sealed class FakeWarnings(IReadOnlyList<RouteWarning> warnings, NavigationalWarningSet? set = null) : IRouteWarningSource
+{
+    public NavigationalWarningSet Set { get; } = set ?? new NavigationalWarningSet(warnings.Select(w => w.Info));
+
+    public IReadOnlyList<RouteWarning> WarningsNear(BoundingBox extent) => warnings;
+}
+
 /// <summary>
 /// The synthetic passage: one rhumb leg due east along the equator from
 /// 0° to 0,1° E (about 6 NM), run at 6 kn, so it takes about an hour.
@@ -104,8 +130,56 @@ internal static class Fixture
         new([leg ?? Leg()], departure ?? Departure);
 
     /// <summary>Settings that judge at <paramref name="at"/> (default <see cref="Departure"/>), without depth checks.</summary>
-    public static RouteCheckSettings Settings(DateTimeOffset? at = null) => new() { At = at ?? Departure };
+    public static RouteCheckSettings Settings(DateTimeOffset? at = null, DepartureRange? window = null) => new() { At = at ?? Departure, DepartureWindow = window };
+}
 
-    public static PassageCheckEngine Engine(IChartedDepthSource depth, IWaterLevelSource water) =>
-        new(depth, water);
+/// <summary>Runs one check the way a <see cref="RouteChecker"/> does: on a context built for the run.</summary>
+internal static class Checks
+{
+    /// <summary>Runs <paramref name="check"/> once on a fresh context.</summary>
+    public static RouteCheckOutcome<T> Run<T>(
+        IRouteCheck<T> check,
+        PassagePlan plan,
+        RouteCheckSettings settings,
+        RouteCheckSources sources,
+        RouteCheckOptions? options = null,
+        CancellationToken? cancellationToken = null)
+        where T : class =>
+        check.Run(new RouteCheckContext(plan, settings, sources, options), cancellationToken ?? TestContext.Current.CancellationToken);
+
+    /// <summary>Runs a fresh <see cref="ChartCheck"/> over charts, and S-102 depth when given.</summary>
+    public static RouteCheckOutcome<ChartCheckResult> Chart(
+        IRouteChartSource charts,
+        PassagePlan plan,
+        RouteCheckSettings settings,
+        IChartedDepthSource? depth = null,
+        RouteCheckOptions? options = null,
+        CancellationToken? cancellationToken = null) =>
+        Run(new ChartCheck(), plan, settings, new RouteCheckSources { Charts = charts, Depth = depth }, options, cancellationToken);
+
+    /// <summary>Runs a fresh <see cref="AreaCheck"/> over areas.</summary>
+    public static RouteCheckOutcome<AreaCheckResult> Areas(
+        IRouteAreaSource areas,
+        PassagePlan plan,
+        RouteCheckSettings settings,
+        RouteCheckOptions? options = null) =>
+        Run(new AreaCheck(), plan, settings, new RouteCheckSources { Areas = areas }, options);
+
+    /// <summary>Runs a fresh <see cref="WarningCheck"/> over warnings.</summary>
+    public static RouteCheckOutcome<WarningCheckResult> Warnings(
+        IRouteWarningSource warnings,
+        PassagePlan plan,
+        RouteCheckSettings settings,
+        RouteCheckOptions? options = null) =>
+        Run(new WarningCheck(), plan, settings, new RouteCheckSources { Warnings = warnings }, options);
+
+    /// <summary>Runs a fresh <see cref="ClearanceCheck"/> over depth and water level.</summary>
+    public static RouteCheckOutcome<ClearanceCheckResult> Clearance(
+        IChartedDepthSource depth,
+        IWaterLevelSource water,
+        PassagePlan plan,
+        RouteCheckSettings settings,
+        RouteCheckOptions? options = null,
+        CancellationToken? cancellationToken = null) =>
+        Run(new ClearanceCheck(), plan, settings, new RouteCheckSources { Depth = depth, WaterLevel = water }, options, cancellationToken);
 }

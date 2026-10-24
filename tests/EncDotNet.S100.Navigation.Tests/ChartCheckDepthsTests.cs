@@ -6,11 +6,11 @@ namespace EncDotNet.S100.Navigation.Tests;
 
 /// <summary>
 /// Charted dangers and the safety contour and depth (#955) on the synthetic
-/// leg of <see cref="RouteCheckEngineTests"/>: due east along the equator
+/// leg of <see cref="ChartCheckTests"/>: due east along the equator
 /// from 0° to 0,01° E (about 1 112 m), so north is to port. The corridor is
 /// the default 50 m each side; dangers are worth checking 185,2 m beyond it.
 /// </summary>
-public class RouteCheckDepthsTests
+public class ChartCheckDepthsTests
 {
     private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
 
@@ -26,11 +26,8 @@ public class RouteCheckDepthsTests
         SafetyDepth = Depth.FromMetres(10),
     };
 
-    private static readonly ChartCheckOptions Options = new();
-
-    private static RouteCheckResult Check(IReadOnlyList<RouteChartFeature> features, IChartedDepthSource? bathymetry = null, params PassageLeg[] legs) =>
-        new RouteCheckEngine(new FakeCharts([Harbour], features), Options, bathymetry)
-            .Check(new PassagePlan(legs.Length == 0 ? [East] : legs), Ten, TestContext.Current.CancellationToken);
+    private static RouteCheckOutcome<ChartCheckResult> Check(IReadOnlyList<RouteChartFeature> features, IChartedDepthSource? bathymetry = null, params PassageLeg[] legs) =>
+        Checks.Chart(new FakeCharts([Harbour], features), new PassagePlan(legs.Length == 0 ? [East] : legs), Ten, bathymetry);
 
     // East, with a draft, squat and required UKC.
     private static PassageLeg EastWithKeel(double draft, double squat, double required) =>
@@ -171,7 +168,7 @@ public class RouteCheckDepthsTests
         var coastal = new FakeCell("101COASTAL", 90_000);
         var charts = new FakeCharts([Harbour, coastal], [Danger("Wreck", "1", 0.005, 0, 3, cell: coastal)]);
 
-        var result = new RouteCheckEngine(charts, Options).Check(new PassagePlan([East]), Ten, TestContext.Current.CancellationToken);
+        var result = Checks.Chart(charts, new PassagePlan([East]), Ten);
 
         Assert.Empty(result.Findings);
     }
@@ -293,7 +290,11 @@ public class RouteCheckDepthsTests
     {
         var charts = new FakeCharts([Harbour], [Danger("Wreck", "1", 0.005, 0, 1), Area(RouteChartFeatureKind.DepthArea, "2", 1, 0.002, 0.003)]);
 
-        Assert.Empty(new RouteCheckEngine(charts).Check(new PassagePlan([East]), Fixture.Settings(), TestContext.Current.CancellationToken).Findings);
+        var outcome = Checks.Chart(charts, new PassagePlan([East]), Fixture.Settings());
+
+        Assert.Empty(outcome.Findings);
+        Assert.Equal(RouteCheckState.Partial, outcome.State);
+        Assert.Equal(RouteCheckReasons.SafetySettingsMissing, outcome.Reason);
     }
 
     [Fact]

@@ -9,7 +9,7 @@ namespace EncDotNet.S100.Navigation.Tests;
 /// east from 0° to 0,01° E (about 1 112 m), 50 m limits either side, at
 /// 6 kn from 06:00 on 1 March.
 /// </summary>
-public class RouteAreaCheckTests
+public class AreaCheckTests
 {
     private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
     private static readonly DateTimeOffset Departure = new(2026, 3, 1, 6, 0, 0, TimeSpan.Zero);
@@ -38,20 +38,18 @@ public class RouteAreaCheckTests
 
     // Checks East at 6 kn leaving at Departure, or the given plan, judged at
     // the given time where the plan gives none.
-    private static RouteAreaResult Check(RouteArea area, IReadOnlyList<RouteChartCell>? cells = null, PassagePlan? plan = null, DateTimeOffset? at = null) =>
-        new RouteAreaCheck(new RouteAreaOptions()).Check(
+    private static RouteCheckOutcome<AreaCheckResult> Check(RouteArea area, IReadOnlyList<RouteChartCell>? cells = null, PassagePlan? plan = null, DateTimeOffset? at = null) =>
+        Checks.Areas(
+            new FakeAreas([area], cells),
             plan ?? new PassagePlan([EastPassage], Departure),
-            Fixture.Settings(at ?? Departure),
-            [area],
-            cells ?? [],
-            TestContext.Current.CancellationToken);
+            Fixture.Settings(at ?? Departure));
 
     [Fact]
     public void Entering_an_entry_prohibited_area_must_be_reviewed()
     {
         var result = Check(Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, restrictions: [7]));
 
-        var match = Assert.Single(result.Matches);
+        var match = Assert.Single(result.Detail!.Matches);
         Assert.Equal(RouteAreaRelation.Enters, match.Relation);
         Assert.Equal(0.004 * M, match.StartDistanceMeters, 1.0);
         Assert.Equal(0.006 * M, match.EndDistanceMeters, 1.0);
@@ -109,7 +107,7 @@ public class RouteAreaCheckTests
         var prohibited = Check(Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, south: 30 / M, north: 0.002, restrictions: [7]));
         var caution = Check(Area(RouteAreaKind.CautionArea, 0.004, 0.006, south: 30 / M, north: 0.002));
 
-        var match = Assert.Single(prohibited.Matches);
+        var match = Assert.Single(prohibited.Detail!.Matches);
         Assert.Equal(RouteAreaRelation.InCorridor, match.Relation);
         Assert.Equal((RouteFindingCodes.ProhibitedAreaInCorridor, RouteFindingGroup.Check), (match.Finding!.Code, match.Finding.Group));
         Assert.Equal("Restricted area inside the cross-track limits", match.Finding.Title);
@@ -123,7 +121,7 @@ public class RouteAreaCheckTests
     {
         var result = Check(Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, south: 80 / M, north: 0.002, restrictions: [7]));
 
-        Assert.Equal(RouteAreaRelation.Off, Assert.Single(result.Matches).Relation);
+        Assert.Equal(RouteAreaRelation.Off, Assert.Single(result.Detail!.Matches).Relation);
         Assert.Empty(result.Findings);
     }
 
@@ -134,14 +132,12 @@ public class RouteAreaCheckTests
         var hole = Ring(-0.0005, 0.0045, 0.0005, 0.0055).Reverse().ToList();
         var area = Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, south: -0.002, north: 0.002, restrictions: [7], holes: [hole]);
 
-        var inside = new RouteAreaCheck().Check(
+        var inside = Checks.Areas(
+            new FakeAreas([area]),
             new PassagePlan([Fixture.Leg([new GeoPosition(0, 0.0046), new GeoPosition(0, 0.0054)], port: 10, starboard: 10)]),
-            AtDeparture,
-            [area],
-            [],
-            TestContext.Current.CancellationToken);
+            AtDeparture);
 
-        Assert.Equal(RouteAreaRelation.Off, Assert.Single(inside.Matches).Relation);
+        Assert.Equal(RouteAreaRelation.Off, Assert.Single(inside.Detail!.Matches).Relation);
     }
 
     [Fact]
@@ -192,7 +188,7 @@ public class RouteAreaCheckTests
         var time = DateTimeOffset.Parse(at, CultureInfo.InvariantCulture);
         var area = Area(RouteAreaKind.RestrictedArea, 0, 1) with { PeriodicDateRanges = [new RouteAreaDateRange(start, end)] };
 
-        Assert.Equal(inForce, RouteAreaCheck.InForceOver(area, time, time));
+        Assert.Equal(inForce, AreaCheck.InForceOver(area, time, time));
     }
 
     [Theory]
@@ -206,7 +202,7 @@ public class RouteAreaCheckTests
         var time = DateTimeOffset.Parse(at, CultureInfo.InvariantCulture);
         var area = Area(RouteAreaKind.RestrictedArea, 0, 1) with { FixedDateRange = new RouteAreaDateRange(start, end, TimeOfDayEnd: endTime) };
 
-        Assert.Equal(inForce, RouteAreaCheck.InForceOver(area, time, time));
+        Assert.Equal(inForce, AreaCheck.InForceOver(area, time, time));
     }
 
     [Fact]
@@ -217,25 +213,15 @@ public class RouteAreaCheckTests
         var inFine = Area(RouteAreaKind.CautionArea, 0.004, 0.006) with { Cell = fine, Feature = new RouteFindingFeature("101FINE", "1") };
         var inCoarse = Area(RouteAreaKind.CautionArea, 0.004, 0.006) with { Cell = coarse, Feature = new RouteFindingFeature("101COARSE", "1") };
 
-        var result = new RouteAreaCheck().Check(
-            new PassagePlan([East]),
-            AtDeparture,
-            [inFine, inCoarse],
-            [fine, coarse],
-            TestContext.Current.CancellationToken);
+        var result = Checks.Areas(new FakeAreas([inFine, inCoarse], [fine, coarse]), new PassagePlan([East]), AtDeparture);
 
         var finding = Assert.Single(result.Findings);
         Assert.Equal("101FINE", finding.Feature!.DatasetId);
-        Assert.Equal(RouteAreaRelation.Off, result.Matches[1].Relation);
+        Assert.Equal(RouteAreaRelation.Off, result.Detail!.Matches[1].Relation);
 
         // Where the fine cell doesn't cover the place, the coarse cell's area counts.
         var patchy = new FakeCell("101FINE", 22_000, p => p.Longitude > 0.008);
-        var coarseOnly = new RouteAreaCheck().Check(
-            new PassagePlan([East]),
-            AtDeparture,
-            [inCoarse],
-            [patchy, coarse],
-            TestContext.Current.CancellationToken);
+        var coarseOnly = Checks.Areas(new FakeAreas([inCoarse], [patchy, coarse]), new PassagePlan([East]), AtDeparture);
         Assert.Single(coarseOnly.Findings);
     }
 
@@ -246,11 +232,30 @@ public class RouteAreaCheckTests
         var source = new FakeAreas([area, area]);
         var north = Fixture.Leg([new GeoPosition(0, 0.01), new GeoPosition(0.01, 0.01)]);
 
-        var result = new RouteAreaCheck().Check(new PassagePlan([East, north]), AtDeparture, source, TestContext.Current.CancellationToken);
+        var result = Checks.Areas(source, new PassagePlan([East, north]), AtDeparture);
 
         Assert.Equal(2, source.Queries);
-        Assert.Single(result.Matches);
+        Assert.Single(result.Detail!.Matches);
         Assert.Single(result.Findings);
+    }
+
+    [Fact]
+    public void Without_areas_the_check_is_skipped()
+    {
+        var outcome = Checks.Run(new AreaCheck(), new PassagePlan([East]), AtDeparture, RouteCheckSources.Empty);
+
+        Assert.Equal((RouteCheckState.Skipped, RouteCheckReasons.AreasMissing), (outcome.State, outcome.Reason));
+        Assert.Empty(outcome.Findings);
+        Assert.Null(outcome.Detail);
+    }
+
+    [Fact]
+    public void The_findings_are_the_matches_findings()
+    {
+        var result = Check(Area(RouteAreaKind.CautionArea, 0.004, 0.006));
+
+        Assert.Equal(RouteCheckState.Ran, result.State);
+        Assert.Equal(result.Detail!.Matches.Select(m => m.Finding), result.Findings);
     }
 
     [Theory]
@@ -262,7 +267,7 @@ public class RouteAreaCheckTests
     [InlineData("--02-29", 2, 29)]
     public void Truncated_dates_give_a_month_and_day(string text, int month, int day)
     {
-        Assert.Equal((month, day), RouteAreaCheck.DayOfYear(text));
+        Assert.Equal((month, day), AreaCheck.DayOfYear(text));
     }
 
     [Theory]
@@ -273,19 +278,6 @@ public class RouteAreaCheckTests
     [InlineData("---01")]
     public void Other_text_gives_no_day(string? text)
     {
-        Assert.Null(RouteAreaCheck.DayOfYear(text));
-    }
-
-    private sealed class FakeAreas(IReadOnlyList<RouteArea> areas) : IRouteAreaSource
-    {
-        public int Queries { get; private set; }
-
-        public IReadOnlyList<RouteArea> AreasNear(EncDotNet.S100.Pipelines.BoundingBox extent)
-        {
-            Queries++;
-            return areas;
-        }
-
-        public IReadOnlyList<RouteChartCell> CellsNear(EncDotNet.S100.Pipelines.BoundingBox extent) => [];
+        Assert.Null(AreaCheck.DayOfYear(text));
     }
 }

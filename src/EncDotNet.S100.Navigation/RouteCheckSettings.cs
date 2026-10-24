@@ -129,7 +129,12 @@ public sealed record DepartureRange
 
     /// <summary>
     /// Every <paramref name="step"/> across the water-level data that covers
-    /// the route (<see cref="PassageCheckEngine.SweepWaterLevelRange"/>).
+    /// the route: from the first whole step (counted from midnight UTC) at or
+    /// after the data starts to the data's end. Departures whose arrival falls
+    /// after the data ends get <see cref="PassageVerdict.WaterLevelEndsBeforeArrival"/>.
+    /// When the range would need more than <paramref name="maxDepartures"/>
+    /// departures, the step widens to the smallest multiple of
+    /// <paramref name="step"/> that fits, so a long forecast stays cheap.
     /// </summary>
     /// <param name="step">The time between departures; must be positive.</param>
     /// <param name="maxDepartures">The most departures to evaluate; must be at least 1.</param>

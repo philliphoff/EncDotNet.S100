@@ -207,6 +207,22 @@ The reasons are constants in `RouteCheckReasons`. `report.Status("clearance")`
 returns one check's status. A skipped check's detail is `null`:
 `report.Clearance` is `null` when the clearance check didn't run.
 
+Each built-in check is an `IRouteCheck<TDetail>`, so you can also run one on
+its own, on a `RouteCheckContext` built for the run. Its outcome carries the
+findings, the state and reason, and the check's own result, typed:
+
+| Check | Result | In the report |
+|---|---|---|
+| `ChartCheck` | `ChartCheckResult`: each leg's corridor | `report.Chart` |
+| `AreaCheck` | `AreaCheckResult`: every area near the route | `report.Areas` |
+| `WarningCheck` | `WarningCheckResult`: every warning near the route | `report.Warnings` |
+| `ClearanceCheck` | `ClearanceCheckResult`: the clearance and the departure sweep | `report.Clearance`, `report.Departures` |
+
+```csharp
+var clearance = new ClearanceCheck().Run(new RouteCheckContext(plan, settings, sources));
+Console.WriteLine($"{clearance.State}: {clearance.Detail?.Clearance.Verdict}");
+```
+
 ## Finding codes
 
 Every finding's `Code` is one of the codes in `RouteFindingCodes`. A

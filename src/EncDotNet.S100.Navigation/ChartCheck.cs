@@ -5,14 +5,21 @@ using EncDotNet.S100.Quantities;
 namespace EncDotNet.S100.Navigation;
 
 /// <summary>
-/// Checks a route against charted features (#888, #954): where its track
-/// crosses land or drying ground, where either reaches into the corridor
-/// between its cross-track limits, and where it leaves the loaded charts.
-/// When <see cref="RouteCheckSettings.ChecksDepths"/> it also checks
-/// charted dangers and the safety contour and depth (#955), judging each
-/// leg's dangers against that leg's keel when it has a draft.
+/// The chart check, built into <see cref="RouteChecker"/>: where the route's
+/// track crosses land or drying ground, where either reaches into the
+/// corridor between its cross-track limits, and where it leaves the loaded
+/// charts (#888, #954), over <see cref="RouteCheckSources.Charts"/>. When
+/// <see cref="RouteCheckSettings.ChecksDepths"/> it also checks charted
+/// dangers and the safety contour and depth (#955), judging each leg's
+/// dangers against that leg's keel when it has a draft.
 /// </summary>
 /// <remarks>
+/// <para>
+/// Skipped without charts (<see cref="RouteCheckReasons.ChartsMissing"/>).
+/// Without a safety contour and safety depth it runs only in part
+/// (<see cref="RouteCheckReasons.SafetySettingsMissing"/>): land, drying
+/// ground and coverage are checked; depths and dangers aren't.
+/// </para>
 /// <para>
 /// Each leg is swept by cross-sections every
 /// <see cref="ChartCheckOptions.StationSpacingMeters"/>, each reaching from
@@ -26,23 +33,35 @@ namespace EncDotNet.S100.Navigation;
 /// at a place only when its cell is in the finest band (by
 /// <see cref="CellScaleRanking"/>) of the cells whose coverage contains that
 /// place. So a coarse cell's generalised land doesn't fire where a finer cell
-/// charts water, matching what the display shows.
+/// charts water, matching what the display shows. The S-102 safety-contour
+/// check reads only the S-102 surfaces of <see cref="RouteCheckSources.Depth"/>
+/// (<see cref="IChartedDepthSource.SampleBathymetry"/>).
 /// </para>
 /// <para>
 /// Findings are <see cref="RouteFinding"/>s in the
 /// <see cref="RouteFindingCategory.Chart"/> and <see cref="RouteFindingCategory.Depth"/>
 /// categories (and <see cref="RouteFindingCategory.Data"/> for coverage),
-/// with their text rendered by <see cref="ChartCheckOptions.Formatter"/>. Consecutive crossings
+/// with their text rendered by <see cref="RouteCheckOptions.Formatter"/>. Consecutive crossings
 /// of the same kind are merged into one finding, so adjacent depth areas that
 /// both dry make a single "Crosses drying ground"; its feature is the one at
 /// the start of the span.
 /// </para>
 /// <para>
+/// Its findings don't depend on time, so it keeps the last result and reuses
+/// it while the legs, the depth settings, the corridor override, the options
+/// and the sources are unchanged: changing only the departure doesn't sweep
+/// the charts again. Its <see cref="RouteCheckOutcome{TDetail}.Detail"/> is
+/// the <see cref="ChartCheckResult"/>.
+/// </para>
+/// <para>
 /// This is an aid for exploring the data. It isn't for navigation.
 /// </para>
 /// </remarks>
-public sealed partial class RouteCheckEngine
+public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
 {
+    /// <summary>The check's <see cref="Name"/>.</summary>
+    public const string CheckName = "chart";
+
     // How many cross-sections share one edge bucket.
     private const int ChunkSize = 16;
 
@@ -58,47 +77,71 @@ public sealed partial class RouteCheckEngine
     // Crossings shorter than this aren't reported.
     private const double MinimumCrossingMeters = 1.0;
 
-    private readonly IRouteChartSource _charts;
-    private readonly ChartCheckOptions _options;
-    private readonly IChartedDepthSource? _bathymetry;
+    private readonly object _gate = new();
+    private (RouteCheckSources Sources, ChartRun Run, IReadOnlyList<PassageLeg> Legs, RouteCheckSettings Settings, IReadOnlyList<RouteFinding> Findings, ChartCheckResult Result)? _last;
 
-    /// <summary>Creates the engine.</summary>
-    /// <param name="charts">The charted features to check against.</param>
-    /// <param name="options">Tuning, or <c>null</c> for <see cref="ChartCheckOptions.Default"/>.</param>
-    /// <param name="depth">
-    /// Charted depth for the S-102 safety-contour check, or <c>null</c> when
-    /// there is none. Only its S-102 surfaces are read
-    /// (<see cref="IChartedDepthSource.SampleBathymetry"/>), so the
-    /// clearance check's source, with its S-101 fallback, serves here too.
-    /// </param>
-    public RouteCheckEngine(IRouteChartSource charts, ChartCheckOptions? options = null, IChartedDepthSource? depth = null)
+    /// <inheritdoc/>
+    public string Name => CheckName;
+
+    /// <inheritdoc/>
+    /// <exception cref="ArgumentOutOfRangeException"><see cref="ChartCheckOptions.StationSpacingMeters"/> isn't positive, or <see cref="ChartCheckOptions.MaxStationsPerLeg"/> is less than 2.</exception>
+    public RouteCheckOutcome<ChartCheckResult> Run(RouteCheckContext context, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(charts);
-        _charts = charts;
-        _options = options ?? ChartCheckOptions.Default;
-        _bathymetry = depth;
-        if (!(_options.StationSpacingMeters > 0))
+        ArgumentNullException.ThrowIfNull(context);
+        if (context.Sources.Charts is not { } charts)
         {
-            throw new ArgumentOutOfRangeException(nameof(options), "StationSpacingMeters must be positive.");
+            return RouteCheckOutcome<ChartCheckResult>.Skipped(RouteCheckReasons.ChartsMissing);
         }
 
-        if (_options.MaxStationsPerLeg < 2)
+        var run = new ChartRun(charts, context.Options.Chart, context.Sources.Depth, context.Options.DefaultLimit.TotalMetres, context.Options.Formatter);
+        var settings = context.Settings;
+        (IReadOnlyList<RouteFinding> Findings, ChartCheckResult Result)? reuse = null;
+        lock (_gate)
         {
-            throw new ArgumentOutOfRangeException(nameof(options), "MaxStationsPerLeg must be at least 2.");
+            if (_last is { } last
+                && ReferenceEquals(last.Sources, context.Sources)
+                && last.Run == run
+                && last.Settings.SafetyContour == settings.SafetyContour
+                && last.Settings.SafetyDepth == settings.SafetyDepth
+                && last.Settings.CorridorOverride == settings.CorridorOverride
+                && PassageLegs.Same(last.Legs, context.Plan.Legs))
+            {
+                reuse = (last.Findings, last.Result);
+            }
         }
+
+        if (reuse is not { } swept)
+        {
+            swept = Sweep(run, context.Plan, settings, cancellationToken);
+            lock (_gate)
+            {
+                _last = (context.Sources, run, context.Plan.Legs.ToArray(), settings, swept.Findings, swept.Result);
+            }
+        }
+
+        return settings.ChecksDepths
+            ? RouteCheckOutcome<ChartCheckResult>.Ran(swept.Findings, swept.Result)
+            : RouteCheckOutcome<ChartCheckResult>.Partial(RouteCheckReasons.SafetySettingsMissing, swept.Findings, swept.Result);
     }
 
-    /// <summary>Checks a plan.</summary>
-    /// <param name="plan">The plan: its legs in order, each starting where the previous one ends, with their cross-track limits and vessel values.</param>
-    /// <param name="settings">The safety contour and depth, and the corridor override.</param>
-    /// <param name="cancellationToken">Cancels the check, for example when the route changes again.</param>
-    /// <returns>The findings and the corridor of each leg.</returns>
-    public RouteCheckResult Check(PassagePlan plan, RouteCheckSettings settings, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    RouteCheckOutcome IRouteCheck.Run(RouteCheckContext context, CancellationToken cancellationToken) => Run(context, cancellationToken);
+
+    private static (IReadOnlyList<RouteFinding> Findings, ChartCheckResult Result) Sweep(ChartRun run, PassagePlan plan, RouteCheckSettings settings, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(plan);
-        ArgumentNullException.ThrowIfNull(settings);
+        var options = run.Options;
+        if (!(options.StationSpacingMeters > 0))
+        {
+            throw new ArgumentOutOfRangeException(nameof(run), "StationSpacingMeters must be positive.");
+        }
+
+        if (options.MaxStationsPerLeg < 2)
+        {
+            throw new ArgumentOutOfRangeException(nameof(run), "MaxStationsPerLeg must be at least 2.");
+        }
+
         var legs = plan.Legs;
-        var findings = new FindingList(_options.Formatter);
+        var findings = new FindingList(run.Formatter);
         var corridors = new List<RouteCheckCorridor>(legs.Count);
         var dangers = new DangerList();
         var offset = 0.0;
@@ -114,7 +157,7 @@ public sealed partial class RouteCheckEngine
             var depths = settings is { SafetyContour: { } contour, SafetyDepth: { } safety }
                 ? new LegDepths(contour.TotalMetres, safety.TotalMetres, leg.KeelMetres)
                 : null;
-            var sweep = new LegSweep(this, i, leg, settings, depths, offset, findings, dangers, cancellationToken);
+            var sweep = new LegSweep(run, i, leg, settings, depths, offset, findings, dangers, cancellationToken);
             sweep.Run();
             corridors.Add(sweep.Corridor);
             offset = sweep.EndDistance;
@@ -122,8 +165,16 @@ public sealed partial class RouteCheckEngine
 
         dangers.AddTo(findings);
 
-        return new RouteCheckResult(findings.Sorted(), corridors);
+        return (findings.Sorted(), new ChartCheckResult(corridors));
     }
+
+    /// <summary>What one run sweeps against: the charts, the tuning and the S-102 surfaces.</summary>
+    private sealed record ChartRun(
+        IRouteChartSource Charts,
+        ChartCheckOptions Options,
+        IChartedDepthSource? Bathymetry,
+        double DefaultHalfWidthMeters,
+        RouteFindingFormatter Formatter);
 
     /// <summary>One cross-section: a point on the track and the corridor's limits either side of it.</summary>
     private readonly record struct Station(GeoPosition Centre, double Distance, GeoPosition Port, GeoPosition Starboard);
@@ -137,7 +188,7 @@ public sealed partial class RouteCheckEngine
     /// <summary>The sweep of one leg.</summary>
     private sealed partial class LegSweep
     {
-        private readonly RouteCheckEngine _engine;
+        private readonly ChartRun _run;
         private readonly int _legIndex;
         private readonly PassageLeg _leg;
         private readonly LegDepths? _depths;
@@ -157,19 +208,18 @@ public sealed partial class RouteCheckEngine
         private IReadOnlyList<int>?[] _portBands = [];
         private IReadOnlyList<int>?[] _starboardBands = [];
 
-        public LegSweep(RouteCheckEngine engine, int legIndex, PassageLeg leg, RouteCheckSettings settings, LegDepths? depths, double offset, FindingList findings, DangerList dangers, CancellationToken cancellationToken)
+        public LegSweep(ChartRun run, int legIndex, PassageLeg leg, RouteCheckSettings settings, LegDepths? depths, double offset, FindingList findings, DangerList dangers, CancellationToken cancellationToken)
         {
-            _engine = engine;
+            _run = run;
             _legIndex = legIndex;
             _leg = leg;
             _depths = depths;
             _findings = findings;
             _dangers = dangers;
             _cancellationToken = cancellationToken;
-            var options = engine._options;
-            _port = settings.PortMeters(leg, options.DefaultHalfWidthMeters);
-            _starboard = settings.StarboardMeters(leg, options.DefaultHalfWidthMeters);
-            (_stations, _spacing) = BuildStations(leg, offset, options);
+            _port = settings.PortMeters(leg, run.DefaultHalfWidthMeters);
+            _starboard = settings.StarboardMeters(leg, run.DefaultHalfWidthMeters);
+            (_stations, _spacing) = BuildStations(leg, offset, run.Options);
             _extent = Extent(_stations);
             _ring = Ring(_stations);
             Corridor = new RouteCheckCorridor(legIndex, offset, EndDistance, _port, _starboard, _ring);
@@ -186,9 +236,9 @@ public sealed partial class RouteCheckEngine
             // geometry against the corridor itself, so the extra features
             // change nothing for them.
             var depths = _depths;
-            var (ring, extent) = depths is null ? (_ring, _extent) : WideRing(Math.Max(0, _engine._options.DangerNearbyMeters));
-            var features = _engine._charts.FeaturesInCorridor(ring, extent);
-            _cells = new List<RouteChartCell>(_engine._charts.CellsNear(extent));
+            var (ring, extent) = depths is null ? (_ring, _extent) : WideRing(Math.Max(0, _run.Options.DangerNearbyMeters));
+            var features = _run.Charts.FeaturesInCorridor(ring, extent);
+            _cells = new List<RouteChartCell>(_run.Charts.CellsNear(extent));
             foreach (var cell in _cells)
             {
                 _cellIndex.TryAdd(cell, _cellIndex.Count);
