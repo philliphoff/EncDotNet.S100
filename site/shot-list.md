@@ -222,7 +222,7 @@ as a desktop app.
   shades) next to a chart that shows the effect, e.g. a shallow harbour entrance.
 
 ### F10 · Check route (Passage section)
-- **Captured (2026-10-22)**, with the Light twin. A deep-draft passage into
+- **Captured (2026-10-23)**, with the Light twin. A deep-draft passage into
   Charleston Harbor: Fort Sumter Range (inside the jetties) up the federal
   channel to the Wando River Turning Basin, 9 waypoints and 9.8 NM. The turns are
   where the reaches' `DRGARE` centrelines meet. 14.5 m draft, 1 m required UKC,
@@ -231,17 +231,16 @@ as a desktop app.
 - **Data:** the NOAA harbour-scale cells `US5CHS*` (public domain) and NOAA's
   S-104 pilot tile `104US004SC1CO` (repo fixture, 2025-12-17 12Z run, public
   domain), which covers the whole route, so there is no tile seam on it.
-  Band-4 cells are left out: `US4SC1CO` charts the upper harbour as one 0–1.8 m
-  depth area, which the route check counts as crossing the safety contour along
-  every leg (filed as a follow-up). `US5CHSED` needs the pattern-clip fix on
-  branch `fix/pattern-clip-duplicate-rings`; without it the cell doesn't load.
+  Band-4 cells are left out because every view is at harbour scale. Three fixes
+  this scenario needed are in main: #1029 (`US5CHSED` didn't load), #1031
+  (route checks took the band-4 cell's 0–1.8 m harbour area over the harbour
+  cells) and #1030 (translated S-57 cells now state their sounding datum).
 - **State:** Routes panel on **Check route** showing "Below your UKC setting in 3
   places" (min 0.5 m) with the departure windows, the first below-UKC finding
   selected and zoomed to (the turn into Hog Island Reach, 1:9 000), the
   Clearance profile with the S-104 water level and the departure strip, and
-  the map legend open. Depth comes from the translated S-57 cells, which carry
-  no SoundingDatum feature, so the band is dashed (datums unconfirmed); also a
-  follow-up.
+  the map legend open. The band is dashed because the depth comes from the ENC
+  rather than S-102 (lower confidence by design).
 - **Warnings:** `SyntheticWarnings` in capture.cs writes four fictitious
   S-124 Ed 2.0 datasets (series SAMPLE, "Sample Hydrographic Office
   (fictitious)", numbered for the departure's year) to `.cache/synthetic/`,
@@ -254,7 +253,7 @@ as a desktop app.
   already shows Night, so F12 and the CI card are two wider minis instead.
 
 ### F11 · Navigational warnings on the route
-- **Captured (2026-10-22)**, with the Light twin. The F10 set-up, then the
+- **Captured (2026-10-23)**, with the Light twin. The F10 set-up, then the
   Navigational warnings panel in **On {route}** scope and SAMPLE 201/25
   selected, so Object Information opens its card with the "Crosses route ·
   leg 3 → 4" row. Framed on Rebellion Range around the dredging area (the
@@ -264,7 +263,7 @@ as a desktop app.
   `Dock.ObjectInformationEdge`.
 
 ### F12 · From warning to finding (small card)
-- **Captured (2026-10-22)**, with the Light twin. The F11 state, cropped to
+- **Captured (2026-10-23)**, with the Light twin. The F11 state, cropped to
   16:9 from a 3× window capture (it fills a half-width card): as wide as the
   Warning card, from its top (bounds from `ui_tree`, which line up with the
   capture), so the header, the route row and the classification all show.

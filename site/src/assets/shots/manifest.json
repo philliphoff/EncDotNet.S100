@@ -662,8 +662,8 @@
     },
     "F10": {
       "image": "F10.png",
-      "imageCapturedUtc": "2026-10-23T00:54:56.8630297Z",
-      "recordedUtc": "2026-10-23T00:54:56.8850550Z",
+      "imageCapturedUtc": "2026-10-24T00:59:56.7400480Z",
+      "recordedUtc": "2026-10-24T00:59:56.7615830Z",
       "imageMatchesRecord": true,
       "chromeTheme": "Dark",
       "timeZone": "America/New_York",
@@ -1019,6 +1019,12 @@
           }
         },
         {
+          "tool": "ui_select",
+          "args": {
+            "id": "Routes.Check.FindingsTab"
+          }
+        },
+        {
           "tool": "select_finding",
           "args": {
             "id": "clearance.below_setting.0"
@@ -1034,8 +1040,8 @@
     },
     "F10.light": {
       "image": "F10.light.png",
-      "imageCapturedUtc": "2026-10-23T01:15:24.4695772Z",
-      "recordedUtc": "2026-10-23T01:15:24.5391610Z",
+      "imageCapturedUtc": "2026-10-24T01:10:05.2698860Z",
+      "recordedUtc": "2026-10-24T01:10:05.2890960Z",
       "imageMatchesRecord": true,
       "chromeTheme": "Light",
       "timeZone": "America/New_York",
@@ -1391,6 +1397,12 @@
           }
         },
         {
+          "tool": "ui_select",
+          "args": {
+            "id": "Routes.Check.FindingsTab"
+          }
+        },
+        {
           "tool": "select_finding",
           "args": {
             "id": "clearance.below_setting.0"
@@ -1406,8 +1418,8 @@
     },
     "F11": {
       "image": "F11.png",
-      "imageCapturedUtc": "2026-10-23T01:09:08.8556871Z",
-      "recordedUtc": "2026-10-23T01:09:08.9793390Z",
+      "imageCapturedUtc": "2026-10-24T01:04:39.8721311Z",
+      "recordedUtc": "2026-10-24T01:04:39.9778800Z",
       "imageMatchesRecord": true,
       "chromeTheme": "Dark",
       "timeZone": "America/New_York",
@@ -1819,8 +1831,8 @@
     },
     "F11.light": {
       "image": "F11.light.png",
-      "imageCapturedUtc": "2026-10-23T01:16:10.4049168Z",
-      "recordedUtc": "2026-10-23T01:16:10.4257230Z",
+      "imageCapturedUtc": "2026-10-24T01:14:32.5805604Z",
+      "recordedUtc": "2026-10-24T01:14:32.5838450Z",
       "imageMatchesRecord": true,
       "chromeTheme": "Light",
       "timeZone": "America/New_York",
@@ -2232,141 +2244,24 @@
     },
     "F12": {
       "image": "F12.png",
-      "imageCapturedUtc": "2026-10-23T01:14:42.9862238Z",
-      "recordedUtc": "2026-10-23T01:14:43.0843730Z",
+      "imageCapturedUtc": "2026-10-24T01:09:29.4826052Z",
+      "recordedUtc": "2026-10-24T01:09:29.4888940Z",
       "imageMatchesRecord": true,
       "chromeTheme": "Dark",
       "timeZone": "America/New_York",
       "capture": "window crop around PickReport.WarningCard.RouteFinding (capture_app_screenshot, scale 3)",
       "datasets": [
         {
-          "file": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000",
-          "source": "NOAA ENC (charts.noaa.gov)",
-          "licence": "public domain (NOAA)",
-          "id": "US5CHSDD.000",
-          "spec": "S-57",
-          "bounds": {
-            "southLatitude": 32.7,
-            "westLongitude": -79.95,
-            "northLatitude": 32.775,
-            "eastLongitude": -79.875
-          }
-        },
-        {
-          "file": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000",
-          "source": "NOAA ENC (charts.noaa.gov)",
-          "licence": "public domain (NOAA)",
-          "id": "US5CHSDE.000",
-          "spec": "S-57",
-          "bounds": {
-            "southLatitude": 32.7,
-            "westLongitude": -79.875,
-            "northLatitude": 32.775,
-            "eastLongitude": -79.8
-          }
-        },
-        {
-          "file": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000",
-          "source": "NOAA ENC (charts.noaa.gov)",
-          "licence": "public domain (NOAA)",
-          "id": "US5CHSDF.000",
-          "spec": "S-57",
-          "bounds": {
-            "southLatitude": 32.7,
-            "westLongitude": -79.8,
-            "northLatitude": 32.775,
-            "eastLongitude": -79.725
-          }
-        },
-        {
-          "file": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000",
-          "source": "NOAA ENC (charts.noaa.gov)",
-          "licence": "public domain (NOAA)",
-          "id": "US5CHSED.000",
-          "spec": "S-57",
-          "bounds": {
-            "southLatitude": 32.775,
-            "westLongitude": -79.95,
-            "northLatitude": 32.85,
-            "eastLongitude": -79.875
-          }
-        },
-        {
-          "file": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000",
-          "source": "NOAA ENC (charts.noaa.gov)",
-          "licence": "public domain (NOAA)",
-          "id": "US5CHSEE.000",
-          "spec": "S-57",
-          "bounds": {
-            "southLatitude": 32.775,
-            "westLongitude": -79.875,
-            "northLatitude": 32.85,
-            "eastLongitude": -79.8
-          }
-        },
-        {
-          "file": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000",
-          "source": "NOAA ENC (charts.noaa.gov)",
-          "licence": "public domain (NOAA)",
-          "id": "US5CHSCE.000",
-          "spec": "S-57",
-          "bounds": {
-            "southLatitude": 32.625,
-            "westLongitude": -79.875,
-            "northLatitude": 32.7,
-            "eastLongitude": -79.8
-          }
-        },
-        {
-          "file": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000",
-          "source": "NOAA ENC (charts.noaa.gov)",
-          "licence": "public domain (NOAA)",
-          "id": "US5CHSCF.000",
-          "spec": "S-57",
-          "bounds": {
-            "southLatitude": 32.625,
-            "westLongitude": -79.8,
-            "northLatitude": 32.7,
-            "eastLongitude": -79.725
-          }
-        },
-        {
-          "file": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5",
-          "source": "EncDotNet.S100 test fixture",
-          "licence": "repo fixture (MIT)",
-          "id": "104US004SC1CO_20251217T12Z.h5",
-          "spec": "S-104",
-          "bounds": {
-            "southLatitude": 32.70089820399079,
-            "westLongitude": -80.09893617011173,
-            "northLatitude": 32.999101796209686,
-            "eastLongitude": -79.80106382938958
-          }
-        },
-        {
-          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml",
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml",
           "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
           "licence": "ours (MIT)",
-          "id": "124ZZ_SAMPLE_201_25.gml",
+          "id": "124ZZ_SAMPLE_204_25.gml",
           "spec": "S-124",
           "bounds": {
-            "southLatitude": 32.7636,
-            "westLongitude": -79.879,
-            "northLatitude": 32.7666,
-            "eastLongitude": -79.8745
-          }
-        },
-        {
-          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml",
-          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
-          "licence": "ours (MIT)",
-          "id": "124ZZ_SAMPLE_202_25.gml",
-          "spec": "S-124",
-          "bounds": {
-            "southLatitude": 32.7512,
-            "westLongitude": -79.8536,
-            "northLatitude": 32.7512,
-            "eastLongitude": -79.8536
+            "southLatitude": 32.727,
+            "westLongitude": -79.836,
+            "northLatitude": 32.735,
+            "eastLongitude": -79.82
           }
         },
         {
@@ -2383,16 +2278,133 @@
           }
         },
         {
-          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_204_25.gml",
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_202_25.gml",
           "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
           "licence": "ours (MIT)",
-          "id": "124ZZ_SAMPLE_204_25.gml",
+          "id": "124ZZ_SAMPLE_202_25.gml",
           "spec": "S-124",
           "bounds": {
-            "southLatitude": 32.727,
-            "westLongitude": -79.836,
-            "northLatitude": 32.735,
-            "eastLongitude": -79.82
+            "southLatitude": 32.7512,
+            "westLongitude": -79.8536,
+            "northLatitude": 32.7512,
+            "eastLongitude": -79.8536
+          }
+        },
+        {
+          "file": "site/capture/.cache/synthetic/124ZZ_SAMPLE_201_25.gml",
+          "source": "Synthetic S-124 warnings written by capture.cs (fictitious)",
+          "licence": "ours (MIT)",
+          "id": "124ZZ_SAMPLE_201_25.gml",
+          "spec": "S-124",
+          "bounds": {
+            "southLatitude": 32.7636,
+            "westLongitude": -79.879,
+            "northLatitude": 32.7666,
+            "eastLongitude": -79.8745
+          }
+        },
+        {
+          "file": "tests/datasets/S104/104US004SC1CO_20251217T12Z.h5",
+          "source": "EncDotNet.S100 test fixture",
+          "licence": "repo fixture (MIT)",
+          "id": "104US004SC1CO_20251217T12Z.h5",
+          "spec": "S-104",
+          "bounds": {
+            "southLatitude": 32.70089820399079,
+            "westLongitude": -80.09893617011173,
+            "northLatitude": 32.999101796209686,
+            "eastLongitude": -79.80106382938958
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCF/ENC_ROOT/US5CHSCF/US5CHSCF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.8,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSCE/ENC_ROOT/US5CHSCE/US5CHSCE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSCE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.625,
+            "westLongitude": -79.875,
+            "northLatitude": 32.7,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSEE/ENC_ROOT/US5CHSEE/US5CHSEE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSEE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.875,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSED/ENC_ROOT/US5CHSED/US5CHSED.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSED.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.775,
+            "westLongitude": -79.95,
+            "northLatitude": 32.85,
+            "eastLongitude": -79.875
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDF/ENC_ROOT/US5CHSDF/US5CHSDF.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDF.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.8,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.725
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDE/ENC_ROOT/US5CHSDE/US5CHSDE.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDE.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.875,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.8
+          }
+        },
+        {
+          "file": "site/capture/.cache/enc/US5CHSDD/ENC_ROOT/US5CHSDD/US5CHSDD.000",
+          "source": "NOAA ENC (charts.noaa.gov)",
+          "licence": "public domain (NOAA)",
+          "id": "US5CHSDD.000",
+          "spec": "S-57",
+          "bounds": {
+            "southLatitude": 32.7,
+            "westLongitude": -79.95,
+            "northLatitude": 32.775,
+            "eastLongitude": -79.875
           }
         }
       ],
@@ -2645,8 +2657,8 @@
     },
     "F12.light": {
       "image": "F12.light.png",
-      "imageCapturedUtc": "2026-10-23T01:16:58.4711263Z",
-      "recordedUtc": "2026-10-23T01:16:58.5244130Z",
+      "imageCapturedUtc": "2026-10-24T01:18:59.0434919Z",
+      "recordedUtc": "2026-10-24T01:18:59.0474820Z",
       "imageMatchesRecord": true,
       "chromeTheme": "Light",
       "timeZone": "America/New_York",

@@ -93,9 +93,8 @@ var passageBox = new Box(47.590, -122.500, 47.690, -122.320);
 // The Check route shots (F10–F12): a deep-draft ship from the Fort Sumter Range,
 // inside the jetties, up the federal channel to the Wando River Turning Basin
 // (Wando Welch Terminal). The turns are where the reaches' dredged-area
-// centrelines meet. Harbour-scale cells only: the band-4 cell under them charts
-// the upper harbour as one 0–1.8 m depth area, which the route check would take
-// as crossing the safety contour along every leg. NOAA's S-104 pilot tile
+// centrelines meet. Harbour-scale cells only: every view is framed at harbour
+// scale, where the band-4 cells add nothing. NOAA's S-104 pilot tile
 // 104US004SC1CO covers the whole route, so there is no tile seam on it.
 string[] charlestonEnc = ["US5CHSDD", "US5CHSDE", "US5CHSDF", "US5CHSED", "US5CHSEE", "US5CHSCE", "US5CHSCF"];
 (double Lat, double Lon)[] fortSumterToWando =
@@ -640,7 +639,7 @@ async Task<byte[]> CheckRoute(Viewer v, string palette)
 {
     await CheckedRoute(v, palette);
     await v.Panel("Routes");
-    await v.Call("ui_toggle", new() { ["id"] = "Routes.Check.FindingsTab" });
+    await v.Call("ui_select", new() { ["id"] = "Routes.Check.FindingsTab" });
     // The first below-UKC stretch (the list runs by distance), so the profile
     // cursor sits there and the Clearance readout shows the S-104 water level at
     // the ETA.
