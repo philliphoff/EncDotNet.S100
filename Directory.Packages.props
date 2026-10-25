@@ -13,6 +13,13 @@
     <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Skia" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+    <!-- Tmds.DBus.Protocol is deliberately not pinned: it is a 0.x package
+         whose minor versions break API, so it must stay at the version
+         Avalonia.FreeDesktop was built against (0.92.0 for 12.0.5), or the
+         viewer fails to start on Linux. The old pin answered CVE-2026-39959
+         (GHSA-xrw6-gwf8-vvr9), patched in 0.92.0; NuGetAudit (mode 'all')
+         fails the build if a vulnerable version ever comes in transitively.
+         AvaloniaDependencyTypeTests catches an API mismatch. -->
     <!-- DevTools support; Avalonia 12 replaced the old Avalonia.Diagnostics package. -->
     <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3" />
     <!-- MVVM / DI -->
@@ -53,7 +60,6 @@
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
     <PackageVersion Include="Spectre.Console.Cli" Version="0.50.0" />
     <PackageVersion Include="Svg.Skia" Version="3.2.1" />
-    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.94.2" />
     <!-- Test -->
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
