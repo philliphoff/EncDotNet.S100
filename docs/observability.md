@@ -50,8 +50,9 @@ The OTLP exporter reads the standard environment variables:
 | `OTEL_SERVICE_NAME` | `EncDotNet.S100.Viewer` |
 | `OTEL_RESOURCE_ATTRIBUTES` | (none) |
 
-If no collector is running, the exporter retries in the background and the
-app keeps working.
+SoundCharts adds the OTLP exporter only when `OTEL_EXPORTER_OTLP_ENDPOINT`, or
+the signal's own `OTEL_EXPORTER_OTLP_{LOGS,TRACES,METRICS}_ENDPOINT`, is set.
+Without one, nothing is exported and nothing retries in the background.
 
 ### Use the Aspire AppHost
 
@@ -110,6 +111,7 @@ Open the Jaeger UI at `http://localhost:16686`.
 | `ENC_DOTNET_OTEL_CONSOLE=1` | Also writes logs, traces and metrics to standard output. The AppHost sets this, so they appear in the dashboard's console view. |
 | `ENC_DOTNET_OTEL_FILE=<path>` | Also writes traces and metrics to `<path>` as newline-delimited JSON, the format the PerfReport tool reads. |
 | `--log-file <PATH>` | Appends structured logs to a file. |
+| (always on) | Writes rolling logs, up to 5 files of 1 MB, to a `logs` folder next to your settings (or under `--data-dir`). Copies of SoundCharts running side by side share the folder and never delete each other's files while running, so the folder can briefly hold a few more files while several copies run. `--ephemeral` runs don't write them. |
 | `-v`, `--verbose` | Lowers the log level from Information to Debug. |
 
 SoundCharts also keeps its last 1,000 log messages in memory, whatever these

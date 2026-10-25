@@ -19,8 +19,9 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 /// the libraries are subscribed via wildcard. The OTLP exporter is
 /// configured via the standard OTEL_* environment variables
 /// (<c>OTEL_EXPORTER_OTLP_ENDPOINT</c>, <c>OTEL_SERVICE_NAME</c>,
-/// <c>OTEL_RESOURCE_ATTRIBUTES</c>); when no endpoint is reachable
-/// the exporter retries silently and the application keeps working.
+/// <c>OTEL_RESOURCE_ATTRIBUTES</c>). The OTLP exporter is only registered
+/// when an endpoint is configured, so a viewer run without a collector
+/// does not retry exports in the background.
 /// </remarks>
 internal static class ViewerObservability
 {
@@ -45,10 +46,22 @@ internal static class ViewerObservability
     public static IServiceCollection AddS100Observability(this IServiceCollection services)
         => services.AddS100Observability(logFilePath: null, verbose: false);
 
+    /// <param name="services">Service collection to register into.</param>
+    /// <param name="logFilePath">The <c>--log-file</c> path, or <see langword="null"/>.</param>
+    /// <param name="verbose">Whether <c>--verbose</c> lowers the log floor to Debug.</param>
+    /// <param name="rollingLogDirectory">Directory for the always-on rolling
+    /// log files, or <see langword="null"/> to disable them.</param>
+    /// <param name="getEnvironmentVariable">Environment lookup; defaults to
+    /// <see cref="Environment.GetEnvironmentVariable(string)"/>.</param>
     public static IServiceCollection AddS100Observability(
-        this IServiceCollection services, string? logFilePath, bool verbose)
+        this IServiceCollection services,
+        string? logFilePath,
+        bool verbose,
+        string? rollingLogDirectory = null,
+        Func<string, string?>? getEnvironmentVariable = null)
     {
-        var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME") ?? ServiceName;
+        var env = getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
+        var serviceName = env("OTEL_SERVICE_NAME") ?? ServiceName;
         var serviceVersion = typeof(ViewerObservability).Assembly
             .GetName().Version?.ToString() ?? "0.0.0";
 
@@ -57,7 +70,7 @@ internal static class ViewerObservability
         // setting ENC_DOTNET_OTEL_CONSOLE=1 (the AppHost project sets
         // this by default in its launch profiles).
         var consoleExport = string.Equals(
-            Environment.GetEnvironmentVariable("ENC_DOTNET_OTEL_CONSOLE"),
+            env("ENC_DOTNET_OTEL_CONSOLE"),
             "1", StringComparison.OrdinalIgnoreCase);
 
         // The Logs panel's in-memory buffer (#1080) always runs, with its own
@@ -85,6 +98,15 @@ internal static class ViewerObservability
                     logFilePath!, verbose ? LogLevel.Debug : LogLevel.Information));
             }
 
+            // Always-on rolling history (5 × 1 MB) so the next launch can
+            // attach a crashed session's log to the feedback report.
+            // Registered by factory so the container disposes (flushes) it.
+            if (!string.IsNullOrWhiteSpace(rollingLogDirectory))
+            {
+                builder.Services.AddSingleton<ILoggerProvider>(_ => new RollingFileLoggerProvider(
+                    rollingLogDirectory, verbose ? LogLevel.Debug : LogLevel.Information));
+            }
+
             builder.AddOpenTelemetry(options =>
             {
                 options.SetResourceBuilder(
@@ -93,7 +115,10 @@ internal static class ViewerObservability
                 options.IncludeFormattedMessage = true;
                 options.IncludeScopes = true;
                 options.ParseStateValues = true;
-                options.AddOtlpExporter();
+                if (IsOtlpEndpointConfigured(env, "LOGS"))
+                {
+                    options.AddOtlpExporter();
+                }
                 if (consoleExport)
                 {
                     options.AddConsoleExporter();
@@ -108,8 +133,11 @@ internal static class ViewerObservability
                 tracing
                     .AddSource(SourceWildcard)
                     .AddSource(ServiceName)
-                    .AddOtlpExporter()
                     .AddFileExporterIfConfigured(out _);
+                if (IsOtlpEndpointConfigured(env, "TRACES"))
+                {
+                    tracing.AddOtlpExporter();
+                }
                 if (consoleExport)
                 {
                     tracing.AddConsoleExporter();
@@ -120,8 +148,11 @@ internal static class ViewerObservability
                 metrics
                     .AddMeter(SourceWildcard)
                     .AddMeter(ServiceName)
-                    .AddOtlpExporter()
                     .AddFileExporterIfConfigured();
+                if (IsOtlpEndpointConfigured(env, "METRICS"))
+                {
+                    metrics.AddOtlpExporter();
+                }
                 if (consoleExport)
                 {
                     metrics.AddConsoleExporter();
@@ -130,6 +161,17 @@ internal static class ViewerObservability
 
         return services;
     }
+
+    /// <summary>
+    /// Whether an OTLP endpoint is configured for a signal, through
+    /// <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> or the signal's own
+    /// <c>OTEL_EXPORTER_OTLP_{signal}_ENDPOINT</c>.
+    /// </summary>
+    /// <param name="getEnvironmentVariable">Environment lookup.</param>
+    /// <param name="signal"><c>LOGS</c>, <c>TRACES</c> or <c>METRICS</c>.</param>
+    internal static bool IsOtlpEndpointConfigured(Func<string, string?> getEnvironmentVariable, string signal) =>
+        !string.IsNullOrWhiteSpace(getEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT"))
+        || !string.IsNullOrWhiteSpace(getEnvironmentVariable($"OTEL_EXPORTER_OTLP_{signal}_ENDPOINT"));
 
     /// <summary>
     /// Starts a root <c>s100.viewer.command</c> activity wrapping a

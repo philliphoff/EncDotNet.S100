@@ -156,6 +156,7 @@ internal sealed class FeedbackService : IFeedbackService
             LastError = lastError,
             PreviousCrashes = previousCrashes,
             CrashLogTail = _crashes.HasCrashes ? _crashes.CrashLogTail : null,
+            PreviousSessionLogTail = _crashes.HasCrashes ? _crashes.PreviousSessionLogTail : null,
         };
         return Redacted(report, _logs?.Snapshot() ?? Array.Empty<LogEntry>(), HomePathRedactor.Redact);
     }
@@ -198,6 +199,7 @@ internal sealed class FeedbackService : IFeedbackService
                 }
                 : null,
             CrashLogTail = report.CrashLogTail is null ? null : redact(report.CrashLogTail),
+            PreviousSessionLogTail = report.PreviousSessionLogTail is null ? null : redact(report.PreviousSessionLogTail),
         };
     }
 

@@ -63,6 +63,14 @@ internal sealed partial record FeedbackReport
     public string? CrashLogTail { get; init; }
 
     /// <summary>
+    /// Best-effort tail of the rolling viewer log written by the most recent
+    /// session in <see cref="PreviousCrashes"/>, with the home directory
+    /// replaced by <c>~</c>, or <see langword="null"/> when none was
+    /// available or no crash was detected.
+    /// </summary>
+    public string? PreviousSessionLogTail { get; init; }
+
+    /// <summary>
     /// The viewer's recent log entries (#1080), oldest first, from the Logs
     /// panel's buffer; empty when nothing was logged. Not serialised by
     /// <see cref="ToJson"/>: <see cref="LogsToText"/> writes them to

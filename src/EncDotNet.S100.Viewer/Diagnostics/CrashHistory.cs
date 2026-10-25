@@ -25,6 +25,12 @@ internal interface ICrashHistory
     /// </summary>
     string? CrashLogTail { get; }
 
+    /// <summary>
+    /// Best-effort tail of the rolling viewer log written by the most recent
+    /// crashed session, or <see langword="null"/> when none was available.
+    /// </summary>
+    string? PreviousSessionLogTail { get; }
+
     /// <summary>Whether any unclean shutdown was detected.</summary>
     bool HasCrashes { get; }
 
@@ -34,7 +40,12 @@ internal interface ICrashHistory
     /// </summary>
     /// <param name="crashes">Detected crashed sessions (oldest first).</param>
     /// <param name="crashLogTail">Optional tail of the crash log.</param>
-    void Capture(IReadOnlyList<PreviousSession> crashes, string? crashLogTail);
+    /// <param name="previousSessionLogTail">Optional tail of the most recent
+    /// crashed session's rolling log.</param>
+    void Capture(
+        IReadOnlyList<PreviousSession> crashes,
+        string? crashLogTail,
+        string? previousSessionLogTail = null);
 }
 
 /// <summary>
@@ -47,6 +58,7 @@ internal sealed class CrashHistory : ICrashHistory
     private readonly object _gate = new();
     private IReadOnlyList<PreviousSession> _crashes = Array.Empty<PreviousSession>();
     private string? _crashLogTail;
+    private string? _previousSessionLogTail;
 
     /// <inheritdoc />
     public IReadOnlyList<PreviousSession> Crashes
@@ -61,19 +73,29 @@ internal sealed class CrashHistory : ICrashHistory
     }
 
     /// <inheritdoc />
+    public string? PreviousSessionLogTail
+    {
+        get { lock (_gate) return _previousSessionLogTail; }
+    }
+
+    /// <inheritdoc />
     public bool HasCrashes
     {
         get { lock (_gate) return _crashes.Count > 0; }
     }
 
     /// <inheritdoc />
-    public void Capture(IReadOnlyList<PreviousSession> crashes, string? crashLogTail)
+    public void Capture(
+        IReadOnlyList<PreviousSession> crashes,
+        string? crashLogTail,
+        string? previousSessionLogTail = null)
     {
         ArgumentNullException.ThrowIfNull(crashes);
         lock (_gate)
         {
             _crashes = crashes;
             _crashLogTail = crashLogTail;
+            _previousSessionLogTail = previousSessionLogTail;
         }
     }
 }

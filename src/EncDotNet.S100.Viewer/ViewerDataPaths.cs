@@ -97,6 +97,16 @@ internal sealed class ViewerDataPaths
             ? Path.Combine(b, "crash-markers")
             : Path.Combine(DefaultSettingsDirectory, "crash-markers");
 
+    /// <summary>
+    /// Directory holding the always-on rolling viewer log files, alongside
+    /// the crash markers so the next launch can attach a crashed session's
+    /// log to the feedback report.
+    /// </summary>
+    public string LogsDirectory =>
+        _baseDirectory is { } b
+            ? Path.Combine(b, "logs")
+            : Path.Combine(DefaultSettingsDirectory, "logs");
+
     /// <summary>Directory for the shared disk pattern-clip cache.</summary>
     public string PatternClipCacheDirectory =>
         _baseDirectory is { } b

@@ -80,4 +80,18 @@ public class CrashHistoryTests
         Assert.Single(history.Crashes);
         Assert.Equal(42, history.Crashes[0].Pid);
     }
+
+    [Fact]
+    public void Capture_RetainsPreviousSessionLogTail()
+    {
+        var history = new CrashHistory();
+
+        history.Capture(
+            [Session(7, "1.0.0", new DateTime(2026, 6, 14, 10, 0, 0, DateTimeKind.Utc))],
+            "crash-tail",
+            "session-log-tail");
+
+        Assert.Equal("session-log-tail", history.PreviousSessionLogTail);
+        Assert.Equal("crash-tail", history.CrashLogTail);
+    }
 }
