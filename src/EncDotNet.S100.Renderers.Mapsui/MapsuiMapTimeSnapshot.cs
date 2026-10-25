@@ -1,3 +1,5 @@
+using EncDotNet.S100.Datasets.Pipelines;
+
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
@@ -88,6 +90,13 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
     /// </summary>
     public DateTime? IssueTime { get; init; }
 
+    /// <summary>
+    /// The model run the dataset belongs to, as its processor reports it
+    /// (<c>ITimeAwareDatasetProcessor.ForecastRun</c>), or <see langword="null"/>
+    /// when it is not a forecast run.
+    /// </summary>
+    public DatasetForecastRun? ForecastRun { get; init; }
+
     /// <summary>How the dataset picks the sample it draws.</summary>
     public MapsuiTimeSelectionKind Selection { get; init; } = MapsuiTimeSelectionKind.Nearest;
 
@@ -140,6 +149,7 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
         && ProductSpec == other.ProductSpec
         && DatasetId == other.DatasetId
         && IssueTime == other.IssueTime
+        && ForecastRun == other.ForecastRun
         && Selection == other.Selection
         && Tolerance == other.Tolerance
         && Coverage.SequenceEqual(other.Coverage)

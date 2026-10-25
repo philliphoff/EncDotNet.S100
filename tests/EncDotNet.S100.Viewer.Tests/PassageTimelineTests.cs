@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Headless;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Renderers.Mapsui;
@@ -78,7 +79,7 @@ public sealed class PassageTimelineTests : IDisposable
             Datasets =
             [
                 new MapsuiMapTimedDataset("104FIXTURE", samples[0], samples[^1]) { ProductSpec = "S-104", DatasetId = "104FIXTURE", Samples = samples },
-                new MapsuiMapTimedDataset("111FIXTURE", samples[0], samples[^1]) { ProductSpec = "S-111", DatasetId = "111FIXTURE", Samples = samples },
+                new MapsuiMapTimedDataset("111FIXTURE", samples[0], samples[^1]) { ProductSpec = "S-111", DatasetId = "111FIXTURE", Samples = samples, ForecastRun = new DatasetForecastRun("S-111") },
             ],
         });
         return new Setup(f, time, timeline, follow, clock);

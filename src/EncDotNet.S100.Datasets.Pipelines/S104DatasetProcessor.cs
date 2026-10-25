@@ -149,6 +149,19 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     };
 
     /// <summary>
+    /// S-104 water level steps: forecasts, each held until the next step for
+    /// one typical step. Treated as forecasts until the reader exposes
+    /// <c>dataDynamicity</c>; an observation would hold its last value for
+    /// 30 minutes.
+    /// </summary>
+    public static TimeSemantics WaterLevelTimeSemantics { get; } =
+        new(TimeStepKind.Forecast, TimeStepSelection.AtOrBefore);
+
+    /// <inheritdoc />
+    /// <remarks>Always <see cref="WaterLevelTimeSemantics"/>.</remarks>
+    public TimeSemantics TimeSemantics => WaterLevelTimeSemantics;
+
+    /// <summary>
     /// <see langword="true"/> when this dataset is a regularly-gridded (dcf2)
     /// water-level <em>surface</em>, drawn as isolines, rather than a
     /// fixed-station (dcf1 / dcf8) point series. S-104 Edition 2.0.0 defines no

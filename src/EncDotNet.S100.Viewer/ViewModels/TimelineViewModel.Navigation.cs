@@ -331,9 +331,9 @@ internal sealed partial class TimelineViewModel
         _service.TimedDatasets.FirstOrDefault(d => d.Name == _driverName)
         ?? TimelineStepper.DefaultDriver(AxisDatasets, IsForecastDataset);
 
-    /// <summary>True for S-111 surface currents and for any dataset of a known forecast run (#720).</summary>
+    /// <summary>True for a dataset whose processor reports a forecast run (S-111) and for any dataset of a known forecast run (#720).</summary>
     private bool IsForecastDataset(MapsuiMapTimedDataset dataset) =>
-        string.Equals(dataset.ProductSpec, "S-111", StringComparison.OrdinalIgnoreCase)
+        dataset.ForecastRun is not null
         || ForecastRunNames.RunOf(dataset, LibraryEntries) is not null;
 
     /// <summary>"cbofs" for a model's run or tile, else the dataset name.</summary>

@@ -66,6 +66,38 @@ internal sealed class StubProcessor :
 
     public DateTime? IssueTime { get; set; }
 
+    private TimeSemantics? _timeSemantics;
+
+    private DatasetForecastRun? _forecastRun;
+
+    private bool _forecastRunSet;
+
+    /// <summary>
+    /// The time semantics; unless set, the real processor's for
+    /// <see cref="ProductSpec"/> (S-104 and S-411 hold, others snap to the nearest step).
+    /// </summary>
+    public TimeSemantics TimeSemantics
+    {
+        get => _timeSemantics ?? ProductSpec switch
+        {
+            "S-104" => S104DatasetProcessor.WaterLevelTimeSemantics,
+            "S-411" => S411DatasetProcessor.SeaIceTimeSemantics,
+            _ => TimeSemantics.Default,
+        };
+        set => _timeSemantics = value;
+    }
+
+    /// <summary>The forecast run; unless set, an S-111 run for an S-111 stub, as the real processor reports.</summary>
+    public DatasetForecastRun? ForecastRun
+    {
+        get => _forecastRunSet ? _forecastRun : ProductSpec == "S-111" ? new DatasetForecastRun("S-111") : null;
+        set
+        {
+            _forecastRun = value;
+            _forecastRunSet = true;
+        }
+    }
+
     public RenderContext? LastContext { get; private set; }
 
     public int RenderCount { get; private set; }

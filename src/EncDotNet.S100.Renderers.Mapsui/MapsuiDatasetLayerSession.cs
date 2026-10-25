@@ -230,6 +230,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
         TimePolicy? timePolicy = null;
         DateTime? issueTime = null;
+        DatasetForecastRun? forecastRun = null;
         if (_processorOwner.TryAcquire(dataset.Id, out var processorLease))
         {
             using (processorLease)
@@ -237,9 +238,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 if (processorLease.Processor is ITimeAwareDatasetProcessor timeAware)
                 {
                     timePolicy = TimePolicy.TryCreate(
-                        dataset.Metadata.Spec.Name,
+                        timeAware.TimeSemantics,
                         timeAware.AvailableTimes);
                     issueTime = timeAware.IssueTime;
+                    forecastRun = timeAware.ForecastRun;
                 }
             }
         }
@@ -269,6 +271,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 entry.Dataset.SubLayers);
             entry.TimePolicy = timePolicy;
             entry.IssueTime = issueTime;
+            entry.ForecastRun = forecastRun;
             if (timePolicy is not null)
             {
                 entry.Dataset = CopyDataset(
@@ -1834,6 +1837,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 ProductSpec = entry.Dataset.Metadata.Spec.Name,
                 DatasetId = entry.Dataset.Id.Value,
                 IssueTime = entry.IssueTime,
+                ForecastRun = entry.ForecastRun,
                 Selection = entry.TimePolicy.Selection,
                 Tolerance = entry.TimePolicy.Tolerance,
                 Coverage = entry.TimePolicy.CoverageSegments,
@@ -2130,9 +2134,6 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         /// <summary>Tolerance when a dataset has a single sample and so no step.</summary>
         private static readonly TimeSpan SingleSampleTolerance = TimeSpan.FromHours(1);
 
-        /// <summary>An S-411 ice snapshot is valid until the next one, for at most this long.</summary>
-        private static readonly TimeSpan IceSnapshotValidity = TimeSpan.FromDays(14);
-
         private readonly TimePolicyKind _kind;
         private readonly DateTime[] _times;
         private readonly TimeSpan _tolerance;
@@ -2157,10 +2158,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         public IReadOnlyList<MapsuiMapTimeSegment> CoverageSegments { get; }
 
         public static TimePolicy? TryCreate(
-            string productSpec,
+            TimeSemantics semantics,
             IReadOnlyList<DateTime> availableTimes)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(productSpec);
+            ArgumentNullException.ThrowIfNull(semantics);
             ArgumentNullException.ThrowIfNull(availableTimes);
             var times = availableTimes
                 .Distinct()
@@ -2169,14 +2170,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             if (times.Length == 0)
                 return null;
 
-            // S-104 is treated as a forecast until the reader exposes
-            // dataDynamicity; observations would hold their last value 30 min.
-            return productSpec.ToUpperInvariant() switch
-            {
-                "S-104" => new TimePolicy(TimePolicyKind.AtOrBefore, times, TypicalStep(times)),
-                "S-411" => new TimePolicy(TimePolicyKind.AtOrBefore, times, IceSnapshotValidity),
-                _ => new TimePolicy(TimePolicyKind.Nearest, times, TypicalStep(times)),
-            };
+            var kind = semantics.Selection == TimeStepSelection.AtOrBefore
+                ? TimePolicyKind.AtOrBefore
+                : TimePolicyKind.Nearest;
+            return new TimePolicy(kind, times, semantics.Validity ?? TypicalStep(times));
         }
 
         /// <summary>
@@ -2246,10 +2243,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
     private enum TimePolicyKind
     {
-        /// <summary>The nearest sample, within the tolerance either side (S-111).</summary>
+        /// <summary>The nearest sample, within the tolerance either side (<see cref="TimeStepSelection.Nearest"/>).</summary>
         Nearest,
 
-        /// <summary>The latest sample at or before the clock, held for the tolerance (S-104, S-411).</summary>
+        /// <summary>The latest sample at or before the clock, held for the tolerance (<see cref="TimeStepSelection.AtOrBefore"/>).</summary>
         AtOrBefore,
     }
 
@@ -2261,6 +2258,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
         /// <summary>When the dataset was issued, from its data (#720).</summary>
         public DateTime? IssueTime { get; set; }
+
+        /// <summary>The model run the dataset belongs to, from its processor, or null.</summary>
+        public DatasetForecastRun? ForecastRun { get; set; }
 
         public DateTime? RenderedTime { get; set; }
 

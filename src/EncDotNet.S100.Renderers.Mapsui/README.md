@@ -206,13 +206,22 @@ The clock isn't clamped to the loaded data: it can sit in a gap or past the end,
 where each dataset follows its own rule. It starts at the first sample and stays
 put as datasets come and go.
 
-A dataset never shows data from outside its tolerance as if it were current:
+A dataset never shows data from outside its tolerance as if it were current.
+Each processor says which sample it shows through
+`ITimeAwareDatasetProcessor.TimeSemantics`: `Nearest` or `AtOrBefore`, held for
+its `Validity`, or for one step (the dataset's median sample interval) when that
+is `null`. The session has no rules of its own per product, so a new time-aware
+product needs no changes here. The bundled processors report:
 
 | Product | Shows |
 |---|---|
-| S-111 | The nearest sample within one step (the dataset's median sample interval). |
+| S-111 | The nearest sample within one step (the default `TimeSemantics`). |
 | S-104 | The latest sample at or before the clock, for up to one step. |
 | S-411 | The latest snapshot at or before the clock, for up to 14 days. |
+
+The processor's `ForecastRun` (the model and its reference time, or `null` when
+the dataset is no forecast run) is passed on as `MapsuiMapTimedDataset.ForecastRun`,
+so a host can name the run without knowing the product.
 
 Outside its tolerance, including in gaps within a dataset, the dataset is
 hidden, and its coverage segments split around those gaps.

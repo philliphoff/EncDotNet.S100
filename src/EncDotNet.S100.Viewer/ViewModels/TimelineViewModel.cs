@@ -303,15 +303,16 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     public string ModeLabel => IsLive ? Strings.TimelinePanel_Live : Strings.TimelinePanel_Pinned;
 
     /// <summary>
-    /// True when the timeline spans forecasts: S-111 surface currents (always
-    /// model forecasts, however their files are named; Library tiles carry no
-    /// run in their name) or a dataset whose name carries a run time, e.g.
+    /// True when the timeline spans forecasts: a dataset whose processor
+    /// reports a forecast run (S-111 surface currents are always model
+    /// forecasts, however their files are named; Library tiles carry no run in
+    /// their name) or whose name carries a run time, e.g.
     /// <c>111US00_CBOFS_20260930T18Z_…</c>. "Every forecast ended" is shown
     /// for them (#685, #713).
     /// </summary>
     public bool IsForecastTimeline =>
         Runs.Count > 0
-        || _service.TimedDatasets.Any(d => string.Equals(d.ProductSpec, "S-111", StringComparison.OrdinalIgnoreCase));
+        || _service.TimedDatasets.Any(d => d.ForecastRun is not null);
 
     /// <summary>The forecast runs loaded, by model, in UTC whatever the user's setting (for agents), e.g. "cbofs 12:00Z".</summary>
     public IReadOnlyList<string> Runs => _service.TimedDatasets

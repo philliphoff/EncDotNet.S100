@@ -161,6 +161,14 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     };
 
     /// <summary>
+    /// S-111 surface currents are always model forecasts, whatever their files
+    /// are named, so the dataset is a run of the <c>S-111</c> product. The data
+    /// carries no run time of its own: a host takes it from the file name, or
+    /// falls back to the later <see cref="IssueTime"/>.
+    /// </summary>
+    public DatasetForecastRun ForecastRun { get; } = new("S-111");
+
+    /// <summary>
     /// Initializes a new <see cref="S111DatasetProcessor"/> from the HDF5
     /// dataset file at <paramref name="path"/>. For a regular-grid (dcf2)
     /// dataset the file stays open and per-time-step values are decoded

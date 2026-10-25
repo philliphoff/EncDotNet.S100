@@ -27,4 +27,18 @@ public interface ITimeAwareDatasetProcessor
     /// after the model run it carries.
     /// </summary>
     DateTime? IssueTime => null;
+
+    /// <summary>
+    /// What the time steps are, which one is drawn between steps, and how long
+    /// a step stays valid. Defaults to <see cref="TimeSemantics.Default"/>:
+    /// forecast steps, nearest within the typical step.
+    /// </summary>
+    TimeSemantics TimeSemantics => TimeSemantics.Default;
+
+    /// <summary>
+    /// The model run this dataset belongs to, or <see langword="null"/> (the
+    /// default) when it is not a forecast run. A host uses it to name the run
+    /// and to treat the timeline as a forecast.
+    /// </summary>
+    DatasetForecastRun? ForecastRun => null;
 }
