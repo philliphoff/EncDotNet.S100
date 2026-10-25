@@ -4,6 +4,8 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Pipelines.Sampling;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S104.Validation;
 using EncDotNet.S100.Hdf5;
@@ -23,7 +25,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// dcf2 (regular grid → coverage layer) and dcf1/dcf8 positioned station
 /// series (station-glyph point layer; S-100 Part 10c §10.2.1).
 /// </summary>
-public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, ILoadedDatasetProjection
+public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, ILoadedDatasetProjection, ICoverageSampler
 {
     /// <summary>The sub-layer key of the gridded surface's isolines.</summary>
     public const string IsolineLayerKey = "s104.isolines";
@@ -97,6 +99,16 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <inheritdoc />
     public LoadedDatasetData CreateLoadedData() =>
         _source is not null ? new S104CoverageData(_source) : new S104StationSeriesData(_stationSeries!);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Water level height and trend: at the grid node nearest the point for a
+    /// regular grid (dcf2), or at every station of a station series (dcf8),
+    /// at the step nearest the requested time.
+    /// </remarks>
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => _source is not null
+        ? new S104GridSampler(_source).FindSites(query)
+        : new S104StationSampler(_stationSeries!).FindSites(query);
 
     private DatasetMetadata BuildMetadata()
     {

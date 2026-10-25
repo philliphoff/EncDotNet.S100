@@ -106,7 +106,7 @@ These read an `IDatasetCatalog` and never change it.
 | `SearchFeaturesTool` | `search_features` | Finds features by name, in `OBJNAM`, `NOBJNM`, `objectName` and `featureName`. Substring and case-insensitive by default; set `Exact` or `CaseSensitive` to narrow it. |
 | `DescribeFeatureTool` | `describe_feature` | Describes one feature, by dataset and feature ID. |
 | `DescribeFeatureTypeTool` | `describe_feature_type` | Lists a product's feature types, or one type's attributes and allowed values, from the bundled feature catalogue. It needs no catalog or loaded dataset. |
-| `SampleCoverageTool` | `sample_coverage` | Samples an S-102, S-104 or S-111 coverage at a point, at one time or over a time window. |
+| `SampleCoverageTool` | `sample_coverage` | Samples a coverage at a point, at one time or over a time window: S-102, S-104, S-111, or any product whose catalog payload implements `ICoverageSampler` (its values come back as `CoverageFieldsSample` fields with quantity and unit). |
 | `SampleCoverageAlongTool` | `sample_coverage_along` | Samples a coverage at each vertex of a polyline. A vertex with no value has an error instead of failing the whole call. |
 | `CheckRouteTool` | `check_route` | Checks a polyline or a host route (through `IPassageRouteProvider`) with `RouteChecker`: charts, areas, S-124 warnings and, with a draft, under-keel clearance. Returns the whole `RouteCheckReport` as a `CheckRouteResult`; `CheckRouteResult.From` projects a report you ran yourself. |
 

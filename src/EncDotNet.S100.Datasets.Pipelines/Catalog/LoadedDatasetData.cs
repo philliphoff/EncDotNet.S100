@@ -1,3 +1,5 @@
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Pipelines.Sampling;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
@@ -93,23 +95,62 @@ public sealed record S421DatasetData(S421Dataset Model) : LoadedDatasetData;
 /// actual sample call. Wrap reads in
 /// <c>try / catch (ObjectDisposedException)</c> and surface the failure as
 /// <see cref="EncDotNet.S100.Datasets.Pipelines.Query.DatasetClosedDuringQuery"/>.
+/// <para>
+/// The coverage variants implement <see cref="ICoverageSampler"/>, the same
+/// sampling their processors offer, which is how the <c>sample_coverage</c>
+/// tools read them. A product with no variant of its own reaches the catalog
+/// as a <see cref="CoverageSamplerData"/>.
+/// </para>
 /// </remarks>
-public sealed record S102CoverageData(S102CoverageSource Source) : LoadedDatasetData;
+public sealed record S102CoverageData(S102CoverageSource Source) : LoadedDatasetData, ICoverageSampler
+{
+    /// <inheritdoc />
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => new S102CoverageSampler(Source).FindSites(query);
+}
 
 /// <summary>S-104 Water Level coverage handle (dcf2 — regular grid).</summary>
-public sealed record S104CoverageData(S104CoverageSource Source) : LoadedDatasetData;
+public sealed record S104CoverageData(S104CoverageSource Source) : LoadedDatasetData, ICoverageSampler
+{
+    /// <inheritdoc />
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => new S104GridSampler(Source).FindSites(query);
+}
 
 /// <summary>
 /// S-104 Water Level station-series dataset (dcf8 — time series at fixed
 /// stations; see S-104 Edition 2.0.0 §10.2.3 / §10.2.7).
 /// </summary>
-public sealed record S104StationSeriesData(S104StationSeriesDataset Dataset) : LoadedDatasetData;
+public sealed record S104StationSeriesData(S104StationSeriesDataset Dataset) : LoadedDatasetData, ICoverageSampler
+{
+    /// <inheritdoc />
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => new S104StationSampler(Dataset).FindSites(query);
+}
 
 /// <summary>S-111 Surface Currents coverage handle.</summary>
-public sealed record S111CoverageData(S111CoverageSource Source) : LoadedDatasetData;
+public sealed record S111CoverageData(S111CoverageSource Source) : LoadedDatasetData, ICoverageSampler
+{
+    /// <inheritdoc />
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => new S111GridSampler(Source).FindSites(query);
+}
 
 /// <summary>
 /// S-111 Surface Currents station-series dataset (dcf8 — time series at
 /// fixed stations; see S-111 Edition 2.0.0 §10.2.3 / §10.2.7).
 /// </summary>
-public sealed record S111StationSeriesData(S111StationSeriesDataset Dataset) : LoadedDatasetData;
+public sealed record S111StationSeriesData(S111StationSeriesDataset Dataset) : LoadedDatasetData, ICoverageSampler
+{
+    /// <inheritdoc />
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => new S111StationSampler(Dataset).FindSites(query);
+}
+
+/// <summary>
+/// A coverage whose catalog payload is its <see cref="ICoverageSampler"/>
+/// alone: typically the processor of a product with no typed variant here (a
+/// weather grid, say). The <c>sample_coverage</c> tools sample it like any
+/// other coverage, with no tool changes.
+/// </summary>
+/// <param name="Sampler">The dataset's sampler, usually its processor.</param>
+public sealed record CoverageSamplerData(ICoverageSampler Sampler) : LoadedDatasetData, ICoverageSampler
+{
+    /// <inheritdoc />
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => Sampler.FindSites(query);
+}

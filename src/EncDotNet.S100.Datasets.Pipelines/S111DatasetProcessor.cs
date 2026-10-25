@@ -2,6 +2,8 @@ using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Pipelines.Sampling;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Datasets.S111.Validation;
 using EncDotNet.S100.Hdf5;
@@ -22,7 +24,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// positioned station/node series (station-arrow point layers; S-111 Edition
 /// 2.0.0 §10.2.2.6–10.2.2.9).
 /// </summary>
-public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection
+public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection, ICoverageSampler
 {
     // dcf2 only
     private readonly S111CoverageSource? _source;
@@ -105,6 +107,16 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <inheritdoc />
     public LoadedDatasetData CreateLoadedData() =>
         _source is not null ? new S111CoverageData(_source) : new S111StationSeriesData(_stationSeries!);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Surface current speed and direction: at the grid node nearest the point
+    /// for a regular grid (dcf2), or at every station of a station series
+    /// (dcf8), at the step nearest the requested time.
+    /// </remarks>
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => _source is not null
+        ? new S111GridSampler(_source).FindSites(query)
+        : new S111StationSampler(_stationSeries!).FindSites(query);
 
     private DatasetMetadata BuildMetadata()
     {
