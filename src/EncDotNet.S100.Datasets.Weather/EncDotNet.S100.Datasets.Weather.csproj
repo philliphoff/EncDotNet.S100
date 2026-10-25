@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <Description>The shared in-memory model for wind and wave grids read from GRIB2 and NetCDF-CF files: a regular latitude/longitude weather grid set, the canonical parameter table with its GRIB2 and CF mappings, normalisation to the coverage pipeline's grid order, and an ICoverageSource with lazily decoded time steps, overview levels and wind speed and direction derived from U and V. Not for navigation. Depends only on EncDotNet.S100.Core.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Datasets.Weather.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Weather grid model.** A new `EncDotNet.S100.Datasets.Weather` package
+  holds the in-memory model the GRIB2 and NetCDF readers will share: a
+  `WeatherGridSet` (model and run time, a regular latitude/longitude grid,
+  and parameters with time steps), the canonical parameter table with its
+  GRIB2 codes and CF standard names, normalisation to the coverage grid order
+  (rows running north, longitudes in −180 to 180, missing values as `NaN`),
+  and `WeatherCoverageSource`, which decodes time steps only when they're
+  sampled, offers 2× and 4× overview levels, and derives wind speed and
+  direction from U and V. See its
+  [README](../src/EncDotNet.S100.Datasets.Weather/README.md).
 - **One `RenderContext` for every product.** `RenderContext` is now a sealed
   record with a `TimeStep` property, and its per-product subclasses
   (`S101RenderContext`, `S102RenderContext`, `S104RenderContext`,
