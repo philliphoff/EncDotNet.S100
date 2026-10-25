@@ -77,7 +77,8 @@ see [Reading product data](../../docs/reading-product-data.md).
   windows.
 - **`S104CoverageSource`**: the `ICoverageSource` for the coverage pipeline.
 - **`S104CoverageStyle`**: the SoundCharts portrayal of water level: the
-  ink colours, isoline interval and label formats. See [Portrayal](#portrayal).
+  palette, station symbols, instruction builders, isoline interval and label
+  formats. See [Portrayal](#portrayal).
 
 The `S104DatasetProcessor` that renders, samples and validates a dataset is in
 [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md).
@@ -107,8 +108,15 @@ avoid magenta (mariner information), red and amber (danger) and blue and green
 | Dusk | `#9FD3DE` | `#3B4650` | `#3B4650` |
 | Night | `#3E7C88` | `#0B0F14` | `#0B0F14` |
 
-Night colours stay under luminance 0.2. `S104CoverageStyle.GetInk(PaletteType)`
-returns a palette's colours.
+Night colours stay under luminance 0.2. `S104CoverageStyle.Palette` holds
+them as the colour tokens `S104INK`, `S104FILL`, `S104HALO` and `S104ISOHALO`
+(an `ApplicationPalette`); `Palette.Resolve(token, palette)` returns one colour
+and `Palette.GetColorPalette(palette)` the `ColorPalette` the station gauges
+resolve against.
+
+The style is built with the code-defined portrayal toolkit in
+[`EncDotNet.S100.Portrayals`](../EncDotNet.S100.Portrayals/README.md#code-defined-portrayal)
+(`EncDotNet.S100.Portrayals.Application`).
 
 ### Stations
 
@@ -127,8 +135,11 @@ each station, on the `s104.stations` sub-layer:
 - A station whose height at the step is the fill value (`-9999`) draws "—" in
   the square and no value.
 
-The gauges are ordinary S-100 symbols (`S104CoverageStyle.GetSymbol`, with
-colours from `GetColorPalette`) and text instructions, carried on a
+The gauges are ordinary S-100 symbols and text instructions. The symbols are
+SVG files in this project's `Symbols/` folder, embedded and served by
+`S104CoverageStyle.Symbols` (a `SymbolSet`); the instructions are built by
+`S104CoverageStyle.StationSymbols` and `StationLabels` (`InstructionBuilder`s)
+with `StationLabelStyle`. They're carried on a
 `VectorCoverageSubLayer` and drawn by the same renderer as S-101. So they follow
 the same rules as S-101 symbols and labels: the mariner's symbol and text
 scale, the label's scale minimum (SCAMIN), label decluttering (a label that
@@ -136,6 +147,11 @@ overlaps a higher-priority one is dropped; symbols always draw), upright
 symbols and text on a rotated display, and picking. The value label uses the
 S-100 Part 9 font characteristics `MonoSpaced` and `Bold`, with a halo
 (`TextInstruction.HaloColor`).
+
+The gauges use the warm tile disk cache. Their content scope is a hash of the
+dataset's bytes plus `S104CoverageStyle.ContentScope`: the style name, its
+`StyleVersion` and the toolkit's version. Bump `StyleVersion` when you change a
+symbol or a colour, so tiles drawn with the old style aren't reused.
 
 ### Surface
 

@@ -31,3 +31,11 @@ When modifying S-104 code:
   green or depth blues: they compete with the ENC. Update
   `S104CoverageStyleTests` and the `S104RenderingTests` baselines with
   any change.
+  The style is built with the `EncDotNet.S100.Portrayals.Application`
+  toolkit: colours in `S104CoverageStyle.Palette` (`ApplicationPalette`),
+  symbols as SVG files in `src/EncDotNet.S100.Datasets.S104/Symbols/`
+  (`SymbolSet`), instructions from `StationSymbols` / `StationLabels`
+  (`InstructionBuilder`). Don't add palette dictionaries or inline SVG
+  strings back. Bump `S104CoverageStyle.StyleVersion` when a symbol or
+  colour changes, so the tile disk cache drops tiles drawn with the old
+  style.

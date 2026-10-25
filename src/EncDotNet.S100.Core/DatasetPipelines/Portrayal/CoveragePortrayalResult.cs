@@ -383,6 +383,21 @@ public sealed class CoveragePortrayalResult
     public required string Info { get; init; }
 
     /// <summary>
+    /// A content identity of everything that shapes this dataset's
+    /// <see cref="VectorCoverageSubLayer"/>s beyond their drawing instructions:
+    /// a hash of the dataset's bytes plus the style's identity, as
+    /// <see cref="VectorPortrayalResult.ContentScope"/> is for a vector product.
+    /// For a style defined in code it carries the style's version, so a new
+    /// style version drops the warm tiles drawn with the old one.
+    /// </summary>
+    /// <remarks>
+    /// The Mapsui renderer folds it into the warm tile disk-cache namespace of
+    /// the vector sub-layers. When <see langword="null"/>, they bypass the disk
+    /// cache. The other sub-layer kinds don't use the disk cache.
+    /// </remarks>
+    public string? ContentScope { get; init; }
+
+    /// <summary>
     /// Optional stable per-sub-layer keys for the viewer's disclosure UI.
     /// When null the renderer derives them from each sub-layer's key.
     /// </summary>

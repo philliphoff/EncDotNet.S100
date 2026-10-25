@@ -85,12 +85,10 @@ public sealed class S104WaterLevelPortrayalTests
         try
         {
             var layer = await StationsAt(new S104DatasetProcessor(path, Transforms), new RenderContext { Palette = palette });
-            var ink = S104CoverageStyle.GetInk(palette);
-
             Assert.True(layer.Palette.TryResolve(S104CoverageStyle.InkToken, out var inkHex));
             Assert.True(layer.Palette.TryResolve(S104CoverageStyle.SymbolFillToken, out var fillHex));
-            Assert.Equal(ink.Ink, RgbaColor.FromHex(inkHex));
-            Assert.Equal(ink.SymbolFill, RgbaColor.FromHex(fillHex));
+            Assert.Equal(S104CoverageStyle.Palette.Resolve(S104CoverageStyle.InkToken, palette), RgbaColor.FromHex(inkHex));
+            Assert.Equal(S104CoverageStyle.Palette.Resolve(S104CoverageStyle.SymbolFillToken, palette), RgbaColor.FromHex(fillHex));
 
             foreach (var symbol in layer.Instructions.OfType<PointInstruction>().Select(p => p.SymbolReference!).Distinct())
             {

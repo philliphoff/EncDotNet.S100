@@ -63,6 +63,9 @@ description: |
   square with a trend chevron, dash or "?", plus the signed height at
   1:100 000 and larger) and dashed surface isolines (0.5 m, or 0.25 m
   for a dataset range under 1 m), in one teal ink per palette with no
-  colour fill. See the S-104 README's Portrayal section.
+  colour fill, built with the `EncDotNet.S100.Portrayals.Application`
+  toolkit (palette tokens, SVGs embedded from `Symbols/`, instruction
+  builders). Bump `S104CoverageStyle.StyleVersion` when a symbol or colour
+  changes. See the S-104 README's Portrayal section.
   Do **not** invent a synthetic IHO-shaped PC under `content/S104/pc/`
   (kept `.gitkeep`-only by design).

@@ -55,6 +55,50 @@ another path. The provider disposes the source when you dispose it.
     by `SetPath` and `SetSource`. A failure (`null`) isn't cached, so the next
     call tries again.
 
+## Code-defined portrayal
+
+Some products have no portrayal catalogue: S-104 Ed 2.0.0 defines no
+symbology, and weather grids and CAP warnings aren't S-100 products. The
+`EncDotNet.S100.Portrayals.Application` namespace holds the pieces for drawing
+them in code, producing the same drawing instructions, palettes and symbols a
+catalogue does:
+
+- `ApplicationPalette` holds named colour tokens, each with a Day, Dusk and
+  Night value (`PaletteColors`). `GetColorPalette(palette)` returns the
+  `ColorPalette` that instruction colour tokens and SVG palette classes
+  resolve against.
+- `SymbolSet` reads S-100 SVG symbols from a project's embedded resources.
+  Its `Provider` is the `Func<string, string?>` symbol provider a sub-layer
+  takes.
+- `InstructionBuilder` builds point-symbol, text, line and area
+  `DrawingInstruction`s, stamping its viewing group, drawing priority, display
+  plane and scale limits on each. `TextInstructionStyle` describes a label's
+  font, colours, halo and offset.
+- `ApplicationContentScope.For(style, version)` is the style's part of the
+  tile disk-cache content scope: the style name and version plus the toolkit
+  assembly's version. A code-defined style has no catalogue files to hash, so
+  bump its version when its symbols or colours change.
+
+```csharp
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Portrayals.Application;
+
+var palette = new ApplicationPalette("Weather", new Dictionary<string, PaletteColors>
+{
+    ["WXINK"] = PaletteColors.FromHex(day: "#0F5E73", dusk: "#9FD3DE", night: "#3E7C88"),
+});
+var symbols = new SymbolSet(typeof(MyStyle).Assembly, "My.Product.Symbols");
+var stations = new InstructionBuilder { ViewingGroup = 31050, DrawingPriority = 15 };
+
+var instruction = stations.Point("station:42", "WXSTATION");
+ColorPalette night = palette.GetColorPalette(PaletteType.Night);
+string scope = ApplicationContentScope.For("Weather", version: 1);
+```
+
+`S104CoverageStyle` in
+[`EncDotNet.S100.Datasets.S104`](../EncDotNet.S100.Datasets.S104/README.md#portrayal)
+is built this way.
+
 ## See also
 
 - [Custom catalogues and validation](../../docs/catalogues-and-validation.md):

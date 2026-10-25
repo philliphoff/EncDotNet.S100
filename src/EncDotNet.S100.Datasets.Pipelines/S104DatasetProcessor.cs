@@ -61,6 +61,10 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly S104DatasetData _data;
     private readonly string _fileName;
 
+    // The dataset's content hash plus the S-104 style's scope (its version and
+    // the toolkit's), keying the station gauges' warm tile disk cache.
+    private readonly string _contentScope;
+
     private readonly SemaphoreSlim _renderGate = new(1, 1);
     private ValidationReport? _validationReport;
     private bool _validationCached;
@@ -232,6 +236,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         ArgumentNullException.ThrowIfNull(datasetStream);
         _fileName = fileName;
         _crsTransformFactory = crsTransformFactory;
+        _contentScope = $"ds:{DatasetContentHash.HashAndRewind(ref datasetStream)}|{S104CoverageStyle.ContentScope}";
 
         using (datasetStream)
         using (var hdf5 = PureHdfFile.Open(datasetStream))
@@ -351,7 +356,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private IsolineCoverageSubLayer BuildIsolineSubLayer(int step, RenderContext? context, CancellationToken cancellationToken)
     {
         var dataset = ((S104DatasetData.GriddedCoverage)_data).Dataset;
-        var ink = S104CoverageStyle.GetInk(context?.Palette ?? PaletteType.Day);
+        var palette = context?.Palette ?? PaletteType.Day;
         // Labels follow the mariner's text scale, as S-101 labels do.
         double textScale = context?.TextScale ?? 1.0;
         var isolines = _isolinesByStep.GetOrAdd(step, s => TraceIsolines(dataset, s, cancellationToken));
@@ -365,8 +370,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             SourceFeatureType = IsolineLayerKey,
             Isolines = isolines,
             Extent = GridMercatorExtent(),
-            Ink = ink.Ink,
-            LabelHalo = ink.IsolineLabelHalo,
+            Ink = S104CoverageStyle.Palette.Resolve(S104CoverageStyle.InkToken, palette),
+            LabelHalo = S104CoverageStyle.Palette.Resolve(S104CoverageStyle.IsolineLabelHaloToken, palette),
             LabelFontSize = 10 * textScale,
             LabelHaloWidth = 3 * textScale,
         };
@@ -556,30 +561,17 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             var height = station.Heights[idx];
             bool noData = float.IsNaN(height) || height == S104CoverageSource.FillValue;
 
-            instructions.Add(new PointInstruction
-            {
-                FeatureReference = featureRef,
-                SymbolReference = noData ? S104CoverageStyle.NoDataSymbol : StationSymbol(station.Trends[idx]),
-            });
+            instructions.Add(S104CoverageStyle.StationSymbols.Point(
+                featureRef,
+                noData ? S104CoverageStyle.NoDataSymbol : StationSymbol(station.Trends[idx])));
 
             if (!noData)
             {
-                instructions.Add(new TextInstruction
-                {
-                    FeatureReference = featureRef,
-                    Text = S104CoverageStyle.FormatStationValue(height),
-                    FontSize = S104CoverageStyle.StationLabelFontSize,
-                    FontColor = S104CoverageStyle.InkToken,
-                    FontWeight = TextFontWeight.Bold,
-                    FontProportion = TextFontProportion.MonoSpaced,
-                    HaloColor = S104CoverageStyle.LabelHaloToken,
-                    HaloWidth = S104CoverageStyle.StationLabelHaloMm,
-                    HorizontalAlignment = TextHorizontalAlignment.Start,
-                    VerticalAlignment = TextVerticalAlignment.Center,
-                    OffsetX = S104CoverageStyle.StationLabelOffsetMm,
-                    // Drawn at 1:100 000 and larger, as an S-101 label with SCAMIN is.
-                    ScaleMinimum = S104CoverageStyle.StationLabelMaxScaleDenominator,
-                });
+                // Drawn at 1:100 000 and larger, as an S-101 label with SCAMIN is.
+                instructions.Add(S104CoverageStyle.StationLabels.Text(
+                    featureRef,
+                    S104CoverageStyle.FormatStationValue(height),
+                    S104CoverageStyle.StationLabelStyle));
             }
         }
 
@@ -606,8 +598,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     SourceFeatureType = StationLayerKey,
                     Instructions = instructions,
                     GeometryProvider = new StationGeometryProvider(geometries),
-                    Palette = S104CoverageStyle.GetColorPalette(palette),
-                    SymbolProvider = S104CoverageStyle.GetSymbol,
+                    Palette = S104CoverageStyle.Palette.GetColorPalette(palette),
+                    SymbolProvider = S104CoverageStyle.Symbols.Provider,
                     SymbolScale = context?.SymbolScale ?? 1.0,
                     TextScale = context?.TextScale ?? 1.0,
                     Product = "S-104",
@@ -617,6 +609,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             Spec = Spec,
             SourceDatasetId = _fileName,
             Info = info,
+            ContentScope = _contentScope,
         };
     }
 
