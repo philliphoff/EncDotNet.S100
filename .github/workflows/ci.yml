@@ -63,14 +63,17 @@ jobs:
           command -v xvfb-run >/dev/null || { sudo apt-get update && sudo apt-get install -y xvfb; }
           url_file="$RUNNER_TEMP/viewer-mcp.url"
           log="$RUNNER_TEMP/viewer-smoke.log"
-          xvfb-run -a dotnet run --no-build --configuration Release --project src/EncDotNet.S100.Viewer -- \
+          # Its own session and process group, so xvfb-run, Xvfb, dotnet run
+          # and the viewer can be stopped together; the viewer doesn't exit
+          # on SIGTERM alone.
+          setsid xvfb-run -a dotnet run --no-build --configuration Release --project src/EncDotNet.S100.Viewer -- \
             --ephemeral --mcp-port-file "$url_file" --crash-log "$RUNNER_TEMP/viewer-crash.log" >"$log" 2>&1 &
           pid=$!
+          stop_viewer() { kill -KILL -- "-$pid" 2>/dev/null || true; }
           for _ in $(seq 1 90); do
             if [ -s "$url_file" ]; then
               echo "Viewer started: $(cat "$url_file")"
-              pkill -f SoundCharts || true
-              wait "$pid" 2>/dev/null || true
+              stop_viewer
               exit 0
             fi
             if ! kill -0 "$pid" 2>/dev/null; then
@@ -82,7 +85,7 @@ jobs:
           done
           echo "::error::Viewer did not start within 90 seconds"
           cat "$log"
-          kill "$pid" 2>/dev/null || true
+          stop_viewer
           exit 1
 
       - name: Upload test results
