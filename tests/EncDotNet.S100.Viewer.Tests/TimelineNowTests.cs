@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -35,6 +36,34 @@ public sealed class TimelineNowTests
         var clock = new FakeTimeProvider(new DateTimeOffset(now));
         var timeline = new TimelineViewModel(service, timeFormat: null, clock, action => action(), refresher);
         return (service, timeline, clock);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_forecast_timeline_follows_the_reported_run_not_the_product(bool reportsRun)
+    {
+        var (service, timeline, _) = Create(Run.AddHours(1));
+        var snapshot = RunSnapshot(Run, current: null);
+
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
+        {
+            Minimum = snapshot.Minimum,
+            Maximum = snapshot.Maximum,
+            Current = snapshot.Current,
+            Samples = snapshot.Samples,
+            CoverageSegments = snapshot.CoverageSegments,
+            Datasets =
+            [
+                new MapsuiMapTimedDataset("gfs.t12z.wave", Run, Run.AddHours(48))
+                {
+                    ProductSpec = "S-111",
+                    ForecastRun = reportsRun ? new DatasetForecastRun("gfs") : null,
+                },
+            ],
+        });
+
+        Assert.Equal(reportsRun, timeline.IsForecastTimeline);
     }
 
     [Fact]
@@ -96,7 +125,8 @@ public sealed class TimelineNowTests
             Current = snapshot.Current,
             Samples = snapshot.Samples,
             CoverageSegments = snapshot.CoverageSegments,
-            Datasets = [new MapsuiMapTimedDataset("111US00_CBOFS_US4MD1DD", Run, Run.AddHours(48)) { ProductSpec = "S-111" }],
+            // The S-111 processor reports a run of the product with no run time.
+            Datasets = [new MapsuiMapTimedDataset("111US00_CBOFS_US4MD1DD", Run, Run.AddHours(48)) { ProductSpec = "S-111", ForecastRun = new DatasetForecastRun("S-111") }],
         });
 
         clock.Advance(TimeSpan.FromHours(11));

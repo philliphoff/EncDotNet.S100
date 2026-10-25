@@ -37,6 +37,7 @@ public class S102IssueTimeTests
 
             var timeAware = Assert.IsAssignableFrom<ITimeAwareDatasetProcessor>(processor);
             Assert.Empty(timeAware.AvailableTimes);
+            Assert.Null(timeAware.ForecastRun);
             Assert.Equal(
                 DateTime.SpecifyKind(DateTime.Parse(expectedUtc, System.Globalization.CultureInfo.InvariantCulture), DateTimeKind.Utc),
                 timeAware.IssueTime);

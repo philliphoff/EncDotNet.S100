@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -62,6 +63,40 @@ public sealed class LayerTimeTests
         // Forecast hours count from the run, never from the later issue time.
         Assert.Equal("08:00Z · T+8 h", LayerTimes.Describe(tile, Run.AddHours(8), false, TimeFormat.Utc, TimeZoneInfo.Utc, ForecastRunNames.RunOf(tile, [loaded])).Text);
         Assert.Equal("08:00Z", LayerTimes.Describe(tile, Run.AddHours(8), false, TimeFormat.Utc, TimeZoneInfo.Utc, ForecastRunNames.RunOf(tile)).Text);
+    }
+
+    /// <summary>A weather grid whose name follows no S-100 convention; its processor reports the run.</summary>
+    private static MapsuiMapTimedDataset WeatherGrid(DatasetForecastRun? run) => new("gfs.t00z.pgrb2.0p25", Run, Run.AddHours(48))
+    {
+        DatasetId = "gfs",
+        Samples = [.. Enumerable.Range(0, 17).Select(i => Run.AddHours(3 * i))],
+        ForecastRun = run,
+        IssueTime = Run.AddHours(4),
+    };
+
+    [Fact]
+    public void A_run_the_processor_reports_names_a_dataset_whose_name_carries_none()
+    {
+        var grid = WeatherGrid(new DatasetForecastRun("gfs", Run));
+
+        Assert.Equal(new ForecastRun("gfs", Run, FromIssueTime: false), ForecastRunNames.RunOf(grid));
+        Assert.Equal("gfs 00:00Z", ForecastRunNames.Describe(grid));
+    }
+
+    [Fact]
+    public void A_reported_run_without_a_reference_time_falls_back_to_the_issue_time()
+    {
+        var grid = WeatherGrid(new DatasetForecastRun("S-111"));
+
+        Assert.Equal(new ForecastRun("S-111", Run.AddHours(4), FromIssueTime: true), ForecastRunNames.RunOf(grid));
+    }
+
+    [Fact]
+    public void A_dataset_whose_processor_reports_no_run_is_no_run()
+    {
+        Assert.Null(ForecastRunNames.RunOf(WeatherGrid(run: null)));
+        // The product name alone no longer makes a run: the processor says so.
+        Assert.Null(ForecastRunNames.RunOf(WeatherGrid(run: null) with { ProductSpec = "S-111" }));
     }
 
     [Fact]

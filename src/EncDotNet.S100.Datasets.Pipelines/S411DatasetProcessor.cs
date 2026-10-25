@@ -59,6 +59,17 @@ public sealed class S411DatasetProcessor :
         _dataset.IssueDate is { } dt ? [dt] : Array.Empty<DateTime>();
 
     /// <summary>
+    /// S-411 ice chart snapshots: observations, each valid until the next one
+    /// for at most 14 days.
+    /// </summary>
+    public static TimeSemantics SeaIceTimeSemantics { get; } =
+        new(TimeStepKind.Observation, TimeStepSelection.AtOrBefore, TimeSpan.FromDays(14));
+
+    /// <inheritdoc />
+    /// <remarks>Always <see cref="SeaIceTimeSemantics"/>.</remarks>
+    public TimeSemantics TimeSemantics => SeaIceTimeSemantics;
+
+    /// <summary>
     /// Initializes a new <see cref="S411DatasetProcessor"/> by reading and parsing the
     /// dataset file at <paramref name="path"/>. The file is read in full and
     /// closed before the constructor returns.

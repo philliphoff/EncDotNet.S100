@@ -35,6 +35,10 @@ public class S111Dcf1ProcessorTests
                     new DateTime(2024, 1, 1, 1, 30, 0, DateTimeKind.Utc),
                 ],
                 processor.AvailableTimes);
+            // S-111 is always a forecast run of the product, snapped to the nearest step.
+            var timeAware = (ITimeAwareDatasetProcessor)processor;
+            Assert.Equal(new DatasetForecastRun("S-111"), timeAware.ForecastRun);
+            Assert.Equal(TimeSemantics.Default, timeAware.TimeSemantics);
 
             using var bitmap = await processor.RenderHeadlessAsync(
                 256,

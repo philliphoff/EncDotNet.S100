@@ -41,9 +41,11 @@ internal static partial class ForecastRunNames
 
     /// <summary>
     /// The forecast run a loaded dataset belongs to (#720): the model from its
-    /// name (a tile's, a run's, or S-111's own), and the run time from, in
-    /// order, the name, the Library's run for the loaded copy, or the data's
-    /// issue time (later than the run; <see cref="ForecastRun.FromIssueTime"/>).
+    /// name (a tile's or a run's), else from the run its processor reports
+    /// (<see cref="EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset.ForecastRun"/>,
+    /// e.g. <c>S-111</c>); and the run time from, in order, the processor's
+    /// reference time, the name, the Library's run for the loaded copy, or the
+    /// data's issue time (later than the run; <see cref="ForecastRun.FromIssueTime"/>).
     /// <see langword="null"/> for data that is not a forecast run.
     /// </summary>
     /// <param name="dataset">The loaded dataset.</param>
@@ -53,9 +55,11 @@ internal static partial class ForecastRunNames
         ArgumentNullException.ThrowIfNull(dataset);
         var model = ModelAndTile(dataset.Name)?.Model
             ?? (Describe(dataset.Name) is { } described ? described[..described.IndexOf(' ', StringComparison.Ordinal)] : null)
-            ?? (string.Equals(dataset.ProductSpec, "S-111", StringComparison.OrdinalIgnoreCase) ? "S-111" : null);
+            ?? dataset.ForecastRun?.Model;
         if (model is null)
             return null;
+        if (dataset.ForecastRun?.ReferenceTime is { } reference)
+            return new ForecastRun(model, reference, FromIssueTime: false);
         if (RunTime(dataset.Name) is { } named)
             return new ForecastRun(model, named, FromIssueTime: false);
         var key = LibraryTimedEntry.KeyOf(dataset.Name);
@@ -118,7 +122,7 @@ internal static partial class ForecastRunNames
 }
 
 /// <summary>A loaded dataset's forecast run (#720).</summary>
-/// <param name="Model">The model, e.g. <c>cbofs</c> (or <c>S-104</c> / <c>S-111</c> when the name has none).</param>
+/// <param name="Model">The model, e.g. <c>cbofs</c> (or <c>S-104</c> from the name, or the processor's model such as <c>S-111</c>, when the name has none).</param>
 /// <param name="Time">The run time (UTC).</param>
 /// <param name="FromIssueTime">
 /// True when only the data's issue time was known: it is later than the run

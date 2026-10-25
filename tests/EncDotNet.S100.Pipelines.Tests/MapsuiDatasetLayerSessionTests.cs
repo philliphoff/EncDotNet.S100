@@ -889,6 +889,59 @@ public sealed class MapsuiDatasetLayerSessionTests
     }
 
     [Fact]
+    public void TimePolicyComesFromTheProcessorsTimeSemanticsWithNoHostRules()
+    {
+        // A product the host knows nothing about: a six-hourly run held for
+        // three hours after each step, from a model run it reports itself.
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var id = new MapDatasetId("grid");
+        var run = new DatasetForecastRun("gfs", first.AddHours(-3));
+        Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)
+        {
+            AvailableTimes = [first, first.AddHours(6)],
+            TimeSemantics = new TimeSemantics(TimeStepKind.Forecast, TimeStepSelection.AtOrBefore, TimeSpan.FromHours(3)),
+            ForecastRun = run,
+        }));
+
+        session.SetDataset(Dataset(id));
+
+        var timed = Assert.Single(session.GetTimeSnapshot().Datasets);
+        Assert.Equal(MapsuiTimeSelectionKind.AtOrBefore, timed.Selection);
+        Assert.Equal(TimeSpan.FromHours(3), timed.Tolerance);
+        Assert.Equal(run, timed.ForecastRun);
+        Assert.Equal(
+            [new MapsuiMapTimeSegment(first, first.AddHours(3)), new MapsuiMapTimeSegment(first.AddHours(6), first.AddHours(9))],
+            timed.Coverage);
+        Assert.Equal(first.AddHours(6), timed.SampleAt(first.AddHours(8)));
+        Assert.Null(timed.SampleAt(first.AddHours(4)));
+    }
+
+    [Fact]
+    public void DefaultTimeSemanticsSnapToTheNearestStepWithinTheTypicalStep()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var id = new MapDatasetId("plain");
+        Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)
+        {
+            AvailableTimes = [first, first.AddHours(1), first.AddHours(2)],
+        }));
+
+        session.SetDataset(Dataset(id));
+
+        var timed = Assert.Single(session.GetTimeSnapshot().Datasets);
+        Assert.Equal(MapsuiTimeSelectionKind.Nearest, timed.Selection);
+        Assert.Equal(TimeSpan.FromHours(1), timed.Tolerance);
+        Assert.Null(timed.ForecastRun);
+        Assert.Equal(first.AddHours(1), timed.SampleAt(first.AddMinutes(40)));
+    }
+
+    [Fact]
     public void TimeSnapshotDefensivelyMaterializesCollections()
     {
         var first = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);

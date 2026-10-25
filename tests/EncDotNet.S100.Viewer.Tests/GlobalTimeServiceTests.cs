@@ -253,6 +253,11 @@ public class GlobalTimeServiceTests
 
         public IReadOnlyList<DateTime> AvailableTimes { get; } = times;
 
+        // What the real processor reports for the product (S-104 holds each step).
+        public TimeSemantics TimeSemantics => spec == "S-104"
+            ? S104DatasetProcessor.WaterLevelTimeSemantics
+            : TimeSemantics.Default;
+
         public FeatureInfo? GetFeatureInfo(string featureRef) => null;
     }
 }
