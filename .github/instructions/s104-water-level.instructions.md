@@ -22,12 +22,12 @@ When modifying S-104 code:
   `Assert.SkipUnless` when a real HDF5 file is required).
 - **Portrayal is SoundCharts' own by design.** IHO publishes no official
   S-104 portrayal catalogue (the spec treats water levels as input to ECDIS
-  depth adjustment, not a visual layer). `S104PortrayalCatalogue` defines
+  depth adjustment, not a visual layer). `S104CoverageStyle` defines
   station gauges (trend mark + signed value) and dashed surface isolines in
   one ink colour per Day / Dusk / Night palette; the S-104 README's
   Portrayal section is the reference. Do **not** invent a synthetic
   IHO-shaped PC under `content/S104/pc/`; that directory stays
   `.gitkeep`-only until IHO publishes one. Don't add colour fills, or red,
   green or depth blues: they compete with the ENC. Update
-  `S104PortrayalCatalogueTests` and the `S104RenderingTests` baselines with
+  `S104CoverageStyleTests` and the `S104RenderingTests` baselines with
   any change.

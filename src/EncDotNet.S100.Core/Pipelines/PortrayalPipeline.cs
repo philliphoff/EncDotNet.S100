@@ -56,7 +56,7 @@ public sealed class PortrayalPipeline
     /// <see cref="StyledCoverageLayer"/>.
     /// </summary>
     /// <param name="source">The coverage source.</param>
-    /// <param name="catalogue">The coverage portrayal catalogue.</param>
+    /// <param name="style">The coverage style.</param>
     /// <param name="viewport">Optional map viewport for viewport-scoped
     /// sampling (issue #487). When <see langword="null"/> the full grid is
     /// sampled.</param>
@@ -67,16 +67,16 @@ public sealed class PortrayalPipeline
     /// <param name="cancellationToken">Cancellation token.</param>
     public async Task<IPortrayalLayer> ProcessAsync(
         ICoverageSource source,
-        ICoveragePortrayalCatalogue catalogue,
+        ICoverageStyle style,
         Viewport? viewport = null,
         ICrsTransform? wgs84ToNative = null,
         MarinerSettings? mariner = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(catalogue);
+        ArgumentNullException.ThrowIfNull(style);
         return await _coveragePipeline
-            .ProcessAsync(source, catalogue, viewport, wgs84ToNative, mariner, cancellationToken)
+            .ProcessAsync(source, style, viewport, wgs84ToNative, mariner, cancellationToken)
             .ConfigureAwait(false);
     }
 }

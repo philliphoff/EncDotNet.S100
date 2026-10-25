@@ -74,7 +74,7 @@ public sealed class S111ArrowRenderingTests : IDisposable
     public void SymbolRef_for_band_matches_SCAROW0N(int bandIndex, float speed)
     {
         var symbolScheme = _catalogue.ResolveSymbolScheme(new MarinerSettings());
-        var band = symbolScheme.Resolve(speed);
+        var band = symbolScheme.Resolve(speed, latitude: 0);
 
         Assert.NotNull(band);
         Assert.Equal($"SCAROW0{bandIndex}", band!.SymbolRef);
@@ -90,7 +90,7 @@ public sealed class S111ArrowRenderingTests : IDisposable
         // PC §B-9): differentiation is by colour, not size.
         foreach (var speed in new[] { 0.1f, 0.75f, 1.5f })
         {
-            var band = symbolScheme.Resolve(speed);
+            var band = symbolScheme.Resolve(speed, latitude: 0);
             Assert.NotNull(band);
             Assert.False(band!.ScaleByValue);
             Assert.Equal(0.40f, band.ScaleFactor);
@@ -106,7 +106,7 @@ public sealed class S111ArrowRenderingTests : IDisposable
         // Bands 4-8: scaleAttribute=surfaceCurrentSpeed,
         // scaleFactor=scaleFactorIntermediate (0.20).
         const float v = 3.5f;
-        var band = symbolScheme.Resolve(v);
+        var band = symbolScheme.Resolve(v, latitude: 0);
         Assert.NotNull(band);
         Assert.True(band!.ScaleByValue);
         Assert.Equal(0.20f, band.ScaleFactor);
@@ -120,7 +120,7 @@ public sealed class S111ArrowRenderingTests : IDisposable
 
         // Band 9: defaultScaleFactor = scaleCeiling (2.60), no
         // scaleAttribute.
-        var band = symbolScheme.Resolve(15.0f);
+        var band = symbolScheme.Resolve(15.0f, latitude: 0);
         Assert.NotNull(band);
         Assert.False(band!.ScaleByValue);
         Assert.Equal(2.60f, band.ScaleFactor);
@@ -280,7 +280,7 @@ public sealed class S111ArrowRenderingTests : IDisposable
         // H = Href · min(max(Slow, S), Shigh) / Sref with Href = 10 mm,
         // Sref = 5 kn, Slow = 2 kn, Shigh = 13 kn (S-111 Ed 2.0.0 Eqn 9.1).
         var scheme = _catalogue.ResolveSymbolScheme(new MarinerSettings());
-        var band = scheme.Resolve(speed);
+        var band = scheme.Resolve(speed, latitude: 0);
         Assert.NotNull(band);
 
         double length = scheme.NominalSymbolLengthMillimetres * band!.ScaleFor(speed);

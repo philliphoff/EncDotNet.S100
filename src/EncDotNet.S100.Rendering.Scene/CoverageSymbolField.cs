@@ -105,7 +105,7 @@ public sealed class CoverageSymbolField
                 if (valueMissing || directionMissing)
                     continue;
 
-                var band = scheme.Resolve(value);
+                var band = scheme.Resolve(value, lat);
                 if (band is null)
                     continue;
 
@@ -115,7 +115,7 @@ public sealed class CoverageSymbolField
 
                 field.Bands[i] = band;
                 field.Scale[i] = (float)scale;
-                field.Rotation[i] = direction;
+                field.Rotation[i] = scheme.RotationFor(direction);
                 field.Priority[i] = value;
             }
         }

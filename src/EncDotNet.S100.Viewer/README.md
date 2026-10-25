@@ -1794,7 +1794,7 @@ Design notes for features that cross several projects:
 
 The internationalization conventions, the `IActivityTab` and activity-bar
 contract, the `IDynamicFeatureSource` abstraction, the
-`ICoveragePortrayalCatalogue` and `IVectorPortrayalCatalogue` contracts, and
+`ICoverageStyle` and `IVectorPortrayalCatalogue` contracts, and
 the `.resx` string convention are in
 [`viewer.instructions.md`](https://github.com/philliphoff/EncDotNet.S100/blob/main/.github/instructions/viewer.instructions.md).
 The app icon and installer art are described in

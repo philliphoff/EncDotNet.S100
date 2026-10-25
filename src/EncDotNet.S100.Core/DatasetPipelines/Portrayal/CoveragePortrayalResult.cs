@@ -93,7 +93,7 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
 /// </summary>
 /// <remarks>
 /// S-104 Ed 2.0.0 §9 defines no portrayal; the S-104 isolines are SoundCharts'
-/// own (see <c>S104PortrayalCatalogue</c>).
+/// own (see <c>S104CoverageStyle</c>).
 /// </remarks>
 public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
 {

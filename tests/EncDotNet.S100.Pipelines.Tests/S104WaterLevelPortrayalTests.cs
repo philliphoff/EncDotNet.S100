@@ -31,19 +31,19 @@ public sealed class S104WaterLevelPortrayalTests
             Assert.Equal(S104DatasetProcessor.StationLayerKey, layer.LayerKey);
             Assert.Equal(S98DisplayPlane.OtherChartOverlays, layer.Plane);
 
-            AssertStation(layer, "Rising", S104PortrayalCatalogue.RisingSymbol, "+1.42");
-            AssertStation(layer, "Falling", S104PortrayalCatalogue.FallingSymbol, "+0.87");
-            AssertStation(layer, "Steady", S104PortrayalCatalogue.SteadySymbol, "\u22120.12");
-            AssertStation(layer, "Unknown", S104PortrayalCatalogue.UnknownSymbol, "+0.31");
-            AssertStation(layer, "Missing", S104PortrayalCatalogue.NoDataSymbol, null);
+            AssertStation(layer, "Rising", S104CoverageStyle.RisingSymbol, "+1.42");
+            AssertStation(layer, "Falling", S104CoverageStyle.FallingSymbol, "+0.87");
+            AssertStation(layer, "Steady", S104CoverageStyle.SteadySymbol, "\u22120.12");
+            AssertStation(layer, "Unknown", S104CoverageStyle.UnknownSymbol, "+0.31");
+            AssertStation(layer, "Missing", S104CoverageStyle.NoDataSymbol, null);
 
             // Labels follow the S-101 label rules: SCAMIN-gated at 1:100 000,
             // drawn with the S-104 ink and halo tokens in a monospaced face.
             Assert.All(layer.Instructions.OfType<TextInstruction>(), text =>
             {
-                Assert.Equal(S104PortrayalCatalogue.StationLabelMaxScaleDenominator, text.ScaleMinimum);
-                Assert.Equal(S104PortrayalCatalogue.InkToken, text.FontColor);
-                Assert.Equal(S104PortrayalCatalogue.LabelHaloToken, text.HaloColor);
+                Assert.Equal(S104CoverageStyle.StationLabelMaxScaleDenominator, text.ScaleMinimum);
+                Assert.Equal(S104CoverageStyle.InkToken, text.FontColor);
+                Assert.Equal(S104CoverageStyle.LabelHaloToken, text.HaloColor);
                 Assert.Equal(TextFontProportion.MonoSpaced, text.FontProportion);
                 Assert.Equal(TextHorizontalAlignment.Start, text.HorizontalAlignment);
             });
@@ -85,10 +85,10 @@ public sealed class S104WaterLevelPortrayalTests
         try
         {
             var layer = await StationsAt(new S104DatasetProcessor(path, Transforms), new RenderContext { Palette = palette });
-            var ink = S104PortrayalCatalogue.GetInk(palette);
+            var ink = S104CoverageStyle.GetInk(palette);
 
-            Assert.True(layer.Palette.TryResolve(S104PortrayalCatalogue.InkToken, out var inkHex));
-            Assert.True(layer.Palette.TryResolve(S104PortrayalCatalogue.SymbolFillToken, out var fillHex));
+            Assert.True(layer.Palette.TryResolve(S104CoverageStyle.InkToken, out var inkHex));
+            Assert.True(layer.Palette.TryResolve(S104CoverageStyle.SymbolFillToken, out var fillHex));
             Assert.Equal(ink.Ink, RgbaColor.FromHex(inkHex));
             Assert.Equal(ink.SymbolFill, RgbaColor.FromHex(fillHex));
 
@@ -156,7 +156,7 @@ public sealed class S104WaterLevelPortrayalTests
                 Assert.All(isolines.Isolines, line =>
                 {
                     Assert.Equal(0, Math.IEEERemainder(line.Level, 0.25), precision: 9);
-                    Assert.Equal(S104PortrayalCatalogue.FormatIsolineLabel(line.Level, 0.25), line.Label);
+                    Assert.Equal(S104CoverageStyle.FormatIsolineLabel(line.Level, 0.25), line.Label);
                 });
             }
 

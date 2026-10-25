@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Pipelines.Coverage;
 
 /// <summary>
 /// Assembles a <see cref="StyledCoverageLayer"/> from a coverage source and
-/// portrayal catalogue: resolves the catalogue's colour and (optional) symbol
+/// coverage style: resolves the style's colour and (optional) symbol
 /// schemes against the supplied <see cref="MarinerSettings"/>, samples the
 /// full grid, and bundles the result with the source's georeferencing.
 /// Pixel-level colorization and any reprojection are deferred to the renderer,
@@ -21,7 +21,7 @@ public class CoveragePipeline
     /// Assembles a <see cref="StyledCoverageLayer"/> from a coverage source.
     /// </summary>
     /// <param name="source">The coverage source to sample.</param>
-    /// <param name="catalogue">The coverage portrayal catalogue.</param>
+    /// <param name="style">The coverage style.</param>
     /// <param name="viewport">Optional map viewport in WGS-84. When supplied the
     /// pipeline calls <see cref="GridRegion.FromViewport"/> to sample only the
     /// cells that fall inside the viewport at the viewport's ground resolution
@@ -35,14 +35,14 @@ public class CoveragePipeline
     /// <param name="cancellationToken">Cancellation token.</param>
     public async Task<StyledCoverageLayer> ProcessAsync(
         ICoverageSource source,
-        ICoveragePortrayalCatalogue catalogue,
+        ICoverageStyle style,
         Viewport? viewport = null,
         ICrsTransform? wgs84ToNative = null,
         MarinerSettings? mariner = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(catalogue);
+        ArgumentNullException.ThrowIfNull(style);
         cancellationToken.ThrowIfCancellationRequested();
 
         using var activity = Telemetry.ActivitySource.StartActivity("s100.pipeline.coverage.process");
@@ -65,26 +65,26 @@ public class CoveragePipeline
             var settings = mariner ?? MarinerSettings.Default;
             var metadata = source.Metadata;
 
-            // Pre-warm the catalogue so the synchronous Resolve*Scheme
+            // Pre-warm the style so the synchronous Resolve*Scheme
             // calls below can read entirely from cached state. We only
-            // trigger a switch when the catalogue is still at its empty
-            // Default palette (catalogue uninitialised); when the dataset
+            // trigger a switch when the style is still at its empty
+            // Default palette (style uninitialised); when the dataset
             // processor has already invoked SwitchPaletteAsync the active
             // palette is already populated and we leave it untouched.
-            if (catalogue.ActivePalette.Colors.Count == 0)
+            if (style.ActivePalette.Colors.Count == 0)
             {
-                await catalogue.SwitchPaletteAsync(PaletteType.Day, cancellationToken)
+                await style.SwitchPaletteAsync(PaletteType.Day, cancellationToken)
                     .ConfigureAwait(false);
             }
 
-            // Stage 1 — resolve colour and symbol schemes from catalogue
+            // Stage 1 — resolve colour and symbol schemes from the style
             CoverageColorScheme? colorScheme;
             CoverageSymbolScheme? symbolScheme;
             using (Telemetry.ActivitySource.StartActivity("s100.pipeline.coverage.stage.resolve"))
             {
                 var stageStart = Stopwatch.GetTimestamp();
-                colorScheme = catalogue.ResolveColorScheme(settings);
-                symbolScheme = catalogue.ResolveSymbolScheme(settings);
+                colorScheme = style.ResolveColorScheme(settings);
+                symbolScheme = style.ResolveSymbolScheme(settings);
                 RecordCoverageStageDuration(stageStart, "resolve");
             }
 
@@ -811,11 +811,139 @@ public class SampledCoverage
     /// </summary>
     public required IReadOnlyDictionary<string, float[]> Values { get; init; }
 
-    /// <summary>Returns a 2-D view over the named field's flat backing array.</summary>
+    /// <summary>
+    /// Fields derived from <see cref="Values"/> cell by cell, for example wind
+    /// speed and direction from U and V components. Each one is computed the
+    /// first time it is read (through <see cref="GetValues"/> or
+    /// <see cref="GetField"/>) and kept for the life of this sample, so the
+    /// source never holds a second full-grid copy. Empty by default.
+    /// </summary>
+    /// <remarks>
+    /// Names must differ from the keys of <see cref="Values"/> and from each
+    /// other. Inputs must name fields in <see cref="Values"/>; a computed field
+    /// cannot read another computed field.
+    /// </remarks>
+    public IReadOnlyList<ComputedCoverageField> ComputedFields { get; init; } = [];
+
+    private readonly object _computedLock = new();
+    private Dictionary<string, float[]>? _computedValues;
+
+    /// <summary>
+    /// The names of every field this sample can return: the keys of
+    /// <see cref="Values"/>, then the names of <see cref="ComputedFields"/>.
+    /// </summary>
+    public IEnumerable<string> FieldNames
+    {
+        get
+        {
+            foreach (var name in Values.Keys)
+                yield return name;
+            foreach (var computed in ComputedFields)
+                yield return computed.Name;
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="fieldName"/> is a stored or a computed field of
+    /// this sample.
+    /// </summary>
+    /// <param name="fieldName">The field name.</param>
+    public bool HasField(string fieldName) =>
+        Values.ContainsKey(fieldName) || FindComputed(fieldName) is not null;
+
+    /// <summary>
+    /// The flat row-major values of a stored or computed field, of length
+    /// <c>Rows*Cols</c>. A computed field is computed on the first call and
+    /// the same array is returned afterwards.
+    /// </summary>
+    /// <param name="fieldName">The field name.</param>
+    /// <exception cref="KeyNotFoundException">
+    /// The sample has no field called <paramref name="fieldName"/>, or a
+    /// computed field names an input that is not in <see cref="Values"/>.
+    /// </exception>
+    public float[] GetValues(string fieldName)
+    {
+        if (Values.TryGetValue(fieldName, out var stored))
+            return stored;
+
+        var computed = FindComputed(fieldName)
+            ?? throw new KeyNotFoundException($"The sampled coverage has no field '{fieldName}'.");
+
+        lock (_computedLock)
+        {
+            _computedValues ??= new Dictionary<string, float[]>(StringComparer.Ordinal);
+            if (!_computedValues.TryGetValue(fieldName, out var data))
+            {
+                data = Compute(computed);
+                _computedValues[fieldName] = data;
+            }
+
+            return data;
+        }
+    }
+
+    /// <summary>Returns a 2-D view over the named stored or computed field.</summary>
+    /// <param name="fieldName">The field name.</param>
+    /// <exception cref="KeyNotFoundException">The sample has no such field.</exception>
     public CoverageGridView GetField(string fieldName)
     {
-        var data = Values[fieldName];
+        var data = GetValues(fieldName);
         return new CoverageGridView(data, Metadata.NumRows, Metadata.NumColumns);
+    }
+
+    private ComputedCoverageField? FindComputed(string fieldName)
+    {
+        var fields = ComputedFields;
+        for (int i = 0; i < fields.Count; i++)
+        {
+            if (string.Equals(fields[i].Name, fieldName, StringComparison.Ordinal))
+                return fields[i];
+        }
+
+        return null;
+    }
+
+    private float[] Compute(ComputedCoverageField field)
+    {
+        var inputNames = field.Inputs;
+        var inputs = new float[inputNames.Count][];
+        for (int k = 0; k < inputs.Length; k++)
+        {
+            if (!Values.TryGetValue(inputNames[k], out var input))
+            {
+                throw new KeyNotFoundException(
+                    $"Computed field '{field.Name}' reads '{inputNames[k]}', which is not a stored field of the sampled coverage.");
+            }
+
+            inputs[k] = input;
+        }
+
+        int length = Metadata.NumRows * Metadata.NumColumns;
+        var result = new float[length];
+        Span<float> cell = inputs.Length <= 16 ? stackalloc float[inputs.Length] : new float[inputs.Length];
+        bool checkNoData = field.NoDataValue is not null;
+        float noData = field.NoDataValue.GetValueOrDefault();
+        bool noDataIsNaN = float.IsNaN(noData);
+
+        for (int i = 0; i < length; i++)
+        {
+            bool missing = false;
+            for (int k = 0; k < inputs.Length; k++)
+            {
+                float value = inputs[k][i];
+                if (checkNoData && (noDataIsNaN ? float.IsNaN(value) : value == noData))
+                {
+                    missing = true;
+                    break;
+                }
+
+                cell[k] = value;
+            }
+
+            result[i] = missing ? noData : field.Compute(cell);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -841,4 +969,38 @@ public class SampledCoverage
         double lon = Metadata.OriginLongitude + col * Metadata.SpacingLongitudinal;
         return new GeoPosition(lat, lon);
     }
+}
+
+/// <summary>
+/// Computes one cell of a <see cref="ComputedCoverageField"/> from the
+/// cell's input values, in the order of <see cref="ComputedCoverageField.Inputs"/>.
+/// </summary>
+/// <param name="inputs">The cell's input values.</param>
+/// <returns>The computed value.</returns>
+public delegate float CoverageFieldComputation(ReadOnlySpan<float> inputs);
+
+/// <summary>
+/// A field of a <see cref="SampledCoverage"/> derived cell by cell from its
+/// stored fields: for example wind speed, <c>sqrt(u² + v²)</c>, from the
+/// <c>u</c> and <c>v</c> components of a weather grid.
+/// </summary>
+public sealed class ComputedCoverageField
+{
+    /// <summary>The field name, used with <see cref="SampledCoverage.GetField"/>.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>The stored fields the computation reads, in the order it receives them.</summary>
+    public required IReadOnlyList<string> Inputs { get; init; }
+
+    /// <summary>Computes one cell from its input values.</summary>
+    public required CoverageFieldComputation Compute { get; init; }
+
+    /// <summary>
+    /// The no-data value, or <see langword="null"/> to call
+    /// <see cref="Compute"/> for every cell. When set, a cell where any input
+    /// equals it (or is NaN, for a NaN no-data value) is set to it without
+    /// calling <see cref="Compute"/>. Use the coverage's
+    /// <see cref="CoverageMetadata.NoDataValue"/>.
+    /// </summary>
+    public float? NoDataValue { get; init; }
 }

@@ -5,9 +5,10 @@ namespace EncDotNet.S100.Pipelines;
 /// <summary>
 /// Members shared by every product portrayal catalogue: the product it
 /// portrays, its edition, and the active colour palette. Specialised by
-/// <see cref="Vector.IVectorPortrayalCatalogue"/> for feature-based products
-/// and <see cref="Coverage.ICoveragePortrayalCatalogue"/> for gridded
-/// coverage products.
+/// <see cref="Vector.IVectorPortrayalCatalogue"/> for feature-based products.
+/// The file-backed coverage catalogues (S-102, S-111) implement it alongside
+/// <see cref="Coverage.ICoverageStyle"/>, which code-defined coverage styles
+/// implement on their own.
 /// </summary>
 /// <remarks>
 /// A catalogue instance is stateful (active palette, and for vector
@@ -43,7 +44,7 @@ public interface IPortrayalCatalogue
     /// Day) rather than failing. Coverage catalogues also use this call to
     /// pre-load the assets their synchronous resolve methods need, so it must
     /// be awaited before those are called (see
-    /// <see cref="Coverage.ICoveragePortrayalCatalogue"/>).
+    /// <see cref="Coverage.ICoverageStyle.SwitchPaletteAsync"/>).
     /// </remarks>
     /// <param name="type">The palette mood (Day, Dusk, or Night).</param>
     /// <param name="cancellationToken">Cancellation token.</param>

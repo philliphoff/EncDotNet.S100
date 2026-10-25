@@ -31,7 +31,7 @@ public class CoveragePipelineTests
                 ["depth"] = new float[,] { { 5f, 6f, 7f }, { 8f, 9f, 10f } }
             });
 
-        var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
+        var catalogue = new FakeCoverageStyle(DepthColorScheme);
         var pipeline = new CoveragePipeline();
 
         var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
@@ -80,7 +80,7 @@ public class CoveragePipelineTests
             sampledRows: 40,
             sampledCols: 30);
 
-        var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
+        var catalogue = new FakeCoverageStyle(DepthColorScheme);
         var pipeline = new CoveragePipeline();
 
         var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
@@ -208,7 +208,7 @@ public class CoveragePipelineTests
                 new SymbolBand { MinValue = 0f, MaxValue = 5f, SymbolRef = "ARROW" },
             ],
         };
-        var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme, symbolScheme: symbolScheme);
+        var catalogue = new FakeCoverageStyle(DepthColorScheme, symbolScheme: symbolScheme);
 
         var pipeline = new CoveragePipeline();
         var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
@@ -231,7 +231,7 @@ public class CoveragePipelineTests
             ShallowContour = Depth.FromMetres(2.0),
             DeepContour = Depth.FromMetres(30.0),
         };
-        var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
+        var catalogue = new FakeCoverageStyle(DepthColorScheme);
 
         var pipeline = new CoveragePipeline();
         await pipeline.ProcessAsync(source, catalogue, mariner: mariner, cancellationToken: TestContext.Current.CancellationToken);
@@ -248,7 +248,7 @@ public class CoveragePipelineTests
             {
                 ["depth"] = new float[,] { { 5f } }
             });
-        var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
+        var catalogue = new FakeCoverageStyle(DepthColorScheme);
 
         var pipeline = new CoveragePipeline();
         await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
@@ -267,7 +267,7 @@ public class CoveragePipelineTests
                 ["depth"] = new float[,] { { 3f, noData } }
             });
 
-        var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
+        var catalogue = new FakeCoverageStyle(DepthColorScheme);
         var pipeline = new CoveragePipeline();
 
         var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
@@ -284,7 +284,7 @@ public class CoveragePipelineTests
             {
                 ["depth"] = new float[,] { { 5f } }
             });
-        var catalogue = new FakeCoveragePortrayalCatalogue(DepthColorScheme);
+        var catalogue = new FakeCoverageStyle(DepthColorScheme);
         var pipeline = new CoveragePipeline();
 
         using var cts = new CancellationTokenSource();
@@ -408,13 +408,13 @@ public class CoveragePipelineTests
         }
     }
 
-    private sealed class FakeCoveragePortrayalCatalogue : ICoveragePortrayalCatalogue
+    private sealed class FakeCoverageStyle : ICoverageStyle
     {
         private readonly CoverageColorScheme _colorScheme;
         private readonly CoverageSymbolScheme? _symbolScheme;
         private readonly IReadOnlyList<ContourStyle> _contours;
 
-        public FakeCoveragePortrayalCatalogue(
+        public FakeCoverageStyle(
             CoverageColorScheme colorScheme,
             CoverageSymbolScheme? symbolScheme = null,
             IReadOnlyList<ContourStyle>? contours = null)
@@ -424,8 +424,6 @@ public class CoveragePipelineTests
             _contours = contours ?? [];
         }
 
-        public SpecRef Spec => new("S-102", default);
-        public string Edition => "1.0";
         public ColorPalette ActivePalette => ColorPalette.Default;
         public void SwitchPalette(PaletteType type) { }
         public ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;

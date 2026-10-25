@@ -9,11 +9,32 @@ public sealed class CoverageSymbolScheme
     /// <summary>The coverage field used to select the symbol band (e.g. "surfaceCurrentSpeed").</summary>
     public required string ValueFieldName { get; init; }
 
-    /// <summary>The coverage field whose value supplies the rotation angle in degrees clockwise from north.</summary>
+    /// <summary>
+    /// The coverage field whose value supplies the rotation angle in degrees
+    /// clockwise from north, before <see cref="RotationOffsetDegrees"/> is added.
+    /// </summary>
     public required string RotationFieldName { get; init; }
 
     /// <summary>The ordered list of symbol bands mapping value ranges to symbol references.</summary>
     public required IReadOnlyList<SymbolBand> Bands { get; init; }
+
+    /// <summary>
+    /// Bands used instead of <see cref="Bands"/> for cells south of the
+    /// equator, or <see langword="null"/> (the default) to use
+    /// <see cref="Bands"/> everywhere. Wind barbs use this: their feathers go
+    /// on the other side of the staff in the southern hemisphere.
+    /// </summary>
+    public IReadOnlyList<SymbolBand>? SouthernHemisphereBands { get; init; }
+
+    /// <summary>
+    /// Degrees added to the rotation field's value before the symbol is drawn.
+    /// Defaults to 0, for a field that gives the direction the symbol should
+    /// point (S-111 currents flow toward their direction). A field that gives
+    /// the direction a quantity comes <em>from</em> (wave direction, wind
+    /// direction) drawn with an arrow-shaped symbol uses 180, so the arrow
+    /// points the way the waves travel.
+    /// </summary>
+    public double RotationOffsetDegrees { get; init; }
 
     /// <summary>
     /// The length, in millimetres, of a symbol drawn at scale 1 — the symbol's
@@ -33,16 +54,37 @@ public sealed class CoverageSymbolScheme
     /// <summary>
     /// Resolves a value to its matching symbol band, or <c>null</c> for no-data / out-of-range.
     /// </summary>
-    public SymbolBand? Resolve(float value)
+    /// <param name="value">The cell's value in the <see cref="ValueFieldName"/> field.</param>
+    /// <param name="latitude">
+    /// The cell's latitude in degrees. Selects <see cref="SouthernHemisphereBands"/>
+    /// when it is negative and that list is set; ignored otherwise.
+    /// </param>
+    public SymbolBand? Resolve(float value, double latitude)
     {
-        for (int i = 0; i < Bands.Count; i++)
+        var bands = latitude < 0 && SouthernHemisphereBands is { } southern ? southern : Bands;
+        for (int i = 0; i < bands.Count; i++)
         {
-            var band = Bands[i];
+            var band = bands[i];
             if (value >= band.MinValue && value < band.MaxValue)
                 return band;
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The drawn rotation, in degrees clockwise from north in [0, 360), for a
+    /// rotation field value: <paramref name="direction"/> plus
+    /// <see cref="RotationOffsetDegrees"/>.
+    /// </summary>
+    /// <param name="direction">The cell's value in the <see cref="RotationFieldName"/> field.</param>
+    public float RotationFor(float direction)
+    {
+        if (RotationOffsetDegrees == 0)
+            return direction;
+
+        double rotation = (direction + RotationOffsetDegrees) % 360.0;
+        return (float)(rotation < 0 ? rotation + 360.0 : rotation);
     }
 }
 

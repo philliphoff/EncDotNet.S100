@@ -28,7 +28,7 @@ namespace EncDotNet.S100.Datasets.S111;
 /// hard-coded in this catalogue.
 /// </para>
 /// </remarks>
-public class S111PortrayalCatalogue : ICoveragePortrayalCatalogue
+public class S111PortrayalCatalogue : ICoverageStyle, IPortrayalCatalogue
 {
     private readonly PortrayalCatalogueProvider _provider;
     private readonly IPortrayalAssetCache _cache;

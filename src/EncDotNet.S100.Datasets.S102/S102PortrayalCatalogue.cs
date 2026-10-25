@@ -31,7 +31,7 @@ namespace EncDotNet.S100.Datasets.S102;
 /// <see cref="CoverageColorScheme.NoDataColor"/>.
 /// </para>
 /// </remarks>
-public class S102PortrayalCatalogue : ICoveragePortrayalCatalogue
+public class S102PortrayalCatalogue : ICoverageStyle, IPortrayalCatalogue
 {
     // Last-resort fallback if the bundled colour profile cannot be
     // loaded. These are the sRGB values from the official S-102 Day

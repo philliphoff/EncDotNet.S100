@@ -1,5 +1,4 @@
 using System.Globalization;
-using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 
@@ -23,10 +22,13 @@ public sealed record S104Ink(RgbaColor Ink, RgbaColor SymbolFill, RgbaColor Labe
 /// <para>
 /// S-104 Ed 2.0.0 §9 defines <b>no</b> portrayal: the data exists to adjust
 /// depths in the ENC or bathymetry (S-98 Annex C), and the edition removed the
-/// earlier portrayal catalogue. Everything this catalogue describes is
+/// earlier portrayal catalogue. Everything this style describes is
 /// SoundCharts' own symbology, and the viewer, CLI and MCP tools label it so
 /// (<see cref="EncDotNet.S100.Datasets.Pipelines.SpecConventions.S104Portrayal"/>).
-/// Replace it with an official IHO portrayal catalogue if one is published.
+/// It is defined in code, so it is an <see cref="ICoverageStyle"/> and not an
+/// <see cref="IPortrayalCatalogue"/>: it has no catalogue specification or
+/// edition. Replace it with an official IHO portrayal catalogue if one is
+/// published.
 /// </para>
 /// <para>
 /// The design keeps clear of official portrayal: no colour fill over the ENC,
@@ -52,7 +54,7 @@ public sealed record S104Ink(RgbaColor Ink, RgbaColor SymbolFill, RgbaColor Labe
 ///   </description></item>
 /// </list>
 /// </remarks>
-public class S104PortrayalCatalogue : ICoveragePortrayalCatalogue
+public class S104CoverageStyle : ICoverageStyle
 {
     /// <summary>
     /// The largest scale denominator the station value label is drawn at
@@ -145,12 +147,6 @@ public class S104PortrayalCatalogue : ICoveragePortrayalCatalogue
         };
 
     private PaletteType _activePaletteType = PaletteType.Day;
-
-    /// <summary>Gets the S-100 product specification identifier for this catalogue.</summary>
-    public SpecRef Spec => new("S-104", default);
-
-    /// <summary>Gets the edition of the product specification this catalogue draws.</summary>
-    public string Edition => "2.0.0";
 
     /// <summary>Gets the currently active color palette.</summary>
     public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;

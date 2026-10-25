@@ -64,7 +64,7 @@ public static class SpecConventions
     /// <summary>
     /// The S-104 portrayal: S-104 Edition 2.0.0 §9 defines none, so the station
     /// gauges and surface isolines are SoundCharts' own (see
-    /// <c>S104PortrayalCatalogue</c>).
+    /// <c>S104CoverageStyle</c>).
     /// </summary>
     public static ApplicationPortrayal S104Portrayal { get; } = new("S-104", "2.0.0");
 

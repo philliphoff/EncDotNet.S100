@@ -76,7 +76,7 @@ see [Reading product data](../../docs/reading-product-data.md).
   `null` height. The MCP server's `sample_coverage` tool uses it for time
   windows.
 - **`S104CoverageSource`**: the `ICoverageSource` for the coverage pipeline.
-- **`S104PortrayalCatalogue`**: the SoundCharts portrayal of water level: the
+- **`S104CoverageStyle`**: the SoundCharts portrayal of water level: the
   ink colours, isoline interval and label formats. See [Portrayal](#portrayal).
 
 The `S104DatasetProcessor` that renders, samples and validates a dataset is in
@@ -90,7 +90,7 @@ earlier portrayal catalogue. The `content/S104/pc/` folder in
 `EncDotNet.S100.Specifications` is empty.
 
 Both renderings below are SoundCharts' own, not IHO symbology.
-`S104PortrayalCatalogue` describes them and `S104DatasetProcessor` builds them.
+`S104CoverageStyle` describes them and `S104DatasetProcessor` builds them.
 Wherever a user meets them, they're labelled "SoundCharts portrayal: S-104 Ed
 2.0.0 defines no symbology" (`SpecConventions.S104Portrayal`): in SoundCharts'
 Object information panel for a station or grid cell and its dataset inspector,
@@ -107,7 +107,7 @@ avoid magenta (mariner information), red and amber (danger) and blue and green
 | Dusk | `#9FD3DE` | `#3B4650` | `#3B4650` |
 | Night | `#3E7C88` | `#0B0F14` | `#0B0F14` |
 
-Night colours stay under luminance 0.2. `S104PortrayalCatalogue.GetInk(PaletteType)`
+Night colours stay under luminance 0.2. `S104CoverageStyle.GetInk(PaletteType)`
 returns a palette's colours.
 
 ### Stations
@@ -127,7 +127,7 @@ each station, on the `s104.stations` sub-layer:
 - A station whose height at the step is the fill value (`-9999`) draws "—" in
   the square and no value.
 
-The gauges are ordinary S-100 symbols (`S104PortrayalCatalogue.GetSymbol`, with
+The gauges are ordinary S-100 symbols (`S104CoverageStyle.GetSymbol`, with
 colours from `GetColorPalette`) and text instructions, carried on a
 `VectorCoverageSubLayer` and drawn by the same renderer as S-101. So they follow
 the same rules as S-101 symbols and labels: the mariner's symbol and text

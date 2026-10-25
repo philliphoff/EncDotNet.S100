@@ -164,7 +164,8 @@ new("SafetyContour", m => m.SafetyContour.TotalMetres, LuaValueSerializers.Numbe
 | Area | Type(s) | Status |
 |---|---|---|
 | `Length`, `Depth` | — | Done |
-| `DepthFormatting`, `ContourStyle` | `Depth` | Done |
+| `DepthFormatting` | `Depth` | Done |
+| `ContourStyle` | — | Moved back to `double Value` plus a unit string (#1062), so a contour can trace any field (isobars, wave height); products convert from `Depth` where they build contours |
 | `MarinerSettings` + consumers | `Depth` | Done |
 | `Angle`, `Speed` | — | Done (this note) |
 | `DynamicMotion` + consumers | `Angle`, `Speed` | Done |

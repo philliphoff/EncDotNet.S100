@@ -153,7 +153,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// water-level <em>surface</em>, drawn as isolines, rather than a
     /// fixed-station (dcf1 / dcf8) point series. S-104 Edition 2.0.0 defines no
     /// official portrayal catalogue and treats water level primarily as input to
-    /// ECDIS vertical adjustment (see <see cref="S104PortrayalCatalogue"/>), so
+    /// ECDIS vertical adjustment (see <see cref="S104CoverageStyle"/>), so
     /// the surface is hidden by default in interactive viewers and shown on
     /// demand (issue #483). Fixed-station gauges are discrete symbols at genuine
     /// tide-station locations and remain visible by default.
@@ -333,12 +333,12 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <summary>
     /// Builds the SoundCharts water-level isolines for time step
     /// <paramref name="step"/>: dashed lines in the palette's ink at the
-    /// dataset's interval, labelled in metres (see <see cref="S104PortrayalCatalogue"/>).
+    /// dataset's interval, labelled in metres (see <see cref="S104CoverageStyle"/>).
     /// </summary>
     private IsolineCoverageSubLayer BuildIsolineSubLayer(int step, RenderContext? context, CancellationToken cancellationToken)
     {
         var dataset = ((S104DatasetData.GriddedCoverage)_data).Dataset;
-        var ink = S104PortrayalCatalogue.GetInk(context?.Palette ?? PaletteType.Day);
+        var ink = S104CoverageStyle.GetInk(context?.Palette ?? PaletteType.Day);
         // Labels follow the mariner's text scale, as S-101 labels do.
         double textScale = context?.TextScale ?? 1.0;
         var isolines = _isolinesByStep.GetOrAdd(step, s => TraceIsolines(dataset, s, cancellationToken));
@@ -362,7 +362,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private IReadOnlyList<Isoline> TraceIsolines(S104Dataset dataset, int step, CancellationToken cancellationToken)
     {
         var (minimum, maximum, interval) = _isolineRange!.Value;
-        var levels = S104PortrayalCatalogue.IsolineLevels(minimum, maximum, interval);
+        var levels = S104CoverageStyle.IsolineLevels(minimum, maximum, interval);
         var coverage = dataset.Coverages[step];
         int rows = coverage.NumPointsLatitudinal;
         int columns = coverage.NumPointsLongitudinal;
@@ -391,7 +391,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             result.Add(new Isoline
             {
                 Level = line.Level,
-                Label = S104PortrayalCatalogue.FormatIsolineLabel(line.Level, interval),
+                Label = S104CoverageStyle.FormatIsolineLabel(line.Level, interval),
                 MercatorCoordinates = mercator,
             });
         }
@@ -419,8 +419,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         }
 
         return double.IsFinite(minimum)
-            ? (minimum, maximum, S104PortrayalCatalogue.SelectIsolineInterval(minimum, maximum))
-            : (0.0, 0.0, S104PortrayalCatalogue.IsolineInterval);
+            ? (minimum, maximum, S104CoverageStyle.SelectIsolineInterval(minimum, maximum))
+            : (0.0, 0.0, S104CoverageStyle.IsolineInterval);
     }
 
     /// <summary>The EPSG:3857 extent of the whole grid, half a cell beyond the outer nodes.</summary>
@@ -492,7 +492,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// </summary>
     /// <remarks>
     /// S-104 Ed 2.0.0 §9 defines no portrayal, so the gauge is SoundCharts' own
-    /// (see <see cref="S104PortrayalCatalogue"/>): a rounded square in the
+    /// (see <see cref="S104CoverageStyle"/>): a rounded square in the
     /// palette's ink with a chevron up (rising), chevron down (falling), dash
     /// (steady) or "?" (unknown) for <c>waterLevelTrend</c>, and the height at
     /// the selected step as a signed label, shown at 1:100 000 and larger scales.
@@ -546,7 +546,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             instructions.Add(new PointInstruction
             {
                 FeatureReference = featureRef,
-                SymbolReference = noData ? S104PortrayalCatalogue.NoDataSymbol : StationSymbol(station.Trends[idx]),
+                SymbolReference = noData ? S104CoverageStyle.NoDataSymbol : StationSymbol(station.Trends[idx]),
             });
 
             if (!noData)
@@ -554,18 +554,18 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 instructions.Add(new TextInstruction
                 {
                     FeatureReference = featureRef,
-                    Text = S104PortrayalCatalogue.FormatStationValue(height),
-                    FontSize = S104PortrayalCatalogue.StationLabelFontSize,
-                    FontColor = S104PortrayalCatalogue.InkToken,
+                    Text = S104CoverageStyle.FormatStationValue(height),
+                    FontSize = S104CoverageStyle.StationLabelFontSize,
+                    FontColor = S104CoverageStyle.InkToken,
                     FontWeight = TextFontWeight.Bold,
                     FontProportion = TextFontProportion.MonoSpaced,
-                    HaloColor = S104PortrayalCatalogue.LabelHaloToken,
-                    HaloWidth = S104PortrayalCatalogue.StationLabelHaloMm,
+                    HaloColor = S104CoverageStyle.LabelHaloToken,
+                    HaloWidth = S104CoverageStyle.StationLabelHaloMm,
                     HorizontalAlignment = TextHorizontalAlignment.Start,
                     VerticalAlignment = TextVerticalAlignment.Center,
-                    OffsetX = S104PortrayalCatalogue.StationLabelOffsetMm,
+                    OffsetX = S104CoverageStyle.StationLabelOffsetMm,
                     // Drawn at 1:100 000 and larger, as an S-101 label with SCAMIN is.
-                    ScaleMinimum = S104PortrayalCatalogue.StationLabelMaxScaleDenominator,
+                    ScaleMinimum = S104CoverageStyle.StationLabelMaxScaleDenominator,
                 });
             }
         }
@@ -593,8 +593,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     SourceFeatureType = StationLayerKey,
                     Instructions = instructions,
                     GeometryProvider = new StationGeometryProvider(geometries),
-                    Palette = S104PortrayalCatalogue.GetColorPalette(palette),
-                    SymbolProvider = S104PortrayalCatalogue.GetSymbol,
+                    Palette = S104CoverageStyle.GetColorPalette(palette),
+                    SymbolProvider = S104CoverageStyle.GetSymbol,
                     SymbolScale = context?.SymbolScale ?? 1.0,
                     TextScale = context?.TextScale ?? 1.0,
                     Product = "S-104",
@@ -632,10 +632,10 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// </summary>
     private static string StationSymbol(byte trend) => trend switch
     {
-        1 => S104PortrayalCatalogue.FallingSymbol,
-        2 => S104PortrayalCatalogue.RisingSymbol,
-        3 => S104PortrayalCatalogue.SteadySymbol,
-        _ => S104PortrayalCatalogue.UnknownSymbol,
+        1 => S104CoverageStyle.FallingSymbol,
+        2 => S104CoverageStyle.RisingSymbol,
+        3 => S104CoverageStyle.SteadySymbol,
+        _ => S104CoverageStyle.UnknownSymbol,
     };
 
     /// <summary>

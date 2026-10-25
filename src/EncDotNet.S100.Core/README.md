@@ -76,7 +76,7 @@ implements the engine.
 `EncDotNet.S100.Pipelines.Coverage`) render gridded data, with
 `GridGeoreferencer`, `CoverageColorScheme` and `StyledCoverageLayer`.
 
-- `ICoveragePortrayalCatalogue.ResolveColorScheme` returns
+- `ICoverageStyle.ResolveColorScheme` returns
   `CoverageColorScheme?`. Catalogues that only emit symbols, such as S-111's
   arrow-only portrayal, return `null`. The coverage renderers throw if you pass
   them a layer with a `null` scheme.
