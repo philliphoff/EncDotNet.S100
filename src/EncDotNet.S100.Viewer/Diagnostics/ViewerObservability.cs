@@ -60,8 +60,15 @@ internal static class ViewerObservability
             Environment.GetEnvironmentVariable("ENC_DOTNET_OTEL_CONSOLE"),
             "1", StringComparison.OrdinalIgnoreCase);
 
+        // The Logs panel's in-memory buffer (#1080) always runs, with its own
+        // minimum level so the panel's Verbose toggle leaves OTLP alone.
+        var logBuffer = new LogBuffer(minimumLevel: verbose ? LogLevel.Debug : LogLevel.Information);
+        services.AddSingleton(logBuffer);
+
         services.AddLogging(builder =>
         {
+            LogBufferLoggerProvider.AddLogBuffer(builder, logBuffer);
+
             // --verbose drops the floor to Debug so agent runs capture
             // the full picture; otherwise leave the default (Information).
             if (verbose)

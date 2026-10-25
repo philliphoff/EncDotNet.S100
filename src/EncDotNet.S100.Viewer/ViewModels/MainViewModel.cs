@@ -191,6 +191,7 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsTimelineTabSelected));
                 OnPropertyChanged(nameof(IsClearanceTabSelected));
                 OnPropertyChanged(nameof(IsTimeHudVisible));
+                UpdateBottomTabsShown();
 
                 if (_settingsInitialized)
                 {
@@ -394,6 +395,7 @@ internal sealed class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsBottomDockShown));
         OnPropertyChanged(nameof(IsTimeHudVisible));
         OnPropertyChanged(nameof(IsMapStampVisible));
+        UpdateBottomTabsShown();
         (ToggleTimelineDockCommand as RelayCommand)?.NotifyCanExecuteChanged();
     }
 
@@ -671,6 +673,31 @@ internal sealed class MainViewModel : ViewModelBase
 
     /// <summary>Id of the Clearance tab in the bottom dock (#902), shown while Check passage is on.</summary>
     internal const string ClearanceTabId = "Clearance";
+
+    /// <summary>Id of the Logs tab in the bottom dock (#1080).</summary>
+    internal const string LogsTabId = "Logs";
+
+    /// <summary>
+    /// Tells the bottom-dock tabs that care (<see cref="IActivityTabShown"/>)
+    /// whether the user can see them now.
+    /// </summary>
+    private void UpdateBottomTabsShown()
+    {
+        foreach (var tab in BottomTabs)
+        {
+            if (tab.ViewModel is IActivityTabShown shown)
+                shown.IsTabShown = IsBottomDockShown && ReferenceEquals(_selectedBottomTab, tab);
+        }
+    }
+
+    /// <summary>Opens the bottom dock on the Logs tab (Help › Show logs, #1080).</summary>
+    private void ShowLogs()
+    {
+        if (!_tabsById.TryGetValue(LogsTabId, out var logs))
+            return;
+        SelectedBottomTab = logs;
+        IsBottomDockOpen = true;
+    }
 
     private IActivityTab? _bottomTabBeforeCheck;
     private bool _bottomDockOpenBeforeCheck;
@@ -1015,6 +1042,9 @@ internal sealed class MainViewModel : ViewModelBase
     /// app-bar button and the Help menu.
     /// </summary>
     public ICommand ShowFeedbackCommand { get; }
+
+    /// <summary>Opens the bottom dock on the Logs tab (Help › Show logs, #1080).</summary>
+    public ICommand ShowLogsCommand { get; }
 
     /// <summary>
     /// Opens the "About" modal dialog (version info + update check).
@@ -1440,7 +1470,18 @@ internal sealed class MainViewModel : ViewModelBase
 
         ToggleStatusBarCommand = new RelayCommand(() => IsStatusBarVisible = !IsStatusBarVisible);
 
-        ToggleTimelineCommand = new RelayCommand(() => IsBottomDockOpen = !IsBottomDockOpen);
+        ToggleTimelineCommand = new RelayCommand(() =>
+        {
+            // View › Timeline and T open the Timeline, not the Logs tab the dock
+            // last showed (#1080).
+            if (!IsBottomDockOpen && SelectedBottomTabId == LogsTabId && _tabsById.TryGetValue(TimelineTabId, out var timeline))
+            {
+                SelectedBottomTab = timeline;
+                IsBottomDockOpen = true;
+                return;
+            }
+            IsBottomDockOpen = !IsBottomDockOpen;
+        });
         ToggleTimelineDockCommand = new RelayCommand(
             () =>
             {
@@ -1526,6 +1567,7 @@ internal sealed class MainViewModel : ViewModelBase
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());
 
         ShowFeedbackCommand = new AsyncRelayCommand(ShowFeedbackAsync);
+        ShowLogsCommand = new RelayCommand(ShowLogs);
         ShowAboutCommand = new AsyncRelayCommand(ShowAboutAsync);
 
         // Keep IsDarkTheme in sync when the theme is changed via paths
@@ -1610,6 +1652,7 @@ internal sealed class MainViewModel : ViewModelBase
         // Enable persistence write-backs only after hydration is complete.
         // Setters check this flag to avoid writing during initial assignment.
         _settingsInitialized = true;
+        UpdateBottomTabsShown();
     }
 
     private void WireAutoOpenSubscriptions()

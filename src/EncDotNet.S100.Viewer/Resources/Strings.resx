@@ -456,7 +456,7 @@
     <value>Report Feedback</value>
   </data>
   <data name="Feedback_DataDescription" xml:space="preserve">
-    <value>This report includes the technical details below plus your optional screenshot and feedback. No file contents or personal data are collected. Expand “Show data that will be sent” to review everything first.</value>
+    <value>This report includes the technical details below, the viewer's recent log messages, and your optional screenshot and feedback. No file contents are collected, and your home folder shows as ~ in paths. Expand “Show data that will be sent” to review everything first.</value>
   </data>
   <data name="Feedback_YourFeedbackLabel" xml:space="preserve">
     <value>Your feedback</value>
@@ -496,6 +496,250 @@
   </data>
   <data name="Feedback_SubmitFailedTitle" xml:space="preserve">
     <value>Could not prepare feedback</value>
+  </data>
+  <data name="Pane_Logs" xml:space="preserve">
+    <value>Logs</value>
+    <comment>Bottom-dock tab title for the Logs panel (#1080).</comment>
+  </data>
+  <data name="Label_Activity_Logs" xml:space="preserve">
+    <value>Logs</value>
+    <comment>Accessible name of the Logs tab in the bottom dock (#1080).</comment>
+  </data>
+  <data name="Tooltip_Logs" xml:space="preserve">
+    <value>Recent messages the viewer logged</value>
+    <comment>Tooltip of the Logs tab (#1080).</comment>
+  </data>
+  <data name="Menu_ShowLogs" xml:space="preserve">
+    <value>Show logs</value>
+    <comment>Help menu item that opens the Logs tab in the bottom dock (#1080).</comment>
+  </data>
+  <data name="Logs_Column_Time" xml:space="preserve">
+    <value>Time</value>
+    <comment>Logs panel column header (#1080).</comment>
+  </data>
+  <data name="Logs_Column_Level" xml:space="preserve">
+    <value>Level</value>
+    <comment>Logs panel column header (#1080).</comment>
+  </data>
+  <data name="Logs_Column_Area" xml:space="preserve">
+    <value>Area</value>
+    <comment>Logs panel column header: the part of the viewer that wrote the message (#1080).</comment>
+  </data>
+  <data name="Logs_Column_Message" xml:space="preserve">
+    <value>Message</value>
+    <comment>Logs panel column header (#1080).</comment>
+  </data>
+  <data name="Logs_Filter_All" xml:space="preserve">
+    <value>All levels</value>
+    <comment>Logs panel level filter: show everything, Debug included (#1080).</comment>
+  </data>
+  <data name="Logs_Filter_Information" xml:space="preserve">
+    <value>Info and above</value>
+    <comment>Logs panel level filter: hide Debug (the default) (#1080).</comment>
+  </data>
+  <data name="Logs_Filter_Warning" xml:space="preserve">
+    <value>Warnings and errors</value>
+    <comment>Logs panel level filter (#1080).</comment>
+  </data>
+  <data name="Logs_Filter_Error" xml:space="preserve">
+    <value>Errors only</value>
+    <comment>Logs panel level filter (#1080).</comment>
+  </data>
+  <data name="Label_LogsLevelFilter" xml:space="preserve">
+    <value>Level filter</value>
+    <comment>Accessible name of the Logs panel's level filter (#1080).</comment>
+  </data>
+  <data name="Tooltip_LogsLevelFilter" xml:space="preserve">
+    <value>Show only entries at this level and above</value>
+    <comment>Tooltip of the Logs panel's level filter (#1080).</comment>
+  </data>
+  <data name="Label_LogsSearch" xml:space="preserve">
+    <value>Search logs</value>
+    <comment>Accessible name of the Logs panel's search box (#1080).</comment>
+  </data>
+  <data name="Logs_SearchWatermark" xml:space="preserve">
+    <value>Filter by message or area…</value>
+    <comment>Placeholder of the Logs panel's search box (#1080).</comment>
+  </data>
+  <data name="Logs_Pause" xml:space="preserve">
+    <value>Pause</value>
+    <comment>Logs panel toggle that freezes the list (#1080).</comment>
+  </data>
+  <data name="Tooltip_LogsPause" xml:space="preserve">
+    <value>Stop adding new entries to the list while you read; they are still recorded</value>
+    <comment>Tooltip of the Logs panel's Pause toggle (#1080).</comment>
+  </data>
+  <data name="Logs_AutoScroll" xml:space="preserve">
+    <value>Auto-scroll</value>
+    <comment>Logs panel toggle that keeps the newest entry in view (#1080).</comment>
+  </data>
+  <data name="Tooltip_LogsAutoScroll" xml:space="preserve">
+    <value>Keep the newest entry in view</value>
+    <comment>Tooltip of the Logs panel's Auto-scroll toggle (#1080).</comment>
+  </data>
+  <data name="Logs_Verbose" xml:space="preserve">
+    <value>Verbose</value>
+    <comment>Logs panel toggle that also records Debug messages (#1080).</comment>
+  </data>
+  <data name="Tooltip_LogsVerbose" xml:space="preserve">
+    <value>Also record Debug messages. Changes only this panel and feedback reports</value>
+    <comment>Tooltip of the Logs panel's Verbose toggle (#1080).</comment>
+  </data>
+  <data name="Logs_Copy" xml:space="preserve">
+    <value>Copy</value>
+    <comment>Logs panel button (#1080).</comment>
+  </data>
+  <data name="Tooltip_LogsCopy" xml:space="preserve">
+    <value>Copy the entries shown to the clipboard</value>
+    <comment>Tooltip of the Logs panel's Copy button (#1080).</comment>
+  </data>
+  <data name="Logs_Clear" xml:space="preserve">
+    <value>Clear</value>
+    <comment>Logs panel button (#1080).</comment>
+  </data>
+  <data name="Tooltip_LogsClear" xml:space="preserve">
+    <value>Remove every entry from the list</value>
+    <comment>Tooltip of the Logs panel's Clear button (#1080).</comment>
+  </data>
+  <data name="Logs_SendFeedback" xml:space="preserve">
+    <value>Send feedback</value>
+    <comment>Logs panel button that opens the feedback dialog (#1080).</comment>
+  </data>
+  <data name="Tooltip_LogsSendFeedback" xml:space="preserve">
+    <value>Report a problem; the report includes these logs, and you can review them first</value>
+    <comment>Tooltip of the Logs panel's Send feedback button (#1080).</comment>
+  </data>
+  <data name="Logs_Empty" xml:space="preserve">
+    <value>No log entries yet.</value>
+    <comment>Logs panel empty state (#1080).</comment>
+  </data>
+  <data name="Logs_EmptyFiltered" xml:space="preserve">
+    <value>No entries match the filter.</value>
+    <comment>Logs panel empty state while the level filter or search hides every entry (#1080).</comment>
+  </data>
+  <data name="Logs_PausedFormat" xml:space="preserve">
+    <value>Paused · {0} new</value>
+    <comment>Logs panel status while paused; {0} is how many messages arrived since (#1080).</comment>
+  </data>
+  <data name="Logs_RepeatFormat" xml:space="preserve">
+    <value>×{0}</value>
+    <comment>Logs panel badge on a row standing for {0} identical consecutive messages (#1080).</comment>
+  </data>
+  <data name="Logs_BadgeName" xml:space="preserve">
+    <value>{0} new warnings</value>
+    <comment>Accessible name of the Logs tab's badge: {0} warnings or errors arrived while the tab was hidden (#1080).</comment>
+  </data>
+  <data name="Logs_RowNameFormat" xml:space="preserve">
+    <value>{0}, {1}: {2}</value>
+    <comment>Accessible name of a Logs panel row: {0} level, {1} area, {2} message (#1080).</comment>
+  </data>
+  <data name="Logs_Details_Category" xml:space="preserve">
+    <value>Category</value>
+    <comment>Logs panel details pane label: the logger category (#1080).</comment>
+  </data>
+  <data name="Logs_Details_Exception" xml:space="preserve">
+    <value>Exception</value>
+    <comment>Logs panel details pane label (#1080).</comment>
+  </data>
+  <data name="Logs_Details_Repeated" xml:space="preserve">
+    <value>Repeated {0} times, last at {1}</value>
+    <comment>Logs panel details pane: {0} count, {1} time of the latest repeat (#1080).</comment>
+  </data>
+  <data name="Label_LogsCloseDetails" xml:space="preserve">
+    <value>Close details</value>
+    <comment>Accessible name of the Logs panel details pane's close button (#1080).</comment>
+  </data>
+  <data name="Tooltip_LogsCloseDetails" xml:space="preserve">
+    <value>Close the entry details</value>
+    <comment>Tooltip of the Logs panel details pane's close button (#1080).</comment>
+  </data>
+  <data name="Label_LogsEntries" xml:space="preserve">
+    <value>Log entries</value>
+    <comment>Accessible name of the Logs panel's list (#1080).</comment>
+  </data>
+  <data name="LogLevel_Trace" xml:space="preserve">
+    <value>Trace</value>
+    <comment>Log level name in the Logs panel (#1080).</comment>
+  </data>
+  <data name="LogLevel_Debug" xml:space="preserve">
+    <value>Debug</value>
+    <comment>Log level name in the Logs panel (#1080).</comment>
+  </data>
+  <data name="LogLevel_Information" xml:space="preserve">
+    <value>Info</value>
+    <comment>Log level name in the Logs panel (#1080).</comment>
+  </data>
+  <data name="LogLevel_Warning" xml:space="preserve">
+    <value>Warning</value>
+    <comment>Log level name in the Logs panel (#1080).</comment>
+  </data>
+  <data name="LogLevel_Error" xml:space="preserve">
+    <value>Error</value>
+    <comment>Log level name in the Logs panel (#1080).</comment>
+  </data>
+  <data name="LogLevel_Critical" xml:space="preserve">
+    <value>Critical</value>
+    <comment>Log level name in the Logs panel (#1080).</comment>
+  </data>
+  <data name="LogArea_App" xml:space="preserve">
+    <value>App</value>
+    <comment>Logs panel area: the viewer itself (#1080).</comment>
+  </data>
+  <data name="LogArea_Commands" xml:space="preserve">
+    <value>Commands</value>
+    <comment>Logs panel area: viewer commands (#1080).</comment>
+  </data>
+  <data name="LogArea_SECOM" xml:space="preserve">
+    <value>SECOM</value>
+    <comment>Logs panel area: SECOM services (#1080).</comment>
+  </data>
+  <data name="LogArea_Updates" xml:space="preserve">
+    <value>Updates</value>
+    <comment>Logs panel area: update checks (#1080).</comment>
+  </data>
+  <data name="LogArea_AIS" xml:space="preserve">
+    <value>AIS</value>
+    <comment>Logs panel area: AIS vessel feeds (#1080).</comment>
+  </data>
+  <data name="LogArea_OwnShip" xml:space="preserve">
+    <value>Own ship</value>
+    <comment>Logs panel area: own-vessel position (#1080).</comment>
+  </data>
+  <data name="LogArea_Warnings" xml:space="preserve">
+    <value>Warnings</value>
+    <comment>Logs panel area: navigational warnings (#1080).</comment>
+  </data>
+  <data name="LogArea_MCP" xml:space="preserve">
+    <value>MCP</value>
+    <comment>Logs panel area: the MCP server (#1080).</comment>
+  </data>
+  <data name="LogArea_Library" xml:space="preserve">
+    <value>Library</value>
+    <comment>Logs panel area: the Library and its sources (#1080).</comment>
+  </data>
+  <data name="LogArea_Routes" xml:space="preserve">
+    <value>Routes</value>
+    <comment>Logs panel area: routes and route checks (#1080).</comment>
+  </data>
+  <data name="LogArea_Datasets" xml:space="preserve">
+    <value>Datasets</value>
+    <comment>Logs panel area: dataset loading (#1080).</comment>
+  </data>
+  <data name="LogArea_Rendering" xml:space="preserve">
+    <value>Rendering</value>
+    <comment>Logs panel area: portrayal and map drawing (#1080).</comment>
+  </data>
+  <data name="LogArea_Storage" xml:space="preserve">
+    <value>Storage</value>
+    <comment>Logs panel area: caches and data on disk (#1080).</comment>
+  </data>
+  <data name="LogArea_System" xml:space="preserve">
+    <value>System</value>
+    <comment>Logs panel area: .NET and third-party libraries (#1080).</comment>
+  </data>
+  <data name="Feedback_RawLogsHeader" xml:space="preserve">
+    <value>Recent logs (logs.txt)</value>
+    <comment>Feedback dialog raw-data section: heading of the recent log entries, which go in the bundle's logs.txt (#1080).</comment>
   </data>
 
   <!-- File picker -->

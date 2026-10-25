@@ -112,6 +112,12 @@ Open the Jaeger UI at `http://localhost:16686`.
 | `--log-file <PATH>` | Appends structured logs to a file. |
 | `-v`, `--verbose` | Lowers the log level from Information to Debug. |
 
+SoundCharts also keeps its last 1,000 log messages in memory, whatever these
+settings are. The **Logs** tab in the bottom dock shows them, feedback reports
+include them as `logs.txt`, and the `get_recent_logs` MCP tool returns them.
+The tab's **Verbose** toggle records Debug messages there without changing the
+log level the other outputs use.
+
 ## Names
 
 - Each library has one static `Telemetry` class that holds its

@@ -61,6 +61,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel? _navigationalWarnings;
     private readonly NavigationalWarningsService? _navigationalWarningsService;
     private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? _routeCheckSources;
+    private readonly EncDotNet.S100.Viewer.Diagnostics.LogBuffer? _logBuffer;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private S100McpServer? _server;
@@ -101,8 +102,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         NavigationalWarningsService? navigationalWarningsService = null,
         RouteExchangeService? routeExchange = null,
         EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? routeCheckLegend = null,
-        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeCheckSources = null)
+        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeCheckSources = null,
+        EncDotNet.S100.Viewer.Diagnostics.LogBuffer? logBuffer = null)
     {
+        _logBuffer = logBuffer;
         _routeCheckSources = routeCheckSources;
         _routeCheckLegend = routeCheckLegend;
         _routeExchange = routeExchange;
@@ -402,6 +405,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(ViewerStateMcpAdapters.Create(new ListNotificationsTool(_notifications)));
             tools.Add(ViewerStateMcpAdapters.Create(new DismissNotificationTool(_notifications)));
+        }
+        if (_logBuffer is not null)
+        {
+            tools.Add(GetRecentLogsMcpAdapter.Create(new GetRecentLogsTool(_logBuffer)));
         }
         tools.AddRange(LibraryMcpTools.Create(_library, _libraryEditor, _secomRegistry, _secomServerTrust, _secomIdentities));
         // Test hooks only: set_test_clock exists only when the viewer was
