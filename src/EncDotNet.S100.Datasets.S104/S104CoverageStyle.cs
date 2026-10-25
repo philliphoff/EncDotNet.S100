@@ -1,17 +1,10 @@
 using System.Globalization;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Portrayals.Application;
 
 namespace EncDotNet.S100.Datasets.S104;
-
-/// <summary>
-/// The colours one palette uses for the SoundCharts S-104 portrayal.
-/// </summary>
-/// <param name="Ink">Station stroke, trend mark and value label; isoline lines and labels.</param>
-/// <param name="SymbolFill">Station square fill.</param>
-/// <param name="LabelHalo">Station value label halo.</param>
-/// <param name="IsolineLabelHalo">Isoline label halo: the palette's water ground.</param>
-public sealed record S104Ink(RgbaColor Ink, RgbaColor SymbolFill, RgbaColor LabelHalo, RgbaColor IsolineLabelHalo);
 
 /// <summary>
 /// The SoundCharts portrayal of S-104 water level: station gauges for
@@ -42,7 +35,8 @@ public sealed record S104Ink(RgbaColor Ink, RgbaColor SymbolFill, RgbaColor Labe
 ///   (falling), dash (steady) or "?" (unknown), and the height at the selected
 ///   step to its right (<see cref="FormatStationValue"/>), shown at
 ///   1:<see cref="StationLabelMaxScaleDenominator"/> and larger scales. They are
-///   ordinary S-100 symbols (<see cref="GetSymbol"/>) and text, so they follow
+///   ordinary S-100 symbols (<see cref="Symbols"/>) and text (built with
+///   <see cref="StationSymbols"/> and <see cref="StationLabels"/>), so they follow
 ///   the same rules as S-101 symbols and labels: symbol and text scale, scale
 ///   minimum, label declutter, and upright drawing on a rotated display.
 ///   </description></item>
@@ -71,14 +65,25 @@ public class S104CoverageStyle : ICoverageStyle
     /// <summary>The dataset range, in metres, under which <see cref="FineIsolineInterval"/> is used.</summary>
     public const double FineIntervalRangeLimit = 1.0;
 
-    /// <summary>Colour token of the ink (stroke, mark, label) in <see cref="GetColorPalette"/>.</summary>
+    /// <summary>
+    /// The version of this style, folded into the tile disk-cache
+    /// <see cref="ContentScope"/>. Bump it whenever the symbols, the palette or
+    /// anything else that changes the drawn pixels without changing the drawing
+    /// instructions changes, so warm tiles drawn with the old style are dropped.
+    /// </summary>
+    public const int StyleVersion = 1;
+
+    /// <summary>Colour token of the ink (stroke, mark, label; isoline lines and labels) in <see cref="Palette"/>.</summary>
     public const string InkToken = "S104INK";
 
-    /// <summary>Colour token of the station square fill in <see cref="GetColorPalette"/>.</summary>
+    /// <summary>Colour token of the station square fill in <see cref="Palette"/>.</summary>
     public const string SymbolFillToken = "S104FILL";
 
-    /// <summary>Colour token of the station label halo in <see cref="GetColorPalette"/>.</summary>
+    /// <summary>Colour token of the station label halo in <see cref="Palette"/>.</summary>
     public const string LabelHaloToken = "S104HALO";
+
+    /// <summary>Colour token of the isoline label halo in <see cref="Palette"/>: the palette's water ground.</summary>
+    public const string IsolineLabelHaloToken = "S104ISOHALO";
 
     /// <summary>Station symbol for a rising water level.</summary>
     public const string RisingSymbol = "S104GAUGE_RISING";
@@ -107,93 +112,98 @@ public class S104CoverageStyle : ICoverageStyle
     private const double PixelSizeMm = 0.32;
     private const char Minus = '\u2212';
 
-    // S-100 SVG symbols, pivot at the origin, colours by palette class
-    // (sTOKEN stroke, fTOKEN fill). Coordinates are the design's pixels; the
-    // 18 px viewBox is sized in millimetres so the shared symbol rule (SVG
-    // millimetres at 96 DPI, times the S-100 symbol factor 0.6) draws one
-    // design pixel as one display pixel: 18 × 0.0254 / 96 × 1000 / 0.6 mm.
-    // The square is 16 px with a 1.6 px stroke; marks are 1.9 px strokes with
-    // round caps and joins.
-    private const string SymbolHead =
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" version=\"1.2\" width=\"7.9375mm\" height=\"7.9375mm\" viewBox=\"-9 -9 18 18\">" +
-        "<rect class=\"symbolBox layout\" fill=\"none\" x=\"-8.8\" y=\"-8.8\" width=\"17.6\" height=\"17.6\"/>" +
-        "<rect class=\"fS104FILL sS104INK\" stroke-width=\"1.6\" x=\"-8\" y=\"-8\" width=\"16\" height=\"16\" rx=\"3\"/>";
+    /// <summary>
+    /// The S-104 colours: the <see cref="InkToken"/>, <see cref="SymbolFillToken"/>,
+    /// <see cref="LabelHaloToken"/> and <see cref="IsolineLabelHaloToken"/> of each
+    /// Day / Dusk / Night palette. The station gauges' drawing instructions and
+    /// symbols resolve against its <see cref="ApplicationPalette.GetColorPalette"/>.
+    /// </summary>
+    public static ApplicationPalette Palette { get; } = new(
+        "S-104",
+        new Dictionary<string, PaletteColors>(StringComparer.Ordinal)
+        {
+            [InkToken] = PaletteColors.FromHex(day: "#0F5E73", dusk: "#9FD3DE", night: "#3E7C88"),
+            [SymbolFillToken] = PaletteColors.FromHex(day: "#FFFFFF", dusk: "#3B4650", night: "#0B0F14"),
+            [LabelHaloToken] = PaletteColors.FromHex(day: "#FFFFFF", dusk: "#3B4650", night: "#0B0F14"),
+            [IsolineLabelHaloToken] = PaletteColors.FromHex(day: "#F6FBFE", dusk: "#3B4650", night: "#0B0F14"),
+        });
 
-    private const string SymbolTail = "<circle class=\"pivotPoint layout\" fill=\"none\" cx=\"0\" cy=\"0\" r=\"1\"/></svg>";
+    /// <summary>
+    /// The station symbols (<see cref="RisingSymbol"/> and the others), embedded
+    /// from the project's <c>Symbols</c> folder. Colours are palette classes
+    /// resolved against <see cref="Palette"/>.
+    /// </summary>
+    /// <remarks>
+    /// S-100 SVG symbols, pivot at the origin, colours by palette class
+    /// (<c>sTOKEN</c> stroke, <c>fTOKEN</c> fill). Coordinates are the design's
+    /// pixels; the 18 px viewBox is sized in millimetres so the shared symbol
+    /// rule (SVG millimetres at 96 DPI, times the S-100 symbol factor 0.6) draws
+    /// one design pixel as one display pixel: 18 × 0.0254 / 96 × 1000 / 0.6 mm.
+    /// The square is 16 px with a 1.6 px stroke; marks are 1.9 px strokes with
+    /// round caps and joins.
+    /// </remarks>
+    public static SymbolSet Symbols { get; } =
+        new(typeof(S104CoverageStyle).Assembly, "EncDotNet.S100.Datasets.S104.Symbols");
 
-    private static readonly IReadOnlyDictionary<string, string> Symbols = new Dictionary<string, string>(StringComparer.Ordinal)
+    /// <summary>
+    /// Builds the station symbol instructions: viewing group 0, priority 0,
+    /// under radar, at every scale. The sub-layer's plane places them among the
+    /// other products.
+    /// </summary>
+    public static InstructionBuilder StationSymbols { get; } = new();
+
+    /// <summary>
+    /// Builds the station value labels: as <see cref="StationSymbols"/>, drawn at
+    /// 1:<see cref="StationLabelMaxScaleDenominator"/> and larger, as an S-101
+    /// label with SCAMIN is.
+    /// </summary>
+    public static InstructionBuilder StationLabels { get; } =
+        StationSymbols with { ScaleMinimum = StationLabelMaxScaleDenominator };
+
+    /// <summary>
+    /// The station value label: bold monospaced <see cref="InkToken"/> text on a
+    /// <see cref="LabelHaloToken"/> halo, left-aligned
+    /// <see cref="StationLabelOffsetMm"/> right of the station.
+    /// </summary>
+    public static TextInstructionStyle StationLabelStyle { get; } = new()
     {
-        [RisingSymbol] = SymbolHead + "<path class=\"sl f0 sS104INK\" stroke-width=\"1.9\" d=\"M -4 2 L 0 -2.5 L 4 2\"/>" + SymbolTail,
-        [FallingSymbol] = SymbolHead + "<path class=\"sl f0 sS104INK\" stroke-width=\"1.9\" d=\"M -4 -2 L 0 2.5 L 4 -2\"/>" + SymbolTail,
-        [SteadySymbol] = SymbolHead + "<path class=\"sl f0 sS104INK\" stroke-width=\"1.9\" d=\"M -4 0 L 4 0\"/>" + SymbolTail,
-        [UnknownSymbol] = SymbolHead +
-            "<path class=\"sl f0 sS104INK\" stroke-width=\"1.5\" d=\"M -2 -1.8 C -2 -4.2 2 -4.2 2 -1.8 C 2 -0.2 0 0 0 1.4\"/>" +
-            "<circle class=\"fS104INK\" cx=\"0\" cy=\"3.5\" r=\"0.8\"/>" + SymbolTail,
-        [NoDataSymbol] = SymbolHead + "<path class=\"f0 sS104INK\" stroke-width=\"1\" d=\"M -5 0 L 5 0\"/>" + SymbolTail,
+        FontSize = StationLabelFontSize,
+        FontColor = InkToken,
+        FontWeight = TextFontWeight.Bold,
+        FontProportion = TextFontProportion.MonoSpaced,
+        HaloColor = LabelHaloToken,
+        HaloWidth = StationLabelHaloMm,
+        HorizontalAlignment = TextHorizontalAlignment.Start,
+        VerticalAlignment = TextVerticalAlignment.Center,
+        OffsetX = StationLabelOffsetMm,
     };
 
-    private static readonly IReadOnlyDictionary<PaletteType, S104Ink> Inks =
-        new Dictionary<PaletteType, S104Ink>
-        {
-            [PaletteType.Day] = new(
-                RgbaColor.FromHex("#0F5E73"), RgbaColor.FromHex("#FFFFFF"),
-                RgbaColor.FromHex("#FFFFFF"), RgbaColor.FromHex("#F6FBFE")),
-            [PaletteType.Dusk] = new(
-                RgbaColor.FromHex("#9FD3DE"), RgbaColor.FromHex("#3B4650"),
-                RgbaColor.FromHex("#3B4650"), RgbaColor.FromHex("#3B4650")),
-            [PaletteType.Night] = new(
-                RgbaColor.FromHex("#3E7C88"), RgbaColor.FromHex("#0B0F14"),
-                RgbaColor.FromHex("#0B0F14"), RgbaColor.FromHex("#0B0F14")),
-        };
+    /// <summary>
+    /// The style's part of the tile disk-cache content scope: the style name and
+    /// <see cref="StyleVersion"/> plus the toolkit version
+    /// (<see cref="ApplicationContentScope.For"/>). The processor prefixes the
+    /// dataset's content hash.
+    /// </summary>
+    public static string ContentScope { get; } = ApplicationContentScope.For("S-104", StyleVersion);
 
     private PaletteType _activePaletteType = PaletteType.Day;
 
-    /// <summary>Gets the currently active color palette.</summary>
-    public ColorPalette ActivePalette { get; private set; } = ColorPalette.Default;
+    /// <summary>
+    /// Gets the currently active colour palette: <see cref="Palette"/>'s colours
+    /// for the palette last passed to <see cref="SwitchPaletteAsync"/> (Day
+    /// until then).
+    /// </summary>
+    public ColorPalette ActivePalette => Palette.GetColorPalette(_activePaletteType);
 
-    /// <summary>The colours of the active palette.</summary>
-    public S104Ink ActiveInk => GetInk(_activePaletteType);
+    /// <summary>The palette last passed to <see cref="SwitchPaletteAsync"/>; Day until then.</summary>
+    public PaletteType ActivePaletteType => _activePaletteType;
 
     /// <inheritdoc/>
     public ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default)
     {
         _activePaletteType = type;
-        ActivePalette = ColorPalette.FromType(type);
         return ValueTask.CompletedTask;
     }
-
-    /// <summary>The colours of <paramref name="palette"/>; Day for an unknown palette.</summary>
-    /// <param name="palette">The palette.</param>
-    public static S104Ink GetInk(PaletteType palette) =>
-        Inks.TryGetValue(palette, out var ink) ? ink : Inks[PaletteType.Day];
-
-    /// <summary>
-    /// The colour palette for the station gauges' drawing instructions: the
-    /// <see cref="InkToken"/>, <see cref="SymbolFillToken"/> and
-    /// <see cref="LabelHaloToken"/> colours of <paramref name="palette"/>.
-    /// </summary>
-    /// <param name="palette">The palette.</param>
-    public static ColorPalette GetColorPalette(PaletteType palette)
-    {
-        var ink = GetInk(palette);
-        return new ColorPalette(
-            $"S-104 {palette}",
-            new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [InkToken] = ink.Ink.ToHex(),
-                [SymbolFillToken] = ink.SymbolFill.ToHex(),
-                [LabelHaloToken] = ink.LabelHalo.ToHex(),
-            });
-    }
-
-    /// <summary>
-    /// The S-100 SVG for a station symbol (<see cref="RisingSymbol"/> and the
-    /// others), or <see langword="null"/> for an unknown name. Colours are
-    /// palette classes resolved against <see cref="GetColorPalette"/>.
-    /// </summary>
-    /// <param name="name">The symbol name.</param>
-    public static string? GetSymbol(string name) =>
-        Symbols.TryGetValue(name, out var svg) ? svg : null;
 
     /// <summary>
     /// Returns <see langword="null"/>: the SoundCharts S-104 portrayal draws

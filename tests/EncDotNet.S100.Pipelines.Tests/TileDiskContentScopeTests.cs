@@ -1,11 +1,16 @@
+using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Portrayals.Application;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.Testing.Scenarios.Hdf5;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -103,6 +108,94 @@ public class TileDiskContentScopeTests : IDisposable
         Assert.True(forwardOnly.CanSeek);
         Assert.Equal(0, forwardOnly.Position);
         Assert.Equal(0, seekable.Position);
+    }
+
+    [Fact]
+    public async Task S104_station_tiles_are_keyed_by_the_dataset_and_the_style_version()
+    {
+        var path = WriteS104Stations("stations.h5");
+        var stations = await S104Stations(path);
+
+        // ds:{hash of the bytes}|{the S-104 style's scope}, so the gauges use
+        // the disk cache like a vector product.
+        Assert.NotNull(stations.Scope);
+        Assert.StartsWith("ds:", stations.Scope, StringComparison.Ordinal);
+        Assert.EndsWith("|" + S104CoverageStyle.ContentScope, stations.Scope, StringComparison.Ordinal);
+
+        // The same bytes reloaded keep their namespace.
+        var reloaded = await S104Stations(WriteS104Stations("copy.h5"));
+        Assert.Equal(stations.Scope, reloaded.Scope);
+        Assert.Equal(S104Namespace(stations.Layer, stations.Scope), S104Namespace(reloaded.Layer, reloaded.Scope));
+
+        // A new style version, with the same instructions and dataset, gets a
+        // namespace of its own, so a tile drawn with the old style isn't read.
+        var bumpedScope = stations.Scope.Replace(
+            S104CoverageStyle.ContentScope,
+            ApplicationContentScope.For("S-104", S104CoverageStyle.StyleVersion + 1),
+            StringComparison.Ordinal);
+        Assert.NotEqual(stations.Scope, bumpedScope);
+
+        var current = S104Namespace(stations.Layer, stations.Scope);
+        var bumped = S104Namespace(stations.Layer, bumpedScope);
+        Assert.NotEqual(current, bumped);
+
+        using var cache = new TileDiskCache(Path.Combine(_root, "tiles"), 64L * 1024 * 1024);
+        var key = new TileKey(12, 2101, 1350);
+        using (var image = SolidImage(64))
+            cache.Write(current, key, image);
+
+        using (var hit = cache.TryRead(current, key))
+            Assert.NotNull(hit);
+        Assert.Null(cache.TryRead(bumped, key));
+    }
+
+    private string WriteS104Stations(string name)
+    {
+        var path = Path.Combine(_root, name);
+        S104Dcf8FixtureBuilder.WriteFile(
+            path,
+            new[]
+            {
+                S104Station("Rising", 51.90f, 4.10f, 1.42f, 2),
+                S104Station("Steady", 51.88f, 4.16f, -0.12f, 3),
+            },
+            waterLevelTrendThreshold: 0.05);
+        return path;
+    }
+
+    private static S104Dcf8FixtureBuilder.Station<S104Dcf8FixtureBuilder.SpecValueRow> S104Station(
+        string id, float lat, float lon, float height, byte trend) => new()
+        {
+            Identifier = id,
+            Latitude = lat,
+            Longitude = lon,
+            StartDateTime = "20261014T100000Z",
+            EndDateTime = "20261014T100000Z",
+            TimeRecordInterval = 3600,
+            Values = [new() { WaterLevelHeight = height, WaterLevelTrend = trend }],
+        };
+
+    private static async Task<(VectorCoverageSubLayer Layer, string? Scope)> S104Stations(string path)
+    {
+        var processor = new S104DatasetProcessor(path, new ProjNetCrsTransformFactory());
+        var result = await processor.BuildCoveragePortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
+        return (result.SubLayers.OfType<VectorCoverageSubLayer>().Single(), result.ContentScope);
+    }
+
+    /// <summary>The per-pixel-size disk namespace the renderer would bind the S-104 station layer under.</summary>
+    private static string S104Namespace(VectorCoverageSubLayer layer, string? scope)
+    {
+        var renderer = new MapsuiDisplayListRenderer
+        {
+            Product = layer.Product,
+            ContentScope = scope,
+            Palette = layer.Palette,
+        };
+
+        var (productLayerSet, styleStateHash) = renderer.DiskCacheKey(layer.Instructions);
+        Assert.NotNull(productLayerSet);
+        Assert.NotNull(styleStateHash);
+        return TileDiskCache.NamespaceFor(TileDiskCache.NamespaceFor(productLayerSet, styleStateHash), 64);
     }
 
     private string WriteFixture(string name, bool moveLeg)

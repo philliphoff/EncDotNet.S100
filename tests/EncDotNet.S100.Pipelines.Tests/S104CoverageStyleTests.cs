@@ -18,21 +18,49 @@ public sealed class S104CoverageStyleTests
         var style = new S104CoverageStyle();
         await style.SwitchPaletteAsync(palette, TestContext.Current.CancellationToken);
 
-        Assert.Equal(RgbaColor.FromHex(ink), style.ActiveInk.Ink);
-        Assert.Equal(RgbaColor.FromHex(fill), style.ActiveInk.SymbolFill);
-        Assert.Equal(RgbaColor.FromHex(halo), style.ActiveInk.LabelHalo);
-        Assert.Equal(RgbaColor.FromHex(isolineHalo), style.ActiveInk.IsolineLabelHalo);
-        Assert.Equal(style.ActiveInk, S104CoverageStyle.GetInk(palette));
+        Assert.Equal(palette, style.ActivePaletteType);
+        Assert.Equal(ink, style.ActivePalette.Resolve(S104CoverageStyle.InkToken));
+        Assert.Equal(fill, style.ActivePalette.Resolve(S104CoverageStyle.SymbolFillToken));
+        Assert.Equal(halo, style.ActivePalette.Resolve(S104CoverageStyle.LabelHaloToken));
+        Assert.Equal(isolineHalo, style.ActivePalette.Resolve(S104CoverageStyle.IsolineLabelHaloToken));
+        Assert.Equal(RgbaColor.FromHex(isolineHalo), S104CoverageStyle.Palette.Resolve(S104CoverageStyle.IsolineLabelHaloToken, palette));
     }
 
     [Fact]
     public void Night_ink_and_grounds_stay_under_luminance_0_2()
     {
-        var night = S104CoverageStyle.GetInk(PaletteType.Night);
-
         Assert.All(
-            [night.Ink, night.SymbolFill, night.LabelHalo, night.IsolineLabelHalo],
-            color => Assert.True(RelativeLuminance(color) < 0.2, $"{color} is too bright for Night."));
+            S104CoverageStyle.Palette.Tokens.Values,
+            colors => Assert.True(RelativeLuminance(colors.Night) < 0.2, $"{colors.Night} is too bright for Night."));
+    }
+
+    [Fact]
+    public void Every_station_symbol_is_an_embedded_S100_svg()
+    {
+        string[] symbols =
+        [
+            S104CoverageStyle.RisingSymbol, S104CoverageStyle.FallingSymbol, S104CoverageStyle.SteadySymbol,
+            S104CoverageStyle.UnknownSymbol, S104CoverageStyle.NoDataSymbol,
+        ];
+
+        Assert.Equal(symbols.Order(StringComparer.Ordinal), S104CoverageStyle.Symbols.Names.Order(StringComparer.Ordinal));
+        Assert.All(symbols, name =>
+        {
+            var svg = S104CoverageStyle.Symbols.Provider(name);
+            Assert.NotNull(svg);
+            Assert.StartsWith("<svg ", svg, StringComparison.Ordinal);
+            Assert.Contains("pivotPoint", svg, StringComparison.Ordinal);
+            Assert.Contains("sS104INK", svg, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void Content_scope_carries_the_style_version()
+    {
+        Assert.Equal(
+            Portrayals.Application.ApplicationContentScope.For("S-104", S104CoverageStyle.StyleVersion),
+            S104CoverageStyle.ContentScope);
+        Assert.Contains($"S-104@{S104CoverageStyle.StyleVersion}", S104CoverageStyle.ContentScope, StringComparison.Ordinal);
     }
 
     [Fact]

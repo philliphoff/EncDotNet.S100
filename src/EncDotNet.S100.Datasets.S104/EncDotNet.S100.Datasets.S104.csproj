@@ -8,5 +8,9 @@
   <ItemGroup>
     <ProjectReference Include="..\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The SoundCharts station symbols, served by S104CoverageStyle.Symbols. -->
+    <EmbeddedResource Include="Symbols\*.svg" LogicalName="EncDotNet.S100.Datasets.S104.Symbols.%(Filename)%(Extension)" />
+  </ItemGroup>
 
 </Project>

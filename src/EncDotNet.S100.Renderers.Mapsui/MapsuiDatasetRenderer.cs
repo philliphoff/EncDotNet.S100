@@ -342,6 +342,7 @@ public sealed class MapsuiDatasetRenderer
                         {
                             LayerName = vector.LayerName,
                             Product = vector.Product,
+                            ContentScope = result.ContentScope,
                             Palette = vector.Palette,
                             AssetCache = AssetCaches.GetValue(processor, static _ => new MapsuiRenderAssetCache()),
                             SymbolScale = vector.SymbolScale,
