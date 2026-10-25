@@ -619,10 +619,14 @@ public partial class App : Application
                 Timeout = TimeSpan.FromMinutes(10),
             };
             return new Library.LibraryDownloadService(
-                EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(
-                    // Signers are judged against the anchors the user chose (#845); each object
-                    // presents its source's identity (#883).
-                    http, downloads, secom, sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(), trust),
+                new EncDotNet.S100.Collections.Library.LibraryDownloads(
+                    EncDotNet.S100.Collections.Library.LibraryDownloads.ManagedFolders(
+                        // Signers are judged against the anchors the user chose (#845); each object
+                        // presents its source's identity (#883).
+                        http, downloads, secom, sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRevocation>(), trust))
+                {
+                    Logger = sp.GetService<ILogger<EncDotNet.S100.Collections.Library.LibraryDownloads>>(),
+                },
                 sp.GetService<Services.Notifications.INotificationService>());
         });
         services.AddSingleton(sp =>
@@ -961,7 +965,8 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Updates.IGitHubReleaseClient>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Updates.IAppVersionProvider>(),
                 sp.GetRequiredService<ViewerSettings>(),
-                sp.GetRequiredService<TimeProvider>()));
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetService<ILogger<EncDotNet.S100.Viewer.Services.Updates.UpdateService>>()));
         services.AddSingleton<IUpdateNotificationCoordinator, UpdateNotificationCoordinator>();
         services.AddTransient<AboutDialogViewModel>();
         services.AddSingleton<Func<AboutDialogViewModel>>(sp =>

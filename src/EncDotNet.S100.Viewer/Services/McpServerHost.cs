@@ -58,6 +58,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly ISecomIdentityReferences? _secomIdentities;
     private readonly IViewerUiAutomation? _uiAutomation;
     private readonly ILoggerFactory? _loggers;
+    private readonly ILogger _logger;
     private readonly EncDotNet.S100.Viewer.ViewModels.NavigationalWarningsViewModel? _navigationalWarnings;
     private readonly NavigationalWarningsService? _navigationalWarningsService;
     private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? _routeCheckSources;
@@ -143,6 +144,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         _libraryEditor = libraryEditor;
         _uiAutomation = uiAutomation;
         _loggers = loggers;
+        _logger = loggers?.CreateLogger<McpServerHost>()
+            ?? (ILogger)Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
     }
 
     /// <summary>
@@ -228,6 +231,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         catch (Exception ex) when (IsPortInUse(ex))
         {
             await next.DisposeAsync().ConfigureAwait(false);
+            _logger.LogWarning(
+                "The MCP server could not start: port {Port} is already in use by another process", port);
             // Bind failed because the requested port is taken by another
             // process. Leave the server torn down and notify subscribers
             // so the UI can offer a recovery action. We never silently
@@ -239,11 +244,13 @@ internal sealed class McpServerHost : IAsyncDisposable
         }
         catch
         {
+            // The caller records the failure (and LastErrorTracker logs it).
             await next.DisposeAsync().ConfigureAwait(false);
             throw;
         }
 
         _server = next;
+        _logger.LogInformation("MCP server listening on {Endpoint}", next.Endpoint);
 
         // Persist the bound port so subsequent launches reuse it. When
         // the user asked for an ephemeral port (McpPort == 0) Kestrel
@@ -591,6 +598,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         try
         {
             await prev.StopAsync(cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("MCP server stopped");
         }
         finally
         {

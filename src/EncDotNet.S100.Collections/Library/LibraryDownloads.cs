@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using EncDotNet.S100.Collections.Downloads;
 using EncDotNet.S100.Collections.Secom;
+using Microsoft.Extensions.Logging;
 
 namespace EncDotNet.S100.Collections.Library;
 
@@ -102,6 +103,13 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
         ArgumentNullException.ThrowIfNull(downloaderFor);
         _downloaderFor = downloaderFor;
     }
+
+    /// <summary>
+    /// Where download batches and failed downloads are logged, or
+    /// <see langword="null"/> for no logging. Items are logged by name only,
+    /// never by location, since a location can carry credentials.
+    /// </summary>
+    public ILogger? Logger { get; init; }
 
     /// <summary>
     /// The managed download layout the viewer uses under its downloads root,
@@ -305,6 +313,8 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
                 LibraryDownloadItemState.Queued, 0, ((RemoteItemLocation)item.Location).SizeBytes);
         }
 
+        Logger?.LogInformation("Downloading {Count} library items", toDownload.Length);
+        var batchStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         var start = new LibraryDownloadProgress(0, 0, toDownload.Length, 0, sizes.Sum());
         Volatile.Write(ref _progress, start);
         RaiseChanged();
@@ -373,6 +383,7 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
             {
                 _status[key] = new LibraryDownloadItemStatus(LibraryDownloadItemState.Failed, 0, null, ex.Message);
                 Interlocked.Increment(ref failed);
+                Logger?.LogWarning(ex, "Downloading {Item} failed: {Reason}", DownloadName(item), ex.Message);
             }
             finally
             {
@@ -409,6 +420,10 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
             RaiseChanged();
         }
 
+        Logger?.LogInformation(
+            "Library download finished in {ElapsedMs:F0} ms: {Downloaded} downloaded, {Failed} failed{Cancelled}",
+            System.Diagnostics.Stopwatch.GetElapsedTime(batchStarted).TotalMilliseconds,
+            done, failed, cancelled ? ", cancelled" : string.Empty);
         return new LibraryDownloadResult(done, failed, cancelled);
     }
 

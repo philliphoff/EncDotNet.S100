@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace EncDotNet.S100.Viewer.Services.Updates;
 
 /// <summary>
@@ -151,6 +154,7 @@ internal sealed class UpdateService : IUpdateService
     private readonly IAppVersionProvider _versionProvider;
     private readonly ViewerSettings _settings;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger _logger;
     private readonly SemaphoreSlim _checkGate = new(1, 1);
     private readonly bool _forceCheck =
         Environment.GetEnvironmentVariable(ForceCheckEnvVar) == "1";
@@ -160,12 +164,14 @@ internal sealed class UpdateService : IUpdateService
         IGitHubReleaseClient releaseClient,
         IAppVersionProvider versionProvider,
         ViewerSettings settings,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<UpdateService>? logger = null)
     {
         _releaseClient = releaseClient ?? throw new ArgumentNullException(nameof(releaseClient));
         _versionProvider = versionProvider ?? throw new ArgumentNullException(nameof(versionProvider));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _logger = logger ?? (ILogger)NullLogger.Instance;
     }
 
     /// <inheritdoc />
@@ -215,6 +221,7 @@ internal sealed class UpdateService : IUpdateService
             return _lastStatus = CreateCachedStatus(current, last);
         }
 
+        _logger.LogInformation("Checking for viewer updates (current version {Version})", current.Version);
         GitHubRelease? release;
         try
         {
@@ -224,13 +231,16 @@ internal sealed class UpdateService : IUpdateService
         {
             throw;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "The update check failed");
             return _lastStatus = RecordFailedCheck(now);
         }
 
         if (release is null)
         {
+            // The release client already logged why at Warning.
+            _logger.LogDebug("The update check returned no release information");
             return _lastStatus = RecordFailedCheck(now);
         }
 
@@ -245,6 +255,12 @@ internal sealed class UpdateService : IUpdateService
         var newerThanCurrent = ReleaseVersion.IsNewer(latestVersion, current.Version);
         var isSkipped = !string.IsNullOrEmpty(_settings.SkippedUpdateVersion)
             && !ReleaseVersion.IsNewer(latestVersion, _settings.SkippedUpdateVersion);
+
+        _logger.LogInformation(
+            newerThanCurrent
+                ? "Viewer update available: version {Latest} (current version {Version})"
+                : "The viewer is up to date: latest version {Latest} (current version {Version})",
+            latestVersion, current.Version);
 
         if (newerThanCurrent)
         {

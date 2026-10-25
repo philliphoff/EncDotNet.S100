@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Avalonia.Input.Platform;
 using EncDotNet.S100.Collections.Library;
@@ -13,6 +14,8 @@ using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -43,6 +46,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// </summary>
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
     private readonly IMapViewportNotifier _viewportNotifier;
+    private readonly ILogger _logger;
 
     private readonly Dictionary<MapDatasetId, DatasetEntry> _processorEntries = [];
     private readonly Dictionary<MapDatasetId, DatasetEntry> _sessionEntries = [];
@@ -75,7 +79,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         DatasetProcessorOwner processorOwner,
         IMapViewportNotifier viewportNotifier,
         IRenderActivityMonitor? renderActivityMonitor = null,
-        TimeRefreshProgress? timeProgress = null)
+        TimeRefreshProgress? timeProgress = null,
+        ILogger<DatasetLoaderService>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -104,7 +109,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _processorOwner = processorOwner;
         _viewportNotifier = viewportNotifier;
         _renderActivityMonitor = renderActivityMonitor;
-
+        _logger = logger ?? (ILogger)NullLogger.Instance;
     }
 
     /// <summary>
@@ -320,6 +325,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (spec is null || !HasRequiredCatalogueOrWarn(spec))
             return;
 
+        // Exchange-set loads open many datasets at once, so their per-dataset
+        // progress stays at Debug; a standalone open is a user action.
+        var progressLevel = fromExchangeSet ? LogLevel.Debug : LogLevel.Information;
+        _logger.Log(progressLevel, "Opening {Spec} dataset {Dataset} from {Path}",
+            spec, entry.DisplayName, entry.FilePath);
+        var loadStart = Stopwatch.GetTimestamp();
+        TimeSpan parseTime = default;
+        TimeSpan portrayalTime = default;
+
         // Standalone loads hold a single progress notification across the whole
         // load; exchange-set entries are covered by the aggregate exchange-set
         // progress notification, so they get no per-dataset one.
@@ -332,8 +346,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         var loadCompleted = false;
         try
         {
+            var parseStart = Stopwatch.GetTimestamp();
             var processor = await CreateProcessorAsync(
                 entry, spec, fromExchangeSet, token).ConfigureAwait(true);
+            parseTime = Stopwatch.GetElapsedTime(parseStart);
             callerOwnedProcessor = processor;
             if (!IsCurrentLoad(entry, loadGeneration))
             {
@@ -387,11 +403,13 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             }
             else
             {
+                var portrayalStart = Stopwatch.GetTimestamp();
                 result = await RenderAndReplaceAsync(
                     entry,
                     processor,
                     presentation: null,
                     token).ConfigureAwait(true);
+                portrayalTime = Stopwatch.GetElapsedTime(portrayalStart);
                 if (result is null)
                 {
                     DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);
@@ -497,11 +515,18 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 _recentFiles.Add(entry.FilePath);
             }
 
+            _logger.Log(progressLevel,
+                "Loaded {Spec} dataset {Dataset} in {ElapsedMs:F0} ms (parse {ParseMs:F0} ms, portrayal {PortrayalMs:F0} ms)",
+                spec, entry.DisplayName,
+                Stopwatch.GetElapsedTime(loadStart).TotalMilliseconds,
+                parseTime.TotalMilliseconds,
+                portrayalTime.TotalMilliseconds);
             DatasetLoaded?.Invoke(entry);
             loadCompleted = true;
         }
         catch (OperationCanceledException)
         {
+            _logger.Log(progressLevel, "Loading {Spec} dataset {Dataset} was cancelled", spec, entry.DisplayName);
             if (!fromExchangeSet)
             {
                 DriveTerminal(
@@ -510,6 +535,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex,
+                "Could not load {Spec} dataset {Dataset} from {Path}: {Reason}",
+                spec, entry.DisplayName, entry.FilePath, LoadFailureClassifier.Describe(ex));
             if (!fromExchangeSet)
             {
                 // Shape the notification around the innermost structured
@@ -575,6 +603,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         var spec = DatasetPipelineFactory.DetectProductSpec(entry.FilePath);
         if (spec is null)
         {
+            _logger.LogWarning(
+                "Could not open {Path}: the file type {Extension} is not a recognized S-100 dataset",
+                entry.FilePath, Path.GetExtension(entry.FilePath));
             _notifications.Create(Strings.Toast_Warning)
                 .WithSeverity(NotificationSeverity.Warning)
                 .WithContent(string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)))
@@ -597,6 +628,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         var requiredCatalogue = SpecConventions.PortrayalSpecName(spec);
         if (spec != "S-104" && !_catalogueManager.HasCatalogue(requiredCatalogue))
         {
+            _logger.LogWarning(
+                "Could not open a {Spec} dataset: the {Catalogue} portrayal catalogue is not installed",
+                spec, requiredCatalogue);
             _notifications.Create(Strings.Toast_Warning)
                 .WithSeverity(NotificationSeverity.Warning)
                 .WithContent(string.Format(Strings.Status_SelectPortrayalCatalogue, requiredCatalogue))
@@ -1060,7 +1094,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// load. Returns the report on success, the processor's null on
     /// "no rule pack for this spec", or null on exception.
     /// </summary>
-    private static EncDotNet.S100.Validation.ValidationReport? SafeValidate(IDatasetProcessor processor)
+    private EncDotNet.S100.Validation.ValidationReport? SafeValidate(IDatasetProcessor processor)
     {
         try
         {
@@ -1072,7 +1106,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             // captured as synthetic Error findings by ValidationRuleSet.
             // This catches the unlikely case where projection or rule
             // pack construction itself throws.
-            System.Diagnostics.Debug.WriteLine($"[validation] {processor.Spec.Name}: {ex.GetType().Name}: {ex.Message}");
+            _logger.LogWarning(ex, "Validation of a {Spec} dataset failed", processor.Spec.Name);
             return null;
         }
     }
@@ -1213,7 +1247,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            System.Diagnostics.Debug.WriteLine($"[viewing groups] {entry.DisplayName}: {ex.GetType().Name}: {ex.Message}");
+            _logger.LogWarning(ex, "Re-rendering dataset {Dataset} after a viewing-group change failed", entry.DisplayName);
         }
     }
 

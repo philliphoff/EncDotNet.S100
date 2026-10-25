@@ -202,6 +202,10 @@ internal sealed class DeferredAisFeatureSource : IDynamicFeatureSource, IAsyncDi
             _inner = built;
         }
 
+        _logger.LogInformation(
+            "Starting the AIS overlay: the map view is within the {Span}° activation span.",
+            _activationSpanDegrees);
+
         // Surface the freshly-activated state to consumers — even an
         // empty CurrentFeatures snapshot is meaningful because layer
         // visibility, picks, etc. now have a real source to query.
@@ -296,6 +300,7 @@ internal sealed class DeferredAisFeatureSource : IDynamicFeatureSource, IAsyncDi
         {
             inner.Changed -= OnInnerChanged;
             await inner.DisposeAsync().ConfigureAwait(false);
+            _logger.LogInformation("Stopped the AIS overlay.");
         }
     }
 }

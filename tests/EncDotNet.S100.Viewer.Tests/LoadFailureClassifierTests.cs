@@ -72,4 +72,26 @@ public class LoadFailureClassifierTests
 
         Assert.Same(ns, result);
     }
+
+    [Fact]
+    public void Describe_Schema_NamesTheProductAttributeAndGroup()
+    {
+        var reason = LoadFailureClassifier.Describe(new TargetInvocationException(MakeSchema()));
+
+        Assert.Equal("This S-104 file is missing or has an invalid 'code' at '/Group_F'.", reason);
+    }
+
+    [Fact]
+    public void Describe_NotSupported_NamesTheProductAndFeature()
+    {
+        var reason = LoadFailureClassifier.Describe(MakeNotSupported());
+
+        Assert.Equal("S-104 dataset uses data coding format 8, which is not yet supported.", reason);
+    }
+
+    [Fact]
+    public void Describe_Unstructured_UsesTheExceptionMessage()
+    {
+        Assert.Equal("disk on fire", LoadFailureClassifier.Describe(new IOException("disk on fire")));
+    }
 }

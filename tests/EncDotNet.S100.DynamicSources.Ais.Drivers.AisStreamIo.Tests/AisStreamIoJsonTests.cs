@@ -191,6 +191,20 @@ public class AisStreamIoJsonTests
     }
 
     [Fact]
+    public void Redact_api_key_replaces_the_json_escaped_key_in_a_built_frame()
+    {
+        // Base64-style keys contain characters the JSON writer escapes.
+        const string apiKey = "ab+cd/ef<gh>==";
+        var frame = AisStreamIoJson.BuildSubscribeFrame(apiKey, new AisSubscriptionRequest());
+
+        var redacted = AisStreamIoJson.RedactApiKey(frame, apiKey);
+
+        Assert.DoesNotContain("cd", redacted, StringComparison.Ordinal);
+        Assert.DoesNotContain("ef", redacted, StringComparison.Ordinal);
+        Assert.Contains("***REDACTED***", redacted, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Timestamp_parser_handles_go_format_with_zone_label()
     {
         Assert.True(AisStreamIoJson.TryParseAisStreamTimestamp(

@@ -80,8 +80,14 @@ internal sealed class AisStreamIoSubscription : IAisSubscription
 
                     await SendSubscribeAsync(transport, connectCts.Token).ConfigureAwait(false);
                     backoff = _options.InitialReconnectBackoff;
+                    // The API key travels in the subscribe frame, never the URI.
+                    _logger.LogInformation("Connected to aisstream.io at {Endpoint}.", _options.Endpoint);
 
                     await ReceiveUntilDoneAsync(transport, cancellationToken).ConfigureAwait(false);
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        _logger.LogInformation("aisstream.io closed the connection; reconnecting after {Backoff}.", backoff);
+                    }
                 }
                 finally
                 {
@@ -198,6 +204,7 @@ internal sealed class AisStreamIoSubscription : IAisSubscription
         {
             await transport.DisposeAsync().ConfigureAwait(false);
         }
+        _logger.LogInformation("Disconnected from aisstream.io.");
         _cts.Dispose();
     }
 }

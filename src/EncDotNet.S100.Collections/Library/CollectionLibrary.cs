@@ -485,9 +485,19 @@ public sealed class CollectionLibrary : IDisposable
 
         SourceIndex? index = null;
         string? error = null;
+        // Name the source by display name and kind only: its location can
+        // carry credentials (e.g. a signed URL).
+        var sourceName = source.DisplayName ?? sourceId.ToString();
+        var sourceKind = source.GetType().Name;
+        _logger.LogDebug("Indexing collection source {Source} ({Kind})", sourceName, sourceKind);
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
             index = await _indexer.IndexAsync(source, previous, progress: null, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation(
+                "Indexed collection source {Source} ({Kind}): {ItemCount} items in {ElapsedMs:F0} ms",
+                sourceName, sourceKind, index.Items.Count,
+                System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -496,7 +506,8 @@ public sealed class CollectionLibrary : IDisposable
         catch (Exception ex)
         {
             error = ex.Message;
-            _logger.LogWarning(ex, "Indexing collection source {SourceId} failed", sourceId);
+            _logger.LogWarning(ex, "Indexing collection source {Source} ({Kind}) failed: {Reason}",
+                sourceName, sourceKind, ex.Message);
         }
 
         lock (_gate)

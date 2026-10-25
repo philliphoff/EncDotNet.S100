@@ -1,15 +1,25 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace EncDotNet.S100.Viewer.Diagnostics;
 
 /// <summary>
 /// Default <see cref="ILastErrorTracker"/>: keeps only the most recent
 /// error in a single volatile field guarded by a lock. Registered as a
 /// singleton and fed by the application's global exception handlers (see
-/// <c>App.OnFrameworkInitializationCompleted</c>).
+/// <c>App.OnFrameworkInitializationCompleted</c>). Every recorded error
+/// is also written to the log at <see cref="LogLevel.Error"/>.
 /// </summary>
 internal sealed class LastErrorTracker : ILastErrorTracker
 {
     private readonly object _gate = new();
+    private readonly ILogger _logger;
     private LastErrorRecord? _current;
+
+    public LastErrorTracker(ILogger<LastErrorTracker>? logger = null)
+    {
+        _logger = logger ?? (ILogger)NullLogger.Instance;
+    }
 
     /// <inheritdoc />
     public LastErrorRecord? Current
@@ -28,6 +38,8 @@ internal sealed class LastErrorTracker : ILastErrorTracker
             Message: exception.Message,
             StackTrace: exception.ToString());
         lock (_gate) _current = record;
+        Log(() => _logger.LogError(
+            exception, "Unhandled error in {Source}: {Message}", record.Source, record.Message));
     }
 
     /// <inheritdoc />
@@ -48,5 +60,20 @@ internal sealed class LastErrorTracker : ILastErrorTracker
             Message: firstLine,
             StackTrace: string.IsNullOrWhiteSpace(text) ? null : text);
         lock (_gate) _current = record;
+        Log(() => _logger.LogError(
+            "Unhandled error in {Source}: {Details}", record.Source, text));
+    }
+
+    // Errors are recorded from the global exception handlers, so a
+    // failing log provider must never throw back into them.
+    private static void Log(Action write)
+    {
+        try
+        {
+            write();
+        }
+        catch
+        {
+        }
     }
 }

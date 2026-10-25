@@ -38,6 +38,28 @@ public sealed class SecomIdentityStoreTests : IDisposable
     }
 
     [Fact]
+    public void A_missing_key_is_logged_without_secrets()
+    {
+        var logger = new ListLogger<SecomIdentityStore>();
+        var identities = new SecomIdentityStore(_keys.Settings, _keys.Trust, _keys.Keys, logger);
+        var identity = identities.Load(_keys.IdentityFile(), "secret");
+        var reference = identities.Import(identity, "Bridge PC", makeDefault: true);
+        _keys.Keys.Remove(reference.Thumbprint);
+
+        identities.Restore(commandLine: null);
+
+        var entry = Assert.Single(logger.Entries, e => e.Level == Microsoft.Extensions.Logging.LogLevel.Warning);
+        Assert.Contains(reference.Id, entry.Message, StringComparison.Ordinal);
+        foreach (var logged in logger.Entries)
+        {
+            var text = logged.Message + logged.Exception;
+            Assert.DoesNotContain("secret", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("PRIVATE KEY", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("BEGIN", text, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void A_wrong_password_stores_nothing()
     {
         Assert.Throws<InvalidDataException>(() => _keys.Identities.Load(_keys.IdentityFile(), "wrong"));
