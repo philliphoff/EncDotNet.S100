@@ -86,6 +86,24 @@ internal sealed class FeedbackDialogViewModel : ViewModelBase
         private set => SetProperty(ref _rawDiagnostics, value);
     }
 
+    private string _rawLogs = string.Empty;
+    /// <summary>
+    /// The recent log entries that will be sent, as written to <c>logs.txt</c>
+    /// in the bundle (#1080); empty when nothing was logged.
+    /// </summary>
+    public string RawLogs
+    {
+        get => _rawLogs;
+        private set
+        {
+            if (SetProperty(ref _rawLogs, value))
+                OnPropertyChanged(nameof(HasRawLogs));
+        }
+    }
+
+    /// <summary>Whether the report carries any log entries.</summary>
+    public bool HasRawLogs => _rawLogs.Length > 0;
+
     private bool _isRawDataExpanded;
     /// <summary>Whether the raw-data disclosure section is expanded.</summary>
     public bool IsRawDataExpanded
@@ -122,6 +140,7 @@ internal sealed class FeedbackDialogViewModel : ViewModelBase
         _report = result.Report;
         _screenshotPng = result.ScreenshotPng;
         RawDiagnostics = result.Report.ToJson();
+        RawLogs = result.Report.LogsToText();
 
         if (_screenshotPng is { Length: > 0 })
         {

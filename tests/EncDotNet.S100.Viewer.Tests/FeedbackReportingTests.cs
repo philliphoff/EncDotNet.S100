@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using System.Text;
+using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Services;
+using Microsoft.Extensions.Logging;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -230,6 +232,85 @@ public class FeedbackReportingTests
         {
             using var archive = ZipFile.OpenRead(path);
             Assert.DoesNotContain("screenshot.png", archive.Entries.Select(e => e.FullName));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    // ── Recent logs (#1080) ─────────────────────────────────────────────
+
+    private static readonly DateTimeOffset LogTime = new(2026, 6, 14, 11, 58, 0, TimeSpan.Zero);
+
+    private static FeedbackReport ReportWithLogs() => FeedbackService.Redacted(
+        SampleReport() with { CrashLogTail = "[Crash] at /Users/alice/Charts/US5MA1BO.000" },
+        [
+            new LogEntry(1, LogTime, LogTime, LogLevel.Information, "EncDotNet.S100.Viewer.Services.DatasetLoaderService", "Opened /Users/alice/Charts/US5MA1BO.000", null),
+            new LogEntry(2, LogTime, LogTime.AddSeconds(4), LogLevel.Warning, "EncDotNet.S100.Viewer.Services.Secom.SecomClient", "SECOM fetch failed", "System.Net.Http.HttpRequestException: 503\n   at /Users/alice/src/x.cs:line 1", Count: 3),
+        ],
+        text => HomePathRedactor.Redact(text, "/Users/alice", ignoreCase: false));
+
+    [Fact]
+    public void Report_carries_recent_logs_with_the_home_directory_redacted()
+    {
+        var report = ReportWithLogs();
+
+        Assert.Equal(2, report.RecentLogs.Count);
+        Assert.Equal("Opened ~/Charts/US5MA1BO.000", report.RecentLogs[0].Message);
+        Assert.Contains("at ~/src/x.cs", report.RecentLogs[1].Exception);
+        Assert.Equal("[Crash] at ~/Charts/US5MA1BO.000", report.CrashLogTail);
+
+        var text = report.LogsToText();
+        Assert.Contains("INFO  [Datasets] EncDotNet.S100.Viewer.Services.DatasetLoaderService: Opened ~/Charts/US5MA1BO.000", text);
+        Assert.Contains("WARN  [SECOM]", text);
+        Assert.Contains("(×3, last ", text);
+        Assert.DoesNotContain("/Users/alice", text);
+    }
+
+    [Fact]
+    public void Recent_logs_stay_out_of_the_json_and_the_issue_url()
+    {
+        var report = ReportWithLogs();
+        var json = report.ToJson();
+
+        Assert.DoesNotContain("RecentLogs", json);
+        Assert.DoesNotContain("SECOM fetch failed", json);
+
+        var url = FeedbackService.BuildIssueUrl(report, "Broken", json, screenshotPath: null, hasScreenshot: false, screenshotOnClipboard: false);
+        Assert.DoesNotContain(Uri.EscapeDataString("SECOM fetch failed"), url);
+        Assert.DoesNotContain("SECOM%20fetch%20failed", url);
+    }
+
+    [Fact]
+    public void WriteBundle_WritesLogsTxt()
+    {
+        var report = ReportWithLogs();
+
+        var path = FeedbackService.WriteBundle(report.ToJson(), "please fix", screenshotPng: null, report.LogsToText());
+        try
+        {
+            using var archive = ZipFile.OpenRead(path);
+            using var reader = new StreamReader(archive.GetEntry("logs.txt")!.Open(), Encoding.UTF8);
+            var logs = reader.ReadToEnd();
+            Assert.Equal(report.LogsToText(), logs);
+            Assert.Contains("SECOM fetch failed", logs);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void WriteBundle_SaysSoWhenThereAreNoLogs()
+    {
+        var path = FeedbackService.WriteBundle("{}", "", screenshotPng: null, logsText: string.Empty);
+        try
+        {
+            using var archive = ZipFile.OpenRead(path);
+            using var reader = new StreamReader(archive.GetEntry("logs.txt")!.Open(), Encoding.UTF8);
+            Assert.Equal("(no log entries)", reader.ReadToEnd());
         }
         finally
         {

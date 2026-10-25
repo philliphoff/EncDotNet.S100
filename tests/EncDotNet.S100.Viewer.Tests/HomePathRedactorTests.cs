@@ -3,47 +3,45 @@ using EncDotNet.S100.Viewer.Diagnostics;
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// Covers replacing the user's home directory with <c>~</c> in log text
-/// attached to an exported feedback report.
+/// Exported reports and logs show the user's home directory as <c>~</c> (#1080).
 /// </summary>
-public class HomePathRedactorTests
+public sealed class HomePathRedactorTests
 {
-    [Fact]
-    public void ReplacesHomeDirectory()
-    {
-        var redacted = HomePathRedactor.Redact(
-            "Opened /home/alice/charts/US5MA1SK.000 and /home/alice/.config", "/home/alice");
-
-        Assert.Equal("Opened ~/charts/US5MA1SK.000 and ~/.config", redacted);
-    }
-
-    [Fact]
-    public void ReplacesForwardSlashSpellingOfWindowsHome()
-    {
-        var redacted = HomePathRedactor.Redact(
-            @"C:\Users\alice\charts and C:/Users/alice/logs", @"C:\Users\alice\");
-
-        Assert.Equal(@"~\charts and ~/logs", redacted);
-    }
+    [Theory]
+    [InlineData("Could not open /Users/alice/Charts/US5MA1BO.000", "Could not open ~/Charts/US5MA1BO.000")]
+    [InlineData("/Users/alice", "~")]
+    [InlineData("cwd=\"/Users/alice\" next", "cwd=\"~\" next")]
+    [InlineData("a /Users/alice/x and /Users/alice/y", "a ~/x and ~/y")]
+    // A longer account name that starts with the same letters is not the home.
+    [InlineData("/Users/alicebob/Charts", "/Users/alicebob/Charts")]
+    [InlineData("nothing to do", "nothing to do")]
+    public void Replaces_the_home_directory_on_unix(string text, string expected) =>
+        Assert.Equal(expected, HomePathRedactor.Redact(text, "/Users/alice", ignoreCase: false));
 
     [Fact]
-    public void DefaultsToCurrentUserProfile()
+    public void Matches_windows_paths_with_either_separator_any_case_and_json_escaping()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        Assert.SkipWhen(home.Length <= 3, "No usable home directory.");
+        const string home = @"C:\Users\Alice";
 
-        var redacted = HomePathRedactor.Redact(Path.Combine(home, "file.txt"));
-
-        Assert.Equal(Path.Combine("~", "file.txt"), redacted);
+        Assert.Equal(@"at ~\AppData\Local\Temp\x.zip", HomePathRedactor.Redact(@"at C:\Users\Alice\AppData\Local\Temp\x.zip", home, ignoreCase: true));
+        Assert.Equal("at ~/Charts", HomePathRedactor.Redact("at c:/users/alice/Charts", home, ignoreCase: true));
+        Assert.Equal(@"{""Path"": ""~\\Charts""}", HomePathRedactor.Redact(@"{""Path"": ""C:\\Users\\Alice\\Charts""}", home, ignoreCase: true));
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    public void LeavesEmptyTextUnchanged(string? text) =>
-        Assert.Equal(text, HomePathRedactor.Redact(text, "/home/alice"));
+    [InlineData("/")]
+    public void Leaves_text_alone_without_a_usable_home(string? home) =>
+        Assert.Equal("/x/y", HomePathRedactor.Redact("/x/y", home, ignoreCase: false));
 
     [Fact]
-    public void IgnoresRootHome() =>
-        Assert.Equal("/var/log/x", HomePathRedactor.Redact("/var/log/x", "/"));
+    public void Redacts_the_current_users_home()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.SkipWhen(string.IsNullOrEmpty(home) || home.TrimEnd('/', '\\').Length < 3, "no home directory");
+
+        Assert.Equal("open ~" + Path.DirectorySeparatorChar + "f", HomePathRedactor.Redact("open " + Path.Combine(home, "f")));
+        Assert.Null(HomePathRedactor.RedactOrNull(null));
+    }
 }

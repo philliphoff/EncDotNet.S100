@@ -1175,7 +1175,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
-            sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>()));
+            sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));
@@ -1509,6 +1510,21 @@ public partial class App : Application
             visibilitySourceFactory: static sp =>
                 new EncDotNet.S100.Viewer.ViewModels.Activities.CheckModeVisibilitySource(
                     sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>()));
+
+        // Logs (#1080): the recent entries of the always-on log buffer, next to
+        // the Timeline and Clearance. Always visible; it never opens by itself.
+        services.AddSingleton(sp => new LogsViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>(),
+            showFeedback: () => sp.GetRequiredService<MainViewModel>().ShowFeedbackCommand.Execute(null)));
+        services.AddActivityTab<LogsViewModel, LogsView>(
+            id: MainViewModel.LogsTabId,
+            order: 30,
+            title: Strings.Pane_Logs,
+            name: Strings.Label_Activity_Logs,
+            tooltip: Strings.Tooltip_Logs,
+            iconFactory: static () => new FluentIcon { Icon = Icon.TextBulletListSquare, IconVariant = IconVariant.Regular, FontSize = 22 },
+            persistAsLastSelected: false,
+            dock: TabDock.Bottom);
 
         // Main window — receives only the StartupOptions plus the small set
         // of cross-cutting services it still owns directly. Per-dataset
