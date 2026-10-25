@@ -38,6 +38,7 @@ internal sealed class FeedbackService : IFeedbackService
     private readonly SettingsViewModel _settings;
     private readonly IAppScreenshotProvider _screenshot;
     private readonly ICapabilityAccessor<IImageRenderer> _mapRendererAccessor;
+    private readonly LogBuffer? _logs;
 
     public FeedbackService(
         DatasetsViewModel datasets,
@@ -47,7 +48,8 @@ internal sealed class FeedbackService : IFeedbackService
         IThemeService theme,
         SettingsViewModel settings,
         IAppScreenshotProvider screenshot,
-        ICapabilityAccessor<IImageRenderer> mapRendererAccessor)
+        ICapabilityAccessor<IImageRenderer> mapRendererAccessor,
+        LogBuffer? logs = null)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(viewport);
@@ -66,6 +68,7 @@ internal sealed class FeedbackService : IFeedbackService
         _settings = settings;
         _screenshot = screenshot;
         _mapRendererAccessor = mapRendererAccessor;
+        _logs = logs;
     }
 
     /// <inheritdoc />
@@ -143,7 +146,7 @@ internal sealed class FeedbackService : IFeedbackService
                 Version: crash.Version));
         }
 
-        return new FeedbackReport
+        var report = new FeedbackReport
         {
             GeneratedUtc = DateTimeOffset.UtcNow,
             Application = app,
@@ -153,6 +156,48 @@ internal sealed class FeedbackService : IFeedbackService
             LastError = lastError,
             PreviousCrashes = previousCrashes,
             CrashLogTail = _crashes.HasCrashes ? _crashes.CrashLogTail : null,
+        };
+        return Redacted(report, _logs?.Snapshot() ?? Array.Empty<LogEntry>(), HomePathRedactor.Redact);
+    }
+
+    /// <summary>
+    /// Adds <paramref name="recentLogs"/> to <paramref name="report"/> and
+    /// runs <paramref name="redact"/> (which replaces the home directory with
+    /// <c>~</c> in the app) over every free-text field that can hold a path:
+    /// the log messages and exceptions, the last error and the crash-log tail.
+    /// </summary>
+    internal static FeedbackReport Redacted(
+        FeedbackReport report,
+        IReadOnlyList<LogEntry> recentLogs,
+        Func<string, string> redact)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        ArgumentNullException.ThrowIfNull(recentLogs);
+        ArgumentNullException.ThrowIfNull(redact);
+
+        var logs = new LogEntry[recentLogs.Count];
+        for (var i = 0; i < logs.Length; i++)
+        {
+            var entry = recentLogs[i];
+            logs[i] = entry with
+            {
+                Message = redact(entry.Message),
+                Exception = entry.Exception is null ? null : redact(entry.Exception),
+            };
+        }
+
+        return report with
+        {
+            RecentLogs = logs,
+            Datasets = [.. report.Datasets.Select(d => d with { DisplayName = redact(d.DisplayName) })],
+            LastError = report.LastError is { } error
+                ? error with
+                {
+                    Message = redact(error.Message),
+                    StackTrace = error.StackTrace is null ? null : redact(error.StackTrace),
+                }
+                : null,
+            CrashLogTail = report.CrashLogTail is null ? null : redact(report.CrashLogTail),
         };
     }
 
@@ -201,12 +246,13 @@ internal sealed class FeedbackService : IFeedbackService
         ArgumentNullException.ThrowIfNull(request);
 
         var json = request.Report.ToJson();
+        var logsText = request.Report.LogsToText();
         var userMessage = request.UserMessage?.Trim() ?? string.Empty;
 
         var hasScreenshot = request.ScreenshotPng is { Length: > 0 };
 
         var (bundlePath, screenshotPath) = await Task.Run(
-            () => WriteArtifacts(json, userMessage, request.ScreenshotPng),
+            () => WriteArtifacts(json, userMessage, request.ScreenshotPng, logsText),
             cancellationToken).ConfigureAwait(false);
 
         // Place the screenshot on the clipboard so the user can paste it
@@ -245,9 +291,9 @@ internal sealed class FeedbackService : IFeedbackService
     /// <returns>The bundle path and the standalone screenshot path (or
     /// <see langword="null"/> when no screenshot was provided).</returns>
     internal static (string BundlePath, string? ScreenshotPath) WriteArtifacts(
-        string json, string userMessage, byte[]? screenshotPng)
+        string json, string userMessage, byte[]? screenshotPng, string? logsText = null)
     {
-        var bundlePath = WriteBundle(json, userMessage, screenshotPng);
+        var bundlePath = WriteBundle(json, userMessage, screenshotPng, logsText);
 
         string? screenshotPath = null;
         if (screenshotPng is { Length: > 0 })
@@ -262,7 +308,12 @@ internal sealed class FeedbackService : IFeedbackService
         return (bundlePath, screenshotPath);
     }
 
-    internal static string WriteBundle(string json, string userMessage, byte[]? screenshotPng)
+    /// <summary>
+    /// Writes the feedback zip: <c>diagnostics.json</c>, <c>feedback.txt</c>,
+    /// <c>logs.txt</c> when <paramref name="logsText"/> is given, and
+    /// <c>screenshot.png</c> when one is included.
+    /// </summary>
+    internal static string WriteBundle(string json, string userMessage, byte[]? screenshotPng, string? logsText = null)
     {
         var folder = Path.Combine(Path.GetTempPath(), "S100ViewerFeedback");
         Directory.CreateDirectory(folder);
@@ -281,6 +332,13 @@ internal sealed class FeedbackService : IFeedbackService
             writer.Write(string.IsNullOrWhiteSpace(userMessage)
                 ? "(no message provided)"
                 : userMessage);
+
+        if (logsText is not null)
+        {
+            var logsEntry = archive.CreateEntry("logs.txt", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(logsEntry.Open(), new UTF8Encoding(false));
+            writer.Write(logsText.Length == 0 ? "(no log entries)" : logsText);
+        }
 
         if (screenshotPng is { Length: > 0 })
         {
@@ -335,7 +393,7 @@ internal sealed class FeedbackService : IFeedbackService
                 .Append(fileName)
                 .Append(" into this field instead");
             if (screenshotPath is not null)
-                builder.Append(" (it was just revealed in your file manager: ").Append(screenshotPath).Append(')');
+                builder.Append(" (it was just revealed in your file manager: ").Append(HomePathRedactor.Redact(screenshotPath)).Append(')');
             builder.Append(" — uploading the file is more reliable than pasting.");
             screenshot = builder.ToString();
         }

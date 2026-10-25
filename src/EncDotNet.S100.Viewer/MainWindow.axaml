@@ -1155,9 +1155,32 @@
                                         <ToggleButton Classes="dockTab"
                                                       AutomationProperties.AutomationId="{Binding Id, StringFormat=Dock.Tab.{0}}"
                                                       AutomationProperties.Name="{Binding Title}"
-                                                      Content="{Binding Title, Converter={x:Static conv:ToUpperConverter.Instance}}"
                                                       Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
                                                       CommandParameter="{Binding}">
+                                            <!-- The title, and a count badge such as the Logs tab's
+                                                 new warnings (#1080). -->
+                                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                                <TextBlock Text="{Binding Title, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                                           VerticalAlignment="Center" />
+                                                <Border IsVisible="{Binding HasBadge}"
+                                                        IsHitTestVisible="False"
+                                                        VerticalAlignment="Center"
+                                                        MinWidth="15"
+                                                        Height="15"
+                                                        Padding="4,0"
+                                                        CornerRadius="7.5"
+                                                        Background="{DynamicResource AccentBrush}"
+                                                        AutomationProperties.AutomationId="{Binding Id, StringFormat=Dock.Tab.{0}Badge}"
+                                                        AutomationProperties.Name="{Binding BadgeName}">
+                                                    <TextBlock Text="{Binding BadgeCount}"
+                                                               FontSize="9.5"
+                                                               LetterSpacing="0"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="White"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" />
+                                                </Border>
+                                            </StackPanel>
                                             <ToggleButton.IsChecked>
                                                 <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
                                                     <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedBottomTabId" />

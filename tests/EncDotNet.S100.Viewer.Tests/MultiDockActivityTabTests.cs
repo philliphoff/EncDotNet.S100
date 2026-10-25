@@ -370,4 +370,55 @@ public sealed class MultiDockActivityTabTests : IDisposable
         signal.Raise();
         Assert.True(vm.IsRightDockOpen);
     }
+
+    // ── Logs tab (#1080) ────────────────────────────────────────────────
+
+    [Fact]
+    public void Show_logs_opens_the_bottom_dock_on_the_logs_tab_and_tells_it_it_is_shown()
+    {
+        using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer();
+        using var logs = new LogsViewModel(buffer, post: action => action());
+        var timeline = new FakeTab { Id = MainViewModel.TimelineTabId, Order = 10, Dock = TabDock.Bottom };
+        var logsTab = new ActivityTab<LogsViewModel, ContentControl>(
+            MainViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, TabDock.Bottom);
+        var vm = CreateViewModel(new IActivityTab[] { timeline, logsTab });
+        vm.WindowWidth = 1200;
+        Assert.False(vm.IsBottomDockOpen);
+        Assert.Same(timeline, vm.SelectedBottomTab);
+        Assert.False(logs.IsTabShown);
+
+        vm.ShowLogsCommand.Execute(null);
+
+        Assert.True(vm.IsBottomDockOpen);
+        Assert.Same(logsTab, vm.SelectedBottomTab);
+        Assert.True(logs.IsTabShown);
+        Assert.True(vm.HasBottomDockTabs);
+
+        vm.SelectTabCommand.Execute(timeline);
+        Assert.False(logs.IsTabShown);
+        vm.SelectTabCommand.Execute(logsTab);
+        Assert.True(logs.IsTabShown);
+        vm.CloseDockCommand.Execute("Bottom");
+        Assert.False(logs.IsTabShown);
+
+        // View › Timeline opens the Timeline, not the Logs tab the dock last showed.
+        vm.ToggleTimelineCommand.Execute(null);
+        Assert.True(vm.IsBottomDockOpen);
+        Assert.True(vm.IsTimelineTabSelected);
+    }
+
+    [Fact]
+    public void The_logs_badge_reaches_its_bottom_dock_tab()
+    {
+        using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer();
+        using var logs = new LogsViewModel(buffer, post: action => action());
+        using var logsTab = new ActivityTab<LogsViewModel, ContentControl>(
+            MainViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, TabDock.Bottom);
+
+        buffer.Add(Microsoft.Extensions.Logging.LogLevel.Error, "EncDotNet.S100.Viewer.App", "boom");
+        buffer.Flush();
+
+        Assert.True(logsTab.HasBadge);
+        Assert.Equal(1, logsTab.BadgeCount);
+    }
 }

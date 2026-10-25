@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EncDotNet.S100.Viewer.Diagnostics;
 
 namespace EncDotNet.S100.Viewer.Services;
 
@@ -10,9 +11,17 @@ namespace EncDotNet.S100.Viewer.Services;
 /// comes from this record — there is no hidden collection.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The screenshot is deliberately <b>not</b> part of this model: it is a
 /// separate, optional PNG that the user can preview and exclude. This
 /// record contains only textual diagnostics.
+/// </para>
+/// <para>
+/// <see cref="RecentLogs"/> is shown in the raw-data section and written to
+/// the bundle as <c>logs.txt</c> (<see cref="LogsToText"/>), but is left out
+/// of <see cref="ToJson"/>, so it never rides in the prefilled issue URL.
+/// Paths in the report have the user's home directory replaced with <c>~</c>.
+/// </para>
 /// </remarks>
 internal sealed partial record FeedbackReport
 {
@@ -53,6 +62,15 @@ internal sealed partial record FeedbackReport
     /// </summary>
     public string? CrashLogTail { get; init; }
 
+    /// <summary>
+    /// The viewer's recent log entries (#1080), oldest first, from the Logs
+    /// panel's buffer; empty when nothing was logged. Not serialised by
+    /// <see cref="ToJson"/>: <see cref="LogsToText"/> writes them to
+    /// <c>logs.txt</c> in the bundle instead.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<LogEntry> RecentLogs { get; init; } = Array.Empty<LogEntry>();
+
     private static readonly ReportJsonContext ReportJson = new(new JsonSerializerOptions
     {
         WriteIndented = true,
@@ -64,6 +82,13 @@ internal sealed partial record FeedbackReport
     /// the dialog's raw-data section and written to the bundle.
     /// </summary>
     public string ToJson() => JsonSerializer.Serialize(this, ReportJson.FeedbackReport);
+
+    /// <summary>
+    /// Formats <see cref="RecentLogs"/> as plain text, one entry per line —
+    /// exactly the text written to <c>logs.txt</c> in the bundle. Entries are
+    /// redacted when the report is built, not here.
+    /// </summary>
+    public string LogsToText() => LogEntry.ToText(RecentLogs);
 
     [JsonSerializable(typeof(FeedbackReport))]
     private sealed partial class ReportJsonContext : JsonSerializerContext;

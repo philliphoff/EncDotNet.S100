@@ -137,7 +137,10 @@ internal sealed class NativeMenuBuilder
 
         // On macOS the About item lives in the application menu (see
         // App.ConfigureMacApplicationMenu); elsewhere it belongs in Help.
-        var helpSubMenu = new NativeMenu { reportFeedbackItem };
+        var showLogsItem = new NativeMenuItem(Strings.Menu_ShowLogs);
+        showLogsItem.Click += (_, _) => _viewModel.ShowLogsCommand.Execute(null);
+
+        var helpSubMenu = new NativeMenu { reportFeedbackItem, showLogsItem };
         if (!OperatingSystem.IsMacOS())
         {
             var aboutItem = new NativeMenuItem(Strings.Menu_About);

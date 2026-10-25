@@ -1398,6 +1398,31 @@ Routes are saved separately in `routes.json`, and Library collections in
 `collections.json`. SoundCharts migrates settings files from older versions;
 values it doesn't find use their defaults.
 
+## Logs
+
+The **Logs** tab in the bottom dock, next to **Timeline**, lists the last
+1,000 messages SoundCharts logged, newest at the bottom. Open it with
+**Help** > **Show logs** or by choosing **Logs** in the dock's tab strip; it
+never opens by itself. While it's hidden, its tab shows how many warnings and
+errors arrived since you last looked.
+
+- Each row shows the time, level, area (such as **Library**, **SECOM**,
+  **Updates**, **AIS** or **Datasets**) and message. An identical message
+  repeated in a row shows once, with a count such as **×3**.
+- Select a row to see its full message, logger category and any exception.
+- The level filter hides Debug messages by default. **Verbose** also records
+  Debug messages; it changes only what the panel and feedback reports get,
+  not the `--verbose` log level or what goes to an OpenTelemetry collector.
+- Type in the search box to show only messages that contain the text.
+- **Pause** stops the list moving while you read, and **Auto-scroll** keeps
+  the newest message in view.
+- **Copy** copies the messages shown, **Clear** empties the list and **Send
+  feedback** opens the **Report Feedback** dialog, whose report includes
+  these logs.
+
+Log messages are in English. The logs stay in memory and are lost when
+SoundCharts quits; use `--log-file` to keep them.
+
 ## Report feedback
 
 To report a problem, choose **Help** > **Report Feedback…** or the feedback
@@ -1408,18 +1433,22 @@ dialog:
 - Has a box for **Your feedback**.
 - Previews a screenshot of the application window (or, if that fails, of the
   map). Clear **Include this screenshot of the application** to leave it out.
-- Shows the full JSON payload under **Show data that will be sent**.
+- Shows the full JSON payload and the recent log messages under **Show data
+  that will be sent**.
 
 The diagnostics include the app version, build and runtime; the map view
 (center, zoom, coordinate reference system and rotation); each dataset's
 product, visibility and validation error and warning counts; the most recent
 error caught by the global exception handlers (type, message and stack trace);
-and any [crashes](#crash-recovery) detected at start-up.
+any [crashes](#crash-recovery) detected at start-up; and the messages in the
+[Logs](#logs) tab. Paths show your home folder as `~`.
 
 When you choose **Submit Feedback**, SoundCharts:
 
 1. Writes a ZIP bundle to your temp folder containing `diagnostics.json`, your
-   `feedback.txt` and, if included, `screenshot.png`.
+   `feedback.txt`, the recent logs as `logs.txt` and, if included,
+   `screenshot.png`. The logs aren't put in the GitHub issue; attach the
+   bundle if they help.
 2. If you included a screenshot, saves it next to the bundle as
    `…-screenshot.png`, shows that file in your file manager, and copies the
    screenshot to the clipboard.

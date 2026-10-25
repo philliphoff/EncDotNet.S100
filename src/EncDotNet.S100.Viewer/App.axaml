@@ -327,6 +327,12 @@
                 </ControlTemplate>
             </Setter>
         </Style>
+        <!-- Dense rows for long text-only lists, such as the Logs tab (#1080). -->
+        <Style Selector="ListBox.accentList.dense ListBoxItem">
+            <Setter Property="Padding" Value="8,1" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinHeight" Value="22" />
+        </Style>
         <Style Selector="ListBox.accentList ListBoxItem:pointerover /template/ Border#PART_Tint">
             <Setter Property="Opacity" Value="0.06" />
         </Style>
