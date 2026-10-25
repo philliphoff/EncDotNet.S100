@@ -1,4 +1,5 @@
 using EncDotNet.S100.Viewer.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -55,5 +56,56 @@ public class LastErrorTrackerTests
 
         Assert.Equal("two", tracker.Current!.Message);
         Assert.Equal("second", tracker.Current.Source);
+    }
+
+    [Fact]
+    public void Record_Exception_LogsAnError()
+    {
+        var logger = new ListLogger<LastErrorTracker>();
+        var tracker = new LastErrorTracker(logger);
+        var ex = new InvalidOperationException("kaboom");
+
+        tracker.Record("UIThread.UnhandledException", ex);
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Same(ex, entry.Exception);
+        Assert.Contains("UIThread.UnhandledException", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("kaboom", entry.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Record_Message_LogsAnErrorWithTheFullText()
+    {
+        var logger = new ListLogger<LastErrorTracker>();
+        var tracker = new LastErrorTracker(logger);
+
+        tracker.Record("McpServerHost", "Top line\nstack frame 1");
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Contains("McpServerHost", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("stack frame 1", entry.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Record_StillRecords_WhenTheLoggerThrows()
+    {
+        var tracker = new LastErrorTracker(new ThrowingLogger());
+
+        tracker.Record("source", new Exception("one"));
+
+        Assert.Equal("one", tracker.Current!.Message);
+    }
+
+    private sealed class ThrowingLogger : ILogger<LastErrorTracker>
+    {
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            throw new InvalidOperationException("provider failed");
     }
 }

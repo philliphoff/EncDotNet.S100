@@ -40,4 +40,24 @@ internal static class LoadFailureClassifier
 
         return structured ?? exception;
     }
+
+    /// <summary>
+    /// Returns a one-line English reason for a dataset-load failure, shaped
+    /// from the innermost structured S-100 exception like the load-failure
+    /// toast, for use in log entries (which stay in English regardless of
+    /// the UI culture).
+    /// </summary>
+    public static string Describe(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        return Unwrap(exception) switch
+        {
+            S100DatasetNotSupportedException ns =>
+                $"{ns.Product} dataset uses {ns.Feature}, which is not yet supported.",
+            S100DatasetSchemaException sx =>
+                $"This {sx.Product} file is missing or has an invalid '{sx.AttributeOrDataset}' at '{sx.GroupPath}'.",
+            var other => other.Message,
+        };
+    }
 }

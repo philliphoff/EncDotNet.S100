@@ -127,8 +127,9 @@ internal static class ViewerObservability
     /// <summary>
     /// Starts a root <c>s100.viewer.command</c> activity wrapping a
     /// user action, recording <c>s100.viewer.command.duration</c> on
-    /// dispose. Also emits a structured "starting" log entry now and
-    /// a "completed" / "failed" entry on dispose so connected log
+    /// dispose. Also emits a structured "starting" log entry now (at
+    /// Debug, so it stays out of the default log view) and a
+    /// "completed" / "failed" entry on dispose so connected log
     /// sinks (Aspire dashboard, OTLP collectors) show user actions
     /// without instrumenting every viewer service individually.
     /// </summary>
@@ -137,7 +138,7 @@ internal static class ViewerObservability
         var activity = Telemetry.ActivitySource.StartActivity(
             "s100.viewer.command", ActivityKind.Internal);
         activity?.SetTag("s100.viewer.command", commandName);
-        _commandLogger.LogInformation(
+        _commandLogger.LogDebug(
             "Viewer command starting: {Command}", commandName);
         return new CommandScope(activity, commandName);
     }

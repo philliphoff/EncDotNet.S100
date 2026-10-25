@@ -68,7 +68,7 @@ internal sealed class GitHubReleaseClient : IGitHubReleaseClient
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger?.LogDebug("GitHub releases request returned {Status}.", response.StatusCode);
+                _logger?.LogWarning("The GitHub releases request returned {Status}.", response.StatusCode);
                 return null;
             }
 
@@ -88,7 +88,7 @@ internal sealed class GitHubReleaseClient : IGitHubReleaseClient
         }
         catch (Exception ex)
         {
-            _logger?.LogDebug(ex, "Failed to query the latest GitHub release.");
+            _logger?.LogWarning(ex, "Failed to query the latest GitHub release.");
             return null;
         }
     }

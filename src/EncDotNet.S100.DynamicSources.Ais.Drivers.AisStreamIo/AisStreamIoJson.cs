@@ -353,11 +353,18 @@ internal static class AisStreamIoJson
 
     /// <summary>
     /// Replaces the API key in a logged subscribe frame with a
-    /// fixed redaction marker so the key never lands in logs.
+    /// fixed redaction marker so the key never lands in logs. Both the
+    /// raw key and its JSON-escaped form (as <see cref="BuildSubscribeFrame"/>
+    /// writes it, e.g. <c>+</c> as <c>\u002B</c>) are replaced.
     /// </summary>
     public static string RedactApiKey(string frame, string apiKey)
     {
         if (string.IsNullOrEmpty(apiKey)) return frame;
-        return frame.Replace(apiKey, "***REDACTED***", StringComparison.Ordinal);
+        const string marker = "***REDACTED***";
+        var redacted = frame.Replace(apiKey, marker, StringComparison.Ordinal);
+        var escaped = JsonEncodedText.Encode(apiKey).ToString();
+        return escaped == apiKey
+            ? redacted
+            : redacted.Replace(escaped, marker, StringComparison.Ordinal);
     }
 }

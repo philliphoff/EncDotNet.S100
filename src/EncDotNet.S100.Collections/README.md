@@ -379,6 +379,8 @@ SoundCharts Library panel is built on it, and a headless host such as the
     uses, so every host keeps downloads in the same place.
   - It's the `ILibraryLocalCopies` that turns a downloaded item into a local
     one.
+  - Set `Logger` to log each batch and each failed download. Items are
+    logged by name, never by location.
 - `LibraryLoader` opens items into a host's session.
   - `Plan` skips what can't be opened and groups the rest by exchange set.
   - Each group opens through the host's `ILibraryDatasetOpener`. SoundCharts'
