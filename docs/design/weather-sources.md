@@ -705,26 +705,26 @@ matters for route checks later (§10.5).
 
 ## 9. Work breakdown
 
-Each item is one PR-sized issue under #1055. The dependencies are
+Each item is one PR-sized sub-issue of #1055. The dependencies are
 listed after each. Items 1 to 6 are the pipeline refactors from §8.
 They're useful without weather, and they make each weather item
 smaller.
 
 **Pipeline refactors**
 
-1. **One render context** (§8.3). Depends on: nothing.
-2. **Product traits on the registration** (§8.2), including byte-based
+1. (#1060) **One render context** (§8.3). Depends on: nothing.
+2. (#1061) **Product traits on the registration** (§8.2), including byte-based
    detection and the non-S-100 names from §3.1. Depends on: nothing.
-3. **Time traits on the processor** (§8.4). Depends on: 1.
-4. **Coverage styles separate from catalogues** (§8.5), plus the style
+3. (#1065) **Time traits on the processor** (§8.4). Depends on: 1.
+4. (#1062) **Coverage styles separate from catalogues** (§8.5), plus the style
    model changes (§8.6). Depends on: nothing.
-5. **Shared toolkit for code-defined portrayal** (§8.7), with S-104
+5. (#1066) **Shared toolkit for code-defined portrayal** (§8.7), with S-104
    moved onto it. Depends on: 4.
-6. **Coverage sampling as a capability** (§8.8). Depends on: nothing.
+6. (#1063) **Coverage sampling as a capability** (§8.8). Depends on: nothing.
 
 **Weather**
 
-7. **Weather grid model and coverage source.** `Datasets.Weather`
+7. (#1067) **Weather grid model and coverage source.** `Datasets.Weather`
    containing:
    - `WeatherGridSet`
    - the parameter table
@@ -734,32 +734,32 @@ smaller.
      lazy step decoding and overview levels
 
    Tested with grids built in memory. Depends on: 4 for derived fields.
-8. **Weather coverage styles.** Wave-height and wind-speed colour bands
+8. (#1068) **Weather coverage styles.** Wave-height and wind-speed colour bands
    and palettes, barb and wave-arrow SVGs, and the layer order from §5.
    Tested through the headless renderer with in-memory grids. Depends
    on: 5, 7.
-9. **NetCDF reader and processor.** NetCDF-4 on PureHDF, NetCDF-3, CF
+9. (#1071) **NetCDF reader and processor.** NetCDF-4 on PureHDF, NetCDF-3, CF
    interpretation, and `NetCdfDatasetProcessor` with time steps,
    sampling, picking and headless rendering. Depends on: 1, 2, 3, 6, 8.
-10. **GRIB2 decoder.** Sections, templates 3.0, 4.0, 4.8, 5.0, 5.2,
+10. (#1064) **GRIB2 decoder.** Sections, templates 3.0, 4.0, 4.8, 5.0, 5.2,
     5.3, 5.41 and the bitmap, plus the test encoder. Start by
     confirming the templates the target sources use (§7.2). Depends
     on: nothing.
-11. **GRIB2 processor.** The adapter from GRIB2 to the weather grid
+11. (#1074) **GRIB2 processor.** The adapter from GRIB2 to the weather grid
     model, plus `GribDatasetProcessor`, the NOMADS fixtures and
     multi-message files. Depends on: 9 (shared processor base), 10.
-12. **Drawing polish.** Southern-hemisphere barbs, legends in the
+12. (#1072) **Drawing polish.** Southern-hemisphere barbs, legends in the
     viewer, land clipping for wave fills, and pressure isobars.
     Depends on: 8.
-13. **CAP warnings.** `CapDatasetProcessor`, the marine-zone layer, the
+13. (#1069) **CAP warnings.** `CapDatasetProcessor`, the marine-zone layer, the
     in-force logic shared with S-124, and the style built with the
     toolkit. Depends on: 2, 5.
-14. **NDBC observations source.** Depends on: 5 for the station glyph.
-15. **NMEA weather source.** Depends on: 14 for the symbol.
-16. **Library remote sources.** NOMADS GRIB filter, AWS `.idx` reads,
+14. (#1070) **NDBC observations source.** Depends on: 5 for the station glyph.
+15. (#1073) **NMEA weather source.** Depends on: 14 for the symbol.
+16. (#1075) **Library remote sources.** NOMADS GRIB filter, AWS `.idx` reads,
     `api.weather.gov` and ERDDAP entries, runs and staleness, and
     folder-as-run loading. Depends on: 9, 11, 13.
-17. **Surfaces and docs.**
+17. (#1076) **Surfaces and docs.**
     - `s100 info`, `render` and `pick` on weather files
     - MCP: weather formats in `list_specs`, and checks that time steps
       and sampling work through the generic paths
