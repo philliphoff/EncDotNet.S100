@@ -8,7 +8,7 @@ description: |
   at fixed stations, etc.), trend/quality flags, and tide-station
   metadata. USE FOR: S-104 datasets, water level forecasts/observations,
   tide grids, S104DatasetReader, S104CoverageSource,
-  S104PortrayalCatalogue, WaterLevelCoverage, WaterLevelValue,
+  S104CoverageStyle, WaterLevelCoverage, WaterLevelValue,
   time-step iteration, adding S-104 features, S-104 tests.
   DO NOT USE FOR: S-102 bathymetry (use s102-bathymetry), S-111
   currents (use s111-surface-currents), generic HDF5 (use
@@ -59,7 +59,7 @@ description: |
 - **Portrayal is SoundCharts' own, not spec-driven.** S-104 Edition
   2.0.0 has no official IHO portrayal catalogue — the spec treats water
   levels as input to ECDIS depth adjustment rather than a visual
-  layer. `S104PortrayalCatalogue` defines station gauges (a rounded
+  layer. `S104CoverageStyle` defines station gauges (a rounded
   square with a trend chevron, dash or "?", plus the signed height at
   1:100 000 and larger) and dashed surface isolines (0.5 m, or 0.25 m
   for a dataset range under 1 m), in one teal ink per palette with no

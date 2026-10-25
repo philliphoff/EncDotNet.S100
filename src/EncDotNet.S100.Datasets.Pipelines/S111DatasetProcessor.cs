@@ -627,7 +627,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             // PC-faithful arrow: the band's SCAROW symbol, scaled exactly as
             // the catalogue says (0.40 / 0.20 × speed / 2.60, i.e. Eqn 9.1)
             // times the user's symbol scale — the same as the dcf2 grid path.
-            var band = symbolScheme.Resolve(speed);
+            var band = symbolScheme.Resolve(speed, station.Latitude);
             if (band is null)
                 continue;
 
@@ -652,7 +652,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 SvgSource = svgSource,
                 SymbolScale = band.ScaleFor(speed) * baseSymbolScale,
                 // Degrees true is clockwise from north, as is PointGlyph.Rotation.
-                Rotation = direction,
+                Rotation = symbolScheme.RotationFor(direction),
                 ThinningPriority = speed,
             });
         }

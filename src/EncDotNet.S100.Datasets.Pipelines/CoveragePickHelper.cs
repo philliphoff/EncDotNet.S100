@@ -72,8 +72,8 @@ public static class CoveragePickHelper
         var encodedCol = index % encoded.NumColumns;
         var sampled = source.Sample(new GridRegion(encodedRow, encodedRow + 1, encodedCol, encodedCol + 1, 1, 1));
         var values = new Dictionary<string, float>(StringComparer.Ordinal);
-        foreach (var (name, array) in sampled.Values)
-            values[name] = array[0];
+        foreach (var name in sampled.FieldNames)
+            values[name] = sampled.GetValues(name)[0];
 
         return new SamplePoint
         {

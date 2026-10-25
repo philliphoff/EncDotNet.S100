@@ -187,27 +187,27 @@ public class S111CoverageSourceTests : IDisposable
         Assert.Equal(9, scheme.Bands.Count);
 
         // Band 1: slow → small fixed arrow
-        var band1 = scheme.Resolve(0.1f);
+        var band1 = scheme.Resolve(0.1f, latitude: 0);
         Assert.NotNull(band1);
         Assert.Equal("SCAROW01", band1.SymbolRef);
         Assert.False(band1.ScaleByValue);
         Assert.Equal(0.40f, band1.ScaleFactor);
 
         // Band 5: mid-range → speed-scaled arrow
-        var band5 = scheme.Resolve(3.5f);
+        var band5 = scheme.Resolve(3.5f, latitude: 0);
         Assert.NotNull(band5);
         Assert.Equal("SCAROW05", band5.SymbolRef);
         Assert.True(band5.ScaleByValue);
         Assert.Equal(0.20f, band5.ScaleFactor);
 
         // Band 9: fastest → large fixed arrow
-        var band9 = scheme.Resolve(14.0f);
+        var band9 = scheme.Resolve(14.0f, latitude: 0);
         Assert.NotNull(band9);
         Assert.Equal("SCAROW09", band9.SymbolRef);
         Assert.False(band9.ScaleByValue);
         Assert.Equal(2.60f, band9.ScaleFactor);
 
         // No-data → null
-        Assert.Null(scheme.Resolve(-9999f));
+        Assert.Null(scheme.Resolve(-9999f, latitude: 0));
     }
 }
