@@ -176,7 +176,7 @@ public class S98OnDemandSurfaceOrderingTests
         var processor = new S57DatasetProcessor(
             path, catalogues, new MoonSharpLuaEngine(),
             new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
-        return processor.BuildVectorPortrayalAsync(new S101RenderContext());
+        return processor.BuildVectorPortrayalAsync(new RenderContext());
     }
 
     private static Task<VectorPortrayalResult> PortrayS101Async()
@@ -187,14 +187,14 @@ public class S98OnDemandSurfaceOrderingTests
         var processor = new S101DatasetProcessor(
             path, catalogues, new MoonSharpLuaEngine(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
-        return processor.BuildVectorPortrayalAsync(new S101RenderContext());
+        return processor.BuildVectorPortrayalAsync(new RenderContext());
     }
 
     private static Task<CoveragePortrayalResult> PortrayS104Async()
     {
         var processor = new S104DatasetProcessor(RequireFixture(S104Grid), new ProjNetCrsTransformFactory());
         Assert.True(processor.IsGriddedSurface);
-        return processor.BuildCoveragePortrayalAsync(new S104RenderContext());
+        return processor.BuildCoveragePortrayalAsync(new RenderContext());
     }
 
     private static async Task<CoveragePortrayalResult> PortrayS111Async()
@@ -202,7 +202,7 @@ public class S98OnDemandSurfaceOrderingTests
         using var catalogues = S111TestCatalogues.Create();
         using var processor = new S111DatasetProcessor(
             RequireFixture(S111Grid), catalogues, new ProjNetCrsTransformFactory());
-        return await processor.BuildCoveragePortrayalAsync(new S111RenderContext());
+        return await processor.BuildCoveragePortrayalAsync(new RenderContext());
     }
 
     private static string RequireFixture(string repoRelativePath)

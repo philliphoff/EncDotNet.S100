@@ -30,7 +30,15 @@ internal abstract class S102CoverageViewportScenarioBase : IPerfScenario
         }
 
         var viewport = BuildViewport();
-        var context = new S102RenderContext { Viewport = viewport };
+        // A bare context with only the viewport set. Built through
+        // CreateRenderContext, which the base branch's perf-gate build also
+        // has, rather than a constructor whose shape changed in #1060.
+        var context = MapPresentationState.Default.CreateRenderContext(_processor) with
+        {
+            Viewport = viewport,
+            EcdisDisplay = null,
+            Mariner = null,
+        };
         var layerCount = ProcessorRenderBridge.RenderLayerCount(_processor, context, ct);
 
         if (layerCount == 0)

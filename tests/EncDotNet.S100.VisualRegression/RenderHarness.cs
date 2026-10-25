@@ -191,16 +191,13 @@ public sealed class RenderHarness : IDisposable
         EcdisDisplaySettings? ecdis,
         DateTime? timeStep)
     {
-        return processor.Spec.Name switch
+        return new RenderContext
         {
-            "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
-            "S-102" => new S102RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
-            "S-104" => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
-            "S-111" => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
-            "S-124" => new S124RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
-            "S-129" => new S129RenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
-            // S-421 reuses the base RenderContext (no spec-specific record exists yet).
-            _ => new SimpleRenderContext { Palette = palette, SymbolScale = symScale, TextScale = txtScale, EcdisDisplay = ecdis },
+            Palette = palette,
+            SymbolScale = symScale,
+            TextScale = txtScale,
+            EcdisDisplay = ecdis,
+            TimeStep = timeStep,
         };
     }
 
@@ -408,10 +405,4 @@ public sealed class RenderHarness : IDisposable
             _catalogueManager.Dispose();
         }
     }
-
-    /// <summary>
-    /// Concrete fallback used for specs without their own RenderContext record
-    /// (currently S-421).
-    /// </summary>
-    private sealed record SimpleRenderContext : RenderContext;
 }

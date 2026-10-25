@@ -42,7 +42,7 @@ public class S124HiddenPartsTests
 
     private static async Task<HashSet<string>> DrawnFeatures(S124DatasetProcessor processor, IReadOnlySet<string>? hidden)
     {
-        var result = await processor.BuildVectorPortrayalAsync(new S124RenderContext { HiddenFeatures = hidden }, TestContext.Current.CancellationToken);
+        var result = await processor.BuildVectorPortrayalAsync(new RenderContext { HiddenFeatures = hidden }, TestContext.Current.CancellationToken);
         return result.SubLayers.SelectMany(l => l.Instructions).Select(i => i.FeatureReference).ToHashSet(StringComparer.Ordinal);
     }
 
@@ -95,7 +95,7 @@ public class S124HiddenPartsTests
         var processor = CreateProcessor("navwarn_with_xlinks.gml");
 
         // The only part is hidden: the whole warning goes.
-        var none = await processor.BuildVectorPortrayalAsync(new S124RenderContext { HiddenFeatures = new HashSet<string> { "part1" } }, TestContext.Current.CancellationToken);
+        var none = await processor.BuildVectorPortrayalAsync(new RenderContext { HiddenFeatures = new HashSet<string> { "part1" } }, TestContext.Current.CancellationToken);
         Assert.Empty(none.SubLayers);
         Assert.Contains("no warning drawn", none.Info);
 
@@ -111,7 +111,7 @@ public class S124HiddenPartsTests
         var hidden = Hidden(processor, NavigationalWarningSet.Empty, showNotYetInForce: true);
         Assert.Single(hidden);
 
-        var result = await processor.BuildVectorPortrayalAsync(new S124RenderContext { HiddenFeatures = hidden }, TestContext.Current.CancellationToken);
+        var result = await processor.BuildVectorPortrayalAsync(new RenderContext { HiddenFeatures = hidden }, TestContext.Current.CancellationToken);
 
         Assert.Empty(result.SubLayers);
     }
@@ -123,7 +123,7 @@ public class S124HiddenPartsTests
         var processor = CreateProcessor(Parts);
         var hidden = processor.GetNavigationalWarnings().Select(p => p.FeatureRef).ToHashSet(StringComparer.Ordinal);
 
-        var result = await processor.BuildVectorPortrayalAsync(new S124RenderContext { HiddenFeatures = hidden }, TestContext.Current.CancellationToken);
+        var result = await processor.BuildVectorPortrayalAsync(new RenderContext { HiddenFeatures = hidden }, TestContext.Current.CancellationToken);
 
         Assert.Empty(result.SubLayers);
         Assert.Empty(processor.HitTestFeatures(-16.50, 146.00, 500));
@@ -135,11 +135,11 @@ public class S124HiddenPartsTests
         var processor = CreateProcessor(Parts);
         Assert.Contains(processor.HitTestFeatures(-16.50, 146.00, 500), h => h.FeatureRef == InForcePart);
 
-        await processor.BuildVectorPortrayalAsync(new S124RenderContext { HiddenFeatures = new HashSet<string> { InForcePart } }, TestContext.Current.CancellationToken);
+        await processor.BuildVectorPortrayalAsync(new RenderContext { HiddenFeatures = new HashSet<string> { InForcePart } }, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(processor.HitTestFeatures(-16.50, 146.00, 500), h => h.FeatureRef == InForcePart);
 
-        await processor.BuildVectorPortrayalAsync(new S124RenderContext(), TestContext.Current.CancellationToken);
+        await processor.BuildVectorPortrayalAsync(new RenderContext(), TestContext.Current.CancellationToken);
 
         Assert.Contains(processor.HitTestFeatures(-16.50, 146.00, 500), h => h.FeatureRef == InForcePart);
     }

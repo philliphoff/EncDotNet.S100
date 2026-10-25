@@ -360,7 +360,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
         DateTime selectedTime;
-        if (context is S111RenderContext { TimeStep: { } timeStep })
+        if (context?.TimeStep is { } timeStep)
         {
             source.SelectTime(timeStep);
             selectedTime = timeStep;
@@ -457,7 +457,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <summary>
     /// Renders the surface-current portrayal to a standalone
     /// <see cref="SKBitmap"/> through the headless, Mapsui-free Skia path. The
-    /// selected time step is taken from <see cref="S111RenderContext.TimeStep"/>,
+    /// selected time step is taken from <see cref="RenderContext.TimeStep"/>,
     /// defaulting to the first available step.
     /// </summary>
     /// <param name="widthPixels">Output bitmap width in pixels.</param>
@@ -501,7 +501,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         var provider = _provider;
         await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
 
-        if (context is S111RenderContext { TimeStep: { } timeStep })
+        if (context?.TimeStep is { } timeStep)
             source.SelectTime(timeStep);
         else
             source.SelectTime(source.AvailableTimes[0]);
@@ -554,12 +554,12 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// Nodes with a null speed or direction
     /// get no glyph (Annex H Rule 2). The sub-layer carries point-by-point
     /// thinning parameters so the renderers draw a legible, non-overlapping
-    /// subset at every zoom. Rebuilt per <see cref="S111RenderContext.TimeStep"/>.
+    /// subset at every zoom. Rebuilt per <see cref="RenderContext.TimeStep"/>.
     /// </summary>
     private async Task<CoveragePortrayalResult> BuildStationSeriesAsync(S111StationSeriesDataset ds, RenderContext? context, CancellationToken cancellationToken)
     {
         DateTime selectedTime;
-        if (context is S111RenderContext { TimeStep: { } timeStep })
+        if (context?.TimeStep is { } timeStep)
         {
             selectedTime = timeStep;
         }

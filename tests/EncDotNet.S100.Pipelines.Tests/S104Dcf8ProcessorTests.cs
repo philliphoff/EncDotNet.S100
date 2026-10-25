@@ -140,7 +140,7 @@ public class S104Dcf8ProcessorTests
 
             using var none = await processor.RenderHeadlessAsync(256, 256, cancellationToken: TestContext.Current.CancellationToken);
             using var offline = await processor.RenderHeadlessAsync(
-                256, 256, new S104RenderContext { Basemap = BasemapKind.Offline }, cancellationToken: TestContext.Current.CancellationToken);
+                256, 256, new RenderContext { Basemap = BasemapKind.Offline }, cancellationToken: TestContext.Current.CancellationToken);
 
             var land = NaturalEarthBasemap.LandFill;
             Assert.Equal(SKColors.White, none.GetPixel(2, 2));
@@ -204,7 +204,7 @@ public class S104Dcf8ProcessorTests
             // Render at the second time-step; GetFeatureInfo should report
             // the value at the same step (height = 1.5, trend = 2 for Alpha).
             var secondStep = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
-            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new S104RenderContext { TimeStep = secondStep }, TestContext.Current.CancellationToken);
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new RenderContext { TimeStep = secondStep }, TestContext.Current.CancellationToken);
 
             var info = p.GetFeatureInfo("station:Alpha");
 

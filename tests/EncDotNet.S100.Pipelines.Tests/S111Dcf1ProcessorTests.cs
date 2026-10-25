@@ -39,7 +39,7 @@ public class S111Dcf1ProcessorTests
             using var bitmap = await processor.RenderHeadlessAsync(
                 256,
                 256,
-                new S111RenderContext { TimeStep = processor.AvailableTimes[1] },
+                new RenderContext { TimeStep = processor.AvailableTimes[1] },
                 cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains(

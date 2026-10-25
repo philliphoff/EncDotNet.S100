@@ -72,7 +72,8 @@ public sealed class MapsuiDatasetLayerSessionTests
 
         await session.RenderAsync(id, presentation, TestContext.Current.CancellationToken);
 
-        var context = Assert.IsType<S102RenderContext>(processor.LastContext);
+        var context = processor.LastContext;
+        Assert.NotNull(context);
         Assert.Equal(PaletteType.Dusk, context.Palette);
         Assert.Equal(1.25, context.SymbolScale);
         Assert.Equal(0.75, context.TextScale);
@@ -1031,7 +1032,8 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.Equal(
             first.AddHours(3).AddMinutes(20),
             session.GetDataset(lateId)!.Dataset.CurrentTime);
-        var context = Assert.IsType<S111RenderContext>(late.LastContext);
+        var context = late.LastContext;
+        Assert.NotNull(context);
         Assert.Equal(
             first.AddHours(3).AddMinutes(20),
             context.TimeStep);

@@ -19,7 +19,7 @@ public class DatasetViewingGroupsTests
     private static async Task<IReadOnlyList<DrawingInstruction>> PortrayAsync(S421DatasetProcessor processor, ViewingGroupFilter? filter)
     {
         var result = await processor.BuildVectorPortrayalAsync(
-            new S101RenderContext { ViewingGroups = filter },
+            new RenderContext { ViewingGroups = filter },
             TestContext.Current.CancellationToken);
         return [.. result.SubLayers.SelectMany(l => l.Instructions)];
     }

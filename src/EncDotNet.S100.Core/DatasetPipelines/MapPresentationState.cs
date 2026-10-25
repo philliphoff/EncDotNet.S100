@@ -198,19 +198,19 @@ public sealed class MapPresentationState
     }
 
     /// <summary>
-    /// Creates the product-specific render context for a processor and applies
-    /// this map-wide presentation snapshot.
+    /// Creates the render context for a processor and applies this map-wide
+    /// presentation snapshot.
     /// </summary>
     /// <param name="processor">
-    /// The processor whose portrayal specification selects the context type.
+    /// The processor whose portrayal specification selects the per-spec
+    /// display settings.
     /// </param>
     /// <param name="timeStep">
     /// The selected sample for a time-aware product, or <see langword="null"/>
-    /// for a static product or an unset map clock.
+    /// for an unset map clock. Static products ignore it.
     /// </param>
     /// <returns>
-    /// A product-specific render context carrying this presentation and the
-    /// requested time step.
+    /// A render context carrying this presentation and the requested time step.
     /// </returns>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="processor"/> is <c>null</c>.
@@ -224,22 +224,9 @@ public sealed class MapPresentationState
     {
         ArgumentNullException.ThrowIfNull(processor);
 
-        RenderContext context = processor.PortrayalSpec.Name switch
-        {
-            "S-102" => new S102RenderContext(),
-            "S-104" => new S104RenderContext(timeStep),
-            "S-111" => new S111RenderContext(timeStep),
-            "S-122" => new S122RenderContext(),
-            "S-124" => new S124RenderContext(),
-            "S-125" => new S125RenderContext(),
-            "S-127" => new S127RenderContext(),
-            "S-129" => new S129RenderContext(),
-            "S-201" => new S201RenderContext(),
-            "S-411" => new S411RenderContext(timeStep),
-            _ => new S101RenderContext(),
-        };
-
-        return ApplyTo(context, processor.PortrayalSpec);
+        return ApplyTo(
+            new RenderContext { TimeStep = timeStep },
+            processor.PortrayalSpec);
     }
 
     private static EcdisDisplaySettings Snapshot(EcdisDisplaySettings settings)

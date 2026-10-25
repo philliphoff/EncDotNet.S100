@@ -261,7 +261,7 @@ public sealed class S411DatasetProcessor :
     /// </returns>
     protected override string? GetSuppressionInfo(RenderContext? context)
     {
-        if (context is S411RenderContext { TimeStep: { } t }
+        if (context?.TimeStep is { } t
             && _dataset.IssueDate is { } issued
             && t < issued)
         {

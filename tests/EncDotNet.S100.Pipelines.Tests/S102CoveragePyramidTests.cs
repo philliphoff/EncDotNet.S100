@@ -270,7 +270,7 @@ public class S102CoveragePyramidTests
 
         try
         {
-            var context = new S102RenderContext
+            var context = new RenderContext
             {
                 Viewport = new Viewport
                 {

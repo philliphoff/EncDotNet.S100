@@ -5,9 +5,9 @@ using EncDotNet.S100.Pipelines.Vector;
 namespace EncDotNet.S100.Cli.Infrastructure;
 
 /// <summary>
-/// Builds the spec-specific <see cref="RenderContext"/> the dataset processors
-/// expect, mapping CLI options (palette, scales, time-step index, hidden
-/// instruction categories) onto the correct context record. Time-series specs
+/// Builds the <see cref="RenderContext"/> the dataset processors expect,
+/// mapping CLI options (palette, scales, time-step index, hidden instruction
+/// categories) onto it. Time-series specs
 /// resolve their <c>--time-step</c> index, or the step nearest an explicit
 /// instant, against <see cref="ITimeAwareDatasetProcessor"/>.
 /// </summary>
@@ -29,26 +29,17 @@ internal static class RenderContextBuilder
             ? NearestTimeStep(processor, at)
             : ResolveTimeStep(processor, timeStepIndex);
 
-        RenderContext context = processor.Spec.Name switch
+        return new RenderContext
         {
-            "S-101" => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            // S-401 inland ENC renders through the S-101 pipeline with its own
-            // catalogues, so it takes the same render context.
-            "S-401" => new S101RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            "S-102" => new S102RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            "S-104" => new S104RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            "S-111" => new S111RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            "S-122" => new S122RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            "S-124" => new S124RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            "S-125" => new S125RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            "S-127" => new S127RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            "S-129" => new S129RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            "S-201" => new S201RenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            "S-411" => new S411RenderContext(timeStep) { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
-            _ => new GenericRenderContext { Palette = palette, SymbolScale = symbolScale, TextScale = textScale, HiddenInstructionCategories = hiddenCategories },
+            Palette = palette,
+            SymbolScale = symbolScale,
+            TextScale = textScale,
+            HiddenInstructionCategories = hiddenCategories,
+            TimeStep = timeStep,
+            Basemap = basemap,
+            DisplayModeId = displayModeId,
+            Viewport = viewport,
         };
-
-        return context with { Basemap = basemap, DisplayModeId = displayModeId, Viewport = viewport };
     }
 
     /// <summary>
@@ -88,11 +79,4 @@ internal static class RenderContextBuilder
         int idx = Math.Clamp(timeStepIndex, 0, times.Count - 1);
         return times[idx];
     }
-
-    /// <summary>
-    /// Concrete fallback for specs without their own context record (e.g. S-421,
-    /// S-128, S-131), which consume only the shared <see cref="RenderContext"/>
-    /// properties.
-    /// </summary>
-    private sealed record GenericRenderContext : RenderContext;
 }

@@ -47,7 +47,7 @@ public class S57DatasetProcessorScaleBandTests
 
         var processor = CreateProcessor(fixturePath);
 
-        var result = await processor.BuildVectorPortrayalAsync(new S101RenderContext(), TestContext.Current.CancellationToken);
+        var result = await processor.BuildVectorPortrayalAsync(new RenderContext(), TestContext.Current.CancellationToken);
 
         // The ungated whole-cell window lets the viewer hide the whole cell
         // (extent border included) when zoomed out, matching an
@@ -74,7 +74,7 @@ public class S57DatasetProcessorScaleBandTests
 
         var processor = CreateProcessor(fixturePath);
 
-        var result = await processor.BuildVectorPortrayalAsync(new S101RenderContext
+        var result = await processor.BuildVectorPortrayalAsync(new RenderContext
         {
             Mariner = new MarinerSettings { IgnoreScaleMinimum = true },
         }, TestContext.Current.CancellationToken);

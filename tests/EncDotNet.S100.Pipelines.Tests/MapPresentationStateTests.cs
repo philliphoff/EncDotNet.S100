@@ -63,13 +63,13 @@ public class MapPresentationStateTests
         var state = new MapPresentationState(
             PaletteType.Night, 1.5, 0.75, ecdis, mariner);
         var timeStep = new DateTime(2026, 7, 31, 12, 0, 0, DateTimeKind.Utc);
-        var context = new S411RenderContext(timeStep)
+        var context = new RenderContext
         {
             Basemap = BasemapKind.Offline,
+            TimeStep = timeStep,
         };
 
-        var applied = Assert.IsType<S411RenderContext>(
-            state.ApplyTo(context, new SpecRef("S-411", default)));
+        var applied = state.ApplyTo(context, new SpecRef("S-411", default));
 
         Assert.Equal(timeStep, applied.TimeStep);
         Assert.Equal(BasemapKind.Offline, applied.Basemap);
@@ -84,7 +84,7 @@ public class MapPresentationStateTests
     [Fact]
     public void ApplyTo_PreservesContextDisplayModeWhenProductHasNoSelection()
     {
-        var context = new S101RenderContext { DisplayModeId = "PreviousMode" };
+        var context = new RenderContext { DisplayModeId = "PreviousMode" };
 
         var applied = MapPresentationState.Default.ApplyTo(
             context, new SpecRef("S-101", default));
@@ -93,26 +93,37 @@ public class MapPresentationStateTests
     }
 
     [Theory]
-    [InlineData("S-101", typeof(S101RenderContext))]
-    [InlineData("S-102", typeof(S102RenderContext))]
-    [InlineData("S-104", typeof(S104RenderContext))]
-    [InlineData("S-111", typeof(S111RenderContext))]
-    [InlineData("S-122", typeof(S122RenderContext))]
-    [InlineData("S-124", typeof(S124RenderContext))]
-    [InlineData("S-125", typeof(S125RenderContext))]
-    [InlineData("S-127", typeof(S127RenderContext))]
-    [InlineData("S-129", typeof(S129RenderContext))]
-    [InlineData("S-201", typeof(S201RenderContext))]
-    [InlineData("S-411", typeof(S411RenderContext))]
-    [InlineData("S-131", typeof(S101RenderContext))]
-    public void CreateRenderContext_SelectsContextFromPortrayalSpec(
-        string specName,
-        Type expectedType)
+    [InlineData("S-101")]
+    [InlineData("S-102")]
+    [InlineData("S-104")]
+    [InlineData("S-111")]
+    [InlineData("S-122")]
+    [InlineData("S-124")]
+    [InlineData("S-125")]
+    [InlineData("S-127")]
+    [InlineData("S-129")]
+    [InlineData("S-201")]
+    [InlineData("S-411")]
+    [InlineData("S-131")]
+    public void CreateRenderContext_CarriesTimeStepForEveryProduct(string specName)
+    {
+        var timeStep = new DateTime(2026, 8, 3, 12, 0, 0, DateTimeKind.Utc);
+
+        var context = MapPresentationState.Default.CreateRenderContext(
+            new StubProcessor(specName), timeStep);
+
+        Assert.Equal(timeStep, context.TimeStep);
+        Assert.Equal(MapPresentationState.Default.Palette, context.Palette);
+        Assert.Same(MapPresentationState.Default.EcdisDisplay, context.EcdisDisplay);
+    }
+
+    [Fact]
+    public void CreateRenderContext_LeavesTimeStepUnsetWithoutOne()
     {
         var context = MapPresentationState.Default.CreateRenderContext(
-            new StubProcessor(specName));
+            new StubProcessor("S-104"));
 
-        Assert.Equal(expectedType, context.GetType());
+        Assert.Null(context.TimeStep);
     }
 
     [Fact]
@@ -133,8 +144,8 @@ public class MapPresentationStateTests
             },
             mariner);
 
-        var context = Assert.IsType<S411RenderContext>(
-            state.CreateRenderContext(new StubProcessor("S-411"), timeStep));
+        var context = state.CreateRenderContext(
+            new StubProcessor("S-411"), timeStep);
 
         Assert.Equal(timeStep, context.TimeStep);
         Assert.Equal(PaletteType.Night, context.Palette);
@@ -161,7 +172,7 @@ public class MapPresentationStateTests
     public void ApplyTo_RejectsUnsetPortrayalSpec()
     {
         Assert.ThrowsAny<ArgumentException>(() =>
-            MapPresentationState.Default.ApplyTo(new S101RenderContext(), default));
+            MapPresentationState.Default.ApplyTo(new RenderContext(), default));
     }
 
     [Fact]

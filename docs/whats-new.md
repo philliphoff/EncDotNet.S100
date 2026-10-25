@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **One `RenderContext` for every product.** `RenderContext` is now a sealed
+  record with a `TimeStep` property, and its per-product subclasses
+  (`S101RenderContext`, `S102RenderContext`, `S104RenderContext`,
+  `S111RenderContext`, `S122RenderContext`, `S124RenderContext`,
+  `S125RenderContext`, `S127RenderContext`, `S129RenderContext`,
+  `S201RenderContext` and `S411RenderContext`) are gone (a breaking change).
+  Write `new RenderContext { TimeStep = t }` where you wrote
+  `new S104RenderContext(t)`. `MapPresentationState.CreateRenderContext` no
+  longer picks a type by product, so a new time-aware product sees the
+  selected time without a context of its own.
 - **Route checks: the engines are the checks.** In
   `EncDotNet.S100.Navigation`, `RouteCheckEngine`, `RouteAreaCheck`,
   `RouteWarningCheck` and `PassageCheckEngine` are gone (a breaking

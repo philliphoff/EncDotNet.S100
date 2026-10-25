@@ -109,7 +109,7 @@ public class S111Dcf8ProcessorTests
             using var catalogues = S111TestCatalogues.Create();
             using var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext { SymbolScale = 1.5 }, TestContext.Current.CancellationToken);
+            var result = await p.BuildCoveragePortrayalAsync(new RenderContext { SymbolScale = 1.5 }, TestContext.Current.CancellationToken);
 
             var sub = Assert.IsType<GlyphCoverageSubLayer>(Assert.Single(result.SubLayers));
             Assert.Equal(2, sub.Glyphs.Count);
@@ -146,7 +146,7 @@ public class S111Dcf8ProcessorTests
             using var catalogues = S111TestCatalogues.Create();
             using var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext(), TestContext.Current.CancellationToken);
+            var result = await p.BuildCoveragePortrayalAsync(new RenderContext(), TestContext.Current.CancellationToken);
 
             AssertGridArrowPlacement(Assert.Single(result.SubLayers));
         }
@@ -175,7 +175,7 @@ public class S111Dcf8ProcessorTests
             using var catalogues = S111TestCatalogues.Create();
             using var p = new S111DatasetProcessor(path, catalogues, IdentityFactory.Instance);
 
-            var result = await p.BuildCoveragePortrayalAsync(new S111RenderContext(), TestContext.Current.CancellationToken);
+            var result = await p.BuildCoveragePortrayalAsync(new RenderContext(), TestContext.Current.CancellationToken);
 
             AssertGridArrowPlacement(Assert.Single(result.SubLayers));
         }
@@ -266,7 +266,7 @@ public class S111Dcf8ProcessorTests
 
             // Render at the second time-step; expected S1 speed = 0.6, dir = 50.
             var secondStep = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
-            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new S111RenderContext { TimeStep = secondStep }, TestContext.Current.CancellationToken);
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new RenderContext { TimeStep = secondStep }, TestContext.Current.CancellationToken);
 
             var info = p.GetFeatureInfo("station:S1");
 
