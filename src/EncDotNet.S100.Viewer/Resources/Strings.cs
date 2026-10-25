@@ -550,6 +550,9 @@ internal static partial class Strings
     public static string LayerTime_NoDataLastFormat => Get(nameof(LayerTime_NoDataLastFormat));
     public static string LayerTime_NoDataNextFormat => Get(nameof(LayerTime_NoDataNextFormat));
     public static string LayerTime_Hidden => Get(nameof(LayerTime_Hidden));
+    public static string Label_NotS100Product => Get(nameof(Label_NotS100Product));
+    public static string Tooltip_NotS100Product => Get(nameof(Tooltip_NotS100Product));
+    public static string Pick_NotS100Notice => Get(nameof(Pick_NotS100Notice));
     public static string Tooltip_LayerTimeJump => Get(nameof(Tooltip_LayerTimeJump));
     public static string TimelinePanel_DrawingFormat => Get(nameof(TimelinePanel_DrawingFormat));
     public static string TimelinePanel_Cancel => Get(nameof(TimelinePanel_Cancel));

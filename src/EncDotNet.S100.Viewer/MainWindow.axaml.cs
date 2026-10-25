@@ -796,7 +796,10 @@ public partial class MainWindow : ShadUI.Window
                 _viewModel.SelectDefaultTab();
                 foreach (var datasetPath in datasetPaths)
                 {
-                    var spec = DatasetPipelineFactory.DetectProductSpec(datasetPath) ?? "S-101";
+                    // No registered product claims an unrecognised file, so skip
+                    // it rather than guess (the interactive path warns instead).
+                    if (DatasetPipelineFactory.DetectProductSpec(datasetPath) is not { } spec)
+                        continue;
                     var entry = _viewModel.Datasets.Add(datasetPath, spec);
                     await _loader.LoadAsync(entry);
                 }

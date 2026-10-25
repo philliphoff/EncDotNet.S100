@@ -4,9 +4,10 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 
 /// <summary>
 /// Default <see cref="IInteroperabilityAuthority"/> implementation.
-/// Resolves the per-product default plane from a hardcoded table
-/// derived from S-98 Main §9.2.1 / MSC.530(106)/Rev.1 §Appendix 2
-/// "priority of information"; sorts entries by
+/// Resolves the per-product default plane through an
+/// <see cref="IDisplayPlaneAuthority"/> (the product registry's table, derived
+/// from S-98 Main §9.2.1 / MSC.530(106)/Rev.1 §Appendix 2
+/// "priority of information"); sorts entries by
 /// <c>(Plane, WithinPlanePriority, scale denominator descending, input order)</c>.
 /// </summary>
 /// <remarks>
@@ -50,9 +51,35 @@ namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 /// </remarks>
 public sealed class InteroperabilityAuthority : IInteroperabilityAuthority
 {
+    private readonly IDisplayPlaneAuthority _planes;
+
+    /// <summary>
+    /// Creates an authority that knows no product's default planes
+    /// (<see cref="DefaultDisplayPlaneAuthority.Empty"/>): every
+    /// <see cref="GetDefaultPlane"/> answer is
+    /// <see cref="S98DisplayPlane.OtherChartOverlays"/>. Sub-layers carry their
+    /// own plane, so sorting is unaffected; hosts that ask for default planes
+    /// pass the product registry's authority instead.
+    /// </summary>
+    public InteroperabilityAuthority()
+        : this(DefaultDisplayPlaneAuthority.Empty)
+    {
+    }
+
+    /// <summary>
+    /// Creates an authority whose <see cref="GetDefaultPlane"/> delegates to
+    /// <paramref name="planes"/>, usually <c>ProductRegistry.DisplayPlanes</c>.
+    /// </summary>
+    /// <param name="planes">The default-plane table.</param>
+    public InteroperabilityAuthority(IDisplayPlaneAuthority planes)
+    {
+        System.ArgumentNullException.ThrowIfNull(planes);
+        _planes = planes;
+    }
+
     /// <inheritdoc />
     public S98DisplayPlane GetDefaultPlane(string productSpec, string? featureTypeOrLayerKind = null)
-        => DefaultDisplayPlaneAuthority.Instance.GetDefaultPlane(productSpec, featureTypeOrLayerKind);
+        => _planes.GetDefaultPlane(productSpec, featureTypeOrLayerKind);
 
     /// <inheritdoc />
     public IReadOnlyList<SubLayerStackItem> Sort(IEnumerable<SubLayerStackItem> entries)

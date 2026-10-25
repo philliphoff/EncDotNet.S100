@@ -50,7 +50,7 @@ To choose the catalogues, Lua engine or CRS transforms yourself, construct a
 `DatasetPipelineFactory`. It takes a `PortrayalCatalogueManager`, an
 `ILuaEngine`, an `ICrsTransformFactory`, a `FeatureCatalogueManager` and an
 `IDisplayPlaneAuthorityProvider`, plus an optional shared
-`IPortrayalInstructionCache` and an optional `S100ProductRegistry`. A registry
+`IPortrayalInstructionCache` and an optional `ProductRegistry`. A registry
 with a subset of products gives you a host that handles only those products.
 [Loading datasets](../../docs/loading-datasets.md) shows the processor API in
 more detail.
@@ -63,7 +63,7 @@ more detail.
   processor. See [Product detection](#product-detection).
 - **`ExchangeSetLoader`**: reads an S-100 exchange-set catalogue and returns one
   processor per dataset.
-- **`S100Products`** and **`S100ProductRegistration`**: the products a factory
+- **`S100Products`** and **`ProductRegistration`**: the products a factory
   can create, and how each one is recognised.
 - **`DatasetProcessorOwner`**: owns the processors loaded into a map. See
   [Processor lifetime](#processor-lifetime).
@@ -107,13 +107,13 @@ S-401 catalogues.
 
 ## Product detection
 
-`DatasetPipelineFactory` recognises a file by its extension, its HDF5
-signature or its GML application namespace, and returns the matching processor.
-`DetectProductSpecFromSourceAsync(...)` runs the same GML check on a file in an
-asset source. Use it for exchange sets whose catalogue has no machine-readable
-product identifier, such as JCOMM S-411 catalogues.
+`DatasetPipelineFactory` asks each registered product to claim a file and
+returns the matching processor. `DetectProductSpecFromSourceAsync(...)` runs the
+same checks on a file in an asset source. Use it for exchange sets whose
+catalogue has no machine-readable product identifier, such as JCOMM S-411
+catalogues.
 
-Each product describes its own detection. An `S100ProductRegistration` in
+Each product describes its own detection. A `ProductRegistration` in
 `S100Products` says both how to construct the processor and how to recognise
 the product's files:
 
@@ -121,13 +121,51 @@ the product's files:
   `MatchGml`, using a `GmlRootInfo` read once per document.
 - An ISO 8211 product matches on its file envelope through `MatchIso8211`,
   using an `Iso8211RootInfo` read once per file.
+- An HDF5 product (S-102, S-104, S-111) matches on the root
+  `productSpecification` attribute through `MatchHdf5`, using an
+  `Hdf5RootInfo`. A matcher can read other root attributes too, such as a
+  NetCDF-4 file's CF `Conventions`.
+- A format with a signature of its own (GRIB2, NetCDF-3) matches on the file's
+  leading bytes and extension through `MatchBytes`, using a `DatasetHeader`.
 
-The factory reads the root of a GML document, or the envelope of an ISO 8211
-file, once, and returns the first registered product whose matcher accepts it.
-To add a product, you add a registration to `S100Products`; the factory
-doesn't change. The product identifiers `MapProductIdentifierToSpec` accepts
-also come from the registrations (`S100Products.All`). The HDF5 products
-(S-102, S-104, S-111) are recognised by a header check in the factory.
+The factory reads the file's leading bytes once. It takes the encoding from the
+extension (`.000`, `.h5`/`.hdf5`, `.gml`), or from the HDF5 signature when the
+extension is something else, reads that encoding's envelope once and returns
+the first registered product whose matcher accepts it. A file no envelope
+matcher accepts goes to every `MatchBytes`, whatever its extension, so a NOMADS
+GRIB filter download with no useful extension is still recognised. An
+unclaimed `.000` file is S-101, as it has always been; any other unclaimed
+file is unknown (`null`). In particular an HDF5 file that declares no product
+is no longer treated as S-102. ISO 8211 update files (`.001`…) and XML
+catalogues aren't sniffed, so they're never mistaken for datasets.
+
+To add a product, you add a registration; the factory doesn't change. The
+product identifiers `MapProductIdentifierToSpec` accepts also come from the
+registrations (`S100Products.All`).
+
+### Product traits
+
+A `ProductRegistration` also carries the traits hosts used to switch on spec
+names for:
+
+| Trait | Meaning | Read by |
+|---|---|---|
+| `IsS100` | `false` for a product that isn't S-100 (GRIB2, NetCDF, CAP) | MCP `list_specs`, the viewer's "Not an S-100 product" badge and pick-report notice |
+| `Portrayal` | `PortrayalBasis.Catalogue`, or `PortrayalBasis.Application("S-104 Ed 2.0.0")` for a portrayal drawn in code | `list_specs`, `describe_feature`, `s100 info`, the viewer's portrayal note |
+| `PortrayalSpec` | The spec whose portrayal applies, when it isn't the product's own (`S-101` for S-57) | `ProductRegistry.PortrayalSpecFor` / `PortrayalSpecName` |
+| `ReadMetadata` | Cheap path-based metadata reader | The viewer's Library probe (`CachingDatasetMetadataReader`) |
+| `OpenData` | Opens the typed catalog payload | `LoadedDatasetProjector` |
+| `DefaultPlanes` | Default S-98 plane per layer kind (`*` for any other) | `ProductRegistry.DisplayPlanes`, `DisplayPlaneAuthorityProvider` |
+| `PickReportNotice` | A product's own first pick-report line | The viewer's pick report |
+
+`ProductRegistry.Default` is the process-wide registry, pre-loaded with every
+built-in product. The static conveniences, a factory built without a registry,
+the viewer and the MCP tools read it, so a host adds a product by registering
+it there once at start-up.
+
+A product that isn't S-100 registers under one of the format names `SpecName`
+accepts: `GRIB2`, `NetCDF` or `CAP`. Its edition is the format's version, such
+as `GRIB2/2.0.0`, `NetCDF/4.0.0` or `CAP/1.2.0`.
 
 Three products share the `.000` extension, so the envelope decides:
 
@@ -205,9 +243,11 @@ dataset. The two are the same for every native S-100 product. They differ only
 for S-57 cells, which keep the identity `S-57` while acting as the product
 they're translated into.
 
-`SpecConventions` holds the default mapping (`PortrayalSpecFor(SpecRef)`,
-`PortrayalSpecName(string)`), which maps `S-57` to `S-101`. The default
-`PortrayalSpec` uses it.
+The S-57 registration names its portrayal product in its `PortrayalSpec`
+trait (`S-101`). `ProductRegistry.PortrayalSpecFor(SpecRef)` and
+`PortrayalSpecName(string)` read that trait for a caller that has only the
+product spec. The default `IDatasetProcessor.PortrayalSpec` is the processor's
+own `Spec`; `S57DatasetProcessor` overrides it.
 
 An inland S-57 cell (`DSID`/`PRSP` = 10) is translated into S-401 and drawn
 with the S-401 catalogues, so `S57DatasetProcessor` sets `PortrayalSpec` per
@@ -403,6 +443,12 @@ namespace: `InteroperabilityAuthority`, `LayerStackBuilder`, `S98RuleContext`,
 `S98DefaultRules`, `S98SuppressionPolicy`, and the load-order fallback
 `LoadOrderInteroperabilityAuthority`. It works on renderer-neutral
 `SubLayerStackItem` and `StackPayload` values.
+
+Sub-layers carry their own plane. The default plane for a product, for a
+caller with no sub-layer in hand, is the registration's `DefaultPlanes` trait:
+pass `ProductRegistry.DisplayPlanes` to `new InteroperabilityAuthority(...)`.
+A parameterless `InteroperabilityAuthority` knows no products and answers
+`OtherChartOverlays` for every product.
 
 The authority gives each sub-layer a display plane (Under Radar, Standard, Over
 Radar or Dynamic Arrows) and a priority within that plane. It then applies the

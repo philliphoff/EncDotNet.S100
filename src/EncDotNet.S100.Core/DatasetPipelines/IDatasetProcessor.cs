@@ -46,9 +46,11 @@ public interface IDatasetProcessor
     /// resolving a portrayal / feature catalogue, keying viewing-group or
     /// display-category state, or selecting a display mode must key off this
     /// rather than <see cref="Spec"/>; callers labelling, validating, or
-    /// version-assessing the dataset use <see cref="Spec"/>.
+    /// version-assessing the dataset use <see cref="Spec"/>. The default is
+    /// <see cref="Spec"/>; a processor that portrays its product through another
+    /// specification's catalogue (the S-57 processor) overrides it.
     /// </summary>
-    SpecRef PortrayalSpec => SpecConventions.PortrayalSpecFor(Spec);
+    SpecRef PortrayalSpec => Spec;
 
     /// <summary>
     /// How the dataset's declared product specification edition

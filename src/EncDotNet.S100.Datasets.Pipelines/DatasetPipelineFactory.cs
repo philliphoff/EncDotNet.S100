@@ -13,12 +13,12 @@ using EncDotNet.S100.Scripting;
 namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
-/// Detects dataset type from file extension and creates
-/// the appropriate <see cref="IDatasetProcessor"/>.
+/// Detects a dataset's product — each <see cref="ProductRegistration"/> claims
+/// its own files — and creates the appropriate <see cref="IDatasetProcessor"/>.
 /// </summary>
 public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
 {
-    private readonly S100ProductRegistry _registry;
+    private readonly ProductRegistry _registry;
     private readonly DatasetProcessorServices _services;
 
     /// <summary>
@@ -47,9 +47,8 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// </param>
     /// <param name="productRegistry">
     /// Optional set of products this factory can construct. When
-    /// <see langword="null"/> a default registry with every built-in product is
-    /// used (<see cref="S100Products.CreateDefaultRegistry"/>), preserving the
-    /// historical behaviour. Supply a custom registry to enable only a subset of
+    /// <see langword="null"/> the process-wide <see cref="ProductRegistry.Default"/>
+    /// is used: every built-in product, plus any a host registered there. Supply a custom registry to enable only a subset of
     /// products (e.g. an S-101-only host) or to add a product of your own.
     /// </param>
     public DatasetPipelineFactory(
@@ -59,7 +58,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         FeatureCatalogueManager featureCatalogueManager,
         IDisplayPlaneAuthorityProvider authorityProvider,
         IPortrayalInstructionCache? sharedInstructionCache = null,
-        S100ProductRegistry? productRegistry = null)
+        ProductRegistry? productRegistry = null)
     {
         ArgumentNullException.ThrowIfNull(catalogueManager);
         ArgumentNullException.ThrowIfNull(luaEngine);
@@ -76,108 +75,225 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             AuthorityProvider = authorityProvider,
             SharedInstructionCache = sharedInstructionCache,
         };
-        _registry = productRegistry ?? S100Products.CreateDefaultRegistry();
+        _registry = productRegistry ?? ProductRegistry.Default;
     }
 
     /// <summary>
-    /// The all-products registry backing the parameterless
-    /// <see cref="DetectProductSpec(string)"/>, so the batteries-included
-    /// detection and construction share one product set (including the S-57
-    /// <c>.000</c> content discriminator). Built once and never mutated.
+    /// The spec an ISO 8211 (<c>.000</c>) cell gets when no registration claims
+    /// it — an early or non-conformant cell declaring no <c>PRSP</c>, an
+    /// unreadable cell, or a product the registry lacks. The one fallback
+    /// detection keeps, because it is what this factory has always answered for
+    /// a <c>.000</c> file; every other unclaimed file is unknown.
     /// </summary>
-    private static readonly S100ProductRegistry DefaultRegistry = S100Products.CreateDefaultRegistry();
+    private const string Iso8211FallbackSpec = "S-101";
 
     /// <summary>
     /// Returns the product spec identifier for the given file, or null if
-    /// unrecognized, using the batteries-included product set (every built-in
-    /// product, so a <c>.000</c> file is disambiguated S-57 vs S-101). Hosts that
-    /// build a factory from a subset registry get subset-aware detection through
-    /// the registry-aware overload the factory uses internally.
+    /// unrecognized, using <see cref="ProductRegistry.Default"/> (every built-in
+    /// product plus any a host registered there, so a <c>.000</c> file is
+    /// disambiguated S-57 vs S-101). Hosts that build a factory from a subset
+    /// registry get subset-aware detection through the registry-aware overload
+    /// the factory uses internally.
     /// </summary>
-    public static string? DetectProductSpec(string path) => DetectProductSpec(path, DefaultRegistry);
+    public static string? DetectProductSpec(string path) => DetectProductSpec(path, ProductRegistry.Default);
 
     /// <summary>
     /// Registry-aware detection — the single implementation behind
-    /// <see cref="DetectProductSpec(string)"/>. Resolves the ambiguous ISO 8211
-    /// <c>.000</c> extension (shared by S-57, S-101, and S-401 inland ENC) by
-    /// reading the dataset envelope once and returning the spec of the first
-    /// product in <paramref name="registry"/> whose
-    /// <see cref="S100ProductRegistration.MatchIso8211"/> claims it — S-57 by its
-    /// DSPM field, the S-100 products by their declared <c>PRSP</c> product
-    /// identifier. A registry without S-57 registered therefore never reports an
-    /// S-57 dataset it has no registration to build, and the same holds for
-    /// S-401. When no registration claims the file (an early or non-conformant
-    /// cell declaring no <c>PRSP</c>) detection falls back to <c>"S-101"</c>,
-    /// preserving the historical behaviour. This narrows detection to the
-    /// registry's product set; it does not otherwise guarantee the returned spec
-    /// is buildable (e.g. a registry lacking S-101 can still get <c>"S-101"</c>
-    /// from the fallback — construction then validates the spec against the
-    /// registry and throws if unregistered). HDF5 and GML datasets are
-    /// product-agnostic and detected the same way regardless of
-    /// <paramref name="registry"/>.
+    /// <see cref="DetectProductSpec(string)"/>. Each registration claims its own
+    /// files; there is no per-product chain here:
+    /// <list type="number">
+    /// <item><description>
+    /// The file's leading bytes are read once (<see cref="DatasetHeader"/>).
+    /// </description></item>
+    /// <item><description>
+    /// The encoding is taken from the extension (<c>.000</c> ISO 8211,
+    /// <c>.h5</c>/<c>.hdf5</c> HDF5, <c>.gml</c> GML) or, when the extension is
+    /// none of those, from the HDF5 signature in the leading bytes. The
+    /// encoding's envelope is read once and offered to every registration's
+    /// matcher for it (<see cref="ProductRegistration.MatchIso8211"/>,
+    /// <see cref="ProductRegistration.MatchHdf5"/>,
+    /// <see cref="ProductRegistration.MatchGml"/>).
+    /// </description></item>
+    /// <item><description>
+    /// A file no envelope matcher claimed is offered to every
+    /// <see cref="ProductRegistration.MatchBytes"/>, whatever its extension —
+    /// so a GRIB2 download with no useful extension is still recognised.
+    /// </description></item>
+    /// <item><description>
+    /// An unclaimed <c>.000</c> file is <c>"S-101"</c>, as it always has been;
+    /// any other unclaimed file — including an HDF5 file whose
+    /// <c>productSpecification</c> no product declares — is unknown
+    /// (<see langword="null"/>).
+    /// </description></item>
+    /// </list>
+    /// A registry without S-57 registered therefore never reports an S-57
+    /// dataset it has no registration to build, and the same holds for every
+    /// product. It does not otherwise guarantee the returned spec is buildable
+    /// (a registry lacking S-101 can still get <c>"S-101"</c> from the ISO 8211
+    /// fallback — construction then validates the spec against the registry and
+    /// throws if unregistered).
     /// </summary>
-    internal static string? DetectProductSpec(string path, S100ProductRegistry registry)
+    public static string? DetectProductSpec(string path, ProductRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(registry);
+        ArgumentNullException.ThrowIfNull(path);
 
-        var ext = Path.GetExtension(path);
+        var header = ReadHeader(path);
+        var encoding = EncodingOf(header, acceptXmlExtension: false);
 
-        // HDF5 files: inspect productSpecification attribute to distinguish S-102 vs S-111
-        if (ext.Equals(".h5", StringComparison.OrdinalIgnoreCase) ||
-            ext.Equals(".hdf5", StringComparison.OrdinalIgnoreCase))
+        var spec = encoding switch
         {
-            return DetectHdf5ProductSpec(path);
+            DatasetEncoding.Iso8211 => ClaimIso8211(ReadIso8211(path), registry),
+            DatasetEncoding.Hdf5 => ClaimHdf5(path, registry),
+            DatasetEncoding.Gml => ClaimGml(ReadGmlText(path), registry),
+            _ => null,
+        };
+
+        return spec
+            ?? ClaimBytes(header, registry)
+            ?? (encoding == DatasetEncoding.Iso8211 ? Iso8211FallbackSpec : null);
+    }
+
+    /// <summary>The encodings whose envelope the factory reads for the matchers.</summary>
+    private enum DatasetEncoding
+    {
+        Unknown,
+        Iso8211,
+        Hdf5,
+        Gml,
+    }
+
+    /// <summary>
+    /// The encoding of a dataset: from its extension when that names one, else
+    /// from the HDF5 signature in its leading bytes. Only the binary HDF5
+    /// signature is sniffed: an ISO 8211 update file (<c>.001</c>) or an XML
+    /// exchange-set catalogue must not be mistaken for a dataset, so ISO 8211
+    /// and GML are recognised by extension alone. The asset-source route also
+    /// accepts <c>.xml</c> as GML (<paramref name="acceptXmlExtension"/>), as it
+    /// always has, because it only sees datasets an exchange set lists.
+    /// </summary>
+    private static DatasetEncoding EncodingOf(DatasetHeader header, bool acceptXmlExtension)
+    {
+        if (header.HasExtension(".000"))
+            return DatasetEncoding.Iso8211;
+        if (header.HasExtension(".h5") || header.HasExtension(".hdf5"))
+            return DatasetEncoding.Hdf5;
+        if (header.HasExtension(".gml") || (acceptXmlExtension && header.HasExtension(".xml")))
+            return DatasetEncoding.Gml;
+        return header.IsHdf5 ? DatasetEncoding.Hdf5 : DatasetEncoding.Unknown;
+    }
+
+    /// <summary>
+    /// Reads up to <see cref="DatasetHeader.MaxLength"/> leading bytes of the
+    /// file at <paramref name="path"/>; an unreadable file has no leading bytes.
+    /// </summary>
+    private static DatasetHeader ReadHeader(string path)
+    {
+        var extension = Path.GetExtension(path);
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return new DatasetHeader { LeadingBytes = ReadLeadingBytes(stream), Extension = extension };
         }
-
-        // ISO 8211 files: S-57, S-101, and S-401 all use the .000 extension, so
-        // the envelope decides. Read it once and let each registered product
-        // recognize its own datasets (mirrors the GML path below).
-        if (ext.Equals(".000", StringComparison.OrdinalIgnoreCase))
+        catch
         {
-            Iso8211Document? iso;
-            try
-            {
-                iso = Iso8211DocumentReader.ReadFromFile(path);
-            }
-            catch
-            {
-                // Not readable as ISO 8211 — unknown.
-                iso = null;
-            }
-
-            return DetectIso8211ProductSpec(iso, registry);
+            // Missing or unreadable: matchers see no bytes.
+            return new DatasetHeader { LeadingBytes = ReadOnlyMemory<byte>.Empty, Extension = extension };
         }
+    }
 
-        // S-124 and other GML-encoded products.
-        if (ext.Equals(".gml", StringComparison.OrdinalIgnoreCase))
+    private static byte[] ReadLeadingBytes(Stream stream)
+    {
+        var buffer = new byte[DatasetHeader.MaxLength];
+        var total = 0;
+        int read;
+        while (total < buffer.Length && (read = stream.Read(buffer, total, buffer.Length - total)) > 0)
+            total += read;
+        return total == buffer.Length ? buffer : buffer[..total];
+    }
+
+    private static Iso8211Document? ReadIso8211(string path)
+    {
+        try
         {
-            return DetectGmlProductSpec(path, registry);
+            return Iso8211DocumentReader.ReadFromFile(path);
+        }
+        catch
+        {
+            // Not readable as ISO 8211 — no envelope.
+            return null;
+        }
+    }
+
+    private static string? ReadGmlText(string path)
+    {
+        try
+        {
+            // Some GML files have leading whitespace before the XML declaration;
+            // read as text, trim, and parse via a StringReader to tolerate this.
+            return File.ReadAllText(path).TrimStart();
+        }
+        catch
+        {
+            // Unable to read – unknown.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Returns the canonical spec of <paramref name="registration"/> (mirroring
+    /// how <see cref="ProductRegistry"/> canonicalizes its keys), so a product
+    /// registered under a non-canonical identifier (e.g. <c>"s124"</c>) is still
+    /// detected as its canonical <c>"S-124"</c>. Built-in registrations already
+    /// carry a canonical spec, so this is a no-op for them.
+    /// </summary>
+    private static string CanonicalSpecOf(ProductRegistration registration) =>
+        ProductRegistry.NormalizeSpec(registration.Spec);
+
+    /// <summary>
+    /// Offers an ISO 8211 dataset's envelope (see <see cref="TryReadIso8211Root"/>)
+    /// to each product in <paramref name="registry"/>, returning the first
+    /// claimant's spec, or <see langword="null"/> when <paramref name="iso"/> is
+    /// unreadable or nobody claims it.
+    /// </summary>
+    private static string? ClaimIso8211(Iso8211Document? iso, ProductRegistry registry)
+    {
+        if (iso is null || !TryReadIso8211Root(iso, out var root))
+            return null;
+
+        foreach (var registration in registry.Registrations)
+        {
+            if (registration.MatchIso8211 is { } match && match(root))
+                return CanonicalSpecOf(registration);
         }
 
         return null;
     }
 
     /// <summary>
-    /// Resolves an ISO 8211 dataset's product specification by letting each
-    /// product in <paramref name="registry"/> recognize the envelope (see
-    /// <see cref="TryReadIso8211Root"/>). When <paramref name="iso"/> is
-    /// <see langword="null"/> (unreadable) or no registration claims it (an
-    /// early or non-conformant cell declaring no <c>PRSP</c>), returns
-    /// <c>"S-101"</c>, which is what this factory has always done.
+    /// Offers a file's leading bytes to each product's
+    /// <see cref="ProductRegistration.MatchBytes"/>, returning the first
+    /// claimant's spec or <see langword="null"/>.
     /// </summary>
-    private static string DetectIso8211ProductSpec(Iso8211Document? iso, S100ProductRegistry registry)
+    private static string? ClaimBytes(DatasetHeader header, ProductRegistry registry)
     {
-        if (iso is not null && TryReadIso8211Root(iso, out var root))
+        foreach (var registration in registry.Registrations)
         {
-            foreach (var registration in registry.Registrations)
+            if (registration.MatchBytes is not { } match)
+                continue;
+
+            try
             {
-                if (registration.MatchIso8211 is { } match && match(root))
-                    // Return the canonical spec, mirroring the GML path.
-                    return MapProductIdentifierToSpec(registration.Spec) ?? registration.Spec.Trim();
+                if (match(header))
+                    return CanonicalSpecOf(registration);
+            }
+            catch
+            {
+                // A faulty matcher must not break detection for every other product.
             }
         }
 
-        return "S-101";
+        return null;
     }
 
     /// <summary>
@@ -186,7 +302,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// <c>PRSP</c> / <c>ENSP</c> subfields) and whether the Data Descriptive
     /// Record defines the S-57-only <c>DSPM</c> field — or returns
     /// <see langword="false"/> when the file cannot be read as ISO 8211. The
-    /// per-product <see cref="S100ProductRegistration.MatchIso8211"/> recognizers
+    /// per-product <see cref="ProductRegistration.MatchIso8211"/> recognizers
     /// consume the result, so the file is parsed once no matter how many products
     /// are registered. S-100 Edition 5.2.1 Part 10a; S-57 Ed 3.1 Appendix B.1.
     /// </summary>
@@ -239,71 +355,75 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         }
     }
 
-    private static string DetectHdf5ProductSpec(string path)
+    private static string? ClaimHdf5(string path, ProductRegistry registry)
     {
         try
         {
             using var hdf5 = PureHdfFile.Open(path);
-            return DetectHdf5ProductSpec(hdf5);
+            return ClaimHdf5(hdf5, registry);
         }
         catch
         {
-            // Not readable as HDF5: fall through to the default.
-            return "S-102";
+            // Not readable as HDF5: unknown.
+            return null;
         }
     }
 
     /// <summary>
-    /// Distinguishes the HDF5 coverage products by the root
-    /// <c>productSpecification</c> attribute (S-100 Part 10c): S-104 and S-111
-    /// are recognized by name, and anything else (including a missing or
-    /// unreadable attribute) is treated as S-102.
+    /// Offers an HDF5 file's root group — its <c>productSpecification</c>
+    /// attribute (S-100 Part 10c) read once, and any other root attribute on
+    /// demand — to each product's <see cref="ProductRegistration.MatchHdf5"/>,
+    /// returning the first claimant's spec. An HDF5 file nobody claims is
+    /// unknown (<see langword="null"/>); it is no longer assumed to be S-102.
     /// </summary>
-    private static string DetectHdf5ProductSpec(PureHdfFile hdf5)
+    private static string? ClaimHdf5(PureHdfFile hdf5, ProductRegistry registry)
     {
+        Hdf5RootInfo root;
         try
         {
-            var root = hdf5.Root;
-
-            if (root.AttributeExists("productSpecification"))
+            var group = hdf5.Root;
+            var productSpecification = "";
+            try
             {
-                var spec = root.ReadStringAttribute("productSpecification");
-                if (spec.Contains("S-104", StringComparison.OrdinalIgnoreCase))
-                    return "S-104";
-                if (spec.Contains("S-111", StringComparison.OrdinalIgnoreCase))
-                    return "S-111";
+                if (group.AttributeExists("productSpecification"))
+                    productSpecification = group.ReadStringAttribute("productSpecification") ?? "";
             }
+            catch
+            {
+                // Unreadable attribute: the file declares no product.
+            }
+
+            root = new Hdf5RootInfo { ProductSpecification = productSpecification, Root = group };
         }
         catch
         {
-            // Fall through to default
+            return null;
         }
 
-        return "S-102";
-    }
+        foreach (var registration in registry.Registrations)
+        {
+            if (registration.MatchHdf5 is not { } match)
+                continue;
 
-    private static string? DetectGmlProductSpec(string path, S100ProductRegistry registry)
-    {
-        try
-        {
-            // Some GML files have leading whitespace before the XML declaration;
-            // read as text, trim, and parse via a StringReader to tolerate this.
-            var xml = File.ReadAllText(path).TrimStart();
-            return DetectGmlProductSpecFromXml(xml, registry);
-        }
-        catch
-        {
-            // Unable to parse – unknown
+            try
+            {
+                if (match(root))
+                    return CanonicalSpecOf(registration);
+            }
+            catch
+            {
+                // A faulty matcher must not break detection for every other product.
+            }
         }
 
         return null;
     }
 
     /// <summary>
-    /// Determines the S-100 product specification (e.g. <c>"S-411"</c>) of an
+    /// Determines the product specification (e.g. <c>"S-411"</c>) of an
     /// already-loaded GML document body by reading its root element once and
     /// returning the spec of the first product in <paramref name="registry"/>
-    /// whose <see cref="S100ProductRegistration.MatchGml"/> claims it. Each GML
+    /// whose <see cref="ProductRegistration.MatchGml"/> claims it. Each GML
     /// product contributes its own recognition rule (namespace / local name /
     /// <c>productIdentifier</c>) next to its construction registration in
     /// <see cref="S100Products"/>, so there is no central per-product switch
@@ -312,20 +432,15 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// <c>productIdentifier</c> (common for JCOMM S-411 sets) are still routed
     /// correctly. Returns <c>null</c> when unrecognized.
     /// </summary>
-    private static string? DetectGmlProductSpecFromXml(string xml, S100ProductRegistry registry)
+    private static string? ClaimGml(string? xml, ProductRegistry registry)
     {
-        if (!TryReadGmlRoot(xml, out var root))
+        if (xml is null || !TryReadGmlRoot(xml, out var root))
             return null;
 
         foreach (var registration in registry.Registrations)
         {
             if (registration.MatchGml is { } match && match(root))
-                // Return the canonical spec (mirroring how S100ProductRegistry
-                // canonicalizes its keys), so a product registered under a
-                // non-canonical identifier (e.g. "s124") is still detected as
-                // its canonical "S-124". Built-in registrations already carry a
-                // canonical Spec, so this is a no-op for them.
-                return MapProductIdentifierToSpec(registration.Spec) ?? registration.Spec.Trim();
+                return CanonicalSpecOf(registration);
         }
 
         return null;
@@ -335,7 +450,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// Reads the root element of a GML document into a <see cref="GmlRootInfo"/>
     /// (its namespace URI, local name, and the values of its attributes), or
     /// returns <see langword="false"/> when the document has no element or cannot
-    /// be parsed. The per-product <see cref="S100ProductRegistration.MatchGml"/>
+    /// be parsed. The per-product <see cref="ProductRegistration.MatchGml"/>
     /// recognizers consume the result.
     /// </summary>
     private static bool TryReadGmlRoot(string xml, out GmlRootInfo root)
@@ -656,7 +771,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// <param name="relativePath">Path to the dataset, relative to <paramref name="source"/>.</param>
     /// <returns>The canonical product-specification string, or <c>null</c> when not recognized.</returns>
     public static string? DetectProductSpecFromSource(IAssetSource source, string relativePath) =>
-        DetectProductSpecFromSource(source, relativePath, DefaultRegistry);
+        DetectProductSpecFromSource(source, relativePath, ProductRegistry.Default);
 
     /// <summary>
     /// Registry-aware synchronous source detection, used by
@@ -664,8 +779,8 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// so the ISO 8211 and GML recognizers consult the factory's own product
     /// registry, as path-based detection does.
     /// </summary>
-    internal static string? DetectProductSpecFromSource(
-        IAssetSource source, string relativePath, S100ProductRegistry registry)
+    public static string? DetectProductSpecFromSource(
+        IAssetSource source, string relativePath, ProductRegistry registry)
     {
         return DetectProductSpecFromSourceAsync(source, relativePath, registry, CancellationToken.None)
             .ConfigureAwait(false)
@@ -675,60 +790,68 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
 
     /// <summary>
     /// Asynchronously content-sniffs a dataset stored inside
-    /// <paramref name="source"/> to determine its S-100 product specification,
-    /// applying the same rules as <see cref="DetectProductSpec(string)"/> does
-    /// for a file on disk:
+    /// <paramref name="source"/> to determine its product specification,
+    /// applying the same rules as <see cref="DetectProductSpec(string, ProductRegistry)"/>
+    /// does for a file on disk — each registration claims its own files:
     /// <list type="bullet">
     /// <item><description>
-    /// <c>.000</c> (ISO 8211): the dataset envelope is read and each built-in
-    /// product recognizes its own cells (S-57 by its <c>DSPM</c> field, S-101
-    /// and S-401 by their declared <c>PRSP</c>); a readable cell that no product
-    /// claims is treated as <c>"S-101"</c>.
+    /// <c>.000</c> (ISO 8211): the dataset envelope is read and each product
+    /// recognizes its own cells (S-57 by its <c>DSPM</c> field, S-101 and S-401
+    /// by their declared <c>PRSP</c>); a readable cell that no product claims is
+    /// treated as <c>"S-101"</c>.
     /// </description></item>
     /// <item><description>
-    /// <c>.h5</c> / <c>.hdf5</c>: the root <c>productSpecification</c>
-    /// attribute distinguishes S-104 and S-111; anything else is
-    /// <c>"S-102"</c>.
+    /// <c>.h5</c> / <c>.hdf5</c>, or any other extension when the file starts
+    /// with the HDF5 signature: each product's
+    /// <see cref="ProductRegistration.MatchHdf5"/> reads the root group
+    /// (S-102, S-104 and S-111 by their <c>productSpecification</c>); an HDF5
+    /// file nobody claims is unknown.
     /// </description></item>
     /// <item><description>
     /// <c>.gml</c> / <c>.xml</c>: the GML root element and namespaces are
-    /// matched against the built-in products, reading only a bounded,
-    /// BOM-aware prefix. This also covers catalogues that omit a
-    /// machine-readable <c>productIdentifier</c>, such as JCOMM S-411 exchange
-    /// sets that declare only a human-readable product name.
+    /// matched against each product's <see cref="ProductRegistration.MatchGml"/>,
+    /// reading only a bounded, BOM-aware prefix. This also covers catalogues
+    /// that omit a machine-readable <c>productIdentifier</c>, such as JCOMM
+    /// S-411 exchange sets that declare only a human-readable product name.
+    /// </description></item>
+    /// <item><description>
+    /// Anything nobody has claimed yet: the leading bytes are offered to each
+    /// product's <see cref="ProductRegistration.MatchBytes"/>.
     /// </description></item>
     /// </list>
     /// Returns the canonical spec string (e.g. <c>"S-411"</c>) understood by
     /// <see cref="CreateProcessor(IAssetSource, string, string?, IReadOnlyDictionary{string, string}?)"/>.
+    /// Uses <see cref="ProductRegistry.Default"/>.
     /// </summary>
     /// <param name="source">The asset source (folder or ZIP) hosting the dataset.</param>
     /// <param name="relativePath">Path to the dataset, relative to <paramref name="source"/>.</param>
     /// <param name="cancellationToken">Cancellation token for reading dataset bytes.</param>
     /// <returns>
-    /// The canonical product-specification string, or <c>null</c> when the
-    /// extension is not one of the above, the file cannot be read, or a GML
-    /// dataset is unrecognized.
+    /// The canonical product-specification string, or <c>null</c> when no
+    /// product claims the file or the file cannot be read.
     /// </returns>
     public static Task<string?> DetectProductSpecFromSourceAsync(
         IAssetSource source,
         string relativePath,
         CancellationToken cancellationToken = default) =>
-        DetectProductSpecFromSourceAsync(source, relativePath, DefaultRegistry, cancellationToken);
+        DetectProductSpecFromSourceAsync(source, relativePath, ProductRegistry.Default, cancellationToken);
 
     private static async Task<string?> DetectProductSpecFromSourceAsync(
         IAssetSource source,
         string relativePath,
-        S100ProductRegistry registry,
+        ProductRegistry registry,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
 
-        var ext = Path.GetExtension(relativePath);
+        var extension = Path.GetExtension(relativePath);
         try
         {
-            if (ext.Equals(".000", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(extension, ".000", StringComparison.OrdinalIgnoreCase))
             {
+                // The envelope reader needs every byte anyway, so the header is
+                // taken from the same read.
                 var bytes = await source.ReadAllBytesAsync(relativePath, cancellationToken)
                     .ConfigureAwait(false);
                 Iso8211Document? iso;
@@ -742,47 +865,36 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
                     iso = null;
                 }
 
-                return DetectIso8211ProductSpec(iso, registry);
+                var leading = bytes.Bytes.Length > DatasetHeader.MaxLength
+                    ? bytes.Bytes[..DatasetHeader.MaxLength]
+                    : bytes.Bytes;
+                return ClaimIso8211(iso, registry)
+                    ?? ClaimBytes(new DatasetHeader { LeadingBytes = leading, Extension = extension }, registry)
+                    ?? Iso8211FallbackSpec;
             }
 
-            if (ext.Equals(".h5", StringComparison.OrdinalIgnoreCase)
-                || ext.Equals(".hdf5", StringComparison.OrdinalIgnoreCase))
+            DatasetHeader header;
+            await using (var stream = await source.OpenAsync(relativePath, cancellationToken)
+                .ConfigureAwait(false))
             {
-                await using var stream = await AssetSourceHelpers
-                    .OpenSeekableAsync(source, relativePath, cancellationToken)
-                    .ConfigureAwait(false);
-                try
+                header = new DatasetHeader
                 {
-                    using var hdf5 = PureHdfFile.Open(stream);
-                    return DetectHdf5ProductSpec(hdf5);
-                }
-                catch
-                {
-                    // Readable but not HDF5: same fallback as the path route.
-                    return "S-102";
-                }
+                    LeadingBytes = await ReadLeadingBytesAsync(stream, cancellationToken).ConfigureAwait(false),
+                    Extension = extension,
+                };
             }
 
-            if (ext.Equals(".gml", StringComparison.OrdinalIgnoreCase)
-                || ext.Equals(".xml", StringComparison.OrdinalIgnoreCase))
+            var spec = EncodingOf(header, acceptXmlExtension: true) switch
             {
-                await using var stream = await source.OpenAsync(relativePath, cancellationToken)
-                    .ConfigureAwait(false);
-                using var streamReader = new StreamReader(
-                    stream,
-                    System.Text.Encoding.UTF8,
-                    detectEncodingFromByteOrderMarks: true);
-                const int maxSniffPrefixChars = 64 * 1024;
-                var buffer = new char[maxSniffPrefixChars];
-                int read = await streamReader.ReadBlockAsync(
-                        buffer.AsMemory(0, maxSniffPrefixChars),
-                        cancellationToken)
-                    .ConfigureAwait(false);
-                var xml = new string(buffer, 0, read).TrimStart();
-                return DetectGmlProductSpecFromXml(xml, registry);
-            }
+                DatasetEncoding.Hdf5 => await ClaimHdf5Async(source, relativePath, registry, cancellationToken)
+                    .ConfigureAwait(false),
+                DatasetEncoding.Gml => ClaimGml(
+                    await ReadGmlPrefixAsync(source, relativePath, cancellationToken).ConfigureAwait(false),
+                    registry),
+                _ => null,
+            };
 
-            return null;
+            return spec ?? ClaimBytes(header, registry);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -793,5 +905,60 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             // The dataset could not be read from the source.
             return null;
         }
+    }
+
+    private static async Task<byte[]> ReadLeadingBytesAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[DatasetHeader.MaxLength];
+        var total = 0;
+        int read;
+        while (total < buffer.Length
+            && (read = await stream.ReadAsync(buffer.AsMemory(total), cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            total += read;
+        }
+
+        return total == buffer.Length ? buffer : buffer[..total];
+    }
+
+    private static async Task<string?> ClaimHdf5Async(
+        IAssetSource source,
+        string relativePath,
+        ProductRegistry registry,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = await AssetSourceHelpers
+            .OpenSeekableAsync(source, relativePath, cancellationToken)
+            .ConfigureAwait(false);
+        try
+        {
+            using var hdf5 = PureHdfFile.Open(stream);
+            return ClaimHdf5(hdf5, registry);
+        }
+        catch
+        {
+            // Readable but not HDF5: unknown, as on the path route.
+            return null;
+        }
+    }
+
+    private static async Task<string> ReadGmlPrefixAsync(
+        IAssetSource source,
+        string relativePath,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = await source.OpenAsync(relativePath, cancellationToken)
+            .ConfigureAwait(false);
+        using var streamReader = new StreamReader(
+            stream,
+            System.Text.Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true);
+        const int maxSniffPrefixChars = 64 * 1024;
+        var buffer = new char[maxSniffPrefixChars];
+        int read = await streamReader.ReadBlockAsync(
+                buffer.AsMemory(0, maxSniffPrefixChars),
+                cancellationToken)
+            .ConfigureAwait(false);
+        return new string(buffer, 0, read).TrimStart();
     }
 }

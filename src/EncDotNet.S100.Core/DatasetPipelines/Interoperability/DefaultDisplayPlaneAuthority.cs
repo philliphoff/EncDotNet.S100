@@ -3,97 +3,72 @@ using EncDotNet.S100.Interoperability;
 namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 
 /// <summary>
-/// Mapsui-free default-plane table derived from S-98 Main §9.2.1 /
-/// MSC.530(106)/Rev.1 §Appendix 2 "priority of information". This is the
-/// authoritative <see cref="IDisplayPlaneAuthority.GetDefaultPlane"/>
-/// implementation; the Mapsui-typed cross-dataset stack authority delegates
-/// its own plane lookups here so there is a single table.
+/// A per-product table of default S-98 display planes. The product registry
+/// (<c>ProductRegistry</c> in <c>EncDotNet.S100.Datasets.Pipelines</c>)
+/// implements it from each registration's <c>DefaultPlanes</c> trait, so the
+/// table lives with the products rather than in a <c>switch</c> here.
+/// </summary>
+public interface IProductPlaneTable
+{
+    /// <summary>
+    /// Returns the default plane <paramref name="productSpec"/> gives
+    /// <paramref name="layerKind"/>, or <see langword="null"/> when the product
+    /// is unknown or gives that kind no plane.
+    /// </summary>
+    /// <param name="productSpec">The canonical product spec, e.g. <c>"S-101"</c>.</param>
+    /// <param name="layerKind">The layer kind (e.g. <c>"area"</c>, <c>"s104.stations"</c>), or <see langword="null"/>.</param>
+    S98DisplayPlane? FindDefaultPlane(string productSpec, string? layerKind);
+}
+
+/// <summary>
+/// Mapsui-free default-plane authority over an <see cref="IProductPlaneTable"/>,
+/// whose built-in entries follow S-98 Main §9.2.1 / MSC.530(106)/Rev.1
+/// §Appendix 2 "priority of information". This is the authoritative
+/// <see cref="IDisplayPlaneAuthority.GetDefaultPlane"/> implementation; the
+/// Mapsui-typed cross-dataset stack authority delegates its own plane lookups
+/// here so there is a single table.
 /// </summary>
 /// <remarks>
-/// Recognised <c>featureTypeOrLayerKind</c> values:
+/// A product the table doesn't know, or a layer kind it gives no plane, lands
+/// on <see cref="S98DisplayPlane.OtherChartOverlays"/> so the renderer doesn't
+/// lose the layer. The built-in table (the registry's product traits) is:
 /// <list type="bullet">
-///   <item><description>S-101 / S-57: <c>"area"</c> → BaseChartUnder; otherwise BaseChartOver.</description></item>
+///   <item><description>S-101 / S-57 / S-401: <c>"area"</c> → BaseChartUnder; otherwise BaseChartOver.</description></item>
+///   <item><description>S-102: Bathymetry.</description></item>
 ///   <item><description>S-104: <c>"s104.stations"</c> → OtherChartOverlays; otherwise OnDemandSurface.</description></item>
 ///   <item><description>S-111: every sub-layer (<c>"s111.arrows"</c> grid arrows and <c>"s111.stations"</c> station / mesh arrows) → DynamicArrows.</description></item>
+///   <item><description>S-124: CautionsAndWarnings; S-129: OnDemandSurface; the other GML products: OtherChartOverlays.</description></item>
 /// </list>
 /// </remarks>
 public sealed class DefaultDisplayPlaneAuthority : IDisplayPlaneAuthority
 {
-    /// <summary>A shared, stateless instance.</summary>
-    public static readonly DefaultDisplayPlaneAuthority Instance = new();
+    private readonly IProductPlaneTable? _products;
+
+    /// <summary>Creates an authority over <paramref name="products"/>.</summary>
+    /// <param name="products">The per-product plane table, usually the product registry.</param>
+    public DefaultDisplayPlaneAuthority(IProductPlaneTable products)
+    {
+        ArgumentNullException.ThrowIfNull(products);
+        _products = products;
+    }
+
+    private DefaultDisplayPlaneAuthority()
+    {
+    }
+
+    /// <summary>
+    /// An authority that knows no products and puts every layer on
+    /// <see cref="S98DisplayPlane.OtherChartOverlays"/>. Used where no product
+    /// table is in reach (a renderer without the dataset pipelines); hosts pass
+    /// the product registry's authority instead.
+    /// </summary>
+    public static DefaultDisplayPlaneAuthority Empty { get; } = new();
 
     /// <inheritdoc />
     public S98DisplayPlane GetDefaultPlane(string productSpec, string? featureTypeOrLayerKind = null)
     {
         ArgumentNullException.ThrowIfNull(productSpec);
-
-        var kind = featureTypeOrLayerKind?.Trim();
-
-        return productSpec switch
-        {
-            // S-101 ENC / S-57 / S-401 inland ENC. Split between fills and line
-            // work per S-98 Annex A §A-6.9.1 (so S-102 lands between them).
-            // S-401 is the inland base chart and occupies the same planes.
-            "S-101" or "S-57" or "S-401" => string.Equals(kind, "area", StringComparison.OrdinalIgnoreCase)
-                ? S98DisplayPlane.BaseChartUnder
-                : S98DisplayPlane.BaseChartOver,
-
-            // S-102 Bathymetric Surface (S-98 Annex A §A-6.9.1).
-            "S-102" => S98DisplayPlane.Bathymetry,
-
-            // S-104 Water Level. Surface isolines on the on-demand surface
-            // plane; station glyphs are point overlays.
-            "S-104" => kind switch
-            {
-                "s104.stations" => S98DisplayPlane.OtherChartOverlays,
-                _ => S98DisplayPlane.OnDemandSurface,
-            },
-
-            // S-111 Surface Currents (Edition 2.0.0). The portrayal catalogue
-            // gives one SurfaceCurrent instruction for every data coding
-            // format, and S-111 §9.2.9 / §9.3.3 portray station series and
-            // ungeorectified meshes with the same arrows as regular grids, so
-            // grid ("s111.arrows") and station/mesh ("s111.stations") arrows
-            // share one plane. S-98 assigns no specific plane to current
-            // arrows (Main §9.2.1 puts surface currents in layer 6, "official
-            // on demand data"); DynamicArrows is this library's choice — see
-            // S98DisplayPlane.DynamicArrows.
-            "S-111" => S98DisplayPlane.DynamicArrows,
-
-            // S-124 Navigational Warnings — MSC.530(106)/Rev.1 §Appendix 2
-            // layers 3-4; S-98 Main §9.2.1.
-            "S-124" => S98DisplayPlane.CautionsAndWarnings,
-
-            // S-129 Under Keel Clearance Management (PR-L1 placement).
-            "S-129" => S98DisplayPlane.OnDemandSurface,
-
-            // Out-of-S-98-scope products. MSC.530(106)/Rev.1 §Appendix 2
-            // default plane assignment.
-            "S-122" or "S-125" or "S-127" or "S-128"
-                or "S-131" or "S-201" or "S-411" or "S-421"
-                => S98DisplayPlane.OtherChartOverlays,
-
-            // Unknown product — land at the catch-all overlay plane so the
-            // renderer doesn't lose the layer.
-            _ => S98DisplayPlane.OtherChartOverlays,
-        };
-    }
-}
-
-/// <summary>
-/// The default <see cref="IDisplayPlaneAuthorityProvider"/>: exposes the
-/// stateless <see cref="DefaultDisplayPlaneAuthority"/> and never raises
-/// <see cref="CurrentChanged"/> (the plane table is policy-invariant).
-/// </summary>
-public sealed class DisplayPlaneAuthorityProvider : IDisplayPlaneAuthorityProvider
-{
-    /// <inheritdoc />
-    public IDisplayPlaneAuthority Current => DefaultDisplayPlaneAuthority.Instance;
-
-    /// <inheritdoc />
-    public event Action? CurrentChanged
-    {
-        add { }
-        remove { }
+        return _products?.FindDefaultPlane(productSpec, featureTypeOrLayerKind)
+            ?? S98DisplayPlane.OtherChartOverlays;
     }
 }

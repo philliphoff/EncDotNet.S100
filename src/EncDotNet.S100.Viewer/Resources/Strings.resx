@@ -4160,6 +4160,18 @@
     <value>Hidden</value>
     <comment>Tag on a layer that has no data at the view time.</comment>
   </data>
+  <data name="Label_NotS100Product" xml:space="preserve">
+    <value>Not an S-100 product</value>
+    <comment>Badge on a layer-stack row whose product isn't an IHO S-100 product, such as a weather model grid (GRIB2, NetCDF).</comment>
+  </data>
+  <data name="Tooltip_NotS100Product" xml:space="preserve">
+    <value>This layer isn't an IHO S-100 product and isn't for navigation.</value>
+    <comment>Tooltip on the "Not an S-100 product" badge in the layer stack.</comment>
+  </data>
+  <data name="Pick_NotS100Notice" xml:space="preserve">
+    <value>Weather model data, not for navigation.</value>
+    <comment>First line of the Object Information panel for a feature of a product that isn't an S-100 product, such as a weather model grid, unless the product supplies its own line.</comment>
+  </data>
   <data name="Tooltip_LayerTimeJump" xml:space="preserve">
     <value>Go to this layer’s nearest data</value>
   </data>

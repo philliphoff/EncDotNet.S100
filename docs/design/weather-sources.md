@@ -592,6 +592,23 @@ The sub-layers already carry their own `Plane`. `DefaultPlanes` is only
 the fallback for callers that ask the authority without a sub-layer in
 hand.
 
+As built (#1061):
+
+- The HDF5 products claim their files through a fourth hook,
+  `MatchHdf5`, which sees the root `productSpecification` and can read
+  other root attributes (the NetCDF-4 `Conventions` check above).
+- `OpenData` is a `DatasetDataOpener(Stream, externalTextResolver)`; a
+  product with no built-in payload returns a `ProductDatasetData`
+  carrying its own `DatasetMetadata`. `PickReportNotice` overrides the
+  viewer's default not-for-navigation line.
+- An unclaimed `.000` file is still S-101; every other unclaimed file
+  is unknown. Only the HDF5 signature is sniffed for an unknown
+  extension; ISO 8211 update files and XML catalogues are not.
+- `SpecConventions` is gone. `DefaultDisplayPlaneAuthority` stays in
+  `EncDotNet.S100.Core` over an `IProductPlaneTable` that
+  `ProductRegistry` implements; hosts and the static conveniences read
+  `ProductRegistry.Default`.
+
 ### 8.3 One render context
 
 Replace the eleven `RenderContext` subclasses (`S101RenderContext`,

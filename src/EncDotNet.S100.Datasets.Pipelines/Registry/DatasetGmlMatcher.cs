@@ -3,7 +3,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <summary>
 /// Decides, from the root element of a GML-encoded dataset, whether the
 /// document belongs to a particular product. Contributed per
-/// <see cref="S100ProductRegistration"/> so a GML product is <em>recognized</em>
+/// <see cref="ProductRegistration"/> so a GML product is <em>recognized</em>
 /// in the same place it is <em>constructed</em>, rather than in a central
 /// <c>switch</c> inside <see cref="DatasetPipelineFactory"/>. The factory reads
 /// the document's root once (see <see cref="GmlRootInfo"/>) and returns the spec

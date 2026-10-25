@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <summary>
 /// Decides, from the envelope of an ISO 8211-encoded dataset, whether the file
 /// belongs to a particular product. Contributed per
-/// <see cref="S100ProductRegistration"/> so an ISO 8211 product is
+/// <see cref="ProductRegistration"/> so an ISO 8211 product is
 /// <em>recognized</em> in the same place it is <em>constructed</em>, rather than
 /// in a central <c>switch</c> inside <see cref="DatasetPipelineFactory"/>. The
 /// factory reads the envelope once (see <see cref="Iso8211RootInfo"/>) and

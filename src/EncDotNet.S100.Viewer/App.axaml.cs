@@ -761,7 +761,8 @@ public partial class App : Application
         });
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthorityProvider(
-                new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority()));
+                new EncDotNet.S100.Datasets.Pipelines.Interoperability.InteroperabilityAuthority(
+                    EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default.DisplayPlanes)));
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(
             _ => new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
         services.AddSingleton<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(sp =>
