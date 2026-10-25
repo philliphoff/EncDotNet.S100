@@ -94,3 +94,5 @@
           href: design/rendering-backend-contract.md
         - name: Dataset collections
           href: design/dataset-collections.md
+        - name: Wind and wave data
+          href: design/weather-sources.md
