@@ -30,7 +30,7 @@ internal abstract class S102CoverageViewportScenarioBase : IPerfScenario
         }
 
         var viewport = BuildViewport();
-        var context = new S102RenderContext { Viewport = viewport };
+        var context = new RenderContext { Viewport = viewport };
         var layerCount = ProcessorRenderBridge.RenderLayerCount(_processor, context, ct);
 
         if (layerCount == 0)

@@ -50,7 +50,7 @@ public class S411DisplayModePortrayalTests
     private static async Task<IReadOnlyList<string>> RenderAreaFillsAsync(string? displayModeId, string? fixturePath = null)
     {
         var processor = CreateProcessor(fixturePath);
-        var context = new S411RenderContext(null) { DisplayModeId = displayModeId };
+        var context = new RenderContext { DisplayModeId = displayModeId };
         var result = await processor.BuildVectorPortrayalAsync(context);
         return result.SubLayers
             .SelectMany(sl => sl.Instructions)

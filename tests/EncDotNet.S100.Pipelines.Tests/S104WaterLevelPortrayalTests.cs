@@ -27,7 +27,7 @@ public sealed class S104WaterLevelPortrayalTests
         var path = WriteStations();
         try
         {
-            var layer = await StationsAt(new S104DatasetProcessor(path, Transforms), new S104RenderContext());
+            var layer = await StationsAt(new S104DatasetProcessor(path, Transforms), new RenderContext());
             Assert.Equal(S104DatasetProcessor.StationLayerKey, layer.LayerKey);
             Assert.Equal(S98DisplayPlane.OtherChartOverlays, layer.Plane);
 
@@ -64,7 +64,7 @@ public sealed class S104WaterLevelPortrayalTests
         {
             var layer = await StationsAt(
                 new S104DatasetProcessor(path, Transforms),
-                new S104RenderContext { SymbolScale = 1.5, TextScale = 2.0 });
+                new RenderContext { SymbolScale = 1.5, TextScale = 2.0 });
 
             Assert.Equal(1.5, layer.SymbolScale);
             Assert.Equal(2.0, layer.TextScale);
@@ -84,7 +84,7 @@ public sealed class S104WaterLevelPortrayalTests
         var path = WriteStations();
         try
         {
-            var layer = await StationsAt(new S104DatasetProcessor(path, Transforms), new S104RenderContext { Palette = palette });
+            var layer = await StationsAt(new S104DatasetProcessor(path, Transforms), new RenderContext { Palette = palette });
             var ink = S104PortrayalCatalogue.GetInk(palette);
 
             Assert.True(layer.Palette.TryResolve(S104PortrayalCatalogue.InkToken, out var inkHex));
@@ -118,11 +118,11 @@ public sealed class S104WaterLevelPortrayalTests
 
             // A small frame keeps the render inside the 1:100 000 label limit.
             using var normal = await processor.RenderHeadlessAsync(
-                400, 300, new S104RenderContext(), cancellationToken: TestContext.Current.CancellationToken);
+                400, 300, new RenderContext(), cancellationToken: TestContext.Current.CancellationToken);
             using var large = await processor.RenderHeadlessAsync(
-                400, 300, new S104RenderContext { TextScale = 2.0 }, cancellationToken: TestContext.Current.CancellationToken);
+                400, 300, new RenderContext { TextScale = 2.0 }, cancellationToken: TestContext.Current.CancellationToken);
             using var noText = await processor.RenderHeadlessAsync(
-                400, 300, new S104RenderContext { HiddenInstructionCategories = DrawingInstructionCategory.Text },
+                400, 300, new RenderContext { HiddenInstructionCategories = DrawingInstructionCategory.Text },
                 cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.True(Ink(large) > Ink(normal), "Doubling the text scale must enlarge the labels.");
@@ -148,7 +148,7 @@ public sealed class S104WaterLevelPortrayalTests
             foreach (var step in steps)
             {
                 var result = await processor.BuildCoveragePortrayalAsync(
-                    new S104RenderContext(step), TestContext.Current.CancellationToken);
+                    new RenderContext { TimeStep = step }, TestContext.Current.CancellationToken);
 
                 var isolines = Assert.IsType<IsolineCoverageSubLayer>(Assert.Single(result.SubLayers));
                 Assert.Equal(S104DatasetProcessor.IsolineLayerKey, isolines.LayerKey);
@@ -179,7 +179,7 @@ public sealed class S104WaterLevelPortrayalTests
         try
         {
             var result = await new S104DatasetProcessor(path, Transforms).BuildCoveragePortrayalAsync(
-                new S104RenderContext { TextScale = 2.0 }, TestContext.Current.CancellationToken);
+                new RenderContext { TextScale = 2.0 }, TestContext.Current.CancellationToken);
             var isolines = Assert.IsType<IsolineCoverageSubLayer>(Assert.Single(result.SubLayers));
 
             Assert.Equal(20, isolines.LabelFontSize);
@@ -276,11 +276,11 @@ public sealed class S104WaterLevelPortrayalTests
     private static async Task<IsolineCoverageSubLayer> IsolinesAt(S104DatasetProcessor processor, DateTime? step)
     {
         var result = await processor.BuildCoveragePortrayalAsync(
-            new S104RenderContext(step), TestContext.Current.CancellationToken);
+            new RenderContext { TimeStep = step }, TestContext.Current.CancellationToken);
         return Assert.IsType<IsolineCoverageSubLayer>(Assert.Single(result.SubLayers));
     }
 
-    private static async Task<VectorCoverageSubLayer> StationsAt(S104DatasetProcessor processor, S104RenderContext context)
+    private static async Task<VectorCoverageSubLayer> StationsAt(S104DatasetProcessor processor, RenderContext context)
     {
         var result = await processor.BuildCoveragePortrayalAsync(context, TestContext.Current.CancellationToken);
         return Assert.IsType<VectorCoverageSubLayer>(Assert.Single(result.SubLayers));

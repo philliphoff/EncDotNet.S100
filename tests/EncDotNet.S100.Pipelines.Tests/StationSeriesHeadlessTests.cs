@@ -109,7 +109,7 @@ public class StationSeriesHeadlessTests
                     S104Station("WL1", CentreLat, CentreLon),
                     S104Station("WL2", FarLat, FarLon),
                 });
-                return (new S104DatasetProcessor(path, new ProjNetCrsTransformFactory()), new S104RenderContext());
+                return (new S104DatasetProcessor(path, new ProjNetCrsTransformFactory()), new RenderContext());
 
             case "S-111 dcf8":
                 S111Dcf8FixtureBuilder.WriteFile(path, new[]
@@ -117,7 +117,7 @@ public class StationSeriesHeadlessTests
                     S111Station("SC1", CentreLat, CentreLon),
                     S111Station("SC2", FarLat, FarLon),
                 });
-                return (new S111DatasetProcessor(path, S111TestCatalogues.Create(), new ProjNetCrsTransformFactory()), new S111RenderContext());
+                return (new S111DatasetProcessor(path, S111TestCatalogues.Create(), new ProjNetCrsTransformFactory()), new RenderContext());
 
             default:
                 S111Dcf3FixtureBuilder.WriteFile(
@@ -130,7 +130,7 @@ public class StationSeriesHeadlessTests
                         new() { TimePoint = "20240101T000000Z", Values = [new() { SurfaceCurrentSpeed = 0.5f, SurfaceCurrentDirection = 45f }, new() { SurfaceCurrentSpeed = 1.5f, SurfaceCurrentDirection = 90f }] },
                     ],
                     lastDateTime: "20240101T000000Z");
-                return (new S111DatasetProcessor(path, S111TestCatalogues.Create(), new ProjNetCrsTransformFactory()), new S111RenderContext());
+                return (new S111DatasetProcessor(path, S111TestCatalogues.Create(), new ProjNetCrsTransformFactory()), new RenderContext());
         }
     }
 

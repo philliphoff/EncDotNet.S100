@@ -313,7 +313,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private int SelectedStep(RenderContext? context)
     {
         var coverages = ((S104DatasetData.GriddedCoverage)_data).Dataset.Coverages;
-        if (context is not S104RenderContext { TimeStep: { } time })
+        if (context?.TimeStep is not { } time)
             return 0;
 
         int best = 0;
@@ -435,7 +435,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     /// <summary>
     /// Renders the water-level portrayal to a standalone <see cref="SKBitmap"/>
     /// through the headless, Mapsui-free Skia path. The selected time step is
-    /// taken from <see cref="S104RenderContext.TimeStep"/>, defaulting to the
+    /// taken from <see cref="RenderContext.TimeStep"/>, defaulting to the
     /// first available step.
     /// </summary>
     /// <param name="widthPixels">Output bitmap width in pixels.</param>
@@ -502,7 +502,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private CoveragePortrayalResult BuildStationSeries(S104StationSeriesDataset ds, RenderContext? context)
     {
         DateTime selectedTime;
-        if (context is S104RenderContext { TimeStep: { } timeStep })
+        if (context?.TimeStep is { } timeStep)
         {
             selectedTime = timeStep;
         }
