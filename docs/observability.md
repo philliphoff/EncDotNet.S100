@@ -111,7 +111,7 @@ Open the Jaeger UI at `http://localhost:16686`.
 | `ENC_DOTNET_OTEL_CONSOLE=1` | Also writes logs, traces and metrics to standard output. The AppHost sets this, so they appear in the dashboard's console view. |
 | `ENC_DOTNET_OTEL_FILE=<path>` | Also writes traces and metrics to `<path>` as newline-delimited JSON, the format the PerfReport tool reads. |
 | `--log-file <PATH>` | Appends structured logs to a file. |
-| (always on) | Writes rolling logs, up to 5 files of 1 MB, to a `logs` folder next to your settings (or under `--data-dir`). `--ephemeral` runs don't write them. |
+| (always on) | Writes rolling logs, up to 5 files of 1 MB, to a `logs` folder next to your settings (or under `--data-dir`). Copies of SoundCharts running side by side share the folder and never delete each other's files while running, so the folder can briefly hold a few more files while several copies run. `--ephemeral` runs don't write them. |
 | `-v`, `--verbose` | Lowers the log level from Information to Debug. |
 
 ## Names

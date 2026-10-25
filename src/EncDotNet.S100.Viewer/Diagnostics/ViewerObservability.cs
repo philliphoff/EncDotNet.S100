@@ -93,9 +93,10 @@ internal static class ViewerObservability
 
             // Always-on rolling history (5 × 1 MB) so the next launch can
             // attach a crashed session's log to the feedback report.
+            // Registered by factory so the container disposes (flushes) it.
             if (!string.IsNullOrWhiteSpace(rollingLogDirectory))
             {
-                builder.AddProvider(new RollingFileLoggerProvider(
+                builder.Services.AddSingleton<ILoggerProvider>(_ => new RollingFileLoggerProvider(
                     rollingLogDirectory, verbose ? LogLevel.Debug : LogLevel.Information));
             }
 

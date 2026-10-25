@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -19,7 +20,9 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 /// the next sequence number when the current file reaches the size cap.
 /// Several viewers running side by side therefore never write the same
 /// file. Whenever a file is opened, the oldest log files in the directory
-/// (from any session) are deleted until at most the file-count cap remain.
+/// are deleted until at most the file-count cap remain. Files of another
+/// session whose process is still running are never deleted, so the cap
+/// can be exceeded by one current file per other running instance.
 /// </para>
 /// <para>
 /// Log calls only format the line and enqueue it; a background thread
@@ -42,12 +45,21 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
     private const string TimestampFormat = "yyyyMMdd'T'HHmmss";
     private const int MaxQueuedEntries = 10_000;
 
+    /// <summary>
+    /// Slack when comparing a process's start time with a session start
+    /// read from a file name, which is truncated to whole seconds.
+    /// </summary>
+    private static readonly TimeSpan StartTimeTolerance = TimeSpan.FromSeconds(2);
+
     private static readonly Encoding Utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
     private readonly string _directory;
     private readonly LogLevel _minLevel;
     private readonly long _maxFileBytes;
     private readonly int _maxFiles;
+    private readonly DateTime _sessionStartUtc;
+    private readonly int _processId;
+    private readonly Func<int, DateTime, bool> _isSessionAlive;
     private readonly string _sessionId;
     private readonly ConcurrentQueue<string> _queue = new();
     private readonly AutoResetEvent _signal = new(false);
@@ -70,13 +82,18 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
     /// defaults to now.</param>
     /// <param name="processId">Process id used in file names; defaults to
     /// the current process.</param>
+    /// <param name="isSessionAlive">Decides whether another session, given
+    /// its process id and start time (UTC), is still running; its files are
+    /// then kept. Defaults to a process check that treats a reused process
+    /// id as a dead session.</param>
     public RollingFileLoggerProvider(
         string directory,
         LogLevel minLevel,
         long maxFileBytes = DefaultMaxFileBytes,
         int maxFiles = DefaultMaxFiles,
         DateTime? sessionStartUtc = null,
-        int? processId = null)
+        int? processId = null,
+        Func<int, DateTime, bool>? isSessionAlive = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxFileBytes, 1);
@@ -86,9 +103,13 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
         _minLevel = minLevel;
         _maxFileBytes = maxFileBytes;
         _maxFiles = maxFiles;
+        _isSessionAlive = isSessionAlive ?? IsSessionAlive;
+        _processId = processId ?? Environment.ProcessId;
         var start = (sessionStartUtc ?? DateTime.UtcNow).ToUniversalTime();
-        _sessionId = string.Create(CultureInfo.InvariantCulture,
-            $"{start.ToString(TimestampFormat, CultureInfo.InvariantCulture)}Z-{processId ?? Environment.ProcessId}");
+        var stamp = start.ToString(TimestampFormat, CultureInfo.InvariantCulture);
+        _sessionStartUtc = DateTime.ParseExact(stamp, TimestampFormat, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
+        _sessionId = string.Create(CultureInfo.InvariantCulture, $"{stamp}Z-{_processId}");
 
         _writer = new Thread(WriterLoop)
         {
@@ -276,12 +297,26 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
     {
         try
         {
-            var stale = EnumerateLogFiles(_directory)
+            var others = EnumerateLogFiles(_directory)
                 .Where(f => !string.Equals(f.Path, currentPath, StringComparison.Ordinal))
+                .ToList();
+
+            // Another running instance may still be writing its files; only
+            // this session's own older files and dead sessions' files go.
+            var liveSessions = others
+                .Where(f => !IsOwnSession(f))
+                .Select(f => (f.ProcessId, f.SessionStartUtc))
+                .Distinct()
+                .Where(s => _isSessionAlive(s.ProcessId, s.SessionStartUtc))
+                .ToHashSet();
+            var kept = others.Count(f => liveSessions.Contains((f.ProcessId, f.SessionStartUtc)));
+
+            var stale = others
+                .Where(f => !liveSessions.Contains((f.ProcessId, f.SessionStartUtc)))
                 .OrderByDescending(f => SafeLastWriteUtc(f.Path))
                 .ThenByDescending(f => f.SessionStartUtc)
                 .ThenByDescending(f => f.Sequence)
-                .Skip(_maxFiles - 1);
+                .Skip(Math.Max(0, _maxFiles - 1 - kept));
             foreach (var file in stale)
             {
                 try
@@ -297,6 +332,47 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
         catch
         {
             // Best-effort.
+        }
+    }
+
+    private bool IsOwnSession(LogFile file) =>
+        file.ProcessId == _processId && file.SessionStartUtc == _sessionStartUtc;
+
+    /// <summary>
+    /// Whether the session that wrote a log file is still running: a process
+    /// with its id exists and started no later than the session did. A
+    /// process id reused by a later process therefore counts as dead.
+    /// </summary>
+    private static bool IsSessionAlive(int processId, DateTime sessionStartUtc)
+    {
+        if (processId <= 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            if (process.HasExited)
+            {
+                return false;
+            }
+
+            try
+            {
+                return process.StartTime.ToUniversalTime() <= sessionStartUtc + StartTimeTolerance;
+            }
+            catch
+            {
+                // Start time unreadable (access denied): keep the files
+                // rather than risk deleting a live instance's log.
+                return true;
+            }
+        }
+        catch
+        {
+            // No process with that id is running.
+            return false;
         }
     }
 
