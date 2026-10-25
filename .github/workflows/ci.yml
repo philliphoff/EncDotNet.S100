@@ -51,6 +51,43 @@ jobs:
       - name: Run route check sample
         run: dotnet run --no-build --configuration Release --project samples/EncDotNet.S100.Samples.RouteCheck
 
+      - name: Smoke start viewer on X11
+        # The X11 and FreeDesktop (D-Bus) backends only load on Linux, so a
+        # dependency that breaks them passes every test and still kills the
+        # viewer at startup. The MCP endpoint file is written only after the
+        # platform and the app are initialized, so its appearance means the
+        # viewer started.
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          command -v xvfb-run >/dev/null || { sudo apt-get update && sudo apt-get install -y xvfb; }
+          url_file="$RUNNER_TEMP/viewer-mcp.url"
+          log="$RUNNER_TEMP/viewer-smoke.log"
+          # Its own session and process group, so xvfb-run, Xvfb, dotnet run
+          # and the viewer can be stopped together; the viewer doesn't exit
+          # on SIGTERM alone.
+          setsid xvfb-run -a dotnet run --no-build --configuration Release --project src/EncDotNet.S100.Viewer -- \
+            --ephemeral --mcp-port-file "$url_file" --crash-log "$RUNNER_TEMP/viewer-crash.log" >"$log" 2>&1 &
+          pid=$!
+          stop_viewer() { kill -KILL -- "-$pid" 2>/dev/null || true; }
+          for _ in $(seq 1 90); do
+            if [ -s "$url_file" ]; then
+              echo "Viewer started: $(cat "$url_file")"
+              stop_viewer
+              exit 0
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "::error::Viewer exited during startup"
+              cat "$log"
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "::error::Viewer did not start within 90 seconds"
+          cat "$log"
+          stop_viewer
+          exit 1
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
