@@ -152,7 +152,10 @@ internal sealed class FeedbackService : IFeedbackService
             Datasets = datasets,
             LastError = lastError,
             PreviousCrashes = previousCrashes,
-            CrashLogTail = _crashes.HasCrashes ? _crashes.CrashLogTail : null,
+            CrashLogTail = _crashes.HasCrashes ? HomePathRedactor.Redact(_crashes.CrashLogTail) : null,
+            PreviousSessionLogTail = _crashes.HasCrashes
+                ? HomePathRedactor.Redact(_crashes.PreviousSessionLogTail)
+                : null,
         };
     }
 

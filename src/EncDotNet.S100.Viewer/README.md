@@ -1476,8 +1476,11 @@ that session ended abnormally:
 
 - A **Viewer recovered from an unexpected shutdown** notification appears,
   with a **Send feedback** button.
-- Each detected session's start time, process ID and version, and the end of
-  `viewer-crash.log`, are added to the feedback report automatically. They're
+- Each detected session's start time, process ID and version, the end of
+  `viewer-crash.log`, and the end of the most recent crashed session's log
+  (from the rolling logs in the `logs` folder next to your settings, at most
+  5 files of 1 MB) are added to the feedback report automatically. Your home
+  folder is shown as `~` in those log excerpts. They're
   kept separately from the most-recent-error slot, so a later, non-fatal error
   doesn't replace them before you send feedback. Every detected crash is
   reported, not only the latest.
@@ -1486,7 +1489,7 @@ Markers are per process, so this works when you run several copies of
 SoundCharts side by side: one copy's normal exit never removes another's crash
 evidence. SoundCharts checks whether a process is alive by its ID and start
 time, on Windows, macOS and Linux, so a reused process ID isn't mistaken for a
-running session. `--ephemeral` runs don't write markers.
+running session. `--ephemeral` runs don't write markers or rolling logs.
 
 ## Connect AI agents over MCP
 

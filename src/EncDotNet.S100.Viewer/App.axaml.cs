@@ -437,18 +437,21 @@ public partial class App : Application
     {
         var services = new ServiceCollection();
 
-        // OpenTelemetry tracing/metrics/logging — opt-in via OTEL_* env vars.
-        // CLI --log-file / --verbose add a file sink and lower the log
-        // floor for agent runs.
-        services.AddS100Observability(
-            logFilePath: StartupOptions?.LogFile,
-            verbose: StartupOptions?.Verbose ?? false);
-
         // Resolved on-disk locations for this run (settings + caches),
         // honouring --data-dir / S100_DATA_DIR (and --settings for the
         // settings file). A single shared instance drives the settings
-        // file, the disk caches, and the crash-marker directory.
-        services.AddSingleton<ViewerDataPaths>(_ => ViewerDataPaths.Resolve(StartupOptions));
+        // file, the disk caches, the logs, and the crash-marker directory.
+        var dataPaths = ViewerDataPaths.Resolve(StartupOptions);
+        services.AddSingleton(dataPaths);
+
+        // OpenTelemetry tracing/metrics/logging — opt-in via OTEL_* env vars.
+        // CLI --log-file / --verbose add a file sink and lower the log
+        // floor for agent runs. Rolling logs under the data directory are
+        // always on, except for ephemeral automation runs.
+        services.AddS100Observability(
+            logFilePath: StartupOptions?.LogFile,
+            verbose: StartupOptions?.Verbose ?? false,
+            rollingLogDirectory: StartupOptions?.Ephemeral == true ? null : dataPaths.LogsDirectory);
 
         // Persisted user settings, with any command-line overrides
         // (settings path / --ephemeral / MCP / palette / display
@@ -1567,11 +1570,17 @@ public partial class App : Application
 
         PreviousUncleanShutdowns = crashed;
 
-        // Capture every detected crash (with a tail of the crash log) into the
-        // sticky crash history so the feedback report always includes it,
+        // Capture every detected crash (with a tail of the crash log and of
+        // the most recent crashed session's rolling log) into the sticky
+        // crash history so the feedback report always includes it,
         // independent of any runtime errors recorded later this session.
         var tail = CrashLog.ReadTail(8000);
+        var mostRecent = crashed[^1];
+        var sessionLogTail = _services?.GetService<ViewerDataPaths>() is { } paths
+            ? EncDotNet.S100.Viewer.Diagnostics.RollingFileLoggerProvider.ReadSessionTail(
+                paths.LogsDirectory, mostRecent.Pid, mostRecent.StartedUtc, 16000)
+            : null;
         _services?.GetService<EncDotNet.S100.Viewer.Diagnostics.ICrashHistory>()
-            ?.Capture(crashed, tail);
+            ?.Capture(crashed, tail, sessionLogTail);
     }
 }

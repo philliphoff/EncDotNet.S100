@@ -53,6 +53,14 @@ internal sealed partial record FeedbackReport
     /// </summary>
     public string? CrashLogTail { get; init; }
 
+    /// <summary>
+    /// Best-effort tail of the rolling viewer log written by the most recent
+    /// session in <see cref="PreviousCrashes"/>, with the home directory
+    /// replaced by <c>~</c>, or <see langword="null"/> when none was
+    /// available or no crash was detected.
+    /// </summary>
+    public string? PreviousSessionLogTail { get; init; }
+
     private static readonly ReportJsonContext ReportJson = new(new JsonSerializerOptions
     {
         WriteIndented = true,
