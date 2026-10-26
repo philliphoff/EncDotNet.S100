@@ -35,6 +35,18 @@ public class ProductTraitsTests
     }
 
     [Fact]
+    public void DisplayPlaneAuthorityProvider_CanBeCreatedByReflection()
+    {
+        // The perf runner's version probe builds the factory reflectively
+        // (tools/EncDotNet.S100.PerfRunner/SharedInfrastructure.cs), so the
+        // provider needs a real parameterless constructor.
+        var provider = Assert.IsType<DisplayPlaneAuthorityProvider>(
+            Activator.CreateInstance(typeof(DisplayPlaneAuthorityProvider)));
+
+        Assert.Same(ProductRegistry.Default.DisplayPlanes, provider.Current);
+    }
+
+    [Fact]
     public void PortrayalSpecName_NullProduct_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => ProductRegistry.Default.PortrayalSpecName(null!));
