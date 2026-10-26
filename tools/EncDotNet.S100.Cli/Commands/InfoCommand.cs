@@ -11,7 +11,8 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <summary>
 /// <c>s100 info &lt;dataset&gt;</c> — reports the detected product specification,
 /// edition, whether the dataset can be rendered headlessly, and (for
-/// time-series datasets) the available time steps with their indices.
+/// time-series datasets) the available time steps with their indices; for
+/// weather files (GRIB2, NetCDF), the parameters and why any isn't used.
 /// </summary>
 internal sealed class InfoCommand : Command<DatasetCommandSettings>
 {
@@ -29,6 +30,8 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             }
 
             var processor = DatasetProcessorLoader.Create(factory, spec, settings);
+            // A lazily reading processor (GRIB2, NetCDF) keeps its file open.
+            using var processorLifetime = processor as IDisposable;
 
             var table = new Table().Border(TableBorder.Rounded);
             table.AddColumn("Property");
@@ -132,6 +135,27 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
                         ta.AvailableTimes[i].ToString("yyyy-MM-dd HH:mm:ss"));
                 }
                 AnsiConsole.Write(timeTable);
+            }
+
+            // Weather files (GRIB2, NetCDF): what the file holds, and why
+            // anything isn't drawn or sampled (issue #1074).
+            if (processor is WeatherGridProcessorBase weather && weather.Contents.Count > 0)
+            {
+                var contentsTable = new Table().Border(TableBorder.Rounded).Title("Weather parameters");
+                contentsTable.AddColumn("Parameter");
+                contentsTable.AddColumn("Level");
+                contentsTable.AddColumn("Steps");
+                contentsTable.AddColumn("Used");
+                foreach (var entry in weather.Contents)
+                {
+                    contentsTable.AddRow(
+                        Markup.Escape(entry.Name),
+                        Markup.Escape(entry.Level),
+                        entry.Steps.ToString(),
+                        entry.IsUsed ? "[green]yes[/]" : $"[yellow]no[/]: {Markup.Escape(entry.Reason!)}");
+                }
+
+                AnsiConsole.Write(contentsTable);
             }
 
             return 0;

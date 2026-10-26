@@ -27,6 +27,12 @@ What it writes (see tests/datasets/GRIB2/README.md):
   (5.3, 5.2 and 5.0) with the land bitmap.
 - gfswave-wcoast-htsgw-f003-jpeg2000.grib2: one GFS-Wave message exactly as
   NCEP serves it (template 5.40), for the unsupported-template test.
+- gfswave-useast-filter.grib2 (issue #1074): what a NOMADS GRIB filter
+  request for three forecast hours returns, the hours appended one after
+  another: GFS-Wave 0.25° WIND, WDIR, UGRD, VGRD, HTSGW, PERPW, DIRPW,
+  WVHGT, the three SWELL partitions and WVDIR at f000, f003 and f006, in
+  NCEP's file order, cropped and repacked by ecCodes (5.3 order 1) with the
+  land bitmap.
 """
 
 import os
@@ -163,6 +169,16 @@ def main():
         for var, packing in (("HTSGW", "grid_complex_spatial_differencing"),
                              ("PERPW", "grid_complex"),
                              ("DIRPW", "grid_simple"))
+    ]
+    # Issue #1074: a GRIB filter style download, one forecast hour after another.
+    filter_vars = (":WIND:surface:", ":WDIR:surface:", ":UGRD:surface:", ":VGRD:surface:",
+                   ":HTSGW:surface:", ":PERPW:surface:", ":DIRPW:surface:", ":WVHGT:surface:",
+                   ":SWELL:1 in sequence:", ":SWELL:2 in sequence:", ":SWELL:3 in sequence:",
+                   ":WVDIR:surface:")
+    files["gfswave-useast-filter.grib2"] = [
+        crop(fetch_message(f"{wave}.global.0p25.f{fh:03d}.grib2", var),
+             "grid_complex_spatial_differencing", order=1)
+        for fh in (0, 3, 6) for var in filter_vars
     ]
     files["gfswave-wcoast-htsgw-f003-jpeg2000.grib2"] = [
         fetch_message(f"{wave}.wcoast.0p16.f003.grib2", ":HTSGW:surface:")

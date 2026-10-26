@@ -35,7 +35,8 @@ public sealed class NonS100ProductViewTests : IDisposable
 
     public void Dispose()
     {
-        ProductRegistry.Default.Unregister(FakeWeatherProduct.Spec);
+        // Put the real GRIB2 registration (#1074) back in place of the fake.
+        ProductRegistry.Default.Register(WeatherProducts.Grib2);
         Directory.Delete(_dir, recursive: true);
     }
 

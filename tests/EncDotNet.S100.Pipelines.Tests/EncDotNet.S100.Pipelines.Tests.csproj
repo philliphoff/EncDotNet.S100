@@ -26,6 +26,7 @@
     <Compile Include="..\_shared\SyntheticS128Catalogue.cs" Link="TestSupport\SyntheticS128Catalogue.cs" />
     <Compile Include="..\_shared\FakeWeatherProduct.cs" Link="TestSupport\FakeWeatherProduct.cs" />
     <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
+    <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -60,5 +61,10 @@
     <Content Include="..\datasets\S124\navwarn_drawing_*.gml;..\datasets\S124\navwarn_with_xlinks.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <!-- NOAA GFS and GFS-Wave subsets (issue #1074); see tests/datasets/GRIB2/README.md. -->
+    <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\GRIB2\%(Filename)%(Extension)" />
+  </ItemGroup>
 
 </Project>

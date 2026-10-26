@@ -20,6 +20,9 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// and swell (10,0,14) before the primary wave direction (10,0,10), and wave
 /// period is the peak period (10,0,34) before the mean period of combined wind
 /// waves and swell (10,0,15) and the primary wave mean period (10,0,11).
+/// Mean sea level pressure is NCEP's PRMSL (0,3,1) before ECMWF's <c>msl</c>,
+/// which is plain pressure (0,3,0) at mean sea level: the row's level keeps
+/// surface pressure, also (0,3,0), out.
 /// </para>
 /// </remarks>
 public static class WeatherParameters
@@ -51,6 +54,9 @@ public static class WeatherParameters
     /// <summary>Canonical id of the significant height of wind waves (wind sea).</summary>
     public const string WindSeaHeight = "wave.wind_sea.hs";
 
+    /// <summary>Canonical id of the direction wind waves (wind sea) come from, in degrees true.</summary>
+    public const string WindSeaDirection = "wave.wind_sea.dir";
+
     /// <summary>Canonical id of the significant height of swell.</summary>
     public const string SwellHeight = "wave.swell.hs";
 
@@ -66,7 +72,7 @@ public static class WeatherParameters
     /// <summary>Group id of the combined sea state: height, direction and period.</summary>
     public const string WaveGroup = "wave";
 
-    /// <summary>Group id of the wind-sea height.</summary>
+    /// <summary>Group id of the wind sea: height and direction.</summary>
     public const string WindSeaGroup = "wave.wind_sea";
 
     /// <summary>Group id of the swell height.</summary>
@@ -77,7 +83,10 @@ public static class WeatherParameters
 
     private static readonly WeatherLevel TenMetres = WeatherLevel.AboveGround(Length.FromMetres(10));
 
-    /// <summary>Every row of the table, in the order of design note §3.5.</summary>
+    /// <summary>
+    /// Every row of the table, in the order of design note §3.5, with the
+    /// wind-sea direction (NCEP's WVDIR, issue #1074) after the wind-sea height.
+    /// </summary>
     public static IReadOnlyList<WeatherParameterDefinition> All { get; } =
     [
         new(WindU, "Wind, eastward component", WeatherUnit.MetresPerSecond, WindGroup, TenMetres,
@@ -100,10 +109,12 @@ public static class WeatherParameters
             ["sea_surface_wave_period_at_variance_spectral_density_maximum", "sea_surface_wave_mean_period"]),
         new(WindSeaHeight, "Wind-sea significant height", WeatherUnit.Metres, WindSeaGroup, null,
             [new(10, 0, 5)], ["sea_surface_wind_wave_significant_height"]),
+        new(WindSeaDirection, "Wind-sea direction (from)", WeatherUnit.DegreesTrue, WindSeaGroup, null,
+            [new(10, 0, 4)], ["sea_surface_wind_wave_from_direction"]),
         new(SwellHeight, "Swell significant height", WeatherUnit.Metres, SwellGroup, null,
             [new(10, 0, 8)], ["sea_surface_swell_wave_significant_height"]),
         new(PressureMsl, "Mean sea level pressure", WeatherUnit.Pascals, PressureGroup, WeatherLevel.MeanSeaLevel,
-            [new(0, 3, 1)], ["air_pressure_at_mean_sea_level", "air_pressure_at_sea_level"]),
+            [new(0, 3, 1), new(0, 3, 0)], ["air_pressure_at_mean_sea_level", "air_pressure_at_sea_level"]),
     ];
 
     /// <summary>Finds the row with canonical id <paramref name="id"/>.</summary>

@@ -29,11 +29,12 @@
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S411\EncDotNet.S100.Datasets.S411.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />
-    <!-- Weather grids (design note weather-sources.md §3.3): the NetCDF reader
-         brings EncDotNet.S100.Datasets.Weather, where the shared grid model and
-         styles live. WeatherGridProcessorBase is here, not in Datasets.Weather,
+    <!-- Weather grids (design note weather-sources.md §3.3): the GRIB2 and NetCDF
+         readers bring EncDotNet.S100.Datasets.Weather, where the shared grid model
+         and styles live. WeatherGridProcessorBase is here, not in Datasets.Weather,
          because it implements IHeadlessImageRenderer and ILoadedDatasetProjection,
          which live in this project. -->
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.Grib\EncDotNet.S100.Datasets.Grib.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.NetCdf\EncDotNet.S100.Datasets.NetCdf.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.Weather\EncDotNet.S100.Datasets.Weather.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />

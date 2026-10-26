@@ -197,6 +197,7 @@ internal sealed class WeatherGridSampler : ICoverageSampler
         WeatherParameters.WaveDirection => ("wave_from_direction", "deg"),
         WeatherParameters.WavePeriod => ("wave_period", "s"),
         WeatherParameters.WindSeaHeight => ("wind_wave_significant_height", "m"),
+        WeatherParameters.WindSeaDirection => ("wind_wave_from_direction", "deg"),
         WeatherParameters.SwellHeight => ("swell_wave_significant_height", "m"),
         WeatherParameters.PressureMsl => ("air_pressure_at_mean_sea_level", "Pa"),
         _ => (id, null),

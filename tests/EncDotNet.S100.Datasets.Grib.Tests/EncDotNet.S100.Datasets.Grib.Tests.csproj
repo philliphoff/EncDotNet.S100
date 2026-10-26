@@ -23,6 +23,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- NOAA GFS and GFS-Wave subsets; see tests/datasets/GRIB2/README.md. -->
     <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
   </ItemGroup>
