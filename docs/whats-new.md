@@ -6,6 +6,24 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **NetCDF wind and wave files.** A new `EncDotNet.S100.Datasets.NetCdf`
+  package reads NetCDF-CF grids with no native code: NetCDF-3 (classic and
+  64-bit offset, ERDDAP's `.nc` output) with a managed reader, and NetCDF-4
+  on PureHDF (deflate and shuffle). It finds the coordinates, decodes CF time
+  units, applies packing and missing values, and matches variables to the
+  weather parameter table by `standard_name`; files it can't use fail with a
+  message listing their variables or naming the grid type.
+  `NetCdfDatasetProcessor` (on a new `WeatherGridProcessorBase` that the
+  GRIB2 processor will share) draws the wave height fill and wind barbs,
+  steps through time, picks and samples with units, and renders headlessly,
+  and the default registry recognises the files as `NetCDF/4.0.0` or
+  `NetCDF/3.0.0`, so they open in the viewer, `s100 render` and the MCP
+  `sample_coverage` tools. Not for navigation. Breaking changes:
+  `S100Products.CreateDefaultRegistry()` (and so `ProductRegistry.Default`)
+  now also holds `NetCDF`, which `AddAllS100Products()` leaves out (use
+  `AddWeatherProducts()`), and `UnsupportedWeatherGridException` now derives
+  from `NotSupportedException`. See its
+  [README](../src/EncDotNet.S100.Datasets.NetCdf/README.md).
 - **GRIB2 decoder.** A new `EncDotNet.S100.Datasets.Grib` package decodes
   GRIB2 in managed code, with no native dependencies: several messages per
   file and repeated sections, the regular latitude/longitude grid (template

@@ -112,7 +112,7 @@ internal static class PointGlyphHeadlessAdapter
         }.Render(viewport, layers);
     }
 
-    private static Viewport FitViewport(MercatorBounds extent, int widthPixels, int heightPixels, double padding)
+    internal static Viewport FitViewport(MercatorBounds extent, int widthPixels, int heightPixels, double padding)
     {
         double minX = extent.MinX;
         double minY = extent.MinY;

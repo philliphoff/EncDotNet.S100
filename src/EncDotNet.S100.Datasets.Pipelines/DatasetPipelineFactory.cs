@@ -359,7 +359,13 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     {
         try
         {
-            using var hdf5 = PureHdfFile.Open(path);
+            // Own the stream: PureHDF can leave the file handle of a path it
+            // opened itself open when the open fails (an .h5 file that isn't
+            // HDF5, such as a NetCDF-3 file), which keeps the file locked on
+            // Windows. (The signature may sit after a user block, so the
+            // leading bytes alone can't rule HDF5 out.)
+            using var stream = File.OpenRead(path);
+            using var hdf5 = PureHdfFile.Open(stream);
             return ClaimHdf5(hdf5, registry);
         }
         catch

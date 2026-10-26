@@ -5,7 +5,7 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// regional grid that crosses the antimeridian, or one whose geometry is
 /// invalid. The message says why, in words a user can act on.
 /// </summary>
-public class UnsupportedWeatherGridException : Exception
+public class UnsupportedWeatherGridException : NotSupportedException
 {
     /// <summary>Creates the exception with a message.</summary>
     /// <param name="message">Why the grid isn't supported.</param>

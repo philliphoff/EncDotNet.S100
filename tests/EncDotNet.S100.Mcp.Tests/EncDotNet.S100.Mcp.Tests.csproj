@@ -39,6 +39,7 @@
   -->
   <ItemGroup>
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\FakeDatasetCatalog.cs" Link="Fakes\FakeDatasetCatalog.cs" />
+    <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\LoadedDatasetFactory.cs" Link="Fakes\LoadedDatasetFactory.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S101Synth.cs" Link="Fakes\S101Synth.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S102Synth.cs" Link="Fakes\S102Synth.cs" />

@@ -265,6 +265,7 @@ split into focused packages.
 | **EncDotNet.S100.Datasets.Grib** | Managed GRIB2 decoder for wind and wave grids: regular latitude/longitude grids, analysis, forecast and time-interval products, and simple, complex, spatially differenced and PNG packing with bitmaps. Indexes fields on open, decodes on demand, and maps fields onto the weather grid model. No native dependencies. Not for navigation. |
 | **EncDotNet.S100.Datasets.Weather** | Shared in-memory model for GRIB2 and NetCDF-CF wind and wave grids: the canonical parameter table, normalisation to the coverage grid order, and an `ICoverageSource` with lazily decoded time steps, overview levels and wind speed and direction derived from U and V. Not for navigation. |
 | **EncDotNet.S100.Datasets.Pipelines** | Per-spec `IDatasetProcessor` implementations, the S-98 interoperability authority, the validation runner, the `ConcatReports` rebadge helper used by S-57, and the passage-check data sources (S-102, S-101, S-104) over loaded datasets. |
+| **EncDotNet.S100.Datasets.NetCdf** | Managed NetCDF-CF reader for wind and wave grids: NetCDF-3 (classic, 64-bit offset) and NetCDF-4 (on PureHDF, deflate and shuffle), with the CF interpretation that builds a weather grid set. Drawn by `NetCdfDatasetProcessor` in Datasets.Pipelines. Not for navigation. |
 
 ### Navigation
 
