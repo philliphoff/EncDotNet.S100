@@ -2,6 +2,8 @@ using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Pipelines.Sampling;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S102.Validation;
 using EncDotNet.S100.Hdf5;
@@ -35,7 +37,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// directly.
 /// </para>
 /// </remarks>
-public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection
+public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection, ICoverageSampler
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;
@@ -63,6 +65,10 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     /// <inheritdoc />
     public LoadedDatasetData CreateLoadedData() => new S102CoverageData(_source);
+
+    /// <inheritdoc />
+    /// <remarks>Depth and uncertainty at the cell containing the point; no time dimension.</remarks>
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => new S102CoverageSampler(_source).FindSites(query);
 
     private DatasetMetadata BuildMetadata()
     {

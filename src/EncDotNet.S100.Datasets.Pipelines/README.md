@@ -378,6 +378,42 @@ exchange-set updates the processor applied. The MCP `identify_features`,
 `sample_coverage` and `describe_feature` tools map `ToolResult<T>` onto the MCP
 protocol.
 
+### Coverage sampling
+
+`SampleCoverageService` (the `sample_coverage` and `sample_coverage_along`
+tools, and `s100 identify`) doesn't know any product. It samples the catalog
+entries of the requested spec whose payload implements `ICoverageSampler`, a
+processor capability in `EncDotNet.S100.Core`:
+
+- `ICoverageSampler.FindSites(query)` says where the dataset can answer a
+  point: the grid node nearest it, or every station of a station series. Each
+  `CoverageSampleSite` has a kind (grid or station), a rank (cell area or
+  distance), the run, its time steps' window, and `Read` / `ReadSteps`, which
+  return a `SampledValue`.
+- `CoverageSampling` chooses between datasets and sites and applies the time
+  handling: grids before stations, the run covering the requested time, the
+  finest grid or nearest station, then the newest run; one step of tolerance
+  at either end; `time_out_of_range` or the nearest step; and range and
+  series windows with `truncated`, `coveredFrom` and `coveredTo`. The
+  `SampleAt`, `SampleWindow` and `SampleAlong` extension methods do the same
+  for one sampler, without a catalog.
+- `SampledValue.GetFields()` describes any sample as `SampledField`s, each with
+  a `Name`, `Quantity` (`depth`, `water_level_height`, `current_speed`,
+  `significant_wave_height`), `Unit` (`m`, `kn`, `deg`) and `Value`. S-102,
+  S-104 and S-111 keep their typed shapes (`DepthSample`, `WaterLevelSample`
+  and so on), so their MCP output is unchanged. A new product returns a
+  `CoverageFieldsSample` (MCP `$kind` `"fields"`), whose fields reach MCP
+  callers with no tool changes.
+
+`S102DatasetProcessor`, `S104DatasetProcessor` and `S111DatasetProcessor`
+implement the capability, and so do their catalog payloads (`S102CoverageData`,
+`S104CoverageData`, `S104StationSeriesData`, `S111CoverageData` and
+`S111StationSeriesData`), with the same code. A product with no payload of
+its own reaches the catalog as a `ProductDatasetData` that also implements
+`ICoverageSampler`. A spec
+with no sampler loaded is `spec_not_supported_for_tool`, except S-102, S-104
+and S-111, which report no coverage.
+
 ## Validation
 
 Every processor implements `IDatasetProcessor.Validate()`:

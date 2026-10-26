@@ -65,6 +65,10 @@ public static class McpJson
                 new JsonDerivedType(typeof(WaterLevelStationSample), "water_level_station"),
                 new JsonDerivedType(typeof(SurfaceCurrentSample), "surface_current"),
                 new JsonDerivedType(typeof(SurfaceCurrentStationSample), "surface_current_station"),
+                // The generic shape: any product without a typed shape of its
+                // own (a weather grid, say) samples through it, so its fields
+                // reach callers with no change here.
+                new JsonDerivedType(typeof(CoverageFieldsSample), "fields"),
             },
         };
     }
@@ -114,6 +118,7 @@ public static class McpJson
 [JsonSerializable(typeof(WaterLevelStationSample))]
 [JsonSerializable(typeof(SurfaceCurrentSample))]
 [JsonSerializable(typeof(SurfaceCurrentStationSample))]
+[JsonSerializable(typeof(CoverageFieldsSample))]
 // Errors, written by their concrete type.
 [JsonSerializable(typeof(InvalidArgument))]
 [JsonSerializable(typeof(DatasetNotFound))]

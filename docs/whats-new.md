@@ -6,6 +6,21 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Coverage sampling is a processor capability.** `ICoverageSampler` (in
+  `EncDotNet.S100.Core`) finds where a dataset can answer a point, and
+  `CoverageSampling` chooses the dataset and applies the time handling
+  (nearest step, one step of tolerance, `time_out_of_range` or the nearest
+  step, range and series windows) for every product. The S-102, S-104 and
+  S-111 processors and catalog payloads implement it, and
+  `SampleCoverageService` no longer names a product: any coverage whose
+  catalog payload samples (a `ProductDatasetData` that implements
+  `ICoverageSampler`, for example) answers `sample_coverage` and `sample_coverage_along`, with its
+  values as `$kind` `"fields"` entries that carry their quantity and unit.
+  The S-102, S-104 and S-111 results are unchanged. Breaking changes:
+  `SampledValue` and `SampleTimeStatus` moved to `EncDotNet.S100.Core` (same
+  namespace), and `SampledValue` declares the abstract `GetFields()`, so a
+  subtype outside the library must implement it. See the
+  [Datasets.Pipelines README](../src/EncDotNet.S100.Datasets.Pipelines/README.md#coverage-sampling).
 - **Weather grid model.** A new `EncDotNet.S100.Datasets.Weather` package
   holds the in-memory model the GRIB2 and NetCDF readers will share: a
   `WeatherGridSet` (model and run time, a regular latitude/longitude grid,

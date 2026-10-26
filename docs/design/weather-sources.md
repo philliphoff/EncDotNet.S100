@@ -711,6 +711,13 @@ capability, not the spec name. Weather processors then answer
 `sample_coverage` and `sample_coverage_along` with no MCP changes. That
 matters for route checks later (§10.5).
 
+As built (#1063): `ICoverageSampler.FindSites` returns the grid node or
+stations that can answer a point, and `CoverageSampling` (both in
+`EncDotNet.S100.Core`) does the choosing and the time handling for every
+product. A weather processor returns `CoverageFieldsSample`s, whose
+`SampledField`s carry each value's quantity and unit, and reaches the catalog
+as a `ProductDatasetData` that implements `ICoverageSampler`.
+
 ### 8.9 Left as is
 
 - **`PickService` station time-series views** (S-104, S-111). These are
