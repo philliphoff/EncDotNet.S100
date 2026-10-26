@@ -28,7 +28,6 @@ public class ErrorTests
     }
 
     [Theory]
-    [InlineData(40, "5.40 (JPEG 2000)")]
     [InlineData(42, "5.42 (CCSDS/AEC)")]
     [InlineData(4, "5.4 (IEEE floating point)")]
     [InlineData(61, "5.61 (simple packing with logarithmic preprocessing)")]
@@ -44,7 +43,7 @@ public class ErrorTests
         Assert.Equal(template, indexed.DataRepresentation.TemplateNumber);
         Assert.False(indexed.IsSupported);
         Assert.Contains(named, indexed.UnsupportedReason);
-        Assert.Contains("only templates 5.0, 5.2, 5.3 and 5.41", indexed.UnsupportedReason);
+        Assert.Contains("only templates 5.0, 5.2, 5.3, 5.40 and 5.41", indexed.UnsupportedReason);
         var ex = Assert.Throws<UnsupportedGribException>(() => grib.ReadValues(indexed, TestContext.Current.CancellationToken));
         Assert.Contains(named, ex.Message);
     }
@@ -52,8 +51,8 @@ public class ErrorTests
     [Fact]
     public void Unsupported_field_doesnt_stop_the_others_decoding()
     {
-        var jpeg = Field() with { Packing = new RawTestPacking(40, new byte[18], [], 35) };
-        using var grib = GribFile.Open(GribTestEncoder.File(GribTestEncoder.Message(jpeg), GribTestEncoder.Message(Field())));
+        var ccsds = Field() with { Packing = new RawTestPacking(42, new byte[18], [], 35) };
+        using var grib = GribFile.Open(GribTestEncoder.File(GribTestEncoder.Message(ccsds), GribTestEncoder.Message(Field())));
 
         Assert.False(grib.Fields[0].IsSupported);
         Assert.Equal(34f, grib.ReadValues(grib.Fields[1], TestContext.Current.CancellationToken)[^1]);

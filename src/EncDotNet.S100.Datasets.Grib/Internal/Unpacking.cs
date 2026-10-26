@@ -20,6 +20,15 @@ internal readonly struct Scaling
     }
 
     public float Apply(long x) => (float)(((x * _binary) + _reference) * _decimal);
+
+    /// <summary>
+    /// The value of every point of a field packed in 0 bits: <c>R</c> itself,
+    /// unscaled. That's how ecCodes writes and reads constant fields (checked
+    /// with 2.50.0 for templates 5.0 and 5.40): it stores the value as
+    /// <c>R</c> and leaves <c>D</c> as it was, so applying <c>10^−D</c>
+    /// would be wrong by that factor.
+    /// </summary>
+    public static float Constant(GribDataRepresentation drs) => drs.ReferenceValue;
 }
 
 /// <summary>Decodes data representation template 5.0, simple packing.</summary>
@@ -33,7 +42,7 @@ internal static class SimpleUnpacking
         var bits = drs.BitsPerValue;
         if (bits == 0)
         {
-            Array.Fill(values, scaling.Apply(0));
+            Array.Fill(values, Scaling.Constant(drs));
             return values;
         }
 
@@ -250,6 +259,47 @@ internal static class ComplexUnpacking
     }
 }
 
+/// <summary>Decodes data representation template 5.40, JPEG 2000 packing.</summary>
+/// <remarks>
+/// Section 7 is a JPEG 2000 codestream holding one greyscale component
+/// whose samples, read row by row, are the packed integers. NCEP's encoders
+/// write the values as one row (width = the packed count, height 1) when
+/// there's a bitmap and as Ni × Nj otherwise; either works, as only the
+/// order matters. The type of compression (lossless or lossy) and target
+/// ratio in the template need nothing from the decoder: the codestream says
+/// which transform it uses. A depth of 0 means every value is <c>R</c>, and
+/// encoders then write an empty Section 7, as ecCodes does.
+/// </remarks>
+internal static class Jpeg2000Unpacking
+{
+    public static float[] Unpack(ReadOnlySpan<byte> data, GribDataRepresentation drs, CancellationToken cancellationToken)
+    {
+        var count = SimpleUnpacking.PackedCount(drs);
+        var scaling = new Scaling(drs);
+        var values = new float[count];
+        if (drs.BitsPerValue == 0 || count == 0)
+        {
+            Array.Fill(values, Scaling.Constant(drs));
+            return values;
+        }
+
+        var image = Jpeg2000.Jpeg2000Decoder.Decode(data, cancellationToken);
+        if ((long)image.Width * image.Height < count)
+        {
+            throw new GribFormatException(
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"The JPEG 2000 image has {image.Width} × {image.Height} samples, fewer than the {count} values Section 5 gives."));
+        }
+
+        var samples = image.Samples;
+        for (var i = 0; i < count; i++)
+            values[i] = scaling.Apply(samples[i]);
+
+        return values;
+    }
+}
+
 /// <summary>Decodes data representation template 5.41, PNG packing.</summary>
 /// <remarks>
 /// Section 7 is a PNG image whose pixels, read row by row, are the packed
@@ -270,7 +320,7 @@ internal static class PngUnpacking
         var values = new float[count];
         if (drs.BitsPerValue == 0 || count == 0)
         {
-            Array.Fill(values, scaling.Apply(0));
+            Array.Fill(values, Scaling.Constant(drs));
             return values;
         }
 

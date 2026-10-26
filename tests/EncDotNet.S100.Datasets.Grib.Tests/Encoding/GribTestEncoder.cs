@@ -180,12 +180,19 @@ internal static class GribTestEncoder
                 integers[i] = Math.Max(0, (long)Math.Round(((values[i] * decimalFactor) - reference) * binaryFactor));
         }
 
+        // A constant field has 0 bits, and its reference value is the value
+        // itself, unscaled, as ecCodes and NCEP's g2lib write and read it.
+        var constant = present.Length > 0 && present.All(v => v == present[0]) && packing.Reference is null
+            && packing is SimpleTestPacking { Bits: null or 0 } or PngTestPacking { Depth: 0 };
+        if (constant)
+            reference = (float)values.First(v => !IsMissing(v));
+
         var common = new OctetWriter().F32(reference).S16(packing.BinaryScale).S16(packing.DecimalScale);
         switch (packing)
         {
             case SimpleTestPacking simple:
                 {
-                    var bits = simple.Bits ?? BitWriter.BitsFor((ulong)(integers.Length == 0 ? 0 : integers.Max()));
+                    var bits = constant ? 0 : simple.Bits ?? BitWriter.BitsFor((ulong)(integers.Length == 0 ? 0 : integers.Max()));
                     var writer = new BitWriter();
                     if (bits > 0)
                     {
