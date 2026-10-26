@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <Description>A managed GRIB2 decoder for wind and wave grids: sections 0 to 8 with several messages per file and repeated sections, the regular latitude/longitude grid (template 3.0), analysis and forecast products and their time-interval statistics (templates 4.0 and 4.8), simple, complex, spatially differenced and PNG packing (templates 5.0, 5.2, 5.3 and 5.41) and the bitmap. Indexes the fields when a file opens, decodes values only when asked, and maps fields onto the EncDotNet.S100.Datasets.Weather grid model. No native dependencies. Not for navigation.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Datasets.Grib.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.Weather\EncDotNet.S100.Datasets.Weather.csproj" />
+  </ItemGroup>
+
+</Project>
