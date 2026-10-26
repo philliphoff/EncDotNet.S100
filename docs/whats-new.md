@@ -24,6 +24,17 @@ month. For package versions and release assets, see
   `AddWeatherProducts()`), and `UnsupportedWeatherGridException` now derives
   from `NotSupportedException`. See its
   [README](../src/EncDotNet.S100.Datasets.NetCdf/README.md).
+- **GRIB2 decoder.** A new `EncDotNet.S100.Datasets.Grib` package decodes
+  GRIB2 in managed code, with no native dependencies: several messages per
+  file and repeated sections, the regular latitude/longitude grid (template
+  3.0) in any scanning mode, analysis, forecast and time-interval products
+  (4.0 and 4.8), and simple, complex, spatially differenced and PNG packing
+  (5.0, 5.2, 5.3 and 5.41) with bitmaps. `GribFile` indexes the fields when
+  it opens and decodes values only when asked, and each `GribField` maps onto
+  the weather grid model (native grid, level, canonical parameter and a lazy
+  `WeatherStepDecoder`). GRIB1, JPEG 2000 (5.40), CCSDS (5.42) and other
+  templates fail with a message naming them. See its
+  [README](../src/EncDotNet.S100.Datasets.Grib/README.md).
 - **Coverage sampling is a processor capability.** `ICoverageSampler` (in
   `EncDotNet.S100.Core`) finds where a dataset can answer a point, and
   `CoverageSampling` chooses the dataset and applies the time handling

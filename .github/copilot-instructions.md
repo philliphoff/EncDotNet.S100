@@ -54,6 +54,7 @@ src/
   EncDotNet.S100.Datasets.S201/      # S-201 aids to navigation information (IALA) reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S411/      # S-411 sea ice reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S421/      # S-421 route plans reader + GML/XSLT portrayal
+  EncDotNet.S100.Datasets.Grib/      # Managed GRIB2 decoder (templates 3.0, 4.0/4.8, 5.0/5.2/5.3/5.41) for the weather readers
   EncDotNet.S100.Datasets.Weather/   # Shared wind and wave grid model + coverage source (GRIB2, NetCDF)
   EncDotNet.S100.Routes.Rtz/         # RTZ (IEC 61174 Annex S) route plan reader + writer
   EncDotNet.S100.Renderers.Skia/     # SkiaSharp coverage + vector rasteriser (no map projection)
@@ -68,6 +69,7 @@ tests/
   EncDotNet.S100.Datasets.S131.Tests/
   EncDotNet.S100.Datasets.S201.Tests/
   EncDotNet.S100.Datasets.S421.Tests/
+  EncDotNet.S100.Datasets.Grib.Tests/
   EncDotNet.S100.Datasets.Weather.Tests/
   EncDotNet.S100.ExchangeSets.Tests/
   EncDotNet.S100.Pipelines.Tests/    # Pipeline integration tests (S-101, S-102, coverage, vector, Skia)
