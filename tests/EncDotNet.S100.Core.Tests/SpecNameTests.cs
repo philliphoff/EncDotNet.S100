@@ -36,4 +36,53 @@ public class SpecNameTests
     {
         Assert.False(SpecName.TryNormalize(null, out _));
     }
+
+    [Theory]
+    [InlineData("GRIB2", "GRIB2")]
+    [InlineData("grib2", "GRIB2")]
+    [InlineData(" Grib2 ", "GRIB2")]
+    [InlineData("NetCDF", "NetCDF")]
+    [InlineData("NETCDF", "NetCDF")]
+    [InlineData("netcdf", "NetCDF")]
+    [InlineData("CAP", "CAP")]
+    [InlineData("cap", "CAP")]
+    public void Normalize_accepts_the_non_S100_format_names_in_their_canonical_casing(string raw, string expected)
+    {
+        Assert.Equal(expected, SpecName.Normalize(raw));
+        Assert.True(SpecName.IsNonS100Format(raw));
+    }
+
+    [Theory]
+    [InlineData("GRIB")]
+    [InlineData("GRIB1")]
+    [InlineData("NetCDF4")]
+    [InlineData("BUFR")]
+    public void Normalize_rejects_other_format_names(string raw)
+    {
+        Assert.False(SpecName.TryNormalize(raw, out _));
+        Assert.False(SpecName.IsNonS100Format(raw));
+    }
+
+    [Theory]
+    [InlineData("S-101")]
+    [InlineData(null)]
+    public void IsNonS100Format_is_false_for_S100_names(string? raw)
+    {
+        Assert.False(SpecName.IsNonS100Format(raw));
+    }
+
+    [Theory]
+    [InlineData("GRIB2/2.0.0", "GRIB2", 2, 0, 0)]
+    [InlineData("netcdf/4.0.0", "NetCDF", 4, 0, 0)]
+    [InlineData("NetCDF/3.0.0", "NetCDF", 3, 0, 0)]
+    [InlineData("cap@1.2.0", "CAP", 1, 2, 0)]
+    public void SpecRef_parses_a_format_name_with_its_version_as_the_edition(
+        string raw, string name, int major, int minor, int clarification)
+    {
+        var spec = SpecRef.Parse(raw);
+
+        Assert.Equal(name, spec.Name);
+        Assert.Equal(new SpecVersion(major, minor, clarification), spec.Edition);
+        Assert.Equal($"{name}/{major}.{minor}.{clarification}", spec.ToString());
+    }
 }

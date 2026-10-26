@@ -1,16 +1,16 @@
 namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
-/// Fluent registration helpers for <see cref="S100ProductRegistry"/>.
+/// Fluent registration helpers for <see cref="ProductRegistry"/>.
 /// </summary>
-public static class S100ProductRegistryExtensions
+public static class ProductRegistryExtensions
 {
     /// <summary>
     /// Registers a single product and returns the registry for chaining.
     /// </summary>
-    public static S100ProductRegistry AddS100Product(
-        this S100ProductRegistry registry,
-        S100ProductRegistration registration)
+    public static ProductRegistry AddProduct(
+        this ProductRegistry registry,
+        ProductRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registry);
         registry.Register(registration);
@@ -21,7 +21,7 @@ public static class S100ProductRegistryExtensions
     /// Registers every built-in S-100 product (the batteries-included set) and
     /// returns the registry for chaining.
     /// </summary>
-    public static S100ProductRegistry AddAllS100Products(this S100ProductRegistry registry)
+    public static ProductRegistry AddAllS100Products(this ProductRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(registry);
         S100Products.RegisterAll(registry);

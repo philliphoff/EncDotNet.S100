@@ -1,3 +1,4 @@
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.Pipelines.Sampling;
 using EncDotNet.S100.Datasets.S101;
@@ -99,7 +100,8 @@ public sealed record S421DatasetData(S421Dataset Model) : LoadedDatasetData;
 /// The coverage variants implement <see cref="ICoverageSampler"/>, the same
 /// sampling their processors offer, which is how the <c>sample_coverage</c>
 /// tools read them. A product with no variant of its own reaches the catalog
-/// as a <see cref="CoverageSamplerData"/>.
+/// as a <see cref="ProductDatasetData"/> that also implements
+/// <see cref="ICoverageSampler"/>.
 /// </para>
 /// </remarks>
 public sealed record S102CoverageData(S102CoverageSource Source) : LoadedDatasetData, ICoverageSampler
@@ -143,14 +145,17 @@ public sealed record S111StationSeriesData(S111StationSeriesDataset Dataset) : L
 }
 
 /// <summary>
-/// A coverage whose catalog payload is its <see cref="ICoverageSampler"/>
-/// alone: typically the processor of a product with no typed variant here (a
-/// weather grid, say). The <c>sample_coverage</c> tools sample it like any
-/// other coverage, with no tool changes.
+/// The payload of a product that has no built-in <see cref="LoadedDatasetData"/>
+/// variant — a host's own product, or a non-S-100 format such as GRIB2 —
+/// returned by its <see cref="ProductRegistration.OpenData"/>. It carries the
+/// dataset's own <see cref="DatasetMetadata"/>, from which
+/// <see cref="LoadedDatasetProjector"/> takes the catalog entry's spec, bounds
+/// and time coverage, so the projector needs no case for the product. A
+/// coverage product's payload also implements <see cref="ICoverageSampler"/>,
+/// so the <c>sample_coverage</c> tools sample it with no tool changes.
 /// </summary>
-/// <param name="Sampler">The dataset's sampler, usually its processor.</param>
-public sealed record CoverageSamplerData(ICoverageSampler Sampler) : LoadedDatasetData, ICoverageSampler
+public abstract record ProductDatasetData : LoadedDatasetData
 {
-    /// <inheritdoc />
-    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => Sampler.FindSites(query);
+    /// <summary>The dataset's declared spec, extent and time coverage.</summary>
+    public abstract DatasetMetadata Metadata { get; }
 }

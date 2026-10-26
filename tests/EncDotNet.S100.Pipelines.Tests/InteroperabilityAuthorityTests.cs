@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Interoperability;
 
@@ -10,7 +11,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// </summary>
 public class InteroperabilityAuthorityTests
 {
-    private readonly InteroperabilityAuthority _auth = new();
+    private readonly InteroperabilityAuthority _auth = new(ProductRegistry.Default.DisplayPlanes);
 
     [Theory]
     [InlineData("S-101", null, S98DisplayPlane.BaseChartOver)]
@@ -50,7 +51,7 @@ public class InteroperabilityAuthorityTests
         var grid = _auth.GetDefaultPlane("S-111", "s111.arrows");
 
         Assert.Equal(grid, _auth.GetDefaultPlane("S-111", "s111.stations"));
-        Assert.Equal(grid, DefaultDisplayPlaneAuthority.Instance.GetDefaultPlane("S-111", "s111.stations"));
+        Assert.Equal(grid, ProductRegistry.Default.DisplayPlanes.GetDefaultPlane("S-111", "s111.stations"));
     }
 
     [Fact]
@@ -135,7 +136,7 @@ public class InteroperabilityAuthorityTests
         var s101 = new[] { s101areas, s101lines };
 
         var sorted = LayerStackBuilder.Build(
-            new LoadOrderInteroperabilityAuthority(new InteroperabilityAuthority()),
+            new LoadOrderInteroperabilityAuthority(new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes)),
             new IReadOnlyList<SubLayerStackItem>[] { s101, s102 });
 
         // Bottom-of-UI dataset (s102) paints first, then s101's two
@@ -149,7 +150,7 @@ public class InteroperabilityAuthorityTests
         // The load-order authority's GetDefaultPlane delegates to the
         // S-98 oracle so layer-controls UIs can still annotate layers
         // with their conceptual plane even when sort order ignores it.
-        var lo = new LoadOrderInteroperabilityAuthority(new InteroperabilityAuthority());
+        var lo = new LoadOrderInteroperabilityAuthority(new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
         Assert.Equal(S98DisplayPlane.Bathymetry, lo.GetDefaultPlane("S-102"));
         Assert.Equal(S98DisplayPlane.CautionsAndWarnings, lo.GetDefaultPlane("S-124"));
         Assert.Equal(S98DisplayPlane.BaseChartUnder, lo.GetDefaultPlane("S-101", "area"));

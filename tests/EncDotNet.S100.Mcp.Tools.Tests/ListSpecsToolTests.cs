@@ -1,4 +1,6 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Mcp.Tools.Tests;
 
@@ -103,5 +105,42 @@ public class ListSpecsToolTests
         var s104 = value.Specs.Single(s => s.Name == "S-104");
         Assert.Equal("SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology", s104.PortrayalNote);
         Assert.All(value.Specs.Where(s => s.Name != "S-104"), s => Assert.Null(s.PortrayalNote));
+    }
+
+    [Fact]
+    public async Task Built_in_products_are_listed_from_the_registry_as_S100()
+    {
+        var tool = new ListSpecsTool(new FakeDatasetCatalog());
+
+        var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        var names = value.Specs.Select(s => s.Name).ToHashSet();
+        Assert.All(S100Products.All, r => Assert.Contains(r.Spec, names));
+        Assert.All(value.Specs, s => Assert.True(s.IsS100, s.Name));
+    }
+
+    [Fact]
+    public async Task A_registered_non_S100_product_is_listed_with_its_traits()
+    {
+        // Issue #1061: registering a product is enough for list_specs to list
+        // it; IsS100 and the portrayal note come from the registration.
+        var registry = S100Products.CreateDefaultRegistry();
+        registry.Register(FakeWeatherProduct.Registration());
+        var tool = new ListSpecsTool(new FakeDatasetCatalog(), registry);
+
+        var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        var grib = value.Specs.Single(s => s.Name == "GRIB2");
+        Assert.False(grib.IsS100);
+        Assert.Equal("SoundCharts portrayal: GRIB2 Ed 2 defines no symbology", grib.PortrayalNote);
+        Assert.Equal(0, grib.LoadedDatasetCount);
+        Assert.False(grib.Capabilities.CanQueryFeatures);
+        // The S-104 note is unchanged.
+        Assert.Equal(
+            "SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology",
+            value.Specs.Single(s => s.Name == "S-104").PortrayalNote);
+        Assert.True(value.Specs.Single(s => s.Name == "S-104").IsS100);
     }
 }

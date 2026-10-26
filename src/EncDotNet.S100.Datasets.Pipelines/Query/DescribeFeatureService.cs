@@ -25,7 +25,7 @@ public sealed record DescribeFeatureResult(
 {
     /// <summary>
     /// For a product whose specification defines no portrayal (S-104), says the
-    /// portrayal is SoundCharts' own (<see cref="ApplicationPortrayal.Note"/>);
+    /// portrayal is SoundCharts' own (<see cref="PortrayalBasis.ApplicationBasis.Note"/>);
     /// <c>null</c> otherwise.
     /// </summary>
     [Description("Set when the specification defines no portrayal, so the feature's on-map symbol is SoundCharts' own, not IHO symbology (S-104: \"SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology\"). Null otherwise.")]
@@ -114,7 +114,7 @@ public sealed class DescribeFeatureService
 
         var context = new FeatureDescriberContext(target, request.FeatureId, snapshot, _units);
         var result = describer.Describe(context);
-        if (SpecConventions.ApplicationPortrayalFor(target.Spec.Name) is { } portrayal
+        if (ProductRegistry.Default.PortrayalOf(target.Spec.Name).AsApplication is { } portrayal
             && result.TryGetValue(out var described))
         {
             result = ToolResult<DescribeFeatureResult>.Ok(described with { PortrayalNote = portrayal.Note });

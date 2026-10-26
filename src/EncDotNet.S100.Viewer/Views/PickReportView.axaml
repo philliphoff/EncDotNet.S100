@@ -1106,6 +1106,17 @@
             <!-- Identity block: glyph + human name + class pill, with the
                  technical identity (ID / spec / source) demoted to a single
                  monospace caption line and a copy action. -->
+            <!-- A product that isn't S-100 (a weather model grid) leads with a
+                 not-for-navigation notice (weather-sources.md §3.1). -->
+            <TextBlock Text="{Binding NavigationNotice}"
+                       IsVisible="{Binding HasNavigationNotice}"
+                       AutomationProperties.AutomationId="PickReport.NavigationNotice"
+                       AutomationProperties.Name="{Binding NavigationNotice}"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource WarningColor}"
+                       Margin="0,0,0,6"
+                       TextWrapping="Wrap" />
             <Grid ColumnDefinitions="Auto,*,Auto"
                   IsVisible="{Binding HasDatasetPick}">
                 <Border Grid.Column="0"

@@ -442,7 +442,20 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// <summary>True when <see cref="PortrayalNote"/> has a value to show.</summary>
     public bool HasPortrayalNote => PortrayalNote is not null;
 
-    /// <summary>Clipboard text for the copy-identity action: heading plus caption.</summary>
+    /// <summary>
+    /// The pick report's first line for a product that isn't S-100, such as
+    /// "Weather model data, not for navigation."; <see langword="null"/> for an
+    /// S-100 product (see <see cref="NavigationNoticeText"/>).
+    /// </summary>
+    public string? NavigationNotice => _selectedHit is null ? null : NavigationNoticeText.For(ProductSpec);
+
+    /// <summary>True when <see cref="NavigationNotice"/> has a value to show.</summary>
+    public bool HasNavigationNotice => NavigationNotice is not null;
+
+    /// <summary>
+    /// Clipboard text for the copy-identity action: heading plus caption, after
+    /// the <see cref="NavigationNotice"/> when there is one.
+    /// </summary>
     private string? IdentityClipboardText
     {
         get
@@ -450,9 +463,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             if (_selectedHit is null)
                 return null;
             var caption = IdentityCaption;
-            return string.IsNullOrEmpty(caption)
+            var identity = string.IsNullOrEmpty(caption)
                 ? PrimaryLabel
                 : $"{PrimaryLabel}\n{caption}";
+            return NavigationNotice is { } notice ? $"{notice}\n{identity}" : identity;
         }
     }
 
@@ -1270,6 +1284,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(IdentityCaption));
         OnPropertyChanged(nameof(PortrayalNote));
         OnPropertyChanged(nameof(HasPortrayalNote));
+        OnPropertyChanged(nameof(NavigationNotice));
+        OnPropertyChanged(nameof(HasNavigationNotice));
         OnPropertyChanged(nameof(IsExaminerAvailable));
         (CopyIdentityCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();

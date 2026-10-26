@@ -46,14 +46,21 @@ internal sealed class DatasetEntry : ViewModelBase
     public bool HasPortrayalNote => PortrayalNote is not null;
 
     /// <summary>
+    /// True when the product isn't an S-100 product
+    /// (<see cref="ProductRegistration.IsS100"/> is <see langword="false"/>), so
+    /// the layer stack shows a "Not an S-100 product" badge on its row.
+    /// </summary>
+    public bool IsNotS100 => !ProductRegistry.Default.IsS100(ProductSpec);
+
+    /// <summary>
     /// The specification whose catalogues portray this dataset. Until the
     /// dataset loads this is the conventional mapping of
-    /// <see cref="ProductSpec"/> (<see cref="SpecConventions.PortrayalSpecName"/>);
+    /// <see cref="ProductSpec"/> (<see cref="ProductRegistry.PortrayalSpecName"/>);
     /// once loaded it is the processor's own
     /// <see cref="IDatasetProcessor.PortrayalSpec"/>, which for an S-57 cell
     /// depends on the cell (S-101 for a maritime ENC, S-401 for an inland one).
     /// </summary>
-    public string PortrayalSpec => _portrayalSpec ?? SpecConventions.PortrayalSpecName(ProductSpec);
+    public string PortrayalSpec => _portrayalSpec ?? ProductRegistry.Default.PortrayalSpecName(ProductSpec);
 
     private string? _portrayalSpec;
 

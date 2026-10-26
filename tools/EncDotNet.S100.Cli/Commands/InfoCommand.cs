@@ -64,7 +64,7 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             }
 
             // S-104 defines no portrayal, so say whose symbology render draws (issue #937).
-            if (SpecConventions.ApplicationPortrayalFor(processor.Spec.Name) is { } portrayal)
+            if (ProductRegistry.Default.PortrayalOf(processor.Spec.Name).AsApplication is { } portrayal)
             {
                 table.AddRow("Portrayal", Markup.Escape(portrayal.Note));
             }

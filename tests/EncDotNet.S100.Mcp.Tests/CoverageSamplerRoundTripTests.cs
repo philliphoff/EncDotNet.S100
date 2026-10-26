@@ -25,7 +25,7 @@ public class CoverageSamplerRoundTripTests
         WeatherSpec,
         LoadedDatasetFactory.Box(9.5, 19.5, 12.5, 22.5),
         TimeRange: null,
-        new CoverageSamplerData(new FakeWaveProcessor()));
+        new WaveData(new FakeWaveProcessor()));
 
     [Fact]
     public async Task Sample_coverage_returns_the_fake_processors_fields_with_units()
@@ -180,6 +180,18 @@ public class CoverageSamplerRoundTripTests
     /// then 2.5 m) and wind speed (10 kn plus the row). It implements only
     /// <see cref="ICoverageSampler"/>.
     /// </summary>
+    /// <summary>
+    /// The fake product's catalog payload: a <see cref="ProductDatasetData"/>
+    /// (the payload of a product with no built-in variant) that samples
+    /// through its processor.
+    /// </summary>
+    private sealed record WaveData(FakeWaveProcessor Processor) : ProductDatasetData, ICoverageSampler
+    {
+        public override DatasetMetadata Metadata { get; } = new() { Spec = WeatherSpec };
+
+        public CoverageSiteSearch FindSites(CoverageSampleQuery query) => Processor.FindSites(query);
+    }
+
     private sealed class FakeWaveProcessor : ICoverageSampler
     {
         private static readonly DateTime[] Times =

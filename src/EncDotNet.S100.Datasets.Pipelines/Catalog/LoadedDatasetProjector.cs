@@ -1,20 +1,7 @@
 using EncDotNet.S100.Core;
-using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S111;
-using EncDotNet.S100.Datasets.S122;
-using EncDotNet.S100.Datasets.S124;
-using EncDotNet.S100.Datasets.S125;
-using EncDotNet.S100.Datasets.S127;
-using EncDotNet.S100.Datasets.S128;
-using EncDotNet.S100.Datasets.S129;
-using EncDotNet.S100.Datasets.S131;
-using EncDotNet.S100.Datasets.S201;
-using EncDotNet.S100.Datasets.S411;
-using EncDotNet.S100.Datasets.S421;
-using EncDotNet.S100.Datasets.S57;
-using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 
@@ -28,25 +15,26 @@ namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 /// <para>
 /// There are two ways in: from the raw <see cref="Stream"/> of a dataset already
 /// detected as a known product specification
-/// (<see cref="Project(DatasetId, string, Stream, System.Func{string, string?}?, ICrsTransformFactory?)"/>),
+/// (<see cref="Project(DatasetId, string, Stream, System.Func{string, string?}?, ICrsTransformFactory?, ProductRegistry?)"/>),
 /// used by the loose-file / exchange-set catalogues; and from an
 /// <em>already-parsed</em> <see cref="IDatasetProcessor"/>
 /// (<see cref="Project(DatasetId, IDatasetProcessor, System.Func{string, string?}?, ICrsTransformFactory?)"/>),
 /// used by hosts that keep a resident render processor and want to avoid parsing
 /// the dataset a second time (see issue #566). Both funnel through the single
-/// <c>BuildFromData</c> switch below, so a processor-projected
+/// <c>BuildFromData</c> below, so a processor-projected
 /// <see cref="LoadedDataset"/> is byte-for-byte identical to a stream-projected
 /// one: the two entry points differ only in how they obtain the
 /// <see cref="LoadedDatasetData"/> payload — by opening a stream, or by asking
 /// the processor for the model it already holds.
 /// </para>
 /// <para>
-/// This is the one place the codebase maps a product-specification name to
-/// the per-spec <c>Open</c> reader and the matching
-/// <see cref="LoadedDatasetData"/> variant, so every host — the Avalonia
-/// viewer (<c>ViewerDatasetCatalog</c>) and the headless
-/// <see cref="FileDatasetCatalog"/> that backs the CLI <c>identify</c>
-/// command — produces byte-identical catalog entries. See S-100 Edition
+/// The per-product <c>Open</c> reader is the registration's
+/// <see cref="ProductRegistration.OpenData"/> trait, looked up in a
+/// <see cref="ProductRegistry"/> (by default <see cref="ProductRegistry.Default"/>),
+/// so every host — the Avalonia viewer (<c>ViewerDatasetCatalog</c>) and the
+/// headless <see cref="FileDatasetCatalog"/> that backs the CLI
+/// <c>identify</c> command — produces byte-identical catalog entries, and a
+/// registered product needs no case here. See S-100 Edition
 /// 5.2.1 Part 1 (product specifications) and the per-spec encoding parts
 /// (10a ISO 8211 for S-101, 10b GML for the vector products, 10c HDF5 for
 /// S-102 / S-104 / S-111).
@@ -66,23 +54,16 @@ public static class LoadedDatasetProjector
     public static readonly BoundingBox WorldBounds = new(-90, -180, 90, 180);
 
     /// <summary>
-    /// The catalog identity of a legacy S-57 cell; matches
-    /// <see cref="S57DatasetProcessor.Spec"/> so both projection entry points
-    /// agree.
-    /// </summary>
-    private static readonly SpecRef S57Spec = new("S-57", default);
-
-    /// <summary>
     /// Projects <paramref name="stream"/> into a <see cref="LoadedDataset"/>.
     /// </summary>
     /// <param name="id">Stable identifier for the dataset within the catalog session.</param>
     /// <param name="spec">
     /// The detected product specification name (e.g. <c>"S-101"</c>,
-    /// <c>"S-102"</c>, <c>"S-57"</c>). A legacy <c>"S-57"</c> cell is read with
-    /// the S-57 reader and translated in-memory into the product it declares
-    /// (S-101, or S-401 for an inland ENC — the same translation
-    /// <see cref="S57DatasetProcessor"/> performs), and the entry keeps the
-    /// product identity <c>"S-57"</c>.
+    /// <c>"S-102"</c>, <c>"S-57"</c>). The registration's
+    /// <see cref="ProductRegistration.OpenData"/> reads it. A product portrayed
+    /// through another specification (<see cref="ProductRegistration.PortrayalSpec"/>,
+    /// e.g. a legacy <c>"S-57"</c> cell translated in-memory into the S-101 or
+    /// S-401 model) keeps its own product identity in the entry.
     /// </param>
     /// <param name="stream">The dataset bytes; the caller owns and disposes it.</param>
     /// <param name="externalTextResolver">
@@ -97,32 +78,45 @@ public static class LoadedDatasetProjector
     /// When <c>null</c> the native grid georeferencing is treated as
     /// geographic degrees (correct only for datasets already in EPSG:4326).
     /// </param>
+    /// <param name="registry">
+    /// The products to open the dataset with; <see langword="null"/> for
+    /// <see cref="ProductRegistry.Default"/>.
+    /// </param>
     /// <returns>
     /// The projected dataset, or <c>null</c> when <paramref name="spec"/> is
-    /// not a known S-100 product specification.
+    /// not a registered product with an <see cref="ProductRegistration.OpenData"/>
+    /// opener.
     /// </returns>
     public static LoadedDataset? Project(
         DatasetId id,
         string spec,
         Stream stream,
         Func<string, string?>? externalTextResolver = null,
-        ICrsTransformFactory? transforms = null)
+        ICrsTransformFactory? transforms = null,
+        ProductRegistry? registry = null)
     {
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(stream);
 
-        var data = OpenData(spec, stream, externalTextResolver);
-        if (data is null)
+        if (!(registry ?? ProductRegistry.Default).TryResolve(spec, out var registration)
+            || registration.OpenData is not { } open)
+        {
             return null;
+        }
 
-        var loaded = BuildFromData(id, data, transforms);
+        var loaded = BuildFromData(id, open(stream, externalTextResolver), transforms);
 
-        // A translated S-57 cell carries an S101DatasetData payload, so
-        // BuildFromData derives spec "S-101" from it; the catalog entry must keep
-        // the product identity "S-57" (product identity vs. portrayal spec; see
-        // the Datasets.Pipelines README). Mirrors the processor overload, which
-        // takes the identity from S57DatasetProcessor.Spec.
-        return spec == S57Spec.Name ? loaded with { Spec = S57Spec } : loaded;
+        // A product portrayed through another specification carries that
+        // specification's payload — a translated S-57 cell is an
+        // S101DatasetData, so BuildFromData derives spec "S-101" from it — but
+        // the catalog entry must keep the product identity "S-57" (product
+        // identity vs. portrayal spec; see the Datasets.Pipelines README).
+        // Mirrors the processor overload, which takes the identity from the
+        // processor's Spec.
+        return registration.PortrayalSpec is not null
+            && !string.Equals(loaded.Spec.Name, registration.Spec, StringComparison.OrdinalIgnoreCase)
+                ? loaded with { Spec = new SpecRef(registration.Spec, default) }
+                : loaded;
     }
 
     /// <summary>
@@ -181,90 +175,6 @@ public static class LoadedDatasetProjector
     }
 
     /// <summary>
-    /// Opens <paramref name="stream"/> into the <see cref="LoadedDatasetData"/>
-    /// payload for <paramref name="spec"/>, or <c>null</c> for an unknown spec.
-    /// This is the only per-spec <c>Open</c> switch; bounds, temporal coverage,
-    /// and the declared specification are derived from the payload by
-    /// <see cref="BuildFromData"/>.
-    /// </summary>
-    private static LoadedDatasetData? OpenData(
-        string spec, Stream stream, Func<string, string?>? externalTextResolver)
-        => spec switch
-        {
-            // S-401 inland ENC is read by the same Part 10a reader and carries
-            // the same payload; BuildFromData keeps its declared identity via the
-            // dataset's DSID product specification.
-            "S-101" or "S-401" => new S101DatasetData(S101Dataset.Open(stream), externalTextResolver),
-            // Legacy S-57 is a different ISO 8211 profile: read it with the S-57
-            // reader and translate to the S-101 / S-401 model, exactly as
-            // S57DatasetProcessor does. Never open S-57 bytes with S101Dataset.
-            "S-57" => OpenS57(stream, externalTextResolver),
-            "S-102" => OpenS102(stream),
-            "S-104" => OpenS104(stream),
-            "S-111" => OpenS111(stream),
-            "S-122" => new S122DatasetData(S122Dataset.Open(stream)),
-            "S-124" => new S124DatasetData(S124Dataset.Open(stream)),
-            "S-125" => new S125DatasetData(S125Dataset.Open(stream)),
-            "S-127" => new S127DatasetData(S127Dataset.Open(stream)),
-            "S-128" => new S128DatasetData(S128Dataset.Open(stream)),
-            "S-129" => new S129DatasetData(S129Dataset.Open(stream)),
-            "S-131" => new S131DatasetData(S131Dataset.Open(stream)),
-            "S-201" => new S201DatasetData(S201Dataset.Open(stream)),
-            "S-411" => new S411DatasetData(S411Dataset.Open(stream)),
-            "S-421" => new S421DatasetData(S421Dataset.Open(stream)),
-            _ => null,
-        };
-
-    private static S101DatasetData OpenS57(Stream stream, Func<string, string?>? externalTextResolver)
-    {
-        // Translate into the product the cell declares (S-101 for a maritime
-        // ENC, S-401 for an inland ENC, issue #608), as S57DatasetProcessor
-        // does. The projector has no portrayal-catalogue context, so unlike the
-        // processor it does not fall back to S-101 when S-401 is unavailable.
-        var s57 = S57Dataset.Open(stream);
-        var translator = S57ToS101Translator.ForTarget(s57.TranslationTarget);
-        // The translation drops the compilation scale, which ranks the cell
-        // against overlapping cells, so the payload carries it.
-        return new S101DatasetData(
-            S101Dataset.FromDocument(translator.Translate(s57)),
-            externalTextResolver,
-            S57Dataset.ResolveCompilationScale(s57.Document));
-    }
-
-    private static LoadedDatasetData OpenS102(Stream stream)
-    {
-        using var file = PureHdfFile.Open(stream);
-        var dataset = S102DatasetReader.Read(file);
-        return new S102CoverageData(new S102CoverageSource(dataset));
-    }
-
-    private static LoadedDatasetData OpenS104(Stream stream)
-    {
-        using var file = PureHdfFile.Open(stream);
-        var data = S104DatasetReader.ReadAny(file);
-        return data switch
-        {
-            S104DatasetData.GriddedCoverage g => new S104CoverageData(new S104CoverageSource(g.Dataset)),
-            S104DatasetData.StationSeries s => new S104StationSeriesData(s.Dataset),
-            _ => throw new InvalidOperationException(
-                $"Unexpected S-104 dataset variant {data.GetType().Name}."),
-        };
-    }
-
-    private static LoadedDatasetData OpenS111(Stream stream)
-    {
-        using var file = PureHdfFile.Open(stream);
-        var data = S111DatasetReader.ReadAny(file);
-        return data switch
-        {
-            S111DatasetData.GriddedCoverage g => new S111CoverageData(new S111CoverageSource(g.Dataset)),
-            S111DatasetData.StationSeries s => new S111StationSeriesData(s.Dataset),
-            _ => throw new InvalidOperationException(
-                $"Unexpected S-111 dataset variant {data.GetType().Name}."),
-        };
-    }
-
-    /// <summary>
     /// Builds the <see cref="LoadedDataset"/> from an opened
     /// <see cref="LoadedDatasetData"/> payload — the single place that derives
     /// the declared specification, geographic bounds, and temporal coverage. Both
@@ -302,6 +212,17 @@ public static class LoadedDatasetProjector
                 HdfDeclaredSpec.Resolve(d.Dataset.DeclaredProductSpecification, "S-111"),
                 ComputeStationBounds(d.Dataset.Stations, x => x.Latitude, x => x.Longitude) ?? WorldBounds,
                 ComputeTimeRange(d.Dataset.MinTime, d.Dataset.MaxTime, d.Dataset.Stations.Count),
+                data),
+            // A product without a built-in variant describes itself.
+            ProductDatasetData d => new LoadedDataset(
+                id,
+                d.Metadata.Spec,
+                d.Metadata.Extent ?? WorldBounds,
+                d.Metadata.TimeCoverage is { } t
+                    ? new TimeRange(
+                        new DateTimeOffset(DateTime.SpecifyKind(t.Start, DateTimeKind.Utc)),
+                        new DateTimeOffset(DateTime.SpecifyKind(t.End, DateTimeKind.Utc)))
+                    : null,
                 data),
             _ => throw new InvalidOperationException(
                 $"No catalog projection for payload {data.GetType().Name}."),

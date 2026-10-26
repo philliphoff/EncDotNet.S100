@@ -13,8 +13,8 @@ month. For package versions and release assets, see
   step, range and series windows) for every product. The S-102, S-104 and
   S-111 processors and catalog payloads implement it, and
   `SampleCoverageService` no longer names a product: any coverage whose
-  catalog payload samples (a processor in a `CoverageSamplerData`, for
-  example) answers `sample_coverage` and `sample_coverage_along`, with its
+  catalog payload samples (a `ProductDatasetData` that implements
+  `ICoverageSampler`, for example) answers `sample_coverage` and `sample_coverage_along`, with its
   values as `$kind` `"fields"` entries that carry their quantity and unit.
   The S-102, S-104 and S-111 results are unchanged. Breaking changes:
   `SampledValue` and `SampleTimeStatus` moved to `EncDotNet.S100.Core` (same
@@ -31,6 +31,16 @@ month. For package versions and release assets, see
   sampled, offers 2× and 4× overview levels, and derives wind speed and
   direction from U and V. See its
   [README](../src/EncDotNet.S100.Datasets.Weather/README.md).
+- **Weather styles.** `EncDotNet.S100.Datasets.Weather` now draws its
+  grids with code-defined coverage styles built on the portrayal toolkit: a
+  wave height fill and WMO wind barbs (on by default), and a Beaufort wind
+  speed fill and wave direction arrows (off by default), in Day, Dusk and
+  Night palettes. Fills go on the on-demand surface plane under S-104 at
+  half opacity; barbs and arrows go on the dynamic arrows plane above S-111.
+  `WeatherPortrayal` builds the coverage sub-layers from a
+  `WeatherCoverageSource`, so the Skia and Mapsui renderers draw them with no
+  weather-specific code. The package now depends on
+  `EncDotNet.S100.Portrayals` too.
 - **One `RenderContext` for every product.** `RenderContext` is now a sealed
   record with a `TimeStep` property, and its per-product subclasses
   (`S101RenderContext`, `S102RenderContext`, `S104RenderContext`,

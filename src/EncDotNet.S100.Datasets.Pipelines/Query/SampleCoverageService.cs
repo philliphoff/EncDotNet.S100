@@ -124,7 +124,8 @@ public sealed record TimedSampledValue(
 /// the dataset and site and applies the time handling; it then maps the
 /// outcome onto <see cref="SampleCoverageResult"/> and the tool errors. It
 /// knows no product: a new one is sampled as soon as its datasets reach the
-/// catalog with a sampler (see <see cref="CoverageSamplerData"/>).
+/// catalog with a sampler (a <see cref="Catalog.ProductDatasetData"/> that
+/// implements <see cref="ICoverageSampler"/>, for example).
 /// </para>
 /// <para>
 /// "Nearest cell" semantics: the cell whose centre is closest to the

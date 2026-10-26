@@ -86,7 +86,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// <summary>
     /// The specification whose catalogues portray this cell: S-101 for a
     /// maritime ENC, S-401 for an inland ENC. Unlike the default
-    /// <see cref="SpecConventions"/> mapping this depends on the cell, not just
+    /// <see cref="ProductRegistration.PortrayalSpec"/> trait (S-101) this depends on the cell, not just
     /// on its S-57 identity.
     /// </summary>
     public SpecRef PortrayalSpec => new(_target.Spec, default);
