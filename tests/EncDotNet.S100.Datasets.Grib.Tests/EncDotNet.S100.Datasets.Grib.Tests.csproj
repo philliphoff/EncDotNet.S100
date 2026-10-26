@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Weather\EncDotNet.S100.Datasets.Weather.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Grib\EncDotNet.S100.Datasets.Grib.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NOAA GFS and GFS-Wave subsets; see tests/datasets/GRIB2/README.md. -->
+    <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

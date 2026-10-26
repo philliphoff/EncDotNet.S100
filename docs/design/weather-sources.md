@@ -487,6 +487,92 @@ Rejected:
   maintained. Otherwise, own the decoder. Its scope is small and well
   specified.
 
+**As built (#1064).** `EncDotNet.S100.Datasets.Grib` is the managed
+decoder, written from the WMO Manual on Codes (FM 92 GRIB edition 2) and
+the PNG specification. It covers the table above. Details are in its
+[README](../../src/EncDotNet.S100.Datasets.Grib/README.md).
+
+Templates the sources serve, checked on 26 October 2026 against the
+2026-10-25 00Z (and 24th 12Z) runs. Each message was read with an HTTP byte
+range from the source's index and described with ecCodes 2.50.0
+(`dataRepresentationTemplateNumber`, `productDefinitionTemplateNumber`,
+`bitmapPresent` and so on):
+
+| Source | Parameters checked | Grid | Product | Data | Bitmap |
+|---|---|---|---|---|---|
+| AWS `noaa-gfs-bdp-pds`, GFS `pgrb2.0p25`, `0p50`, `1p00` | UGRD/VGRD 10 m, GUST, PRMSL (f000, f003) | 3.0 | 4.0 (4.8 for TMAX, APCP) | **5.3**, order 2, no missing value management | No |
+| AWS `noaa-gfs-bdp-pds`, GFS-Wave `global.0p25`, `global.0p16`, `atlocn`, `epacif`, `wcoast`, `gsouth` | HTSGW, PERPW, DIRPW, WVHGT, SWELL, WVDIR, WIND, UGRD | 3.0 | 4.0 | **5.40 (JPEG 2000)** | Yes |
+| AWS `noaa-gfs-bdp-pds`, GFS-Wave `arctic.9km` | as above | **3.20** (polar stereographic) | 4.0 | 5.40 | Yes |
+| ECMWF Open Data (the `ecmwf-forecasts` AWS mirror of `data.ecmwf.int`), IFS `0p25` `oper` and `wave` | 10u, 10v, msl, 10fg; swh, mwd, mwp, pp1d, mp2 | 3.0 | 4.0 (4.8 for 10fg) | **5.42 (CCSDS)** | Yes for wave |
+| NOMADS GRIB filter (`filter_gfs_0p25.pl`, `filter_gfswave.pl`) | — | — | — | Not checked: `nomads.ncep.noaa.gov` was blocked from the build environment | — |
+
+So only GFS atmosphere is decodable as served. GFS-Wave, the main wave
+source, is JPEG 2000 on AWS, and ECMWF is CCSDS throughout. The NOMADS filter
+cuts its subsets with `wgrib2`, which by default keeps the input's packing,
+so GFS-Wave from the filter is probably JPEG 2000 as well: check this before
+building #1074 or #1075 on it. The unsupported templates fail with a message
+naming them (`5.40 (JPEG 2000)`, `5.42 (CCSDS/AEC)`), and the field is still
+listed. Adding them is open question §10.6.
+
+Existing managed libraries, checked on NuGet and GitHub:
+
+| Library | Licence | Coverage | Maintenance | Verdict |
+|---|---|---|---|---|
+| NGrib (`nmangue/NGrib`) | LGPL-3.0-or-later | GRIB1 and GRIB2, JPEG 2000 through CSJ2K | 0.12.0, December 2024 | Rejected: LGPL, and it depends on the native `Libaec` package for CCSDS |
+| GribSharp (`insanebytes/GribSharp`) | MIT (JPEG 2000 add-on uses CSJ2K, BSD-2-Clause) | Simple, complex and spatially differenced packing, IEEE float; JPEG 2000 as an add-on; no PNG; grid and product coverage not documented | First release June 2026, 1.0.16 in August 2026; 14 commits, 1 star | Not used: no 5.41, parses whole files rather than indexing, and too new to call maintained. Worth watching for JPEG 2000 |
+| GribApi.NET (`Grib.Api`) | Apache-2.0 | ecCodes wrapper | Last release 2017 | Rejected: native, unmaintained |
+
+No ecCodes or `wgrib2` code was copied. ecCodes was used only as the
+reference tool for the fixtures.
+
+Decisions:
+
+- **Datasets.Grib references Datasets.Weather** (as §3.3 has it), rather than
+  standing alone behind an adapter. `GribField` carries the
+  `GribParameterCode`, and `ToWeatherNativeGrid`, `ToWeatherLevel` and
+  `FindWeatherParameter` map onto the model directly.
+  `GribFile.CreateStepDecoder` returns a `WeatherStepDecoder`. The cost is
+  that the decoder package pulls in Core and Portrayals through Weather.
+- **One index entry per field, not per message.** A message that repeats
+  sections 2 to 7 gives several fields. Every NOAA and ECMWF file has one
+  field per message, so in practice the two are the same.
+- **Unsupported templates don't stop the index.** Only GRIB1 (or another
+  edition) fails at open, because its framing can't be walked. A field with
+  an unsupported grid, product or data template is listed with
+  `UnsupportedReason` set, and fails only when it's decoded. So a mixed file
+  still opens, and `info` can show what it holds.
+- **Values come back row-major in the grid's own directions.** Scanning
+  mode bits 1 and 2 become the signs of the `WeatherNativeGrid` increments.
+  Bits 3 and 4 (column-major and boustrophedon) are undone by the decoder.
+  Staggered grids (bits 5 to 8) are unsupported.
+- **Missing values are NaN**, whether the bitmap marks them or they're
+  embedded by complex packing's missing value management.
+- **PNG depth.** g2lib writes the image depth in template 5.41, but ecCodes
+  writes the field's bit count (for example 11) and stores a 16-bit image.
+  So the decoder reads pixels at the image's depth.
+
+For #1074 (the processor):
+
+- ECMWF's mean sea level pressure is `msl`, (0, 3, 0) at fixed surface 101,
+  but the parameter table maps `pressure.msl` to (0, 3, 1) (NCEP's PRMSL).
+  Add (0, 3, 0) at mean sea level to the table.
+- GFS-Wave also carries the model's input wind as UGRD/VGRD/WIND/WDIR at the
+  *surface* (fixed surface type 1). `FindWeatherParameter` checks the level,
+  so these don't map to the 10 m `wind.*` rows. Decide whether they should.
+- NCEP swell partitions (SWELL, SWPER, SWDIR) use the local fixed surface
+  type 241 ("1 in sequence", "2 in sequence"…). They map to the table by
+  parameter code, at `WeatherLevel.Other`. Keep the first partition, or
+  list them all.
+- GFS-Wave WVDIR is (10, 0, 4), the wind-wave direction, which isn't in the
+  table. The primary wave direction DIRPW (10, 0, 10) is.
+- ECMWF's `10fg` gust is a 4.8 maximum. Its `ValidTime` is the end of the
+  interval.
+- The model name for `WeatherOrigin` isn't in the file. Only the centre
+  (`GribCentres`) and the generating process number are, for example NCEP
+  96 for GFS. Take it from the registration or the file name.
+- Keep the `GribFile` open for the life of the `WeatherGridSet`: the step
+  decoders read from it.
+
 ### 7.3 Test fixtures
 
 - **GRIB2:** a NOMADS GRIB filter subset of GFS-Wave and of GFS 10 m
@@ -504,6 +590,18 @@ Rejected:
 
 The scenario generator (#940) can later add co-located weather to its
 fictitious area, for example wind over the S-111 currents.
+
+**As built (#1064).** NOMADS was blocked from the build environment, so the
+GRIB2 fixtures come from the same runs on AWS (`noaa-gfs-bdp-pds`, public
+domain): GFS 10 m wind and GFS-Wave height, period and direction, off the US
+East Coast (40°N to 32°N, 76°W to 68°W, 0.25°), at f000, f003 and f006.
+They're cropped and repacked by ecCodes in each supported template (GFS-Wave
+because it's served as JPEG 2000). They sit beside one GFS 1° message and one
+GFS-Wave JPEG 2000 message, both exactly as NCEP serves them. The total is
+about 115 KB. Their README in `tests/datasets/GRIB2` gives the exact subsets,
+and `tools/grib-fixtures/make_grib_fixtures.py` rebuilds them and prints the
+ecCodes reference values the tests hardcode. Every data template also has
+byte-exact round-trip tests through a test-only encoder.
 
 ## 8. Pipeline refactors for products without catalogues
 
@@ -812,3 +910,11 @@ result is item 9: a NetCDF wave file drawn over a chart.
 5. **Weather in route checks.** Wind and wave along a route at ETA is
    the obvious next step, after this epic. The `ICoverageSource` design
    makes it possible without new readers.
+6. **JPEG 2000 and CCSDS packing.** GFS-Wave on AWS uses 5.40 and ECMWF
+   Open Data uses 5.42 (§7.2, as built), so without them the main wave
+   source and all of ECMWF can't be read. CCSDS (CCSDS 121.0-B, the
+   adaptive Rice coder) is small and well specified, so a managed decoder
+   is a contained piece of work. JPEG 2000 is a large codec. Options are
+   CSJ2K (managed, BSD-2-Clause, which GribSharp already uses) or asking
+   users to repack (`wgrib2 -set_grib_type c3`). Decide before #1074 picks
+   its default sources.
