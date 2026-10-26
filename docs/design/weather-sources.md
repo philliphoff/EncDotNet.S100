@@ -467,7 +467,8 @@ Not supported, with a clear error:
 - **5.40 (JPEG 2000).** It needs a JPEG 2000 codestream decoder. No
   maintained MIT-compatible managed one has been confirmed. If a target
   source turns out to use it, choose then between a dependency and
-  asking users to fetch the data in another packing.
+  asking users to fetch the data in another packing. (GFS-Wave does: see
+  §10.6 and the as-built note for #1098 below. 5.40 is now supported.)
 - **5.42 (CCSDS/AEC).**
 
 Check which data templates NOMADS, AWS and ECMWF Open Data actually
@@ -573,6 +574,67 @@ For #1074 (the processor):
 - Keep the `GribFile` open for the life of the `WeatherGridSet`: the step
   decoders read from it.
 
+**As built (#1098).** Template 5.40 is supported, through a managed JPEG
+2000 Part 1 codestream decoder inside `EncDotNet.S100.Datasets.Grib`
+(`Internal/Jpeg2000`, internal: nothing else needs it, and keeping it
+internal leaves its API free to change). It was written from ITU-T T.800 |
+ISO/IEC 15444-1; no OpenJPEG, JasPer or JJ2000 code was used. §10.6 records
+why.
+
+What the sources use, from the COD, QCD and SIZ markers of every message in
+the GFS-Wave West Coast, Atlantic, East Pacific, South Global and global
+0.25° f003 files of the 2026-10-25 00Z run (91 messages): a raw codestream
+(no JP2 box) written by JasPer 2.0.25; one component of 7 to 16 bits,
+unsigned; the packed values (the points the bitmap keeps) as one row, so a
+global field is a 565,732 × 1 image; one tile, no offsets; the 5/3
+reversible transform with 5 levels; 64 × 64 code-blocks (so 64 × 1 here)
+with no style flags; LRCP order, one layer, default precincts, no SOP or
+EPH; QCD with no quantisation and 2 guard bits, a QCC repeating it, and a
+COM. Template 5.40 says lossless (type of compression 0, ratio missing).
+ecCodes 2.50.0, which encodes with OpenJPEG 2.5.2, writes an `Ni × Nj`
+image when there's no bitmap, and its "lossy" mode is the 5/3 transform cut
+short by rate control rather than the 9/7.
+
+The decoder covers more than that, as T.800 allows for one component:
+
+- A raw codestream, or the codestream box of a JP2 file.
+- One component of 1 to 31 bits, unsigned or signed, with any subsampling.
+- Image and tile offsets, any number of tiles, and tile-parts in any order.
+- SIZ, COD, COC, QCD, QCC (main and tile-part headers, with T.800's
+  precedence), SOT, SOD and EOC; TLM, PLM, PLT, CRG and COM skipped; SOP and
+  EPH read.
+- The five progression orders, any number of quality layers, default and
+  custom precincts.
+- Tier-1 with every code-block style: bypass, reset, terminate on each pass,
+  vertically causal, predictable termination, segmentation symbols.
+- The 5/3 and 9/7 transforms with 0 to 32 levels, for any size and offset;
+  no quantisation, and derived and expounded scalar quantisation; midpoint
+  reconstruction of truncated code-blocks.
+
+It rejects, with `UnsupportedGribException` naming the feature: several
+components (and so colour transforms), regions of interest (RGN),
+progression order changes (POC), packed packet headers (PPM, PPT), Part 2
+(Rsiz bit 15, or wavelet kernels other than 5/3 and 9/7), HTJ2K (Rsiz bit
+14, a CAP marker, or HT code-blocks), samples over 31 bits, and code-blocks
+with more than 30 coded bit-planes. None appears in the sources. POC and
+packed headers could be added, but no encoder at hand writes them to test
+against.
+
+Decisions:
+
+- **A 0-bit field is `R`, unscaled.** ecCodes writes a constant field as
+  `R` = the value, leaving `D` as the field had it, and reads it back as
+  `R`. The decoder now does the same for 5.0, 5.40 and 5.41, where it used
+  to apply `10^−D`. Section 7 may be empty.
+- **The 9/7 transform follows T.800's 1 / K.** OpenJPEG uses
+  1.625732422 / 2 for the high-pass scaling, 3.3 × 10⁻⁵ off; at 16 bits its
+  lossy output differs from T.800's by up to 2. No GRIB2 source uses 9/7.
+- **Performance.** On a 4-core build machine (Release, .NET 10, one
+  thread), the global 0.25° significant height decodes in about 85 ms and
+  the slowest global wave field in about 210 ms, against 70 and 160 ms for
+  OpenJPEG 2.5.4. Tier-1 keeps each sample's state in one `int` with its
+  neighbours' significance, and allocates per code-block, not per sample.
+
 ### 7.3 Test fixtures
 
 - **GRIB2:** a NOMADS GRIB filter subset of GFS-Wave and of GFS 10 m
@@ -602,6 +664,16 @@ about 115 KB. Their README in `tests/datasets/GRIB2` gives the exact subsets,
 and `tools/grib-fixtures/make_grib_fixtures.py` rebuilds them and prints the
 ecCodes reference values the tests hardcode. Every data template also has
 byte-exact round-trip tests through a test-only encoder.
+
+**As built (#1098).** The single GFS-Wave JPEG 2000 message became four,
+still exactly as NCEP serves them: West Coast significant height, peak
+period and primary direction, and Atlantic significant height. A fifth file
+holds GFS and GFS-Wave crops repacked by ecCodes as 5.40 (lossless, lossy,
+with a bitmap, and a constant field). The JPEG 2000 decoder also has 51
+codestreams written by OpenJPEG through Pillow, imagecodecs and glymur
+(`tools/grib-fixtures/make_jpeg2000_fixtures.py`), with their expected
+samples. Together they add about 245 KB. The global 0.25° messages (300 to
+830 KB each) were only decoded locally, against ecCodes and for timing.
 
 ## 8. Pipeline refactors for products without catalogues
 
@@ -918,3 +990,12 @@ result is item 9: a NetCDF wave file drawn over a chart.
    CSJ2K (managed, BSD-2-Clause, which GribSharp already uses) or asking
    users to repack (`wgrib2 -set_grib_type c3`). Decide before #1074 picks
    its default sources.
+
+   **Decided for JPEG 2000 (#1098): our own managed decoder.** CSJ2K has had
+   no commits for about eight years, and its JJ2000 origins carry their own
+   licence; OpenJPEG and JasPer are native, which §2 rules out; asking users
+   to repack would leave the main wave source unreadable as served. GRIB2
+   needs only a single-component Part 1 decoder, which T.800 specifies
+   fully, so the decoder is scoped to that and lives inside
+   `EncDotNet.S100.Datasets.Grib` (§7.2, as built for #1098). CCSDS (5.42)
+   is still open.
