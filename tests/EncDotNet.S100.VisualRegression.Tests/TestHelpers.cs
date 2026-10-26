@@ -116,11 +116,17 @@ internal static class TestHelpers
     /// few pixels, but label text shifts by a pixel or two between macOS and
     /// Linux, so every glyph pixel of a labelled render can differ.
     /// </param>
-    public static SettingsTask VerifySparseBitmap(SKBitmap bitmap, int minimumInkPixels, double maxDifferentInkFraction)
+    /// <param name="background">
+    /// The background ink is counted against; opaque white when
+    /// <see langword="null"/>. Pass the render's background for a Dusk or
+    /// Night render on a dark ground.
+    /// </param>
+    public static SettingsTask VerifySparseBitmap(
+        SKBitmap bitmap, int minimumInkPixels, double maxDifferentInkFraction, SKColor? background = null)
     {
         try
         {
-            var ink = CountNonBackgroundPixels(bitmap);
+            var ink = CountNonBackgroundPixels(bitmap, background);
             Assert.True(
                 ink >= minimumInkPixels,
                 $"Render has only {ink} non-background pixels (expected at least {minimumInkPixels}); the portrayal drew (almost) nothing.");
@@ -129,6 +135,7 @@ internal static class TestHelpers
             var comparer = new PerceptualImageComparer
             {
                 MaxDifferentInkFraction = maxDifferentInkFraction,
+                Background = background ?? SKColors.White,
             };
             return Verifier.Verify(bytes, "png")
                 .UsePerceptualImageComparer(comparer);
