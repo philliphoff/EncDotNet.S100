@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// <summary>
 /// End-to-end coverage that every committed GML sample dataset is routed to the
 /// correct product specification by the per-registration
-/// <see cref="S100ProductRegistration.MatchGml"/> recognizers that back
+/// <see cref="ProductRegistration.MatchGml"/> recognizers that back
 /// <see cref="DatasetPipelineFactory"/>'s GML detection. This exercises the real
 /// namespaces / <c>productIdentifier</c> shapes of all ten GML products (rather
 /// than a single hand-written sample), so a regression in any one product's
@@ -61,6 +61,45 @@ public class DatasetPipelineFactoryGmlDetectionTests
             source, Path.GetFileName(gmlPath), TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedSpec, spec);
+    }
+
+    [Theory]
+    [MemberData(nameof(GmlFixtures))]
+    public void DetectProductSpec_RoutesSampleToDeclaredProduct(string gmlPath, string expectedSpec)
+    {
+        Assert.Equal(expectedSpec, DatasetPipelineFactory.DetectProductSpec(gmlPath));
+    }
+
+    // Folder under tests/datasets → canonical spec of every committed HDF5
+    // coverage fixture (S-100 Part 10c productSpecification).
+    public static TheoryData<string, string> Hdf5Fixtures()
+    {
+        var data = new TheoryData<string, string>();
+        foreach (var (folder, spec) in new[] { ("S102", "S-102"), ("S104", "S-104"), ("S111", "S-111") })
+        {
+            var dir = ResolveDatasetsDirectory(folder)
+                ?? throw new InvalidOperationException(
+                    $"Committed HDF5 fixture folder 'tests/datasets/{folder}' was not found.");
+            foreach (var h5 in Directory.EnumerateFiles(dir, "*.h5"))
+                data.Add(h5, spec);
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(Hdf5Fixtures))]
+    public async Task Hdf5Fixtures_AreClaimedByTheirProduct(string h5Path, string expectedSpec)
+    {
+        // Issue #1061: the HDF5 products claim their own files (MatchHdf5); there
+        // is no S-102 fallback, so each committed fixture must still be claimed.
+        Assert.Equal(expectedSpec, DatasetPipelineFactory.DetectProductSpec(h5Path));
+
+        using var source = FileSystemAssetSource.Create(Path.GetDirectoryName(h5Path)!);
+        Assert.Equal(
+            expectedSpec,
+            await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(
+                source, Path.GetFileName(h5Path), TestContext.Current.CancellationToken));
     }
 
     /// <summary>Walks up from the test assembly to the committed fixture folder.</summary>

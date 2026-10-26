@@ -665,6 +665,20 @@
                                     <TextBlock Text="{Binding ProductSpec}"
                                                FontSize="11"
                                                Opacity="0.6" />
+                                    <!-- A product that isn't S-100 (a weather model grid) is labelled so (weather-sources.md §3.1). -->
+                                    <Border Classes="HiddenTag"
+                                            HorizontalAlignment="Left"
+                                            Margin="0,2,0,0"
+                                            IsVisible="{Binding IsNotS100}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_NotS100Product}"
+                                            AutomationProperties.AutomationId="Datasets.Row.NotS100Badge"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Label_NotS100Product}"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NotS100Product}">
+                                        <TextBlock Text="{x:Static loc:Strings.Label_NotS100Product}"
+                                                   FontSize="10"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource WarningColor}" />
+                                    </Border>
                                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasLayerTime}">
                                         <Button Grid.Column="0"
                                                 AutomationProperties.AutomationId="Datasets.Row.LayerTime"

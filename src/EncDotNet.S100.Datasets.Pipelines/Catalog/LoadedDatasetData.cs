@@ -1,3 +1,4 @@
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S104;
@@ -113,3 +114,17 @@ public sealed record S111CoverageData(S111CoverageSource Source) : LoadedDataset
 /// fixed stations; see S-111 Edition 2.0.0 §10.2.3 / §10.2.7).
 /// </summary>
 public sealed record S111StationSeriesData(S111StationSeriesDataset Dataset) : LoadedDatasetData;
+
+/// <summary>
+/// The payload of a product that has no built-in <see cref="LoadedDatasetData"/>
+/// variant — a host's own product, or a non-S-100 format such as GRIB2 —
+/// returned by its <see cref="ProductRegistration.OpenData"/>. It carries the
+/// dataset's own <see cref="DatasetMetadata"/>, from which
+/// <see cref="LoadedDatasetProjector"/> takes the catalog entry's spec, bounds
+/// and time coverage, so the projector needs no case for the product.
+/// </summary>
+public abstract record ProductDatasetData : LoadedDatasetData
+{
+    /// <summary>The dataset's declared spec, extent and time coverage.</summary>
+    public abstract DatasetMetadata Metadata { get; }
+}

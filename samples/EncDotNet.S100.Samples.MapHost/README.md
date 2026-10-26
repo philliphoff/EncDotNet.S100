@@ -156,5 +156,5 @@ the same. It needs:
 `IDatasetProcessorFactory` from `EncDotNet.S100.Core`. `EncDotNet.S100` brings in
 every product through `BundledDatasetProcessorFactory`. For a smaller app, build
 your own `IDatasetProcessorFactory`, or a `DatasetPipelineFactory` with a
-smaller `S100ProductRegistry`, and reference only the product packages you
+smaller `ProductRegistry`, and reference only the product packages you
 need.

@@ -267,7 +267,7 @@ public sealed class HeadlessCompositor
     /// </param>
     /// <param name="authority">
     /// The S-98 interoperability authority (ordering + rule policy). Defaults to
-    /// the fixed-table <see cref="InteroperabilityAuthority"/>.
+    /// an <see cref="InteroperabilityAuthority"/> over <see cref="ProductRegistry.Default"/>.
     /// </param>
     public HeadlessCompositor(
         ICrsTransformFactory crsTransformFactory,
@@ -275,7 +275,7 @@ public sealed class HeadlessCompositor
     {
         ArgumentNullException.ThrowIfNull(crsTransformFactory);
         _crsTransformFactory = crsTransformFactory;
-        _authority = authority ?? new InteroperabilityAuthority();
+        _authority = authority ?? new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes);
     }
 
     /// <summary>

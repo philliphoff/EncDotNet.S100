@@ -17,7 +17,7 @@ namespace EncDotNet.S100.Datasets.S104;
 /// depths in the ENC or bathymetry (S-98 Annex C), and the edition removed the
 /// earlier portrayal catalogue. Everything this style describes is
 /// SoundCharts' own symbology, and the viewer, CLI and MCP tools label it so
-/// (<see cref="EncDotNet.S100.Datasets.Pipelines.SpecConventions.S104Portrayal"/>).
+/// (<c>S100Products.S104Portrayal</c>, the S-104 registration's <c>Portrayal</c> trait).
 /// It is defined in code, so it is an <see cref="ICoverageStyle"/> and not an
 /// <see cref="IPortrayalCatalogue"/>: it has no catalogue specification or
 /// edition. Replace it with an official IHO portrayal catalogue if one is

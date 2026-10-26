@@ -11,7 +11,7 @@ public sealed record ListSpecsRequest();
 /// <summary>
 /// Per-spec summary returned by <see cref="ListSpecsTool"/>.
 /// </summary>
-/// <param name="Name">Canonical spec name (<c>"S-NNN"</c>).</param>
+/// <param name="Name">Canonical spec name (<c>"S-NNN"</c>, or a non-S-100 format name such as <c>"GRIB2"</c>).</param>
 /// <param name="LoadedDatasetCount">Number of datasets of this spec currently loaded.</param>
 /// <param name="Capabilities">
 /// Capability flags advertising which tools the agent can productively
@@ -19,14 +19,20 @@ public sealed record ListSpecsRequest();
 /// </param>
 /// <param name="PortrayalNote">
 /// For a product whose specification defines no portrayal (S-104), says the
-/// portrayal is SoundCharts' own (<see cref="ApplicationPortrayal.Note"/>);
+/// portrayal is SoundCharts' own (<see cref="PortrayalBasis.ApplicationBasis.Note"/>);
 /// <c>null</c> for products drawn from an official portrayal catalogue.
 /// </param>
+/// <param name="IsS100">
+/// Whether the product is an IHO S-100 product
+/// (<see cref="ProductRegistration.IsS100"/>); <c>false</c> for a format such
+/// as a weather model grid, which isn't for navigation.
+/// </param>
 public sealed record SpecSummary(
-    [property: Description("Canonical spec name, e.g. \"S-101\", \"S-124\".")] string Name,
+    [property: Description("Canonical spec name, e.g. \"S-101\", \"S-124\", or a non-S-100 format name such as \"GRIB2\".")] string Name,
     [property: Description("Number of datasets of this spec currently loaded in the host catalog.")] int LoadedDatasetCount,
     [property: Description("Capability flags advertising which MCP tools the agent can productively invoke against this spec in the current session.")] SpecCapabilities Capabilities,
-    [property: Description("Set when the specification defines no portrayal, so what render_to_image draws is SoundCharts' own symbology, not IHO's (S-104: \"SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology\"). Null for products drawn from an official portrayal catalogue.")] string? PortrayalNote = null);
+    [property: Description("Set when the specification defines no portrayal, so what render_to_image draws is SoundCharts' own symbology, not IHO's (S-104: \"SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology\"). Null for products drawn from an official portrayal catalogue.")] string? PortrayalNote = null,
+    [property: Description("True for an IHO S-100 product (and legacy S-57). False for a product that isn't S-100, such as weather model data, which is not for navigation.")] bool IsS100 = true);
 
 /// <summary>
 /// Per-spec capability flags. All flags are conservative — they reflect
@@ -62,43 +68,25 @@ public sealed record SpecCapabilities(
 public sealed record ListSpecsResult([property: Description("Per-spec summaries in catalog order, one entry per known spec.")] IReadOnlyList<SpecSummary> Specs);
 
 /// <summary>
-/// Returns the product specifications this MCP-tools assembly knows
-/// about, the number of datasets of each spec currently loaded, and
-/// per-spec capability flags. Helps the agent introspect what tools
-/// are productive against the current session before issuing them.
+/// Returns the product specifications the host can load, the number of
+/// datasets of each spec currently loaded, and per-spec capability flags.
+/// Helps the agent introspect what tools are productive against the current
+/// session before issuing them.
 /// </summary>
 /// <remarks>
-/// The catalogue of known specs is fixed by the assembly (matches the
-/// product set under <c>src/EncDotNet.S100.Datasets.*/</c>). Datasets
-/// of unknown specs that somehow appear in the catalog are still
-/// surfaced — the summary list is the union of the known-spec list
-/// and the spec names observed in the catalog snapshot.
+/// The known specs are the products in the <see cref="ProductRegistry"/>
+/// (by default <see cref="ProductRegistry.Default"/>), and each summary's
+/// <see cref="SpecSummary.IsS100"/> and <see cref="SpecSummary.PortrayalNote"/>
+/// come from the product's registration, so a host that registers a product
+/// sees it listed without changing this tool. Datasets of unregistered specs
+/// that somehow appear in the catalog are still surfaced — the summary list is
+/// the union of the registered specs and the spec names observed in the
+/// catalog snapshot.
 /// </remarks>
 public sealed class ListSpecsTool
 {
     /// <summary>Tool name used in error payloads.</summary>
     public const string Name = "list_specs";
-
-    // Canonical list of spec names this assembly ships support for.
-    // Update in lockstep with EncDotNet.S100.Datasets.* projects.
-    private static readonly string[] KnownSpecs =
-    [
-        "S-101",
-        "S-102",
-        "S-104",
-        "S-111",
-        "S-122",
-        "S-124",
-        "S-125",
-        "S-127",
-        "S-128",
-        "S-129",
-        "S-131",
-        "S-201",
-        "S-401",
-        "S-411",
-        "S-421",
-    ];
 
     // Specs whose features are exposed via the shared IS100Feature
     // interface and addressable by QueryFeaturesTool. Must match the
@@ -134,12 +122,19 @@ public sealed class ListSpecsTool
     };
 
     private readonly IDatasetCatalog _catalog;
+    private readonly ProductRegistry _registry;
 
     /// <summary>Creates a new <see cref="ListSpecsTool"/>.</summary>
-    public ListSpecsTool(IDatasetCatalog catalog)
+    /// <param name="catalog">The host's dataset catalog.</param>
+    /// <param name="registry">
+    /// The products the host can load; <see langword="null"/> for
+    /// <see cref="ProductRegistry.Default"/>.
+    /// </param>
+    public ListSpecsTool(IDatasetCatalog catalog, ProductRegistry? registry = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
+        _registry = registry ?? ProductRegistry.Default;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -158,7 +153,7 @@ public sealed class ListSpecsTool
             counts[dataset.Spec.Name] = count + 1;
         }
 
-        var names = new SortedSet<string>(KnownSpecs, StringComparer.Ordinal);
+        var names = new SortedSet<string>(_registry.RegisteredSpecs, StringComparer.Ordinal);
         foreach (var k in counts.Keys) names.Add(k);
 
         var summaries = new List<SpecSummary>(names.Count);
@@ -170,7 +165,12 @@ public sealed class ListSpecsTool
                 CanDescribeFeature: DescribableSpecs.Contains(name),
                 CanSampleCoverage: CoverageSpecs.Contains(name),
                 CanListTimeSteps: TimeVaryingCoverageSpecs.Contains(name));
-            summaries.Add(new SpecSummary(name, loaded, caps, SpecConventions.ApplicationPortrayalFor(name)?.Note));
+            summaries.Add(new SpecSummary(
+                name,
+                loaded,
+                caps,
+                _registry.PortrayalOf(name).AsApplication?.Note,
+                _registry.IsS100(name)));
         }
 
         return Task.FromResult(ToolResult<ListSpecsResult>.Ok(

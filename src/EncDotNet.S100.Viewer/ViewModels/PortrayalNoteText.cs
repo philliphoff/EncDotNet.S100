@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 
 /// <summary>
 /// The localized note for a product whose specification defines no portrayal
-/// (<see cref="SpecConventions.ApplicationPortrayalFor"/>), such as
+/// (an <see cref="PortrayalBasis.ApplicationBasis"/> on its registration), such as
 /// "SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology" (issue #937).
 /// </summary>
 internal static class PortrayalNoteText
@@ -17,7 +17,7 @@ internal static class PortrayalNoteText
     /// portrayal catalogue.
     /// </summary>
     public static string? For(string? productSpec) =>
-        SpecConventions.ApplicationPortrayalFor(productSpec) is { } portrayal
+        ProductRegistry.Default.PortrayalOf(productSpec).AsApplication is { } portrayal
             ? string.Format(CultureInfo.CurrentCulture, Strings.Portrayal_ApplicationNote, portrayal.Basis)
             : null;
 }

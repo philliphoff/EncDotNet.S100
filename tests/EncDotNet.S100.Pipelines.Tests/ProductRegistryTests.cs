@@ -10,9 +10,9 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// delegates are trivial (<c>null!</c>) because construction of real processors
 /// is covered by the factory/product tests.
 /// </summary>
-public class S100ProductRegistryTests
+public class ProductRegistryTests
 {
-    private static S100ProductRegistration Fake(string spec) => new()
+    private static ProductRegistration Fake(string spec) => new()
     {
         Spec = spec,
         CreateFromPath = (_, _) => null!,
@@ -22,7 +22,7 @@ public class S100ProductRegistryTests
     [Fact]
     public void Register_ThenResolve_ReturnsSameRegistration()
     {
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
         var registration = Fake("S-101");
 
         registry.Register(registration);
@@ -36,7 +36,7 @@ public class S100ProductRegistryTests
     [Fact]
     public void Resolve_IsCaseInsensitive()
     {
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
         var registration = Fake("S-101");
         registry.Register(registration);
 
@@ -47,7 +47,7 @@ public class S100ProductRegistryTests
     [Fact]
     public void Register_NormalizesNonCanonicalSpec_ResolvableByCanonical()
     {
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
         var registration = Fake("S101");
 
         registry.Register(registration);
@@ -63,7 +63,7 @@ public class S100ProductRegistryTests
     [InlineData("   ")]
     public void Register_RejectsBlankSpec(string spec)
     {
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
 
         Assert.Throws<ArgumentException>(() => registry.Register(Fake(spec)));
     }
@@ -71,7 +71,7 @@ public class S100ProductRegistryTests
     [Fact]
     public void Register_ReplacesExistingBySpec()
     {
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
         var first = Fake("S-101");
         var second = Fake("S-101");
 
@@ -85,7 +85,7 @@ public class S100ProductRegistryTests
     [Fact]
     public void Resolve_ForUnregisteredSpec_Throws()
     {
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
 
         Assert.False(registry.IsRegistered("S-999"));
         Assert.False(registry.TryResolve("S-999", out _));
@@ -95,9 +95,9 @@ public class S100ProductRegistryTests
     [Fact]
     public void AddS100Product_ChainsAndRegisters()
     {
-        var registry = new S100ProductRegistry()
-            .AddS100Product(Fake("S-101"))
-            .AddS100Product(Fake("S-102"));
+        var registry = new ProductRegistry()
+            .AddProduct(Fake("S-101"))
+            .AddProduct(Fake("S-102"));
 
         Assert.True(registry.IsRegistered("S-101"));
         Assert.True(registry.IsRegistered("S-102"));
@@ -123,7 +123,7 @@ public class S100ProductRegistryTests
     [Fact]
     public void AddAllS100Products_MatchesDefaultRegistry()
     {
-        var registry = new S100ProductRegistry().AddAllS100Products();
+        var registry = new ProductRegistry().AddAllS100Products();
 
         Assert.Equal(
             S100Products.CreateDefaultRegistry().RegisteredSpecs.OrderBy(s => s),

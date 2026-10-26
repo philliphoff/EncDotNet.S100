@@ -15,7 +15,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// </summary>
 public class DatasetPipelineFactoryRegistryDetectionTests
 {
-    private static S100ProductRegistration Iso8211(string spec, DatasetIso8211Matcher? match) => new()
+    private static ProductRegistration Iso8211(string spec, DatasetIso8211Matcher? match) => new()
     {
         Spec = spec,
         CreateFromPath = (_, _) => null!,
@@ -23,7 +23,7 @@ public class DatasetPipelineFactoryRegistryDetectionTests
         MatchIso8211 = match,
     };
 
-    private static S100ProductRegistration Plain(string spec) => new()
+    private static ProductRegistration Plain(string spec) => new()
     {
         Spec = spec,
         CreateFromPath = (_, _) => null!,
@@ -80,7 +80,7 @@ public class DatasetPipelineFactoryRegistryDetectionTests
         {
             var path = SyntheticS57Cell.Write(dir, "U37TEST.000", productSpecification);
             Iso8211RootInfo? captured = null;
-            var registry = new S100ProductRegistry();
+            var registry = new ProductRegistry();
             registry.Register(Iso8211("S-57", root =>
             {
                 captured = root;
@@ -107,7 +107,7 @@ public class DatasetPipelineFactoryRegistryDetectionTests
 
         // With only S-101 and S-401 registered, nothing claims an S-57 cell, so it
         // falls back to S-101 rather than being mistaken for an S-401 dataset.
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
         registry.Register(S100Products.S101);
         registry.Register(S100Products.S401);
 
@@ -131,7 +131,7 @@ public class DatasetPipelineFactoryRegistryDetectionTests
 
         // A host that registered only S-101 has no S-401 registration to build,
         // so the S-401 matcher never runs and the cell falls back to S-101.
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
         registry.Register(Iso8211("S-101", static root => root.DeclaresProduct("S-101")));
 
         Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec(path, registry));
@@ -142,7 +142,7 @@ public class DatasetPipelineFactoryRegistryDetectionTests
     {
         var path = SyntheticIso8211Cell.Write(dir, "cell.000", "INT.IHO.S-101.1.0.2");
 
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
         registry.Register(Iso8211("S-57", static _ => true));
 
         Assert.Equal("S-57", DatasetPipelineFactory.DetectProductSpec(path, registry));
@@ -153,7 +153,7 @@ public class DatasetPipelineFactoryRegistryDetectionTests
     {
         var path = SyntheticIso8211Cell.Write(dir, "cell.000", "INT.IHO.S-401.1.2");
 
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
         registry.Register(Plain("S-101"));
 
         Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec(path, registry));
@@ -164,7 +164,7 @@ public class DatasetPipelineFactoryRegistryDetectionTests
     {
         var path = SyntheticIso8211Cell.Write(dir, "cell.000", "INT.IHO.S-101.1.0.2");
 
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
         registry.Register(Iso8211("S-57", match: null));
 
         Assert.Equal("S-101", DatasetPipelineFactory.DetectProductSpec(path, registry));
@@ -242,7 +242,7 @@ public class DatasetPipelineFactoryRegistryDetectionTests
     [Fact]
     public void NonIso8211Extension_DelegatesToProductAgnosticDetection()
     {
-        var registry = new S100ProductRegistry();
+        var registry = new ProductRegistry();
 
         // Unknown extension is product-agnostic and resolves to null regardless
         // of the registry's contents (same as the parameterless overload).
@@ -258,11 +258,11 @@ public class DatasetPipelineFactoryRegistryDetectionTests
             var path = Path.Combine(dir, "custom.gml");
             File.WriteAllText(path, "<?xml version=\"1.0\"?><root xmlns=\"http://example/custom\"/>");
 
-            var registry = new S100ProductRegistry();
+            var registry = new ProductRegistry();
             // A host registers a GML product under a non-canonical identifier; the
             // registry canonicalizes its key but not registration.Spec, so detection
             // must still return the canonical "S-124".
-            registry.Register(new S100ProductRegistration
+            registry.Register(new ProductRegistration
             {
                 Spec = "s124",
                 CreateFromPath = (_, _) => null!,
