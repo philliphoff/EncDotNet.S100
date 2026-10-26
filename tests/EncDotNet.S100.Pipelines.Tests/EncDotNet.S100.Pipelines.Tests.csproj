@@ -25,6 +25,7 @@
     <Compile Include="..\_shared\SyntheticS57Cell.cs" Link="TestSupport\SyntheticS57Cell.cs" />
     <Compile Include="..\_shared\SyntheticS128Catalogue.cs" Link="TestSupport\SyntheticS128Catalogue.cs" />
     <Compile Include="..\_shared\FakeWeatherProduct.cs" Link="TestSupport\FakeWeatherProduct.cs" />
+    <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
   </ItemGroup>
 
   <ItemGroup>

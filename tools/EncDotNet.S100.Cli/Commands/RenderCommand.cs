@@ -400,6 +400,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             }
 
             var processor = DatasetProcessorLoader.Create(factory, spec, datasetPath, settings.NoUpdates);
+            // Processors that read lazily (NetCDF, S-111 dcf2) keep their file
+            // open until disposed.
+            using var processorLifetime = processor as IDisposable;
 
             // Non-blocking: warn (on stderr) when the dataset's declared
             // edition diverges from what this build implements. Rendering still

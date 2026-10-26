@@ -110,7 +110,7 @@ public class ProductRegistryTests
         [
             "S-57", "S-101", "S-102", "S-104", "S-111", "S-122", "S-124",
             "S-125", "S-127", "S-128", "S-129", "S-131", "S-201", "S-401",
-            "S-411", "S-421",
+            "S-411", "S-421", "NetCDF",
         ];
 
         var registry = S100Products.CreateDefaultRegistry();
@@ -121,12 +121,21 @@ public class ProductRegistryTests
     }
 
     [Fact]
-    public void AddAllS100Products_MatchesDefaultRegistry()
+    public void AddAllS100Products_AndWeatherProducts_MatchDefaultRegistry()
     {
-        var registry = new ProductRegistry().AddAllS100Products();
+        var registry = new ProductRegistry().AddAllS100Products().AddWeatherProducts();
 
         Assert.Equal(
             S100Products.CreateDefaultRegistry().RegisteredSpecs.OrderBy(s => s),
             registry.RegisteredSpecs.OrderBy(s => s));
+    }
+
+    [Fact]
+    public void AddAllS100Products_LeavesOutTheWeatherFormats()
+    {
+        var registry = new ProductRegistry().AddAllS100Products();
+
+        Assert.False(registry.IsRegistered("NetCDF"));
+        Assert.All(registry.RegisteredSpecs, spec => Assert.True(registry.IsS100(spec), spec));
     }
 }

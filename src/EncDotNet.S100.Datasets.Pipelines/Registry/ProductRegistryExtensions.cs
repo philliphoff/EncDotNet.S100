@@ -27,4 +27,16 @@ public static class ProductRegistryExtensions
         S100Products.RegisterAll(registry);
         return registry;
     }
+
+    /// <summary>
+    /// Registers the built-in weather formats (<see cref="WeatherProducts"/>:
+    /// NetCDF-CF) and returns the registry for chaining. They aren't S-100
+    /// products, so <see cref="AddAllS100Products"/> leaves them out.
+    /// </summary>
+    public static ProductRegistry AddWeatherProducts(this ProductRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        WeatherProducts.RegisterAll(registry);
+        return registry;
+    }
 }

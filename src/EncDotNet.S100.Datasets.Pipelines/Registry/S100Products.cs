@@ -30,14 +30,18 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// former hard-coded <c>switch</c>es in <see cref="DatasetPipelineFactory"/>
 /// and the hosts. A host that wants every product calls
 /// <see cref="ProductRegistryExtensions.AddAllS100Products"/> (the default
-/// <see cref="ProductRegistry.Default"/> does this); a host that wants a subset
-/// registers only the products it needs.
+/// <see cref="ProductRegistry.Default"/> does this, and adds the weather formats
+/// of <see cref="WeatherProducts"/>); a host that wants a subset registers only
+/// the products it needs.
 /// </summary>
 public static class S100Products
 {
-    /// <summary>Creates a registry pre-loaded with every built-in product.</summary>
+    /// <summary>
+    /// Creates a registry pre-loaded with every built-in product: the S-100
+    /// products here and the weather formats in <see cref="WeatherProducts"/>.
+    /// </summary>
     public static ProductRegistry CreateDefaultRegistry() =>
-        new ProductRegistry().AddAllS100Products();
+        new ProductRegistry().AddAllS100Products().AddWeatherProducts();
 
     /// <summary>Registers every built-in product with <paramref name="registry"/>.</summary>
     public static void RegisterAll(ProductRegistry registry)

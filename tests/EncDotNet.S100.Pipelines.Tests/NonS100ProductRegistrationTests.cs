@@ -184,14 +184,26 @@ public class NonS100ProductRegistrationTests : IDisposable
     [Fact]
     public void Hdf5_FileNoProductClaims_IsUnknownNotS102()
     {
-        // A NetCDF-4 file (HDF5 underneath) with no S-100 productSpecification:
-        // it used to be routed to S-102; now nobody claims it.
+        // An HDF5 file with no S-100 productSpecification: it used to be
+        // routed to S-102; now nobody claims it. (One with a CF Conventions
+        // attribute is NetCDF-4, issue #1071; see NetCdfProcessorTests.)
         var path = Path.Combine(_dir, "wave.h5");
-        new H5File { Attributes = new() { ["Conventions"] = "CF-1.8" } }.Write(path);
+        new H5File { Attributes = new() { ["title"] = "not a product" } }.Write(path);
 
         Assert.Null(DatasetPipelineFactory.DetectProductSpec(path));
         using var source = FileSystemAssetSource.Create(_dir);
         Assert.Null(DatasetPipelineFactory.DetectProductSpecFromSource(source, "wave.h5"));
+    }
+
+    [Fact]
+    public void Hdf5_FileWithCfConventions_IsNetCdf()
+    {
+        var path = Path.Combine(_dir, "wave.h5");
+        new H5File { Attributes = new() { ["Conventions"] = "CF-1.8" } }.Write(path);
+
+        Assert.Equal("NetCDF", DatasetPipelineFactory.DetectProductSpec(path));
+        using var source = FileSystemAssetSource.Create(_dir);
+        Assert.Equal("NetCDF", DatasetPipelineFactory.DetectProductSpecFromSource(source, "wave.h5"));
     }
 
     [Fact]

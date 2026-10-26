@@ -104,7 +104,11 @@ public class ListSpecsToolTests
         Assert.True(result.TryGetValue(out var value));
         var s104 = value.Specs.Single(s => s.Name == "S-104");
         Assert.Equal("SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology", s104.PortrayalNote);
-        Assert.All(value.Specs.Where(s => s.Name != "S-104"), s => Assert.Null(s.PortrayalNote));
+        // The weather formats (#1071) are drawn by SoundCharts' own styles too.
+        Assert.Equal(
+            "SoundCharts portrayal: NetCDF-CF defines no symbology",
+            value.Specs.Single(s => s.Name == "NetCDF").PortrayalNote);
+        Assert.All(value.Specs.Where(s => s.Name is not ("S-104" or "NetCDF")), s => Assert.Null(s.PortrayalNote));
     }
 
     [Fact]
@@ -117,7 +121,18 @@ public class ListSpecsToolTests
         Assert.True(result.TryGetValue(out var value));
         var names = value.Specs.Select(s => s.Name).ToHashSet();
         Assert.All(S100Products.All, r => Assert.Contains(r.Spec, names));
-        Assert.All(value.Specs, s => Assert.True(s.IsS100, s.Name));
+        Assert.All(value.Specs.Where(s => S100Products.All.Any(r => r.Spec == s.Name)), s => Assert.True(s.IsS100, s.Name));
+    }
+
+    [Fact]
+    public async Task The_built_in_weather_formats_are_listed_as_not_S100()
+    {
+        var tool = new ListSpecsTool(new FakeDatasetCatalog());
+
+        var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.All(WeatherProducts.All, r => Assert.False(value.Specs.Single(s => s.Name == r.Spec).IsS100, r.Spec));
     }
 
     [Fact]
