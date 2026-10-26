@@ -1,5 +1,4 @@
 using EncDotNet.S100.Datasets.Weather;
-using EncDotNet.S100.TestSupport;
 using static EncDotNet.S100.TestSupport.GribFixtures;
 
 namespace EncDotNet.S100.Datasets.Grib.Tests;
@@ -182,6 +181,16 @@ public sealed class GribWeatherDatasetTests
         Assert.Contains("5.40 (JPEG 2000)", ignored.Reason);
         Assert.Equal("HTSGW (10,0,3), surface, valid 2026-10-25 03:00Z", ignored.Name);
         Assert.Equal(3, dataset.GridSet.FindParameter(WeatherParameters.WaveHeight)!.Steps.Count);
+    }
+
+    [Fact]
+    public void A_CCSDS_message_is_listed_with_its_reason_and_not_used()
+    {
+        using var dataset = GribWeatherDataset.Read(GribFile.Open(Concat(EcmwfWave(), CcsdsMessage())), "wave-fc.grib2");
+
+        var ignored = Assert.Single(dataset.IgnoredFields);
+        Assert.Contains("5.42 (CCSDS", ignored.Reason);
+        Assert.Equal("HTSGW (10,0,3), mean sea level, valid 2026-10-25 03:00Z", ignored.Name);
     }
 
     [Fact]

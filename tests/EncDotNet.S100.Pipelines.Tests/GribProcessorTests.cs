@@ -306,7 +306,7 @@ public sealed class GribProcessorTests : IDisposable
     {
         var path = Write(
             PathFor("gfswave.grib2"),
-            Concat(File.ReadAllBytes(Fixture(WaveFilter)), File.ReadAllBytes(Fixture(Jpeg2000))));
+            Concat(File.ReadAllBytes(Fixture(WaveFilter)), CcsdsMessage()));
         using var processor = new GribDatasetProcessor(path, new ProjNetCrsTransformFactory());
 
         var contents = processor.Contents;
@@ -318,17 +318,19 @@ public sealed class GribProcessorTests : IDisposable
         var partitions = contents.Where(c => c.Name == "grib2:10,0,8 (SWELL)").ToArray();
         Assert.Equal(2, partitions.Length);
         Assert.All(partitions, p => Assert.Contains("the first partition the file has", p.Reason));
-        var jpeg = contents.Single(c => c.Steps == 0);
-        Assert.Equal("HTSGW (10,0,3), surface, valid 2026-10-25 03:00Z", jpeg.Name);
-        Assert.Contains("5.40 (JPEG 2000)", jpeg.Reason);
+        var ccsds = contents.Single(c => c.Steps == 0);
+        Assert.Equal("HTSGW (10,0,3), mean sea level, valid 2026-10-25 03:00Z", ccsds.Name);
+        Assert.Contains("5.42 (CCSDS", ccsds.Reason);
     }
 
     [Fact]
     public void A_file_with_nothing_decodable_fails_with_the_file_name()
     {
-        var error = Assert.Throws<UnsupportedGribException>(() => CreateFactory().CreateProcessor(Fixture(Jpeg2000)));
+        var path = Write(PathFor("20261025000000-3h-wave-fc.grib2"), CcsdsMessage());
 
-        Assert.StartsWith($"{Jpeg2000}: The file's only field can't be decoded: Data representation template 5.40 (JPEG 2000)", error.Message);
+        var error = Assert.Throws<UnsupportedGribException>(() => CreateFactory().CreateProcessor(path));
+
+        Assert.StartsWith("20261025000000-3h-wave-fc.grib2: The file's only field can't be decoded: Data representation template 5.42 (CCSDS", error.Message);
     }
 
     [Fact]

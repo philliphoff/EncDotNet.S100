@@ -78,14 +78,15 @@ public sealed class GribRenderCommandTests : IDisposable
     }
 
     [Fact]
-    public void A_JPEG_2000_only_file_fails()
+    public void A_file_with_nothing_decodable_fails()
     {
-        var dataset = GribFixtures.CopyFixture(GribFixtures.Jpeg2000, Path.Combine(_dir, "wcoast.grib2"));
+        // ECMWF Open Data as served: CCSDS packing (template 5.42).
+        var dataset = GribFixtures.Write(Path.Combine(_dir, "wave.grib2"), GribFixtures.CcsdsMessage());
 
-        int exit = CliApp.Build().Run(["render", dataset, Path.Combine(_dir, "wcoast.png")]);
+        int exit = CliApp.Build().Run(["render", dataset, Path.Combine(_dir, "wave.png")]);
 
         Assert.NotEqual(0, exit);
-        Assert.False(File.Exists(Path.Combine(_dir, "wcoast.png")));
+        Assert.False(File.Exists(Path.Combine(_dir, "wave.png")));
     }
 
     [Fact]
@@ -94,7 +95,7 @@ public sealed class GribRenderCommandTests : IDisposable
         var dataset = Path.Combine(_dir, "gfswave.grib2");
         File.WriteAllBytes(dataset, GribFixtures.Concat(
             File.ReadAllBytes(GribFixtures.Fixture(GribFixtures.WaveFilter)),
-            File.ReadAllBytes(GribFixtures.Fixture(GribFixtures.Jpeg2000))));
+            GribFixtures.CcsdsMessage()));
 
         var (exit, stdout) = RunCapturingAnsiConsole(["info", dataset]);
 
@@ -105,7 +106,7 @@ public sealed class GribRenderCommandTests : IDisposable
         Assert.Contains("wave.hs (HTSGW)", stdout);
         Assert.Contains("grib2:10,0,8 (SWELL)", stdout);
         Assert.Contains("the first partition the file has", stdout);
-        Assert.Contains("5.40 (JPEG 2000)", stdout);
+        Assert.Contains("5.42 (CCSDS", stdout);
     }
 
     private static (int Exit, string Stdout) RunCapturingAnsiConsole(string[] args)

@@ -229,7 +229,8 @@ Unknown parameters are listed in `info` output but not drawn.
 | `wave.dir` (primary or mean, from) | 10,0,10 / 10,0,14 | `sea_surface_wave_from_direction` | degrees true |
 | `wave.period` (peak or mean) | 10,0,11 / 10,0,15 | `sea_surface_wave_period_at_variance_spectral_density_maximum` / `sea_surface_wave_mean_period` | s |
 | `wave.wind_sea.hs`, `wave.swell.hs` | 10,0,5 / 10,0,8 | `sea_surface_wind_wave_significant_height` / `sea_surface_swell_wave_significant_height` | m |
-| `pressure.msl` | 0,3,1 | `air_pressure_at_mean_sea_level` | Pa |
+| `wave.wind_sea.dir` (from; added in #1074) | 10,0,4 | `sea_surface_wind_wave_from_direction` | degrees true |
+| `pressure.msl` | 0,3,1 / 0,3,0 at mean sea level (ECMWF `msl`, added in #1074) | `air_pressure_at_mean_sea_level` | Pa |
 
 The table is data in `Datasets.Weather`. Check the exact codes against
 the WMO GRIB2 code tables and the CF standard name table while
@@ -620,6 +621,79 @@ For #1074 (the processor):
 - Keep the `GribFile` open for the life of the `WeatherGridSet`: the step
   decoders read from it.
 
+**As built (#1074).** `GribWeatherDataset` (in `Datasets.Grib`, beside the
+decoder, as §3.3 has it and as `NetCdfWeatherDataset` sits in its reader)
+reads a whole file into a `WeatherGridSet`. `GribDatasetProcessor` (in
+`Datasets.Pipelines`, on `WeatherGridProcessorBase`) only opens the file, and
+`WeatherProducts.Grib2` registers it.
+
+- **Files.** One file of many messages, or several appended (a NOMADS GRIB
+  filter request for several hours returns them so). Fields are grouped by
+  (code, level); each group's steps are ordered by valid time, so the message
+  order doesn't matter. A field is decoded only when its step is drawn or
+  sampled, through `GribFile.CreateStepDecoder`, and the `GribFile` stays
+  open until the processor is disposed.
+- **Levels and codes.** Each table group is read at one level, so a drawn group
+  never mixes levels: the row's own level (10 m wind, mean sea level pressure);
+  for the wind, the surface when the file has no 10 m wind; for rows without a
+  level, a proper level before NCEP's partitions, and partition 1 first. Within
+  that level, the most preferred code the file has. Everything else (another
+  level or partition, a less preferred code, a code the table doesn't have)
+  stays in the set as an unknown parameter, `grib2:d,c,n`, with why in
+  `UnusedReasons`, and isn't drawn or sampled.
+  - *GFS-Wave's surface wind* (UGRD, VGRD, WIND, WDIR at fixed surface 1) is
+    accepted as the wind when there's no 10 m wind. It is the GFS 10 m wind
+    that forces WAVEWATCH III, labelled as at the surface; refusing it would
+    leave a GFS-Wave download without wind. The level stays "surface" in the
+    model and the pick. With a 10 m wind in the same file (GFS appended), the
+    10 m wind wins and the surface fields are listed.
+  - *Swell partitions* (local fixed surface 241, "n in sequence"): partition 1
+    is `wave.swell.hs`. WAVEWATCH III orders its swell partitions by energy,
+    so the first is normally the dominant swell (in the fixture, partition 1
+    averages 1.25 m against 0.32 m and 0.12 m); 2 and 3 are listed. The level
+    reads "GRIB2 fixed surface type 241 = 1".
+  - *ECMWF*: `msl` is (0,3,0) at mean sea level, now the second code of
+    `pressure.msl` (the row's level keeps surface pressure, also (0,3,0), out);
+    `10u`/`10v` are the 10 m wind; `swh`, `mwd` (10,0,14), `pp1d` (10,0,34)
+    and `mwp` (10,0,15) are at mean sea level, which the wave rows accept, and
+    `pp1d` is the period (`mwp` is listed). The `10fg` gust is a 4.8 maximum
+    whose valid time is the end of its interval, the same rule as GFS's 4.8
+    fields, so it lines up with the instantaneous fields of that step.
+  - *WVDIR* (10,0,4) is a new row, `wave.wind_sea.dir`, in the `wave.wind_sea`
+    group beside the wind-sea height, following the table's id scheme. It's
+    sampled and picked; no style draws it yet.
+- **Grid.** The grid of the first readable field the table knows; fields on
+  another grid are listed. Scanning-mode row flips and 0 to 360 longitudes are
+  `WeatherGridLayout`'s (a global 0 to 360 grid is rotated to −180 to 180; a
+  regional 350°E to 10°E grid becomes −10° to 10°). Bitmapped points are NaN.
+- **Several reference times.** All analyses (each field valid at its reference
+  time, for example appended f000 files of several runs): an analysis series,
+  with no run time (`TimeStepKind.Analysis`). Otherwise the latest run is used
+  and the older runs' fields are listed. Rejecting the file would refuse a
+  common mistake for no gain; merging runs would show steps of different runs
+  as one forecast.
+- **Left out, with why** (`IgnoredFields`, and `Contents` on the processor,
+  which `s100 info` prints): unsupported templates (JPEG 2000, CCSDS, Lambert),
+  another grid, an older run, a repeat of a parameter, level and valid time. A
+  file with nothing decodable fails naming the template, prefixed with the
+  file name.
+- **Model name** (`ForecastRun`, the layer name): NCEP's generating process
+  (81, 82 and 96 are the GFS, 11 is GFS-Wave), which holds whatever the file
+  is called; else the file name as the sources name files (`gfs`, `gfswave`
+  tokens, so `gfs.t00z…` and `filter_gfs_0p25.pl`; ECMWF's `…-oper-fc` or
+  `…-scda-fc` is "ECMWF IFS", `…-wave-fc` or `…-scwv-fc` "ECMWF WAM", `aifs`
+  "ECMWF AIFS"); else the centre ("ECMWF", "GRIB2 centre 74"). ECMWF's process
+  number changes with each IFS cycle, so it isn't used. Several models in one
+  file are joined: "GFS-Wave + GFS".
+- **Detection.** `MatchBytes` claims a GRIB edition 2 indicator at the start
+  of any file, whatever the extension: NCEP's files have none, the filter's
+  download is named after the script, and others use `.bin`. A `.grb`,
+  `.grb2`, `.grib2` or `.grib` file is also claimed with `GRIB` anywhere in its
+  first kilobyte, so a WMO bulletin header is skipped and a GRIB1 file reaches
+  the reader's "edition 1 isn't supported". No S-100 encoding starts with
+  `GRIB`, and the envelope matchers (ISO 8211, HDF5, GML) run first, so S-100
+  and NetCDF files are never claimed; tests check both ways.
+
 ### 7.3 Test fixtures
 
 - **GRIB2:** a NOMADS GRIB filter subset of GFS-Wave and of GFS 10 m
@@ -649,6 +723,18 @@ about 115 KB. Their README in `tests/datasets/GRIB2` gives the exact subsets,
 and `tools/grib-fixtures/make_grib_fixtures.py` rebuilds them and prints the
 ecCodes reference values the tests hardcode. Every data template also has
 byte-exact round-trip tests through a test-only encoder.
+
+**As built (#1074).** One fixture was added, `gfswave-useast-filter.grib2`
+(41.5 KB): what a GRIB filter request for three hours of GFS-Wave returns,
+the hours appended (WIND, WDIR, UGRD, VGRD, HTSGW, PERPW, DIRPW, WVHGT, the
+three SWELL partitions and WVDIR at f000, f003 and f006), from AWS and
+repacked like the others, since the filter would keep the JPEG 2000 packing.
+The JPEG 2000 message stays the unsupported-template case. The S-101 test
+cells are synthetic (62°E, 32°S), where no NOAA grid reaches, so the golden
+over an S-101 cell draws generated GRIB2 messages, written by a small test
+helper (`tests/_shared/GribFixtures.cs`) that also writes a global 0 to 360
+grid and ECMWF's codes. ECMWF Open Data is CC BY 4.0 and CCSDS-packed, so no
+ECMWF bytes are committed.
 
 ## 8. Pipeline refactors for products without catalogues
 

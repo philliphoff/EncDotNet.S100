@@ -65,7 +65,45 @@ var set = new WeatherGridSet(
     [u]);
 ```
 
-The GRIB2 dataset processor (issue #1074) does this for a whole file.
+### A whole file
+
+`GribWeatherDataset` does this for a whole file, which is what
+`GribDatasetProcessor` (in `EncDotNet.S100.Datasets.Pipelines`) draws:
+
+```csharp
+using var dataset = GribWeatherDataset.Open("filter_gfswave.pl");   // a NOMADS GRIB filter download
+Console.WriteLine($"{dataset.Model}, run {dataset.ReferenceTime:u}"); // GFS-Wave, run 2026-10-25 00:00:00Z
+foreach (var ignored in dataset.IgnoredFields)
+    Console.WriteLine($"{ignored.Name}: {ignored.Reason}");
+```
+
+- **Files.** One file of many messages, or several appended (a GRIB filter
+  request for several forecast hours, or `cat f000 f003 f006`). Message order
+  doesn't matter.
+- **Parameters.** Fields are grouped by code and level, and each group's steps
+  are ordered by valid time (for a template 4.8 statistic, such as ECMWF's
+  `10fg` gust, the end of the interval). Each parameter group of the table is
+  read at one level: the row's own (10 m for the wind, mean sea level for
+  pressure); for the wind, the surface when the file has no 10 m wind
+  (GFS-Wave labels its 10 m forcing wind as at the surface); otherwise a proper
+  level before NCEP's numbered swell partitions (fixed surface 241), and
+  partition 1 before the others. Where a row has several codes, the most
+  preferred one the file has is used. Every other group stays in the grid set
+  as an unknown parameter (`grib2:10,0,8`), listed with why in `UnusedReasons`
+  but not drawn.
+- **Left out** (`IgnoredFields`, with why): fields with an unsupported
+  template, fields on another grid than the first known field's, fields of an
+  older model run, and repeats of a parameter, level and valid time. A file
+  with nothing decodable throws `UnsupportedGribException` naming the template.
+- **Runs.** One reference time is the run. Several, all analyses, are an
+  analysis series (`ReferenceTime` is `null`). Otherwise the latest run is used.
+- **Model.** GRIB2 doesn't name the model. `Model` comes from NCEP's
+  generating process (81, 82 and 96 are the GFS, 11 is GFS-Wave), else the
+  file name (`gfs.t00z…`, `gfswave.t00z…`, `filter_gfs_0p25.pl`, ECMWF's
+  `…-oper-fc` for the IFS, `…-wave-fc` for ECMWF WAM, `aifs`), else the
+  centre (`"ECMWF"`).
+- The dataset keeps the `GribFile` open for its steps; dispose it to close the
+  file.
 
 ## What's supported
 
@@ -138,6 +176,7 @@ and the options.
 |---|---|
 | `GribFile` | Opens and indexes a file. `Fields`, `ReadValues` and `CreateStepDecoder`. |
 | `GribField` | One indexed field: `Parameter`, `Identification`, `Grid`, `Product`, `DataRepresentation`, `HasBitmap`, the message offset and length, `ReferenceTime`, `ValidTime` and `UnsupportedReason`. It also has the weather mapping methods. |
+| `GribWeatherDataset`, `GribIgnoredField` | A whole file read into a `WeatherGridSet`, and the fields it left out with why. |
 | `GribIdentification` | Section 1. |
 | `GribGrid`, `GribLatLonGrid`, `GribScanningMode` | Section 3, and template 3.0's geometry and scanning flags. |
 | `GribProduct`, `GribFixedSurface`, `GribTimeRange`, `GribTimeUnit`, `GribStatisticalProcess` | Section 4 and templates 4.0 and 4.8. |

@@ -190,7 +190,7 @@ other extension writes PNG, unless you set `--format`.
 | `--palette <palette>` | `day` | `day`, `dusk` or `night`. |
 | `--symbol-scale <factor>` | `1.0` | Symbol scale factor. |
 | `--text-scale <factor>` | `1.0` | Text scale factor. |
-| `--time-step <index>` | `0` | Zero-based time step for time-series datasets (S-104, S-111). `s100 info` lists the steps. |
+| `--time-step <index>` | `0` | Zero-based time step for time-series datasets (S-104, S-111, GRIB2, NetCDF). `s100 info` lists the steps. |
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
 | `--bbox <minLon,minLat,maxLon,maxLat>` | fit to the data | Draws this WGS-84 bounding box. Can't be combined with `--center` and `--scale`. |
 | `--center <lon,lat>` | fit to the data | Centre of the view. Use with `--scale`. |
@@ -616,9 +616,14 @@ takes. For S-104, a **Portrayal** row says "SoundCharts portrayal: S-104 Ed
 2.0.0 defines no symbology", because what `render` draws for it is
 [SoundCharts' own](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal).
 For an S-101 base cell, it applies the [update files](#s-101-updates) first.
+For a weather file (GRIB2 or NetCDF), a **Weather parameters** table lists
+each parameter with its level and step count, whether it's used, and if not,
+why: for example a second swell partition, a parameter the weather table
+doesn't have, or a GRIB2 message packed as JPEG 2000.
 
 ```bash
 s100 info currents.h5
+s100 info filter_gfswave.pl
 ```
 
 | Option | Default | Description |

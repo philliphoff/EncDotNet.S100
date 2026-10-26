@@ -202,6 +202,13 @@ internal static class GribFixtures
 
         /// <summary>The decimal scale factor D: values are kept to 10^−D.</summary>
         public int DecimalScale { get; init; } = 3;
+
+        /// <summary>
+        /// Whether to write data template 5.42 (CCSDS, as ECMWF Open Data
+        /// packs everything) with placeholder data instead of simple packing:
+        /// a field the decoder lists as unsupported.
+        /// </summary>
+        public bool Ccsds { get; init; }
     }
 
     /// <summary>Encodes one GRIB2 message.</summary>
@@ -253,6 +260,17 @@ internal static class GribFixtures
         var packed = present.Select(v => (ulong)Math.Round(v * scale - reference)).ToArray();
         ulong max = packed.Length == 0 ? 0 : packed.Max();
         int bits = max == 0 ? 0 : 64 - System.Numerics.BitOperations.LeadingZeroCount(max);
+        if (m.Ccsds)
+        {
+            // Template 5.42: R, E, D, bits, original type, CCSDS flags, block size, reference sample interval.
+            body.AddRange(Section(5, w => w
+                .U32((uint)present.Length).U16(42)
+                .F32(reference).S16(0).S16(m.DecimalScale).U8(16).U8(0).U8(14).U8(32).U16(128)));
+            body.AddRange(Section(6, w => w.U8(255)));
+            body.AddRange(Section(7, w => w.Bytes(new byte[16])));
+            return Finish(m, body);
+        }
+
         body.AddRange(Section(5, w => w
             .U32((uint)present.Length).U16(0)
             .F32(reference).S16(0).S16(m.DecimalScale).U8(bits).U8(0)));
@@ -265,7 +283,11 @@ internal static class GribFixtures
                 w.Bytes(PackBits(m.Values.Select(v => double.IsNaN(v) ? 0UL : 1UL), 1));
         }));
         body.AddRange(Section(7, w => w.Bytes(PackBits(packed, bits))));
+        return Finish(m, body);
+    }
 
+    private static byte[] Finish(Message m, List<byte> body)
+    {
         var message = new Writer()
             .Bytes("GRIB"u8.ToArray()).U8(0).U8(0).U8(m.Discipline).U8(2).U64((ulong)(16 + body.Count + 4))
             .Bytes([.. body])
@@ -385,6 +407,27 @@ internal static class GribFixtures
     /// (<see cref="GlobalValue"/>), so a test can see which column landed where.
     /// </summary>
     public static Grid GlobalGrid { get; } = new(90, 0, 2, 91, 180);
+
+    /// <summary>
+    /// An ECMWF WAM style <c>swh</c> message at step 3 on <see cref="EcmwfGrid"/>
+    /// packed with CCSDS (template 5.42, placeholder data), as ECMWF Open Data
+    /// serves everything: a field the decoder lists as unsupported. The
+    /// end-to-end tests use it rather than the JPEG 2000 fixture, which a
+    /// JPEG 2000 decoder would make readable.
+    /// </summary>
+    public static byte[] CcsdsMessage() => Encode(new Message
+    {
+        Discipline = 10,
+        Category = 0,
+        Number = 3,
+        Centre = 98,
+        Process = 153,
+        SurfaceType = 101,
+        ForecastHours = 3,
+        Grid = EcmwfGrid,
+        Values = new double[EcmwfGrid.Rows * EcmwfGrid.Columns],
+        Ccsds = true,
+    });
 
     /// <summary>The value of <see cref="GlobalFile"/> at a node: longitude east (0 to 360) plus (latitude + 90) / 1000.</summary>
     /// <param name="latitude">The node's latitude.</param>
