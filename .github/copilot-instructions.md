@@ -47,6 +47,7 @@ src/
   EncDotNet.S100.Datasets.S124/      # S-124 navigational warnings reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S125/      # S-125 marine aids to navigation reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S127/      # S-127 marine resources & services reader + GML/XSLT portrayal
+  EncDotNet.S100.Datasets.NetCdf/    # NetCDF-CF wind and wave reader (NetCDF-3 managed, NetCDF-4 on PureHDF)
   EncDotNet.S100.Datasets.S128/      # S-128 catalogue of nautical products reader + GML/XSLT portrayal
   EncDotNet.S100.Datasets.S129/      # S-129 under keel clearance reader
   EncDotNet.S100.Datasets.S131/      # S-131 marine harbour infrastructure reader + GML/Lua portrayal
@@ -59,6 +60,7 @@ src/
   EncDotNet.S100.Renderers.Mapsui/   # Mapsui layer renderer with CRS projection (ProjNet/EPSG:3857)
   EncDotNet.S100.Viewer/             # Avalonia cross-platform desktop viewer (macOS, Windows, Linux)
 tests/
+  EncDotNet.S100.Datasets.NetCdf.Tests/
   EncDotNet.S100.Datasets.S104.Tests/
   EncDotNet.S100.Datasets.S111.Tests/
   EncDotNet.S100.Datasets.S124.Tests/

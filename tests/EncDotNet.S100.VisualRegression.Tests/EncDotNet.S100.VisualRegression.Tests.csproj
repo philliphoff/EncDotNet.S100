@@ -21,6 +21,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\EncDotNet.S100.VisualRegression\EncDotNet.S100.VisualRegression.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Testing.Scenarios\EncDotNet.S100.Testing.Scenarios.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Weather\EncDotNet.S100.Datasets.Weather.csproj" />

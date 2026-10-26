@@ -101,6 +101,7 @@ namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 | `S411DatasetProcessor` | S-411 | Vector, XSLT |
 | `S421DatasetProcessor` | S-421 | Vector, XSLT |
 | `S57DatasetProcessor` | S-57 | Translated to S-101 (maritime ENC) or S-401 (inland ENC), then drawn by the S-101 vector pipeline with that product's catalogues |
+| `NetCdfDatasetProcessor` | NetCDF-CF wind and wave grids (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 
 `S101DatasetProcessor` handles S-401 inland ENCs when it's created with the
 S-401 catalogues.
@@ -159,7 +160,9 @@ names for:
 | `PickReportNotice` | A product's own first pick-report line | The viewer's pick report |
 
 `ProductRegistry.Default` is the process-wide registry, pre-loaded with every
-built-in product. The static conveniences, a factory built without a registry,
+built-in product: the S-100 products in `S100Products` and the weather formats
+in `WeatherProducts` (`S100Products.CreateDefaultRegistry()`;
+`AddAllS100Products()` and `AddWeatherProducts()` add one set each). The static conveniences, a factory built without a registry,
 the viewer and the MCP tools read it, so a host adds a product by registering
 it there once at start-up.
 
@@ -184,6 +187,45 @@ keeps the `S-57` identity; the code only decides which catalogue portrays it
 A cell that declares no `PRSP`, or whose product isn't in the host's registry,
 is treated as S-101. A host that registers only some products never gets a
 processor it can't build.
+
+## Weather grids
+
+Weather model data isn't an S-100 product, but it's loaded, drawn, sampled and
+picked like one (design note
+[Wind and wave data](../../docs/design/weather-sources.md)).
+`WeatherGridProcessorBase` is everything after a reader has produced a
+`WeatherGridSet`; `NetCdfDatasetProcessor` derives from it and only opens the
+file (the GRIB2 processor will do the same). It implements:
+
+- **Drawing.** One `WeatherCoverageSource` per parameter group, drawn by the
+  weather styles that are on by default (wave height fill, wind barbs) through
+  `WeatherPortrayal`. Each style is a layer stack entry on its S-98 plane, and
+  the overview level follows the viewport's cells per pixel.
+- **Time.** `ITimeAwareDatasetProcessor`: the parameters' valid times;
+  `TimeSemantics` of forecast steps (analysis steps when the file gives no
+  reference time) drawn from the nearest step; and `ForecastRun`, the model
+  from the file (`source`, `institution` or `title` for NetCDF) with its
+  reference time.
+- **Picks.** `GetCoverageInfo` samples every parameter at the nearest grid
+  node and step. Its first attribute is "Weather model data, not for
+  navigation.", then the model run and valid time, then each value: wave
+  height in metres, wind speed in knots, directions in degrees ("from").
+- **Sampling.** `ICoverageSampler` returns `CoverageFieldsSample`s whose fields
+  carry their quantity and unit (`wave.hs` in `m`, `wind.speed` in `m/s` and
+  `wind.speed.kn` in `kn`, directions in `deg`), and the catalog payload
+  (`WeatherGridDatasetData`) does the same, so `sample_coverage` and
+  `sample_coverage_along` work with no MCP change.
+- **Headless rendering.** `IHeadlessImageRenderer`, through the
+  `HeadlessCompositor`, framed on the grid.
+- **Metadata.** The cells' WGS-84 extent, EPSG:4326 and the time coverage.
+
+`WeatherProducts.NetCdf` registers NetCDF as `NetCDF/4.0.0` (NetCDF-4) or
+`NetCDF/3.0.0` (NetCDF-3), not S-100, with an application portrayal
+(`NetCDF-CF`). It claims a file that starts with `CDF\x01` or `CDF\x02`, an
+HDF5 file whose root `Conventions` attribute names CF and which declares no
+S-100 `productSpecification`, and an unclaimed HDF5 file named `.nc` or
+`.nc4`. S-102, S-104 and S-111 claim only files whose `productSpecification`
+names them, so the two never claim the same file.
 
 ## Processor lifetime
 

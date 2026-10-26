@@ -62,6 +62,8 @@
       href: EncDotNet.S100.Datasets.Weather/README.md
     - name: EncDotNet.S100.Datasets.Pipelines
       href: EncDotNet.S100.Datasets.Pipelines/README.md
+    - name: EncDotNet.S100.Datasets.NetCdf
+      href: EncDotNet.S100.Datasets.NetCdf/README.md
 - name: Navigation
   items:
     - name: EncDotNet.S100.Navigation

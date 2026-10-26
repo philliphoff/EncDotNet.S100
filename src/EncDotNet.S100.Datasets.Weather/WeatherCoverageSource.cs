@@ -69,13 +69,13 @@ public sealed class WeatherCoverageSource : ICoverageSource
     /// their reader's id.
     /// </param>
     /// <param name="spec">
-    /// The product identity reported in <see cref="CoverageMetadata.Spec"/>.
-    /// Interim (until issue #1061 lets <see cref="SpecName"/> accept the
-    /// non-S-100 names <c>GRIB2</c> and <c>NetCDF</c>): a reader can't yet
-    /// build a <see cref="SpecRef"/> for its format, so the default is
-    /// <c>default(SpecRef)</c>, whose <see cref="SpecRef.Name"/> is
-    /// <see langword="null"/>. Readers pass <c>GRIB2/2.0.0</c> or
-    /// <c>NetCDF/4.0.0</c> here once #1061 lands.
+    /// The product identity reported in <see cref="CoverageMetadata.Spec"/>
+    /// and on the portrayal: the file format and its version, for example
+    /// <c>SpecRef.Parse("NetCDF/4.0.0")</c>, <c>NetCDF/3.0.0</c> or
+    /// <c>GRIB2/2.0.0</c> (<see cref="SpecName"/> accepts these non-S-100
+    /// names). A processor always passes one; <c>default(SpecRef)</c>, whose
+    /// <see cref="SpecRef.Name"/> is <see langword="null"/>, is only for a grid
+    /// built in memory with no file behind it.
     /// </param>
     /// <param name="cacheCapacity">How many decoded time steps to keep; at least 1.</param>
     /// <exception cref="ArgumentException">
@@ -188,8 +188,9 @@ public sealed class WeatherCoverageSource : ICoverageSource
     public IReadOnlyList<WeatherParameter> Parameters => _parameters;
 
     /// <summary>
-    /// The product identity reported in <see cref="CoverageMetadata.Spec"/>;
-    /// <c>default(SpecRef)</c> until issue #1061 (see the constructor).
+    /// The product identity reported in <see cref="CoverageMetadata.Spec"/>,
+    /// for example <c>NetCDF/4.0.0</c>; <c>default(SpecRef)</c> for an
+    /// in-memory grid (see the constructor).
     /// </summary>
     public SpecRef Spec { get; }
 

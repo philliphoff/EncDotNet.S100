@@ -1,8 +1,9 @@
 # EncDotNet.S100.Datasets.Weather
 
 `EncDotNet.S100.Datasets.Weather` is the shared in-memory model for wind and
-wave grids from formats that predate S-100: GRIB2 and NetCDF-CF. The GRIB2 and
-NetCDF readers (separate packages, still to come) produce a `WeatherGridSet`,
+wave grids from formats that predate S-100: GRIB2 and NetCDF-CF. The readers
+(separate packages: [`EncDotNet.S100.Datasets.NetCdf`](../EncDotNet.S100.Datasets.NetCdf/README.md),
+and GRIB2 still to come) produce a `WeatherGridSet`,
 and everything after the reader is shared: normalisation to the coverage
 pipeline's grid order, the canonical parameter table, and an `ICoverageSource`
 for drawing, sampling and picking, and the coverage styles that draw it. It
@@ -147,9 +148,10 @@ expects:
   least two points.
 - **No data.** `NoDataValue` and every field's `FillValue` are `NaN`.
 
-`CoverageMetadata.Spec` needs a `SpecRef`, which accepts only S-100 names
-until issue #1061 adds `GRIB2` and `NetCDF`. Until then a source reports
-`default(SpecRef)` unless the reader passes one.
+`CoverageMetadata.Spec` is the `SpecRef` the reader passes: the file format
+and its version, such as `NetCDF/4.0.0`, `NetCDF/3.0.0` or `GRIB2/2.0.0`.
+A grid built in memory with no file behind it can leave it as
+`default(SpecRef)`.
 
 ## Styles
 
