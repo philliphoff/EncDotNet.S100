@@ -56,7 +56,11 @@ internal sealed class S102CoverageRenderLargeScenario : IPerfScenario
     {
         var path = Path.Combine(
             Path.GetTempPath(),
-            $"encdotnet-s100-perfrunner-s102-{dim}x{dim}.h5");
+            // "ed3": the file declares productSpecification, which detection
+            // needs now that an undeclared HDF5 file is no longer taken for
+            // S-102 (#1061). The new name keeps a runner from reusing an older
+            // runner's undeclared copy from the shared temp directory.
+            $"encdotnet-s100-perfrunner-s102-ed3-{dim}x{dim}.h5");
 
         if (File.Exists(path))
             return path;
@@ -91,6 +95,7 @@ internal sealed class S102CoverageRenderLargeScenario : IPerfScenario
         {
             Attributes = new()
             {
+                ["productSpecification"] = "INT.IHO.S-102.3.0.0",
                 ["horizontalCRS"] = 4326,
             },
             ["BathymetryCoverage"] = new H5Group
