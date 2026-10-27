@@ -104,11 +104,14 @@ public class ListSpecsToolTests
         Assert.True(result.TryGetValue(out var value));
         var s104 = value.Specs.Single(s => s.Name == "S-104");
         Assert.Equal("SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology", s104.PortrayalNote);
-        // The weather formats (#1071) are drawn by SoundCharts' own styles too.
+        // The weather formats (#1071, #1074) are drawn by SoundCharts' own styles too.
         Assert.Equal(
             "SoundCharts portrayal: NetCDF-CF defines no symbology",
             value.Specs.Single(s => s.Name == "NetCDF").PortrayalNote);
-        Assert.All(value.Specs.Where(s => s.Name is not ("S-104" or "NetCDF")), s => Assert.Null(s.PortrayalNote));
+        Assert.Equal(
+            "SoundCharts portrayal: GRIB2 defines no symbology",
+            value.Specs.Single(s => s.Name == "GRIB2").PortrayalNote);
+        Assert.All(value.Specs.Where(s => s.Name is not ("S-104" or "NetCDF" or "GRIB2")), s => Assert.Null(s.PortrayalNote));
     }
 
     [Fact]

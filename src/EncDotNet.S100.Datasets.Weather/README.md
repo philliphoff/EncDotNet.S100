@@ -105,8 +105,9 @@ lists several codes or names, they're alternatives in order of preference.
 | `wave.dir` | `wave` | any | 10,0,14 (combined), 10,0,10 (primary) | `sea_surface_wave_from_direction`, `sea_surface_wave_from_direction_at_variance_spectral_density_maximum` | degrees true |
 | `wave.period` | `wave` | any | 10,0,34 (peak), 10,0,15 (mean, combined), 10,0,11 (primary wave mean) | `sea_surface_wave_period_at_variance_spectral_density_maximum`, `sea_surface_wave_mean_period` | s |
 | `wave.wind_sea.hs` | `wave.wind_sea` | any | 10,0,5 | `sea_surface_wind_wave_significant_height` | m |
+| `wave.wind_sea.dir` | `wave.wind_sea` | any | 10,0,4 (NCEP's WVDIR) | `sea_surface_wind_wave_from_direction` | degrees true |
 | `wave.swell.hs` | `wave.swell` | any | 10,0,8 | `sea_surface_swell_wave_significant_height` | m |
-| `pressure.msl` | `pressure` | mean sea level | 0,3,1 | `air_pressure_at_mean_sea_level`, `air_pressure_at_sea_level` | Pa |
+| `pressure.msl` | `pressure` | mean sea level | 0,3,1 (NCEP's PRMSL), 0,3,0 (ECMWF's `msl`; plain pressure, so only at mean sea level) | `air_pressure_at_mean_sea_level`, `air_pressure_at_sea_level` | Pa |
 
 Directions are "from", in degrees clockwise from true north. Readers convert
 values to the stored unit; values cross the public API as `Speed`, `Length`

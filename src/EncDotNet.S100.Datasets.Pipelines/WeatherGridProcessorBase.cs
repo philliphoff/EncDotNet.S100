@@ -16,8 +16,9 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <summary>
 /// The format-neutral part of a weather grid processor: everything after the
 /// reader has produced a <see cref="WeatherGridSet"/>. The NetCDF-CF processor
-/// (<see cref="NetCdfDatasetProcessor"/>) and the GRIB2 processor derive from
-/// it and only open their files (design note weather-sources.md §3.3).
+/// (<see cref="NetCdfDatasetProcessor"/>) and the GRIB2 processor
+/// (<see cref="GribDatasetProcessor"/>) derive from it and only open their
+/// files (design note weather-sources.md §3.3).
 /// </summary>
 /// <remarks>
 /// <para>What it provides:</para>
@@ -78,6 +79,7 @@ public abstract class WeatherGridProcessorBase :
     private readonly string? _contentHash;
     private readonly SemaphoreSlim _renderGate = new(1, 1);
     private DatasetMetadata? _metadata;
+    private WeatherDatasetContent[]? _contents;
     private bool _disposed;
 
     /// <summary>Creates the processor over a grid set a reader produced.</summary>
@@ -136,6 +138,39 @@ public abstract class WeatherGridProcessorBase :
     /// <summary>The layer keys drawn, one per style that applies and is on by default, in stack order.</summary>
     public IReadOnlyList<string> LayerKeys => _layers.SelectMany(l => l.Styles).Select(s => s.LayerKey).ToArray();
 
+    /// <summary>
+    /// What the file holds, for <c>info</c> output: every parameter of the grid
+    /// set (the ones the weather table knows are used; unknown ones aren't
+    /// drawn or sampled, with why), then what the reader left out of the grid
+    /// set altogether, with why (for GRIB2, fields with an unsupported
+    /// template such as CCSDS; for NetCDF, variables on other dimensions).
+    /// </summary>
+    public IReadOnlyList<WeatherDatasetContent> Contents => _contents ??= DescribeContents().ToArray();
+
+    /// <summary>
+    /// Lists <see cref="Contents"/>. The default lists the grid set's
+    /// parameters, unknown ones as not in the weather parameter table; readers
+    /// add what they left out.
+    /// </summary>
+    protected virtual IEnumerable<WeatherDatasetContent> DescribeContents() =>
+        GridSet.Parameters.Select(p => Describe(p, null));
+
+    /// <summary>Describes one parameter of the grid set for <see cref="Contents"/>.</summary>
+    /// <param name="parameter">The parameter.</param>
+    /// <param name="reason">Why an unknown parameter isn't used, or <see langword="null"/> for the default.</param>
+    protected static WeatherDatasetContent Describe(WeatherParameter parameter, string? reason)
+    {
+        ArgumentNullException.ThrowIfNull(parameter);
+        var name = parameter.SourceName is { } source && source != parameter.Id
+            ? $"{parameter.Id} ({source})"
+            : parameter.Id;
+        return new WeatherDatasetContent(
+            name,
+            parameter.LevelDescription,
+            parameter.Steps.Count,
+            parameter.IsKnown ? null : reason ?? "The weather parameter table doesn't have this parameter.");
+    }
+
     /// <inheritdoc />
     /// <remarks>
     /// Derived once from the grid: the cells' WGS-84 extent (half a cell
@@ -151,7 +186,8 @@ public abstract class WeatherGridProcessorBase :
 
     /// <summary>
     /// The model run: the model the file names (CF <c>source</c>,
-    /// <c>institution</c> or <c>title</c>; GRIB2 centre and process) and its
+    /// <c>institution</c> or <c>title</c>; for GRIB2 the generating process,
+    /// file name or centre, see <see cref="Grib.GribWeatherDataset.Model"/>) and its
     /// reference time when the data gives one.
     /// </summary>
     public DatasetForecastRun ForecastRun { get; }
@@ -389,6 +425,7 @@ public abstract class WeatherGridProcessorBase :
             WeatherParameters.WaveDirection => new() { Code = field.Name, Name = "Wave direction (from)", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0")}°") },
             WeatherParameters.WavePeriod => new() { Code = field.Name, Name = "Wave period", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.#")} s") },
             WeatherParameters.WindSeaHeight => new() { Code = field.Name, Name = "Wind-sea height", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m") },
+            WeatherParameters.WindSeaDirection => new() { Code = field.Name, Name = "Wind-sea direction (from)", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0")}°") },
             WeatherParameters.SwellHeight => new() { Code = field.Name, Name = "Swell height", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m") },
             WeatherParameters.WindSpeed => new() { Code = field.Name, Name = "Wind speed", RawValue = raw, DisplayValue = Display(x => $"{Number(Speed.FromMetresPerSecond(x).TotalKnots, "0.#")} kn") },
             WeatherParameters.WindFromDirection => new() { Code = field.Name, Name = "Wind direction (from)", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0")}°") },

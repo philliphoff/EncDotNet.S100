@@ -53,7 +53,8 @@ public class NonS100ProductRegistrationTests : IDisposable
     {
         var path = FakeWeatherProduct.Write(_dir);
 
-        Assert.Null(DatasetPipelineFactory.DetectProductSpec(path, S100Products.CreateDefaultRegistry()));
+        // The S-100 products alone: the default registry has the real GRIB2 (#1074).
+        Assert.Null(DatasetPipelineFactory.DetectProductSpec(path, new ProductRegistry().AddAllS100Products()));
     }
 
     [Fact]
@@ -167,7 +168,7 @@ public class NonS100ProductRegistrationTests : IDisposable
         using var stream = new MemoryStream([1, 2, 3]);
 
         Assert.Null(LoadedDatasetProjector.Project(
-            new DatasetId("fake"), "GRIB2", stream, registry: S100Products.CreateDefaultRegistry()));
+            new DatasetId("fake"), "GRIB2", stream, registry: new ProductRegistry().AddAllS100Products()));
     }
 
     [Fact]

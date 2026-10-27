@@ -20,10 +20,11 @@ still run north to south (scanning mode 0), and ecCodes repacked them.
 | `gfs-useast-templates.grib2` | 5,325 | `gfs.20261025/00/atmos/gfs.t00z.pgrb2.0p25.f003` | Cropped, one message per data template: `GUST:surface` as 5.0, `PRMSL:mean sea level` as 5.2, `TMAX:2 m above ground` (0–3 hour max, product template 4.8) as 5.41 PNG, and `UGRD:10 m above ground` as 5.3 order 1. |
 | `gfs-useast-jpeg2000.grib2` | 3,181 | `gfs.20261025/00/atmos/gfs.t00z.pgrb2.0p25.f003`, `gfs.20261025/00/wave/gridded/gfswave.t00z.global.0p25.f003.grib2` | Cropped and repacked by ecCodes as 5.40 (ecCodes encodes with OpenJPEG 2.5.2): `UGRD:10 m above ground` lossless and `PRMSL:mean sea level` lossy (target ratio 10, which ecCodes does as the 5/3 transform cut short), each a 33 × 33 image; GFS-Wave `HTSGW:surface` with the land bitmap, a one-row image of 1,025 samples with no decomposition levels; and `GUST:surface` set to a constant 5.5, so 0 bits and an empty Section 7. Four messages. |
 | `gfswave-useast.grib2` | 13,729 | `gfs.20261025/00/wave/gridded/gfswave.t00z.global.0p25.f000`, `f003`, `f006` (`.grib2`) | `HTSGW`, `PERPW` and `DIRPW` at the surface, cropped, with the land bitmap (64 of 1,089 points missing). Repacked from the served JPEG 2000 as 5.3 order 1, 5.2 and 5.0. Nine messages. |
+| `gfswave-useast-filter.grib2` | 41,536 | `gfs.20261025/00/wave/gridded/gfswave.t00z.global.0p25.f000`, `f003`, `f006` (`.grib2`) | Issue #1074: what a NOMADS GRIB filter request for three hours returns, the hours appended one after another. `WIND`, `WDIR`, `UGRD`, `VGRD`, `HTSGW`, `PERPW`, `DIRPW` and `WVHGT` at the surface, `SWELL` at "1 in sequence", "2 in sequence" and "3 in sequence" (local fixed surface 241), and `WVDIR`, in NCEP's file order, cropped, with the land bitmap. Repacked from the served JPEG 2000 as 5.3 order 1. 36 messages. |
 | `gfswave-wcoast-f003-jpeg2000.grib2` | 42,850 | `gfs.20261025/00/wave/gridded/gfswave.t00z.wcoast.0p16.f003.grib2` | The `HTSGW:surface`, `PERPW:surface` and `DIRPW:surface` messages (`.idx` lines 5, 6 and 7), byte for byte as NCEP serves them: West Coast 0.16°, 241 × 151 points with the land bitmap (25,350 missing), template 5.40 lossless, 10, 11 and 16 bits. |
 | `gfswave-atlocn-htsgw-f003-jpeg2000.grib2` | 30,600 | `gfs.20261025/00/wave/gridded/gfswave.t00z.atlocn.0p16.f003.grib2` | The `HTSGW:surface` message (`.idx` line 5), byte for byte as NCEP serves it: Atlantic 0.16°, 301 × 331 points with the land bitmap (70,212 missing), template 5.40 lossless, 9 bits. |
 
-Total: 180,953 bytes.
+Total: 222,489 bytes.
 
 Every NCEP JPEG 2000 codestream here (and every one in the five GFS-Wave
 grids checked, see the design note's §7.2) was written by JasPer 2.0.25:
@@ -34,6 +35,15 @@ were only decoded locally, compared with ecCodes and timed.
 
 The NOMADS GRIB filter (`nomads.ncep.noaa.gov`) was blocked from the
 environment that built these, so they come from AWS rather than the filter.
+The filter keeps the input's packing, so a real GFS-Wave filter download is
+JPEG 2000; `gfswave-useast-filter.grib2` has the filter's layout with
+supported packing.
+
+The GRIB2 processor's tests also use generated messages
+(`tests/_shared/GribFixtures.cs`, a small test-only writer): waves and wind
+over the synthetic S-101 test cell for the composited golden, a global 0 to
+360 grid, and ECMWF's codes. ECMWF Open Data is CC BY 4.0 and CCSDS-packed,
+so no ECMWF bytes are committed.
 To rebuild them, see the script's header. AWS keeps only recent runs, so
 pass a current run as `RUN`. The values will then differ, and the tests'
 reference values must be updated from the script's output.

@@ -100,6 +100,12 @@ public sealed class NetCdfDatasetProcessor : WeatherGridProcessorBase
     }
 
     /// <inheritdoc />
+    /// <remarks>Adds the data variables left out of the grid set (<see cref="NetCdfWeatherDataset.IgnoredVariables"/>).</remarks>
+    protected override IEnumerable<WeatherDatasetContent> DescribeContents() =>
+        base.DescribeContents().Concat(
+            _dataset.IgnoredVariables.Select(v => new WeatherDatasetContent(v.Name, string.Empty, 0, v.Reason)));
+
+    /// <inheritdoc />
     protected override void Dispose(bool disposing) => _dataset.Dispose();
 
     private static (NetCdfWeatherDataset Dataset, string FileName, string Hash) Open(Stream stream, string fileName)

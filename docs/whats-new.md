@@ -6,6 +6,22 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **GRIB2 wind and wave files.** `GribDatasetProcessor` draws GRIB2 grids
+  from NOAA's GFS and GFS-Wave and ECMWF open data: the wave height fill and
+  wind barbs, time steps, picks, `sample_coverage` and headless rendering, in
+  the viewer, `s100 render` and the MCP tools. `GribWeatherDataset` (in
+  `EncDotNet.S100.Datasets.Grib`) reads one file of many messages or several
+  appended, such as a NOMADS GRIB filter download, orders steps by valid time,
+  decodes a field only when its step is needed, and lists fields it can't use
+  (CCSDS, another grid, an older run) and parameters it doesn't draw, with
+  why; `s100 info` prints them. The model name comes from NCEP's generating
+  process or the file name. The default registry recognises GRIB2 files as
+  `GRIB2/2.0.0` by their first bytes, whatever their extension. The parameter
+  table gains `wave.wind_sea.dir` (NCEP's WVDIR) and ECMWF's `msl` code for
+  `pressure.msl`. Not for navigation. Breaking changes:
+  `S100Products.CreateDefaultRegistry()` (and so `ProductRegistry.Default`)
+  now also holds `GRIB2`, and `WeatherParameters.All` has a twelfth row. See
+  the [Datasets.Pipelines README](../src/EncDotNet.S100.Datasets.Pipelines/README.md#weather-grids).
 - **JPEG 2000 in the GRIB2 decoder.** `EncDotNet.S100.Datasets.Grib` now
   decodes data template 5.40, so GFS-Wave as NOAA serves it on AWS reads
   directly. It has its own managed JPEG 2000 Part 1 codestream decoder,

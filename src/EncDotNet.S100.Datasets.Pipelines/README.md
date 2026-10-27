@@ -101,6 +101,7 @@ namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 | `S411DatasetProcessor` | S-411 | Vector, XSLT |
 | `S421DatasetProcessor` | S-421 | Vector, XSLT |
 | `S57DatasetProcessor` | S-57 | Translated to S-101 (maritime ENC) or S-401 (inland ENC), then drawn by the S-101 vector pipeline with that product's catalogues |
+| `GribDatasetProcessor` | GRIB2 wind and wave grids: GFS, GFS-Wave, ECMWF (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `NetCdfDatasetProcessor` | NetCDF-CF wind and wave grids (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 
 `S101DatasetProcessor` handles S-401 inland ENCs when it's created with the
@@ -194,8 +195,8 @@ Weather model data isn't an S-100 product, but it's loaded, drawn, sampled and
 picked like one (design note
 [Wind and wave data](../../docs/design/weather-sources.md)).
 `WeatherGridProcessorBase` is everything after a reader has produced a
-`WeatherGridSet`; `NetCdfDatasetProcessor` derives from it and only opens the
-file (the GRIB2 processor will do the same). It implements:
+`WeatherGridSet`; `GribDatasetProcessor` and `NetCdfDatasetProcessor` derive
+from it and only open the file. It implements:
 
 - **Drawing.** One `WeatherCoverageSource` per parameter group, drawn by the
   weather styles that are on by default (wave height fill, wind barbs) through
@@ -204,8 +205,9 @@ file (the GRIB2 processor will do the same). It implements:
 - **Time.** `ITimeAwareDatasetProcessor`: the parameters' valid times;
   `TimeSemantics` of forecast steps (analysis steps when the file gives no
   reference time) drawn from the nearest step; and `ForecastRun`, the model
-  from the file (`source`, `institution` or `title` for NetCDF) with its
-  reference time.
+  from the file (`source`, `institution` or `title` for NetCDF; for GRIB2,
+  NCEP's generating process, the file name or the centre) with its reference
+  time.
 - **Picks.** `GetCoverageInfo` samples every parameter at the nearest grid
   node and step. Its first attribute is "Weather model data, not for
   navigation.", then the model run and valid time, then each value: wave
@@ -218,6 +220,27 @@ file (the GRIB2 processor will do the same). It implements:
 - **Headless rendering.** `IHeadlessImageRenderer`, through the
   `HeadlessCompositor`, framed on the grid.
 - **Metadata.** The cells' WGS-84 extent, EPSG:4326 and the time coverage.
+- **Contents.** `Contents` lists what the file holds for `s100 info`: each
+  parameter with its level and step count, whether it's used, and if not, why
+  (not in the parameter table, another level or swell partition, a less
+  preferred code), then what the reader left out (GRIB2 fields with an
+  unsupported template such as CCSDS, on another grid or from an older
+  run; NetCDF variables on other dimensions).
+
+`WeatherProducts.Grib2` registers GRIB2 as `GRIB2/2.0.0`, not S-100, with an
+application portrayal (`GRIB2`). `MatchBytes` claims a file that starts with a
+GRIB edition 2 indicator section (`GRIB`, then 2 in octet 8) whatever its
+extension, since GRIB2 has no reliable one: NCEP's files have none, and a NOMADS
+GRIB filter download is named after the script (`filter_gfs_0p25.pl`). It
+also claims a `.grb`, `.grb2`, `.grib2` or `.grib` file with `GRIB` anywhere
+in its first kilobyte (after a WMO bulletin header, or GRIB edition 1, which
+the reader then rejects by name). No S-100 encoding starts with `GRIB`, and the
+envelope matchers run first, so it never claims an S-100 or NetCDF file.
+`GribDatasetProcessor` reads the file with `GribWeatherDataset`
+(`EncDotNet.S100.Datasets.Grib`): one file of many messages or several files
+appended, steps in valid-time order whatever the message order, and a field
+decoded only when its step is drawn or sampled. The file stays open until the
+processor is disposed.
 
 `WeatherProducts.NetCdf` registers NetCDF as `NetCDF/4.0.0` (NetCDF-4) or
 `NetCDF/3.0.0` (NetCDF-3), not S-100, with an application portrayal

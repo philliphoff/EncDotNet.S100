@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Grib;
 using EncDotNet.S100.Datasets.NetCdf;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Interoperability;
@@ -7,7 +8,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <summary>
 /// The built-in <see cref="ProductRegistration"/>s for weather model data,
 /// formats that aren't S-100 products (design note weather-sources.md §3.1
-/// and §3.2): NetCDF-CF today, GRIB2 later. They're kept apart from
+/// and §3.2): GRIB2 and NetCDF-CF. They're kept apart from
 /// <see cref="S100Products"/> so a host can register the S-100 products
 /// without them (<see cref="ProductRegistryExtensions.AddAllS100Products"/>);
 /// <see cref="S100Products.CreateDefaultRegistry"/>, and so
@@ -34,6 +35,55 @@ public static class WeatherProducts
     /// no symbology.
     /// </summary>
     public static PortrayalBasis NetCdfPortrayal { get; } = PortrayalBasis.Application("NetCDF-CF");
+
+    /// <summary>
+    /// The portrayal of GRIB2 grids: the code-defined weather styles, since
+    /// GRIB2 defines no symbology.
+    /// </summary>
+    public static PortrayalBasis GribPortrayal { get; } = PortrayalBasis.Application("GRIB2");
+
+    /// <summary>
+    /// GRIB edition 2 wind and wave grids (<c>GRIB2/2.0.0</c>): NOAA GFS and
+    /// GFS-Wave, ECMWF open data and others on a regular latitude/longitude
+    /// grid, drawn by <see cref="GribDatasetProcessor"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>A file is claimed (<see cref="ProductRegistration.MatchBytes"/>) when:</para>
+    /// <list type="bullet">
+    /// <item><description>
+    /// it starts with a GRIB edition 2 indicator section (<c>GRIB</c>, two
+    /// reserved octets, the discipline, then 2 in octet 8), whatever its
+    /// extension: GRIB2 data has no reliable extension. A NOMADS GRIB filter
+    /// download is named after the script (<c>filter_gfs_0p25.pl</c>), NCEP's
+    /// own files have none (<c>gfs.t00z.pgrb2.0p25.f003</c>), and others use
+    /// <c>.grb</c>, <c>.grb2</c>, <c>.grib2</c>, <c>.grib</c> or <c>.bin</c>;
+    /// </description></item>
+    /// <item><description>
+    /// it's named <c>.grb</c>, <c>.grb2</c>, <c>.grib2</c> or <c>.grib</c> and
+    /// holds a <c>GRIB</c> indicator in its first kilobyte of any edition, or
+    /// after a WMO bulletin header, so a GRIB edition 1 file reaches the reader,
+    /// which says it isn't supported.
+    /// </description></item>
+    /// </list>
+    /// <para>
+    /// S-100 encodings never start with <c>GRIB</c> (ISO 8211 starts with the
+    /// record length's digits, HDF5 with its signature, GML with <c>&lt;</c>),
+    /// and the envelope matchers run first, so the GRIB2 matcher can't claim an
+    /// S-100 dataset or a NetCDF file.
+    /// </para>
+    /// </remarks>
+    public static ProductRegistration Grib2 { get; } = new()
+    {
+        Spec = GribDatasetProcessor.SpecName,
+        CreateFromPath = static (s, path) => new GribDatasetProcessor(path, s.CrsTransformFactory),
+        CreateFromSource = static (s, r) => new GribDatasetProcessor(r.Source, r.RelativePath, s.CrsTransformFactory),
+        IsS100 = false,
+        Portrayal = GribPortrayal,
+        MatchBytes = static header => IsGrib2(header) || (HasGribExtension(header) && ContainsGribIndicator(header)),
+        ReadMetadata = GribDatasetProcessor.ReadMetadata,
+        OpenData = static (stream, _) => OpenGrib(stream),
+        DefaultPlanes = WeatherPlanes,
+    };
 
     /// <summary>
     /// NetCDF-CF wind and wave grids, NetCDF-4 (<c>NetCDF/4.0.0</c>) and
@@ -85,7 +135,7 @@ public static class WeatherProducts
     };
 
     /// <summary>Every built-in weather registration.</summary>
-    public static IReadOnlyList<ProductRegistration> All { get; } = Array.AsReadOnly(new[] { NetCdf });
+    public static IReadOnlyList<ProductRegistration> All { get; } = Array.AsReadOnly(new[] { Grib2, NetCdf });
 
     /// <summary>Registers every built-in weather product with <paramref name="registry"/>.</summary>
     /// <param name="registry">The registry.</param>
@@ -100,6 +150,34 @@ public static class WeatherProducts
     private static bool DeclaresS100Product(string productSpecification) =>
         !string.IsNullOrWhiteSpace(productSpecification)
         && System.Text.RegularExpressions.Regex.IsMatch(productSpecification, @"S-?\d{2,3}", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    // WMO FM 92 GRIB edition 2, Section 0: "GRIB", two reserved octets, the
+    // discipline, then the edition number in octet 8.
+    private static bool IsGrib2(DatasetHeader header) =>
+        header.StartsWith("GRIB"u8)
+        && header.LeadingBytes.Length >= 8
+        && header.LeadingBytes.Span[7] == 2;
+
+    private static bool HasGribExtension(DatasetHeader header) =>
+        header.HasExtension(".grb") || header.HasExtension(".grb2")
+        || header.HasExtension(".grib2") || header.HasExtension(".grib");
+
+    private static bool ContainsGribIndicator(DatasetHeader header) =>
+        header.LeadingBytes.Span.IndexOf("GRIB"u8) >= 0;
+
+    // The catalog payload: the stream is the caller's, so the reader keeps an
+    // in-memory copy to decode fields from later. A file stream's name helps
+    // name the model.
+    private static LoadedDatasetData OpenGrib(Stream stream)
+    {
+        var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        var dataset = GribWeatherDataset.Read(
+            GribFile.Open(copy.GetBuffer().AsMemory(0, (int)copy.Length)),
+            (stream as FileStream)?.Name is { } path ? Path.GetFileName(path) : null);
+        var metadata = WeatherGridProcessorBase.BuildMetadata(dataset.GridSet, GribDatasetProcessor.Grib2Spec, dataset.Times);
+        return new WeatherGridDatasetData(dataset.GridSet, metadata, dataset.ReferenceTime);
+    }
 
     // The catalog payload: the stream is the caller's, so the reader keeps an
     // in-memory copy to decode time steps from later.
