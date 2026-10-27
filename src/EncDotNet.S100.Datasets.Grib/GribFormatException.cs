@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Datasets.Grib;
 /// </summary>
 /// <remarks>
 /// A file that is valid but uses something this decoder doesn't support, such
-/// as GRIB edition 1 or JPEG 2000 packing, throws
+/// as GRIB edition 1 or CCSDS packing, throws
 /// <see cref="UnsupportedGribException"/> instead.
 /// </remarks>
 public class GribFormatException : FormatException

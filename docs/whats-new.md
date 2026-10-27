@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **JPEG 2000 in the GRIB2 decoder.** `EncDotNet.S100.Datasets.Grib` now
+  decodes data template 5.40, so GFS-Wave as NOAA serves it on AWS reads
+  directly. It has its own managed JPEG 2000 Part 1 codestream decoder,
+  written from ITU-T T.800 and limited to one greyscale component: all
+  progression orders, tiles and tile-parts, precincts, quality layers, every
+  code-block style, and the 5/3 and 9/7 transforms. Regions of interest,
+  progression order changes, packed packet headers, several components,
+  Part 2 and HTJ2K fail with a message naming them.
+  `GribDataRepresentation` gains `CompressionType` and
+  `TargetCompressionRatio`. A field packed in 0 bits now decodes to its
+  reference value unscaled, as ecCodes reads it, in every template.
 - **NetCDF wind and wave files.** A new `EncDotNet.S100.Datasets.NetCdf`
   package reads NetCDF-CF grids with no native code: NetCDF-3 (classic and
   64-bit offset, ERDDAP's `.nc` output) with a managed reader, and NetCDF-4

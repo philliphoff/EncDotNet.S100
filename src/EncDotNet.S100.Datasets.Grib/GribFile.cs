@@ -21,10 +21,11 @@ namespace EncDotNet.S100.Datasets.Grib;
 /// Supported: grid template 3.0 (regular latitude/longitude, any scanning
 /// mode except staggered), product templates 4.0 and 4.8, and data templates
 /// 5.0 (simple), 5.2 (complex), 5.3 (complex with spatial differencing of
-/// order 1 or 2) and 5.41 (PNG), with or without a bitmap. Fields using any
-/// other template are listed with <see cref="GribField.UnsupportedReason"/>
-/// set, and reading them throws <see cref="UnsupportedGribException"/>
-/// naming the template: notably 5.40 (JPEG 2000) and 5.42 (CCSDS). A GRIB
+/// order 1 or 2), 5.40 (JPEG 2000) and 5.41 (PNG), with or without a bitmap.
+/// Fields using any other template are listed with
+/// <see cref="GribField.UnsupportedReason"/> set, and reading them throws
+/// <see cref="UnsupportedGribException"/> naming the template: notably 5.42
+/// (CCSDS). A GRIB
 /// edition 1 message can't be indexed at all, so opening a file that holds
 /// one throws.
 /// </para>
@@ -113,6 +114,7 @@ public sealed class GribFile : IDisposable
         {
             0 => SimpleUnpacking.Unpack(data, drs, cancellationToken),
             2 or 3 => ComplexUnpacking.Unpack(data, drs, cancellationToken),
+            40 => Jpeg2000Unpacking.Unpack(data, drs, cancellationToken),
             41 => PngUnpacking.Unpack(data, drs, cancellationToken),
             _ => throw new UnsupportedGribException(
                 string.Create(CultureInfo.InvariantCulture, $"Data representation template 5.{drs.TemplateNumber} isn't supported.")),

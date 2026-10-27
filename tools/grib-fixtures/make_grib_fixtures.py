@@ -25,8 +25,16 @@ What it writes (see tests/datasets/GRIB2/README.md):
 - gfswave-useast.grib2: GFS-Wave 0.25° significant height, peak period and
   primary direction at f000, f003 and f006, cropped and repacked by ecCodes
   (5.3, 5.2 and 5.0) with the land bitmap.
-- gfswave-wcoast-htsgw-f003-jpeg2000.grib2: one GFS-Wave message exactly as
-  NCEP serves it (template 5.40), for the unsupported-template test.
+- gfswave-wcoast-f003-jpeg2000.grib2: GFS-Wave West Coast 0.16° significant
+  height, peak period and primary direction, exactly as NCEP serves them
+  (template 5.40, JPEG 2000 written by JasPer, with the land bitmap).
+- gfswave-atlocn-htsgw-f003-jpeg2000.grib2: GFS-Wave Atlantic 0.16°
+  significant height, exactly as NCEP serves it (template 5.40).
+- gfs-useast-jpeg2000.grib2: cropped and repacked by ecCodes as 5.40, which
+  encodes with OpenJPEG: GFS 10 m U lossless and PRMSL lossy (target ratio
+  10), both 33 × 33 images; GFS-Wave significant height with the land
+  bitmap (a one-row image); and a constant gust field (0 bits, an empty
+  Section 7).
 """
 
 import os
@@ -63,8 +71,10 @@ def fetch_message(url, match):
     raise KeyError(f"{match} not in {url}.idx")
 
 
-def crop(message, packing, order=None):
-    """Crops a regular lat/lon message (scanning mode 0) and repacks it."""
+def crop(message, packing, order=None, keys=None, constant=None):
+    """Crops a regular lat/lon message (scanning mode 0) and repacks it.
+    keys are set after the packing type (for example JPEG 2000's type of
+    compression); constant replaces every value that isn't missing."""
     src = eccodes.codes_new_from_message(message)
     ni = eccodes.codes_get(src, "Ni")
     nj = eccodes.codes_get(src, "Nj")
@@ -95,6 +105,10 @@ def crop(message, packing, order=None):
     eccodes.codes_set(out, "packingType", packing)
     if order is not None:
         eccodes.codes_set(out, "orderOfSpatialDifferencing", order)
+    for key, value in (keys or {}).items():
+        eccodes.codes_set(out, key, value)
+    if constant is not None:
+        sub = np.where(sub == MISSING, MISSING, constant)
     eccodes.codes_set_values(out, sub.flatten())
     data = eccodes.codes_get_message(out)
     eccodes.codes_release(out)
@@ -119,6 +133,8 @@ def report(path):
                     "numberOfMissing", "offset", "totalLength"]
             if eccodes.codes_is_defined(h, "orderOfSpatialDifferencing"):
                 keys.append("orderOfSpatialDifferencing")
+            if eccodes.codes_get(h, "dataRepresentationTemplateNumber") == 40:
+                keys += ["bitsPerValue", "typeOfCompressionUsed", "targetCompressionRatio"]
             if eccodes.codes_get(h, "productDefinitionTemplateNumber") == 8:
                 keys += ["lengthOfTimeRange", "typeOfStatisticalProcessing", "yearOfEndOfOverallTimeInterval",
                          "monthOfEndOfOverallTimeInterval", "dayOfEndOfOverallTimeInterval",
@@ -131,6 +147,11 @@ def report(path):
             picks = [0, 1, n // 2, n - 1, 17 * 33 + 5]
             print("     values " + " ".join(f"[{i}]={v[i]!r}" for i in picks))
             print(f"     valid={len(valid)} min={valid.min()!r} max={valid.max()!r} mean={valid.mean()!r}")
+            # A checksum over every point, weighted by position so that the
+            # order counts too (the JPEG 2000 tests use it).
+            weights = (np.arange(n) % 13) + 1
+            present = v != MISSING
+            print(f"     weighted={float(np.sum(v[present] * weights[present]))!r}")
             eccodes.codes_release(h)
             index += 1
 
@@ -164,8 +185,18 @@ def main():
                              ("PERPW", "grid_complex"),
                              ("DIRPW", "grid_simple"))
     ]
-    files["gfswave-wcoast-htsgw-f003-jpeg2000.grib2"] = [
-        fetch_message(f"{wave}.wcoast.0p16.f003.grib2", ":HTSGW:surface:")
+    files["gfswave-wcoast-f003-jpeg2000.grib2"] = [
+        fetch_message(f"{wave}.wcoast.0p16.f003.grib2", f":{var}:surface:") for var in ("HTSGW", "PERPW", "DIRPW")
+    ]
+    files["gfswave-atlocn-htsgw-f003-jpeg2000.grib2"] = [
+        fetch_message(f"{wave}.atlocn.0p16.f003.grib2", ":HTSGW:surface:")
+    ]
+    files["gfs-useast-jpeg2000.grib2"] = [
+        crop(fetch_message(f"{atmos}.0p25.f003", ":UGRD:10 m above ground:"), "grid_jpeg"),
+        crop(fetch_message(f"{atmos}.0p25.f003", ":PRMSL:mean sea level:"), "grid_jpeg",
+             keys={"typeOfCompressionUsed": 1, "targetCompressionRatio": 10}),
+        crop(fetch_message(f"{wave}.global.0p25.f003.grib2", ":HTSGW:surface:"), "grid_jpeg"),
+        crop(fetch_message(f"{atmos}.0p25.f003", ":GUST:surface:"), "grid_jpeg", constant=5.5),
     ]
 
     for name, messages in files.items():
@@ -173,8 +204,7 @@ def main():
         with open(path, "wb") as f:
             for m in messages:
                 f.write(m)
-        if "jpeg2000" not in name:
-            report(path)
+        report(path)
     print("ecCodes", eccodes.codes_get_api_version())
 
 
