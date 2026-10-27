@@ -12,7 +12,9 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <c>s100 info &lt;dataset&gt;</c> — reports the detected product specification,
 /// edition, whether the dataset can be rendered headlessly, and (for
 /// time-series datasets) the available time steps with their indices; for
-/// weather files (GRIB2, NetCDF), the parameters and why any isn't used.
+/// weather files (GRIB2, NetCDF), the parameters and why any isn't used; for
+/// CAP warnings, each alert area, when it's in force and the zone codes the
+/// marine zone layer doesn't have.
 /// </summary>
 internal sealed class InfoCommand : Command<DatasetCommandSettings>
 {
@@ -158,6 +160,11 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
                 AnsiConsole.Write(contentsTable);
             }
 
+            // CAP warnings: each alert area, when it's in force, and the zone
+            // codes the marine zone layer doesn't have (issue #1069).
+            if (processor is CapDatasetProcessor cap)
+                WriteCapWarnings(cap);
+
             return 0;
         }
         catch (NotSupportedException ex)
@@ -195,6 +202,51 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
         finally
         {
             catalogueManager.Dispose();
+        }
+    }
+
+    private static void WriteCapWarnings(CapDatasetProcessor cap)
+    {
+        static string Time(DateTimeOffset? time) =>
+            time is { } t ? t.UtcDateTime.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) : "—";
+
+        var table = new Table().Border(TableBorder.Rounded).Title("Warnings");
+        table.AddColumn("Area");
+        table.AddColumn("Event");
+        table.AddColumn("Severity");
+        table.AddColumn("From (UTC)");
+        table.AddColumn("To (UTC)");
+        table.AddColumn("Shape");
+        foreach (var area in cap.Warnings.Areas)
+        {
+            var shape = area.ShapeSource switch
+            {
+                Datasets.Cap.CapShapeSource.Zones => $"zones {string.Join(", ", area.Zones.Select(z => z.Code))}",
+                Datasets.Cap.CapShapeSource.None => "none",
+                var source => source.ToString().ToLowerInvariant(),
+            };
+            if (area.UnmatchedZoneCodes.Count > 0)
+                shape += $"; not found: {string.Join(", ", area.UnmatchedZoneCodes)}";
+            var to = Time(area.Validity.End);
+            if (area.SupersededAt is { } superseded)
+                to += $" (superseded {Time(superseded)})";
+            if (!area.IsDrawable)
+                to += $" ({area.Alert.MessageType}, not drawn)";
+
+            table.AddRow(
+                Markup.Escape(area.Id),
+                Markup.Escape(area.Info.Event),
+                Markup.Escape(area.Info.Severity.ToString()),
+                Markup.Escape(Time(area.Validity.Start)),
+                Markup.Escape(to),
+                area.UnmatchedZoneCodes.Count > 0 ? $"[yellow]{Markup.Escape(shape)}[/]" : Markup.Escape(shape));
+        }
+
+        AnsiConsole.Write(table);
+        if (cap.Warnings.UnmatchedZoneCodes.Count > 0)
+        {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[yellow]Zone codes not in the marine zone layer:[/] {string.Join(", ", cap.Warnings.UnmatchedZoneCodes)}");
         }
     }
 

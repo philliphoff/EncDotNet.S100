@@ -70,8 +70,8 @@ catalogue does:
 - `SymbolSet` reads S-100 SVG symbols from a project's embedded resources.
   Its `Provider` is the `Func<string, string?>` symbol provider a sub-layer
   takes.
-- `InstructionBuilder` builds point-symbol, text, line and area
-  `DrawingInstruction`s, stamping its viewing group, drawing priority, display
+- `InstructionBuilder` builds point-symbol, text, line, solid area and
+  pattern area (`AreaPattern`, such as hatching) `DrawingInstruction`s, stamping its viewing group, drawing priority, display
   plane and scale limits on each. `TextInstructionStyle` describes a label's
   font, colours, halo and offset.
 - `IDynamicFeaturePortrayal` is a code-defined portrayal of a dynamic

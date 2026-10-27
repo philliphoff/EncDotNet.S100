@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Cap;
 using EncDotNet.S100.Datasets.Grib;
 using EncDotNet.S100.Datasets.NetCdf;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
@@ -6,9 +7,9 @@ using EncDotNet.S100.Interoperability;
 namespace EncDotNet.S100.Datasets.Pipelines;
 
 /// <summary>
-/// The built-in <see cref="ProductRegistration"/>s for weather model data,
-/// formats that aren't S-100 products (design note weather-sources.md §3.1
-/// and §3.2): GRIB2 and NetCDF-CF. They're kept apart from
+/// The built-in <see cref="ProductRegistration"/>s for weather data, formats
+/// that aren't S-100 products (design note weather-sources.md §3.1, §3.2 and
+/// §6.1): GRIB2 and NetCDF-CF model grids, and CAP weather warnings. They're kept apart from
 /// <see cref="S100Products"/> so a host can register the S-100 products
 /// without them (<see cref="ProductRegistryExtensions.AddAllS100Products"/>);
 /// <see cref="S100Products.CreateDefaultRegistry"/>, and so
@@ -134,8 +135,65 @@ public static class WeatherProducts
         DefaultPlanes = WeatherPlanes,
     };
 
+    /// <summary>
+    /// The portrayal of CAP warnings: <see cref="CapStyle"/>, outlines and
+    /// hatching by severity, since CAP defines no symbology.
+    /// </summary>
+    public static PortrayalBasis CapPortrayal { get; } = PortrayalBasis.Application("CAP 1.2");
+
+    // Design note §5: CAP warnings on the cautions and warnings plane, after
+    // S-124 (the sub-layer carries priority 10; this is the fallback).
+    private static readonly IReadOnlyDictionary<string, S98DisplayPlane> CapPlanes =
+        new Dictionary<string, S98DisplayPlane>(StringComparer.OrdinalIgnoreCase)
+        {
+            [ProductRegistration.AnyLayerKind] = S98DisplayPlane.CautionsAndWarnings,
+        };
+
+    /// <summary>
+    /// CAP 1.2 marine weather warnings (<c>CAP/1.2.0</c>), drawn by
+    /// <see cref="CapDatasetProcessor"/>: one CAP alert, an Atom feed of them,
+    /// or the NWS GeoJSON form from <c>api.weather.gov/alerts</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>A file is claimed, whatever its extension, when:</para>
+    /// <list type="bullet">
+    /// <item><description>
+    /// its leading bytes are XML whose root is a CAP <c>alert</c>, or an Atom
+    /// <c>feed</c> that declares the CAP namespace
+    /// (<see cref="ProductRegistration.MatchBytes"/>, <see cref="CapReader.LooksLikeCap"/>);
+    /// </description></item>
+    /// <item><description>
+    /// they are JSON from <c>api.weather.gov</c> that names an alert
+    /// (<c>wx:Alert</c> or an <c>/alerts/</c> URL);
+    /// </description></item>
+    /// <item><description>
+    /// it's read as GML (a <c>.gml</c> file, or <c>.xml</c> in an exchange set)
+    /// and its root is one of those (<see cref="ProductRegistration.MatchGml"/>).
+    /// </description></item>
+    /// </list>
+    /// <para>
+    /// An S-100 GML dataset has a <c>DataSet</c> root in an S-100 namespace and
+    /// the S-100 matchers run first, so CAP never claims S-124 or another GML
+    /// product, and no S-100 matcher claims CAP. Other GeoJSON isn't claimed.
+    /// </para>
+    /// </remarks>
+    public static ProductRegistration Cap { get; } = new()
+    {
+        Spec = CapDatasetProcessor.SpecName,
+        CreateFromPath = static (_, path) => new CapDatasetProcessor(path),
+        CreateFromSource = static (_, r) => new CapDatasetProcessor(r.Source, r.RelativePath),
+        IsS100 = false,
+        Portrayal = CapPortrayal,
+        PickReportNotice = CapDatasetProcessor.NotForNavigationNotice,
+        MatchBytes = static header => CapReader.LooksLikeCap(header.LeadingBytes.Span),
+        MatchGml = static root => CapReader.IsCapRoot(root.NamespaceUri ?? string.Empty, root.LocalName ?? string.Empty, root.Xml ?? string.Empty),
+        ReadMetadata = CapDatasetProcessor.ReadMetadata,
+        OpenData = static (stream, _) => OpenCap(stream),
+        DefaultPlanes = CapPlanes,
+    };
+
     /// <summary>Every built-in weather registration.</summary>
-    public static IReadOnlyList<ProductRegistration> All { get; } = Array.AsReadOnly(new[] { Grib2, NetCdf });
+    public static IReadOnlyList<ProductRegistration> All { get; } = Array.AsReadOnly(new[] { Grib2, NetCdf, Cap });
 
     /// <summary>Registers every built-in weather product with <paramref name="registry"/>.</summary>
     /// <param name="registry">The registry.</param>
@@ -177,6 +235,14 @@ public static class WeatherProducts
             (stream as FileStream)?.Name is { } path ? Path.GetFileName(path) : null);
         var metadata = WeatherGridProcessorBase.BuildMetadata(dataset.GridSet, GribDatasetProcessor.Grib2Spec, dataset.Times);
         return new WeatherGridDatasetData(dataset.GridSet, metadata, dataset.ReferenceTime);
+    }
+
+    // The catalog payload: the file is read whole, so the caller's stream
+    // isn't kept.
+    private static LoadedDatasetData OpenCap(Stream stream)
+    {
+        var warnings = CapWarningSet.Build(CapReader.Read(stream));
+        return new CapDatasetData(warnings, CapDatasetProcessor.BuildMetadata(warnings));
     }
 
     // The catalog payload: the stream is the caller's, so the reader keeps an

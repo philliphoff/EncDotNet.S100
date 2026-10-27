@@ -25,6 +25,7 @@
     <Project Path="src/EncDotNet.S100.Datasets.S57/EncDotNet.S100.Datasets.S57.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Grib/EncDotNet.S100.Datasets.Grib.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Weather/EncDotNet.S100.Datasets.Weather.csproj" />
+    <Project Path="src/EncDotNet.S100.Datasets.Cap/EncDotNet.S100.Datasets.Cap.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Pipelines/EncDotNet.S100.Datasets.Pipelines.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.NetCdf/EncDotNet.S100.Datasets.NetCdf.csproj" />
     <Project Path="src/EncDotNet.S100.Crs.ProjNet/EncDotNet.S100.Crs.ProjNet.csproj" />
@@ -75,6 +76,7 @@
     <Project Path="tests/EncDotNet.S100.Datasets.S57.Tests/EncDotNet.S100.Datasets.S57.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.Grib.Tests/EncDotNet.S100.Datasets.Grib.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.Weather.Tests/EncDotNet.S100.Datasets.Weather.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.Datasets.Cap.Tests/EncDotNet.S100.Datasets.Cap.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Cli.Tests/EncDotNet.S100.Cli.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Testing.Scenarios.Tests/EncDotNet.S100.Testing.Scenarios.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Testing.Scenarios/EncDotNet.S100.Testing.Scenarios.csproj" />

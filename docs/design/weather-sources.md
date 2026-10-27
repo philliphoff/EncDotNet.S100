@@ -376,6 +376,49 @@ How warnings are handled:
   S-124 warnings and don't follow S-124's numbering or cancellation
   rules. Revisit if users want them listed there.
 
+**As built (#1069).**
+
+- **Projects.** The reader, the zone layer and the style are a new package,
+  `EncDotNet.S100.Datasets.Cap` (Core and Portrayals only), like the GRIB2
+  and NetCDF readers; `CapDatasetProcessor` is in `Datasets.Pipelines` and
+  registered in `WeatherProducts` as `CAP/1.2.0`, not S-100, with an
+  application portrayal (`CAP 1.2`) and its own pick-report notice.
+  Detection is `MatchBytes` on the first kilobyte (a CAP `alert` root, an
+  Atom `feed` declaring the CAP namespace, or `api.weather.gov` JSON naming
+  an alert) plus `MatchGml` for an exchange set's `.xml`; S-124 and other
+  XML or GeoJSON aren't claimed.
+- **Atom.** Both entry shapes: a whole `<alert>` inside the entry, and the
+  NWS entry whose fields are `cap:` elements (identifier from the entry's
+  `id`, headline from `title`, description from `summary`).
+- **Zone layer.** All 696 NWS coastal and offshore zones (`mz18mr25`,
+  `oz18mr25`), Douglas-Peucker at 0.005° and four decimals, 798 KB, embedded.
+  weather.gov was unreachable, so the features came from a mirror that keeps
+  the shapefile records unchanged; `tools/cap` has the scripts and the
+  provenance. Only `UGC` geocodes are resolved (not marine SAME codes), and
+  only for an area with no polygon or circle of its own.
+- **Validity.** The NWS sets `expires` to when the message should be
+  replaced, often before the hazard starts (a gale warning for tomorrow that
+  expires tonight), and gives the hazard's end separately (`ends` in GeoJSON,
+  the `eventEndingTime` parameter in CAP XML). An area is in force from
+  `onset` (else `effective`, else `sent`) to the later of the two. An `Update`
+  or `Cancel` in the same file ends what it references from its `sent`; a
+  `Cancel` isn't drawn.
+- **In-force logic.** The single-warning rule moved out of
+  `NavigationalWarningInfo.StatusAt` into `WarningValidity` (Core), which both
+  use. S-124's view-time filtering is host-side (the viewer hides parts
+  through `RenderContext.HiddenFeatures`); CAP instead implements
+  `ITimeAwareDatasetProcessor`, with a step at each start and at the tick
+  after each end (`WarningValidity.Changes`) and `AtOrBefore` selection, so
+  the Mapsui session, `s100 render --time-step` and tiles hand it a time that
+  judges exactly what's in force, with no viewer change. No time step draws
+  every warning not superseded.
+- **Drawing.** A vector sub-layer (`IVectorPortrayalSource`), not
+  `VectorCoverageSubLayer`: CAP areas are features with ids, so the vector
+  path gives picking, hit tests and highlights for free. Hatching is an S-100
+  pattern area fill (one SVG tile per severity, a new `AreaPattern` on the
+  toolkit's `InstructionBuilder`); the spacing differs by severity as well as
+  the colour. Labels have SCAMIN 1:3,000,000.
+
 ### 6.2 Observations
 
 Two `IDynamicFeatureSource` implementations, following the AIS source

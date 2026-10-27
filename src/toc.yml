@@ -62,6 +62,8 @@
       href: EncDotNet.S100.Datasets.Grib/README.md
     - name: EncDotNet.S100.Datasets.Weather
       href: EncDotNet.S100.Datasets.Weather/README.md
+    - name: EncDotNet.S100.Datasets.Cap
+      href: EncDotNet.S100.Datasets.Cap/README.md
     - name: EncDotNet.S100.Datasets.Pipelines
       href: EncDotNet.S100.Datasets.Pipelines/README.md
     - name: EncDotNet.S100.Datasets.NetCdf
