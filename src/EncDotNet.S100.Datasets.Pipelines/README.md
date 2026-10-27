@@ -103,6 +103,7 @@ namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 | `S57DatasetProcessor` | S-57 | Translated to S-101 (maritime ENC) or S-401 (inland ENC), then drawn by the S-101 vector pipeline with that product's catalogues |
 | `GribDatasetProcessor` | GRIB2 wind and wave grids: GFS, GFS-Wave, ECMWF (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `NetCdfDatasetProcessor` | NetCDF-CF wind and wave grids (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
+| `CapDatasetProcessor` | CAP 1.2 marine weather warnings: CAP XML, Atom, NWS GeoJSON (not S-100) | Vector: SoundCharts CAP style (see [CAP weather warnings](#cap-weather-warnings)) |
 
 `S101DatasetProcessor` handles S-401 inland ENCs when it's created with the
 S-401 catalogues.
@@ -127,7 +128,7 @@ the product's files:
   `productSpecification` attribute through `MatchHdf5`, using an
   `Hdf5RootInfo`. A matcher can read other root attributes too, such as a
   NetCDF-4 file's CF `Conventions`.
-- A format with a signature of its own (GRIB2, NetCDF-3) matches on the file's
+- A format with a signature of its own (GRIB2, NetCDF-3, CAP) matches on the file's
   leading bytes and extension through `MatchBytes`, using a `DatasetHeader`.
 
 The factory reads the file's leading bytes once. It takes the encoding from the
@@ -249,6 +250,45 @@ HDF5 file whose root `Conventions` attribute names CF and which declares no
 S-100 `productSpecification`, and an unclaimed HDF5 file named `.nc` or
 `.nc4`. S-102, S-104 and S-111 claim only files whose `productSpecification`
 names them, so the two never claim the same file.
+
+## CAP weather warnings
+
+`CapDatasetProcessor` draws CAP 1.2 marine weather warnings (design note
+[Wind and wave data](../../docs/design/weather-sources.md) §6.1), read and
+resolved by [`EncDotNet.S100.Datasets.Cap`](../EncDotNet.S100.Datasets.Cap/README.md):
+one CAP alert, an Atom feed of them, or the NWS GeoJSON from
+`api.weather.gov/alerts`. Each CAP area is one feature, outlined by its
+polygons, its circles (64-vertex polygons) or the NWS marine zones its zone
+codes name. It implements:
+
+- **Time.** An area is drawn only while it's in force at the render context's
+  `TimeStep`, by the rule S-124 warnings use (`WarningValidity`, in Core), and
+  every area is drawn with no time step. `ITimeAwareDatasetProcessor` reports
+  the instants the set in force changes (each start, and the tick after each
+  end) held until the next one (`TimeStepSelection.AtOrBefore`), so the
+  timeline redraws it exactly when a warning starts or ends.
+- **Drawing.** `IVectorPortrayalSource` and `IHeadlessImageRenderer`: one
+  sub-layer, `cap.warnings`, on the `CautionsAndWarnings` plane at priority
+  10, above S-124, drawn by `CapStyle` (hatching and outlines by severity, the
+  event as a label).
+- **Picks.** The notice "Weather warning (CAP), not an S-100 product and not
+  for navigation.", then the headline, event, severity, urgency, certainty,
+  times, sender, area, zones and zone codes not found, description,
+  instruction and identifier. A hit test only finds what the last render drew.
+- **Metadata** and the catalog payload (`CapDatasetData`): the areas' extent
+  and the warnings' time coverage. `Warnings` lists every area for
+  `s100 info`, including zone codes the zone layer doesn't have.
+
+CAP alerts aren't navigational warnings: `GetNavigationalWarnings` is empty,
+so the viewer's Navigational warnings panel doesn't list them.
+
+`WeatherProducts.Cap` registers CAP as `CAP/1.2.0`, not S-100, with an
+application portrayal (`CAP 1.2`). `MatchBytes` claims, whatever the
+extension, XML whose root is a CAP `alert` or an Atom `feed` declaring the CAP
+namespace, and JSON from `api.weather.gov` naming an alert; `MatchGml` claims
+the same roots when an exchange set's `.xml` is read as GML. An S-100 GML
+dataset has a `DataSet` root, so CAP never claims S-124, and other GeoJSON
+isn't claimed.
 
 ## Processor lifetime
 

@@ -202,30 +202,13 @@ public sealed record NavigationalWarningInfo
     /// <remarks>
     /// Cancellation datasets and in-force bulletins end a warning too; they
     /// are other warnings, so <see cref="NavigationalWarningSet.StatusAt"/>
-    /// applies them.
+    /// applies them. The rule itself is <see cref="WarningValidity.StatusAt"/>,
+    /// which CAP weather warnings share.
     /// </remarks>
     /// <param name="time">The time to test, usually the view time.</param>
     /// <returns>The warning's status at that time.</returns>
-    public NavigationalWarningStatus StatusAt(DateTimeOffset time)
-    {
-        if (CancellationDate is { } cancelled && time >= cancelled)
-            return NavigationalWarningStatus.Ended;
-        if (Validity.Count == 0)
-            return NavigationalWarningStatus.InForce;
-
-        var anyLater = false;
-        foreach (var range in Validity)
-        {
-            var started = range.Start is null || time >= range.Start;
-            var ended = range.End is { } end && time > end;
-            if (started && !ended)
-                return NavigationalWarningStatus.InForce;
-            anyLater |= !started;
-        }
-
-        // Outside every range: waiting for a later one, or past them all.
-        return anyLater ? NavigationalWarningStatus.NotYetInForce : NavigationalWarningStatus.Ended;
-    }
+    public NavigationalWarningStatus StatusAt(DateTimeOffset time) =>
+        WarningValidity.StatusAt(Validity, CancellationDate, time);
 }
 
 /// <summary>
