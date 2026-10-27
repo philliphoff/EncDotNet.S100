@@ -190,7 +190,7 @@ other extension writes PNG, unless you set `--format`.
 | `--palette <palette>` | `day` | `day`, `dusk` or `night`. |
 | `--symbol-scale <factor>` | `1.0` | Symbol scale factor. |
 | `--text-scale <factor>` | `1.0` | Text scale factor. |
-| `--time-step <index>` | `0` | Zero-based time step for time-series datasets (S-104, S-111, GRIB2, NetCDF). `s100 info` lists the steps. |
+| `--time-step <index>` | `0` | Zero-based time step for time-series datasets (S-104, S-111, GRIB2, NetCDF, CAP). `s100 info` lists the steps. |
 | `--background <hex>` | opaque white | Background colour, `#RRGGBB` or `#AARRGGBB`. |
 | `--bbox <minLon,minLat,maxLon,maxLat>` | fit to the data | Draws this WGS-84 bounding box. Can't be combined with `--center` and `--scale`. |
 | `--center <lon,lat>` | fit to the data | Centre of the view. Use with `--scale`. |
@@ -619,11 +619,17 @@ For an S-101 base cell, it applies the [update files](#s-101-updates) first.
 For a weather file (GRIB2 or NetCDF), a **Weather parameters** table lists
 each parameter with its level and step count, whether it's used, and if not,
 why: for example a second swell partition, a parameter the weather table
-doesn't have, or a GRIB2 message packed as JPEG 2000.
+doesn't have, or a GRIB2 message packed as JPEG 2000. For a CAP weather
+warning file (CAP XML, an Atom feed or NWS GeoJSON), a **Warnings** table lists
+each alert area with its event, severity, when it's in force (UTC) and how
+it's drawn (a polygon, a circle, or the NWS marine zones it names), then any
+zone codes the marine zone layer doesn't have. Its time steps are when
+warnings start and end, so `render --time-step` draws what's in force then.
 
 ```bash
 s100 info currents.h5
 s100 info filter_gfswave.pl
+s100 info alerts.atom
 ```
 
 | Option | Default | Description |

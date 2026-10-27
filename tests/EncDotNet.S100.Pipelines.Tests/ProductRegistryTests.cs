@@ -110,7 +110,7 @@ public class ProductRegistryTests
         [
             "S-57", "S-101", "S-102", "S-104", "S-111", "S-122", "S-124",
             "S-125", "S-127", "S-128", "S-129", "S-131", "S-201", "S-401",
-            "S-411", "S-421", "GRIB2", "NetCDF",
+            "S-411", "S-421", "GRIB2", "NetCDF", "CAP",
         ];
 
         var registry = S100Products.CreateDefaultRegistry();
@@ -136,6 +136,7 @@ public class ProductRegistryTests
         var registry = new ProductRegistry().AddAllS100Products();
 
         Assert.False(registry.IsRegistered("NetCDF"));
+        Assert.False(registry.IsRegistered("CAP"));
         Assert.All(registry.RegisteredSpecs, spec => Assert.True(registry.IsS100(spec), spec));
     }
 }

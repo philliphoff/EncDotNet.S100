@@ -178,6 +178,31 @@ public sealed record InstructionBuilder
             ScaleMaximum = ScaleMaximum,
         };
     }
+
+    /// <summary>
+    /// Builds a pattern-fill area instruction: the area tiled with an area
+    /// fill's symbol, such as hatching. The fill is resolved by name through
+    /// the sub-layer's area fill provider, and its symbol through the symbol
+    /// provider (see <see cref="SymbolSet"/>).
+    /// </summary>
+    /// <param name="featureReference">The feature whose surface is filled.</param>
+    /// <param name="areaFillReference">The area fill's name.</param>
+    public AreaInstruction AreaPattern(string featureReference, string areaFillReference)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(featureReference);
+        ArgumentException.ThrowIfNullOrEmpty(areaFillReference);
+
+        return new AreaInstruction
+        {
+            FeatureReference = featureReference,
+            AreaFillReference = areaFillReference,
+            Plane = Plane,
+            ViewingGroup = ViewingGroup,
+            DrawingPriority = DrawingPriority,
+            ScaleMinimum = ScaleMinimum,
+            ScaleMaximum = ScaleMaximum,
+        };
+    }
 }
 
 /// <summary>

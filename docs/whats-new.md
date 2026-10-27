@@ -6,6 +6,25 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **CAP marine weather warnings.** A new `EncDotNet.S100.Datasets.Cap`
+  package reads CAP 1.2 alerts: one CAP XML alert, an Atom feed of them, or
+  the NWS GeoJSON from `api.weather.gov/alerts`. Polygons are drawn as given,
+  circles as 64-vertex polygons, and an area with only NWS zone codes (such
+  as `ANZ535`) as the zones from a bundled, simplified copy of the NWS coastal
+  and offshore marine zone layer; codes it doesn't have are listed in the pick
+  report and `s100 info`, not dropped. `CapDatasetProcessor` draws each
+  warning only while it's in force at the view time, by the rule S-124 warnings
+  use, hatched and outlined by severity and labelled with its event, on the
+  cautions and warnings plane above S-124, in the viewer, `s100 render` and
+  `s100 info` (which lists every alert), and the MCP tools. The default
+  registry recognises CAP files as `CAP/1.2.0` by their first bytes, whatever
+  their extension. CAP alerts aren't listed in the Navigational warnings panel.
+  Not for navigation. Breaking changes: `S100Products.CreateDefaultRegistry()`
+  (and so `ProductRegistry.Default`) and `WeatherProducts.All` now also hold
+  `CAP`; the S-124 in-force rule moved from `NavigationalWarningInfo.StatusAt`
+  to the new `WarningValidity` (same behaviour); `InstructionBuilder` gains
+  `AreaPattern`. See the
+  [Datasets.Cap README](../src/EncDotNet.S100.Datasets.Cap/README.md).
 - **GRIB2 wind and wave files.** `GribDatasetProcessor` draws GRIB2 grids
   from NOAA's GFS and GFS-Wave and ECMWF open data: the wave height fill and
   wind barbs, time steps, picks, `sample_coverage` and headless rendering, in

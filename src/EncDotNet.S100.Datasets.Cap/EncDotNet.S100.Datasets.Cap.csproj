@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework />
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <Description>A reader for OASIS Common Alerting Protocol (CAP) 1.2 marine weather warnings: one CAP alert, an Atom feed of them (whole alerts or the NWS entries) and the NWS GeoJSON form from api.weather.gov/alerts. Turns each alert area into polygons (CAP polygons, circles as 64-vertex polygons, and NWS marine zone codes resolved against a bundled, simplified copy of the public-domain NWS marine zone layer), judges which alerts are in force at a time, and draws them with code-defined outlines, severity hatching and event labels. Drawn by CapDatasetProcessor in Datasets.Pipelines. Not for navigation.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Datasets.Cap.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The NWS coastal and offshore marine zones, simplified once by tools/cap-zones. -->
+    <EmbeddedResource Include="Resources\MarineZones.geojson" LogicalName="EncDotNet.S100.Datasets.Cap.MarineZones.geojson" />
+    <!-- The severity hatching, served by CapStyle.Symbols. -->
+    <EmbeddedResource Include="Symbols\*.svg" LogicalName="EncDotNet.S100.Datasets.Cap.Symbols.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
