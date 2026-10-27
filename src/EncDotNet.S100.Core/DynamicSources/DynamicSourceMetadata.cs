@@ -1,3 +1,5 @@
+using EncDotNet.S100.Interoperability;
+
 namespace EncDotNet.S100.DynamicSources;
 
 /// <summary>
@@ -39,4 +41,18 @@ public sealed record DynamicSourceMetadata
     /// panels. Not required.
     /// </summary>
     public string? Description { get; init; }
+
+    /// <summary>
+    /// The S-98 display plane the source's features belong to. Hosts use it
+    /// to group the source with the other layers of that plane, for example
+    /// in a layer stack. Defaults to <see cref="S98DisplayPlane.DynamicArrows"/>,
+    /// the plane of own-ship and AIS targets.
+    /// </summary>
+    public S98DisplayPlane Plane { get; init; } = S98DisplayPlane.DynamicArrows;
+
+    /// <summary>
+    /// Ordering hint within <see cref="Plane"/>, ascending: lower draws
+    /// first. Defaults to 0.
+    /// </summary>
+    public int WithinPlanePriority { get; init; }
 }

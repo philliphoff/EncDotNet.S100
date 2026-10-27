@@ -297,6 +297,7 @@ NuGet** — consume them via project reference (or through the viewer).
 |---|---|
 | **EncDotNet.S100.DynamicSources.Ais** | Decoder-agnostic AIS dynamic feature source: per-MMSI cache, ITU-R M.1371-aligned aging, projection to `DynamicFeature` with sentinel-collapsed motion. See [its README](src/EncDotNet.S100.DynamicSources.Ais/README.md). |
 | **EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo** | Production driver implementing `IAisMessageSource` over [aisstream.io](https://aisstream.io)'s WebSocket service. BCL-only (no third-party AIS or WebSocket deps). See [its README](src/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/README.md). |
+| **EncDotNet.S100.DynamicSources.Ndbc** | NOAA NDBC buoy and C-MAN observations as a dynamic feature source: station table, `realtime2` parser, viewport-gated polling with backoff and ageing, and a station-model glyph (wind barb and wave height) built with the portrayal toolkit. Not for navigation. See [its README](src/EncDotNet.S100.DynamicSources.Ndbc/README.md). |
 
 ### MCP server
 

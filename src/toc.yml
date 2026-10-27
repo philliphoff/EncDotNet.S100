@@ -96,6 +96,8 @@
       href: EncDotNet.S100.DynamicSources.Ais/README.md
     - name: EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo
       href: EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/README.md
+    - name: EncDotNet.S100.DynamicSources.Ndbc
+      href: EncDotNet.S100.DynamicSources.Ndbc/README.md
     - name: EncDotNet.S100.Datasets.S129.Fusion
       href: EncDotNet.S100.Datasets.S129.Fusion/README.md
 - name: S-57 and ISO 8211 (EncDotNet)

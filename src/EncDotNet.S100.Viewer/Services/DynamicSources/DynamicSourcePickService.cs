@@ -44,19 +44,27 @@ internal sealed class DynamicSourcePickService : IDynamicSourcePickService
         var feature = hit.Feature;
         var (lat, lon) = feature.Coordinates[0];
 
+        // A source that describes its own features (NDBC observations, #1070)
+        // supplies the title and the labelled values with their units.
+        var description = hit.Source is IDynamicFeatureDescriber describer
+            ? describer.Describe(feature, CultureInfo.CurrentCulture)
+            : null;
+
         return new DynamicPickHit
         {
             SourceId = hit.Source.Id,
             SourceDisplayName = hit.Source.Metadata.DisplayName,
             FeatureId = feature.Id,
             Kind = feature.Kind,
-            DisplayLabel = ResolveDisplayLabel(feature),
+            DisplayLabel = description?.Title ?? ResolveDisplayLabel(feature),
             LastUpdated = feature.LastUpdated,
             Latitude = lat,
             Longitude = lon,
             Motion = feature.Motion,
             VesselGeometry = feature.VesselGeometry,
-            Attributes = BuildAttributeRows(feature),
+            Attributes = description is null
+                ? BuildAttributeRows(feature)
+                : BuildDescribedRows(feature, description),
         };
     }
 
@@ -124,6 +132,25 @@ internal sealed class DynamicSourcePickService : IDynamicSourcePickService
                 FormatAttributeValue(value)));
         }
 
+        return rows;
+    }
+
+    /// <summary>
+    /// The position row, then the source's own labelled values
+    /// (<see cref="IDynamicFeatureDescriber"/>).
+    /// </summary>
+    private static IReadOnlyList<DynamicPickAttributeRow> BuildDescribedRows(
+        DynamicFeature feature,
+        DynamicFeatureDescription description)
+    {
+        var (lat, lon) = feature.Coordinates[0];
+        var rows = new List<DynamicPickAttributeRow>(description.Properties.Count + 1)
+        {
+            new(Strings.PickReport_Position,
+                string.Format(CultureInfo.InvariantCulture, Strings.PickReport_PositionFormat, lat, lon)),
+        };
+        foreach (var property in description.Properties)
+            rows.Add(new DynamicPickAttributeRow(property.Label, property.Value));
         return rows;
     }
 

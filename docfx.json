@@ -12,6 +12,7 @@
             "src/EncDotNet.S100.Diagnostics.Export/**",
             "src/EncDotNet.S100.DynamicSources.Ais/**",
             "src/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/**",
+            "src/EncDotNet.S100.DynamicSources.Ndbc/**",
             "src/EncDotNet.S100.Mcp/**",
             "src/EncDotNet.S100.Mcp.Tools/**",
             "src/EncDotNet.S100.Viewer/**"

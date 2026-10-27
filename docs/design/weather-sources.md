@@ -437,6 +437,58 @@ pattern (ais-source.md):
   NMEA driver. So this item adds a minimal sentence reader that an
   own-ship NMEA driver can share later.
 
+**As built (#1070).** `NdbcObservationSource` lives in a new
+`EncDotNet.S100.DynamicSources.Ndbc` library, beside the AIS one, and
+depends only on Core, Portrayals and Datasets.Weather (for the barb
+symbols). Choices made along the way:
+
+- **Station table.** `activestations.xml`, not `station_table.txt`: it has
+  decimal positions, the station type and a `met` flag, so only stations
+  with a standard meteorological file are fetched. It is reloaded daily.
+- **Fetching.** Stations inside the viewport plus 0.5°, nearest the centre
+  first, at most 60 per poll and 4 at a time. Like the AIS gate
+  (ais-zoom-gated-subscription.md) nothing is fetched while the viewport is
+  wider than 25° or before the host sets an area, and also while the host's
+  layer is hidden (`IsActive`). A `realtime2` file holds 45 days, so each
+  request asks for its first 16 KiB with a `Range` header and the parser
+  stops at rows older than 12 hours. A station that leaves the area leaves
+  the snapshot but keeps its observation, so panning back needs no fetch.
+- **Latest values.** Buoys report waves hourly and wind every 10 minutes,
+  so `NdbcObservation.Combine` fills the newest row from rows up to an hour
+  older, keeping wind and wave values in groups; a pick says when the wave
+  values are older.
+- **Polling and errors.** Each station is fetched 10 minutes after its last
+  success. A failure (HTTP error, timeout, or a body that isn't the format)
+  waits 10, 20, 40 minutes and so on, up to 2 hours; the station table backs
+  off from 1 minute. The loop runs on an injected `TimeProvider` and is woken
+  by an area change.
+- **Ageing.** Stale after 3 hours (feature kind `weather.observation.ndbc.stale`,
+  drawn in the grey `NDBCSTALE` ink by re-colouring the same SVGs), dropped
+  after 12.
+- **Drawing.** `NdbcStationPortrayal` builds a marker, the `WXBARBN*`/`WXCALM`
+  barb rotated by the "from" direction in the geographic frame, and a
+  wave-height label (SCAMIN 1:2,000,000) with `InstructionBuilder`. It
+  implements a new `IDynamicFeaturePortrayal` (Portrayals.Application); the
+  Mapsui side is a generic `PortrayedDynamicFeatureRenderer`, which lowers the
+  instructions with the vector scene builder into self-styled Mapsui features
+  (`MapsuiDisplayListRenderer.RenderFeatures`). Barbs are northern-hemisphere
+  everywhere until #1072. The palette follows Day/Dusk/Night on the next
+  update, not instantly.
+- **Plane.** `DynamicSourceMetadata` gained `Plane` and
+  `WithinPlanePriority`; the source says `OtherChartOverlays`, 100, and the
+  Layer Stack groups it there. The dynamic-source host still draws every
+  dynamic layer in the overlay band above the charts, so the plane orders the
+  Layer Stack, not yet the paint order.
+- **Picking.** A source may implement the new `IDynamicFeatureDescriber`;
+  the viewer's dynamic pick shows its title and labelled values (wind in kn
+  and m/s, wave height in m and ft, periods, directions, pressure,
+  temperatures, observation time and age) after the position.
+- **Viewer.** "NDBC buoy observations" is a Layer Stack row, off on first
+  run; its visibility persists like the other dynamic sources'.
+- **Fixtures.** NOAA's hosts were blocked from the build environment, so
+  the `realtime2` files and station table under `tests/datasets/NDBC` are
+  hand-written in the documented format (see its README).
+
 ### 6.3 Remote sources in the Library
 
 Add entries to `known-sources.json`, following the NOAA AWS pattern

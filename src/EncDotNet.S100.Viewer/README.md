@@ -577,7 +577,8 @@ Rows include:
 - A row for each loaded dataset, named after the dataset.
 - Sub-layer rows when a product draws more than one layer, such as S-111
   currents, which draws an arrow layer.
-- A row for each live overlay, such as **Own ship**.
+- A row for each live overlay, such as **Own ship** (under **Dynamic
+  arrows**) or **NDBC buoy observations** (under **Other chart overlays**).
 
 Each dataset row has an **Active** toggle. When it's off, the dataset is taken
 out of the cross-product stack: it no longer takes part in S-98 rules or
@@ -1207,6 +1208,29 @@ status. **Also write my check settings** adds your draft, required UKC and
 departure; they're left out otherwise. See [Route file
 formats](../../docs/route-checks.md#route-file-formats) for what each format
 holds.
+
+## Show buoy observations
+
+**NDBC buoy observations** shows the latest observations from NOAA National
+Data Buoy Center buoys and C-MAN stations. Turn it on with its row under
+**Other chart overlays** in the **Layer stack** panel; it's off until you do.
+
+- Each station is a ring with a wind barb pointing into the wind (pennants
+  50 kn, full barbs 10 kn, half barbs 5 kn) and, for buoys, the significant
+  wave height, such as **1.1 m**, at 1:2,000,000 and larger.
+- Observations older than 3 hours are grey; those older than 12 hours are
+  removed.
+- Select a station to see all its values with units in the **Pick report**:
+  wind and gust in knots and m/s, wave height, periods and direction,
+  pressure and its tendency, air, water and dew-point temperatures,
+  visibility and tide, with the observation time and its age.
+- SoundCharts fetches only the stations in the map view (plus a small
+  margin), only while the row is on and the view is narrower than 25°, and
+  each station at most every 10 minutes, NDBC's update interval. Stations
+  that fail are retried less often, up to every 2 hours.
+
+Not for navigation. See the
+[DynamicSources.Ndbc README](../EncDotNet.S100.DynamicSources.Ndbc/README.md).
 
 ## Own ship and AIS vessels
 

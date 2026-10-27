@@ -74,6 +74,11 @@ catalogue does:
   pattern area (`AreaPattern`, such as hatching) `DrawingInstruction`s, stamping its viewing group, drawing priority, display
   plane and scale limits on each. `TextInstructionStyle` describes a label's
   font, colours, halo and offset.
+- `IDynamicFeaturePortrayal` is a code-defined portrayal of a dynamic
+  feature source's features: drawing instructions (feature reference = the
+  feature id), with the palette and symbols they resolve against. The NDBC
+  station-model glyph (`EncDotNet.S100.DynamicSources.Ndbc`) is one; the
+  Mapsui renderer is `PortrayedDynamicFeatureRenderer`.
 - `ApplicationContentScope.For(style, version)` is the style's part of the
   tile disk-cache content scope: the style name and version plus the toolkit
   assembly's version. A code-defined style has no catalogue files to hash, so

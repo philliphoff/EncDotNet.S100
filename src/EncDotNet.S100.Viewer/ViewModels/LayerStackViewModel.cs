@@ -138,8 +138,8 @@ internal sealed class LayerStackViewModel : ViewModelBase
             list.Add(e);
         }
 
-        // PR-D2.1: dynamic feature sources land in the DynamicArrows
-        // plane in registration order. Snapshot once here so the
+        // PR-D2.1: dynamic feature sources land in their metadata's
+        // plane (#1070). Snapshot once here so the
         // bucket sees a stable view even if the registry mutates
         // mid-rebuild.
         var dynamicSources = _dynamicSources?.Sources ?? Array.Empty<DynamicSourceRegistrationInfo>();
@@ -148,9 +148,13 @@ internal sealed class LayerStackViewModel : ViewModelBase
         {
             byPlane.TryGetValue(plane, out var planeEntries);
             var planeEntriesList = planeEntries ?? new List<LayerStackEntry>();
-            var dynamicForPlane = plane == S98DisplayPlane.DynamicArrows
-                ? dynamicSources
-                : Array.Empty<DynamicSourceRegistrationInfo>();
+            // Each source sits in the plane its metadata names (DynamicArrows
+            // by default; NDBC observations on OtherChartOverlays), highest
+            // within-plane priority first, then registration order.
+            var dynamicForPlane = dynamicSources
+                .Where(info => info.Plane == plane)
+                .OrderByDescending(info => info.WithinPlanePriority)
+                .ToList();
 
             if (planeEntriesList.Count == 0 && dynamicForPlane.Count == 0 && !_showEmptyPlanes)
                 continue;
@@ -162,11 +166,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
                 .ThenBy(e => e.SourceDatasetId, StringComparer.Ordinal)
                 .Select(e => (ViewModelBase)new LayerStackEntryViewModel(_loader, e));
 
-            // Dynamic rows: registration order (preserved by
-            // IS100DynamicSourceRegistry.Sources). Placed below
-            // dataset rows in the panel since datasets typically
-            // carry positive priorities; a future priority hint on
-            // DynamicSourceMetadata could change this.
+            // Dynamic rows: placed below the dataset rows in the panel.
             var dynamicChildren = dynamicForPlane
                 .Select(info => (ViewModelBase)new LayerStackDynamicEntryViewModel(_dynamicSources!, info));
 
@@ -251,6 +251,12 @@ internal sealed class LayerStackDynamicEntryViewModel : ViewModelBase
     public string DisplayName { get; }
     public string? Description { get; }
     public bool HasDescription => !string.IsNullOrEmpty(Description);
+
+    /// <summary>
+    /// The visibility checkbox's automation id,
+    /// <c>LayerStack.DynamicEntry.{SourceId}.Active</c>, unique per source.
+    /// </summary>
+    public string AutomationId => $"LayerStack.DynamicEntry.{SourceId}.Active";
 
     /// <summary>
     /// Whether the source's overlay layer is currently visible.

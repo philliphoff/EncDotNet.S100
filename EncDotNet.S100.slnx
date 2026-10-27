@@ -6,6 +6,7 @@
     <Project Path="src/EncDotNet.S100.Diagnostics.Export/EncDotNet.S100.Diagnostics.Export.csproj" />
     <Project Path="src/EncDotNet.S100.DynamicSources.Ais/EncDotNet.S100.DynamicSources.Ais.csproj" />
     <Project Path="src/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.csproj" />
+    <Project Path="src/EncDotNet.S100.DynamicSources.Ndbc/EncDotNet.S100.DynamicSources.Ndbc.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S101/EncDotNet.S100.Datasets.S101.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S102/EncDotNet.S100.Datasets.S102.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.S104/EncDotNet.S100.Datasets.S104.csproj" />
@@ -70,6 +71,7 @@
     <Project Path="tests/EncDotNet.S100.Datasets.S421.Tests/EncDotNet.S100.Datasets.S421.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Tests/EncDotNet.S100.DynamicSources.Ais.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.DynamicSources.Ndbc.Tests/EncDotNet.S100.DynamicSources.Ndbc.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.NetCdf.Tests/EncDotNet.S100.Datasets.NetCdf.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.S57.Tests/EncDotNet.S100.Datasets.S57.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Datasets.Grib.Tests/EncDotNet.S100.Datasets.Grib.Tests.csproj" />

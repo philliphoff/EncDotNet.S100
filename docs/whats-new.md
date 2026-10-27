@@ -6,6 +6,24 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **NDBC buoy observations.** A new `EncDotNet.S100.DynamicSources.Ndbc`
+  library shows NOAA National Data Buoy Center observations as a dynamic
+  feature source. `NdbcObservationSource` reads the `activestations.xml`
+  station table and the head of each `realtime2` standard meteorological
+  file for the stations in view plus a margin, every 10 minutes, with
+  backoff on errors, and nothing while the view is wider than 25° or the
+  layer is hidden. Observations older than 3 hours are drawn grey and
+  dropped after 12. Each station is a station-model glyph (the weather
+  wind barb into the wind and the wave height) built with the portrayal
+  toolkit, on S-98 `OtherChartOverlays` at priority 100; a pick lists every
+  value with its unit and the observation time. In the viewer, NDBC buoy
+  observations is a Layer Stack row, off by default. Supporting additions:
+  `DynamicSourceMetadata.Plane` and `WithinPlanePriority` (the Layer Stack
+  now groups a dynamic source by its plane), `IDynamicFeatureDescriber`,
+  `DynamicFeatureGeometryProvider`, `IDynamicFeaturePortrayal`,
+  `PortrayedDynamicFeatureRenderer` and
+  `MapsuiDisplayListRenderer.RenderFeatures`. Not for navigation. See the
+  [DynamicSources.Ndbc README](../src/EncDotNet.S100.DynamicSources.Ndbc/README.md).
 - **CAP marine weather warnings.** A new `EncDotNet.S100.Datasets.Cap`
   package reads CAP 1.2 alerts: one CAP XML alert, an Atom feed of them, or
   the NWS GeoJSON from `api.weather.gov/alerts`. Polygons are drawn as given,

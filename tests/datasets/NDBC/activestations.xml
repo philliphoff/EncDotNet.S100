@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<stations created="2026-10-27T14:20:01UTC" count="6">
+  <station id="44013" lat="42.346" lon="-70.651" elev="0" name="BOSTON 16 NM East of Boston, MA" owner="NDBC" pgm="NDBC Meteorological/Ocean" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="buzm3" lat="41.397" lon="-71.033" elev="25.3" name="Buzzards Bay, MA" owner="NDBC" pgm="NDBC Meteorological/Ocean" type="fixed" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="44020" lat="41.497" lon="-70.283" elev="0" name="NANTUCKET SOUND" owner="NDBC" pgm="NDBC Meteorological/Ocean" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="44401" lat="37.477" lon="-50.499" elev="0" name="SOUTHEAST NEWFOUNDLAND - 500 NM South of St. John's, NL" owner="NDBC" pgm="Tsunami" type="dart" met="n" currents="n" waterquality="n" dart="y"/>
+  <station id="46026" lat="37.754" lon="-122.839" elev="0" name="SAN FRANCISCO - 18NM West of San Francisco, CA" owner="NDBC" pgm="NDBC Meteorological/Ocean" type="buoy" met="y" currents="n" waterquality="n" dart="n"/>
+  <station id="nolat" lon="-70.0" name="Malformed entry, skipped" owner="NDBC" type="buoy" met="y"/>
+</stations>
