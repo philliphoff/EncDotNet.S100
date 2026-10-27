@@ -22,7 +22,7 @@ namespace EncDotNet.S100.Datasets.Grib;
 /// <item><description>
 /// <b>Fields left out</b> (<see cref="IgnoredFields"/>, with why): fields the
 /// decoder can't read (<see cref="GribField.UnsupportedReason"/>, for example
-/// template 5.40 JPEG 2000 or 5.42 CCSDS, or a Lambert grid); fields on
+/// template 5.42 CCSDS, or a Lambert grid); fields on
 /// another grid than the dataset's (the grid of the first readable field the
 /// parameter table knows); fields of an older model run; and a field whose
 /// parameter, level and valid time repeat an earlier one's.

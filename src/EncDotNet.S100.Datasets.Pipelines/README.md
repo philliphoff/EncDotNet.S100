@@ -224,7 +224,7 @@ from it and only open the file. It implements:
   parameter with its level and step count, whether it's used, and if not, why
   (not in the parameter table, another level or swell partition, a less
   preferred code), then what the reader left out (GRIB2 fields with an
-  unsupported template such as JPEG 2000, on another grid or from an older
+  unsupported template such as CCSDS, on another grid or from an older
   run; NetCDF variables on other dimensions).
 
 `WeatherProducts.Grib2` registers GRIB2 as `GRIB2/2.0.0`, not S-100, with an

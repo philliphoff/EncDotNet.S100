@@ -141,22 +141,6 @@ public class NoaaFixtureTests
     }
 
     [Fact]
-    public void Jpeg2000_fixture_is_listed_but_not_decoded()
-    {
-        using var grib = GribFile.Open(TestData.Path("gfswave-wcoast-htsgw-f003-jpeg2000.grib2"));
-
-        var field = Assert.Single(grib.Fields);
-        Assert.Equal(40, field.DataRepresentation.TemplateNumber);
-        Assert.Equal(new GribParameterCode(10, 0, 3), field.Parameter);
-        Assert.False(field.IsSupported);
-        Assert.Contains("5.40", field.UnsupportedReason);
-        Assert.Contains("JPEG 2000", field.UnsupportedReason);
-
-        var ex = Assert.Throws<UnsupportedGribException>(() => grib.ReadValues(field, TestContext.Current.CancellationToken));
-        Assert.Contains("5.40 (JPEG 2000)", ex.Message);
-    }
-
-    [Fact]
     public void Fixtures_build_a_weather_grid_set_with_lazy_steps()
     {
         using var grib = GribFile.Open(TestData.Path("gfs-useast-wind10m.grib2"));

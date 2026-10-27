@@ -20,7 +20,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <para>
 /// A file can hold many messages, or be several files appended (what the
 /// NOMADS GRIB filter returns for several forecast hours). Fields the decoder
-/// can't read (JPEG 2000, CCSDS, a projected grid), fields of an older run or
+/// can't read (CCSDS, a projected grid), fields of an older run or
 /// on another grid, and parameters the weather table doesn't know are listed
 /// in <see cref="WeatherGridProcessorBase.Contents"/> with why, and not drawn.
 /// </para>

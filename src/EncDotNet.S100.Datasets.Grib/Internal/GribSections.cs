@@ -212,6 +212,7 @@ internal static class GribSections
         var originalType = hasCommon ? s[20] : (byte)0;
 
         ComplexPackingParameters? complex = null;
+        Jpeg2000PackingParameters? jpeg2000 = null;
         unsupported = null;
         switch (template)
         {
@@ -248,6 +249,13 @@ internal static class GribSections
                     unsupported = "Complex packing with more than 32 bits per group reference, width or length isn't supported.";
                 break;
 
+            case 40:
+                Require(s, 23, 5);
+                jpeg2000 = new Jpeg2000PackingParameters(CompressionType: s[21], TargetCompressionRatio: s[22]);
+                if (bits > 31)
+                    unsupported = string.Create(CultureInfo.InvariantCulture, $"JPEG 2000 packing (template 5.40) with {bits} bits per value isn't supported; at most 31 are.");
+                break;
+
             case 41:
                 Require(s, 21, 5);
                 if (bits > 32)
@@ -257,11 +265,11 @@ internal static class GribSections
             default:
                 unsupported = string.Create(
                     CultureInfo.InvariantCulture,
-                    $"Data representation template 5.{template} ({DescribeDataTemplate(template)}) isn't supported; only templates 5.0, 5.2, 5.3 and 5.41 are.");
+                    $"Data representation template 5.{template} ({DescribeDataTemplate(template)}) isn't supported; only templates 5.0, 5.2, 5.3, 5.40 and 5.41 are.");
                 break;
         }
 
-        return new GribDataRepresentation(template, values, reference, e, d, bits, originalType, complex);
+        return new GribDataRepresentation(template, values, reference, e, d, bits, originalType, complex, jpeg2000);
     }
 
     private static GribFixedSurface? ParseSurface(ReadOnlySpan<byte> s, int offset)

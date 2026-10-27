@@ -29,6 +29,8 @@
   <ItemGroup>
     <!-- NOAA GFS and GFS-Wave subsets; see tests/datasets/GRIB2/README.md. -->
     <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
+    <!-- OpenJPEG codestreams and their expected samples; see the same README. -->
+    <Content Include="..\datasets\GRIB2\jpeg2000\*.*" Exclude="..\datasets\GRIB2\jpeg2000\*.md" CopyToOutputDirectory="PreserveNewest" Link="TestData\jpeg2000\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

@@ -143,7 +143,7 @@ public abstract class WeatherGridProcessorBase :
     /// set (the ones the weather table knows are used; unknown ones aren't
     /// drawn or sampled, with why), then what the reader left out of the grid
     /// set altogether, with why (for GRIB2, fields with an unsupported
-    /// template such as JPEG 2000; for NetCDF, variables on other dimensions).
+    /// template such as CCSDS; for NetCDF, variables on other dimensions).
     /// </summary>
     public IReadOnlyList<WeatherDatasetContent> Contents => _contents ??= DescribeContents().ToArray();
 

@@ -17,12 +17,13 @@ namespace EncDotNet.S100.Datasets.Grib;
 /// <item><term>5.0</term><description>Simple: each value in <see cref="BitsPerValue"/> bits.</description></item>
 /// <item><term>5.2</term><description>Complex: values in groups, each with its own reference and bit width.</description></item>
 /// <item><term>5.3</term><description>Complex, packing the first or second differences of the values.</description></item>
+/// <item><term>5.40</term><description>A JPEG 2000 codestream whose samples are the values, lossless or lossy (<see cref="CompressionType"/>).</description></item>
 /// <item><term>5.41</term><description>A PNG image whose pixels are the values, <see cref="BitsPerValue"/> bits deep.</description></item>
 /// </list>
 /// <para>
 /// Other templates are listed with their number, and the field's
-/// <see cref="GribField.UnsupportedReason"/> names them: for example 5.40
-/// (JPEG 2000), 5.42 (CCSDS) and 5.4 (IEEE floating point).
+/// <see cref="GribField.UnsupportedReason"/> names them: for example 5.42
+/// (CCSDS) and 5.4 (IEEE floating point).
 /// </para>
 /// </remarks>
 public sealed class GribDataRepresentation
@@ -35,8 +36,10 @@ public sealed class GribDataRepresentation
         int decimalScaleFactor,
         int bitsPerValue,
         byte originalFieldType,
-        Internal.ComplexPackingParameters? complex)
+        Internal.ComplexPackingParameters? complex,
+        Internal.Jpeg2000PackingParameters? jpeg2000 = null)
     {
+        Jpeg2000 = jpeg2000;
         TemplateNumber = templateNumber;
         NumberOfPackedValues = numberOfPackedValues;
         ReferenceValue = referenceValue;
@@ -83,5 +86,21 @@ public sealed class GribDataRepresentation
     /// <summary>For templates 5.2 and 5.3, the number of groups; otherwise <c>0</c>.</summary>
     public long NumberOfGroups => Complex?.NumberOfGroups ?? 0;
 
+    /// <summary>
+    /// For template 5.40, the type of compression (code table 5.40): <c>0</c>
+    /// lossless, <c>1</c> lossy; otherwise <see langword="null"/>. The decoder
+    /// doesn't need it: the codestream says which wavelet transform it uses.
+    /// </summary>
+    public int? CompressionType => Jpeg2000?.CompressionType;
+
+    /// <summary>
+    /// For template 5.40 with lossy compression, the target compression
+    /// ratio <c>M</c> in <c>M:1</c> the encoder aimed for; otherwise, or when
+    /// the template gives it as missing, <see langword="null"/>.
+    /// </summary>
+    public int? TargetCompressionRatio => Jpeg2000 is { TargetCompressionRatio: not 255 } j ? j.TargetCompressionRatio : null;
+
     internal Internal.ComplexPackingParameters? Complex { get; }
+
+    internal Internal.Jpeg2000PackingParameters? Jpeg2000 { get; }
 }

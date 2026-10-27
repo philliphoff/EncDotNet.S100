@@ -5,7 +5,7 @@ namespace EncDotNet.S100.Datasets.Grib;
 /// <summary>
 /// A field of a GRIB2 file that <see cref="GribWeatherDataset"/> left out of
 /// its <see cref="Weather.WeatherGridSet"/>, with why: an unsupported template
-/// (for example JPEG 2000), a different grid, an older model run, or a repeat
+/// (for example CCSDS), a different grid, an older model run, or a repeat
 /// of another field's parameter, level and valid time. Hosts list these in
 /// <c>info</c> output.
 /// </summary>

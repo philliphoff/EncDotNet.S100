@@ -37,8 +37,8 @@ internal static class GribFixtures
     /// <summary>GFS GUST, PRMSL, TMAX and UGRD at f003, one per data template. 4 messages.</summary>
     public const string Templates = "gfs-useast-templates.grib2";
 
-    /// <summary>One GFS-Wave HTSGW message exactly as NCEP serves it, JPEG 2000 (template 5.40).</summary>
-    public const string Jpeg2000 = "gfswave-wcoast-htsgw-f003-jpeg2000.grib2";
+    /// <summary>GFS-Wave West Coast 0.16° HTSGW, PERPW and DIRPW at f003, exactly as NCEP serves them, JPEG 2000 (template 5.40). 3 messages.</summary>
+    public const string Jpeg2000 = "gfswave-wcoast-f003-jpeg2000.grib2";
 
     /// <summary>The path of a committed fixture in the test output.</summary>
     /// <param name="name">The fixture's file name.</param>
@@ -260,6 +260,12 @@ internal static class GribFixtures
         var packed = present.Select(v => (ulong)Math.Round(v * scale - reference)).ToArray();
         ulong max = packed.Length == 0 ? 0 : packed.Max();
         int bits = max == 0 ? 0 : 64 - System.Numerics.BitOperations.LeadingZeroCount(max);
+        if (bits == 0)
+        {
+            // A constant field is R = the value, unscaled, as ecCodes writes and reads it.
+            reference = (float)min;
+        }
+
         if (m.Ccsds)
         {
             // Template 5.42: R, E, D, bits, original type, CCSDS flags, block size, reference sample interval.

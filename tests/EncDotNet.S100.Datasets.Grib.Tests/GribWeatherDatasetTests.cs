@@ -170,17 +170,17 @@ public sealed class GribWeatherDatasetTests
     // -----------------------------------------------------------------
 
     [Fact]
-    public void A_JPEG_2000_message_is_listed_with_its_reason_and_not_used()
+    public void A_JPEG_2000_file_reads_as_NCEP_serves_it()
     {
-        var bytes = Concat(File.ReadAllBytes(TestData.Path(WaveFilter)), File.ReadAllBytes(TestData.Path(Jpeg2000)));
+        using var dataset = GribWeatherDataset.Open(TestData.Path(EncDotNet.S100.TestSupport.GribFixtures.Jpeg2000));
 
-        using var dataset = GribWeatherDataset.Read(GribFile.Open(bytes));
-
-        var ignored = Assert.Single(dataset.IgnoredFields);
-        Assert.Equal(36, ignored.Field.Index);
-        Assert.Contains("5.40 (JPEG 2000)", ignored.Reason);
-        Assert.Equal("HTSGW (10,0,3), surface, valid 2026-10-25 03:00Z", ignored.Name);
-        Assert.Equal(3, dataset.GridSet.FindParameter(WeatherParameters.WaveHeight)!.Steps.Count);
+        Assert.Empty(dataset.IgnoredFields);
+        Assert.Equal([Run.AddHours(3)], dataset.Times);
+        var values = Read(dataset.GridSet, WeatherParameters.WaveHeight, 0);
+        Assert.Contains(values, float.IsNaN);
+        Assert.Contains(values, v => v > 0);
+        Assert.NotNull(dataset.GridSet.FindParameter(WeatherParameters.WavePeriod));
+        Assert.NotNull(dataset.GridSet.FindParameter(WeatherParameters.WaveDirection));
     }
 
     [Fact]
@@ -196,9 +196,9 @@ public sealed class GribWeatherDatasetTests
     [Fact]
     public void A_file_with_nothing_decodable_fails_naming_the_template()
     {
-        var error = Assert.Throws<UnsupportedGribException>(() => GribWeatherDataset.Open(TestData.Path(Jpeg2000)));
+        var error = Assert.Throws<UnsupportedGribException>(() => GribWeatherDataset.Read(GribFile.Open(CcsdsMessage())));
 
-        Assert.StartsWith("The file's only field can't be decoded: Data representation template 5.40 (JPEG 2000)", error.Message);
+        Assert.StartsWith("The file's only field can't be decoded: Data representation template 5.42 (CCSDS", error.Message);
     }
 
     [Fact]
