@@ -43,6 +43,28 @@ public class LayerStackViewModelDynamicSourceTests
     }
 
     [Fact]
+    public void Rebuild_DynamicSource_AppearsInItsMetadataPlane()
+    {
+        var loader = new ControllableLoader();
+        var registry = new FakeRegistry();
+        registry.Add(new DynamicSourceRegistrationInfo("ais", "AIS", null));
+        registry.Add(new DynamicSourceRegistrationInfo("ndbc", "NDBC buoy observations", null)
+        {
+            Plane = S98DisplayPlane.OtherChartOverlays,
+            WithinPlanePriority = 100,
+        });
+
+        var vm = new LayerStackViewModel(loader, registry);
+
+        var overlays = vm.Planes.Single(p => p.Plane == S98DisplayPlane.OtherChartOverlays);
+        var ndbc = Assert.Single(overlays.Children.OfType<LayerStackDynamicEntryViewModel>());
+        Assert.Equal("ndbc", ndbc.SourceId);
+        Assert.Equal("LayerStack.DynamicEntry.ndbc.Active", ndbc.AutomationId);
+        var arrows = vm.Planes.Single(p => p.Plane == S98DisplayPlane.DynamicArrows);
+        Assert.Equal("ais", Assert.Single(arrows.Children.OfType<LayerStackDynamicEntryViewModel>()).SourceId);
+    }
+
+    [Fact]
     public void DynamicEntry_IsActive_TogglesThroughRegistry()
     {
         var loader = new ControllableLoader();

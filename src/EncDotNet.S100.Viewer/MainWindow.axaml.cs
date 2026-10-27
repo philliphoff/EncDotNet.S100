@@ -398,6 +398,9 @@ public partial class MainWindow : ShadUI.Window
         {
             _dynamicSourceOverlayHost.SetVisible(kv.Key, kv.Value);
         }
+        // #1070: NDBC observations start hidden until the user turns them on.
+        var ndbcOverlay = App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ndbc.NdbcObservationsOverlay>();
+        ndbcOverlay?.SeedDefaultVisibility(_dynamicSourceOverlayHost, viewerSettings.DynamicSourceVisibility);
         _dynamicSourceOverlayHost.SourcesChanged += () =>
         {
             foreach (var info in _dynamicSourceOverlayHost.Sources)
@@ -418,6 +421,10 @@ public partial class MainWindow : ShadUI.Window
         {
             _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));
         }
+
+        // #1070: bind the NDBC source to the viewport and its Layer Stack
+        // toggle, then start polling.
+        ndbcOverlay?.Attach(_dynamicSourceOverlayHost);
 
         // Pick highlight: keep a cursor-echo marker + selected-feature outline
         // on the overlay tier in sync with the current pick report, so the

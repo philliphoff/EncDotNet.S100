@@ -1,3 +1,5 @@
+using EncDotNet.S100.Interoperability;
+
 namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 
 /// <summary>
@@ -13,4 +15,18 @@ namespace EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 public sealed record DynamicSourceRegistrationInfo(
     string Id,
     string DisplayName,
-    string? Description);
+    string? Description)
+{
+    /// <summary>
+    /// The source's S-98 display plane, from
+    /// <see cref="EncDotNet.S100.DynamicSources.DynamicSourceMetadata.Plane"/>.
+    /// Defaults to <see cref="S98DisplayPlane.DynamicArrows"/>.
+    /// </summary>
+    public S98DisplayPlane Plane { get; init; } = S98DisplayPlane.DynamicArrows;
+
+    /// <summary>
+    /// The source's ordering hint within <see cref="Plane"/>, from
+    /// <see cref="EncDotNet.S100.DynamicSources.DynamicSourceMetadata.WithinPlanePriority"/>.
+    /// </summary>
+    public int WithinPlanePriority { get; init; }
+}

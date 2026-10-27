@@ -268,7 +268,15 @@ types don't depend on any graphics library.
   and GPS-antenna offsets (IEC 62388). It matches the AIS type 5
   `dimA`/`dimB`/`dimC`/`dimD` fields.
 - `DynamicSourceMetadata` carries `DisplayName` and `RendererKey`.
-  `EncDotNet.S100.Renderers.Mapsui` uses the key to find the renderer.
+  `EncDotNet.S100.Renderers.Mapsui` uses the key to find the renderer. Its
+  `Plane` (default `DynamicArrows`) and `WithinPlanePriority` say which S-98
+  plane the source belongs to, for a host's layer stack.
+- `IDynamicFeatureDescriber` is an optional capability: a source that
+  implements it describes a feature for a pick report as a title and
+  labelled values with units (`DynamicFeatureDescription`).
+- `DynamicFeatureGeometryProvider` is an `IFeatureGeometryProvider` over
+  dynamic features, so drawing instructions built for them (feature
+  reference = id) go through the vector renderers.
 - `DynamicFeaturesChanged` and `DynamicSourceChangeKind` describe a change.
 - `DynamicFeatureTracker<TInbound>` helps adapters that age features out, such
   as AIS sleep and lost timers or stale-sensor styling.

@@ -135,4 +135,49 @@ public class DynamicSourcePickServiceTests
 
         Assert.Equal("ownship", Assert.Single(hits).DisplayLabel);
     }
+
+    private sealed class DescribedSource : IDynamicFeatureSource, IDynamicFeatureDescriber
+    {
+        public string Id => "obs";
+        public DynamicSourceMetadata Metadata { get; } = new() { DisplayName = "Observations" };
+        public IReadOnlyList<DynamicFeature> CurrentFeatures { get; init; } = [];
+        public event EventHandler<DynamicFeaturesChanged>? Changed { add { } remove { } }
+
+        public DynamicFeatureDescription? Describe(DynamicFeature feature, IFormatProvider? formatProvider = null) =>
+            new("BOSTON 16 NM East of Boston, MA",
+            [
+                new DynamicFeatureProperty("Observed", "2026-10-27 14:50 UTC (10 min ago)"),
+                new DynamicFeatureProperty("Wind", "230° 14.4 kn (7.4 m/s)"),
+            ]);
+    }
+
+    [Fact]
+    public void Pick_UsesTheSourcesOwnDescription_WhenItHasOne()
+    {
+        var registry = new FakeRegistry();
+        registry.Visible.Add(new DescribedSource
+        {
+            CurrentFeatures =
+            [
+                new DynamicFeature
+                {
+                    Id = "ndbc:44013",
+                    Kind = "weather.observation.ndbc",
+                    GeometryType = GeometryType.Point,
+                    Coordinates = [new GeoPosition(Lat, Lon)],
+                    Attributes = new Dictionary<string, object?> { ["observation"] = new object() },
+                    LastUpdated = DateTimeOffset.UnixEpoch,
+                },
+            ],
+        });
+        var sut = new DynamicSourcePickService(registry);
+
+        var hit = Assert.Single(sut.Pick(ToMercator(Lat, Lon), resolution: 10.0));
+
+        Assert.Equal("BOSTON 16 NM East of Boston, MA", hit.DisplayLabel);
+        Assert.Equal(3, hit.Attributes.Count); // position, then the description's rows
+        Assert.Equal("Wind", hit.Attributes[2].Label);
+        Assert.Equal("230° 14.4 kn (7.4 m/s)", hit.Attributes[2].Value);
+        Assert.DoesNotContain(hit.Attributes, a => a.Label == "observation");
+    }
 }

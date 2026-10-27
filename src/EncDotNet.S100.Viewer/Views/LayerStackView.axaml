@@ -128,7 +128,7 @@
                                                   Margin="24,3,8,3">
                                                 <CheckBox Grid.Column="0"
                                                           AutomationProperties.Name="{Binding DisplayName}"
-                                                          AutomationProperties.AutomationId="LayerStack.DynamicEntry.Active"
+                                                          AutomationProperties.AutomationId="{Binding AutomationId}"
                                                           IsChecked="{Binding IsActive, Mode=TwoWay}"
                                                           ToolTip.Tip="{x:Static loc:Strings.LayerStack_DynamicEntry_VisibilityTooltip}"
                                                           VerticalAlignment="Center" />

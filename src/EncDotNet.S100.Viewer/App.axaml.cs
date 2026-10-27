@@ -1083,6 +1083,12 @@ public partial class App : Application
         EncDotNet.S100.Viewer.Services.DynamicSources.Ais.AisOverlayServiceCollectionExtensions
             .AddAisOverlay(services);
 
+        // #1070: NDBC buoy observations. Registered always and hidden until
+        // the user ticks its Layer Stack row; it fetches nothing while hidden
+        // or zoomed out (see Services.DynamicSources.Ndbc).
+        EncDotNet.S100.Viewer.Services.DynamicSources.Ndbc.NdbcObservationsServiceCollectionExtensions
+            .AddNdbcObservations(services);
+
         // Pirate mode: own-ship impersonates a selected live AIS target.
         // The controller reads the raw AIS source (via the exclusion
         // decorator's Inner) so it still sees the followed target, drives

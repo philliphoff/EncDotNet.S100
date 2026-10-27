@@ -458,6 +458,12 @@ note.
   heading vector with an arrowhead. Without `VesselGeometry`, for example for an
   AIS target of unknown size, it always draws the disc. See the
   [own-ship symbology](../../docs/design/own-ship-symbology.md) design note.
+- **`PortrayedDynamicFeatureRenderer`**: draws features with a code-defined
+  `IDynamicFeaturePortrayal` (from `EncDotNet.S100.Portrayals`). It lowers the
+  portrayal's drawing instructions with the same scene builder a vector product
+  uses into self-styled Mapsui features (`MapsuiDisplayListRenderer.RenderFeatures`),
+  in the palette its accessor returns. The NDBC observations
+  (`EncDotNet.S100.DynamicSources.Ndbc`) are drawn with it.
 - **`KindMatchingRenderer`**: chooses a renderer by `DynamicFeature.Kind`, by
   exact match or dotted prefix (`"vessel"` matches `"vessel.cargo"`). The
   longest key wins.

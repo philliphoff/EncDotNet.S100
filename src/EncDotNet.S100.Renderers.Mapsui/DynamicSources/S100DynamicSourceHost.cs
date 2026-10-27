@@ -244,7 +244,11 @@ public sealed class S100DynamicSourceHost : IDisposable, IS100DynamicSourceRegis
                     list.Add(new DynamicSourceRegistrationInfo(
                         Id: r.Source.Id,
                         DisplayName: r.Source.Metadata.DisplayName,
-                        Description: r.Source.Metadata.Description));
+                        Description: r.Source.Metadata.Description)
+                    {
+                        Plane = r.Source.Metadata.Plane,
+                        WithinPlanePriority = r.Source.Metadata.WithinPlanePriority,
+                    });
                 }
                 return list;
             }

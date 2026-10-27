@@ -292,6 +292,55 @@ public sealed class MapsuiDisplayListRenderer
     }
 
     /// <summary>
+    /// Lowers the display list into self-styled Mapsui features (symbol
+    /// images, labels, lines and areas, in Part 9 draw order) without binding
+    /// a tiled scene renderer. Each feature carries its
+    /// <see cref="FeatureRefKey"/> and scale limits.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Render"/> paints its layer with the tiled scene renderer and
+    /// keeps the features only for picking. These features draw on their own,
+    /// so they can go into any plain <see cref="MemoryLayer"/>, such as a
+    /// dynamic source's overlay layer (see
+    /// <see cref="DynamicSources.PortrayedDynamicFeatureRenderer"/>). Use it for
+    /// a handful of features, not a chart.
+    /// </remarks>
+    /// <param name="instructions">The display list.</param>
+    /// <param name="geometryProvider">Resolves the instructions' feature references.</param>
+    /// <returns>The styled features; instructions whose feature can't be resolved are skipped.</returns>
+    public IReadOnlyList<IFeature> RenderFeatures(
+        IReadOnlyList<DrawingInstruction> instructions,
+        IFeatureGeometryProvider geometryProvider)
+    {
+        ArgumentNullException.ThrowIfNull(instructions);
+        ArgumentNullException.ThrowIfNull(geometryProvider);
+
+        var scene = new Scene.VectorSceneBuilder
+        {
+            ResolveColor = Scene.ColorResolver.Create(Palette),
+            SymbolResolver = ResolveSymbolAsset,
+            LineStyleProvider = LineStyleProvider,
+            SymbolScale = SymbolScale,
+            TextScale = TextScale,
+        }.Build(instructions, geometryProvider);
+
+        var features = new List<IFeature>(scene.Ops.Count);
+        var pointHitRectKeys = new HashSet<(string FeatureReference, double X, double Y)>();
+        foreach (var op in scene.Ops)
+        {
+            var includePointHitRect = true;
+            if (op is Scene.PointPaintOp { Symbol: not null } point)
+                includePointHitRect = pointHitRectKeys.Add(
+                    (point.FeatureReference, point.World.X, point.World.Y));
+
+            if (CreateMapFeature(op, includePointHitRect) is { } feature)
+                features.Add(feature);
+        }
+
+        return features;
+    }
+
+    /// <summary>
     /// The <c>(productLayerSet, styleStateHash)</c> pair that keys this layer's
     /// warm tile disk-cache namespace, or a pair of <see langword="null"/>s
     /// (bypass the disk cache) when no <see cref="ContentScope"/> identifies the
@@ -712,6 +761,11 @@ public sealed class MapsuiDisplayListRenderer
             VerticalAlignment = MapVAlign(op.VerticalAlignment),
             Offset = new Offset(op.OffsetXpx, op.OffsetYpx),
             BackColor = op.BackColor is { } b ? new Brush { Color = ToMapsui(b) } : null,
+            // Only seen where Mapsui paints the feature itself (RenderFeatures);
+            // Render's layer is painted by the tiled scene renderer.
+            Halo = op.HaloColor is { } h && op.HaloWidthPx > 0
+                ? new Pen { Color = ToMapsui(h), Width = op.HaloWidthPx }
+                : null,
         };
 
         var feature = new PointFeature(op.World.X, op.World.Y);
