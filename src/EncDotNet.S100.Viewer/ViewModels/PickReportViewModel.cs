@@ -152,6 +152,11 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private void PopulateAttributeSections(IReadOnlyList<PickAttribute> reformatted)
     {
         Attributes.Clear();
+        // The panel leads with NavigationNotice for a product that isn't
+        // S-100; the processor's own notice row (kept for MCP, the CLI and
+        // the Mapsui pick query) would repeat it (#1096).
+        if (NavigationNotice is not null)
+            reformatted = WithoutNavigationNotice(reformatted);
         var rows = FeatureInfoBuilder.WithoutResolvedFileReferences(reformatted);
         if (_selectedHit?.NavigationalWarning is not null)
             rows = WithoutWarningText(rows);
@@ -182,6 +187,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         foreach (var card in TextCards)
             card.CopyRequested -= OnCardCopyRequested;
         TextCards.Clear();
+    }
+
+    /// <summary>
+    /// Drops the not-for-navigation notice rows
+    /// (<see cref="PickAttribute.IsNavigationNotice"/>) that
+    /// <see cref="NavigationNotice"/> already shows.
+    /// </summary>
+    internal static IReadOnlyList<PickAttribute> WithoutNavigationNotice(IReadOnlyList<PickAttribute> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return rows.Any(r => r.IsNavigationNotice)
+            ? rows.Where(r => !r.IsNavigationNotice).ToList()
+            : rows;
     }
 
     /// <summary>
@@ -263,6 +281,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         DateTimeRangeValue = row.DateTimeRangeValue,
         DepthMetresValue = row.DepthMetresValue,
         ExternalText = row.ExternalText,
+        IsNavigationNotice = row.IsNavigationNotice,
         Children = children,
     };
 
@@ -296,6 +315,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
+                IsNavigationNotice = attr.IsNavigationNotice,
                 Children = children,
             };
         }
@@ -312,6 +332,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
+                IsNavigationNotice = attr.IsNavigationNotice,
                 Children = children,
             };
         }
@@ -328,6 +349,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
+                IsNavigationNotice = attr.IsNavigationNotice,
                 Children = children,
             };
         }
@@ -344,6 +366,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
+                IsNavigationNotice = attr.IsNavigationNotice,
                 Children = children,
             };
         }
@@ -451,6 +474,14 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
     /// <summary>True when <see cref="NavigationNotice"/> has a value to show.</summary>
     public bool HasNavigationNotice => NavigationNotice is not null;
+
+    /// <summary>"Data: NOAA/NCEP GFS-Wave · Public domain": the picked dataset's credit from its Library source (#1075), or null.</summary>
+    public string? DataCredit => _selectedHit?.Credit is { } credit
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_DataCreditFormat, credit)
+        : null;
+
+    /// <summary>True when <see cref="DataCredit"/> has a value to show.</summary>
+    public bool HasDataCredit => DataCredit is not null;
 
     /// <summary>
     /// Clipboard text for the copy-identity action: heading plus caption, after
@@ -1286,6 +1317,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasPortrayalNote));
         OnPropertyChanged(nameof(NavigationNotice));
         OnPropertyChanged(nameof(HasNavigationNotice));
+        OnPropertyChanged(nameof(DataCredit));
+        OnPropertyChanged(nameof(HasDataCredit));
         OnPropertyChanged(nameof(IsExaminerAvailable));
         (CopyIdentityCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();

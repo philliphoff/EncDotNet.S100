@@ -26,6 +26,9 @@ public enum LibraryTagKind
 
     /// <summary>A forecast run whose window has ended.</summary>
     Expired,
+
+    /// <summary>A weather run more than 12 hours old (#1075): "Stale", with "Load latest run" offered.</summary>
+    Stale,
 }
 
 /// <summary>A short sentence-case tag after an item's name, e.g. "Ed 46 available" or "Loaded".</summary>
@@ -85,6 +88,9 @@ public sealed record LibraryItemTextInput(
 
     /// <summary>The user's time zone, for <see cref="LibraryTimeFormat.Local"/>.</summary>
     public TimeZoneInfo TimeZone { get; init; } = TimeZoneInfo.Local;
+
+    /// <summary>The time now, which decides whether a weather run is stale (#1075); the system clock when null.</summary>
+    public DateTimeOffset? Now { get; init; }
 }
 
 /// <summary>
@@ -128,7 +134,8 @@ public static class LibraryItemText
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
-        return ForecastRuns.IsForecast(item) && source.Definition is S100ForecastFeedSource { Shape: ForecastShape.Regional };
+        return ForecastRuns.IsForecast(item)
+            && source.Definition is S100ForecastFeedSource { Shape: ForecastShape.Regional } or WeatherFeedSource;
     }
 
     /// <summary>"Queued" or "Failed · retry" for an item in a download, else nothing.</summary>
@@ -189,6 +196,11 @@ public static class LibraryItemText
             // A run's tiles are updated together; the model's row carries its state.
             if (IsForecastRun(item, input.Source))
                 tags.AddRange(ForecastRunTags([input.LoadState?.Invoke(input.EffectiveItem)], input.Availability));
+            // A weather run: pinned (kept on purpose), or stale past 12 hours (#1075).
+            if (Weather.WeatherRuns.IsPinned(item))
+                tags.Add(new LibraryTag(LibraryText.Get("Library_Tag_Pinned"), LibraryTagKind.Neutral));
+            else if (Weather.WeatherRuns.IsStale(item, input.LocalRun, input.Now ?? DateTimeOffset.UtcNow))
+                tags.Add(new LibraryTag(LibraryText.Get("Library_Tag_Stale"), LibraryTagKind.Stale));
             return tags;
         }
 
@@ -310,7 +322,9 @@ public static class LibraryItemText
 
         foreach (var (key, value) in item.Properties.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
-            if (key is not ("notForNavigation" or LocalManifestIndexer.GroupProperty or LocalManifestIndexer.GroupNameProperty))
+            if (key is not ("notForNavigation" or LocalManifestIndexer.GroupProperty or LocalManifestIndexer.GroupNameProperty
+                or Weather.WeatherRuns.StaleAfterProperty or Weather.WeatherRuns.ServiceProperty
+                or Weather.WeatherRuns.DownloadFolderProperty or Weather.WeatherRuns.PinnedProperty))
                 Add(source, LibraryTextFormat.PropertyLabel(key), value);
         }
 

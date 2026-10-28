@@ -43,6 +43,9 @@ public sealed class FeatureDescriberRegistry
         new GmlFeatureDescriber("S-201"),
         new GmlFeatureDescriber("S-411"),
         new GmlFeatureDescriber("S-421"),
+        // CAP weather warnings (not S-100): each area's attributes are its
+        // pick report's values.
+        new GmlFeatureDescriber(Core.SpecName.Cap),
     ]);
 
     internal ISpecFeatureDescriber? Get(string specName) =>

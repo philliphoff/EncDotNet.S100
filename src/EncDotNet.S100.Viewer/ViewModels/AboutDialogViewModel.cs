@@ -72,6 +72,13 @@ internal sealed class AboutDialogViewModel : ViewModelBase
     /// <summary>The "Built with…" attribution paragraph.</summary>
     public string BuiltWith => Strings.About_BuiltWith;
 
+    /// <summary>
+    /// Credits for the weather data sources SoundCharts reads: NOAA (public
+    /// domain), ECMWF Open Data (CC BY 4.0), the Copernicus Marine Service and
+    /// Deutscher Wetterdienst (attribution required).
+    /// </summary>
+    public string DataCredits => Strings.About_DataCredits;
+
     // ---- Version ----------------------------------------------------------
 
     /// <summary>The headline "Version X.Y.Z" line.</summary>

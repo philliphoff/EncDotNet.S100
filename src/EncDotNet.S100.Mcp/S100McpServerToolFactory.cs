@@ -182,7 +182,10 @@ internal static class S100McpServerToolFactory
             "Returns the value of the nearest grid cell — no interpolation, no bbox aggregation. " +
             "Supports S-102 (depth and optional uncertainty in metres, positive down), " +
             "S-104 (water-level height in metres and decoded trend at the nearest time step), and " +
-            "S-111 (current speed in m/s and knots, direction in degrees from true north 0..360, at the nearest time step). " +
+            "S-111 (current speed in m/s and knots, direction in degrees from true north 0..360, at the nearest time step), and " +
+            "the weather grids GRIB2 and NetCDF (a 'fields' sample: wave height, period and direction, wind speed and direction, gusts and " +
+            "pressure, each with its quantity and unit, at the nearest grid node and time step; directions are 'from'; weather model data, not for navigation). " +
+            "CAP warnings are areas, not a coverage: use identify_features for them. " +
             "Of the datasets covering the point, one whose time range contains the requested time is used (finest grid first, then newest run); " +
             "a time within one time step of either end of a range counts as in range. A single time outside every covering dataset's " +
             "range returns time_out_of_range (details: requestedTime, datasetId, validFrom, validTo, nearestStep, run, candidates) " +
@@ -191,10 +194,10 @@ internal static class S100McpServerToolFactory
             "truncated=true and coveredFrom/coveredTo when the data does not span it, and time_out_of_range only when there is no overlap. " +
             "Read-only and side-effect free.";
 
-        var del = ([Description("Spec of the coverage to sample (S-102, S-104, or S-111; e.g. \"S-102/2.1.0\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,
+        var del = ([Description("Spec of the coverage to sample (S-102, S-104, S-111, GRIB2 or NetCDF; e.g. \"S-102/2.1.0\" or \"GRIB2\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,
                    [Description("Sample latitude in decimal degrees, WGS-84, range -90..+90.")] double latitude,
                    [Description("Sample longitude in decimal degrees, WGS-84, range -180..+180.")] double longitude,
-                   [Description("Optional UTC ISO-8601 time selector for time-varying products (S-104, S-111); ignored for S-102. The nearest time step of a dataset whose range contains the time is selected; a time outside every covering dataset's range is handled per 'outOfRange'.")] DateTimeOffset? time = null,
+                   [Description("Optional UTC ISO-8601 time selector for time-varying products (S-104, S-111, GRIB2, NetCDF); ignored for S-102. The nearest time step of a dataset whose range contains the time is selected; a time outside every covering dataset's range is handled per 'outOfRange'.")] DateTimeOffset? time = null,
                    [Description("Optional temporal query JSON envelope. Shapes: {\"kind\":\"instant\",\"t\":\"2024-01-01T14:00:00Z\"}, {\"kind\":\"range\",\"from\":\"…\",\"to\":\"…\"}, {\"kind\":\"series\",\"from\":\"…\",\"to\":\"…\",\"stepSeconds\":1800}. Range/Series populate the result's 'series' field (plus 'truncated'/'coveredFrom'/'coveredTo'). Takes precedence over 'time'.")] string? times = null,
                    [Description(OutOfRangeDescription)] string? outOfRange = null,
                    CancellationToken ct = default) =>
@@ -460,10 +463,10 @@ internal static class S100McpServerToolFactory
     private static McpServerTool CreateSampleCoverageAlongTool(SampleCoverageAlongTool inner)
     {
         var description =
-            "Samples a coverage product (S-102 / S-104 / S-111) at every vertex of a polyline, " +
+            "Samples a coverage product (S-102 / S-104 / S-111, or a GRIB2 or NetCDF weather grid) at every vertex of a polyline, " +
             "returning per-vertex results in input order. Vertices that fall outside coverage or " +
             "have no data return null entries so the agent can still use the rest of the route. " +
-            "For time-varying products (S-104, S-111), the optional time applies identically to " +
+            "For time-varying products (S-104, S-111, GRIB2, NetCDF), the optional time applies identically to " +
             "every vertex — useful for \"depth/level/current at each waypoint at the same instant\". " +
             "Time handling matches sample_coverage per vertex: a vertex whose covering datasets don't reach the requested " +
             "time gets a null result with error code time_out_of_range (or, with outOfRange=\"nearest\", the nearest step and a " +
@@ -471,7 +474,7 @@ internal static class S100McpServerToolFactory
             "The polyline's corridor width is ignored (corridors apply to membership queries, not " +
             "point sampling).";
 
-        var del = ([Description("Spec of the coverage to sample (\"S-102/2.1.0\", \"S-104/1.1.0\", or \"S-111/1.1.1\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,
+        var del = ([Description("Spec of the coverage to sample (\"S-102/2.1.0\", \"S-104/1.1.0\", \"S-111/1.1.1\", \"GRIB2\" or \"NetCDF\"). Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement spec,
                    [Description("Polyline JSON: {\"vertices\":[[lat,lon],...]} — corridor width is not used here. Coordinates are WGS-84 decimal degrees.")] string polyline,
                    [Description("Optional time selector (ISO-8601, time-varying products only).")] DateTimeOffset? time = null,
                    [Description("Optional temporal query JSON envelope applied to every vertex; same shape as sample_coverage. Takes precedence over 'time'.")] string? times = null,
@@ -586,13 +589,14 @@ internal static class S100McpServerToolFactory
     private static McpServerTool CreateListTimeStepsTool(ListTimeStepsTool inner)
     {
         var description =
-            "Returns the available UTC time-step instants for a time-varying coverage dataset " +
-            "(S-104 water level, S-111 surface currents). Use this to ground temporal questions " +
+            "Returns the available UTC time-step instants for a time-varying dataset " +
+            "(S-104 water level, S-111 surface currents, GRIB2 and NetCDF weather grids' valid times, " +
+            "and for CAP warnings the times warnings start and end). Use this to ground temporal questions " +
             "before issuing sample_coverage or sample_coverage_along — the agent can discover the " +
             "first/last instant, the cadence (when uniform), and the full list of valid times. " +
             "For S-102 (static bathymetry) the times array is empty. Read-only and side-effect free.";
 
-        var del = ([Description("Identifier of a currently loaded time-varying coverage dataset (typically obtained from list_datasets).")] string datasetId,
+        var del = ([Description("Identifier of a currently loaded time-varying dataset (typically obtained from list_datasets).")] string datasetId,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(new ListTimeStepsRequest(new DatasetId(datasetId)), ct));

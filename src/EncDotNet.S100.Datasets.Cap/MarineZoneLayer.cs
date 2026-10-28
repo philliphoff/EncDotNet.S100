@@ -71,6 +71,39 @@ public sealed class MarineZoneLayer
         return _zones.GetValueOrDefault(code.Trim());
     }
 
+    /// <summary>
+    /// The codes of the zones whose outline's bounding box meets the box from
+    /// <paramref name="south"/> to <paramref name="north"/> and
+    /// <paramref name="west"/> to <paramref name="east"/> (degrees; a box with
+    /// <paramref name="west"/> greater than <paramref name="east"/> crosses the
+    /// antimeridian), sorted: the marine zones to ask <c>api.weather.gov</c>
+    /// about for an area (#1075).
+    /// </summary>
+    public IReadOnlyList<string> CodesIn(double south, double west, double north, double east)
+    {
+        bool Meets(GeoPosition low, GeoPosition high)
+        {
+            if (high.Latitude < south || low.Latitude > north)
+                return false;
+            return west <= east
+                ? high.Longitude >= west && low.Longitude <= east
+                : high.Longitude >= west || low.Longitude <= east;
+        }
+
+        return [.. _zones.Values
+            .Where(zone => zone.Surfaces.Any(surface =>
+            {
+                var ring = surface.ExteriorRing;
+                if (ring.Count == 0)
+                    return false;
+                var low = new GeoPosition(ring.Min(p => p.Latitude), ring.Min(p => p.Longitude));
+                var high = new GeoPosition(ring.Max(p => p.Latitude), ring.Max(p => p.Longitude));
+                return Meets(low, high);
+            }))
+            .Select(zone => zone.Code)
+            .Order(StringComparer.Ordinal)];
+    }
+
     /// <summary>Builds a layer from zones, for tests and hosts that keep their own.</summary>
     /// <param name="zones">The zones; a later zone with the same code replaces an earlier one.</param>
     public static MarineZoneLayer Create(IEnumerable<MarineZone> zones)

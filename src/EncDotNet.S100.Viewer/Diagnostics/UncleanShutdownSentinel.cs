@@ -27,7 +27,9 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 /// On startup, any marker whose owning process is no longer alive
 /// indicates a previous session that terminated without running its
 /// clean-shutdown path — i.e. it crashed. <see cref="BeginSession"/>
-/// returns every such session and removes their stale markers.
+/// returns every such session and removes their stale markers. Until then,
+/// the rolling log keeps the crashed session's newest log file, so the
+/// launch that reports the crash can still attach its tail.
 /// </para>
 /// <para>
 /// Liveness is decided cross-platform (Windows, macOS, Linux) by process
@@ -110,13 +112,21 @@ internal static partial class UncleanShutdownSentinel
     /// </summary>
     /// <param name="version">The current application version string,
     /// recorded in the marker for diagnostics.</param>
+    /// <param name="onCrashesDetected">Called with the crashed sessions
+    /// before their markers are removed, when there are any. While a marker
+    /// exists the rolling log keeps that session's newest file (see
+    /// <see cref="ReadUnreportedSessions"/>), so reading the crashed
+    /// session's log here can't race another instance's log cleanup.
+    /// Exceptions it throws are swallowed.</param>
     /// <returns>
     /// Every previous session that ended without a clean shutdown, ordered
     /// oldest-first. Empty when there was no prior crash, when the only
     /// other markers belong to still-running instances, or when the
     /// sentinel is disabled.
     /// </returns>
-    public static IReadOnlyList<PreviousSession> BeginSession(string version)
+    public static IReadOnlyList<PreviousSession> BeginSession(
+        string version,
+        Action<IReadOnlyList<PreviousSession>>? onCrashesDetected = null)
     {
         bool enabled;
         string directory;
@@ -129,9 +139,74 @@ internal static partial class UncleanShutdownSentinel
         if (!enabled)
             return Array.Empty<PreviousSession>();
 
-        var crashed = ScanForCrashedSessions(directory);
+        var (crashed, staleMarkers) = ScanForCrashedSessions(directory);
+        if (crashed.Count > 0 && onCrashesDetected is not null)
+        {
+            try
+            {
+                onCrashesDetected(crashed);
+            }
+            catch
+            {
+                // Best-effort — still clear the markers below.
+            }
+        }
+
+        // The owning processes are gone — remove the stale markers so each
+        // crash is reported exactly once.
+        foreach (var marker in staleMarkers)
+            TryDelete(marker);
+
         WriteMarker(directory, version);
         return crashed;
+    }
+
+    /// <summary>
+    /// Returns the sessions that have a marker in <paramref name="directory"/>
+    /// without checking liveness or removing anything: running sessions and
+    /// crashed sessions that no startup has reported yet. Never throws.
+    /// </summary>
+    /// <remarks>
+    /// The rolling log uses this to keep a crashed session's log until the
+    /// next launch has read it; a marker that is still there means no
+    /// <see cref="BeginSession"/> has picked that crash up yet.
+    /// </remarks>
+    /// <param name="directory">Marker directory to read.</param>
+    public static IReadOnlyList<PreviousSession> ReadUnreportedSessions(string directory)
+    {
+        var results = new List<PreviousSession>();
+        try
+        {
+            if (!System.IO.Directory.Exists(directory))
+                return results;
+
+            foreach (var file in System.IO.Directory.EnumerateFiles(
+                         directory, MarkerPrefix + "*" + MarkerExtension))
+            {
+                try
+                {
+                    var marker = JsonSerializer.Deserialize(
+                        File.ReadAllText(file), MarkerJson.SessionMarker);
+                    if (marker is not null)
+                    {
+                        results.Add(new PreviousSession(
+                            StartedUtc: marker.StartedUtc,
+                            Pid: marker.Pid,
+                            Version: marker.Version ?? "(unknown)"));
+                    }
+                }
+                catch
+                {
+                    // Skip an unreadable (or just deleted) marker.
+                }
+            }
+        }
+        catch
+        {
+            // Directory enumeration failed — report nothing.
+        }
+
+        return results;
     }
 
     /// <summary>
@@ -155,13 +230,15 @@ internal static partial class UncleanShutdownSentinel
         TryDelete(MarkerPathFor(directory, SafeCurrentPid()));
     }
 
-    private static List<PreviousSession> ScanForCrashedSessions(string directory)
+    private static (List<PreviousSession> Crashed, List<string> StaleMarkers) ScanForCrashedSessions(
+        string directory)
     {
         var results = new List<PreviousSession>();
+        var stale = new List<string>();
         try
         {
             if (!System.IO.Directory.Exists(directory))
-                return results;
+                return (results, stale);
 
             foreach (var file in System.IO.Directory.EnumerateFiles(
                          directory, MarkerPrefix + "*" + MarkerExtension))
@@ -187,10 +264,7 @@ internal static partial class UncleanShutdownSentinel
                         StartedUtc: marker.StartedUtc,
                         Pid: marker.Pid,
                         Version: marker.Version ?? "(unknown)"));
-
-                    // The owning process is gone — remove the stale marker so
-                    // the crash is reported exactly once.
-                    TryDelete(file);
+                    stale.Add(file);
                 }
                 catch
                 {
@@ -204,7 +278,7 @@ internal static partial class UncleanShutdownSentinel
         }
 
         results.Sort(static (a, b) => a.StartedUtc.CompareTo(b.StartedUtc));
-        return results;
+        return (results, stale);
     }
 
     private static void WriteMarker(string directory, string version)

@@ -71,6 +71,42 @@ public sealed class PickAttribute
     public IReadOnlyList<PickAttribute> Children { get; init; } = [];
 
     /// <summary>
+    /// The <see cref="Code"/> of a not-for-navigation notice row
+    /// (<see cref="NavigationNotice"/>): <c>"notice"</c>.
+    /// </summary>
+    public const string NavigationNoticeCode = "notice";
+
+    /// <summary>
+    /// <c>true</c> when this row is the product's not-for-navigation notice
+    /// rather than a value of the feature, e.g. "Weather model data, not for
+    /// navigation." on a weather grid pick. Non-viewer callers (MCP, CLI)
+    /// show it as an ordinary row; a host that already leads its pick report
+    /// with its own notice for the product hides it so the notice reads once
+    /// (#1096).
+    /// </summary>
+    public bool IsNavigationNotice { get; init; }
+
+    /// <summary>
+    /// A not-for-navigation notice row: <see cref="NavigationNoticeCode"/>,
+    /// named "Notice", with <paramref name="text"/> as its value and
+    /// <see cref="IsNavigationNotice"/> set.
+    /// </summary>
+    /// <param name="text">The notice, e.g. "Weather model data, not for navigation.".</param>
+    /// <returns>The notice row.</returns>
+    public static PickAttribute NavigationNotice(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        return new PickAttribute
+        {
+            Code = NavigationNoticeCode,
+            Name = "Notice",
+            RawValue = text,
+            DisplayValue = text,
+            IsNavigationNotice = true,
+        };
+    }
+
+    /// <summary>
     /// The resolved textual content of the external text file named by a
     /// <c>fileReference</c> attribute (S-100 Edition 5.2.1 Part 5; S-101
     /// Feature Catalogue simple attribute <c>fileReference</c>, aliases

@@ -25,15 +25,18 @@ namespace EncDotNet.S100.Collections.Indexing;
 /// roots, so replacing a cell or catalogue invalidates the index.
 /// </para>
 /// </remarks>
-internal static class LocalSourceScanner
+internal static partial class LocalSourceScanner
 {
     /// <summary>
     /// Bumped whenever indexing output changes for the same input, so indexes
     /// cached by an older build are rebuilt.
     /// </summary>
-    internal const string FingerprintVersion = "local-v3"; // v2: catalogue boxes in dataCoverage, plain-text bounds, LineString coverage; v3: loose HDF5 coverages (#1037)
+    internal const string FingerprintVersion = "local-v4"; // v2: catalogue boxes in dataCoverage, plain-text bounds, LineString coverage; v3: loose HDF5 coverages (#1037); v4: weather files and run folders (#1075)
 
-    private static readonly string[] LooseExtensions = [".000", ".h5", ".gml"];
+    private static readonly string[] LooseExtensions = [".000", ".h5", ".gml", ".nc", ".nc4"];
+
+    // GRIB2 has no reliable extension: these, and NCEP's forecast-hour names (gfs.t00z.pgrb2.0p25.f003).
+    private static readonly string[] GribExtensions = [".grib2", ".grb2", ".grib", ".grb"];
 
     private static readonly EnumerationOptions TopLevel = new()
     {
@@ -89,7 +92,7 @@ internal static class LocalSourceScanner
             units.Add(new ZipUnit(fullPath));
             Stamp(root, new FileInfo(fullPath), stamps);
         }
-        else if (IsLooseCandidate(fileName))
+        else if (IsLooseCandidate(fileName) || IsGribCandidate(fileName))
         {
             var siblings = Directory.EnumerateFiles(root, "*", TopLevel).ToArray();
             var unit = new LooseFileUnit(fullPath, FindUpdates(fullPath, siblings));
@@ -141,6 +144,20 @@ internal static class LocalSourceScanner
                     units.Add(new S57FolderUnit(directory));
                 StampTree(sourceRoot, directory, stamps);
                 continue;
+            }
+
+            // Several GRIB2 files in one folder are one model run, read as one dataset (#1075).
+            var gribFiles = files.Where(f => IsGribCandidate(Path.GetFileName(f))).ToArray();
+            if (gribFiles.Length > 1)
+            {
+                units.Add(new RunFolderUnit(directory, gribFiles));
+                foreach (var grib in gribFiles)
+                    Stamp(sourceRoot, new FileInfo(grib), stamps);
+            }
+            else if (gribFiles.Length == 1)
+            {
+                units.Add(new LooseFileUnit(gribFiles[0], []));
+                Stamp(sourceRoot, new FileInfo(gribFiles[0]), stamps);
             }
 
             foreach (var file in files)
@@ -219,6 +236,15 @@ internal static class LocalSourceScanner
     private static bool IsLooseCandidate(string fileName) =>
         Array.Exists(LooseExtensions, e => fileName.EndsWith(e, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>A GRIB2 file by name: a GRIB extension, or NCEP's forecast-hour suffix (<c>.f003</c>, <c>.f003.grib2</c>).</summary>
+    internal static bool IsGribCandidate(string fileName) =>
+        !fileName.StartsWith('.')
+        && (Array.Exists(GribExtensions, e => fileName.EndsWith(e, StringComparison.OrdinalIgnoreCase))
+            || NcepForecastHour().IsMatch(fileName));
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\.f\d{3,4}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex NcepForecastHour();
+
     private static void StampTree(string sourceRoot, string directory, List<string> stamps)
     {
         try
@@ -284,3 +310,6 @@ internal sealed record ZipUnit(string Path) : ScanUnit;
 
 /// <summary>A loose dataset file and its sequential updates.</summary>
 internal sealed record LooseFileUnit(string Path, IReadOnlyList<string> UpdatePaths) : ScanUnit;
+
+/// <summary>A folder holding several GRIB2 files: one model run, indexed and loaded as one dataset (#1075).</summary>
+internal sealed record RunFolderUnit(string Directory, IReadOnlyList<string> Files) : ScanUnit;

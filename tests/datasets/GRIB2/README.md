@@ -26,6 +26,15 @@ still run north to south (scanning mode 0), and ecCodes repacked them.
 
 Total: 222,489 bytes.
 
+Two `.idx` inventories, unchanged, were downloaded on 28 October 2026 from the
+same bucket for issue #1075's byte-range reads: `gfs.t18z.pgrb2.1p00.f003.idx`
+(39,703 bytes, 743 lines, `gfs.20261027/18/atmos/`) and
+`gfswave.t18z.global.0p25.f003.grib2.idx` (1,005 bytes, 19 lines,
+`gfs.20261027/18/wave/gridded/`). Only their text is used; the GRIB2 files they
+index aren't committed. The Library's tests build their fake remote files from
+the messages above, with generated inventories
+(`tests/_shared/WeatherFakeServer.cs`).
+
 Every NCEP JPEG 2000 codestream here (and every one in the five GFS-Wave
 grids checked, see the design note's §7.2) was written by JasPer 2.0.25:
 one tile, the packed values as a single row, 5 levels of the 5/3 reversible

@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Specifications;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -52,7 +53,19 @@ internal sealed class ListSpecsCommand : Command<ListSpecsCommand.Settings>
                 HeadlessSpecs.Contains(spec) ? "[green]yes[/]" : "[yellow]no[/]");
         }
 
+        // The weather formats (GRIB2, NetCDF, CAP) aren't S-100 products and
+        // have no portrayal catalogue: SoundCharts draws them in code.
+        foreach (var registration in WeatherProducts.All)
+        {
+            table.AddRow(
+                Markup.Escape(registration.Spec),
+                "[grey]SoundCharts, in code[/]",
+                "[green]yes[/]");
+        }
+
         AnsiConsole.Write(table);
+        AnsiConsole.MarkupLine(
+            $"[grey]{Markup.Escape(string.Join(", ", WeatherProducts.All.Select(r => r.Spec)))} aren't S-100 products: weather data, not for navigation.[/]");
         return 0;
     }
 }

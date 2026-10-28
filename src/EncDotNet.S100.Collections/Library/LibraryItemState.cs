@@ -88,6 +88,23 @@ public sealed class LibraryItemState
     /// <summary>True when the item's downloaded copy is loaded now.</summary>
     public bool IsLoadedNow => _loadState?.Invoke(EffectiveItem) == LibraryLoadState.Loaded;
 
+    /// <summary>
+    /// True for a weather run (#1075) whose shown run — the downloaded copy's,
+    /// else the listed one — is more than <see cref="Weather.WeatherRuns.StaleAfter"/>
+    /// (12 hours) old: the Library marks it stale and offers to load the
+    /// latest run. A pinned run never is.
+    /// </summary>
+    public bool IsStaleRun => Weather.WeatherRuns.IsStale(Item, LocalRun, _time.GetUtcNow());
+
+    /// <summary>True for a pinned weather run: a copy kept beside the latest (#1075).</summary>
+    public bool IsPinnedRun => Weather.WeatherRuns.IsPinned(Item);
+
+    /// <summary>
+    /// The source's credit for the item's data, as a layer row and pick report
+    /// show it ("NOAA/NCEP GFS-Wave · Public domain"), or null when it has none (#1075).
+    /// </summary>
+    public string? Credit => Weather.WeatherRuns.CreditOf(Item);
+
     /// <summary>True when the source flags the item not for navigation.</summary>
     public bool NotForNavigation =>
         Item.Properties.TryGetValue("notForNavigation", out var value)

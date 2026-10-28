@@ -179,6 +179,11 @@
 
             <!-- Keep it downloaded (#809), and for a forecast feed how runs download. -->
             <StackPanel Grid.Row="1" Spacing="6" IsVisible="{Binding !IsSecom}">
+            <!-- A weather service (#1075): its latest run and the area, the map view when it was read. -->
+            <TextBlock Text="{Binding WeatherRunNote}" IsVisible="{Binding HasWeatherRunNote}"
+                       AutomationProperties.AutomationId="CatalogueScope.WeatherRun"
+                       AutomationProperties.Name="{Binding WeatherRunNote}"
+                       Classes="muted" FontSize="12.5" TextWrapping="Wrap" />
             <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding CanKeepDownloaded}">
                 <CheckBox IsChecked="{Binding KeepDownloaded}" Content="{x:Static loc:Strings.Library_KeepDownloadedTitle}"
                           AutomationProperties.AutomationId="CatalogueScope.KeepDownloaded" />

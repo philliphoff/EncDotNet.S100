@@ -25,6 +25,9 @@ public sealed class FileSystemAssetSource : IAssetSource
         return new FileSystemAssetSource(Path.GetFullPath(directoryPath));
     }
 
+    /// <summary>The full path of the root directory relative paths resolve against.</summary>
+    public string RootPath => _basePath;
+
     /// <inheritdoc />
     public Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default)
     {

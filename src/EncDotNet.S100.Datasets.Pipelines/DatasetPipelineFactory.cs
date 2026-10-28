@@ -138,6 +138,10 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(path);
 
+        // A folder is a dataset only when a product reads folders (a GRIB2 run, #1075).
+        if (Directory.Exists(path))
+            return ClaimFolder(path, registry);
+
         var header = ReadHeader(path);
         var encoding = EncodingOf(header, acceptXmlExtension: false);
 
@@ -275,6 +279,37 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// <see cref="ProductRegistration.MatchBytes"/>, returning the first
     /// claimant's spec or <see langword="null"/>.
     /// </summary>
+    /// <summary>
+    /// A declared spec the registry has that isn't an S-100 product (<c>GRIB2</c>,
+    /// <c>NetCDF</c>, <c>CAP</c>), as a Library item names it (#1075): a GRIB2 run
+    /// folder can't be sniffed from a source, so its declared spec is taken.
+    /// </summary>
+    private string? DeclaredNonS100Spec(string? declared) =>
+        !string.IsNullOrWhiteSpace(declared) && _registry.TryResolve(declared.Trim(), out var registration) && !registration.IsS100
+            ? registration.Spec
+            : null;
+
+    private static string? ClaimFolder(string path, ProductRegistry registry)
+    {
+        foreach (var registration in registry.Registrations)
+        {
+            if (registration.MatchFolder is not { } match)
+                continue;
+
+            try
+            {
+                if (match(path))
+                    return CanonicalSpecOf(registration);
+            }
+            catch
+            {
+                // A faulty matcher must not break detection for every other product.
+            }
+        }
+
+        return null;
+    }
+
     private static string? ClaimBytes(DatasetHeader header, ProductRegistry registry)
     {
         foreach (var registration in registry.Registrations)
@@ -547,6 +582,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         ArgumentException.ThrowIfNullOrEmpty(relativePath);
 
         var spec = MapProductIdentifierToSpec(declaredProductSpec)
+            ?? DeclaredNonS100Spec(declaredProductSpec)
             ?? DetectProductSpecFromSource(source, relativePath, _registry)
             ?? throw new NotSupportedException(
                 $"Unable to determine product specification for '{relativePath}' " +

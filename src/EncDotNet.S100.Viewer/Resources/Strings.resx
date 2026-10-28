@@ -773,6 +773,10 @@
   <data name="FilePicker_S100DatasetsType" xml:space="preserve">
     <value>S-100 Datasets</value>
   </data>
+  <data name="FilePicker_WeatherDataType" xml:space="preserve">
+    <value>Weather Data (GRIB2, NetCDF, CAP)</value>
+    <comment>Open Dataset file type for the weather formats (#1076). A GRIB2 file with no extension, such as a NOMADS GRIB filter download, needs the All files type.</comment>
+  </data>
   <data name="FilePicker_ExchangeSetFolderTitle" xml:space="preserve">
     <value>Open Exchange Set Folder</value>
   </data>
@@ -2690,6 +2694,12 @@
   </data>
   <data name="About_BuiltWith" xml:space="preserve">
     <value>Built with Avalonia, a cross-platform UI framework. Made possible by the generous support of its contributors and community.</value>
+  </data>
+  <data name="About_DataCreditsTitle" xml:space="preserve">
+    <value>Weather data credits</value>
+  </data>
+  <data name="About_DataCredits" xml:space="preserve">
+    <value>NOAA (NCEP GFS and GFS-Wave, NWS alerts and marine zones, NDBC buoys): public domain. ECMWF Open Data: © ECMWF, CC BY 4.0. Copernicus Marine Service: E.U. Copernicus Marine Service Information. DWD open data: Source: Deutscher Wetterdienst. Credit the provider of any data you load when you share what SoundCharts draws from it. Weather data isn't for navigation.</value>
   </data>
   <data name="About_VersionFormat" xml:space="preserve">
     <value>Version {0}</value>
@@ -6655,5 +6665,33 @@
   <data name="Tooltip_WarningRouteFinding" xml:space="preserve">
     <value>Show this warning's finding in the checked route's Findings list</value>
     <comment>Tooltip on the Warning card's route row (#959).</comment>
+  </data>
+  <data name="Library_StaleRunFormat" xml:space="preserve">
+    <value>Run {0} is over 12 hours old</value>
+    <comment>{0}: a weather model run, e.g. 2026-10-25 00Z</comment>
+  </data>
+  <data name="Library_LoadLatestRun" xml:space="preserve">
+    <value>Load latest run</value>
+    <comment>Re-reads a weather source, downloads its newest model run and loads it</comment>
+  </data>
+  <data name="Library_PinRun" xml:space="preserve">
+    <value>Pin this run</value>
+    <comment>Keeps a downloaded weather model run when a newer one is downloaded</comment>
+  </data>
+  <data name="Library_UnpinRun" xml:space="preserve">
+    <value>Unpin this run</value>
+    <comment>Deletes a pinned weather model run</comment>
+  </data>
+  <data name="Library_Format_Weather" xml:space="preserve">
+    <value>Weather service</value>
+    <comment>The catalogue format of a weather source (GRIB filter, AWS, alerts, ERDDAP)</comment>
+  </data>
+  <data name="Library_DataCreditFormat" xml:space="preserve">
+    <value>Data: {0}</value>
+    <comment>{0}: the data's attribution and licence, e.g. NOAA/NCEP GFS-Wave · Public domain</comment>
+  </data>
+  <data name="Library_DataCreditName" xml:space="preserve">
+    <value>Data credit</value>
+    <comment>Accessible name of the data's attribution and licence line</comment>
   </data>
 </root>

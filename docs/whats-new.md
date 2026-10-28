@@ -6,6 +6,48 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **One not-for-navigation notice per pick.** SoundCharts' pick report on a
+  GRIB2 or NetCDF weather grid or a CAP warning no longer repeats the notice
+  it leads with as the first attribute row. The processors still put the
+  notice first in their feature info for other callers (MCP, the Mapsui pick
+  query), now marked by `PickAttribute.IsNavigationNotice`; build one with
+  `PickAttribute.NavigationNotice(text)`.
+- **Wind and waves in the CLI, MCP and docs.** A new guide,
+  [Show wind and waves on the chart](weather.md), covers the GRIB2, NetCDF
+  and CAP formats, where to get the data, NDBC buoys, own-ship wind and what
+  isn't supported. `s100 identify` now samples GRIB2 and NetCDF grids (a
+  `fields` sample with units) and finds CAP warning areas, and prints a
+  not-for-navigation notice (`notices` in JSON) for weather data; `--spec`
+  accepts `grib2`, `netcdf` and `cap`. `s100 info` adds the model, run, grid,
+  extent and layers of a weather grid, the alert count of a CAP file and a
+  **Notice** row, and `s100 list-specs` lists the weather formats. Over MCP,
+  `list_time_steps` lists GRIB2 and NetCDF valid times and CAP warning starts
+  and ends (through a new `ITimeSteppedDatasetData` on the catalog payload),
+  `list_specs` flags GRIB2 and NetCDF as sampleable and CAP as queryable, and
+  `identify_features`, `query_features` and `describe_feature` read CAP
+  warning areas, whose features now carry the pick report's attributes.
+  SoundCharts' **About** box and the site footer credit the weather data
+  providers (NOAA, ECMWF under CC BY 4.0, Copernicus Marine, DWD), and
+  **Open Dataset...** has a **Weather Data (GRIB2, NetCDF, CAP)** file type.
+- **Weather sources in the Library.** The known catalogues list six weather
+  services, not S-100 data and not for navigation: GFS-Wave and GFS from the
+  NOMADS GRIB filter (cut to the map view) and from NOAA's GFS bucket on AWS
+  (the whole globe, only the chosen fields read from each file by byte range,
+  driven by its `.idx` inventory), `api.weather.gov` marine alerts for the
+  map view's marine zones, and WAVEWATCH III from NOAA's ERDDAP as a NetCDF
+  subset. A new `WeatherFeedSource` and `WeatherFeedIndexer` in
+  `EncDotNet.S100.Collections` list each service's latest run as one item
+  that downloads as one file (`RemoteItemLocation.Parts`). A run more than 12
+  hours old is tagged **Stale**, with **Load latest run**
+  (`LibraryOperations.LoadLatestRunAsync`); a newer run replaces the last
+  unless it's pinned (`LibraryDownloads.Pin`). Each source's licence and
+  attribution go with its items, the loaded layer in the **Datasets** panel
+  and its pick reports. Every request sends an identifying `User-Agent`, as
+  the NWS API asks. A folder holding one model run in hourly GRIB2 files is
+  listed and loads as one dataset (`GribRunFolder`,
+  `ProductRegistration.MatchFolder`). See the
+  [Collections README](../src/EncDotNet.S100.Collections/README.md#weather-services)
+  and the [SoundCharts README](../src/EncDotNet.S100.Viewer/README.md#weather-services).
 - **Own-ship wind from NMEA 0183.** A new `EncDotNet.S100.Nmea` library is a
   minimal NMEA 0183 reader, kept apart so an own-ship NMEA driver can share
   it: checksum validation, talker-agnostic decoding of `MWV`, `MWD`, `MTW`,
@@ -54,6 +96,14 @@ month. For package versions and release assets, see
   tiles are redrawn; `S98DefaultRules.Default` has a seventh rule; an
   `Isoline` with an empty label is drawn unlabelled. See the
   [Datasets.Weather README](../src/EncDotNet.S100.Datasets.Weather/README.md).
+- **Headless renders frame small coverages on their true extent.** With no
+  viewport or `--bbox`, `HeadlessCompositor` (and so `s100 render`) now fits
+  the view to each coverage layer's own extent plus its usual 10 % margin.
+  Before, `SeamAwareBoundsAccumulator.AddLonLatBox` widened a coverage's
+  longitudes out to its 0.5° occupancy bins, so a 0.2° grid composited with a
+  chart cell drew as a small patch. The bins still drive antimeridian
+  detection, and a box whose eastern edge runs past +180° (a 0°–360° grid) is
+  now split across the seam instead of clamped.
 - **NDBC buoy observations.** A new `EncDotNet.S100.DynamicSources.Ndbc`
   library shows NOAA National Data Buoy Center observations as a dynamic
   feature source. `NdbcObservationSource` reads the `activestations.xml`

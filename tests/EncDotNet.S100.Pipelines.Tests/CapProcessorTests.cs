@@ -222,6 +222,7 @@ public sealed class CapProcessorTests : IDisposable
         Assert.Equal("Special Marine Warning", info.FeatureTypeName);
         string Value(string code) => info.Attributes.Single(a => a.Code == code).DisplayText;
         Assert.Equal("notice", info.Attributes[0].Code);
+        Assert.True(info.Attributes[0].IsNavigationNotice);
         Assert.Equal(CapDatasetProcessor.NotForNavigationNotice, Value("notice"));
         Assert.StartsWith("Special Marine Warning issued August 28", Value("headline"));
         Assert.Equal("Special Marine Warning", Value("event"));

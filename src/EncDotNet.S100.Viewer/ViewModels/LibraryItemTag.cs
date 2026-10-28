@@ -12,7 +12,7 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// <param name="Command">What clicking the tag does (retrying a failed download), if anything.</param>
 internal sealed record LibraryItemTag(string Text, LibraryTagKind Kind, ICommand? Command = null)
 {
-    public bool IsUpdate => Kind == LibraryTagKind.Update;
+    public bool IsUpdate => Kind is LibraryTagKind.Update or LibraryTagKind.Stale;
 
     public bool IsLoaded => Kind == LibraryTagKind.Loaded;
 

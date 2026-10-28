@@ -267,6 +267,26 @@
                        FontSize="12"
                        Opacity="0.6"
                        TextWrapping="Wrap" />
+
+            <!-- Data credits: the weather sources SoundCharts reads, and their
+                 terms (CC BY 4.0 for ECMWF, attribution for Copernicus Marine
+                 and DWD). -->
+            <StackPanel Spacing="2"
+                        AutomationProperties.AutomationId="About.DataCredits"
+                        AutomationProperties.Name="{x:Static loc:Strings.About_DataCreditsTitle}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.About_DataCredits}">
+                <TextBlock Text="{x:Static loc:Strings.About_DataCreditsTitle}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           Opacity="0.7" />
+                <SelectableTextBlock Text="{Binding DataCredits}"
+                                     AutomationProperties.AutomationId="About.DataCredits.Text"
+                                     AutomationProperties.Name="{x:Static loc:Strings.About_DataCreditsTitle}"
+                                     AutomationProperties.HelpText="{x:Static loc:Strings.About_DataCredits}"
+                                     FontSize="12"
+                                     Opacity="0.6"
+                                     TextWrapping="Wrap" />
+            </StackPanel>
         </StackPanel>
 
         <!-- Footer -->

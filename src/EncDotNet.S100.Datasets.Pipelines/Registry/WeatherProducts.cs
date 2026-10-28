@@ -82,6 +82,7 @@ public static class WeatherProducts
         IsS100 = false,
         Portrayal = GribPortrayal,
         MatchBytes = static header => IsGrib2(header) || (HasGribExtension(header) && ContainsGribIndicator(header)),
+        MatchFolder = GribRunFolder.IsRunFolder,
         ReadMetadata = GribDatasetProcessor.ReadMetadata,
         OpenData = static (stream, _) => OpenGrib(stream),
         DefaultPlanes = WeatherPlanes,

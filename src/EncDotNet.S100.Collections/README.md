@@ -53,6 +53,7 @@ Indexing never loads the datasets.
   - `S100CatalogueFeedSource`
   - `S100ForecastFeedSource`
   - `SecomSource`
+  - `WeatherFeedSource`
 - `CollectionIndexer` indexes any supported source. It reuses a previous
   `SourceIndex` when the source's fingerprint hasn't changed.
 - `CollectionJson` saves collection definitions as indented JSON, and source
@@ -68,7 +69,12 @@ Indexing never loads the datasets.
 - S-57 exchange sets (`CATALOG.031`), plus each cell's `DSID` record for the
   edition, update and issue date.
 - Exchange sets inside ZIP files.
-- Loose datasets, read through a `DatasetProbe` that the host supplies.
+- Loose datasets, read through a `DatasetProbe` that the host supplies,
+  including NetCDF (`.nc`, `.nc4`) and GRIB2 files (`.grib2`, `.grb2`,
+  `.grib`, `.grb`, or NCEP's forecast-hour names such as `gfs.t00z.pgrb2.0p25.f003`).
+- A folder holding several GRIB2 files: one model run, one file per forecast
+  hour. When the probe reads the folder as one dataset, it's one item whose
+  location is the folder; otherwise each file is its own item.
 
 ### Local collection manifests
 
@@ -196,6 +202,57 @@ and `Get`, using `SecomClient`:
   their signature as `Encrypted` rather than checking it, because the
   signature covers the data before encryption.
 
+### Weather services
+
+`WeatherFeedIndexer` indexes `WeatherFeedSource`s: weather services that
+aren't S-100 and aren't for navigation (design note
+[weather-sources.md](../../docs/design/weather-sources.md) §6.3). A source keeps
+a copy of its service's description (`WeatherService`) and what it includes
+(`WeatherSelection`: parameters, forecast hours, area, marine zones or ERDDAP
+datasets). Each index lists one item per model or dataset:
+
+- **NOMADS GRIB filter** (`gribFilter`). Runs are tried newest first, back
+  five cycles, and the first whose `.idx` for the last chosen hour is
+  published is the latest. Its item downloads one filter request per forecast
+  hour (`WeatherRequests.GribFilterUri`: the run's file, `var_X=on` per
+  parameter, `lev_Y=on` per level, the area rounded out to the grid), appended
+  into one GRIB2 file.
+- **GRIB2 files with `.idx` inventories** (`gribIndex`, NOAA's
+  `noaa-gfs-bdp-pds` bucket on AWS): no area cut, so for larger areas. Each
+  forecast hour's `.idx` is read at download, and only the chosen fields'
+  messages are fetched with HTTP byte ranges (`GribIndex`, neighbouring
+  messages joined into one range).
+- **`api.weather.gov` alerts** (`nwsAlerts`): the alerts in force for the
+  area's NWS marine zones (`?zone=`, or `?area=` past 50 zones), read at each
+  index for their count and `updated` time and downloaded as NWS GeoJSON. The
+  host supplies the zones in an area (`LibraryCatalogueReaders.MarineZones`;
+  `MarineZoneLayer.CodesIn` in `EncDotNet.S100.Datasets.Cap`).
+- **ERDDAP `griddap`** (`erddapGriddap`): datasets by id. Each dataset's
+  `info/<id>/index.json` gives its axes (a negative `averageSpacing` is a
+  descending axis), `actual_range` and time coverage. The item downloads a
+  NetCDF subset of the area from now to the last chosen hour.
+
+Runs and freshness (`WeatherRuns`):
+
+- Items carry their run (`run`, `validTo`), shared with the S-100 forecast
+  feeds, so a downloaded run is outdated once a newer one is listed, and a
+  newer run's download replaces it.
+- A run more than 12 hours old is stale (`LibraryItemState.IsStaleRun`, a
+  **Stale** tag). `LibraryOperations.LoadLatestRunAsync` re-reads the source,
+  downloads its newest run and opens it.
+- Old runs aren't kept unless pinned. `LibraryDownloads.Pin` copies a
+  downloaded run beside the latest; the next index lists it as a local item
+  tagged **Pinned**, never stale, until `Unpin` deletes it.
+- A service that can't be reached lists its downloaded run, with the error.
+
+Each item carries the source's `licence` and `attribution`
+(`WeatherRuns.CreditOf`: "NOAA/NCEP GFS-Wave (WAVEWATCH III) · Public
+domain"), for hosts to show with the loaded layer and its pick reports.
+
+Every request sends a `User-Agent` when the client sets none
+(`LibraryHttp.DefaultUserAgent`: the library, its version and the project's
+address), as the NWS API requires. Hosts can set their own on the client.
+
 ## SECOM trust, identity and registry
 
 - **Signatures.** `SecomSignatureVerifier` checks a data object's signature
@@ -311,6 +368,12 @@ and `Get`, using `SecomClient`:
   work.
 - It keeps a download that isn't a ZIP as a bare file when the item states its
   layout, as remote S-100 datasets do.
+- It assembles a download from several requests when the item's location has
+  `Parts` (a weather run): each part's response, or for a part naming GRIB2
+  fields the byte ranges its `.idx` gives for them, appended into the one file
+  the layout names. A server that ignores `Range` still works. It sends the
+  location's `Accept` type, and a `User-Agent` when the client sets none.
+- `Copy` keeps a downloaded copy under another name (a pinned run).
 - It decodes a SECOM object (`RemoteEnvelope.Secom`) from its `Get` response
   and saves it as the file its layout names. It checks the signature and
   records it in `.source.json`, and refuses the download if the signature
@@ -410,7 +473,8 @@ To add a catalogue:
 - Check the licence of any third-party list you reference. For example, the
   community `chartcatalogs/catalogs` lists are CC0.
 - Use a supported `format`: `noaaEnc`, `usaceIenc`, `chartCatalogs`,
-  `s100Feed`, `s100ExchangeCatalogue`, `s100ForecastModels` or `secom`. A build
+  `s100Feed`, `s100ExchangeCatalogue`, `s100ForecastModels`, `secom` or
+  `weather`. A build
   skips entries in a format it doesn't know, instead of rejecting the list, so
   newer lists still load.
 - Describe accurately what the catalogue provides. These fields drive the
@@ -428,6 +492,18 @@ To add a catalogue:
     and its `catalogue` path when it isn't `<id>/CATALOG.XML`.
   - `pilot` (optional): `true` for a pilot service, which may cover little and
     may stop.
+  - `licence` and `attribution` (optional): the data's licence and the credit
+    the provider asks for. They're carried onto every item and loaded layer.
+    NOAA data is public domain; ECMWF, Copernicus and DWD data need an
+    attribution.
+  - `weather` (for `weather`): the service. `service` is `gribFilter`,
+    `gribIndex`, `nwsAlerts` or `erddapGriddap`; `model` and `modelName`
+    name it. A GRIB2 service gives `dataRoot` (where runs are published),
+    `file` (one forecast hour's path, with `{date}`, `{cycle}` and `{hour}`),
+    `cadenceHours`, `stepHours`, `maxHours`, `defaultHours`, `gridDegrees` and
+    `parameters` (`id` and `level` as the `.idx` lines spell them, `name`,
+    `default`). ERDDAP gives `datasets` (`id`, `name`, `variables`,
+    `default`). An entry without what its service needs is skipped.
 
 ## See also
 

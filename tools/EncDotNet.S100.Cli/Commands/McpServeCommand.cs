@@ -166,7 +166,14 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 ? new LibraryDataPaths(root) { CollectionsFile = Path.GetFullPath(collectionsFile) }
                 : new LibraryDataPaths(root);
             using var services = LibraryServices.Create(
-                paths, FeedPublisher.TryReadMetadata, new LibraryServicesOptions { IsInUse = opener.IsInUse });
+                paths,
+                LibraryMetadata,
+                new LibraryServicesOptions
+                {
+                    IsInUse = opener.IsInUse,
+                    // Alerts sources ask api.weather.gov for the marine zones in an area (#1075).
+                    MarineZones = area => EncDotNet.S100.Datasets.Cap.MarineZoneLayer.Default.CodesIn(area.South, area.West, area.North, area.East),
+                });
             services.Library.Initialize();
             var operations = new LibraryOperations(services.Library, services.Downloads, new LibraryLoader(opener));
             var adder = new LibrarySourceAdder(services.Readers, probe: services.ProbeCatalogue);
@@ -280,6 +287,31 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             known = source;
 
         return new AddSourceRequest(known, path, url, null, choices is { Count: > 0 } ? choices : null, null, null, null, null, null, Preview: false);
+    }
+
+    /// <summary>
+    /// The Library's probe of a local dataset: S-101 and S-57 as a feed reads
+    /// them, and the weather formats (a GRIB2 run folder, NetCDF, CAP) through
+    /// their registrations, so a folder of downloaded model runs lists them (#1075).
+    /// </summary>
+    internal static EncDotNet.S100.Core.DatasetMetadata? LibraryMetadata(string path, CancellationToken cancellationToken)
+    {
+        if (FeedPublisher.TryReadMetadata(path, cancellationToken) is { } metadata)
+            return metadata;
+        var registry = EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default;
+        try
+        {
+            return EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory.DetectProductSpec(path, registry) is { } spec
+                && registry.TryResolve(spec, out var registration)
+                && !registration.IsS100
+                && registration.ReadMetadata is { } read
+                    ? read(path)
+                    : null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
     }
 
     private static bool LooksLikePath(string value) =>

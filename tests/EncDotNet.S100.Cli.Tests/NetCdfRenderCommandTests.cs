@@ -67,12 +67,10 @@ public sealed class NetCdfRenderCommandTests : IDisposable
         var wind = NetCdfFixtures.WriteWindNetCdf4(Path.Combine(_dir, "wind.nc"));
         var output = Path.Combine(_dir, "composite.png");
 
-        // An explicit box on the grids: the composite's own fit of a union
-        // extent snaps longitudes to whole degrees, which leaves a 0.2° grid a
-        // small patch (the single-dataset form frames the grid itself).
+        // No --bbox: the composite frames the 0.2° grids on their own extent
+        // (issue #1097), so they fill most of the image.
         int exit = CliApp.Build().Run(
-            ["render", "--layer", waves, "--layer", wind, output, "--width", "320", "--height", "320", "--time-step", "1",
-             "--bbox", "61.99,-32.3,62.17,-32.13"], TestContext.Current.CancellationToken);
+            ["render", "--layer", waves, "--layer", wind, output, "--width", "320", "--height", "320", "--time-step", "1"], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
         using var bitmap = SKBitmap.Decode(output);

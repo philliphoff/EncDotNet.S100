@@ -118,7 +118,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`tiles export`](#tiles-export) | Renders a dataset, a composite of datasets, or a whole exchange set as XYZ raster tiles: a `{z}/{x}/{y}` folder, a PMTiles archive or an MBTiles database. |
 | [`tiles serve`](#tiles-serve) | Serves a built tile set on XYZ URLs, as a tile source for web maps on this or another computer. |
 | [`info`](#info) | Shows the detected product specification, edition, render support, display modes and time steps. |
-| [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude. |
+| [`identify`](#identify) | Lists the features and coverage values at a latitude and longitude, including weather grids and warnings. |
 | [`validate`](#validate) | Checks a dataset against its specification's rule pack, or checks an exchange set's signatures and checksums. |
 | [`route check`](#route-check) | Checks an RTZ or S-421 route against datasets, and its under-keel clearance when it has a draft. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
@@ -616,15 +616,22 @@ takes. For S-104, a **Portrayal** row says "SoundCharts portrayal: S-104 Ed
 2.0.0 defines no symbology", because what `render` draws for it is
 [SoundCharts' own](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal).
 For an S-101 base cell, it applies the [update files](#s-101-updates) first.
-For a weather file (GRIB2 or NetCDF), a **Weather parameters** table lists
+For weather data, which isn't S-100, a **Notice** row says it isn't for
+navigation. For a weather grid (GRIB2 or NetCDF), **Model** and **Run (UTC)**
+give the model and its run, or say the steps are analyses when the file gives
+no run; **Grid** and **Extent** give the grid's size, spacing and bounds, and
+**Layers** the layers it can draw. A **Weather parameters** table then lists
 each parameter with its level and step count, whether it's used, and if not,
 why: for example a second swell partition, a parameter the weather table
-doesn't have, or a GRIB2 message packed as JPEG 2000. For a CAP weather
-warning file (CAP XML, an Atom feed or NWS GeoJSON), a **Warnings** table lists
-each alert area with its event, severity, when it's in force (UTC) and how
-it's drawn (a polygon, a circle, or the NWS marine zones it names), then any
-zone codes the marine zone layer doesn't have. Its time steps are when
-warnings start and end, so `render --time-step` draws what's in force then.
+doesn't have, or a GRIB2 message packed with CCSDS. The time steps are the
+grid's valid times. For a CAP weather warning file (CAP XML, an Atom feed or
+NWS GeoJSON), **Alerts** counts the alerts, their areas and the areas drawn,
+and a **Warnings** table lists each alert area with its event, severity, when
+it's in force (UTC) and how it's drawn (a polygon, a circle, or the NWS marine
+zones it names), then any zone codes the marine zone layer doesn't have. Its
+time steps are when warnings start and end, so `render --time-step` draws
+what's in force then. [Show wind and waves on the chart](weather.md) covers
+the weather formats.
 
 ```bash
 s100 info currents.h5
@@ -651,6 +658,14 @@ three input forms as `render`. Features are ranked as an ECDIS ranks them:
 points before curves before areas, and nearer before farther. Datasets that
 can't be read are skipped with a warning on standard error.
 
+Coverage samples come from every dataset that can be sampled: S-102,
+S-104, S-111 and the GRIB2 and NetCDF weather grids. A weather grid's sample
+lists each parameter at the nearest grid point and time step with its unit,
+for example `wave.hs 2.52 m, wind.speed.kn 20.2 kn`. CAP warning areas are
+reported as features of type `CapWarningArea`; `--attributes` adds their
+event, severity, times and description. When the result includes weather
+data, a not-for-navigation notice is printed first.
+
 `identify` uses the same code as the MCP `identify_features` and
 `sample_coverage` tools, so the results match.
 
@@ -662,8 +677,8 @@ can't be read are skipped with a warning on standard error.
 | `--from`, `--exchange-set <path>` | none | Picks across every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
 | `--radius <metres>` | `50` | Search distance for point and curve features, from 0 to 100,000. Area features must contain the point, so they ignore it. |
-| `--spec <spec>` | all | Reports only this product specification, for example `S-124`. |
-| `--time <iso8601>` | first step | A UTC time for S-104 and S-111 coverages. The nearest time step is sampled. Ignored for S-102. |
+| `--spec <spec>` | all | Reports only this product specification or format, for example `S-124` or `GRIB2`. |
+| `--time <iso8601>` | first step | A UTC time for S-104, S-111, GRIB2 and NetCDF coverages. The nearest time step is sampled. Ignored for S-102. |
 | `--max-results <n>` | `20` | Maximum features to report, from 1 to 200. |
 | `--attributes` | off | Includes each feature's attributes. |
 | `--format <format>` | `table` | `table` or `json`. |
@@ -674,11 +689,16 @@ s100 identify warnings.gml --lat 51.085 --lon 1.30
 s100 identify --layer enc.000 --layer bathy.h5 --lat 50.1 --lon -1.4
 s100 identify --from exchange-set.zip --lat 50.1 --lon -1.4 --format json
 s100 identify chart.000 --lat 50.1 --lon -1.4 --attributes
+s100 identify --layer gfswave.grib2 --layer alerts.atom --lat 38.5 --lon -74.5 --time 2026-10-25T03:00Z
 ```
 
 The JSON output is an object with `point`, `totalMatched`, `truncated`,
-`features` (ranked), `samples` (one for each coverage dataset that covers the
-point) and, when an input was skipped, `warnings`.
+`features` (ranked), `samples` (one for each specification with a dataset
+that covers the point), `notices` when the result includes weather data and,
+when an input was skipped, `warnings`. A weather grid's sample `value` has
+`kind` `fields`: a `fields` array of `name`, `quantity`, `unit` and `value`,
+plus `sampleTime` and the grid point's `cellCentreLatitude` and
+`cellCentreLongitude`.
 
 ## validate
 
@@ -838,8 +858,10 @@ s100 list-specs
 
 `list-specs` prints a table of the product specifications `s100` reads, with
 whether each has a bundled portrayal catalogue and whether it can be rendered
-headlessly. S-57 is listed with its portrayal shown as "via S-101". See
-[Supported specifications](#supported-specifications).
+headlessly. S-57 is listed with its portrayal shown as "via S-101". The
+weather formats GRIB2, NetCDF and CAP are listed last, with their portrayal
+shown as "SoundCharts, in code", and a line under the table says they aren't
+S-100 products. See [Supported specifications](#supported-specifications).
 
 ## s57 convert
 
@@ -1005,6 +1027,7 @@ command exits with code `1`.
 | Vector, ISO 8211 | S-101, S-401, S-57 | S-57 is translated to S-101, or to S-401 for an inland ENC, and drawn with that product's portrayal, not S-52. |
 | Vector, GML | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | |
 | Coverage, HDF5 | S-102; S-104 data coding formats 1, 2 and 8; S-111 data coding formats 1, 2, 3 and 8 | Gridded data is drawn as a coverage; station and node data as glyphs. S-104 has no IHO portrayal, so its stations and grids use SoundCharts' own gauges and isolines; see [S-104 portrayal](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal). S-111 draws current arrows over the coverage. Other data coding formats exit with code `4`. |
+| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles. Not for navigation. See [Show wind and waves on the chart](weather.md). |
 
 ## Exit codes
 

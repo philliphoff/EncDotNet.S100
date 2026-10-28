@@ -900,6 +900,42 @@
                                        FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.8" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding SelectedItem.PrimaryStateText}" Margin="28,0,0,0"
                                        FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" />
+                            <!-- A weather source's credit (#1075): its attribution and licence. -->
+                            <SelectableTextBlock Text="{Binding SelectedItem.Credit, FallbackValue=''}" Margin="28,0,0,0"
+                                                 IsVisible="{Binding SelectedItem.HasCredit, FallbackValue=False}"
+                                                 AutomationProperties.AutomationId="Library.Details.Credit"
+                                                 AutomationProperties.Name="{x:Static loc:Strings.Library_DataCreditName}"
+                                                 FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6" TextWrapping="Wrap" />
+                            <!-- A weather run (#1075): stale past 12 hours, with "Load latest run"; pin or unpin it. -->
+                            <TextBlock Text="{Binding SelectedItem.StaleRunText, FallbackValue=''}" Margin="28,2,0,0"
+                                       IsVisible="{Binding SelectedItem.IsStaleRun, FallbackValue=False}"
+                                       AutomationProperties.AutomationId="Library.Details.StaleRun"
+                                       AutomationProperties.Name="{Binding SelectedItem.StaleRunText, FallbackValue=''}"
+                                       Foreground="{DynamicResource WarningColor}"
+                                       FontSize="{StaticResource LibrarySecondaryFontSize}" TextWrapping="Wrap" />
+                            <WrapPanel Margin="28,4,0,0" IsVisible="{Binding SelectedItem.IsWeatherRun, FallbackValue=False}">
+                                <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0" Margin="0,0,4,0"
+                                        Command="{Binding LoadLatestRunCommand}"
+                                        IsVisible="{Binding SelectedItem.CanLoadLatestRun, FallbackValue=False}"
+                                        AutomationProperties.AutomationId="Library.Details.LoadLatestRun"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Library_LoadLatestRun}"
+                                        FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                        Content="{x:Static loc:Strings.Library_LoadLatestRun}" />
+                                <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0" Margin="0,0,4,0"
+                                        Command="{Binding PinRunCommand}"
+                                        IsVisible="{Binding SelectedItem.CanPinRun, FallbackValue=False}"
+                                        AutomationProperties.AutomationId="Library.Details.PinRun"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Library_PinRun}"
+                                        FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                        Content="{x:Static loc:Strings.Library_PinRun}" />
+                                <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0"
+                                        Command="{Binding UnpinRunCommand}"
+                                        IsVisible="{Binding SelectedItem.IsPinnedRun, FallbackValue=False}"
+                                        AutomationProperties.AutomationId="Library.Details.UnpinRun"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Library_UnpinRun}"
+                                        FontSize="{StaticResource LibrarySecondaryFontSize}"
+                                        Content="{x:Static loc:Strings.Library_UnpinRun}" />
+                            </WrapPanel>
                         </StackPanel>
                     </Panel>
                 </Border>

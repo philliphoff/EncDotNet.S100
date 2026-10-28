@@ -51,6 +51,9 @@ internal static class ViewerObservability
     /// <param name="verbose">Whether <c>--verbose</c> lowers the log floor to Debug.</param>
     /// <param name="rollingLogDirectory">Directory for the always-on rolling
     /// log files, or <see langword="null"/> to disable them.</param>
+    /// <param name="crashMarkerDirectory">Unclean-shutdown marker directory;
+    /// the rolling log keeps the newest file of a crashed session until a
+    /// launch reports the crash and removes its marker.</param>
     /// <param name="getEnvironmentVariable">Environment lookup; defaults to
     /// <see cref="Environment.GetEnvironmentVariable(string)"/>.</param>
     public static IServiceCollection AddS100Observability(
@@ -58,7 +61,8 @@ internal static class ViewerObservability
         string? logFilePath,
         bool verbose,
         string? rollingLogDirectory = null,
-        Func<string, string?>? getEnvironmentVariable = null)
+        Func<string, string?>? getEnvironmentVariable = null,
+        string? crashMarkerDirectory = null)
     {
         var env = getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
         var serviceName = env("OTEL_SERVICE_NAME") ?? ServiceName;
@@ -103,8 +107,13 @@ internal static class ViewerObservability
             // Registered by factory so the container disposes (flushes) it.
             if (!string.IsNullOrWhiteSpace(rollingLogDirectory))
             {
+                Func<IEnumerable<PreviousSession>>? unreportedCrashes =
+                    string.IsNullOrWhiteSpace(crashMarkerDirectory)
+                        ? null
+                        : () => UncleanShutdownSentinel.ReadUnreportedSessions(crashMarkerDirectory);
                 builder.Services.AddSingleton<ILoggerProvider>(_ => new RollingFileLoggerProvider(
-                    rollingLogDirectory, verbose ? LogLevel.Debug : LogLevel.Information));
+                    rollingLogDirectory, verbose ? LogLevel.Debug : LogLevel.Information,
+                    unreportedCrashes: unreportedCrashes));
             }
 
             builder.AddOpenTelemetry(options =>

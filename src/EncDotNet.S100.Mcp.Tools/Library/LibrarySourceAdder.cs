@@ -194,6 +194,12 @@ public sealed class LibrarySourceAdder
         if (request.Choices is { Count: > 0 } choices)
         {
             var options = draft.Groups.SelectMany(g => g.Options).ToArray();
+            // A weather service starts with its defaults ticked; choices given replace them (#1075).
+            if (draft.Scope is WeatherScope)
+            {
+                foreach (var option in options)
+                    option.IsSelected = false;
+            }
             var unknown = new List<string>();
             foreach (var choice in choices)
             {

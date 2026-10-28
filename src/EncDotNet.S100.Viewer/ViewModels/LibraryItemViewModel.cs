@@ -279,7 +279,36 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// model's one file when runs download as one file per model.
     /// </summary>
     public bool IsForecastRunRow => IsModelHeader
-        || (IsForecast && Source.Definition is S100ForecastFeedSource { Shape: ForecastShape.Regional });
+        || (IsForecast && Source.Definition is S100ForecastFeedSource { Shape: ForecastShape.Regional } or WeatherFeedSource);
+
+    /// <summary>True for a weather model run (#1075), whose runs go stale and can be pinned.</summary>
+    public bool IsWeatherRun => EncDotNet.S100.Collections.Weather.WeatherRuns.IsWeatherRun(Item);
+
+    /// <summary>True when the shown weather run is more than 12 hours old (#1075).</summary>
+    public bool IsStaleRun => State.IsStaleRun;
+
+    /// <summary>True for a pinned weather run, kept beside the latest (#1075).</summary>
+    public bool IsPinnedRun => State.IsPinnedRun;
+
+    /// <summary>True when the latest run can be loaded: a weather run that isn't a pinned copy.</summary>
+    public bool CanLoadLatestRun => IsWeatherRun && !IsPinnedRun;
+
+    /// <summary>True when the row's downloaded run can be pinned (a weather run, downloaded, not already a pin).</summary>
+    public bool CanPinRun => CanLoadLatestRun && LocalRun is not null;
+
+    /// <summary>"Run 2026-10-25 00Z is over 12 hours old" for a stale weather run; otherwise null.</summary>
+    public string? StaleRunText => IsStaleRun && ShownRun is { } run
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_StaleRunFormat, FormatRun(run))
+        : null;
+
+    /// <summary>
+    /// The source's credit for the data ("NOAA/NCEP GFS-Wave · Public domain"), shown with
+    /// the item and carried to its layer and pick report (#1075); null when it has none.
+    /// </summary>
+    public string? Credit => State.Credit;
+
+    /// <summary>True when <see cref="Credit"/> has a value.</summary>
+    public bool HasCredit => Credit is not null;
 
     /// <summary>True for one tile of a forecast run (listed under its model's row).</summary>
     private bool IsForecastTile => IsForecast && !IsForecastRunRow;
@@ -588,6 +617,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         LocalRun = LocalRun,
         TimeFormat = ForecastRunText.ToLibrary(_timeFormat?.Invoke() ?? TimeFormat.Utc),
         TimeZone = _time.LocalTimeZone,
+        Now = _time.GetUtcNow(),
     };
 
     /// <summary>The primary state in words for the details header, e.g. "Online · 1,7 MB".</summary>

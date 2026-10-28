@@ -78,6 +78,41 @@ public sealed class GribFile : IDisposable
         return new GribFile(new StreamGribSource(stream, leaveOpen));
     }
 
+    /// <summary>
+    /// Opens and indexes several GRIB2 files as one, in the order given, as if
+    /// they were appended (<c>cat f000 f003 f006</c>): one model run published
+    /// one file per forecast hour (#1075). Every file stays open until the
+    /// returned file is disposed.
+    /// </summary>
+    /// <param name="paths">The files' paths; at least one.</param>
+    /// <returns>The opened file. Dispose it when done.</returns>
+    /// <exception cref="ArgumentException"><paramref name="paths"/> is empty.</exception>
+    /// <exception cref="GribFormatException">A file isn't valid GRIB2.</exception>
+    /// <exception cref="UnsupportedGribException">A file holds a GRIB edition 1 message, or another edition.</exception>
+    public static GribFile Open(IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        if (paths.Count == 0)
+            throw new ArgumentException("At least one file is needed.", nameof(paths));
+        if (paths.Count == 1)
+            return Open(paths[0]);
+
+        var sources = new List<GribSource>(paths.Count);
+        try
+        {
+            foreach (var path in paths)
+                sources.Add(new FileGribSource(path));
+        }
+        catch
+        {
+            foreach (var source in sources)
+                source.Dispose();
+            throw;
+        }
+
+        return new GribFile(new ConcatenatedGribSource(sources));
+    }
+
     /// <summary>Opens and indexes GRIB2 data already in memory.</summary>
     /// <param name="bytes">The data. It isn't copied, so don't change it while the file is in use.</param>
     /// <returns>The opened file.</returns>
