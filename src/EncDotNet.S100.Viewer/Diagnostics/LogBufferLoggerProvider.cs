@@ -24,9 +24,26 @@ internal sealed class LogBufferLoggerProvider(LogBuffer buffer) : ILoggerProvide
     }
 
     /// <summary>
+    /// Category prefixes the buffer records only at Warning and above, whatever
+    /// its own minimum. These are the hosting libraries under the MCP server
+    /// and HTTP clients: they log several Information (and more Debug) entries
+    /// for every request, so while an agent drives the viewer over MCP they
+    /// would push everything else out of the 1,000-entry buffer, and out of the
+    /// logs a feedback report carries. Their warnings and errors still show.
+    /// The viewer's own MCP messages (<c>McpServerHost</c>) are not affected.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> QuietCategories =
+    [
+        "Microsoft.AspNetCore",
+        "ModelContextProtocol",
+        "System.Net.Http.HttpClient",
+    ];
+
+    /// <summary>
     /// Adds a <see cref="LogBufferLoggerProvider"/> for <paramref name="buffer"/>
     /// and opens the pipeline's filter for it to every level, so the buffer's
-    /// own minimum, not the global <c>SetMinimumLevel</c>, decides what it keeps.
+    /// own minimum, not the global <c>SetMinimumLevel</c>, decides what it keeps,
+    /// except that <see cref="QuietCategories"/> stay at Warning and above.
     /// </summary>
     public static void AddLogBuffer(ILoggingBuilder builder, LogBuffer buffer)
     {
@@ -34,6 +51,8 @@ internal sealed class LogBufferLoggerProvider(LogBuffer buffer) : ILoggerProvide
         ArgumentNullException.ThrowIfNull(buffer);
         builder.AddProvider(new LogBufferLoggerProvider(buffer));
         builder.AddFilter<LogBufferLoggerProvider>(category: null, LogLevel.Trace);
+        foreach (var category in QuietCategories)
+            builder.AddFilter<LogBufferLoggerProvider>(category, LogLevel.Warning);
     }
 
     private sealed class BufferLogger(LogBuffer buffer, string category) : ILogger

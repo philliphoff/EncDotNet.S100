@@ -1486,6 +1486,9 @@ errors arrived since you last looked.
 - The level filter hides Debug messages by default. **Verbose** also records
   Debug messages; it changes only what the panel and feedback reports get,
   not the `--verbose` log level or what goes to an OpenTelemetry collector.
+  Messages from the libraries under the MCP server and HTTP clients show
+  only when they're warnings or errors, so their request-by-request messages
+  don't fill the list.
 - Type in the search box to show only messages that contain the text.
 - **Pause** stops the list moving while you read, and **Auto-scroll** keeps
   the newest message in view.
