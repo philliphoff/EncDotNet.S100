@@ -20,7 +20,17 @@ month. For package versions and release assets, see
   `IsolineCoverageSubLayer`, which both renderers already draw. In the
   viewer, each weather fill in the **Layer stack** shows a colour legend of
   its bands (`GridCoverageSubLayer.Legend`); the headless renderer doesn't
-  draw legends. Not for navigation. Breaking changes: `WeatherLayerKind`
+  draw legends. Off-by-default weather layers (isobars, the wind speed fill,
+  wave arrows) are now built and listed hidden instead of dropped: a new
+  `CoverageSubLayerBase.IsVisibleByDefault` makes the map session start their
+  sub-layer state off, a **Show on map** checkbox on their **Layer stack** row
+  turns them on (the same state as the Datasets panel's sub-layer eye, kept
+  while the dataset is loaded), and the headless compositor leaves them out
+  unless `HeadlessCompositeOptions.ShownLayerKeys` names them, so
+  `s100 render` doesn't draw them. Not for navigation. Breaking changes:
+  weather processors' portrayals and `LayerKeys` now include the
+  off-by-default layers (hidden); the headless compositor skips a coverage
+  sub-layer with `IsVisibleByDefault` false; `WeatherLayerKind`
   gains `Isolines`; `WeatherCoverageStyle.CreateAll()` and, for a pressure
   grid, `CreateFor` also return `PressureIsobarStyle`;
   `WeatherCoverageStyle.Contours` is virtual; `WeatherPalette.Palette` has two

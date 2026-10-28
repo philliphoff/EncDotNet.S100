@@ -73,6 +73,18 @@
     <value>{0}</value>
     <comment>{0} = number of layer entries in this S-98 display plane.</comment>
   </data>
+  <data name="LayerStack_SubLayerVisibleNameFormat" xml:space="preserve">
+    <value>Show {0}</value>
+    <comment>Accessible name of the visibility checkbox on an optional layer's Layer Stack row, such as the weather isobars (#1072). {0} is the layer name, e.g. "Isobars: gfs.grib2".</comment>
+  </data>
+  <data name="LayerStack_SubLayerVisibleLabel" xml:space="preserve">
+    <value>Show on map</value>
+    <comment>Label of the visibility checkbox on an optional layer's Layer Stack row (#1072).</comment>
+  </data>
+  <data name="LayerStack_SubLayerVisibleTooltip" xml:space="preserve">
+    <value>Show — this layer is off until you turn it on. It's the same switch as the layer's eye in the Datasets panel, and it stays as you set it while the dataset is loaded.</value>
+    <comment>Tooltip for the visibility checkbox on an optional layer's Layer Stack row (#1072).</comment>
+  </data>
   <data name="LayerStack_LegendNameFormat" xml:space="preserve">
     <value>Legend of {0}, {1} bands</value>
     <comment>Accessible name of a colour fill's legend in the Layer Stack (#1072). {0} is the layer name, e.g. "Wave height: gfswave.grib2"; {1} the number of colour bands.</comment>
@@ -222,6 +234,26 @@
   </data>
   <data name="SubLayer_S111_Arrows" xml:space="preserve">
     <value>Arrows</value>
+  </data>
+  <data name="SubLayer_Weather_WaveHeight" xml:space="preserve">
+    <value>Wave height</value>
+    <comment>Weather sub-layer name (#1072): the significant wave height colour fill.</comment>
+  </data>
+  <data name="SubLayer_Weather_WindSpeed" xml:space="preserve">
+    <value>Wind speed</value>
+    <comment>Weather sub-layer name (#1072): the Beaufort wind speed colour fill.</comment>
+  </data>
+  <data name="SubLayer_Weather_WindBarbs" xml:space="preserve">
+    <value>Wind barbs</value>
+    <comment>Weather sub-layer name (#1072).</comment>
+  </data>
+  <data name="SubLayer_Weather_WaveDirection" xml:space="preserve">
+    <value>Wave direction</value>
+    <comment>Weather sub-layer name (#1072): the wave direction arrows.</comment>
+  </data>
+  <data name="SubLayer_Weather_Isobars" xml:space="preserve">
+    <value>Isobars</value>
+    <comment>Weather sub-layer name (#1072): mean sea level pressure isobars every 4 hPa.</comment>
   </data>
   <data name="Tooltip_ToggleSubLayerVisibility" xml:space="preserve">
     <value>Show or hide this sub-layer</value>

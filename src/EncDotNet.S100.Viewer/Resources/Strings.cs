@@ -102,6 +102,9 @@ internal static partial class Strings
     public static string LayerStack_ChildCountFormat => Get(nameof(LayerStack_ChildCountFormat));
     public static string LayerStack_PriorityFormat => Get(nameof(LayerStack_PriorityFormat));
     public static string LayerStack_LegendNameFormat => Get(nameof(LayerStack_LegendNameFormat));
+    public static string LayerStack_SubLayerVisibleNameFormat => Get(nameof(LayerStack_SubLayerVisibleNameFormat));
+    public static string LayerStack_SubLayerVisibleTooltip => Get(nameof(LayerStack_SubLayerVisibleTooltip));
+    public static string LayerStack_SubLayerVisibleLabel => Get(nameof(LayerStack_SubLayerVisibleLabel));
     public static string LayerStack_Plane_BaseChartUnder => Get(nameof(LayerStack_Plane_BaseChartUnder));
     public static string LayerStack_Plane_Bathymetry => Get(nameof(LayerStack_Plane_Bathymetry));
     public static string LayerStack_Plane_OnDemandSurface => Get(nameof(LayerStack_Plane_OnDemandSurface));
@@ -160,6 +163,11 @@ internal static partial class Strings
     public static string Menu_MoveDatasetUp => Get(nameof(Menu_MoveDatasetUp));
     public static string Menu_MoveDatasetDown => Get(nameof(Menu_MoveDatasetDown));
     public static string SubLayer_S111_Arrows => Get(nameof(SubLayer_S111_Arrows));
+    public static string SubLayer_Weather_WaveHeight => Get(nameof(SubLayer_Weather_WaveHeight));
+    public static string SubLayer_Weather_WindSpeed => Get(nameof(SubLayer_Weather_WindSpeed));
+    public static string SubLayer_Weather_WindBarbs => Get(nameof(SubLayer_Weather_WindBarbs));
+    public static string SubLayer_Weather_WaveDirection => Get(nameof(SubLayer_Weather_WaveDirection));
+    public static string SubLayer_Weather_Isobars => Get(nameof(SubLayer_Weather_Isobars));
     public static string Tooltip_ToggleSubLayerVisibility => Get(nameof(Tooltip_ToggleSubLayerVisibility));
     public static string Tooltip_SubLayerOpacity => Get(nameof(Tooltip_SubLayerOpacity));
     public static string Tooltip_ExpandSubLayers => Get(nameof(Tooltip_ExpandSubLayers));

@@ -169,6 +169,13 @@ so the coverage pipeline and both renderers draw them with no weather code.
 | `WaveDirectionStyle` | One arrow, half size below 1.5 m, growing to double size at 6 m | `wave.hs` | `wave.dir` + 180° | Off |
 | `PressureIsobarStyle` | Isobars every 4 hPa, labelled in hPa (`1012`) | `pressure.msl` | — | Off |
 
+- **Default visibility.** Every style that applies to a source is built.
+  `WeatherPortrayal` copies `IsVisibleByDefault` onto the sub-layer
+  (`CoverageSubLayerBase.IsVisibleByDefault`), so the wind speed fill, wave
+  arrows and isobars are listed but start hidden: the viewer's map session
+  starts their sub-layer state off, and the headless compositor leaves them
+  out unless `HeadlessCompositeOptions.ShownLayerKeys` names them.
+  `s100 render` has no per-layer option, so it never draws them.
 - **Knots.** `wind.speed` stays in m/s, its stored unit. The barb and
   Beaufort bands are defined in knots and their limits converted to m/s, so
   the grid isn't copied into knots and sampling still reports m/s. Legend

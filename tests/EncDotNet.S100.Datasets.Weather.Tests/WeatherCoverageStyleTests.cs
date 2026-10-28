@@ -243,6 +243,7 @@ public class WeatherCoverageStyleTests
 
         var isobars = Assert.IsType<IsolineCoverageSubLayer>(Assert.Single(result.SubLayers));
         Assert.Equal(PressureIsobarStyle.Key, isobars.LayerKey);
+        Assert.False(isobars.IsVisibleByDefault);
         Assert.Equal(S98DisplayPlane.OtherChartOverlays, isobars.Plane);
         Assert.Equal(90, isobars.WithinPlanePriority);
         Assert.Empty(isobars.DashPattern);
@@ -266,6 +267,8 @@ public class WeatherCoverageStyleTests
         var wind = await WeatherPortrayal.BuildAsync(WindSource(), [new WindSpeedStyle()], "wind", cancellationToken: Ct);
 
         Assert.True(Assert.IsType<GridCoverageSubLayer>(Assert.Single(waves.SubLayers)).ClipToWater);
+        Assert.True(waves.SubLayers[0].IsVisibleByDefault);
+        Assert.False(wind.SubLayers[0].IsVisibleByDefault);
         Assert.False(Assert.IsType<GridCoverageSubLayer>(Assert.Single(wind.SubLayers)).ClipToWater);
     }
 

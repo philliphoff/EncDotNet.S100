@@ -25,12 +25,16 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <list type="bullet">
 /// <item><description>
 /// <b>Drawing.</b> One <see cref="WeatherCoverageSource"/> per parameter group
-/// (<see cref="WeatherCoverageSource.CreateForGroups"/>), drawn with the
-/// code-defined weather styles that apply to it and are on by default (the
-/// wave height fill and the wind barbs; the wind speed fill and wave arrows
-/// are off by default, design note §10.1) through
+/// (<see cref="WeatherCoverageSource.CreateForGroups"/>), drawn with every
+/// code-defined weather style that applies to it through
 /// <see cref="WeatherPortrayal.BuildAsync"/>. Each style is one layer stack
-/// entry, on the plane and priority of design note §5. The overview level of
+/// entry, on the plane and priority of design note §5. The wave height fill
+/// and the wind barbs are on by default; the wind speed fill, wave arrows and
+/// pressure isobars are built too but marked
+/// <see cref="CoverageSubLayerBase.IsVisibleByDefault"/> <see langword="false"/>
+/// (design note §10.1), so a viewer lists them hidden and the headless
+/// compositor leaves them out unless
+/// <see cref="HeadlessCompositeOptions.ShownLayerKeys"/> names them. The overview level of
 /// each source is chosen from the viewport's cells per pixel, as S-102 does.
 /// </description></item>
 /// <item><description>
@@ -110,7 +114,7 @@ public abstract class WeatherGridProcessorBase :
 
         Sources = WeatherCoverageSource.CreateForGroups(gridSet, spec);
         _layers = Sources
-            .Select(source => (source, WeatherCoverageStyle.CreateFor(source).Where(s => s.IsVisibleByDefault).ToArray()))
+            .Select(source => (source, WeatherCoverageStyle.CreateFor(source).ToArray()))
             .ToArray();
         _sampler = new WeatherGridSampler(gridSet, ReferenceTime);
         AvailableTimes = _sampler.Times;
@@ -135,7 +139,11 @@ public abstract class WeatherGridProcessorBase :
     /// <summary>One coverage source per parameter group, in the order the groups first appear.</summary>
     public IReadOnlyList<WeatherCoverageSource> Sources { get; }
 
-    /// <summary>The layer keys drawn, one per style that applies and is on by default, in stack order.</summary>
+    /// <summary>
+    /// The layer keys built, one per style that applies, in stack order; the
+    /// ones not on by default (<see cref="WeatherCoverageStyle.IsVisibleByDefault"/>)
+    /// start hidden.
+    /// </summary>
     public IReadOnlyList<string> LayerKeys => _layers.SelectMany(l => l.Styles).Select(s => s.LayerKey).ToArray();
 
     /// <summary>

@@ -181,7 +181,9 @@ public sealed class NetCdfProcessorTests : IDisposable
         var wavePortrayal = await waves.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
         var windPortrayal = await wind.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
 
-        var fill = Assert.IsType<GridCoverageSubLayer>(Assert.Single(wavePortrayal.SubLayers));
+        // The wave arrows are offered too, hidden until switched on (#1072).
+        Assert.False(Assert.Single(wavePortrayal.SubLayers, l => l.LayerKey == WaveDirectionStyle.Key).IsVisibleByDefault);
+        var fill = Assert.IsType<GridCoverageSubLayer>(Assert.Single(wavePortrayal.SubLayers, l => l.IsVisibleByDefault));
         Assert.Equal(WaveHeightStyle.Key, fill.LayerKey);
         Assert.Equal(S98DisplayPlane.OnDemandSurface, fill.Plane);
         Assert.Equal(0.5, fill.Opacity);
@@ -190,7 +192,7 @@ public sealed class NetCdfProcessorTests : IDisposable
         Assert.Contains("Not for navigation", wavePortrayal.Info);
         Assert.StartsWith("ds:", wavePortrayal.ContentScope);
 
-        var barbs = Assert.IsType<ArrowCoverageSubLayer>(Assert.Single(windPortrayal.SubLayers));
+        var barbs = Assert.IsType<ArrowCoverageSubLayer>(Assert.Single(windPortrayal.SubLayers, l => l.IsVisibleByDefault));
         Assert.Equal(WindBarbStyle.Key, barbs.LayerKey);
         Assert.Equal(S98DisplayPlane.DynamicArrows, barbs.Plane);
         Assert.Equal(20, barbs.WithinPlanePriority);
@@ -385,8 +387,9 @@ public sealed class NetCdfProcessorTests : IDisposable
         var id = new MapDatasetId("waves.nc");
         Assert.True(await s100.AddDatasetAsync(new MapDataset(id, "waves.nc", processor.Metadata), processor, cancellationToken: Ct));
 
-        // The layer stack: the wave height fill on the on-demand surface plane.
-        var entry = Assert.Single(s100.Session.GetLayerStackEntries());
+        // The layer stack: the wave height fill on the on-demand surface plane,
+        // drawn; the wave arrows are listed but hidden (#1072).
+        var entry = Assert.Single(s100.Session.GetLayerStackEntries(), e => e.Layer.Enabled);
         Assert.Equal(WaveHeightStyle.Key, entry.Item.SourceFeatureType);
         Assert.Equal(S98DisplayPlane.OnDemandSurface, entry.Item.Plane);
 

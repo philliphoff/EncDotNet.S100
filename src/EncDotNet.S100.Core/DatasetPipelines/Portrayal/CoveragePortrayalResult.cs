@@ -27,6 +27,19 @@ public abstract class CoverageSubLayerBase
 
     /// <summary>Optional feature-type code for S-98 rules; null for whole-layer entries.</summary>
     public string? SourceFeatureType { get; init; }
+
+    /// <summary>
+    /// Whether the sub-layer is drawn until the user changes it. Defaults to
+    /// <see langword="true"/>. A processor can offer an optional layer, such
+    /// as the weather pressure isobars, with <see langword="false"/>: it is
+    /// still built and listed (a viewer's layer stack shows it, with a
+    /// visibility toggle), but a viewer starts it hidden
+    /// (<see cref="MapDatasetSubLayer.IsVisible"/>) and the headless
+    /// compositor leaves it out unless
+    /// <c>HeadlessCompositeOptions.ShownLayerKeys</c> names its
+    /// <see cref="LayerKey"/> (issue #1072).
+    /// </summary>
+    public bool IsVisibleByDefault { get; init; } = true;
 }
 
 /// <summary>
@@ -97,6 +110,7 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
             Plane = Plane,
             WithinPlanePriority = WithinPlanePriority,
             SourceFeatureType = SourceFeatureType,
+            IsVisibleByDefault = IsVisibleByDefault,
             Coverage = Coverage,
             Viewport = Viewport,
             LandAreaMask = landAreaMask,
@@ -168,6 +182,7 @@ public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
             Plane = Plane,
             WithinPlanePriority = WithinPlanePriority,
             SourceFeatureType = SourceFeatureType,
+            IsVisibleByDefault = IsVisibleByDefault,
             Isolines = Isolines,
             Extent = Extent,
             Ink = Ink,

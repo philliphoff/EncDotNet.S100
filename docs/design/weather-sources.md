@@ -360,9 +360,24 @@ not on the map. The headless renderer doesn't draw a legend.
   clipped. An `IsolineCoverageSubLayer` has one ink and width, so the
   sub-layer takes them from the first contour; per-level styles (a heavier
   1000 hPa line, say) would need per-line appearance.
-- **Off by default.** As for the wind speed fill and wave arrows, the
-  processors build only the styles that are on by default, so the viewer
-  doesn't draw isobars yet; turning layers on is for later work.
+- **Off by default, but switchable.** The processors used to drop the
+  styles that are off by default, so nothing could turn them on. Now
+  `WeatherGridProcessorBase` builds every style that applies, and each
+  sub-layer carries its style's default as the new
+  `CoverageSubLayerBase.IsVisibleByDefault`. Nothing new holds the state: it's
+  the existing per-sub-layer `MapDatasetSubLayer.IsVisible` (the Datasets
+  panel's sub-layer eye). `MapsuiDatasetLayerSession` starts a sub-layer it
+  sees for the first time hidden when its flag is false, and keeps state for
+  a dataset with a single layer when that layer starts hidden. After that the
+  user's choice is kept across re-renders while the dataset is loaded; like
+  other dataset sub-layer state, it isn't saved across restarts. The Layer
+  stack row of such a layer has a **Show on map** checkbox
+  (`LayerStack.Entry.Visible`), routed through the new
+  `IDatasetLoaderService.Get/SetSubLayerVisible` to that state. The isobar
+  row exists only when the file has `pressure.msl`. The wind speed fill and
+  wave arrows get the same treatment for free. Headless: the compositor skips
+  these sub-layers unless `HeadlessCompositeOptions.ShownLayerKeys` lists
+  them; `s100 render` has no per-layer option, so it leaves them out.
 - **Goldens.** New: southern barbs (Day, Night), the wave fill over the
   S-101 test cell clipped to water, and isobars (Day, Night). The three
   existing composites over that cell (32°S) were re-accepted: their barbs are

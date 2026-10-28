@@ -133,6 +133,25 @@ public sealed class GribRenderCommandTests : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Render_leaves_the_off_by_default_isobars_out(bool withViewport)
+    {
+        // #1072: pressure isobars are off by default; s100 render has no
+        // per-layer option, so a pressure-only file draws nothing but the background.
+        var dataset = GribFixtures.Write(Path.Combine(_dir, "msl.grib2"), GribFixtures.ChartPressure());
+        var output = Path.Combine(_dir, "msl.png");
+        string[] args = withViewport
+            ? ["render", dataset, output, "--width", "200", "--height", "200", "--bbox", "61.9,-32.3,62.3,-32.0"]
+            : ["render", dataset, output, "--width", "200", "--height", "200"];
+
+        Assert.Equal(0, CliApp.Build().Run(args));
+
+        using var bitmap = SKBitmap.Decode(output);
+        Assert.Equal(0, InkFraction(bitmap));
+    }
+
     private static double InkFraction(SKBitmap bitmap)
     {
         int ink = 0, total = 0;

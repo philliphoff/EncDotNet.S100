@@ -90,7 +90,7 @@
                                     <ItemsControl.DataTemplates>
                                         <DataTemplate DataType="vm:LayerStackEntryViewModel">
                                             <Grid ColumnDefinitions="Auto,*,Auto"
-                                                  RowDefinitions="Auto,Auto"
+                                                  RowDefinitions="Auto,Auto,Auto"
                                                   ColumnSpacing="8"
                                                   Margin="24,3,8,3">
                                                 <CheckBox Grid.Column="0"
@@ -118,9 +118,23 @@
                                                            Opacity="0.6"
                                                            VerticalAlignment="Center"
                                                            FontFamily="Consolas,Menlo,Monaco,monospace" />
+                                                <!-- #1072: an optional layer (weather isobars, wind speed
+                                                     fill, wave arrows) starts hidden; this shows it. Same
+                                                     state as the sub-layer eye in the Datasets panel. -->
+                                                <CheckBox Grid.Row="1"
+                                                          Grid.Column="1"
+                                                          Grid.ColumnSpan="2"
+                                                          Margin="0,2,0,0"
+                                                          IsVisible="{Binding CanToggleVisibility}"
+                                                          IsChecked="{Binding IsVisible, Mode=TwoWay}"
+                                                          Content="{x:Static loc:Strings.LayerStack_SubLayerVisibleLabel}"
+                                                          FontSize="11"
+                                                          AutomationProperties.AutomationId="LayerStack.Entry.Visible"
+                                                          AutomationProperties.Name="{Binding VisibilityName}"
+                                                          ToolTip.Tip="{x:Static loc:Strings.LayerStack_SubLayerVisibleTooltip}" />
                                                 <!-- #1072: the colour legend of a fill that carries one
                                                      (the weather fills): a swatch and label per band. -->
-                                                <ItemsControl Grid.Row="1"
+                                                <ItemsControl Grid.Row="2"
                                                               Grid.Column="1"
                                                               Grid.ColumnSpan="2"
                                                               Margin="0,4,0,2"

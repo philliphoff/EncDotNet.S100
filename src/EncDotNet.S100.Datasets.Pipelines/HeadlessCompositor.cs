@@ -106,6 +106,16 @@ public sealed class HeadlessCompositeOptions
     /// copies itself (see <see cref="HeadlessCompositeScene.Draw"/>).
     /// </summary>
     public bool EnableSeamWrap { get; init; } = true;
+
+    /// <summary>
+    /// The keys of optional coverage sub-layers to draw: a sub-layer whose
+    /// <see cref="CoverageSubLayerBase.IsVisibleByDefault"/> is
+    /// <see langword="false"/> (the weather isobars, wind speed fill and wave
+    /// arrows) is left out unless its <see cref="CoverageSubLayerBase.LayerKey"/>
+    /// is listed here, as a viewer starts it hidden. Defaults to empty: draw
+    /// only what is on by default (issue #1072).
+    /// </summary>
+    public IReadOnlyCollection<string> ShownLayerKeys { get; init; } = [];
 }
 
 /// <summary>
@@ -329,7 +339,7 @@ public sealed class HeadlessCompositor
         for (int i = datasets.Count - 1; i >= 0; i--)
         {
             var input = datasets[i];
-            var (items, spec, datasetId) = BuildItems(input);
+            var (items, spec, datasetId) = BuildItems(input, options.ShownLayerKeys);
             if (items.Count == 0)
                 continue;
             perDataset.Add(items);
@@ -457,7 +467,8 @@ public sealed class HeadlessCompositor
     }
 
     private static (IReadOnlyList<SubLayerStackItem> Items, string Spec, string DatasetId) BuildItems(
-        HeadlessCompositeInput input)
+        HeadlessCompositeInput input,
+        IReadOnlyCollection<string> shownLayerKeys)
     {
         if (input.Vector is { } vector)
         {
@@ -482,6 +493,10 @@ public sealed class HeadlessCompositor
             var items = new List<SubLayerStackItem>(coverage.SubLayers.Count);
             foreach (var sub in coverage.SubLayers)
             {
+                // An optional layer the caller didn't ask for stays off, as in a viewer.
+                if (!sub.IsVisibleByDefault && !shownLayerKeys.Contains(sub.LayerKey))
+                    continue;
+
                 items.Add(new SubLayerStackItem(
                     new CoverageStackPayload(coverage, sub),
                     sub.Plane,

@@ -25,7 +25,11 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <see cref="WeatherCoverageStyle.Contours"/> through the sampled grid
 /// (<see cref="CoverageContours"/>) into an <see cref="IsolineCoverageSubLayer"/>.
 /// Styles whose fields the source lacks
-/// (<see cref="WeatherCoverageStyle.AppliesTo"/>) are skipped.
+/// (<see cref="WeatherCoverageStyle.AppliesTo"/>) are skipped. Every
+/// sub-layer carries its style's <see cref="WeatherCoverageStyle.IsVisibleByDefault"/>
+/// as <see cref="CoverageSubLayerBase.IsVisibleByDefault"/>, so an off-by-default
+/// layer (isobars, wind speed fill, wave arrows) is built and listed but starts
+/// hidden in a viewer and is left out by the headless compositor unless asked for.
 /// </para>
 /// <para>
 /// This is the part of a weather dataset processor that doesn't depend on a
@@ -155,6 +159,7 @@ public static class WeatherPortrayal
                 Plane = style.Plane,
                 WithinPlanePriority = style.WithinPlanePriority,
                 SourceFeatureType = style.LayerKey,
+                IsVisibleByDefault = style.IsVisibleByDefault,
                 Coverage = layer,
                 Viewport = viewport,
                 Opacity = style.Opacity,
@@ -178,6 +183,7 @@ public static class WeatherPortrayal
                 Plane = style.Plane,
                 WithinPlanePriority = style.WithinPlanePriority,
                 SourceFeatureType = style.LayerKey,
+                IsVisibleByDefault = style.IsVisibleByDefault,
                 Isolines = isolines,
                 Extent = MercatorExtent(bounds),
                 Ink = RgbaColor.FromHex(first?.Color ?? palette.Resolve(WeatherPalette.IsobarInkToken)),
@@ -196,6 +202,7 @@ public static class WeatherPortrayal
             Plane = style.Plane,
             WithinPlanePriority = style.WithinPlanePriority,
             SourceFeatureType = style.LayerKey,
+            IsVisibleByDefault = style.IsVisibleByDefault,
             Coverage = layer,
             Viewport = viewport,
             Palette = style.ActivePalette,

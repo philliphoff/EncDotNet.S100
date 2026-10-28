@@ -206,10 +206,15 @@ public sealed class GribProcessorTests : IDisposable
 
         var portrayal = await processor.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
 
-        Assert.Equal([WindBarbStyle.Key, WaveHeightStyle.Key], portrayal.SubLayers.Select(l => l.LayerKey));
-        var barbs = Assert.IsType<ArrowCoverageSubLayer>(portrayal.SubLayers[0]);
+        // On by default: the wind barbs and the wave fill. The wind speed fill
+        // and wave arrows are offered too, hidden until switched on (#1072).
+        Assert.Equal(
+            [WindSpeedStyle.Key, WindBarbStyle.Key, WaveHeightStyle.Key, WaveDirectionStyle.Key],
+            portrayal.SubLayers.Select(l => l.LayerKey));
+        Assert.Equal([false, true, true, false], portrayal.SubLayers.Select(l => l.IsVisibleByDefault));
+        var barbs = Assert.IsType<ArrowCoverageSubLayer>(portrayal.SubLayers[1]);
         Assert.Equal(S98DisplayPlane.DynamicArrows, barbs.Plane);
-        var fill = Assert.IsType<GridCoverageSubLayer>(portrayal.SubLayers[1]);
+        var fill = Assert.IsType<GridCoverageSubLayer>(portrayal.SubLayers[2]);
         Assert.Equal(S98DisplayPlane.OnDemandSurface, fill.Plane);
         Assert.Equal(SpecRef.Parse("GRIB2/2.0.0"), portrayal.Spec);
         Assert.Equal(WeatherProducts.Grib2.Spec, portrayal.Spec.Name);
@@ -422,9 +427,12 @@ public sealed class GribProcessorTests : IDisposable
         var id = new MapDatasetId("filter_gfswave.pl");
         Assert.True(await s100.AddDatasetAsync(new MapDataset(id, "filter_gfswave.pl", processor.Metadata), processor, cancellationToken: Ct));
 
-        // The layer stack: the wave height fill and the wind barbs.
+        // The layer stack: the wave height fill and the wind barbs, drawn, and
+        // the wind speed fill and wave arrows, listed but hidden (#1072).
         var entries = s100.Session.GetLayerStackEntries();
-        Assert.Equal(2, entries.Count);
+        Assert.Equal(4, entries.Count);
+        Assert.Equal(2, entries.Count(e => e.Layer.Enabled));
+        Assert.False(entries.Single(e => e.Item.SourceFeatureType == WindSpeedStyle.Key).Layer.Enabled);
         Assert.Contains(entries, e => e.Item.SourceFeatureType == WaveHeightStyle.Key && e.Item.Plane == S98DisplayPlane.OnDemandSurface);
         Assert.Contains(entries, e => e.Item.SourceFeatureType == WindBarbStyle.Key && e.Item.Plane == S98DisplayPlane.DynamicArrows);
 

@@ -583,6 +583,12 @@ Rows include:
   and a label for each band, such as **2–2.5 m** or **Force 3, 7–10 kn**, in
   the palette the map is drawn in. Legends appear only in this panel, not on
   the map.
+- Optional weather layers, listed but off until you turn them on: **Isobars**
+  (under **Other chart overlays**, only for a file with mean sea level
+  pressure), the **Wind speed** fill and the **Wave direction** arrows. Their
+  rows have a **Show on map** checkbox. It's the same switch as the layer's
+  eye in the **Datasets** panel, and it stays as you set it while the dataset
+  is loaded, through time steps, palette changes and redraws.
 
 Each dataset row has an **Active** toggle. When it's off, the dataset is taken
 out of the cross-product stack: it no longer takes part in S-98 rules or
