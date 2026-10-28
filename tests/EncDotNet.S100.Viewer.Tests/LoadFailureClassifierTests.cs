@@ -94,4 +94,44 @@ public class LoadFailureClassifierTests
     {
         Assert.Equal("disk on fire", LoadFailureClassifier.Describe(new IOException("disk on fire")));
     }
+
+    [Fact]
+    public void Describe_DamagedFile_SaysSoAndSpellsOutControlCharacters()
+    {
+        // A random file named .000 fails in the ISO 8211 reader like this.
+        var ex = new InvalidOperationException(
+            "load failed", new InvalidDataException("Invalid numeric character '\u000B' at position 0."));
+
+        Assert.Equal(
+            "The file is damaged or is not in the format its name suggests (Invalid numeric character 'U+000B' at position 0.).",
+            LoadFailureClassifier.Describe(ex));
+    }
+
+    [Fact]
+    public void FindDamagedFileException_FindsTruncatedFilesButNotStructuredFailures()
+    {
+        var truncated = new EndOfStreamException("Unexpected end of record.");
+
+        Assert.Same(truncated, LoadFailureClassifier.FindDamagedFileException(new TargetInvocationException(truncated)));
+        Assert.Null(LoadFailureClassifier.FindDamagedFileException(new IOException("disk on fire")));
+        Assert.Null(LoadFailureClassifier.FindDamagedFileException(
+            new S100DatasetSchemaException("S-102", file: "x.h5", groupPath: "/", attributeOrDataset: "code",
+                specReference: null, message: "bad", innerException: new InvalidDataException("bad bytes"))));
+    }
+
+    [Fact]
+    public void Printable_LeavesOrdinaryTextAlone() =>
+        Assert.Equal("Invalid numeric character 's' at position 0.",
+            LoadFailureClassifier.Printable("Invalid numeric character 's' at position 0."));
+
+    [Fact]
+    public void Toast_DamagedFile_UsesTheFriendlyBodyAndKeepsTheReaderMessageInDetails()
+    {
+        var ex = new InvalidDataException("Invalid numeric character '\u000B' at position 0.");
+
+        var failure = LoadFailureViewModel.FromException("US5GARBG.000", "/charts/US5GARBG.000", ex);
+
+        Assert.Equal(Viewer.Resources.Strings.LoadFailureToast_DamagedBody, failure.PrimaryMessage);
+        Assert.Contains("Invalid numeric character", failure.Details);
+    }
 }

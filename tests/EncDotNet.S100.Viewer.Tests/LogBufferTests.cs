@@ -178,6 +178,38 @@ public sealed class LogBufferTests
     }
 
     [Theory]
+    [InlineData("Microsoft.AspNetCore.Hosting.Diagnostics")]
+    [InlineData("Microsoft.AspNetCore.Server.Kestrel")]
+    [InlineData("ModelContextProtocol.Server.McpServer")]
+    [InlineData("System.Net.Http.HttpClient.Default.LogicalHandler")]
+    public void Logger_provider_keeps_hosting_library_chatter_to_warnings(string category)
+    {
+        // MCP and HTTP traffic logs several entries per request; even with
+        // Verbose on, only its warnings and errors reach the buffer.
+        using var buffer = new LogBuffer(minimumLevel: LogLevel.Debug);
+        using var provider = new ServiceCollection()
+            .AddLogging(builder =>
+            {
+                builder.SetMinimumLevel(LogLevel.Information);
+                LogBufferLoggerProvider.AddLogBuffer(builder, buffer);
+            })
+            .BuildServiceProvider();
+        var factory = provider.GetRequiredService<ILoggerFactory>();
+        var chatty = factory.CreateLogger(category);
+        var viewer = factory.CreateLogger("EncDotNet.S100.Viewer.Services.McpServerHost");
+
+        chatty.LogDebug("connection opened");
+        chatty.LogInformation("request finished");
+        chatty.LogWarning("request failed");
+        viewer.LogInformation("MCP server listening");
+        viewer.LogDebug("MCP tool called");
+
+        Assert.Equal(
+            ["request failed", "MCP server listening", "MCP tool called"],
+            buffer.Snapshot().Select(e => e.Message));
+    }
+
+    [Theory]
     [InlineData("EncDotNet.S100.Viewer.Services.Secom.SecomIdentityStore", "SECOM")]
     [InlineData("EncDotNet.S100.Viewer.Services.Updates.GitHubReleaseClient", "Updates")]
     [InlineData("EncDotNet.S100.Viewer.Services.DynamicSources.Ais.DeferredAisFeatureSource", "AIS")]

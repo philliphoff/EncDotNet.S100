@@ -2175,6 +2175,10 @@
     <value>This {0} file is missing or has an invalid '{1}' at '{2}'.</value>
     <comment>{0} = product code; {1} = attribute or dataset name; {2} = HDF5 group path.</comment>
   </data>
+  <data name="LoadFailureToast_DamagedBody" xml:space="preserve">
+    <value>The file is damaged or isn't in the format its name suggests. Copy details has the technical reason.</value>
+    <comment>Body of the load-failure toast when the reader found bytes the format doesn't allow (a corrupt or truncated file, or a file renamed to a dataset extension).</comment>
+  </data>
   <data name="LoadFailureToast_CopyDetails" xml:space="preserve">
     <value>Copy details</value>
     <comment>Label for the action button on the load-failure toast.</comment>

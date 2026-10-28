@@ -1,6 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using EncDotNet.S100.Viewer.Diagnostics;
+using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
@@ -282,5 +284,56 @@ public sealed class LogsPanelTests
         Assert.Empty(panel.Entries);
         Assert.True(host.IsShown("Logs.Search"));
         Assert.True(host.IsShown("Logs.LevelFilter"));
+    }
+
+    [AvaloniaFact]
+    public void View_toolbar_never_overlaps_and_wraps_the_actions_when_narrow()
+    {
+        // At 1100 px with the left dock open the bottom dock is about 730 px
+        // wide; the search box used to be drawn under Pause and Auto-scroll.
+        var (_, panel) = Create();
+        using var host = ViewHost.Show(new LogsView { DataContext = panel }, width: 1100, height: 260);
+        string[] ids =
+        [
+            "Logs.LevelFilter", "Logs.Search", "Logs.Pause", "Logs.AutoScroll",
+            "Logs.Verbose", "Logs.Copy", "Logs.Clear", "Logs.SendFeedback",
+        ];
+        var toolbar = host.Find<LogsToolbarPanel>(_ => true);
+        var wrapped = new List<bool>();
+
+        foreach (var width in new[] { 1100d, 900, 730, 600, 520, 440 })
+        {
+            host.Window.Width = width;
+            host.Settle();
+
+            var bounds = ids.Select(id => (id, rect: BoundsInWindow(host, host.Find<Control>(id)))).ToList();
+            foreach (var (id, rect) in bounds)
+            {
+                Assert.True(rect.Width > 0 && rect.Right <= width + 0.5, $"{id} {rect} doesn't fit at {width} px.");
+            }
+            for (var i = 0; i < bounds.Count; i++)
+            {
+                for (var j = i + 1; j < bounds.Count; j++)
+                {
+                    Assert.False(
+                        bounds[i].rect.Intersects(bounds[j].rect),
+                        $"{bounds[i].id} {bounds[i].rect} overlaps {bounds[j].id} {bounds[j].rect} at {width} px.");
+                }
+            }
+
+            // The level filter sits fully above the column headers.
+            var header = host.Find<TextBlock>(t => t.Text == Strings.Logs_Column_Time);
+            Assert.True(bounds[0].rect.Bottom <= BoundsInWindow(host, header).Top + 0.5);
+            wrapped.Add(toolbar.IsActionsWrapped);
+        }
+
+        Assert.False(wrapped[0], "A wide dock keeps the toolbar on one line.");
+        Assert.True(wrapped[^1], "A narrow dock moves the actions to a second line.");
+    }
+
+    private static Rect BoundsInWindow(ViewHost host, Control control)
+    {
+        var origin = control.TranslatePoint(default, host.Window) ?? default;
+        return new Rect(origin, control.Bounds.Size);
     }
 }

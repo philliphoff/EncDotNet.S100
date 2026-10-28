@@ -118,7 +118,11 @@ SoundCharts also keeps its last 1,000 log messages in memory, whatever these
 settings are. The **Logs** tab in the bottom dock shows them, feedback reports
 include them as `logs.txt`, and the `get_recent_logs` MCP tool returns them.
 The tab's **Verbose** toggle records Debug messages there without changing the
-log level the other outputs use.
+log level the other outputs use. The libraries under the MCP server and HTTP
+clients (`Microsoft.AspNetCore.*`, `ModelContextProtocol.*` and
+`System.Net.Http.HttpClient.*`) log several messages for every request, so the
+buffer keeps only their warnings and errors; otherwise an agent driving the
+viewer over MCP would push everything else out of it.
 
 ## Names
 

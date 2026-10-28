@@ -3,6 +3,7 @@
              xmlns:ic="using:FluentIcons.Avalonia"
              xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
              xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:v="using:EncDotNet.S100.Viewer.Views"
              x:Class="EncDotNet.S100.Viewer.Views.LogsView"
              x:DataType="vm:LogsViewModel">
 
@@ -44,9 +45,45 @@
 
     <Grid RowDefinitions="Auto,Auto,*">
 
-        <!-- Toolbar -->
-        <DockPanel Grid.Row="0" Margin="8,4,8,4" LastChildFill="True">
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0">
+        <!--
+            Toolbar. LogsToolbarPanel keeps the filters on the left and the
+            actions on the right, and moves the actions to a second line when
+            the dock is too narrow for both, so they never overlap.
+        -->
+        <v:LogsToolbarPanel Grid.Row="0" Margin="8,4,8,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" MaxWidth="246" />
+                </Grid.ColumnDefinitions>
+                <ComboBox AutomationProperties.AutomationId="Logs.LevelFilter"
+                          AutomationProperties.Name="{x:Static loc:Strings.Label_LogsLevelFilter}"
+                          AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LogsLevelFilter}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_LogsLevelFilter}"
+                          ItemsSource="{Binding LevelFilters}"
+                          SelectedItem="{Binding SelectedLevelFilter, Mode=TwoWay}"
+                          MinWidth="150"
+                          VerticalAlignment="Center"
+                          FontSize="11.5">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LogLevelFilterOption">
+                            <TextBlock Text="{Binding Label}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBox AutomationProperties.AutomationId="Logs.Search"
+                         AutomationProperties.Name="{x:Static loc:Strings.Label_LogsSearch}"
+                         Text="{Binding SearchText, Mode=TwoWay}"
+                         PlaceholderText="{x:Static loc:Strings.Logs_SearchWatermark}"
+                         Grid.Column="1"
+                         MinWidth="120"
+                         Margin="6,0,0,0"
+                         VerticalAlignment="Center"
+                         FontSize="11.5"
+                         VerticalContentAlignment="Center" />
+            </Grid>
+
+            <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" ItemsAlignment="End">
                 <TextBlock Text="{Binding PausedText}"
                            IsVisible="{Binding IsPaused}"
                            FontSize="11.5"
@@ -104,36 +141,8 @@
                         <TextBlock Text="{x:Static loc:Strings.Logs_SendFeedback}" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
-            </StackPanel>
-
-            <StackPanel Orientation="Horizontal" Spacing="6">
-                <ComboBox AutomationProperties.AutomationId="Logs.LevelFilter"
-                          AutomationProperties.Name="{x:Static loc:Strings.Label_LogsLevelFilter}"
-                          AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LogsLevelFilter}"
-                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_LogsLevelFilter}"
-                          ItemsSource="{Binding LevelFilters}"
-                          SelectedItem="{Binding SelectedLevelFilter, Mode=TwoWay}"
-                          MinWidth="150"
-                          Height="26"
-                          MinHeight="0"
-                          FontSize="11.5">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:LogLevelFilterOption">
-                            <TextBlock Text="{Binding Label}" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <TextBox AutomationProperties.AutomationId="Logs.Search"
-                         AutomationProperties.Name="{x:Static loc:Strings.Label_LogsSearch}"
-                         Text="{Binding SearchText, Mode=TwoWay}"
-                         PlaceholderText="{x:Static loc:Strings.Logs_SearchWatermark}"
-                         Width="240"
-                         Height="26"
-                         MinHeight="0"
-                         FontSize="11.5"
-                         VerticalContentAlignment="Center" />
-            </StackPanel>
-        </DockPanel>
+            </WrapPanel>
+        </v:LogsToolbarPanel>
 
         <!-- Column headers; widths match the row template. -->
         <Grid Grid.Row="1"
