@@ -152,6 +152,11 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private void PopulateAttributeSections(IReadOnlyList<PickAttribute> reformatted)
     {
         Attributes.Clear();
+        // The panel leads with NavigationNotice for a product that isn't
+        // S-100; the processor's own notice row (kept for MCP, the CLI and
+        // the Mapsui pick query) would repeat it (#1096).
+        if (NavigationNotice is not null)
+            reformatted = WithoutNavigationNotice(reformatted);
         var rows = FeatureInfoBuilder.WithoutResolvedFileReferences(reformatted);
         if (_selectedHit?.NavigationalWarning is not null)
             rows = WithoutWarningText(rows);
@@ -182,6 +187,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         foreach (var card in TextCards)
             card.CopyRequested -= OnCardCopyRequested;
         TextCards.Clear();
+    }
+
+    /// <summary>
+    /// Drops the not-for-navigation notice rows
+    /// (<see cref="PickAttribute.IsNavigationNotice"/>) that
+    /// <see cref="NavigationNotice"/> already shows.
+    /// </summary>
+    internal static IReadOnlyList<PickAttribute> WithoutNavigationNotice(IReadOnlyList<PickAttribute> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        return rows.Any(r => r.IsNavigationNotice)
+            ? rows.Where(r => !r.IsNavigationNotice).ToList()
+            : rows;
     }
 
     /// <summary>
@@ -263,6 +281,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         DateTimeRangeValue = row.DateTimeRangeValue,
         DepthMetresValue = row.DepthMetresValue,
         ExternalText = row.ExternalText,
+        IsNavigationNotice = row.IsNavigationNotice,
         Children = children,
     };
 
@@ -296,6 +315,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
+                IsNavigationNotice = attr.IsNavigationNotice,
                 Children = children,
             };
         }
@@ -312,6 +332,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
+                IsNavigationNotice = attr.IsNavigationNotice,
                 Children = children,
             };
         }
@@ -328,6 +349,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
+                IsNavigationNotice = attr.IsNavigationNotice,
                 Children = children,
             };
         }
@@ -344,6 +366,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DateTimeRangeValue = attr.DateTimeRangeValue,
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
+                IsNavigationNotice = attr.IsNavigationNotice,
                 Children = children,
             };
         }

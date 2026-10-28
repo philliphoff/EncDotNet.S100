@@ -239,6 +239,7 @@ public sealed class GribProcessorTests : IDisposable
         var info = processor.GetCoverageInfo(lat + 0.01, lon - 0.01, Run.AddHours(4))!;
 
         Assert.Equal("notice", info.Attributes[0].Code);
+        Assert.True(info.Attributes[0].IsNavigationNotice);
         Assert.Equal("Weather model data, not for navigation.", info.Attributes[0].DisplayValue);
         Assert.Equal("GFS-Wave, run 2026-10-25 00Z", info.Attributes.Single(a => a.Code == "model").DisplayValue);
         Assert.Equal(Run.AddHours(3), info.Attributes.Single(a => a.Code == "timePoint").DateTimeValue);

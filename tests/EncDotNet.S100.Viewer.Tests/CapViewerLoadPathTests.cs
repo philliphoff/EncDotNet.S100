@@ -69,6 +69,7 @@ public sealed class CapViewerLoadPathTests : IDisposable
         await s100.SetTimeAsync(new DateTime(2026, 8, 28, 15, 30, 0, DateTimeKind.Utc), Ct);
         var pick = Assert.Single(await s100.Query.PickAsync(new GeographicPickQuery { Latitude = 39.1, Longitude = -75.1 }, Ct));
         Assert.Equal(CapDatasetProcessor.NotForNavigationNotice, pick.Info.Attributes[0].DisplayValue);
+        Assert.True(pick.Info.Attributes[0].IsNavigationNotice);
         Assert.Equal("Severe", pick.Info.Attributes.Single(a => a.Code == "severity").DisplayValue);
 
         // An hour later it has ended and isn't drawn or picked.

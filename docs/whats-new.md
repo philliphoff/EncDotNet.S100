@@ -6,6 +6,12 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **One not-for-navigation notice per pick.** SoundCharts' pick report on a
+  GRIB2 or NetCDF weather grid or a CAP warning no longer repeats the notice
+  it leads with as the first attribute row. The processors still put the
+  notice first in their feature info for other callers (MCP, the Mapsui pick
+  query), now marked by `PickAttribute.IsNavigationNotice`; build one with
+  `PickAttribute.NavigationNotice(text)`.
 - **Wind and waves in the CLI, MCP and docs.** A new guide,
   [Show wind and waves on the chart](weather.md), covers the GRIB2, NetCDF
   and CAP formats, where to get the data, NDBC buoys, own-ship wind and what

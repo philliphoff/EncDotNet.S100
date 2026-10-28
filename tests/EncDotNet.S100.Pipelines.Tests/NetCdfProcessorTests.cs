@@ -241,6 +241,7 @@ public sealed class NetCdfProcessorTests : IDisposable
         var info = waves.GetCoverageInfo(lat + 0.002, lon - 0.002, Run.AddHours(5))!;
 
         Assert.Equal("notice", info.Attributes[0].Code);
+        Assert.True(info.Attributes[0].IsNavigationNotice);
         Assert.Equal("Weather model data, not for navigation.", info.Attributes[0].DisplayValue);
         Assert.Equal("MFWAM, run 2026-10-25 00Z", info.Attributes.Single(a => a.Code == "model").DisplayValue);
         Assert.Equal(Run.AddHours(6), info.Attributes.Single(a => a.Code == "timePoint").DateTimeValue);

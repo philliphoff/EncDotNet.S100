@@ -86,6 +86,7 @@ public sealed class GribViewerLoadPathTests : IDisposable
         var (latitude, longitude) = GribFixtures.CropPoint(566);
         var pick = Assert.Single(await s100.Query.PickAsync(new GeographicPickQuery { Latitude = latitude, Longitude = longitude }, Ct));
         Assert.Equal("Weather model data, not for navigation.", pick.Info.Attributes[0].DisplayValue);
+        Assert.True(pick.Info.Attributes[0].IsNavigationNotice);
         Assert.Equal(
             $"{GribFixtures.FilterAt566.Height[1]:0.0#} m",
             pick.Info.Attributes.Single(a => a.Code == WeatherParameters.WaveHeight).DisplayValue);
