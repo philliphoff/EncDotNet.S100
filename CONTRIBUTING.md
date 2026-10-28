@@ -37,6 +37,11 @@ appropriate runtime identifier.
 dotnet test --configuration Release
 ```
 
+Tests run on Microsoft Testing Platform, which `global.json` opts into, so
+`dotnet test` takes MTP options. For example, `--report-xunit-trx` writes a
+TRX file and `--coverlet` collects coverage. VSTest-style `--filter` still
+works.
+
 Test conventions:
 
 - Every new public API or bug fix must be accompanied by an xunit test in the
