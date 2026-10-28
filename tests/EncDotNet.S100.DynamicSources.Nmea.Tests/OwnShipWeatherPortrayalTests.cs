@@ -69,6 +69,56 @@ public sealed class OwnShipWeatherPortrayalTests
         Assert.All(instructions, i => Assert.Equal(NmeaWeatherSource.FeatureId, i.FeatureReference));
     }
 
+    [Theory]
+    [InlineData(-33.86, "WXBARBS015")] // off Sydney
+    [InlineData(-0.01, "WXBARBS015")]
+    [InlineData(0.0, "WXBARBN015")]    // the equator is northern
+    [InlineData(42.35, "WXBARBN015")]
+    public void Own_ship_south_of_the_equator_gets_a_southern_barb(double latitude, string expected)
+    {
+        var instructions = Portrayal.Portray(Feature(TrueWind(), latitude: latitude, longitude: 151.2));
+
+        var barb = Assert.IsType<PointInstruction>(instructions[1]);
+        Assert.Equal(expected, barb.SymbolReference);
+        Assert.NotNull(Portrayal.SymbolProvider(barb.SymbolReference!));
+    }
+
+    [Theory]
+    [InlineData(-33.86, "WXBARBS015")]
+    [InlineData(0.0, "WXBARBN015")]
+    public void Relative_wind_south_of_the_equator_is_a_grey_southern_barb(double latitude, string expected)
+    {
+        var instructions = Portrayal.Portray(Feature(RelativeOnly(withHeading: true), latitude: latitude, longitude: 151.2));
+
+        var barb = Assert.IsType<PointInstruction>(instructions[1]);
+        Assert.Equal(OwnShipWeatherPortrayal.RelativeSymbolPrefix + expected, barb.SymbolReference);
+        string svg = Portrayal.SymbolProvider(barb.SymbolReference!)!;
+        Assert.Contains("<title>" + expected + "</title>", svg, StringComparison.Ordinal);
+        Assert.Contains("sOWNWXREL", svg, StringComparison.Ordinal);
+        Assert.DoesNotContain("sWXBARB", svg, StringComparison.Ordinal);
+        Assert.DoesNotContain("fWXBARB", svg, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_southern_barb_renders_with_its_feathers_on_the_other_side()
+    {
+        // Wind from the north: the staff runs straight up from the ring. A
+        // northern barb's feathers are on its right (clockwise) side, a
+        // southern one's on its left.
+        var north = TrueWind() with { TrueWind = new WindVector(Angle.Zero, Speed.FromKnots(25)), WaterTemperatureCelsius = null };
+        using var northern = Render(Feature(north, latitude: 42.35), withText: false);
+        using var southern = Render(Feature(north, latitude: -33.86, longitude: 151.2), withText: false);
+        Save(northern, "north-from-000");
+        Save(southern, "south-from-000");
+
+        int ringX = northern.Width / 2 + 25, ringY = northern.Height / 2 - 25;
+        int Right(SKBitmap b) => CountDrawn(b, p => p.Y < ringY - 6 && p.X > ringX + 1);
+        int Left(SKBitmap b) => CountDrawn(b, p => p.Y < ringY - 6 && p.X < ringX - 1);
+
+        Assert.True(Right(northern) > Left(northern) + 5, $"Northern feathers: {Left(northern)} left, {Right(northern)} right.");
+        Assert.True(Left(southern) > Right(southern) + 5, $"Southern feathers: {Left(southern)} left, {Right(southern)} right.");
+    }
+
     [Fact]
     public void Relative_wind_with_a_heading_is_a_grey_barb_labelled_relative()
     {

@@ -16,8 +16,9 @@ namespace EncDotNet.S100.DynamicSources.Ndbc;
 /// (<see cref="WeatherCoverageStyle.Symbols"/>, one per 5 kn, and the calm
 /// circle), so an observed wind reads like a forecast one. A barb is rotated by
 /// the direction the wind blows from, in the geographic frame, so it turns with
-/// a rotated chart. The barbs are northern-hemisphere ones everywhere, as the
-/// weather styles' are until southern barbs land (issue #1072).
+/// a rotated chart. A station south of the equator gets the mirrored
+/// southern-hemisphere barb, picked by <see cref="WindBarbSymbols"/>
+/// from the station's latitude, as the gridded barbs are (issue #1072).
 /// </para>
 /// <para>
 /// <b>Ageing.</b> An observation older than
@@ -131,15 +132,16 @@ public sealed class NdbcStationPortrayal : IDynamicFeaturePortrayal
         if (observation?.WindSpeed is { } speed && speed.TotalMetresPerSecond >= 0)
         {
             var barb = WindBarb.FromSpeed(speed);
+            string barbSymbol = WindBarbSymbols.For(speed, feature.Coordinates[0].Latitude);
             if (barb.IsCalm)
             {
-                instructions.Add(BarbInstructions.Point(feature.Id, Symbol(barb.SymbolName)));
+                instructions.Add(BarbInstructions.Point(feature.Id, Symbol(barbSymbol)));
             }
             else if (observation.WindFromDirection is { } from)
             {
                 instructions.Add(BarbInstructions.Point(
                     feature.Id,
-                    Symbol(barb.SymbolName),
+                    Symbol(barbSymbol),
                     rotation: Normalise(from.TotalDegrees),
                     rotationCrs: SymbolRotationCrs.Geographic));
             }

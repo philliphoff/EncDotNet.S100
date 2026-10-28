@@ -15,7 +15,8 @@ month. For package versions and release assets, see
   library builds `NmeaWeatherSource` on it: one feature at own ship with
   true wind from `MWD`, or derived from relative wind, heading and motion
   over the ground (falling back to `MWV` T and to motion through the water),
-  drawn as the weather wind barb next to the own-ship symbol on S-98
+  drawn as the weather wind barb (southern-hemisphere barbs south of the
+  equator, by `WindBarbSymbols.For`) next to the own-ship symbol on S-98
   `OtherChartOverlays` at priority 110. Without a heading or speed it shows
   the relative wind, grey and labelled so. A pick lists true and relative
   wind, how true wind was found, heading, water and air temperature and
@@ -23,6 +24,36 @@ month. For package versions and release assets, see
   `tcp://host:port` or a recording's path) to get its Layer Stack row. Not
   for navigation. See the
   [DynamicSources.Nmea README](../src/EncDotNet.S100.DynamicSources.Nmea/README.md).
+- **Weather drawing polish.** Wind barbs south of the equator are now the
+  mirrored southern-hemisphere barbs (`WXBARBS005` to `WXBARBS200`), chosen
+  by each cell's latitude; `WindBarbSymbols.For(knots, latitude)` applies the
+  same rule to a single barb, and NDBC stations south of the equator use it.
+  The wave height fill is clipped to water when an S-101 chart is loaded, by
+  a new S-98 rule, `R-101-WX-B`, that shares its effect with the S-104
+  `R-101-104-B` clip and applies to any `GridCoverageSubLayer` with the new
+  `ClipToWater` flag; wind isn't clipped. A new `PressureIsobarStyle` draws
+  `pressure.msl` as isobars every 4 hPa, labelled in hPa, on
+  `OtherChartOverlays` at priority 90, on by default wherever the data has
+  pressure: `CoverageContours` traces an `ICoverageStyle`'s value-based
+  `ContourStyle`s into an `IsolineCoverageSubLayer`, which both renderers
+  already draw. In the viewer, each weather fill in the **Layer stack** shows
+  a colour legend of its bands (`GridCoverageSubLayer.Legend`); the headless
+  renderer doesn't draw legends. A new **Weather** section in **Display
+  controls**, shown while a GRIB2 or NetCDF dataset is loaded, switches
+  **Isobars** (on), **Wind speed fill** and **Wave arrows** (off) for every
+  weather dataset and keeps them between sessions; the switches reach the
+  processors as the new `EcdisDisplaySettings.LayerVisibility`
+  (`WeatherCoverageStyle.IsDrawnWith`), and `s100 render` draws the defaults.
+  Not for navigation. Breaking changes: the GRIB2 and NetCDF processors now
+  draw isobars for a file with `pressure.msl` and offer every applicable
+  style in `LayerKeys`, and their content scope names the drawn layers;
+  `WeatherLayerKind` gains `Isolines`; `WeatherCoverageStyle.CreateAll()` and,
+  for a pressure grid, `CreateFor` also return `PressureIsobarStyle`;
+  `WeatherCoverageStyle.Contours` is virtual; `WeatherPalette.Palette` has two
+  more tokens; `WeatherCoverageStyle.StyleVersion` is 2, so cached weather
+  tiles are redrawn; `S98DefaultRules.Default` has a seventh rule; an
+  `Isoline` with an empty label is drawn unlabelled. See the
+  [Datasets.Weather README](../src/EncDotNet.S100.Datasets.Weather/README.md).
 - **NDBC buoy observations.** A new `EncDotNet.S100.DynamicSources.Ndbc`
   library shows NOAA National Data Buoy Center observations as a dynamic
   feature source. `NdbcObservationSource` reads the `activestations.xml`

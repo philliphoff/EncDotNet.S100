@@ -319,6 +319,16 @@ internal sealed partial class ViewerSettings
     public bool EcdisShowNavigationalWarnings { get; set; } = true;
 
     /// <summary>
+    /// The Display controls' map-wide switches for optional product layers,
+    /// keyed by the processor's sub-layer key: today the Weather section's
+    /// <c>weather.pressure.isobars</c>, <c>weather.wind.speed</c> and
+    /// <c>weather.wave.direction</c> (#1072). A missing key follows the
+    /// layer's default (isobars on, the wind speed fill and wave arrows off).
+    /// </summary>
+    public Dictionary<string, bool> EcdisLayerVisibility { get; set; }
+        = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Per-spec explicit S-100 Part 9 §11.7 display-mode selections. Keys
     /// are spec codes (e.g. "S-411"); values are the spec-native mode id
     /// (e.g. "IceScientificIcesodDisplayMode"). Populated by the per-dataset

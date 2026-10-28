@@ -71,8 +71,10 @@ relative angle when the heading is known, and labelled `Rel. wind`.
 so it clears the own-ship symbol, with the WMO barb (pennants 50 kn, full
 barbs 10 kn, half barbs 5 kn) growing from it into the wind, rotated in the
 geographic frame, and labels for the wind (`200° 14 kn`) and water
-temperature (`Water 12.4 °C`). The barbs are the northern-hemisphere ones
-everywhere until the hemisphere selection of #1072 lands. Register a
+temperature (`Water 12.4 °C`). The barb is picked with
+`WindBarbSymbols.For` at own ship's latitude: southern-hemisphere barbs
+(`WXBARBS*`) south of the equator, northern ones (`WXBARBN*`) on and north of
+it, as for gridded and NDBC barbs. Register a
 `PortrayedDynamicFeatureRenderer` over `OwnShipWeatherPortrayal.Instance`
 under the renderer key `weather.observation.ownship` (see
 [`EncDotNet.S100.Renderers.Mapsui`](../EncDotNet.S100.Renderers.Mapsui/README.md)).

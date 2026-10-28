@@ -12,7 +12,9 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// The bands break at 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9, 12 and 14 m
 /// (<see cref="Boundaries"/>); the top band is 14 m and higher. Colours are
 /// the violet ramp of <see cref="WeatherPalette"/>, drawn at
-/// <see cref="WeatherCoverageStyle.FillOpacity"/>.
+/// <see cref="WeatherCoverageStyle.FillOpacity"/>. Waves are a sea quantity,
+/// so the fill is clipped to water when an S-101 chart is loaded
+/// (<see cref="WeatherCoverageStyle.ClipToWater"/>).
 /// </remarks>
 public sealed class WaveHeightStyle : WeatherCoverageStyle
 {
@@ -27,7 +29,7 @@ public sealed class WaveHeightStyle : WeatherCoverageStyle
 
     /// <summary>Creates the style, with the Day palette active.</summary>
     public WaveHeightStyle()
-        : base(Key, "Wave height", WeatherLayerKind.Fill, WeatherParameters.WaveHeight, null, isVisibleByDefault: true)
+        : base(Key, "Wave height", WeatherLayerKind.Fill, WeatherParameters.WaveHeight, null, isVisibleByDefault: true, clipToWater: true)
     {
     }
 

@@ -400,6 +400,13 @@ Three of them (R-101-102-A, R-104-A, R-111-A) are pure default
 plane assignments and need no IC payload at all; PR-L1 ships them.
 R-101-102-B and the dynamic IC-driven overrides need PR-L2.
 
+Two Level 2 clip rules came later and share one effect: R-101-104-B (#483)
+clips the S-104 surface to the water of an active S-101 chart, and
+R-101-WX-B (#1072) does the same for any coverage surface that sets
+`GridCoverageSubLayer.ClipToWater`, which today is the weather wave height
+fill (GRIB2 and NetCDF aren't S-100 products, so the rule keys on the flag
+rather than a product pair).
+
 ### 3.5 Deferred — explicit non-goals for v1
 
 | Rule family | Why deferred |

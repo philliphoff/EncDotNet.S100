@@ -77,6 +77,34 @@ public sealed record EcdisDisplaySettings
     /// </summary>
     public IReadOnlyDictionary<string, string?> ActiveDisplayModes { get; init; }
         = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Map-wide switches for a product's optional layers, keyed by the
+    /// processor's stable sub-layer key (e.g. <c>"weather.pressure.isobars"</c>
+    /// → <see langword="true"/>). A processor that offers optional layers
+    /// draws a layer when its entry is <see langword="true"/>, leaves it out
+    /// when <see langword="false"/>, and falls back to its own default when
+    /// the key is missing. Unlike a dataset's sub-layer visibility, which
+    /// hides a built layer in one dataset, this applies to every dataset of
+    /// the product and changes what is portrayed. Set by the viewer's Display
+    /// controls Weather section (issue #1072). Empty by default, so every
+    /// layer follows its producer's default (as <c>s100 render</c> does).
+    /// </summary>
+    public IReadOnlyDictionary<string, bool> LayerVisibility { get; init; }
+        = new Dictionary<string, bool>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether the optional layer <paramref name="layerKey"/> is drawn:
+    /// its <see cref="LayerVisibility"/> entry, or
+    /// <paramref name="defaultVisible"/> when it has none.
+    /// </summary>
+    /// <param name="layerKey">The sub-layer key.</param>
+    /// <param name="defaultVisible">The producer's default.</param>
+    public bool IsLayerVisible(string layerKey, bool defaultVisible)
+    {
+        ArgumentNullException.ThrowIfNull(layerKey);
+        return LayerVisibility.TryGetValue(layerKey, out var visible) ? visible : defaultVisible;
+    }
 }
 
 /// <summary>

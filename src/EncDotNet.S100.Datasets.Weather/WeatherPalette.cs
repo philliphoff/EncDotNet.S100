@@ -6,8 +6,8 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <summary>
 /// The colours of the weather styles: the band fills of
 /// <see cref="WaveHeightStyle"/> and <see cref="WindSpeedStyle"/>, and the
-/// inks of the wind barbs and wave arrows, each with a Day, Dusk and Night
-/// value.
+/// inks of the wind barbs, wave arrows and pressure isobars, each with a Day,
+/// Dusk and Night value.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -34,6 +34,12 @@ public static class WeatherPalette
 
     /// <summary>Colour token of the wave direction arrow.</summary>
     public const string WaveArrowToken = "WXWAVE";
+
+    /// <summary>Colour token of the pressure isobars and their labels (<see cref="PressureIsobarStyle"/>).</summary>
+    public const string IsobarInkToken = "WXISOBAR";
+
+    /// <summary>Colour token of the halo under the isobar labels: the chart's background.</summary>
+    public const string IsobarHaloToken = "WXISOHALO";
 
     /// <summary>The colour token prefix of the wave height bands, followed by the band number: <c>WXHS01</c> to <c>WXHS15</c>.</summary>
     public const string WaveHeightTokenPrefix = "WXHS";
@@ -81,6 +87,7 @@ public static class WeatherPalette
 
     /// <summary>
     /// The weather colours: <see cref="BarbInkToken"/>, <see cref="WaveArrowToken"/>,
+    /// <see cref="IsobarInkToken"/>, <see cref="IsobarHaloToken"/>,
     /// the wave height bands (<see cref="WaveHeightToken"/>) and the Beaufort
     /// bands (<see cref="WindSpeedToken"/>).
     /// </summary>
@@ -118,6 +125,10 @@ public static class WeatherPalette
             [BarbInkToken] = PaletteColors.FromHex(day: "#222630", dusk: "#D4D7DE", night: "#5F636C"),
             // The violet of the wave height ramp, darker than its top band.
             [WaveArrowToken] = PaletteColors.FromHex(day: "#462281", dusk: "#C7BAF3", night: "#615486"),
+            // A neutral grey-blue for the isobars, lighter than the barb ink so
+            // the barbs stay on top visually; the halo is the chart's paper.
+            [IsobarInkToken] = PaletteColors.FromHex(day: "#4A5160", dusk: "#BFC4CE", night: "#555A63"),
+            [IsobarHaloToken] = PaletteColors.FromHex(day: "#FFFFFF", dusk: "#3B4250", night: "#0B0E14"),
         };
 
         for (int i = 0; i < WaveHeightColors.Length; i++)

@@ -466,6 +466,65 @@ public class S98DefaultRulesTests
     }
 
     // ----------------------------------------------------------------
+    // R-101-WX-B — clip weather fills that ask for it to water (#1072)
+    // ----------------------------------------------------------------
+
+    [Fact]
+    public void R_101_WX_B_masks_a_fill_that_asks_to_be_clipped_and_keeps_the_flag()
+    {
+        var s101 = BuildS101LandItem();
+        var waves = BuildCoverageGridItem("waves.grib2", "GRIB2", S98DisplayPlane.OnDemandSurface, clipToWater: true);
+
+        var ruled = _auth.ApplyRules(
+            new[] { waves, s101 },
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("waves.grib2", "GRIB2", Active: true),
+            });
+
+        var grid = GridSubLayerOf(ruled, "waves.grib2");
+        Assert.NotEmpty(grid.LandAreaMask!);
+        Assert.True(grid.ClipToWater);
+    }
+
+    [Fact]
+    public void R_101_WX_B_leaves_a_fill_that_does_not_ask_unmasked()
+    {
+        var s101 = BuildS101LandItem();
+        var wind = BuildCoverageGridItem("wind.grib2", "GRIB2", S98DisplayPlane.OnDemandSurface);
+
+        var ruled = _auth.ApplyRules(
+            new[] { wind, s101 },
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("wind.grib2", "GRIB2", Active: true),
+            });
+
+        Assert.Null(GridSubLayerOf(ruled, "wind.grib2").LandAreaMask);
+    }
+
+    [Theory]
+    [InlineData(false, true)]  // no active chart
+    [InlineData(true, false)]  // the weather dataset itself is inactive
+    public void R_101_WX_B_needs_an_active_chart_and_an_active_fill(bool chartActive, bool wavesActive)
+    {
+        var s101 = BuildS101LandItem();
+        var waves = BuildCoverageGridItem("waves.nc", "NetCDF", S98DisplayPlane.OnDemandSurface, clipToWater: true);
+
+        var ruled = _auth.ApplyRules(
+            new[] { waves, s101 },
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: chartActive),
+                new LoadedDatasetInfo("waves.nc", "NetCDF", Active: wavesActive),
+            });
+
+        Assert.Null(GridSubLayerOf(ruled, "waves.nc").LandAreaMask);
+    }
+
+    // ----------------------------------------------------------------
     // Rule composition / declaration order
     // ----------------------------------------------------------------
 
@@ -519,7 +578,7 @@ public class S98DefaultRulesTests
         // S98DefaultRules.Default declaration order is part of the
         // public contract — pin it.
         Assert.Equal(
-            new[] { "R-101-102-A", "R-101-102-B", "R-101-124-A", "R-104-A", "R-101-104-B", "R-111-A" },
+            new[] { "R-101-102-A", "R-101-102-B", "R-101-124-A", "R-104-A", "R-101-104-B", "R-101-WX-B", "R-111-A" },
             S98DefaultRules.Default.Select(r => r.RuleId).ToArray());
     }
 
@@ -779,7 +838,7 @@ public class S98DefaultRulesTests
     /// clips to water.
     /// </summary>
     private static SubLayerStackItem BuildCoverageGridItem(
-        string datasetId, string spec, S98DisplayPlane plane, GeographicBounds? coverageExtent = null)
+        string datasetId, string spec, S98DisplayPlane plane, GeographicBounds? coverageExtent = null, bool clipToWater = false)
     {
         var metadata = new GridMetadata
         {
@@ -819,6 +878,7 @@ public class S98DefaultRulesTests
             Plane = plane,
             Coverage = styled,
             Viewport = viewport,
+            ClipToWater = clipToWater,
         };
         var result = new CoveragePortrayalResult
         {

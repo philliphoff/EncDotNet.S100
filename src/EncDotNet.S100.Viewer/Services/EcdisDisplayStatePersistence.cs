@@ -63,7 +63,8 @@ internal static class EcdisDisplayStatePersistence
         }
         state.Hydrate(category, hidden, hiddenPlanes.Count > 0 ? hiddenPlanes : null,
             displayModes.Count > 0 ? displayModes : null,
-            settings.EcdisShowNavigationalWarnings);
+            settings.EcdisShowNavigationalWarnings,
+            settings.EcdisLayerVisibility);
 
         // Persist on every change. Cheap because settings.json is small.
         state.Changed += () =>
@@ -84,6 +85,9 @@ internal static class EcdisDisplayStatePersistence
                 if (!string.IsNullOrEmpty(kv.Value))
                     settings.EcdisActiveDisplayModes[kv.Key] = kv.Value;
             }
+            settings.EcdisLayerVisibility.Clear();
+            foreach (var kv in snap.LayerVisibility)
+                settings.EcdisLayerVisibility[kv.Key] = kv.Value;
             Save(settings);
         };
         state.NavigationalWarningsChanged += () =>

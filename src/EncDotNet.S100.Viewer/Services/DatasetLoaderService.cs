@@ -1192,6 +1192,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private static string ResolveSubLayerDisplayName(string key) => key switch
     {
         "s111.arrows" => Strings.SubLayer_S111_Arrows,
+        "weather.wave.height" => Strings.SubLayer_Weather_WaveHeight,
+        "weather.wind.speed" => Strings.SubLayer_Weather_WindSpeed,
+        "weather.wind.barbs" => Strings.SubLayer_Weather_WindBarbs,
+        "weather.wave.direction" => Strings.SubLayer_Weather_WaveDirection,
+        "weather.pressure.isobars" => Strings.SubLayer_Weather_Isobars,
         _ => key,
     };
 

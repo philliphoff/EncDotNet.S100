@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
@@ -7,8 +8,9 @@ namespace EncDotNet.S100.Datasets.Weather;
 
 /// <summary>
 /// How a weather layer is drawn from a <see cref="WeatherCoverageSource"/>:
-/// either a colour fill (<see cref="WeatherLayerKind.Fill"/>) or oriented
-/// symbols (<see cref="WeatherLayerKind.Symbols"/>), with its S-98 display
+/// a colour fill (<see cref="WeatherLayerKind.Fill"/>), oriented symbols
+/// (<see cref="WeatherLayerKind.Symbols"/>) or labelled isolines
+/// (<see cref="WeatherLayerKind.Isolines"/>), with its S-98 display
 /// plane, its priority within the plane, its opacity and whether it is shown
 /// by default.
 /// </summary>
@@ -27,14 +29,23 @@ namespace EncDotNet.S100.Datasets.Weather;
 ///   <item><term><see cref="WindBarbStyle"/></term><description>WMO wind barbs from <c>wind.speed</c> and <c>wind.from_direction</c>. On by default.</description></item>
 ///   <item><term><see cref="WindSpeedStyle"/></term><description>A <c>wind.speed</c> fill in Beaufort bands. Off by default.</description></item>
 ///   <item><term><see cref="WaveDirectionStyle"/></term><description>Arrows along <c>wave.dir</c>, sized by <c>wave.hs</c>. Off by default.</description></item>
+///   <item><term><see cref="PressureIsobarStyle"/></term><description>Isobars every 4 hPa on <c>pressure.msl</c>, labelled. On by default.</description></item>
 /// </list>
 /// <para>
 /// Layer order (design note §5): fills go on
 /// <see cref="S98DisplayPlane.OnDemandSurface"/> at priority
 /// <see cref="FillPriority"/>, under the S-104 surface; barbs and arrows go on
 /// <see cref="S98DisplayPlane.DynamicArrows"/> at priority
-/// <see cref="SymbolPriority"/>, over the S-111 arrows (priority 10). The
+/// <see cref="SymbolPriority"/>, over the S-111 arrows (priority 10);
+/// isobars go on <see cref="S98DisplayPlane.OtherChartOverlays"/> at priority
+/// <see cref="IsolinePriority"/>, under the observations (100). The
 /// sub-layers <see cref="WeatherPortrayal"/> builds carry these.
+/// </para>
+/// <para>
+/// <b>Land.</b> Fills with <see cref="ClipToWater"/> set (wave height) are
+/// clipped to water when an S-101 chart is loaded, by the S-98 rule that
+/// clips the S-104 surface (<c>S98DefaultRules.R_101_WX_B_ClipWeatherFillsToWater</c>).
+/// Wind isn't clipped: it blows over land too.
 /// </para>
 /// <para>
 /// A style holds the active palette, so give each layer its own instance.
@@ -47,7 +58,7 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// The version of the weather styles, folded into <see cref="ContentScope"/>.
     /// Bump it whenever the symbols, the palette or the bands change.
     /// </summary>
-    public const int StyleVersion = 1;
+    public const int StyleVersion = 2;
 
     /// <summary>The opacity of the colour fills: 0.5, so the chart under them stays readable.</summary>
     public const double FillOpacity = 0.5;
@@ -57,6 +68,9 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
 
     /// <summary>The barbs' and arrows' priority within <see cref="S98DisplayPlane.DynamicArrows"/>: 20, over the S-111 arrows (10).</summary>
     public const int SymbolPriority = 20;
+
+    /// <summary>The isolines' priority within <see cref="S98DisplayPlane.OtherChartOverlays"/>: 90, under the observations (100).</summary>
+    public const int IsolinePriority = 90;
 
     /// <summary>
     /// The weather symbols (wind barbs, the calm circle and the wave arrow),
@@ -89,14 +103,17 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// <param name="valueFieldName">The coverage field the bands are keyed on.</param>
     /// <param name="rotationFieldName">The field the symbols are rotated by; <see langword="null"/> for a fill.</param>
     /// <param name="isVisibleByDefault">Whether the layer is shown until the mariner hides it.</param>
+    /// <param name="clipToWater">Whether a fill is clipped to water when an S-101 chart is loaded.</param>
     private protected WeatherCoverageStyle(
         string layerKey,
         string name,
         WeatherLayerKind kind,
         string valueFieldName,
         string? rotationFieldName,
-        bool isVisibleByDefault)
+        bool isVisibleByDefault,
+        bool clipToWater = false)
     {
+        ClipToWater = clipToWater;
         LayerKey = layerKey;
         Name = name;
         Kind = kind;
@@ -120,26 +137,59 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// <summary>The field the symbols are rotated by, or <see langword="null"/> for a fill.</summary>
     public string? RotationFieldName { get; }
 
-    /// <summary>Whether the layer is shown until the mariner hides it.</summary>
+    /// <summary>
+    /// Whether the layer is drawn when nothing says otherwise: on for the
+    /// wave height fill, wind barbs and isobars; off for the wind speed fill
+    /// and wave arrows, which compete with the wave fill and the barbs
+    /// (design note §10.1).
+    /// </summary>
     public bool IsVisibleByDefault { get; }
 
     /// <summary>
-    /// The S-98 display plane: <see cref="S98DisplayPlane.OnDemandSurface"/>
-    /// for a fill, <see cref="S98DisplayPlane.DynamicArrows"/> for symbols.
+    /// Whether the layer is drawn under <paramref name="display"/>: its
+    /// map-wide switch (<see cref="EcdisDisplaySettings.LayerVisibility"/>,
+    /// keyed by <see cref="LayerKey"/>; the viewer's Display controls Weather
+    /// section), or <see cref="IsVisibleByDefault"/> when the switch is unset
+    /// or there are no display settings (headless rendering).
     /// </summary>
-    public S98DisplayPlane Plane => Kind == WeatherLayerKind.Fill
-        ? S98DisplayPlane.OnDemandSurface
-        : S98DisplayPlane.DynamicArrows;
+    /// <param name="display">The display settings, or <see langword="null"/>.</param>
+    public bool IsDrawnWith(EcdisDisplaySettings? display) =>
+        display?.IsLayerVisible(LayerKey, IsVisibleByDefault) ?? IsVisibleByDefault;
+
+    /// <summary>
+    /// Whether the fill is clipped to water when an S-101 chart is loaded
+    /// (<see cref="Pipelines.Portrayal.GridCoverageSubLayer.ClipToWater"/>):
+    /// set for wave height, not for wind.
+    /// </summary>
+    public bool ClipToWater { get; }
+
+    /// <summary>
+    /// The S-98 display plane: <see cref="S98DisplayPlane.OnDemandSurface"/>
+    /// for a fill, <see cref="S98DisplayPlane.DynamicArrows"/> for symbols and
+    /// <see cref="S98DisplayPlane.OtherChartOverlays"/> for isolines.
+    /// </summary>
+    public S98DisplayPlane Plane => Kind switch
+    {
+        WeatherLayerKind.Fill => S98DisplayPlane.OnDemandSurface,
+        WeatherLayerKind.Isolines => S98DisplayPlane.OtherChartOverlays,
+        _ => S98DisplayPlane.DynamicArrows,
+    };
 
     /// <summary>
     /// The priority within <see cref="Plane"/>: <see cref="FillPriority"/> for
-    /// a fill, <see cref="SymbolPriority"/> for symbols.
+    /// a fill, <see cref="SymbolPriority"/> for symbols and
+    /// <see cref="IsolinePriority"/> for isolines.
     /// </summary>
-    public int WithinPlanePriority => Kind == WeatherLayerKind.Fill ? FillPriority : SymbolPriority;
+    public int WithinPlanePriority => Kind switch
+    {
+        WeatherLayerKind.Fill => FillPriority,
+        WeatherLayerKind.Isolines => IsolinePriority,
+        _ => SymbolPriority,
+    };
 
     /// <summary>
     /// The portrayal opacity: <see cref="FillOpacity"/> for a fill, 1 for
-    /// symbols. Renderers multiply it with any user opacity.
+    /// symbols and isolines. Renderers multiply it with any user opacity.
     /// </summary>
     public double Opacity => Kind == WeatherLayerKind.Fill ? FillOpacity : 1.0;
 
@@ -153,8 +203,22 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// <summary>The palette last passed to <see cref="SwitchPaletteAsync"/>; Day until then.</summary>
     public PaletteType ActivePaletteType => _activePaletteType;
 
-    /// <summary>Empty: no weather style draws contours yet (pressure isobars are later work).</summary>
-    public IReadOnlyList<ContourStyle> Contours => [];
+    /// <summary>
+    /// The contours of an isoline style, resolved against the active palette
+    /// (<see cref="PressureIsobarStyle"/>); empty for a fill or symbols.
+    /// </summary>
+    public virtual IReadOnlyList<ContourStyle> Contours => [];
+
+    /// <summary>
+    /// The label of one of <see cref="Contours"/>, e.g. <c>"1012"</c> for an
+    /// isobar. The default is the value in the invariant culture.
+    /// </summary>
+    /// <param name="contour">A contour of this style.</param>
+    public virtual string FormatContourLabel(ContourStyle contour)
+    {
+        ArgumentNullException.ThrowIfNull(contour);
+        return contour.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
 
     /// <inheritdoc/>
     public ValueTask SwitchPaletteAsync(PaletteType type, CancellationToken cancellationToken = default)
@@ -189,10 +253,11 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
 
     /// <summary>
     /// New instances of every weather style, in layer-stack order: the wave
-    /// height and wind speed fills, then the wind barbs and wave arrows.
+    /// height and wind speed fills, the pressure isobars, then the wind barbs
+    /// and wave arrows.
     /// </summary>
     public static IReadOnlyList<WeatherCoverageStyle> CreateAll() =>
-        [new WaveHeightStyle(), new WindSpeedStyle(), new WindBarbStyle(), new WaveDirectionStyle()];
+        [new WaveHeightStyle(), new WindSpeedStyle(), new PressureIsobarStyle(), new WindBarbStyle(), new WaveDirectionStyle()];
 
     /// <summary>
     /// New instances of the styles that apply to <paramref name="source"/>
@@ -237,6 +302,9 @@ public enum WeatherLayerKind
 
     /// <summary>Oriented symbols: an <c>ArrowCoverageSubLayer</c>.</summary>
     Symbols,
+
+    /// <summary>Labelled isolines traced from <see cref="WeatherCoverageStyle.Contours"/>: an <c>IsolineCoverageSubLayer</c>.</summary>
+    Isolines,
 }
 
 /// <summary>

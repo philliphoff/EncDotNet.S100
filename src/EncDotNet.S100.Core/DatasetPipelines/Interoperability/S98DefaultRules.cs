@@ -5,7 +5,8 @@ using EncDotNet.S100.Pipelines.Vector;
 namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 
 /// <summary>
-/// The five inter-product rules shipped in PR-L2 (S-98 Edition 2.0.0). Three
+/// The inter-product rules shipped in PR-L2 (S-98 Edition 2.0.0), plus the
+/// SoundCharts weather clip <see cref="R_101_WX_B_ClipWeatherFillsToWater"/>. Three
 /// rules (<see cref="R_101_102_A"/>, <see cref="R_104_A"/>,
 /// <see cref="R_111_A"/>) are pure plane-assignment properties already
 /// satisfied by the default plane table; they carry an identity
@@ -133,6 +134,26 @@ public static class S98DefaultRules
         Effect: ClipS104SurfaceToWater);
 
     /// <summary>
+    /// R-101-WX-B (Level 2, SoundCharts) — when an S-101 ENC is loaded and
+    /// active, clip every active coverage surface that asks for it
+    /// (<see cref="GridCoverageSubLayer.ClipToWater"/>; today the weather wave
+    /// height fill) to water, exactly as <see cref="R_101_104_B_ClipSurfaceToWater"/>
+    /// clips the S-104 surface: the same ENC <c>LandArea</c> geometry is
+    /// attached as the sub-layer's <see cref="GridCoverageSubLayer.LandAreaMask"/>
+    /// and the renderers clip at output-pixel resolution. Weather grids have no
+    /// S-100 product specification, so the rule keys on the sub-layer's flag
+    /// rather than a product pair; wind fills don't set it, because wind blows
+    /// over land too (design note weather-sources.md §4.2; issue #1072). Cites
+    /// S-98 Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6 by analogy with
+    /// R-101-104-B.
+    /// </summary>
+    public static readonly S98InteroperabilityRule R_101_WX_B_ClipWeatherFillsToWater = new(
+        RuleId: "R-101-WX-B",
+        SpecCitation: "S-98 Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6 (by analogy with R-101-104-B)",
+        Condition: HasActiveProductSet("S-101"),
+        Effect: ClipFlaggedSurfacesToWater);
+
+    /// <summary>
     /// The default rule collection in evaluation order. Declaration order is
     /// the evaluation order; each rule's output is the next rule's input.
     /// </summary>
@@ -144,6 +165,7 @@ public static class S98DefaultRules
             R_101_124_A,
             R_104_A,
             R_101_104_B_ClipSurfaceToWater,
+            R_101_WX_B_ClipWeatherFillsToWater,
             R_111_A,
         };
 
@@ -261,6 +283,32 @@ public static class S98DefaultRules
     private static IReadOnlyList<SubLayerStackItem> ClipS104SurfaceToWater(
         IReadOnlyList<SubLayerStackItem> stack,
         S98RuleContext context)
+        => ClipSurfacesToWater(
+            stack,
+            context,
+            (item, subLayer) => subLayer is GridCoverageSubLayer or IsolineCoverageSubLayer
+                && IsProductItem(item, context, "S-104"));
+
+    private static IReadOnlyList<SubLayerStackItem> ClipFlaggedSurfacesToWater(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+        => ClipSurfacesToWater(
+            stack,
+            context,
+            (item, subLayer) => subLayer is GridCoverageSubLayer { ClipToWater: true }
+                && IsActiveItem(item, context));
+
+    /// <summary>
+    /// Attaches the active S-101 datasets' <c>LandArea</c> surfaces as the land
+    /// mask of every coverage surface (<see cref="GridCoverageSubLayer"/> or
+    /// <see cref="IsolineCoverageSubLayer"/>) that <paramref name="applies"/>
+    /// selects. The shared effect of <see cref="R_101_104_B_ClipSurfaceToWater"/>
+    /// and <see cref="R_101_WX_B_ClipWeatherFillsToWater"/>.
+    /// </summary>
+    private static IReadOnlyList<SubLayerStackItem> ClipSurfacesToWater(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context,
+        Func<SubLayerStackItem, CoverageSubLayerBase, bool> applies)
     {
         // Gather the ENC land geometry once. Distinct S-101 portrayal results
         // may appear on many stack items (one per sub-layer); resolve each
@@ -288,19 +336,15 @@ public static class S98DefaultRules
         var result = new List<SubLayerStackItem>(stack.Count);
         foreach (var item in stack)
         {
-            if (IsProductItem(item, context, "S-104")
-                && item.Payload is CoverageStackPayload coverage
-                && coverage.SubLayer is GridCoverageSubLayer grid)
+            if (item.Payload is CoverageStackPayload coverage && applies(item, coverage.SubLayer))
             {
-                var masked = grid.WithLandAreaMask(landAreas);
-                result.Add(item with { Payload = coverage.WithSubLayer(masked) });
-            }
-            else if (IsProductItem(item, context, "S-104")
-                && item.Payload is CoverageStackPayload isolineCoverage
-                && isolineCoverage.SubLayer is IsolineCoverageSubLayer isolines)
-            {
-                var masked = isolines.WithLandAreaMask(landAreas);
-                result.Add(item with { Payload = isolineCoverage.WithSubLayer(masked) });
+                CoverageSubLayerBase? masked = coverage.SubLayer switch
+                {
+                    GridCoverageSubLayer grid => grid.WithLandAreaMask(landAreas),
+                    IsolineCoverageSubLayer isolines => isolines.WithLandAreaMask(landAreas),
+                    _ => null,
+                };
+                result.Add(masked is null ? item : item with { Payload = coverage.WithSubLayer(masked) });
             }
             else
             {
@@ -308,6 +352,19 @@ public static class S98DefaultRules
             }
         }
         return result;
+    }
+
+    // Whether the item's source dataset is loaded and active, whatever its product.
+    private static bool IsActiveItem(SubLayerStackItem item, S98RuleContext context)
+    {
+        foreach (var ds in context.LoadedDatasets)
+        {
+            if (string.Equals(ds.DatasetId, item.SourceDatasetId, StringComparison.Ordinal))
+            {
+                return ds.Active;
+            }
+        }
+        return false;
     }
 
     private static void CollectLandAreas(VectorPortrayalResult result, ref List<FeatureGeometry>? landAreas)

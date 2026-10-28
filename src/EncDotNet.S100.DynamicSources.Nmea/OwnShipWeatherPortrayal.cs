@@ -18,20 +18,21 @@ namespace EncDotNet.S100.DynamicSources.Nmea;
 /// </para>
 /// <para>
 /// <b>Symbols.</b> The barbs are the weather styles' own
-/// (<see cref="WeatherCoverageStyle.Symbols"/> through
-/// <see cref="WindBarb.FromSpeed"/>, and the calm circle), as
-/// <c>NdbcStationPortrayal</c> uses them, so own-ship wind reads like a
-/// forecast's or a buoy's. A barb is rotated by the direction the wind comes
-/// from, in the geographic frame. Barbs are northern-hemisphere ones
-/// everywhere until the hemisphere selection of issue #1072 lands; this
-/// portrayal should adopt it then.
+/// (<see cref="WeatherCoverageStyle.Symbols"/>, picked by
+/// <see cref="WindBarbSymbols.For(Quantities.Speed, double)"/> at own ship's
+/// latitude: southern barbs south of the equator, northern ones on and north
+/// of it, and the calm circle), as <c>NdbcStationPortrayal</c> picks them, so
+/// own-ship wind reads like a forecast's or a buoy's at the same latitude. A
+/// barb is rotated by the direction the wind comes from, in the geographic
+/// frame.
 /// </para>
 /// <para>
 /// <b>Relative wind.</b> When only the relative wind is known
 /// (<see cref="OwnShipWeather.IsRelativeOnly"/>) and the heading is, the barb
 /// shows the direction the relative wind comes from, drawn in the grey
 /// <see cref="RelativeInkToken"/> (the same SVGs with their palette classes
-/// swapped, under <see cref="RelativeSymbolPrefix"/>), and the label reads
+/// swapped, under <see cref="RelativeSymbolPrefix"/>; northern and southern
+/// barbs alike), and the label reads
 /// <c>Rel. wind</c>. Without a heading there is no barb, only the label.
 /// </para>
 /// <para>
@@ -132,13 +133,13 @@ public sealed class OwnShipWeatherPortrayal : IDynamicFeaturePortrayal
             : (weather.RelativeWindSpeed ?? default, weather.RelativeWindFromDirection);
         if (weather.TrueWind is not null || weather.RelativeWindSpeed is not null)
         {
-            var barb = WindBarb.FromSpeed(speed);
-            if (barb.IsCalm)
-                instructions.Add(Offset(BarbInstructions.Point(feature.Id, Symbol(barb.SymbolName))));
+            string barbSymbol = WindBarbSymbols.For(speed, feature.Coordinates[0].Latitude);
+            if (barbSymbol == WindBarb.CalmSymbol)
+                instructions.Add(Offset(BarbInstructions.Point(feature.Id, Symbol(barbSymbol))));
             else if (from is { } direction)
                 instructions.Add(Offset(BarbInstructions.Point(
                     feature.Id,
-                    Symbol(barb.SymbolName),
+                    Symbol(barbSymbol),
                     rotation: direction.TotalDegrees,
                     rotationCrs: SymbolRotationCrs.Geographic)));
         }

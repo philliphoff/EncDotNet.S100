@@ -19,7 +19,9 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// Visual regression tests for the code-defined weather styles (#1068): each
 /// style in the Day, Dusk and Night palettes over in-memory grids, rendered
 /// through the headless Skia compositor, and a composite of an S-101 cell, the
-/// wave height fill, wind barbs and S-111 arrows in S-98 order.
+/// wave height fill, wind barbs and S-111 arrows in S-98 order. The drawing
+/// polish (#1072) adds southern-hemisphere barbs, the wave fill clipped to the
+/// water of an S-101 cell, and labelled pressure isobars.
 /// </summary>
 /// <remarks>
 /// The grids are generated here, not read from files: no weather reader is
@@ -107,6 +109,108 @@ public sealed class WeatherRenderingTests
         var background = new SKColor(Background(palette));
         await TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 2000, maxDifferentInkFraction: 0.25, background)
             .UseParameters(palette);
+    }
+
+    [Theory]
+    [InlineData(PaletteType.Day)]
+    [InlineData(PaletteType.Night)]
+    public async Task Wind_barbs_in_the_southern_hemisphere(PaletteType palette)
+    {
+        // The Wind_barbs grid moved to 45°S–50°S: the same speeds and
+        // directions, drawn with the mirrored southern barbs.
+        var source = WindSource(6, 7, 1.0, -50, -6, (row, col, cols) =>
+        {
+            int i = row * cols + col;
+            return (5.0 * i, i * 45.0 % 360);
+        });
+
+        var bitmap = await RenderAsync(source, new WindBarbStyle(), palette, 640, 560);
+
+        var background = new SKColor(Background(palette));
+        await TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 2500, maxDifferentInkFraction: 0.25, background)
+            .UseParameters(palette);
+    }
+
+    [Theory]
+    [InlineData(1.0, "east")]
+    [InlineData(-1.0, "west")]
+    public async Task Barb_feathers_change_side_at_the_equator(double latitude, string side)
+    {
+        // One 25 kn northerly: the staff points up (north) from the station, so
+        // its feathers are east of the staff in the north and west of it in
+        // the south.
+        var source = WindSource(3, 3, 1.0, latitude - 1, -6, (row, col, _) =>
+            row == 1 && col == 1 ? (25.0, 0.0) : (double.NaN, double.NaN));
+
+        using var bitmap = await RenderAsync(source, new WindBarbStyle(), PaletteType.Day, 200, 200, CentredViewport(-5, latitude, 2, 200));
+
+        var (west, east, _, _) = InkByHalf(bitmap, new SKColor(Background(PaletteType.Day)));
+        Assert.True(side == "east" ? east > 3 * west : west > 3 * east, $"Ink west {west}, east {east}: the feathers aren't {side} of the staff.");
+    }
+
+    [Fact]
+    public async Task Wave_height_fill_clipped_to_the_water_of_an_S101_cell()
+    {
+        // IHO test cell 101AA00DS0020 (32°S): land either side of a channel.
+        var cellPath = Path.Combine(TestHelpers.DatasetsRoot, "S101", "S-101", "DATASET_FILES", "101AA00DS0020.000");
+        Assert.SkipUnless(File.Exists(cellPath), $"S-101 test dataset not present: {cellPath}");
+
+        using var manager = CreateCatalogueManager();
+        var s101 = await new S101DatasetProcessor(
+                cellPath, manager, new MoonSharpLuaEngine(), new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue))
+            .BuildVectorPortrayalAsync(new RenderContext(), Ct);
+
+        // Wave height rising from 0.5 m in the south-west to 6 m in the
+        // north-east, over the whole view, land included.
+        var waves = await WeatherPortrayal.BuildAsync(
+            WaveSource(20, 20, 0.012, -32.33, 61.97, (row, col, _) => (0.5f + 0.15f * (row + col), 250f)),
+            [new WaveHeightStyle()],
+            "waves.grb2",
+            cancellationToken: Ct);
+
+        var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
+        var options = new HeadlessCompositeOptions { Viewport = CentredViewport(62.0833, -32.2167, 0.2, 640) };
+        using var chart = compositor.Render([HeadlessCompositeInput.ForVector(s101)], options);
+        var bitmap = compositor.Render([HeadlessCompositeInput.ForVector(s101), HeadlessCompositeInput.ForCoverage(waves)], options);
+
+        // The fill covers the whole view, so only pixels it left alone — the
+        // land it was clipped from — match the chart drawn on its own.
+        int same = 0, total = 0;
+        for (int y = 0; y < chart.Height; y += 2)
+        {
+            for (int x = 0; x < chart.Width; x += 2)
+            {
+                total++;
+                if (chart.GetPixel(x, y) == bitmap.GetPixel(x, y))
+                    same++;
+            }
+        }
+
+        Assert.True(same > total / 10, $"Only {same} of {total} sampled pixels are untouched by the wave fill: it isn't clipped to water.");
+        await TestHelpers.VerifyBitmap(bitmap);
+    }
+
+    [Theory]
+    [InlineData(PaletteType.Day)]
+    [InlineData(PaletteType.Night)]
+    public async Task Pressure_isobars(PaletteType palette)
+    {
+        // A 976 hPa low west of a 1030 hPa high over the North Atlantic, on a
+        // 1° grid: isobars every 4 hPa, labelled in hectopascals.
+        var source = PressureSource(21, 31, 1.0, 40, -40, (lat, lon) =>
+        {
+            double low = 1012 - 36 * Math.Exp(-(Square(lat - 50) + Square(lon + 30)) / 40.0);
+            double high = 18 * Math.Exp(-(Square(lat - 45) + Square(lon + 15)) / 60.0);
+            return (float)((low + high) * 100);
+        });
+
+        var bitmap = await RenderAsync(source, new PressureIsobarStyle(), palette, 640, 480);
+
+        var background = new SKColor(Background(palette));
+        await TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 3000, maxDifferentInkFraction: 0.25, background)
+            .UseParameters(palette);
+
+        static double Square(double x) => x * x;
     }
 
     // ---------------------------------------------------------------
@@ -329,6 +433,22 @@ public sealed class WeatherRenderingTests
         var grid = new WeatherNativeGrid(rows, cols, south, west, spacing, spacing);
         WeatherParameter[] parameters = [Parameter(WeatherParameters.WindU, u), Parameter(WeatherParameters.WindV, v)];
         return new WeatherCoverageSource(new WeatherGridSet(new WeatherOrigin("TEST", Run), grid, parameters), WeatherParameters.WindGroup, parameters);
+    }
+
+    // Mean sea level pressure, in pascals, from each node's latitude and longitude.
+    private static WeatherCoverageSource PressureSource(
+        int rows, int cols, double spacing, double south, double west, Func<double, double, float> pascals)
+    {
+        var values = new float[rows * cols];
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < cols; c++)
+                values[r * cols + c] = pascals(south + r * spacing, west + c * spacing);
+        }
+
+        var grid = new WeatherNativeGrid(rows, cols, south, west, spacing, spacing);
+        WeatherParameter[] parameters = [Parameter(WeatherParameters.PressureMsl, values)];
+        return new WeatherCoverageSource(new WeatherGridSet(new WeatherOrigin("TEST", Run), grid, parameters), WeatherParameters.PressureGroup, parameters);
     }
 
     private static WeatherParameter Parameter(string id, float[] values)
