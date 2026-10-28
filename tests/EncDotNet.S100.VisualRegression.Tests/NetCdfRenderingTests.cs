@@ -53,6 +53,46 @@ public sealed class NetCdfRenderingTests : IDisposable
         Assert.True(changed > 5000, $"Only {changed} sampled pixels differ between 00Z and 06Z.");
     }
 
+    // Issue #1097: with no viewport the compositor frames the union of the
+    // cell's extent and the 0.2° wave grid's true extent, not the grid
+    // widened to the 0.5° bins of the seam-aware accumulator.
+    [Fact]
+    public async Task Auto_fit_frames_the_cell_and_the_wave_grid_on_their_true_extents()
+    {
+        var cellPath = Path.Combine(TestHelpers.DatasetsRoot, "S101", "S-101", "DATASET_FILES", "101AA00DS0020.000");
+        Assert.SkipUnless(File.Exists(cellPath), $"S-101 test dataset not present: {cellPath}");
+
+        using var manager = CreateCatalogueManager();
+        var s101 = await new S101DatasetProcessor(
+                cellPath, manager, new MoonSharpLuaEngine(), new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue))
+            .BuildVectorPortrayalAsync(new RenderContext(), Ct);
+        var factory = new ProjNetCrsTransformFactory();
+        using var waves = new NetCdfDatasetProcessor(
+            NetCdfFixtures.WriteWaveNetCdf4(Path.Combine(_dir, "waves.nc")), factory);
+        var wavesInput = HeadlessCompositeInput.ForCoverage(await waves.BuildCoveragePortrayalAsync(null, Ct));
+        var compositor = new HeadlessCompositor(factory);
+
+        Assert.True(compositor.Prepare([HeadlessCompositeInput.ForVector(s101)])
+            .TryGetWorldBounds(out double cellMinX, out double cellMinY, out double cellMaxX, out double cellMaxY));
+        Assert.True(compositor.Prepare([wavesInput])
+            .TryGetWorldBounds(out double gridMinX, out double gridMinY, out double gridMaxX, out double gridMaxY));
+        Assert.True(compositor.Prepare([HeadlessCompositeInput.ForVector(s101), wavesInput])
+            .TryGetWorldBounds(out double minX, out double minY, out double maxX, out double maxY));
+
+        var extent = waves.Metadata.Extent!;
+        var (west, south) = WebMercator.FromLonLat(extent.WestLongitude, extent.SouthLatitude);
+        var (east, north) = WebMercator.FromLonLat(extent.EastLongitude, extent.NorthLatitude);
+        Assert.Equal(west, gridMinX, 1.0);
+        Assert.Equal(east, gridMaxX, 1.0);
+        Assert.Equal(south, gridMinY, 1.0);
+        Assert.Equal(north, gridMaxY, 1.0);
+
+        Assert.Equal(Math.Min(cellMinX, gridMinX), minX, 1.0);
+        Assert.Equal(Math.Max(cellMaxX, gridMaxX), maxX, 1.0);
+        Assert.Equal(Math.Min(cellMinY, gridMinY), minY, 1.0);
+        Assert.Equal(Math.Max(cellMaxY, gridMaxY), maxY, 1.0);
+    }
+
     // The S-101 test cell, the wave fill and the wind barbs at one time step,
     // in a 640 × 640 viewport on the cell.
     private async Task<SKBitmap> RenderCompositeAsync(DateTime time)

@@ -301,9 +301,9 @@ public abstract class WeatherGridProcessorBase :
 
         var portrayal = await BuildCoveragePortrayalAsync(context, cancellationToken).ConfigureAwait(false);
 
-        // Frame the grid here when the caller gives no viewport: the
-        // compositor's own fit snaps longitudes to whole degrees (for its seam
-        // handling), which leaves a regional grid a small patch in the middle.
+        // Frame the grid here when the caller gives no viewport, with a 5 %
+        // margin: tighter than the compositor's own 10 % union fit, which
+        // suits a render of the grid alone.
         var viewport = context?.Viewport;
         if (viewport is null)
         {
