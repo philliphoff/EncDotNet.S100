@@ -6,6 +6,23 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Own-ship wind from NMEA 0183.** A new `EncDotNet.S100.Nmea` library is a
+  minimal NMEA 0183 reader, kept apart so an own-ship NMEA driver can share
+  it: checksum validation, talker-agnostic decoding of `MWV`, `MWD`, `MTW`,
+  `XDR` (air temperature and pressure), `HDT`, `HDG`, `VHW`, `RMC` and
+  `VTG`, true wind from apparent wind, and line sources over a stream, a
+  replay file, TCP and UDP. A new `EncDotNet.S100.DynamicSources.Nmea`
+  library builds `NmeaWeatherSource` on it: one feature at own ship with
+  true wind from `MWD`, or derived from relative wind, heading and motion
+  over the ground (falling back to `MWV` T and to motion through the water),
+  drawn as the weather wind barb next to the own-ship symbol on S-98
+  `OtherChartOverlays` at priority 110. Without a heading or speed it shows
+  the relative wind, grey and labelled so. A pick lists true and relative
+  wind, how true wind was found, heading, water and air temperature and
+  pressure. In the viewer, set `SOUNDCHARTS_NMEA_INPUT` (`udp`,
+  `tcp://host:port` or a recording's path) to get its Layer Stack row. Not
+  for navigation. See the
+  [DynamicSources.Nmea README](../src/EncDotNet.S100.DynamicSources.Nmea/README.md).
 - **NDBC buoy observations.** A new `EncDotNet.S100.DynamicSources.Ndbc`
   library shows NOAA National Data Buoy Center observations as a dynamic
   feature source. `NdbcObservationSource` reads the `activestations.xml`

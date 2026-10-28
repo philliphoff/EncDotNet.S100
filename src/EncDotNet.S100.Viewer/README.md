@@ -1232,6 +1232,43 @@ Data Buoy Center buoys and C-MAN stations. Turn it on with its row under
 Not for navigation. See the
 [DynamicSources.Ndbc README](../EncDotNet.S100.DynamicSources.Ndbc/README.md).
 
+## Show own-ship wind from NMEA instruments
+
+**Own-ship wind and weather (NMEA)** shows the ship's own wind and water
+temperature from its NMEA 0183 instruments. Set the
+`SOUNDCHARTS_NMEA_INPUT` environment variable before starting SoundCharts
+to the input:
+
+| Value | Input |
+| --- | --- |
+| `udp` or `udp:10110` | UDP broadcasts on that port (10110 by default), as most multiplexers and Signal K servers send them |
+| `udp://192.168.1.5:10110` | UDP on one local address |
+| `tcp://plotter.local:10110` | A TCP NMEA server; reconnects when the connection drops |
+| A file path | A recording, replayed at 10 lines a second, over and over |
+
+The row then appears under **Other chart overlays** in the **Layer stack**
+panel. Without the variable there's no row.
+
+- A small ring with a wind barb sits up and to the right of the own-ship
+  symbol, with the true wind (such as **200° 14 kn**) and the water
+  temperature beside it. The barb points into the wind: pennants 50 kn,
+  full barbs 10 kn, half barbs 5 kn.
+- True wind comes from the instruments' `MWD` when they send it, otherwise
+  it's worked out from the relative wind, the heading and the speed and
+  course over the ground, so it compares with forecasts and buoys.
+- When there's no heading or no speed, the relative wind is shown instead,
+  grey and labelled **Rel. wind**.
+- Select it to see the true wind and how it was worked out, the relative
+  wind, heading, water and air temperature and pressure in the
+  **Pick report**.
+- While the own-ship overlay is shown, the glyph follows it. While it's
+  hidden, the glyph goes where the instruments' GPS (`RMC`) puts the vessel.
+  The simulated own ship's heading and speed are only used when the
+  instruments send none.
+
+Not for navigation. See the
+[DynamicSources.Nmea README](../EncDotNet.S100.DynamicSources.Nmea/README.md).
+
 ## Own ship and AIS vessels
 
 ### Show the simulated own ship
