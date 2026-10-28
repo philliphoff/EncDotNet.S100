@@ -109,4 +109,91 @@ public sealed class SeamAwareBoundsAccumulatorTests
         Assert.InRange(LonSpanDegrees(minX, maxX), 25.0, 35.0);
         Assert.True(maxX > WebMercator.Circumference / 2.0);
     }
+
+    // Issue #1097: the 0.5° occupancy bins must not round a box's X extent out
+    // to the bin edges.
+
+    [Theory]
+    [InlineData(10.1, 10.3)]   // inside one bin
+    [InlineData(10.4, 10.6)]   // across a bin edge
+    [InlineData(-6.125, 0.125)]
+    public void Sub_degree_lon_lat_box_resolves_to_its_true_extent(double west, double east)
+    {
+        var acc = new SeamAwareBoundsAccumulator();
+        acc.AddLonLatBox(west, east, south: 50.0, north: 50.2);
+
+        Assert.True(acc.TryResolve(out double minX, out double minY, out double maxX, out double maxY));
+        Assert.Equal(World(west, 0).X, minX, 1e-6);
+        Assert.Equal(World(east, 0).X, maxX, 1e-6);
+        Assert.Equal(World(0, 50.0).Y, minY, 1e-6);
+        Assert.Equal(World(0, 50.2).Y, maxY, 1e-6);
+    }
+
+    [Fact]
+    public void Sub_degree_box_with_vector_geometry_resolves_to_the_union()
+    {
+        var acc = new SeamAwareBoundsAccumulator();
+        var (vx0, vy0) = World(10.0, 50.0);
+        var (vx1, vy1) = World(10.15, 50.1);
+        acc.Add(vx0, vy0);
+        acc.Add(vx1, vy1);
+        acc.AddLonLatBox(west: 10.1, east: 10.3, south: 50.05, north: 50.25);
+
+        Assert.True(acc.TryResolve(out double minX, out double minY, out double maxX, out double maxY));
+        Assert.Equal(vx0, minX, 1e-6);
+        Assert.Equal(World(10.3, 0).X, maxX, 1e-6);
+        Assert.Equal(vy0, minY, 1e-6);
+        Assert.Equal(World(0, 50.25).Y, maxY, 1e-6);
+    }
+
+    [Fact]
+    public void Sub_degree_box_crossing_seam_resolves_to_its_true_shifted_extent()
+    {
+        var acc = new SeamAwareBoundsAccumulator();
+        acc.AddLonLatBox(west: 179.9, east: -179.9, south: 60.0, north: 60.2);
+
+        Assert.True(acc.TryResolve(out double minX, out _, out double maxX, out _));
+        Assert.Equal(World(179.9, 0).X, minX, 1e-6);
+        Assert.Equal(World(180.1, 0).X, maxX, 1e-6);
+    }
+
+    [Fact]
+    public void Box_running_past_180_is_treated_as_crossing_the_seam()
+    {
+        // A grid stored in 0°–360° longitudes reports east > 180°.
+        var acc = new SeamAwareBoundsAccumulator();
+        acc.AddLonLatBox(west: 179.9, east: 180.1, south: 60.0, north: 60.2);
+
+        Assert.True(acc.TryResolve(out double minX, out _, out double maxX, out _));
+        Assert.Equal(World(179.9, 0).X, minX, 1e-6);
+        Assert.Equal(World(180.1, 0).X, maxX, 1e-6);
+    }
+
+    [Fact]
+    public void Sub_degree_box_across_seam_from_vector_geometry_resolves_to_the_union()
+    {
+        // A chart cell just west of +180° and a sub-degree coverage just east of
+        // −180°: the union is ~1.1° wide across the seam, not near-global.
+        var acc = new SeamAwareBoundsAccumulator();
+        var (vx0, vy0) = World(179.0, 60.0);
+        var (vx1, vy1) = World(179.8, 60.3);
+        acc.Add(vx0, vy0);
+        acc.Add(vx1, vy1);
+        acc.AddLonLatBox(west: -179.95, east: -179.9, south: 60.1, north: 60.2);
+
+        Assert.True(acc.TryResolve(out double minX, out _, out double maxX, out _));
+        Assert.Equal(vx0, minX, 1e-6);
+        Assert.Equal(World(180.1, 0).X, maxX, 1e-6);
+    }
+
+    [Fact]
+    public void Box_spanning_the_whole_world_stays_global()
+    {
+        var acc = new SeamAwareBoundsAccumulator();
+        acc.AddLonLatBox(west: -180.0, east: 180.0, south: -60.0, north: 60.0);
+
+        Assert.True(acc.TryResolve(out double minX, out _, out double maxX, out _));
+        Assert.Equal(World(-180, 0).X, minX, 1e-6);
+        Assert.Equal(World(180, 0).X, maxX, 1e-6);
+    }
 }

@@ -6,6 +6,7 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -163,6 +164,91 @@ public class HeadlessCompositorTests
             "Expected a painted feature in the left half of the composite.");
         Assert.True(HasRedPixel(bitmap, bitmap.Width / 2, bitmap.Width),
             "Expected a painted feature in the right half of the composite.");
+    }
+
+    // Issue #1097: the auto-fit frames a sub-degree coverage on its true extent,
+    // not on the 0.5° occupancy bins of the seam-aware accumulator.
+
+    [Fact]
+    public void Prepare_bounds_a_sub_degree_coverage_on_its_true_extent()
+    {
+        // 2×2 cells of 0.1° centred on 10.05/10.15 E, 0.05/0.15 N: 10.0–10.2 E, 0.0–0.2 N.
+        var scene = NewCompositor().Prepare([SmallGrid(10.05, 0.05, 0.1, 2)]);
+
+        AssertBounds(scene, west: 10.0, east: 10.2, south: 0.0, north: 0.2);
+    }
+
+    [Fact]
+    public void Render_fits_a_sub_degree_coverage_to_fill_the_image()
+    {
+        using var bitmap = NewCompositor().Render(
+            [SmallGrid(10.05, 0.05, 0.1, 2)],
+            new HeadlessCompositeOptions { Width = 200, Height = 200, Background = new RgbaColor(255, 255, 255, 255) });
+
+        // A 10 % margin each side leaves the square grid ~167 px across, centred.
+        var red = new SKColor(0xFF, 0x00, 0x00);
+        Assert.Equal(red, bitmap.GetPixel(100, 100));
+        Assert.Equal(red, bitmap.GetPixel(25, 25));
+        Assert.Equal(red, bitmap.GetPixel(175, 175));
+        Assert.Equal(red, bitmap.GetPixel(25, 175));
+        Assert.Equal(red, bitmap.GetPixel(175, 25));
+        Assert.NotEqual(red, bitmap.GetPixel(5, 100));
+        Assert.NotEqual(red, bitmap.GetPixel(195, 100));
+    }
+
+    [Fact]
+    public void Prepare_bounds_an_S101_cell_and_a_sub_degree_coverage_on_their_union()
+    {
+        var cell = VectorLayer(
+            datasetId: "cell.000",
+            plane: S98DisplayPlane.BaseChartUnder,
+            fillHex: "#0000FF",
+            west: 9.9, east: 10.05, south: 0.0, north: 0.1);
+        // 10.0–10.2 E, 0.05–0.25 N.
+        var grid = SmallGrid(10.05, 0.1, 0.1, 2);
+
+        var scene = NewCompositor().Prepare([cell, grid]);
+
+        AssertBounds(scene, west: 9.9, east: 10.2, south: 0.0, north: 0.25);
+    }
+
+    [Fact]
+    public void Prepare_bounds_an_S101_cell_and_a_sub_degree_coverage_across_the_antimeridian()
+    {
+        // The cell sits just west of +180°, the grid (−179.95° to −179.75°) just
+        // east of −180°: the union is 0.65° wide across the seam.
+        var cell = VectorLayer(
+            datasetId: "cell.000",
+            plane: S98DisplayPlane.BaseChartUnder,
+            fillHex: "#0000FF",
+            west: 179.6, east: 179.9, south: 60.0, north: 60.2);
+        var grid = SmallGrid(-179.9, 60.05, 0.1, 2);
+
+        var scene = NewCompositor().Prepare([cell, grid]);
+
+        AssertBounds(scene, west: 179.6, east: 180.25, south: 60.0, north: 60.2);
+    }
+
+    [Fact]
+    public void Prepare_bounds_a_sub_degree_coverage_crossing_the_antimeridian()
+    {
+        // Cells centred on 179.95° and 180.05° (a grid stored in 0°–360°).
+        var scene = NewCompositor().Prepare([SmallGrid(179.95, 60.05, 0.1, 2)]);
+
+        AssertBounds(scene, west: 179.9, east: 180.1, south: 60.0, north: 60.2);
+    }
+
+    private static void AssertBounds(HeadlessCompositeScene scene, double west, double east, double south, double north)
+    {
+        Assert.True(scene.TryGetWorldBounds(out double minX, out double minY, out double maxX, out double maxY));
+        var (expectedMinX, expectedMinY) = WebMercator.FromLonLat(west, south);
+        var (expectedMaxX, expectedMaxY) = WebMercator.FromLonLat(east, north);
+        // A metre is far below a pixel at any fitted scale here, and far below
+        // the 0.5° (~55 km) bin the old fit rounded out to.
+        Assert.Equal(expectedMinX, minX, 1.0);
+        Assert.Equal(expectedMaxX, maxX, 1.0);
+        Assert.Equal(expectedMinY, minY, 1.0);
+        Assert.Equal(expectedMaxY, maxY, 1.0);
     }
 
     [Fact]
@@ -439,6 +525,63 @@ public class HeadlessCompositorTests
             Info = "test",
         };
         return HeadlessCompositeInput.ForCoverage(result);
+    }
+
+    /// <summary>
+    /// Builds a square EPSG:4326 coverage of <paramref name="size"/> × <paramref name="size"/>
+    /// cells of <paramref name="spacing"/> degrees, the first cell centred on
+    /// (<paramref name="originLongitude"/>, <paramref name="originLatitude"/>),
+    /// styled solid red.
+    /// </summary>
+    private static HeadlessCompositeInput SmallGrid(
+        double originLongitude, double originLatitude, double spacing, int size)
+    {
+        var metadata = new GridMetadata
+        {
+            NumRows = size,
+            NumColumns = size,
+            OriginLatitude = originLatitude,
+            OriginLongitude = originLongitude,
+            SpacingLatitudinal = spacing,
+            SpacingLongitudinal = spacing,
+        };
+        var values = new float[size * size];
+        System.Array.Fill(values, 5.0f);
+        var styled = new StyledCoverageLayer
+        {
+            Coverage = new SampledCoverage
+            {
+                Region = GridRegion.Full,
+                Metadata = metadata,
+                Values = new Dictionary<string, float[]> { ["waveHeight"] = values },
+            },
+            NoDataValue = float.NaN,
+            Georeferencer = new GridGeoreferencer(metadata, "EPSG:4326"),
+            ColorScheme = new CoverageColorScheme
+            {
+                FieldName = "waveHeight",
+                Bands = [new ColorBand { MinValue = 0f, MaxValue = 10f, Color = "#FF0000" }],
+            },
+        };
+        double half = spacing / 2;
+        var grid = new GridCoverageSubLayer
+        {
+            LayerKey = "grid.surface",
+            LayerName = "Grid",
+            Plane = S98DisplayPlane.OnDemandSurface,
+            Coverage = styled,
+            Viewport = SquareViewport(
+                originLongitude - half, originLongitude + (size - 0.5) * spacing,
+                originLatitude - half, originLatitude + (size - 0.5) * spacing, size),
+        };
+        return HeadlessCompositeInput.ForCoverage(
+            new CoveragePortrayalResult
+            {
+                SubLayers = [grid],
+                Spec = new SpecRef("S-104", default),
+                SourceDatasetId = "grid.h5",
+                Info = "test",
+            });
     }
 
     private static HeadlessCompositeInput ProjectedCoverageSubset()

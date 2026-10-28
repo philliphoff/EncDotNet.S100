@@ -90,6 +90,14 @@ month. For package versions and release assets, see
   tiles are redrawn; `S98DefaultRules.Default` has a seventh rule; an
   `Isoline` with an empty label is drawn unlabelled. See the
   [Datasets.Weather README](../src/EncDotNet.S100.Datasets.Weather/README.md).
+- **Headless renders frame small coverages on their true extent.** With no
+  viewport or `--bbox`, `HeadlessCompositor` (and so `s100 render`) now fits
+  the view to each coverage layer's own extent plus its usual 10 % margin.
+  Before, `SeamAwareBoundsAccumulator.AddLonLatBox` widened a coverage's
+  longitudes out to its 0.5° occupancy bins, so a 0.2° grid composited with a
+  chart cell drew as a small patch. The bins still drive antimeridian
+  detection, and a box whose eastern edge runs past +180° (a 0°–360° grid) is
+  now split across the seam instead of clamped.
 - **NDBC buoy observations.** A new `EncDotNet.S100.DynamicSources.Ndbc`
   library shows NOAA National Data Buoy Center observations as a dynamic
   feature source. `NdbcObservationSource` reads the `activestations.xml`
