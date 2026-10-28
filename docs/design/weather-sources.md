@@ -561,6 +561,57 @@ symbols). Choices made along the way:
   the `realtime2` files and station table under `tests/datasets/NDBC` are
   hand-written in the documented format (see its README).
 
+**As built (#1073).** The sentence reader is its own library,
+`EncDotNet.S100.Nmea` (Core only), so an own-ship NMEA driver can share it;
+`NmeaWeatherSource` lives in `EncDotNet.S100.DynamicSources.Nmea`, beside the
+NDBC one, and reuses the weather styles' barbs and palette. Choices made
+along the way:
+
+- **Parsing.** A checksum is required by default: a sentence cut off before
+  its end has none, so it can't otherwise be told from a whole one. A tag
+  block is skipped, and when a cut-off sentence is glued to a whole one the
+  last start character wins. Decoding goes by formatter, whatever the
+  talker. `XDR` names are the maker's, so air temperature and pressure are
+  picked by type, unit and a plausible range, with names such as `ENGINE`,
+  `OIL`, `TANK`, `CABIN` or `WATER` ruling a reading out.
+- **Input.** `INmeaLineSource` opens its input per enumeration and closes it
+  when the enumeration ends (so replays don't hold the file); stream, replay
+  file (paced, looped), UDP and TCP (reconnecting) drivers. A host that
+  already reads NMEA can call `ProcessLine` instead.
+- **Heading and motion.** `IOwnShipPositionProvider` is viewer-internal and,
+  in SoundCharts, simulated, so the library doesn't depend on it. The source
+  also decodes `HDT`, `HDG` (with variation from `HDG` or `RMC`), `VHW`,
+  `RMC` and `VTG` from the same stream, and uses them first: they come from
+  the same instruments as the wind and match it in time. The host's own-ship
+  fix (`UpdateOwnShip`) fills in what the stream lacks and places the feature.
+  Stream motion older than 10 s isn't combined with the wind.
+- **True wind,** best first: `MWD`; derived from `MWV` R, heading, SOG and
+  COG (**over the ground**, the reference forecasts and buoys use, so the
+  barbs compare like with like); `MWV` T turned by the heading; derived from
+  `MWV` R, heading and speed through the water. Below 0.2 kn the heading
+  stands in for COG. With none of these, the relative wind is kept, drawn
+  grey from heading plus the relative angle when the heading is known (no
+  barb without one), and labelled `Rel. wind`. Units N, M, K and S are
+  converted; `MWV` status `V` and invalid `RMC`/`VTG` fixes are ignored.
+- **Ageing and rate.** Values not repeated for 1 minute are dropped; the
+  feature is republished at most once a second.
+- **Drawing.** `OwnShipWeatherPortrayal` puts a small ring and the barb 8 mm
+  right of and above own ship (a local offset, fixed on screen), so the
+  glyph sits beside the own-ship symbol rather than on its hull, with wind
+  and water-temperature labels. The barb comes from #1072's
+  `WindBarbSymbols.For` at own ship's latitude (southern south of the
+  equator, northern on and north of it), as NDBC's does; the grey
+  relative-wind recolouring covers both sets. Plane
+  `OtherChartOverlays`, priority 110, above NDBC observations.
+- **Viewer.** Registered only when `SOUNDCHARTS_NMEA_INPUT` names an input;
+  then "Own-ship wind and weather (NMEA)" is a Layer Stack row. The own-ship
+  fix is forwarded only while the own-ship overlay is shown, so with it
+  hidden the glyph follows the stream's `RMC` rather than the invisible
+  simulated ship.
+- **Fixtures.** No instrument was available, so the recordings under
+  `tests/datasets/NMEA` are hand-written from one consistent scene with
+  computed checksums (see its README).
+
 ### 6.3 Remote sources in the Library
 
 Add entries to `known-sources.json`, following the NOAA AWS pattern

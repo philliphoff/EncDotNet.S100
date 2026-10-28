@@ -1089,6 +1089,12 @@ public partial class App : Application
         EncDotNet.S100.Viewer.Services.DynamicSources.Ndbc.NdbcObservationsServiceCollectionExtensions
             .AddNdbcObservations(services);
 
+        // #1073: own-ship wind and water temperature from NMEA 0183. Only
+        // registered when SOUNDCHARTS_NMEA_INPUT names an input (UDP, TCP or
+        // a recording); see Services.DynamicSources.Nmea.
+        EncDotNet.S100.Viewer.Services.DynamicSources.Nmea.NmeaWeatherServiceCollectionExtensions
+            .AddNmeaWeather(services);
+
         // Pirate mode: own-ship impersonates a selected live AIS target.
         // The controller reads the raw AIS source (via the exclusion
         // decorator's Inner) so it still sees the followed target, drives

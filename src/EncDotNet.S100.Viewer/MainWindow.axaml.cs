@@ -426,6 +426,10 @@ public partial class MainWindow : ShadUI.Window
         // toggle, then start polling.
         ndbcOverlay?.Attach(_dynamicSourceOverlayHost);
 
+        // #1073: feed the NMEA weather source the own-ship fix and start
+        // reading its input (only present when an input is configured).
+        App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Nmea.NmeaWeatherOverlay>()?.Attach();
+
         // Pick highlight: keep a cursor-echo marker + selected-feature outline
         // on the overlay tier in sync with the current pick report, so the
         // pick stays visible as the user (or an MCP agent) pans the map.
