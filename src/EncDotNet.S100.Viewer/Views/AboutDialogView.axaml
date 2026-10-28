@@ -281,7 +281,8 @@
                            Opacity="0.7" />
                 <SelectableTextBlock Text="{Binding DataCredits}"
                                      AutomationProperties.AutomationId="About.DataCredits.Text"
-                                     AutomationProperties.Name="{x:Static loc:Strings.About_DataCredits}"
+                                     AutomationProperties.Name="{x:Static loc:Strings.About_DataCreditsTitle}"
+                                     AutomationProperties.HelpText="{x:Static loc:Strings.About_DataCredits}"
                                      FontSize="12"
                                      Opacity="0.6"
                                      TextWrapping="Wrap" />
