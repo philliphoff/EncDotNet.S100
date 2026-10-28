@@ -89,7 +89,7 @@ public sealed class OnlineSyncPolicy : ILibrarySyncPolicy
 {
     /// <inheritdoc/>
     public bool Supports(CollectionSource source) => source is NoaaEncFeedSource or UsaceIencFeedSource
-        or ChartCatalogsFeedSource or S100FeedSource or S100CatalogueFeedSource or S100ForecastFeedSource;
+        or ChartCatalogsFeedSource or S100FeedSource or S100CatalogueFeedSource or S100ForecastFeedSource or WeatherFeedSource;
 
     /// <inheritdoc/>
     public IReadOnlyList<CollectionItem> Wanted(SourceIndex index)

@@ -290,7 +290,7 @@ internal sealed class PickService : IPickService
     /// the underlying info carries a station snapshot.
     /// </summary>
     private PickHit BuildHit(FeatureInfo info, DatasetEntry entry, IDatasetProcessor processor) =>
-        BuildHit(info, entry.DisplayName, processor, entry.NotForNavigation);
+        BuildHit(info, entry.DisplayName, processor, entry.NotForNavigation, entry.Credit);
 
     // A feature opened by dataset name (the warnings panel, reference
     // navigation) finds its entry by name for the not-for-navigation flag.
@@ -302,7 +302,7 @@ internal sealed class PickService : IPickService
             _loader.EntryLayers.Keys.Any(e => e.NotForNavigation
                 && string.Equals(e.DisplayName, datasetFileName, StringComparison.Ordinal)));
 
-    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor, bool notForNavigation)
+    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor, bool notForNavigation, string? credit = null)
     {
         return new PickHit
         {
@@ -318,6 +318,7 @@ internal sealed class PickService : IPickService
             EggCode = info.EggCode,
             NavigationalWarning = info.NavigationalWarning,
             NotForNavigation = notForNavigation,
+            Credit = credit,
         };
     }
 

@@ -207,6 +207,17 @@ public sealed record ProductRegistration
     public DatasetBytesMatcher? MatchBytes { get; init; }
 
     /// <summary>
+    /// Optional recognizer for a folder that is one dataset: given a folder's
+    /// path, decides whether the product reads the folder as a whole (a weather
+    /// model run published one GRIB2 file per forecast hour, #1075). A
+    /// product whose processors take a folder path sets it;
+    /// <see cref="DatasetPipelineFactory"/> offers every folder to it, and
+    /// <see cref="CreateFromPath"/> and <see cref="ReadMetadata"/> then get the
+    /// folder's path. <see langword="null"/> for every other product.
+    /// </summary>
+    public Func<string, bool>? MatchFolder { get; init; }
+
+    /// <summary>
     /// Returns the default plane for <paramref name="layerKind"/> from
     /// <see cref="DefaultPlanes"/>: its own entry, else the
     /// <see cref="AnyLayerKind"/> entry, else <see langword="null"/>.

@@ -888,6 +888,15 @@
                                                IsVisible="{Binding SelectedEntry.HasPortrayalNote, FallbackValue=False}"
                                                TextWrapping="Wrap" />
 
+                                    <!-- The data's credit from its Library source (#1075): attribution and licence. -->
+                                    <SelectableTextBlock Text="{Binding SelectedEntry.CreditText, FallbackValue=''}"
+                                                         FontSize="12"
+                                                         Opacity="0.7"
+                                                         IsVisible="{Binding SelectedEntry.HasCredit, FallbackValue=False}"
+                                                         AutomationProperties.AutomationId="Datasets.Details.Credit"
+                                                         AutomationProperties.Name="{x:Static loc:Strings.Library_DataCreditName}"
+                                                         TextWrapping="Wrap" />
+
                                     <!-- Loader status text (e.g. feature counts). -->
                                     <TextBlock Text="{Binding SelectedEntry.Info}"
                                                FontSize="12"

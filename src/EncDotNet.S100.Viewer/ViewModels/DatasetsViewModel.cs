@@ -170,6 +170,33 @@ internal sealed class DatasetEntry : ViewModelBase
     /// </summary>
     public bool NotForNavigation { get; }
 
+    private string? _credit;
+
+    /// <summary>
+    /// The data's credit from its Library source (#1075): attribution and
+    /// licence, "NOAA/NCEP GFS-Wave · Public domain"; null when it has none or
+    /// the dataset wasn't opened from the Library. Shown with the layer and in
+    /// its pick reports.
+    /// </summary>
+    public string? Credit
+    {
+        get => _credit;
+        set
+        {
+            if (SetProperty(ref _credit, value))
+            {
+                OnPropertyChanged(nameof(CreditText));
+                OnPropertyChanged(nameof(HasCredit));
+            }
+        }
+    }
+
+    /// <summary>"Data: …" for <see cref="Credit"/>, or null.</summary>
+    public string? CreditText => _credit is { } credit ? string.Format(System.Globalization.CultureInfo.CurrentCulture, Resources.Strings.Library_DataCreditFormat, credit) : null;
+
+    /// <summary>True when <see cref="Credit"/> is set.</summary>
+    public bool HasCredit => _credit is not null;
+
     private bool _isDeferred;
     /// <summary>
     /// True when this entry has been <em>registered</em> from a large exchange

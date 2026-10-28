@@ -130,6 +130,9 @@ the product's files:
   NetCDF-4 file's CF `Conventions`.
 - A format with a signature of its own (GRIB2, NetCDF-3, CAP) matches on the file's
   leading bytes and extension through `MatchBytes`, using a `DatasetHeader`.
+- A product whose datasets can be a folder (a GRIB2 model run in hourly files)
+  matches on the folder's path through `MatchFolder`. Only a folder is offered
+  to it, and its processors then get the folder's path.
 
 The factory reads the file's leading bytes once. It takes the encoding from the
 extension (`.000`, `.h5`/`.hdf5`, `.gml`), or from the HDF5 signature when the
@@ -242,6 +245,14 @@ envelope matchers run first, so it never claims an S-100 or NetCDF file.
 appended, steps in valid-time order whatever the message order, and a field
 decoded only when its step is drawn or sampled. The file stays open until the
 processor is disposed.
+
+A folder holding one model run in several GRIB2 files (NOMADS and AWS publish
+one per forecast hour) is one GRIB2 dataset. `MatchFolder` claims a folder that
+holds GRIB2 files (`GribRunFolder`), and `GribDatasetProcessor` and
+`ReadMetadata` read the files appended in name order, by path or from a
+file-system asset source. A Library item that names a non-S-100 product
+(`GRIB2`, `NetCDF`, `CAP`) is built with that registration when the source
+can't be sniffed.
 
 `WeatherProducts.NetCdf` registers NetCDF as `NetCDF/4.0.0` (NetCDF-4) or
 `NetCDF/3.0.0` (NetCDF-3), not S-100, with an application portrayal

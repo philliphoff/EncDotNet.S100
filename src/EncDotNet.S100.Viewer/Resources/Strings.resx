@@ -2203,6 +2203,10 @@
     <value>This {0} file is missing or has an invalid '{1}' at '{2}'.</value>
     <comment>{0} = product code; {1} = attribute or dataset name; {2} = HDF5 group path.</comment>
   </data>
+  <data name="LoadFailureToast_DamagedBody" xml:space="preserve">
+    <value>The file is damaged or isn't in the format its name suggests. Copy details has the technical reason.</value>
+    <comment>Body of the load-failure toast when the reader found bytes the format doesn't allow (a corrupt or truncated file, or a file renamed to a dataset extension).</comment>
+  </data>
   <data name="LoadFailureToast_CopyDetails" xml:space="preserve">
     <value>Copy details</value>
     <comment>Label for the action button on the load-failure toast.</comment>
@@ -6661,5 +6665,33 @@
   <data name="Tooltip_WarningRouteFinding" xml:space="preserve">
     <value>Show this warning's finding in the checked route's Findings list</value>
     <comment>Tooltip on the Warning card's route row (#959).</comment>
+  </data>
+  <data name="Library_StaleRunFormat" xml:space="preserve">
+    <value>Run {0} is over 12 hours old</value>
+    <comment>{0}: a weather model run, e.g. 2026-10-25 00Z</comment>
+  </data>
+  <data name="Library_LoadLatestRun" xml:space="preserve">
+    <value>Load latest run</value>
+    <comment>Re-reads a weather source, downloads its newest model run and loads it</comment>
+  </data>
+  <data name="Library_PinRun" xml:space="preserve">
+    <value>Pin this run</value>
+    <comment>Keeps a downloaded weather model run when a newer one is downloaded</comment>
+  </data>
+  <data name="Library_UnpinRun" xml:space="preserve">
+    <value>Unpin this run</value>
+    <comment>Deletes a pinned weather model run</comment>
+  </data>
+  <data name="Library_Format_Weather" xml:space="preserve">
+    <value>Weather service</value>
+    <comment>The catalogue format of a weather source (GRIB filter, AWS, alerts, ERDDAP)</comment>
+  </data>
+  <data name="Library_DataCreditFormat" xml:space="preserve">
+    <value>Data: {0}</value>
+    <comment>{0}: the data's attribution and licence, e.g. NOAA/NCEP GFS-Wave · Public domain</comment>
+  </data>
+  <data name="Library_DataCreditName" xml:space="preserve">
+    <value>Data credit</value>
+    <comment>Accessible name of the data's attribution and licence line</comment>
   </data>
 </root>

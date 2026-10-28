@@ -144,6 +144,41 @@ public sealed class GribWeatherDataset : IDisposable
         return Read(GribFile.Open(path), Path.GetFileName(path));
     }
 
+    /// <summary>
+    /// Opens and reads several GRIB2 files as one dataset, as if appended
+    /// (one run published a file per forecast hour, #1075): fields are merged
+    /// by parameter and level, and each parameter's steps ordered by valid
+    /// time, whatever the files' order. Files of several runs keep the latest
+    /// run and list the older runs' fields (<see cref="IgnoredFields"/>).
+    /// </summary>
+    /// <param name="paths">The files; at least one.</param>
+    /// <returns>The dataset; dispose it to close the files.</returns>
+    /// <exception cref="ArgumentException"><paramref name="paths"/> is empty.</exception>
+    /// <exception cref="GribFormatException">A file isn't valid GRIB2.</exception>
+    /// <exception cref="UnsupportedGribException">A file is GRIB edition 1, or none of the fields can be decoded.</exception>
+    /// <exception cref="UnsupportedWeatherGridException">The grid can't be normalised (it crosses the antimeridian).</exception>
+    public static GribWeatherDataset Open(IReadOnlyList<string> paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        return Read(GribFile.Open(paths), paths.Count > 0 ? Path.GetFileName(paths[0]) : null);
+    }
+
+    /// <summary>
+    /// Opens a folder holding one model run (<see cref="GribRunFolder"/>): its
+    /// GRIB2 files, in name order, read as one dataset (see <see cref="Open(IReadOnlyList{string})"/>).
+    /// </summary>
+    /// <param name="folder">The folder.</param>
+    /// <returns>The dataset; dispose it to close the files.</returns>
+    /// <exception cref="UnsupportedGribException">The folder holds no GRIB2 file, or none of the fields can be decoded.</exception>
+    public static GribWeatherDataset OpenFolder(string folder)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(folder);
+        var files = GribRunFolder.Files(folder);
+        if (files.Count == 0)
+            throw new UnsupportedGribException($"The folder {Path.GetFileName(Path.TrimEndingDirectorySeparator(folder))} holds no GRIB2 file.");
+        return Open(files);
+    }
+
     /// <summary>Opens and reads a GRIB2 file from a seekable stream.</summary>
     /// <param name="stream">The file's bytes; readable and seekable.</param>
     /// <param name="name">The file's name, used for the model name when the file's codes don't give it.</param>

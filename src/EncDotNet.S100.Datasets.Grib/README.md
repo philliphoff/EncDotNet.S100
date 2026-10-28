@@ -106,6 +106,25 @@ foreach (var ignored in dataset.IgnoredFields)
 - The dataset keeps the `GribFile` open for its steps; dispose it to close the
   file.
 
+### A folder holding one run
+
+NOMADS and AWS publish a model run as one file per forecast hour. A folder of
+them is one dataset:
+
+```csharp
+using var run = GribWeatherDataset.OpenFolder("gfs.20261025/00");   // gfswave.t00z.global.0p25.f000.grib2, f003, …
+```
+
+- `GribRunFolder.Files` lists the folder's GRIB2 files (by their indicator,
+  whatever their extension, skipping `.idx` inventories and other files), in
+  name order. `GribFile.Open(paths)` and `GribWeatherDataset.Open(paths)`
+  read several files as if they were appended, so fields are merged by
+  parameter and level and steps ordered by valid time, whatever the files'
+  order.
+- A folder that mixes runs is read like an appended file: the latest run is
+  used and the older runs' fields are listed in `IgnoredFields`.
+- Every file stays open until the dataset is disposed.
+
 ## What's supported
 
 | Part | Support |
@@ -236,6 +255,7 @@ ECMWF open data uses CCSDS, which isn't supported yet. The design note's
 | `GribFile` | Opens and indexes a file. `Fields`, `ReadValues` and `CreateStepDecoder`. |
 | `GribField` | One indexed field: `Parameter`, `Identification`, `Grid`, `Product`, `DataRepresentation`, `HasBitmap`, the message offset and length, `ReferenceTime`, `ValidTime` and `UnsupportedReason`. It also has the weather mapping methods. |
 | `GribWeatherDataset`, `GribIgnoredField` | A whole file read into a `WeatherGridSet`, and the fields it left out with why. |
+| `GribRunFolder` | The GRIB2 files of a folder holding one model run, read as one dataset. |
 | `GribIdentification` | Section 1. |
 | `GribGrid`, `GribLatLonGrid`, `GribScanningMode` | Section 3, and template 3.0's geometry and scanning flags. |
 | `GribProduct`, `GribFixedSurface`, `GribTimeRange`, `GribTimeUnit`, `GribStatisticalProcess` | Section 4 and templates 4.0 and 4.8. |

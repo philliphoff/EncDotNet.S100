@@ -271,6 +271,35 @@ public sealed class LibraryDownloads : ILibraryLocalCopies
         return deleted;
     }
 
+    /// <summary>
+    /// Pins the downloaded run of a weather item (#1075): keeps a copy beside
+    /// the latest, so the next run doesn't replace it. Its source lists the copy
+    /// as a pinned item once it re-indexes.
+    /// </summary>
+    /// <param name="item">A weather item with a downloaded copy.</param>
+    /// <returns>The pinned copy's name, or null when the item has no downloaded copy.</returns>
+    public string? Pin(CollectionItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (item.Location is not RemoteItemLocation remote || _downloaderFor(remote) is not { } downloader)
+            return null;
+        var pinned = Weather.WeatherFeedIndexer.Pin(downloader, item);
+        if (pinned is not null)
+            RaiseChanged();
+        return pinned;
+    }
+
+    /// <summary>Deletes a pinned weather run (an item <see cref="Weather.WeatherRuns.IsPinned"/> says is one, #1075).</summary>
+    /// <param name="pinned">The pinned item, as its source lists it.</param>
+    /// <returns>True when the copy was deleted.</returns>
+    public bool Unpin(CollectionItem pinned)
+    {
+        ArgumentNullException.ThrowIfNull(pinned);
+        return Weather.WeatherRuns.IsPinned(pinned)
+            && pinned.Properties.TryGetValue(Weather.WeatherRuns.DownloadFolderProperty, out var folder)
+            && Delete(new RemoteItemLocation(new Uri("about:blank"), DownloadFolder: folder), pinned.Name);
+    }
+
     /// <summary>True when <paramref name="item"/> can be downloaded (online, not cancelled, and a downloader takes it).</summary>
     /// <param name="item">The library item.</param>
     public bool CanDownload(CollectionItem item) =>

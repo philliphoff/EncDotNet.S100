@@ -62,7 +62,12 @@ internal sealed class LoadFailureViewModel
                 Strings.LoadFailureToast_SchemaBody,
                 sx.Product, sx.AttributeOrDataset ?? string.Empty, sx.GroupPath),
 
-            _ => unwrapped.Message,
+            // The reader's own message ("Invalid numeric character … at
+            // position 0") means nothing to most users; it stays in Copy details.
+            _ when LoadFailureClassifier.FindDamagedFileException(originalException) is not null =>
+                Strings.LoadFailureToast_DamagedBody,
+
+            _ => LoadFailureClassifier.Printable(unwrapped.Message),
         };
 
         return new LoadFailureViewModel(

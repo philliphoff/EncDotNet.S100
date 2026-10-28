@@ -41,6 +41,12 @@ internal interface ILibraryDownloader : ILibraryLocalCopies
 
     /// <summary>Downloads the downloadable items among <paramref name="items"/>, reporting progress in a notification.</summary>
     Task<LibraryDownloadResult> DownloadAsync(IReadOnlyList<CollectionItem> items, CancellationToken cancellationToken = default);
+
+    /// <summary>Pins a weather item's downloaded run beside the latest (#1075); its name, or null when there is no copy.</summary>
+    string? Pin(CollectionItem item) => null;
+
+    /// <summary>Deletes a pinned weather run (#1075); true when one was deleted.</summary>
+    bool Unpin(CollectionItem pinned) => false;
 }
 
 /// <summary>
@@ -84,6 +90,12 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
 
     /// <summary>The host-neutral downloads behind the service.</summary>
     public LibraryDownloads Downloads => _downloads;
+
+    /// <inheritdoc />
+    public string? Pin(CollectionItem item) => _downloads.Pin(item);
+
+    /// <inheritdoc />
+    public bool Unpin(CollectionItem pinned) => _downloads.Unpin(pinned);
 
     public event EventHandler? Changed
     {

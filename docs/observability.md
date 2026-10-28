@@ -111,14 +111,18 @@ Open the Jaeger UI at `http://localhost:16686`.
 | `ENC_DOTNET_OTEL_CONSOLE=1` | Also writes logs, traces and metrics to standard output. The AppHost sets this, so they appear in the dashboard's console view. |
 | `ENC_DOTNET_OTEL_FILE=<path>` | Also writes traces and metrics to `<path>` as newline-delimited JSON, the format the PerfReport tool reads. |
 | `--log-file <PATH>` | Appends structured logs to a file. |
-| (always on) | Writes rolling logs, up to 5 files of 1 MB, to a `logs` folder next to your settings (or under `--data-dir`). Copies of SoundCharts running side by side share the folder and never delete each other's files while running, so the folder can briefly hold a few more files while several copies run. `--ephemeral` runs don't write them. |
+| (always on) | Writes rolling logs, up to 5 files of 1 MB, to a `logs` folder next to your settings (or under `--data-dir`). Copies of SoundCharts running side by side share the folder and never delete each other's files while running, so the folder can briefly hold a few more files while several copies run. If a copy crashes, its newest log file is also kept until the next launch has read it for the crash report, even past the 5-file limit: at most 3 such files, and none older than 7 days. `--ephemeral` runs don't write them. |
 | `-v`, `--verbose` | Lowers the log level from Information to Debug. |
 
 SoundCharts also keeps its last 1,000 log messages in memory, whatever these
 settings are. The **Logs** tab in the bottom dock shows them, feedback reports
 include them as `logs.txt`, and the `get_recent_logs` MCP tool returns them.
 The tab's **Verbose** toggle records Debug messages there without changing the
-log level the other outputs use.
+log level the other outputs use. The libraries under the MCP server and HTTP
+clients (`Microsoft.AspNetCore.*`, `ModelContextProtocol.*` and
+`System.Net.Http.HttpClient.*`) log several messages for every request, so the
+buffer keeps only their warnings and errors; otherwise an agent driving the
+viewer over MCP would push everything else out of it.
 
 ## Names
 

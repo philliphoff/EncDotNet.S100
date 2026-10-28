@@ -624,4 +624,92 @@
   <data name="Library_SecomWaitingSyncHint" xml:space="preserve">
     <value>Size unknown until readable</value>
   </data>
+  <data name="Weather_LatestRunFormat" xml:space="preserve">
+    <value>Latest run {0}</value>
+    <comment>{0}: a model run, e.g. 2026-10-28 00Z</comment>
+  </data>
+  <data name="Weather_AreaFormat" xml:space="preserve">
+    <value>Area {0}</value>
+    <comment>{0}: a latitude/longitude box, e.g. 32°N–40°N, 76°W–68°W</comment>
+  </data>
+  <data name="Weather_WholeGlobe" xml:space="preserve">
+    <value>Whole globe</value>
+  </data>
+  <data name="Weather_AllMarineZones" xml:space="preserve">
+    <value>Every marine zone</value>
+  </data>
+  <data name="Weather_ZonesFormat" xml:space="preserve">
+    <value>{0} marine zones in view</value>
+    <comment>{0}: a count of NWS marine zones</comment>
+  </data>
+  <data name="Weather_ParametersTitle" xml:space="preserve">
+    <value>Parameters</value>
+  </data>
+  <data name="Weather_DatasetsTitle" xml:space="preserve">
+    <value>Datasets</value>
+  </data>
+  <data name="Weather_DaysTitle" xml:space="preserve">
+    <value>Forecast days</value>
+  </data>
+  <data name="Weather_DayFormat" xml:space="preserve">
+    <value>Day {0}</value>
+    <comment>{0}: the forecast day, 1 for the first 24 hours</comment>
+  </data>
+  <data name="Weather_DayHoursFormat" xml:space="preserve">
+    <value>{0}–{1} h</value>
+    <comment>{0}, {1}: the first and last forecast hour of the day</comment>
+  </data>
+  <data name="Weather_ParametersFormat" xml:space="preserve">
+    <value>{0} parameters</value>
+    <comment>{0}: a count</comment>
+  </data>
+  <data name="Weather_DatasetsFormat" xml:space="preserve">
+    <value>{0} datasets</value>
+    <comment>{0}: a count</comment>
+  </data>
+  <data name="Weather_HoursFormat" xml:space="preserve">
+    <value>{0} forecast hours to +{1} h</value>
+    <comment>{0}: how many forecast hours; {1}: the last one</comment>
+  </data>
+  <data name="Weather_AlertsInForceFormat" xml:space="preserve">
+    <value>{0} alerts in force</value>
+    <comment>{0}: a count</comment>
+  </data>
+  <data name="Weather_StaleFormat" xml:space="preserve">
+    <value>Run {0} is over 12 hours old</value>
+    <comment>{0}: a model run, e.g. 2026-10-28 00Z</comment>
+  </data>
+  <data name="Weather_PinnedFormat" xml:space="preserve">
+    <value>Pinned run {0}</value>
+    <comment>{0}: a model run, e.g. 2026-10-28 00Z</comment>
+  </data>
+  <data name="Library_Property_licence" xml:space="preserve">
+    <value>Licence</value>
+  </data>
+  <data name="Library_Property_attribution" xml:space="preserve">
+    <value>Attribution</value>
+  </data>
+  <data name="Library_Property_parameters" xml:space="preserve">
+    <value>Parameters</value>
+  </data>
+  <data name="Library_Property_hours" xml:space="preserve">
+    <value>Forecast hours</value>
+  </data>
+  <data name="Library_Property_variables" xml:space="preserve">
+    <value>Variables</value>
+  </data>
+  <data name="Library_Property_zones" xml:space="preserve">
+    <value>Marine zones</value>
+  </data>
+  <data name="Library_Property_alerts" xml:space="preserve">
+    <value>Alerts in force</value>
+  </data>
+  <data name="Library_Tag_Pinned" xml:space="preserve">
+    <value>Pinned</value>
+    <comment>A weather model run kept on purpose beside the latest</comment>
+  </data>
+  <data name="Library_Tag_Stale" xml:space="preserve">
+    <value>Stale</value>
+    <comment>A weather model run more than 12 hours old</comment>
+  </data>
 </root>

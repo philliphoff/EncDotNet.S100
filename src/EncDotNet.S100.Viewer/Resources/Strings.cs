@@ -911,6 +911,7 @@ internal static partial class Strings
     public static string Toast_DatasetErrorTitle => Get(nameof(Toast_DatasetErrorTitle));
     public static string LoadFailureToast_NotSupportedBody => Get(nameof(LoadFailureToast_NotSupportedBody));
     public static string LoadFailureToast_SchemaBody => Get(nameof(LoadFailureToast_SchemaBody));
+    public static string LoadFailureToast_DamagedBody => Get(nameof(LoadFailureToast_DamagedBody));
     public static string LoadFailureToast_CopyDetails => Get(nameof(LoadFailureToast_CopyDetails));
 
     // Own-ship overlay (PR-D2)

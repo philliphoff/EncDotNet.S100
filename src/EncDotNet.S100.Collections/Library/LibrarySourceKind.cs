@@ -38,6 +38,9 @@ public enum LibrarySourceKind
 
     /// <summary>Some or all products of a SECOM service, read anonymously (issue #804).</summary>
     Secom,
+
+    /// <summary>A weather service: a GRIB2 model's parameters and hours, marine alerts, or ERDDAP datasets (#1075).</summary>
+    Weather,
 }
 
 /// <summary>Recognises what kind of Library source a known catalogue or a local path is (#792).</summary>
@@ -53,6 +56,7 @@ public static class LibrarySourceKinds
         KnownCatalogueFormat.S100ExchangeCatalogue => LibrarySourceKind.S100Catalogue,
         KnownCatalogueFormat.S100ForecastModels => LibrarySourceKind.S100Forecast,
         KnownCatalogueFormat.Secom => LibrarySourceKind.Secom,
+        KnownCatalogueFormat.Weather => LibrarySourceKind.Weather,
         _ => LibrarySourceKind.NoaaFeed,
     };
 
@@ -80,7 +84,7 @@ public static class LibrarySourceKinds
     /// <param name="kind">The kind.</param>
     public static bool IsOnline(LibrarySourceKind kind) => kind is LibrarySourceKind.NoaaFeed or LibrarySourceKind.UsaceFeed
         or LibrarySourceKind.CommunityFeed or LibrarySourceKind.S100Feed or LibrarySourceKind.S100Catalogue
-        or LibrarySourceKind.S100Forecast or LibrarySourceKind.Secom;
+        or LibrarySourceKind.S100Forecast or LibrarySourceKind.Secom or LibrarySourceKind.Weather;
 
     private static IEnumerable<string?> SafeFileNames(string directory)
     {

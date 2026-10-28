@@ -295,62 +295,9 @@ public sealed partial class EncCellDownloader
 
         try
         {
-            var isSecom = remote.Envelope is RemoteEnvelope.Secom or RemoteEnvelope.SecomPost;
-            var http = isSecom ? SecomHttpClient ?? _httpClient : _httpClient;
-            var identity = isSecom ? SecomTrust?.Resolve(remote.Identity).Identity : null;
-            using var request = remote.Envelope == RemoteEnvelope.SecomPost
-                ? SecomClient.CreatePostGetRequest(
-                    remote.Uri,
-                    SecomTrust?.CreateSigner(identity) ?? throw new SecomIdentityRequiredException(
-                        $"{item.Name} can only be fetched with a signed SECOM 2.0 request, which needs an MCP identity."),
-                    _time.GetUtcNow())
-                : new HttpRequestMessage(HttpMethod.Get, remote.Uri);
-            if (isSecom)
-                SecomServerTrust.PresentIdentity(request, identity);
-            using (var response = await http
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
-                .ConfigureAwait(false))
-            {
-                if (isSecom && !response.IsSuccessStatusCode)
-                    throw await SecomClient.FailureAsync(response, $"SECOM Get of {item.Name}", cancellationToken).ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
-                await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-                await using var target = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-                var buffer = new byte[81920];
-                long total = 0;
-                int read;
-                while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
-                {
-                    await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                    total += read;
-                    bytesProgress?.Report(total);
-                }
-            }
-
-            cancellationToken.ThrowIfCancellationRequested();
-            SignatureRecord? signature = null;
-            if (isSecom)
-            {
-                signature = UnwrapSecom(item, remote, zipPath, staging, TrustAnchors, Revocation, _time.GetUtcNow());
-            }
-            else if (IsZip(zipPath))
-            {
-                ZipFile.ExtractToDirectory(zipPath, staging);
-            }
-            else
-            {
-                // A bare cell (some community lists link .000 files directly), or a
-                // bare dataset whose stated layout is the file itself (remote S-100
-                // catalogues: one HDF5 file per dataset).
-                var fileName = Path.GetFileName(Uri.UnescapeDataString(remote.Uri.AbsolutePath));
-                var isStatedFile = remote.Layout is { UpdateRelativePaths.Count: 0 } stated
-                    && string.Equals(stated.RelativePath, fileName, StringComparison.Ordinal)
-                    && IsSafeName(fileName);
-                if (!isStatedFile && !string.Equals(Path.GetExtension(fileName), ".000", StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException($"The download for {folderName} is neither a zip nor a .000 cell.");
-                Directory.CreateDirectory(staging);
-                File.Move(zipPath, Path.Combine(staging, fileName));
-            }
+            var signature = remote.Parts is { Count: > 0 } parts
+                ? await FetchRunAsync(remote, parts, folderName, zipPath, staging, bytesProgress, cancellationToken).ConfigureAwait(false)
+                : await FetchAsync(item, remote, folderName, zipPath, staging, bytesProgress, cancellationToken).ConfigureAwait(false);
 
             var record = Describe(item, remote, staging) with { Signature = signature, Revision = remote.Revision };
             File.WriteAllText(Path.Combine(staging, RecordFileName), JsonSerializer.Serialize(record, RecordJson.CellRecord));
@@ -364,6 +311,94 @@ public sealed partial class EncCellDownloader
             TryDeleteFile(zipPath);
             TryDeleteDirectory(staging);
         }
+    }
+
+    /// <summary>
+    /// Fetches the item's one download to <paramref name="zipPath"/> and lays it
+    /// out in <paramref name="staging"/>: a SECOM object unwrapped (returning
+    /// its signature check), a zip extracted, or a bare file moved.
+    /// </summary>
+    private async Task<SignatureRecord?> FetchAsync(
+        CollectionItem item, RemoteItemLocation remote, string folderName, string zipPath, string staging,
+        IProgress<long>? bytesProgress, CancellationToken cancellationToken)
+    {
+        var isSecom = remote.Envelope is RemoteEnvelope.Secom or RemoteEnvelope.SecomPost;
+        var http = isSecom ? SecomHttpClient ?? _httpClient : _httpClient;
+        var identity = isSecom ? SecomTrust?.Resolve(remote.Identity).Identity : null;
+        using var request = remote.Envelope == RemoteEnvelope.SecomPost
+            ? SecomClient.CreatePostGetRequest(
+                remote.Uri,
+                SecomTrust?.CreateSigner(identity) ?? throw new SecomIdentityRequiredException(
+                    $"{item.Name} can only be fetched with a signed SECOM 2.0 request, which needs an MCP identity."),
+                _time.GetUtcNow())
+            : new HttpRequestMessage(HttpMethod.Get, remote.Uri);
+        Identify(http, request, remote);
+        if (isSecom)
+            SecomServerTrust.PresentIdentity(request, identity);
+        using (var response = await http
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            if (isSecom && !response.IsSuccessStatusCode)
+                throw await SecomClient.FailureAsync(response, $"SECOM Get of {item.Name}", cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            await using var target = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+            var buffer = new byte[81920];
+            long total = 0;
+            int read;
+            while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+            {
+                await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                total += read;
+                bytesProgress?.Report(total);
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        SignatureRecord? signature = null;
+        if (isSecom)
+        {
+            signature = UnwrapSecom(item, remote, zipPath, staging, TrustAnchors, Revocation, _time.GetUtcNow());
+        }
+        else if (IsZip(zipPath))
+        {
+            ZipFile.ExtractToDirectory(zipPath, staging);
+        }
+        else
+        {
+            // A bare cell (some community lists link .000 files directly), or a
+            // bare dataset whose stated layout is the file itself (remote S-100
+            // catalogues: one HDF5 file per dataset).
+            var fileName = Path.GetFileName(Uri.UnescapeDataString(remote.Uri.AbsolutePath));
+            var isStatedFile = remote.Layout is { UpdateRelativePaths.Count: 0 } stated
+                && string.Equals(stated.RelativePath, fileName, StringComparison.Ordinal)
+                && IsSafeName(fileName);
+            if (!isStatedFile && !string.Equals(Path.GetExtension(fileName), ".000", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"The download for {folderName} is neither a zip nor a .000 cell.");
+            Directory.CreateDirectory(staging);
+            File.Move(zipPath, Path.Combine(staging, fileName));
+        }
+
+        return signature;
+    }
+
+    /// <summary>
+    /// A weather run (#1075): each part's response appended to
+    /// <paramref name="partialPath"/>, then saved in <paramref name="staging"/>
+    /// as the one file the layout names.
+    /// </summary>
+    private async Task<SignatureRecord?> FetchRunAsync(
+        RemoteItemLocation remote, IReadOnlyList<RemotePart> parts, string folderName, string partialPath, string staging,
+        IProgress<long>? bytesProgress, CancellationToken cancellationToken)
+    {
+        if (remote.Layout is not { UpdateRelativePaths.Count: 0, CatalogueRelativePath: null } single || !IsSafeName(single.RelativePath))
+            throw new InvalidDataException($"The download for {folderName} has no single-file layout to save its parts as.");
+        await FetchPartsAsync(remote, parts, partialPath, bytesProgress, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        Directory.CreateDirectory(staging);
+        File.Move(partialPath, Path.Combine(staging, single.RelativePath));
+        return null;
     }
 
     /// <summary>The names of the cells and packages downloaded here (folders holding a record).</summary>

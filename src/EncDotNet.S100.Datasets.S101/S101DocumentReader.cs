@@ -43,9 +43,14 @@ internal static class S101DocumentReader
         var surfaces = new Dictionary<uint, S101SurfaceRecord>();
         var features = new List<S101FeatureRecord>();
         var informationTypes = new Dictionary<uint, S101InformationRecord>();
+        var recordCount = 0;
+        long bytesRead = 0;
 
         foreach (var record in Iso8211DocumentReader.EnumerateRecords(data))
         {
+            recordCount++;
+            bytesRead += record.Leader.RecordLength;
+
             if (ddr is null)
             {
                 ddr = record.IsDataDescriptiveRecord
@@ -124,6 +129,8 @@ internal static class S101DocumentReader
                 ParseCatalogue(record, ddr, "ARCS", "ARCD", "ARNC", roleCatalogue);
             }
         }
+
+        EnsureAllRecordsRead(data.Span, recordCount, bytesRead);
 
         if (ddr is null)
             throw NoDataDescriptiveRecord();
@@ -262,6 +269,54 @@ internal static class S101DocumentReader
             Enum.IsDefined(typeof(S101UpdateInstruction), (S101UpdateInstruction)value)
                 ? (S101UpdateInstruction)value
                 : S101UpdateInstruction.None;
+    }
+
+    // ISO 8211 leader: 24 bytes, the first five the record length in ASCII digits.
+    private const int LeaderLength = 24;
+    private const int RecordLengthDigits = 5;
+
+    /// <summary>
+    /// Throws when the ISO 8211 reader stopped before the end of <paramref name="data"/>.
+    /// The reader ends quietly at a record it can't read, so a file cut part-way through a
+    /// record (a partial download or copy) would otherwise load as the records before the cut.
+    /// </summary>
+    private static void EnsureAllRecordsRead(ReadOnlySpan<byte> data, int recordCount, long bytesRead)
+    {
+        if (bytesRead == data.Length)
+            return;
+
+        var remaining = data[(int)Math.Min(bytesRead, data.Length)..];
+        var recordNumber = recordCount + 1;
+
+        if (remaining.Length < LeaderLength)
+        {
+            throw new EndOfStreamException(
+                $"S-101 dataset ends part-way through the leader of record {recordNumber}: " +
+                $"{remaining.Length} of {LeaderLength} leader bytes present at byte {bytesRead}");
+        }
+
+        if (TryParseRecordLength(remaining[..RecordLengthDigits], out var declaredLength)
+            && declaredLength > remaining.Length)
+        {
+            throw new EndOfStreamException(
+                $"S-101 dataset ends part-way through record {recordNumber}: " +
+                $"{remaining.Length} of {declaredLength} record bytes present at byte {bytesRead}");
+        }
+
+        throw new InvalidDataException(
+            $"S-101 dataset has {remaining.Length} unreadable bytes after record {recordCount}, at byte {bytesRead}");
+    }
+
+    private static bool TryParseRecordLength(ReadOnlySpan<byte> digits, out int length)
+    {
+        length = 0;
+        foreach (var b in digits)
+        {
+            if (b is < (byte)'0' or > (byte)'9')
+                return false;
+            length = (length * 10) + (b - '0');
+        }
+        return true;
     }
 
     private static InvalidOperationException NoDataDescriptiveRecord() =>

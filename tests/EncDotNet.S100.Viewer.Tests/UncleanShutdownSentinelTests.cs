@@ -104,6 +104,57 @@ public sealed class UncleanShutdownSentinelTests : IDisposable
     }
 
     [Fact]
+    public void BeginSession_CallsBackBeforeRemovingCrashMarkers()
+    {
+        var t1 = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        WriteMarker(999_999_991, "ghost", processStartUtc: null, t1, "9.0.0");
+
+        UncleanShutdownSentinel.Configure(enabled: true, _dir);
+        IReadOnlyList<PreviousSession>? seen = null;
+        IReadOnlyList<PreviousSession>? unreportedDuringCallback = null;
+        var crashed = UncleanShutdownSentinel.BeginSession("10.0.0", c =>
+        {
+            seen = c;
+            unreportedDuringCallback = UncleanShutdownSentinel.ReadUnreportedSessions(_dir);
+        });
+
+        Assert.Same(crashed, seen);
+        // The marker still protects the crashed session's log while the
+        // callback reads it, and is removed afterwards.
+        Assert.Contains(unreportedDuringCallback!, s => s.Pid == 999_999_991 && s.StartedUtc == t1);
+        Assert.DoesNotContain(UncleanShutdownSentinel.ReadUnreportedSessions(_dir), s => s.Pid == 999_999_991);
+    }
+
+    [Fact]
+    public void BeginSession_ThrowingCallback_StillRemovesMarkers()
+    {
+        WriteMarker(999_999_991, "ghost", processStartUtc: null, DateTime.UtcNow, "9.0.0");
+
+        UncleanShutdownSentinel.Configure(enabled: true, _dir);
+        var crashed = UncleanShutdownSentinel.BeginSession(
+            "10.0.0", _ => throw new InvalidOperationException("boom"));
+
+        Assert.Single(crashed);
+        Assert.False(File.Exists(Path.Combine(_dir, "viewer-session-999999991.lock")));
+    }
+
+    [Fact]
+    public void ReadUnreportedSessions_ListsMarkersWithoutRemovingThem()
+    {
+        var t1 = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        WriteMarker(999_999_991, "ghost", processStartUtc: null, t1, "9.0.0");
+        File.WriteAllText(Path.Combine(_dir, "viewer-session-999999993.lock"), "not json");
+
+        var sessions = UncleanShutdownSentinel.ReadUnreportedSessions(_dir);
+
+        var session = Assert.Single(sessions);
+        Assert.Equal(999_999_991, session.Pid);
+        Assert.Equal(t1, session.StartedUtc);
+        Assert.Equal(2, MarkerCount());
+        Assert.Empty(UncleanShutdownSentinel.ReadUnreportedSessions(Path.Combine(_dir, "missing")));
+    }
+
+    [Fact]
     public void BeginSession_CalledTwice_DoesNotReportOwnLiveMarker()
     {
         UncleanShutdownSentinel.Configure(enabled: true, _dir);
