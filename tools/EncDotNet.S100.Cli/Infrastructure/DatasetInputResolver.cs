@@ -147,8 +147,19 @@ internal static class DatasetInputResolver
                 continue;
             }
 
+            // A folder holding one weather model run (GRIB2 files, one per forecast hour) is one dataset (#1075).
+            var isRun = DatasetPipelineFactory.DetectProductSpec(directory) is { } runSpec
+                && (onlySpecs is null || onlySpecs.Contains(NormalizeOnlyToken(runSpec)));
+            if (isRun)
+            {
+                var runId = UniqueId(directory == root ? Path.GetFileName(root) : relative, usedIds);
+                inputs.Add(new FileDatasetInput(new DatasetId(runId), DatasetPipelineFactory.DetectProductSpec(directory)!, directory, null));
+            }
+
             foreach (var file in Directory.EnumerateFiles(directory, "*", options).Order(StringComparer.Ordinal))
             {
+                if (isRun && EncDotNet.S100.Datasets.Grib.GribRunFolder.IsGrib2(file))
+                    continue;
                 var extension = Path.GetExtension(file);
                 if (string.Equals(extension, ".zip", StringComparison.OrdinalIgnoreCase))
                 {

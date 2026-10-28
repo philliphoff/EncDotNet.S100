@@ -194,6 +194,9 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
                 if (!ReferenceEquals(previous, entries[i]))
                     entries[i].PropertyChanged += OnEntryChanged;
                 _entries[key] = entries[i];
+                // The source's credit (a weather service's attribution and licence, #1075) goes with the layer.
+                if (EncDotNet.S100.Collections.Weather.WeatherRuns.CreditOf(group.Items[i]) is { } credit)
+                    entries[i].Credit = credit;
             }
 
             return new LibraryOpenOutcome(entries.Count, []);

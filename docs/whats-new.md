@@ -6,6 +6,25 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Weather sources in the Library.** The known catalogues list six weather
+  services, not S-100 data and not for navigation: GFS-Wave and GFS from the
+  NOMADS GRIB filter (cut to the map view) and from NOAA's GFS bucket on AWS
+  (the whole globe, only the chosen fields read from each file by byte range,
+  driven by its `.idx` inventory), `api.weather.gov` marine alerts for the
+  map view's marine zones, and WAVEWATCH III from NOAA's ERDDAP as a NetCDF
+  subset. A new `WeatherFeedSource` and `WeatherFeedIndexer` in
+  `EncDotNet.S100.Collections` list each service's latest run as one item
+  that downloads as one file (`RemoteItemLocation.Parts`). A run more than 12
+  hours old is tagged **Stale**, with **Load latest run**
+  (`LibraryOperations.LoadLatestRunAsync`); a newer run replaces the last
+  unless it's pinned (`LibraryDownloads.Pin`). Each source's licence and
+  attribution go with its items, the loaded layer in the **Datasets** panel
+  and its pick reports. Every request sends an identifying `User-Agent`, as
+  the NWS API asks. A folder holding one model run in hourly GRIB2 files is
+  listed and loads as one dataset (`GribRunFolder`,
+  `ProductRegistration.MatchFolder`). See the
+  [Collections README](../src/EncDotNet.S100.Collections/README.md#weather-services)
+  and the [SoundCharts README](../src/EncDotNet.S100.Viewer/README.md#weather-services).
 - **Own-ship wind from NMEA 0183.** A new `EncDotNet.S100.Nmea` library is a
   minimal NMEA 0183 reader, kept apart so an own-ship NMEA driver can share
   it: checksum validation, talker-agnostic decoding of `MWV`, `MWD`, `MTW`,

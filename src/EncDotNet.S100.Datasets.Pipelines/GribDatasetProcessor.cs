@@ -43,11 +43,15 @@ public sealed class GribDatasetProcessor : WeatherGridProcessorBase
 
     private readonly GribWeatherDataset _dataset;
 
-    /// <summary>Opens the GRIB2 file at <paramref name="path"/>.</summary>
-    /// <param name="path">The file's path.</param>
+    /// <summary>
+    /// Opens the GRIB2 file at <paramref name="path"/>, or, when it's a folder,
+    /// the run its GRIB2 files hold (<see cref="GribRunFolder"/>, #1075): the
+    /// files appended in name order, read as one dataset.
+    /// </summary>
+    /// <param name="path">The file's or folder's path.</param>
     /// <param name="crsTransformFactory">Creates the transforms the headless compositor needs.</param>
     public GribDatasetProcessor(string path, ICrsTransformFactory crsTransformFactory)
-        : this(Open(File.OpenRead(path), Path.GetFileName(path)), crsTransformFactory)
+        : this(Directory.Exists(path) ? OpenFolder(path) : Open(File.OpenRead(path), Path.GetFileName(path)), crsTransformFactory)
     {
     }
 
@@ -55,11 +59,23 @@ public sealed class GribDatasetProcessor : WeatherGridProcessorBase
     /// <param name="source">The asset source holding the file.</param>
     /// <param name="relativePath">The file's source-relative path.</param>
     /// <param name="crsTransformFactory">Creates the transforms the headless compositor needs.</param>
+    /// <remarks>A folder in a <see cref="FileSystemAssetSource"/> is read as one run (<see cref="GribRunFolder"/>, #1075).</remarks>
     public GribDatasetProcessor(IAssetSource source, string relativePath, ICrsTransformFactory crsTransformFactory)
         : this(
-            Open(AssetSourceHelpers.OpenSeekable(source, relativePath), AssetSourceHelpers.GetFileName(relativePath)),
+            FolderIn(source, relativePath) is { } folder
+                ? OpenFolder(folder)
+                : Open(AssetSourceHelpers.OpenSeekable(source, relativePath), AssetSourceHelpers.GetFileName(relativePath)),
             crsTransformFactory)
     {
+    }
+
+    // The folder a file-system source's relative path names, if it is one.
+    private static string? FolderIn(IAssetSource source, string relativePath)
+    {
+        if (source is not FileSystemAssetSource files)
+            return null;
+        var full = Path.GetFullPath(Path.Combine(files.RootPath, relativePath));
+        return full.StartsWith(files.RootPath, StringComparison.Ordinal) && Directory.Exists(full) ? full : null;
     }
 
     private GribDatasetProcessor((GribWeatherDataset Dataset, string FileName, string Hash) opened, ICrsTransformFactory crsTransformFactory)
@@ -87,7 +103,7 @@ public sealed class GribDatasetProcessor : WeatherGridProcessorBase
         GribWeatherDataset dataset;
         try
         {
-            dataset = GribWeatherDataset.Open(path);
+            dataset = Directory.Exists(path) ? GribWeatherDataset.OpenFolder(path) : GribWeatherDataset.Open(path);
         }
         catch (Exception ex)
         {
@@ -134,6 +150,38 @@ public sealed class GribDatasetProcessor : WeatherGridProcessorBase
         {
             stream.Dispose();
             var wrapped = WithFile(ex, fileName);
+            if (ReferenceEquals(wrapped, ex))
+                throw;
+            throw wrapped;
+        }
+    }
+
+    // A folder holding one run: its GRIB2 files read as one, hashed in order.
+    private static (GribWeatherDataset Dataset, string FileName, string Hash) OpenFolder(string folder)
+    {
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(folder));
+        var files = GribRunFolder.Files(folder);
+        string hash;
+        var streams = new List<Stream>(files.Count);
+        try
+        {
+            foreach (var file in files)
+                streams.Add(File.OpenRead(file));
+            hash = DatasetContentHash.HashAndRewind(streams);
+        }
+        finally
+        {
+            foreach (var stream in streams)
+                stream.Dispose();
+        }
+
+        try
+        {
+            return (GribWeatherDataset.OpenFolder(folder), name, hash);
+        }
+        catch (Exception ex)
+        {
+            var wrapped = WithFile(ex, name);
             if (ReferenceEquals(wrapped, ex))
                 throw;
             throw wrapped;

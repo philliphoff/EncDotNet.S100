@@ -229,8 +229,9 @@ once.
 1. **Catalogue**: choose from a curated directory, grouped by region. Search
    by name, provider or country. The directory includes NOAA ENC; USACE Inland
    ENC rivers and buoy overlay; NOAA S-102 bathymetry and S-104 and S-111
-   forecasts; S-124 navigational warnings from Canada over SECOM; and
-   community inland ENC lists for Europe and Brazil. The chosen catalogue shows
+   forecasts; S-124 navigational warnings from Canada over SECOM; community
+   inland ENC lists for Europe and Brazil; and weather services (see
+   [Weather services](#weather-services)). The chosen catalogue shows
    chips for what it provides (**Coverage outlines**, **Bounding boxes** or
    **No coverage until downloaded**; editions; sizes), its URL and a link to
    its terms.
@@ -293,6 +294,40 @@ model's whole water body. Forecast sources show their runs; **Check for new
 runs** (or **Refresh**) looks for a newer run, and **Update** downloads it and
 replaces the run you have. Runs past their forecast window are tagged
 **Expired**.
+
+#### Weather services
+
+The directory's **Worldwide** and **United States** groups list weather
+services. They aren't S-100 data and aren't for navigation:
+
+- **GFS-Wave wave forecast** and **GFS wind and pressure** from the NOMADS
+  GRIB filter, cut to the map view when you open the wizard.
+- The same two models from NOAA's GFS bucket on AWS, for the whole globe. Only
+  the chosen parameters are read from each forecast hour's file, by byte range.
+- **NWS marine weather alerts** in force for the marine zones in the map view,
+  from `api.weather.gov`.
+- **WAVEWATCH III global waves** from NOAA's ERDDAP, as a NetCDF subset of the
+  map view.
+
+In **What to include**, the **Parameters** (or **Datasets**) and **Forecast
+days** tabs start with the service's defaults ticked, and the step shows the
+latest run and the area. Each refresh lists the latest run as one item, which
+downloads as one file: the forecast hours appended into one GRIB2 file, the
+NetCDF subset, or the alerts as GeoJSON. A newer run replaces the one you have.
+
+A run more than 12 hours old is tagged **Stale**. Its details offer **Load
+latest run**, which checks the source again, downloads its newest run and
+loads it. **Pin this run** keeps the downloaded run when a newer one is
+downloaded. The pinned run is listed beside the latest and tagged **Pinned**,
+and **Unpin this run** deletes it.
+
+Each item's details show the source's credit, such as "NOAA/NCEP GFS-Wave
+(WAVEWATCH III) · Public domain". The credit follows the loaded dataset into
+the **Datasets** panel and its pick reports.
+
+A local folder that holds one model run as several GRIB2 files (one per
+forecast hour, as NOMADS and AWS publish them) is listed and loads as one
+dataset.
 
 ### Browse the tree
 

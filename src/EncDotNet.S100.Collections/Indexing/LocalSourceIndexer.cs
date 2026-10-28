@@ -110,6 +110,9 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
                         if (ReadLoose(scan.RootDirectory, loose, diagnostics, cancellationToken) is { } item)
                             items.Add(item);
                         break;
+                    case RunFolderUnit run:
+                        items.AddRange(ReadRunFolder(scan.RootDirectory, run, diagnostics, cancellationToken));
+                        break;
                 }
             }
             catch (OperationCanceledException)
@@ -307,6 +310,43 @@ public sealed class LocalSourceIndexer : ICollectionSourceIndexer
                 loose.UpdatePaths.Select(Path.GetFileName).OfType<string>().ToArray()),
             Properties = properties,
         };
+    }
+
+    /// <summary>
+    /// Indexes a folder of GRIB2 files (#1075): when the probe reads the folder
+    /// as one dataset (a model run published one file per forecast hour), one
+    /// item whose location is the folder itself; otherwise each file as a loose
+    /// dataset, as before.
+    /// </summary>
+    private IEnumerable<CollectionItem> ReadRunFolder(
+        string sourceRoot, RunFolderUnit run, List<IndexDiagnostic> diagnostics, CancellationToken cancellationToken)
+    {
+        if (ReadLoose(sourceRoot, new LooseFileUnit(run.Directory, []), [], cancellationToken) is { } folder)
+        {
+            var parent = Path.GetDirectoryName(run.Directory) ?? run.Directory;
+            var name = Path.GetFileName(run.Directory);
+            var properties = new Dictionary<string, string>(folder.Properties, StringComparer.Ordinal)
+            {
+                ["files"] = run.Files.Count.ToString(CultureInfo.InvariantCulture),
+            };
+            return
+            [
+                folder with
+                {
+                    Key = LocalSourceScanner.RelativePath(sourceRoot, run.Directory) is { Length: > 0 } relative && relative != "."
+                        ? relative + "/"
+                        : name + "/",
+                    Name = name,
+                    Location = new LocalItemLocation(parent, name, []),
+                    Properties = properties,
+                },
+            ];
+        }
+
+        return run.Files
+            .Select(file => ReadLoose(sourceRoot, new LooseFileUnit(file, []), diagnostics, cancellationToken))
+            .OfType<CollectionItem>()
+            .ToArray();
     }
 
     private static S57DatasetHeader? TryReadHeader(string path)

@@ -55,13 +55,14 @@ public sealed class LibraryServices : IDisposable
         var s100Feeds = new S100FeedIndexer(Client(TimeSpan.FromMinutes(2)), feedCache, timeProvider: time);
         var s100Catalogues = new S100CatalogueFeedIndexer(Client(TimeSpan.FromMinutes(2)), feedCache, timeProvider: time);
         var forecasts = new S100ForecastFeedIndexer(Client(TimeSpan.FromMinutes(2)), feedCache, timeProvider: time);
+        var weather = new Weather.WeatherFeedIndexer(Client(TimeSpan.FromMinutes(2)), paths.DownloadsDirectory, time);
         var secom = new SecomSourceIndexer(SecomClient(TimeSpan.FromMinutes(2)), feedCache, paths.DownloadsDirectory, probe, timeProvider: time)
         {
             Revocation = Revocation,
             Trust = SecomTrust,
         };
 
-        Indexer = CollectionIndexer.CreateDefault(probe, [noaa, usace, community, s100Feeds, s100Catalogues, forecasts, secom]);
+        Indexer = CollectionIndexer.CreateDefault(probe, [noaa, usace, community, s100Feeds, s100Catalogues, forecasts, secom, weather]);
         Library = new CollectionLibrary(
             Indexer,
             new CollectionLibraryOptions(paths.CollectionsFile, paths.IndexCacheDirectory) { ReadOnly = options.ReadOnly },
@@ -81,6 +82,8 @@ public sealed class LibraryServices : IDisposable
             ListS100Folders = (catalogue, folders, ct) => s100Catalogues.ListAsync(catalogue, folders, ct),
             ForecastModels = (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct),
             Secom = (uri, area, identity, ct) => secom.DescribeAsync(uri, area, identity, ct),
+            Weather = (source, ct) => weather.DescribeAsync(source, ct),
+            MarineZones = options.MarineZones,
         };
 
         var probeHttp = Client(TimeSpan.FromSeconds(30));
@@ -164,4 +167,7 @@ public sealed record LibraryServicesOptions
 
     /// <summary>True to leave the collections file unchanged (changes last for the run).</summary>
     public bool ReadOnly { get; init; }
+
+    /// <summary>The NWS marine zone codes in an area, for adding an alerts source (#1075); every marine alert without.</summary>
+    public Func<GeoBounds, IReadOnlyList<string>>? MarineZones { get; init; }
 }

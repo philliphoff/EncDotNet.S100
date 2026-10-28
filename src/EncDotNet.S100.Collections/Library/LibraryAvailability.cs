@@ -60,7 +60,9 @@ public static class LibraryAvailabilityResolver
     {
         try
         {
-            return File.Exists(ResolvePath(location));
+            // A folder can be one dataset: a weather model run in hourly GRIB2 files (#1075).
+            var path = ResolvePath(location);
+            return File.Exists(path) || (!location.IsZip && Directory.Exists(path));
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {

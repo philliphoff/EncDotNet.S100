@@ -467,7 +467,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         _editing = null;
         _searchText = string.Empty;
         _catalogueDate = null;
-        _includeAll = true;
+        // A scope may start with only its ticked choices (a weather service's defaults, #1075).
+        _includeAll = draft?.IncludeAll ?? true;
         _nameEdited = false;
         _facetGroups = [];
         _selectedFacetGroup = null;
@@ -508,6 +509,8 @@ internal sealed partial class AddToLibraryDialogViewModel : ViewModelBase
         {
             IsLoading = false;
             OnPropertyChanged(nameof(Title));
+            OnPropertyChanged(nameof(WeatherRunNote));
+            OnPropertyChanged(nameof(HasWeatherRunNote));
         }
     }
 

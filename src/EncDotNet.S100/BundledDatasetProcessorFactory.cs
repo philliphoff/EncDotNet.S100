@@ -64,7 +64,8 @@ public sealed class BundledDatasetProcessorFactory : IDatasetProcessorFactory, I
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (string.IsNullOrWhiteSpace(declaredProductSpec))
+        // A folder that is one dataset (a GRIB2 run, #1075) is detected and built by path.
+        if (string.IsNullOrWhiteSpace(declaredProductSpec) || System.IO.Directory.Exists(path))
             return _host.Factory.CreateProcessor(path);
 
         var full = System.IO.Path.GetFullPath(path);

@@ -55,6 +55,9 @@ internal sealed class PickHit
     /// </summary>
     public bool NotForNavigation { get; init; }
 
+    /// <summary>The data's credit from its Library source (#1075), "NOAA/NCEP GFS-Wave · Public domain"; null for none.</summary>
+    public string? Credit { get; init; }
+
     /// <summary>Attribute rows for the feature, decoded against the dataset's FC where available.</summary>
     public IReadOnlyList<PickAttribute> Attributes { get; init; } = [];
 

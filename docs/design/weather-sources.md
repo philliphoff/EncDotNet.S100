@@ -632,6 +632,84 @@ Freshness rules:
   "load latest run".
 - Old runs aren't kept unless pinned.
 
+**As built (#1075).**
+
+- **Model.** One new source kind, `WeatherFeedSource` (`weatherFeed` in
+  `collections.json`), for all four services, and one known-sources format,
+  `weather`, whose `weather` block says which (`gribFilter`, `gribIndex`,
+  `nwsAlerts`, `erddapGriddap`) and what it offers (`WeatherService`). The
+  source keeps a copy of that block and what it includes (`WeatherSelection`:
+  parameters as `.idx` keys such as `:UGRD:10 m above ground:`, forecast hours,
+  area, marine zones, ERDDAP dataset ids), so it never depends on the list.
+  `WeatherFeedIndexer` lists one online item per model or dataset. The six
+  entries: GFS-Wave and GFS 0.25° from the NOMADS filter, GFS-Wave 0.25° and
+  GFS 0.5° from `noaa-gfs-bdp-pds`, NWS marine alerts, and ERDDAP's
+  `NWW3_Global_Best` (`Thgt`, `Tper`, `Tdir`).
+- **Choosing.** The Library's scope (`WeatherScope`) offers parameters (or
+  ERDDAP datasets) and forecast days as ordinary choice tabs, the service's
+  defaults ticked and only the ticks included, so the viewer's dialog and the
+  MCP adder needed no new controls. The area is the map view when the source
+  is added; AWS takes the whole globe. Reading the "catalogue" finds the
+  latest run, so an unreachable service says so before it's added.
+- **URLs.** The filter request per forecast hour is the run's file
+  (`dir=/gfs.YYYYMMDD/HH/wave/gridded&file=gfswave.tHHz.global.0p25.fNNN.grib2`),
+  `var_X=on` per parameter, `lev_Y=on` per level (the `.idx` spelling with
+  underscores), and the area rounded out to the grid; across the antimeridian
+  the east edge goes past 180°. The filter returns the cross product of
+  variables and levels, which the GRIB2 reader lists. Hours are 3-hourly to
+  f120, chosen by day.
+- **Runs.** A run is published when the `.idx` of its last chosen hour
+  answers a `HEAD` (NOMADS' `pub/` tree, or the bucket); the last five
+  6-hourly cycles are tried, newest first, so a run still being written isn't
+  offered. Items carry `run` and `validTo` (the S-100 forecast feeds'
+  properties), so a newer run makes a download outdated and replaces it in
+  place. ERDDAP's run is its `date_issued` (else `date_modified`,
+  `date_created`); alerts have no run and are re-read at each index.
+- **Staleness.** A run more than 12 hours old (the downloaded copy's, else the
+  listed one's) is stale: a **Stale** tag, the item's `IsStaleRun`, and **Load
+  latest run** (`LibraryOperations.LoadLatestRunAsync`: refresh the source,
+  download its newest run, open it). Stale is a property of weather items
+  (`staleAfterHours`), so S-111 runs are unaffected.
+- **Pinning.** A newer run's download replaces the folder of the last, so old
+  runs go. `LibraryDownloads.Pin` copies the downloaded run to
+  `<name>.run-YYYYMMDDHH` beside it; the indexer lists pinned copies as local
+  items (`Pinned`, never stale) until `Unpin`. A service that can't be
+  reached lists its downloaded run, with the error.
+- **Downloads.** `RemoteItemLocation.Parts` is a list of requests appended
+  into the one file the layout names: whole responses (filter, alerts,
+  ERDDAP), or for a part naming GRIB2 fields, the byte ranges its `.idx`
+  gives, neighbouring messages joined; a server that ignores `Range` still
+  works. `RemoteItemLocation.Accept` asks api.weather.gov for GeoJSON.
+- **User-Agent.** Every Library request and download sends one when the
+  client has none: `EncDotNet.S100/<version> (+https://github.com/philliphoff/EncDotNet.S100)`;
+  SoundCharts sends `SoundCharts/<version> (+…)` the same way. No personal
+  contact.
+- **Marine zones.** `MarineZoneLayer.CodesIn` gives the zones whose outline
+  box meets the area; the host passes it to the Library
+  (`LibraryCatalogueReaders.MarineZones`), since Collections doesn't reference
+  the CAP package. Past 50 zones the request asks by marine area (the zone
+  codes' first two letters).
+- **Folder as a run.** `GribRunFolder` and `GribFile.Open(paths)` read a
+  folder's GRIB2 files appended in name order (a `ConcatenatedGribSource`), so
+  `GribWeatherDataset` merges them exactly as it merges an appended file:
+  fields by parameter and level, steps by valid time, and with mixed runs the
+  latest kept and the older runs' fields listed. A new registration trait,
+  `ProductRegistration.MatchFolder`, lets the factory detect a folder; GRIB2
+  claims a folder that holds GRIB2 files, and its processor and metadata
+  reader take the folder's path (or a folder in a file-system asset source).
+  The local indexer now lists `.nc`, `.nc4` and GRIB2 files, and a folder of
+  several GRIB2 files is one item whose location is the folder.
+- **Attribution.** Known sources may carry `licence` and `attribution`; a
+  weather source copies them, its items carry them, and the viewer shows
+  "Data: NOAA/NCEP GFS-Wave (WAVEWATCH III) · Public domain" in the Library
+  details, on the loaded layer in the **Datasets** panel and in its pick
+  reports. Static credits (site footer, About box) are #1076's.
+- **Not verified live** from the build environment: NOMADS, api.weather.gov and
+  ERDDAP were blocked, so the filter's parameter and level names, the
+  ERDDAP dataset's variable names and latitude order, and the alerts query were
+  built from their documentation. The AWS sources were run live (the opt-in
+  smoke tests, `S100_LIVE_WEATHER_TESTS=1`).
+
 ### 6.4 Why BUFR is last
 
 BUFR decoding needs the full WMO table set (Tables B and D, plus local

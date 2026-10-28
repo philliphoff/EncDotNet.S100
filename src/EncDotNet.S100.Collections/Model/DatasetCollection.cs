@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using EncDotNet.S100.Collections.Weather;
 
 namespace EncDotNet.S100.Collections;
 
@@ -41,6 +42,7 @@ public sealed record DatasetCollection(
 [JsonDerivedType(typeof(S100CatalogueFeedSource), "s100CatalogueFeed")]
 [JsonDerivedType(typeof(S100ForecastFeedSource), "s100ForecastFeed")]
 [JsonDerivedType(typeof(SecomSource), "secom")]
+[JsonDerivedType(typeof(WeatherFeedSource), "weatherFeed")]
 public abstract record CollectionSource(Guid Id, string? DisplayName)
 {
     /// <summary>
@@ -240,4 +242,38 @@ public sealed record SecomSource(Guid Id, string? DisplayName, Uri ServiceUri, S
     }
 
     private readonly string _identity = Secom.SecomIdentitySetting.Default;
+}
+
+/// <summary>
+/// A weather service (#1075; design note weather-sources.md §6.3): NOMADS'
+/// GRIB filter or NOAA's GFS files on AWS (one model run, cut to the chosen
+/// parameters, forecast hours and, for the filter, area), active
+/// <c>api.weather.gov</c> alerts for an area's marine zones, or ERDDAP
+/// datasets chosen by dataset id. Each index lists the service's latest run
+/// (or the alerts in force now) as one online item per model or dataset,
+/// downloaded as one file; a newer run replaces the last unless it is pinned.
+/// </summary>
+/// <param name="Id">The source's stable identifier.</param>
+/// <param name="DisplayName">An optional user-facing label.</param>
+/// <param name="ServiceUri">
+/// The service's endpoint: the GRIB filter script, the bucket root, the alerts
+/// endpoint (<c>…/alerts/active</c>) or the ERDDAP root (<c>…/erddap/</c>).
+/// </param>
+/// <param name="Service">What the service offers and how it is asked, copied from its known source.</param>
+/// <param name="Selection">What the source includes: parameters, forecast hours, area, zones or datasets.</param>
+public sealed record WeatherFeedSource(
+    Guid Id, string? DisplayName, Uri ServiceUri, WeatherService Service, WeatherSelection Selection)
+    : CollectionSource(Id, DisplayName)
+{
+    /// <summary>The data's licence ("Public domain", "CC BY 4.0"), carried onto every item and loaded layer; null when unknown.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Licence { get; init; }
+
+    /// <summary>
+    /// The attribution the provider asks for ("NOAA/NCEP GFS-Wave",
+    /// "Contains modified Copernicus Marine Service information"), carried onto
+    /// every item and shown in the layer stack and pick report; null for none.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Attribution { get; init; }
 }
