@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using EncDotNet.S100.Core;
@@ -87,7 +88,7 @@ public sealed class GribViewerLoadPathTests : IDisposable
         var pick = Assert.Single(await s100.Query.PickAsync(new GeographicPickQuery { Latitude = latitude, Longitude = longitude }, Ct));
         Assert.Equal("Weather model data, not for navigation.", pick.Info.Attributes[0].DisplayValue);
         Assert.Equal(
-            $"{GribFixtures.FilterAt566.Height[1]:0.0#} m",
+            string.Create(CultureInfo.InvariantCulture, $"{GribFixtures.FilterAt566.Height[1]:0.0#} m"),
             pick.Info.Attributes.Single(a => a.Code == WeatherParameters.WaveHeight).DisplayValue);
     }
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Grib;
@@ -242,13 +243,13 @@ public sealed class GribProcessorTests : IDisposable
         Assert.Equal("Weather model data, not for navigation.", info.Attributes[0].DisplayValue);
         Assert.Equal("GFS-Wave, run 2026-10-25 00Z", info.Attributes.Single(a => a.Code == "model").DisplayValue);
         Assert.Equal(Run.AddHours(3), info.Attributes.Single(a => a.Code == "timePoint").DateTimeValue);
-        Assert.Equal($"{FilterAt566.Height[1]:0.0#} m", info.Attributes.Single(a => a.Code == WeatherParameters.WaveHeight).DisplayValue);
-        Assert.Equal($"{FilterAt566.Direction[1]:0}°", info.Attributes.Single(a => a.Code == WeatherParameters.WaveDirection).DisplayValue);
-        Assert.Equal($"{FilterAt566.Period[1]:0.#} s", info.Attributes.Single(a => a.Code == WeatherParameters.WavePeriod).DisplayValue);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{FilterAt566.Height[1]:0.0#} m"), info.Attributes.Single(a => a.Code == WeatherParameters.WaveHeight).DisplayValue);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{FilterAt566.Direction[1]:0}°"), info.Attributes.Single(a => a.Code == WeatherParameters.WaveDirection).DisplayValue);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{FilterAt566.Period[1]:0.#} s"), info.Attributes.Single(a => a.Code == WeatherParameters.WavePeriod).DisplayValue);
         Assert.Equal(
-            $"{Speed.FromMetresPerSecond(FilterAt566.WindSpeed[1]).TotalKnots:0.#} kn",
+            string.Create(CultureInfo.InvariantCulture, $"{Speed.FromMetresPerSecond(FilterAt566.WindSpeed[1]).TotalKnots:0.#} kn"),
             info.Attributes.Single(a => a.Code == WeatherParameters.WindSpeed).DisplayValue);
-        Assert.Equal($"{FilterAt566.WindSeaDirection[1]:0}°", info.Attributes.Single(a => a.Code == WeatherParameters.WindSeaDirection).DisplayValue);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{FilterAt566.WindSeaDirection[1]:0}°"), info.Attributes.Single(a => a.Code == WeatherParameters.WindSeaDirection).DisplayValue);
         Assert.Equal("(15,5)", info.FeatureRef);
 
         // Outside the grid, and on land (the bitmap).
@@ -442,7 +443,7 @@ public sealed class GribProcessorTests : IDisposable
         Assert.True(pick.IsCoverage);
         Assert.Equal("notice", pick.Info.Attributes[0].Code);
         Assert.Equal(Run.AddHours(6), pick.Info.Attributes.Single(a => a.Code == "timePoint").DateTimeValue);
-        Assert.Equal($"{FilterAt566.Height[2]:0.0#} m", pick.Info.Attributes.Single(a => a.Code == WeatherParameters.WaveHeight).DisplayValue);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{FilterAt566.Height[2]:0.0#} m"), pick.Info.Attributes.Single(a => a.Code == WeatherParameters.WaveHeight).DisplayValue);
     }
 
     // -----------------------------------------------------------------

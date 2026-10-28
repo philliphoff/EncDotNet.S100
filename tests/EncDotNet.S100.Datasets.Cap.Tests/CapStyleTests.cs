@@ -1,3 +1,4 @@
+using System.Globalization;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.TestSupport;
@@ -54,7 +55,7 @@ public sealed class CapStyleTests
         var svg = CapStyle.Symbols.GetSymbol(fillName);
         Assert.NotNull(svg);
         Assert.Contains($"class=\"s{token}\"", svg);
-        Assert.Contains($"width=\"{spacing:g}mm\"", svg);
+        Assert.Contains(string.Create(CultureInfo.InvariantCulture, $"width=\"{spacing:g}mm\""), svg);
 
         foreach (var palette in new[] { PaletteType.Day, PaletteType.Dusk, PaletteType.Night })
             Assert.True(CapStyle.Palette.GetColorPalette(palette).Colors.ContainsKey(token));

@@ -1,3 +1,4 @@
+using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.NetCdf;
@@ -245,7 +246,7 @@ public sealed class NetCdfProcessorTests : IDisposable
         Assert.Equal("MFWAM, run 2026-10-25 00Z", info.Attributes.Single(a => a.Code == "model").DisplayValue);
         Assert.Equal(Run.AddHours(6), info.Attributes.Single(a => a.Code == "timePoint").DateTimeValue);
         var height = info.Attributes.Single(a => a.Code == WeatherParameters.WaveHeight);
-        Assert.Equal($"{WaveHeight(4, 7, 2):0.0#} m", height.DisplayValue);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{WaveHeight(4, 7, 2):0.0#} m"), height.DisplayValue);
         Assert.Equal("270°", info.Attributes.Single(a => a.Code == WeatherParameters.WaveDirection).DisplayValue);
         Assert.Equal("8.7 s", info.Attributes.Single(a => a.Code == WeatherParameters.WavePeriod).DisplayValue);
         Assert.Equal("(4,7)", info.FeatureRef);
@@ -264,8 +265,8 @@ public sealed class NetCdfProcessorTests : IDisposable
         var info = wind.GetCoverageInfo(grid.South + 2 * grid.Spacing, grid.West + 3 * grid.Spacing, Run)!;
 
         var (knots, from) = Wind(2, 3, 0, grid.Columns);
-        Assert.Equal($"{knots:0.#} kn", info.Attributes.Single(a => a.Code == WeatherParameters.WindSpeed).DisplayValue);
-        Assert.Equal($"{from:0}°", info.Attributes.Single(a => a.Code == WeatherParameters.WindFromDirection).DisplayValue);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{knots:0.#} kn"), info.Attributes.Single(a => a.Code == WeatherParameters.WindSpeed).DisplayValue);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{from:0}°"), info.Attributes.Single(a => a.Code == WeatherParameters.WindFromDirection).DisplayValue);
     }
 
     [Fact]
@@ -407,7 +408,7 @@ public sealed class NetCdfProcessorTests : IDisposable
         Assert.True(pick.IsCoverage);
         Assert.Equal("notice", pick.Info.Attributes[0].Code);
         Assert.Equal(Run.AddHours(6), pick.Info.Attributes.Single(a => a.Code == "timePoint").DateTimeValue);
-        Assert.Equal($"{WaveHeight(3, 3, 2):0.0#} m", pick.Info.Attributes.Single(a => a.Code == WeatherParameters.WaveHeight).DisplayValue);
+        Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"{WaveHeight(3, 3, 2):0.0#} m"), pick.Info.Attributes.Single(a => a.Code == WeatherParameters.WaveHeight).DisplayValue);
     }
 
     // -----------------------------------------------------------------
