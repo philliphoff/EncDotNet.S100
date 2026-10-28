@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <summary>
 /// Mean sea level pressure (<c>pressure.msl</c>) as isobars every
 /// <see cref="IntervalHectopascals"/> hPa, labelled in hectopascals (e.g.
-/// <c>1012</c>). Off by default.
+/// <c>1012</c>). On by default (wherever the data has pressure).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -58,7 +58,7 @@ public sealed class PressureIsobarStyle : WeatherCoverageStyle
 
     /// <summary>Creates the style, with the Day palette active.</summary>
     public PressureIsobarStyle()
-        : base(Key, "Isobars", WeatherLayerKind.Isolines, WeatherParameters.PressureMsl, null, isVisibleByDefault: false)
+        : base(Key, "Isobars", WeatherLayerKind.Isolines, WeatherParameters.PressureMsl, null, isVisibleByDefault: true)
     {
     }
 

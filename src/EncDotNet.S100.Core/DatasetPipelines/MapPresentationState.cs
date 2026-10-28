@@ -242,6 +242,7 @@ public sealed class MapPresentationState
             HiddenDisplayPlanes = settings.HiddenDisplayPlanes.ToFrozenSet(),
             ActiveDisplayModes = settings.ActiveDisplayModes.ToFrozenDictionary(
                 StringComparer.OrdinalIgnoreCase),
+            LayerVisibility = settings.LayerVisibility.ToFrozenDictionary(StringComparer.Ordinal),
         };
     }
 }

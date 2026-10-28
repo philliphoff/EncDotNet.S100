@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Services;
@@ -74,8 +75,64 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     /// </summary>
     public DisplayModeToolbarViewModel? DisplayModeToolbar => _displayModeToolbar;
 
-    /// <summary>True when there are no loaded vector specs.</summary>
-    public bool IsEmpty => Specs.Count == 0;
+    /// <summary>
+    /// True when there is nothing to control: no loaded vector spec and no
+    /// weather dataset.
+    /// </summary>
+    public bool IsEmpty => Specs.Count == 0 && !HasWeatherData;
+
+    /// <summary>
+    /// Whether a GRIB2 or NetCDF weather dataset is loaded, which shows the
+    /// Weather section (#1072), as the per-spec sections show only for loaded
+    /// specs. The switches apply to every weather dataset and are kept with
+    /// the display settings whether or not one is loaded.
+    /// </summary>
+    public bool HasWeatherData { get; private set; }
+
+    /// <summary>
+    /// The Weather section's Isobars switch: mean sea level pressure isobars
+    /// on every weather dataset with pressure. On by default
+    /// (<see cref="PressureIsobarStyle"/>).
+    /// </summary>
+    public bool IsIsobarsVisible
+    {
+        get => GetWeatherLayer(PressureIsobarStyle.Key);
+        set => _state.SetLayerVisible(PressureIsobarStyle.Key, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Wind speed fill switch: the Beaufort fill on
+    /// every weather dataset with wind. Off by default
+    /// (<see cref="WindSpeedStyle"/>).
+    /// </summary>
+    public bool IsWindSpeedFillVisible
+    {
+        get => GetWeatherLayer(WindSpeedStyle.Key);
+        set => _state.SetLayerVisible(WindSpeedStyle.Key, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Wave arrows switch: wave direction arrows on
+    /// every weather dataset with wave direction. Off by default
+    /// (<see cref="WaveDirectionStyle"/>).
+    /// </summary>
+    public bool IsWaveArrowsVisible
+    {
+        get => GetWeatherLayer(WaveDirectionStyle.Key);
+        set => _state.SetLayerVisible(WaveDirectionStyle.Key, value);
+    }
+
+    // The switch, or the style's own default when the mariner hasn't set it.
+    private bool GetWeatherLayer(string layerKey) =>
+        _state.GetLayerVisible(layerKey) ?? WeatherDefaults[layerKey];
+
+    private static readonly IReadOnlyDictionary<string, bool> WeatherDefaults =
+        WeatherCoverageStyle.CreateAll().ToDictionary(s => s.LayerKey, s => s.IsVisibleByDefault, StringComparer.Ordinal);
+
+    private static readonly HashSet<string> WeatherSpecs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        WeatherProducts.Grib2.Spec, WeatherProducts.NetCdf.Spec,
+    };
 
     /// <summary>Clears all overrides across every spec.</summary>
     public ICommand ResetAllOverridesCommand { get; }
@@ -168,6 +225,9 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
 
     private void OnStateChanged()
     {
+        OnPropertyChanged(nameof(IsIsobarsVisible));
+        OnPropertyChanged(nameof(IsWindSpeedFillVisible));
+        OnPropertyChanged(nameof(IsWaveArrowsVisible));
         OnPropertyChanged(nameof(ActiveCategory));
         OnPropertyChanged(nameof(IsDisplayBase));
         OnPropertyChanged(nameof(IsStandard));
@@ -191,6 +251,14 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
 
     private void RebuildSpecs()
     {
+        var hasWeather = _datasets.Entries.Any(e => WeatherSpecs.Contains(e.ProductSpec));
+        if (hasWeather != HasWeatherData)
+        {
+            HasWeatherData = hasWeather;
+            OnPropertyChanged(nameof(HasWeatherData));
+            OnPropertyChanged(nameof(IsEmpty));
+        }
+
         // Determine which portrayal specs are currently loaded. An S-57 entry
         // is portrayed as S-101 (maritime) or S-401 (inland), so it shares that
         // product's control group — key on the entry's portrayal spec before

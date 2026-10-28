@@ -25,16 +25,18 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <list type="bullet">
 /// <item><description>
 /// <b>Drawing.</b> One <see cref="WeatherCoverageSource"/> per parameter group
-/// (<see cref="WeatherCoverageSource.CreateForGroups"/>), drawn with every
-/// code-defined weather style that applies to it through
-/// <see cref="WeatherPortrayal.BuildAsync"/>. Each style is one layer stack
-/// entry, on the plane and priority of design note §5. The wave height fill
-/// and the wind barbs are on by default; the wind speed fill, wave arrows and
-/// pressure isobars are built too but marked
-/// <see cref="CoverageSubLayerBase.IsVisibleByDefault"/> <see langword="false"/>
-/// (design note §10.1), so a viewer lists them hidden and the headless
-/// compositor leaves them out unless
-/// <see cref="HeadlessCompositeOptions.ShownLayerKeys"/> names them. The overview level of
+/// (<see cref="WeatherCoverageSource.CreateForGroups"/>), drawn with the
+/// code-defined weather styles that apply to it and are switched on, through
+/// <see cref="WeatherPortrayal.BuildAsync"/>. Every applicable style is
+/// offered; each render draws those that
+/// <see cref="WeatherCoverageStyle.IsDrawnWith"/> the context's
+/// <see cref="RenderContext.EcdisDisplay"/>: the map-wide switches in
+/// <see cref="EcdisDisplaySettings.LayerVisibility"/> (the viewer's Display
+/// controls Weather section), or each style's default when unset. By default
+/// the wave height fill, wind barbs and isobars are drawn and the wind speed
+/// fill and wave arrows aren't (design note §10.1). Each drawn style is one
+/// layer stack entry, on the plane and priority of design note §5; a style
+/// switched off isn't built, so it isn't listed. The overview level of
 /// each source is chosen from the viewport's cells per pixel, as S-102 does.
 /// </description></item>
 /// <item><description>
@@ -140,9 +142,9 @@ public abstract class WeatherGridProcessorBase :
     public IReadOnlyList<WeatherCoverageSource> Sources { get; }
 
     /// <summary>
-    /// The layer keys built, one per style that applies, in stack order; the
-    /// ones not on by default (<see cref="WeatherCoverageStyle.IsVisibleByDefault"/>)
-    /// start hidden.
+    /// The layer keys offered, one per style that applies, in stack order.
+    /// Which of them a render draws depends on its display settings
+    /// (<see cref="WeatherCoverageStyle.IsDrawnWith"/>).
     /// </summary>
     public IReadOnlyList<string> LayerKeys => _layers.SelectMany(l => l.Styles).Select(s => s.LayerKey).ToArray();
 
@@ -238,10 +240,13 @@ public abstract class WeatherGridProcessorBase :
             ObjectDisposedException.ThrowIf(_disposed, this);
             var subLayers = new List<CoverageSubLayerBase>();
             var info = new List<string>();
-            foreach (var (source, styles) in _layers)
+            var drawnKeys = new List<string>();
+            foreach (var (source, offered) in _layers)
             {
+                var styles = offered.Where(s => s.IsDrawnWith(context?.EcdisDisplay)).ToArray();
                 if (styles.Length == 0)
                     continue;
+                drawnKeys.AddRange(styles.Select(s => s.LayerKey));
 
                 SelectOverviewLevel(source, context?.Viewport);
                 var result = await WeatherPortrayal.BuildAsync(source, styles, FileName, context, _contentHash, cancellationToken)
@@ -259,7 +264,10 @@ public abstract class WeatherGridProcessorBase :
                 Info = info.Count > 0
                     ? string.Join(" ", info)
                     : $"{GridSet.Origin.Model}: no parameter this viewer draws. {NotForNavigationNotice}",
-                ContentScope = _contentHash is null ? null : $"ds:{_contentHash}|{WeatherCoverageStyle.ContentScope}",
+                // The drawn layers are part of the scope: a switch changes the tiles.
+                ContentScope = _contentHash is null
+                    ? null
+                    : $"ds:{_contentHash}|{WeatherCoverageStyle.ContentScope}|l:{string.Join(',', drawnKeys.Order(StringComparer.Ordinal))}",
                 LayerNames = subLayers.Select(l => l.LayerKey).ToArray(),
                 CoverageExtent = new GeographicBounds(extent.WestLongitude, extent.SouthLatitude, extent.EastLongitude, extent.NorthLatitude),
             };

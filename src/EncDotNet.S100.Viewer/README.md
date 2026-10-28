@@ -583,12 +583,6 @@ Rows include:
   and a label for each band, such as **2–2.5 m** or **Force 3, 7–10 kn**, in
   the palette the map is drawn in. Legends appear only in this panel, not on
   the map.
-- Optional weather layers, listed but off until you turn them on: **Isobars**
-  (under **Other chart overlays**, only for a file with mean sea level
-  pressure), the **Wind speed** fill and the **Wave direction** arrows. Their
-  rows have a **Show on map** checkbox. It's the same switch as the layer's
-  eye in the **Datasets** panel, and it stays as you set it while the dataset
-  is loaded, through time steps, palette changes and redraws.
 
 Each dataset row has an **Active** toggle. When it's off, the dataset is taken
 out of the cross-product stack: it no longer takes part in S-98 rules or
@@ -630,6 +624,14 @@ panel:
   also draws a navigational warning from its publication time until it comes
   into force. It has no effect while the **Navigational warnings** switch is
   off. See [Which warnings the map draws](#which-warnings-the-map-draws).
+- **Weather** (Display controls panel; GRIB2 and NetCDF): shown when a weather
+  dataset is loaded. Three switches apply to every weather dataset and are kept
+  after a restart: **Isobars** (on by default; drawn wherever the data has
+  mean sea level pressure), **Wind speed fill** and **Wave arrows** (both off
+  by default, because they compete with the wave height fill and the wind
+  barbs). The wave height fill and wind barbs are always drawn. A layer that's
+  switched off isn't drawn or listed in the **Layer stack**; when it's on, each
+  dataset's own sub-layer eye in the **Datasets** panel can still hide it there.
 
 The **Display controls** panel also lists each loaded vector product's viewing
 groups, so you can hide or show particular symbol families:

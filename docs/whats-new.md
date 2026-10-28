@@ -15,24 +15,22 @@ month. For package versions and release assets, see
   `R-101-104-B` clip and applies to any `GridCoverageSubLayer` with the new
   `ClipToWater` flag; wind isn't clipped. A new `PressureIsobarStyle` draws
   `pressure.msl` as isobars every 4 hPa, labelled in hPa, on
-  `OtherChartOverlays` at priority 90, off by default: `CoverageContours`
-  traces an `ICoverageStyle`'s value-based `ContourStyle`s into an
-  `IsolineCoverageSubLayer`, which both renderers already draw. In the
-  viewer, each weather fill in the **Layer stack** shows a colour legend of
-  its bands (`GridCoverageSubLayer.Legend`); the headless renderer doesn't
-  draw legends. Off-by-default weather layers (isobars, the wind speed fill,
-  wave arrows) are now built and listed hidden instead of dropped: a new
-  `CoverageSubLayerBase.IsVisibleByDefault` makes the map session start their
-  sub-layer state off, a **Show on map** checkbox on their **Layer stack** row
-  turns them on (the same state as the Datasets panel's sub-layer eye, kept
-  while the dataset is loaded), and the headless compositor leaves them out
-  unless `HeadlessCompositeOptions.ShownLayerKeys` names them, so
-  `s100 render` doesn't draw them. Not for navigation. Breaking changes:
-  weather processors' portrayals and `LayerKeys` now include the
-  off-by-default layers (hidden); the headless compositor skips a coverage
-  sub-layer with `IsVisibleByDefault` false; `WeatherLayerKind`
-  gains `Isolines`; `WeatherCoverageStyle.CreateAll()` and, for a pressure
-  grid, `CreateFor` also return `PressureIsobarStyle`;
+  `OtherChartOverlays` at priority 90, on by default wherever the data has
+  pressure: `CoverageContours` traces an `ICoverageStyle`'s value-based
+  `ContourStyle`s into an `IsolineCoverageSubLayer`, which both renderers
+  already draw. In the viewer, each weather fill in the **Layer stack** shows
+  a colour legend of its bands (`GridCoverageSubLayer.Legend`); the headless
+  renderer doesn't draw legends. A new **Weather** section in **Display
+  controls**, shown while a GRIB2 or NetCDF dataset is loaded, switches
+  **Isobars** (on), **Wind speed fill** and **Wave arrows** (off) for every
+  weather dataset and keeps them between sessions; the switches reach the
+  processors as the new `EcdisDisplaySettings.LayerVisibility`
+  (`WeatherCoverageStyle.IsDrawnWith`), and `s100 render` draws the defaults.
+  Not for navigation. Breaking changes: the GRIB2 and NetCDF processors now
+  draw isobars for a file with `pressure.msl` and offer every applicable
+  style in `LayerKeys`, and their content scope names the drawn layers;
+  `WeatherLayerKind` gains `Isolines`; `WeatherCoverageStyle.CreateAll()` and,
+  for a pressure grid, `CreateFor` also return `PressureIsobarStyle`;
   `WeatherCoverageStyle.Contours` is virtual; `WeatherPalette.Palette` has two
   more tokens; `WeatherCoverageStyle.StyleVersion` is 2, so cached weather
   tiles are redrawn; `S98DefaultRules.Default` has a seventh rule; an

@@ -337,41 +337,6 @@ internal sealed class LayerStackEntryViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Whether the row offers a visibility toggle: the entry is an optional
-    /// coverage sub-layer, one its processor offers hidden
-    /// (<see cref="CoverageSubLayerBase.IsVisibleByDefault"/> false), such as a
-    /// weather dataset's pressure isobars, wind speed fill or wave arrows (#1072).
-    /// </summary>
-    public bool CanToggleVisibility => SubLayer is { IsVisibleByDefault: false };
-
-    /// <summary>
-    /// Whether the optional sub-layer is shown. Routed through
-    /// <see cref="IDatasetLoaderService.SetSubLayerVisible"/>, the same
-    /// per-sub-layer state as the Datasets panel's sub-layer eye, which the
-    /// map session keeps across re-renders for as long as the dataset is
-    /// loaded. Always <see langword="true"/> for a row that can't toggle.
-    /// </summary>
-    public bool IsVisible
-    {
-        get => SubLayer is not { } subLayer || _loader.GetSubLayerVisible(Entry.SourceDatasetId, subLayer.LayerKey);
-        set
-        {
-            if (SubLayer is not { } subLayer || IsVisible == value) return;
-            _loader.SetSubLayerVisible(Entry.SourceDatasetId, subLayer.LayerKey, value);
-            OnPropertyChanged();
-        }
-    }
-
-    /// <summary>The visibility toggle's accessible name, e.g. "Show Isobars: gfs.grib2".</summary>
-    public string VisibilityName => string.Format(
-        System.Globalization.CultureInfo.CurrentCulture,
-        Strings.LayerStack_SubLayerVisibleNameFormat,
-        SubLayer?.LayerName ?? DatasetLabel);
-
-    private CoverageSubLayerBase? SubLayer =>
-        Entry.Item.Payload is CoverageStackPayload coverage ? coverage.SubLayer : null;
-
-    /// <summary>
     /// The colour legend of a fill that carries one
     /// (<see cref="GridCoverageSubLayer.Legend"/>: the weather fills, #1072),
     /// band by band, lowest first; empty otherwise. The colours are those of

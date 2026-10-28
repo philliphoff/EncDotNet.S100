@@ -136,10 +136,9 @@ public sealed class GribRenderCommandTests : IDisposable
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void Render_leaves_the_off_by_default_isobars_out(bool withViewport)
+    public void Render_draws_the_isobars_of_a_file_with_pressure(bool withViewport)
     {
-        // #1072: pressure isobars are off by default; s100 render has no
-        // per-layer option, so a pressure-only file draws nothing but the background.
+        // #1072: s100 render follows the library defaults, and isobars are on.
         var dataset = GribFixtures.Write(Path.Combine(_dir, "msl.grib2"), GribFixtures.ChartPressure());
         var output = Path.Combine(_dir, "msl.png");
         string[] args = withViewport
@@ -149,7 +148,24 @@ public sealed class GribRenderCommandTests : IDisposable
         Assert.Equal(0, CliApp.Build().Run(args));
 
         using var bitmap = SKBitmap.Decode(output);
-        Assert.Equal(0, InkFraction(bitmap));
+        double ink = InkFraction(bitmap);
+        // Lines and labels on a white ground: some ink, far from a fill.
+        Assert.True(ink > 0 && ink < 0.2, $"Ink fraction {ink}: the isobars aren't drawn as lines.");
+    }
+
+    [Fact]
+    public void Render_leaves_the_wind_speed_fill_out()
+    {
+        // #1072: the wind speed fill (and the wave arrows) are off by default,
+        // so a wind file draws sparse barbs, not a fill over the whole grid.
+        var dataset = GribFixtures.Write(Path.Combine(_dir, "wind.grib2"), GribFixtures.ChartWind());
+        var output = Path.Combine(_dir, "wind.png");
+
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, output, "--width", "200", "--height", "200"]));
+
+        using var bitmap = SKBitmap.Decode(output);
+        double ink = InkFraction(bitmap);
+        Assert.True(ink > 0 && ink < 0.3, $"Ink fraction {ink}: expected barbs only.");
     }
 
     private static double InkFraction(SKBitmap bitmap)

@@ -205,33 +205,6 @@ internal interface IDatasetLoaderService
     event Action<string>? ActiveChanged;
 
     /// <summary>
-    /// Returns whether one sub-layer of a loaded dataset is visible: the same
-    /// per-sub-layer state the Datasets panel's sub-layer eye toggles
-    /// (<see cref="DatasetSubLayer.IsVisible"/>). A sub-layer the processor
-    /// offers hidden (<c>CoverageSubLayerBase.IsVisibleByDefault</c>, such as
-    /// the weather isobars) starts <see langword="false"/>. Unknown datasets
-    /// or keys are visible. The default implementation reports every
-    /// sub-layer visible.
-    /// </summary>
-    /// <param name="datasetId">The dataset id.</param>
-    /// <param name="layerKey">The sub-layer key, e.g. <c>"weather.pressure.isobars"</c>.</param>
-    bool GetSubLayerVisible(string datasetId, string layerKey) => true;
-
-    /// <summary>
-    /// Shows or hides one sub-layer of a loaded dataset, through the same
-    /// per-sub-layer state as <see cref="DatasetSubLayer.IsVisible"/>, which
-    /// the map session keeps across re-renders, time steps and palette
-    /// changes for as long as the dataset is loaded. The default
-    /// implementation does nothing.
-    /// </summary>
-    /// <param name="datasetId">The dataset id.</param>
-    /// <param name="layerKey">The sub-layer key.</param>
-    /// <param name="visible">Whether to show it.</param>
-    void SetSubLayerVisible(string datasetId, string layerKey, bool visible)
-    {
-    }
-
-    /// <summary>
     /// Raised on the calling thread (typically the UI thread) immediately
     /// after a dataset has been successfully rendered and its layers added
     /// to the map.

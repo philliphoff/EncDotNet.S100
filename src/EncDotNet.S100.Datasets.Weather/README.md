@@ -167,15 +167,16 @@ so the coverage pipeline and both renderers draw them with no weather code.
 | `WindBarbStyle` | WMO wind barbs, one per 5 kn from 5 to 200 kn; a calm circle below 2.5 kn | `wind.speed` | `wind.from_direction` | On |
 | `WindSpeedStyle` | Colour fill in Beaufort bands, force 0 to 12 | `wind.speed` | — | Off |
 | `WaveDirectionStyle` | One arrow, half size below 1.5 m, growing to double size at 6 m | `wave.hs` | `wave.dir` + 180° | Off |
-| `PressureIsobarStyle` | Isobars every 4 hPa, labelled in hPa (`1012`) | `pressure.msl` | — | Off |
+| `PressureIsobarStyle` | Isobars every 4 hPa, labelled in hPa (`1012`) | `pressure.msl` | — | On |
 
-- **Default visibility.** Every style that applies to a source is built.
-  `WeatherPortrayal` copies `IsVisibleByDefault` onto the sub-layer
-  (`CoverageSubLayerBase.IsVisibleByDefault`), so the wind speed fill, wave
-  arrows and isobars are listed but start hidden: the viewer's map session
-  starts their sub-layer state off, and the headless compositor leaves them
-  out unless `HeadlessCompositeOptions.ShownLayerKeys` names them.
-  `s100 render` has no per-layer option, so it never draws them.
+- **Default and switches.** The Default column is `IsVisibleByDefault`.
+  `IsDrawnWith(display)` applies the map-wide switches in
+  `EcdisDisplaySettings.LayerVisibility`, keyed by the style's `LayerKey`, and
+  falls back to the default when a key is unset or there are no display
+  settings. The GRIB2 and NetCDF processors offer every style that applies
+  and draw those `IsDrawnWith` the render context, so the viewer's Display
+  controls Weather section switches them for every weather dataset, and
+  `s100 render`, which passes no switches, draws the defaults.
 - **Knots.** `wind.speed` stays in m/s, its stored unit. The barb and
   Beaufort bands are defined in knots and their limits converted to m/s, so
   the grid isn't copied into knots and sampling still reports m/s. Legend

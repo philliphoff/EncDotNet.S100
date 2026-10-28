@@ -73,18 +73,6 @@
     <value>{0}</value>
     <comment>{0} = number of layer entries in this S-98 display plane.</comment>
   </data>
-  <data name="LayerStack_SubLayerVisibleNameFormat" xml:space="preserve">
-    <value>Show {0}</value>
-    <comment>Accessible name of the visibility checkbox on an optional layer's Layer Stack row, such as the weather isobars (#1072). {0} is the layer name, e.g. "Isobars: gfs.grib2".</comment>
-  </data>
-  <data name="LayerStack_SubLayerVisibleLabel" xml:space="preserve">
-    <value>Show on map</value>
-    <comment>Label of the visibility checkbox on an optional layer's Layer Stack row (#1072).</comment>
-  </data>
-  <data name="LayerStack_SubLayerVisibleTooltip" xml:space="preserve">
-    <value>Show — this layer is off until you turn it on. It's the same switch as the layer's eye in the Datasets panel, and it stays as you set it while the dataset is loaded.</value>
-    <comment>Tooltip for the visibility checkbox on an optional layer's Layer Stack row (#1072).</comment>
-  </data>
   <data name="LayerStack_LegendNameFormat" xml:space="preserve">
     <value>Legend of {0}, {1} bands</value>
     <comment>Accessible name of a colour fill's legend in the Layer Stack (#1072). {0} is the layer name, e.g. "Wave height: gfswave.grib2"; {1} the number of colour bands.</comment>
@@ -6551,6 +6539,31 @@
   <data name="EcdisPanel_OverlaysHeader" xml:space="preserve">
     <value>Overlays</value>
     <comment>ECDIS Display controls section: product overlays the mariner can switch on and off (S-98 §6.1.1; #995).</comment>
+  </data>
+  <data name="EcdisPanel_WeatherHeader" xml:space="preserve">
+    <value>Weather</value>
+    <comment>Display controls section header for GRIB2 and NetCDF weather data (#1072). Shown while a weather dataset is loaded.</comment>
+  </data>
+  <data name="EcdisPanel_Weather_Isobars" xml:space="preserve">
+    <value>Isobars</value>
+    <comment>Display controls switch (#1072): mean sea level pressure isobars on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_Isobars" xml:space="preserve">
+    <value>Draw mean sea level pressure isobars, every 4 hPa, on every weather dataset that has pressure. On by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_WindSpeedFill" xml:space="preserve">
+    <value>Wind speed fill</value>
+    <comment>Display controls switch (#1072): the Beaufort wind speed colour fill on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_WindSpeedFill" xml:space="preserve">
+    <value>Colour the wind speed in Beaufort bands on every weather dataset with wind. Off by default: it competes with the wave height fill and the wind barbs.</value>
+  </data>
+  <data name="EcdisPanel_Weather_WaveArrows" xml:space="preserve">
+    <value>Wave arrows</value>
+    <comment>Display controls switch (#1072): wave direction arrows on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_WaveArrows" xml:space="preserve">
+    <value>Draw arrows the way the waves travel, sized by wave height, on every weather dataset with wave direction. Off by default: they compete with the wind barbs.</value>
   </data>
   <data name="EcdisPanel_NavigationalWarnings" xml:space="preserve">
     <value>Navigational warnings</value>

@@ -268,8 +268,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             entry.Dataset = ReconcileDatasetState(
                 dataset,
                 entry.LayerKeys,
-                entry.Dataset.SubLayers,
-                HiddenByDefaultKeys(entry));
+                entry.Dataset.SubLayers);
             entry.TimePolicy = timePolicy;
             entry.IssueTime = issueTime;
             entry.ForecastRun = forecastRun;
@@ -891,8 +890,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             entry.Dataset = ReconcileDatasetState(
                 entry.Dataset,
                 entry.LayerKeys,
-                entry.Dataset.SubLayers,
-                HiddenByDefaultKeys(entry));
+                entry.Dataset.SubLayers);
             if (entry.TimePolicy is not null)
             {
                 entry.Dataset = CopyDataset(
@@ -1748,29 +1746,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         };
     }
 
-    // The keys of the coverage sub-layers the processor offers hidden
-    // (CoverageSubLayerBase.IsVisibleByDefault false, e.g. weather isobars).
-    private static IReadOnlySet<string> HiddenByDefaultKeys(Entry entry)
-    {
-        if (entry.StackEntries is not { Count: > 0 } stack)
-            return EmptyKeys;
-
-        HashSet<string>? hidden = null;
-        foreach (var stackEntry in stack)
-        {
-            if (stackEntry.Item.Payload is CoverageStackPayload { SubLayer: { IsVisibleByDefault: false } subLayer })
-                (hidden ??= new HashSet<string>(StringComparer.Ordinal)).Add(subLayer.LayerKey);
-        }
-        return hidden ?? EmptyKeys;
-    }
-
-    private static readonly IReadOnlySet<string> EmptyKeys = new HashSet<string>(StringComparer.Ordinal);
-
     private static MapDataset ReconcileDatasetState(
         MapDataset dataset,
         IReadOnlyList<string>? layerKeys,
-        IReadOnlyList<MapDatasetSubLayer> fallbackSubLayers,
-        IReadOnlySet<string> hiddenByDefault)
+        IReadOnlyList<MapDatasetSubLayer> fallbackSubLayers)
     {
         if (layerKeys is null)
         {
@@ -1780,9 +1759,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                     ? dataset.SubLayers
                     : fallbackSubLayers);
         }
-        // A single layer needs no per-layer state, unless it starts hidden:
-        // then its state carries the visibility the user can switch on.
-        if (layerKeys.Count <= 1 && !layerKeys.Any(hiddenByDefault.Contains))
+        if (layerKeys.Count <= 1)
             return CopyDataset(dataset, []);
 
         var existing = fallbackSubLayers.ToDictionary(layer => layer.Key);
@@ -1797,11 +1774,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             while (!seen.Add(key))
                 key = $"{sourceKey}#{++suffix}";
 
-            // A layer seen for the first time starts as its processor asks;
-            // after that the user's choice is kept across re-portrayals.
             subLayers.Add(existing.TryGetValue(key, out var state)
                 ? state
-                : new MapDatasetSubLayer(key, key, isVisible: !hiddenByDefault.Contains(sourceKey)));
+                : new MapDatasetSubLayer(key, key));
         }
         return CopyDataset(dataset, subLayers);
     }

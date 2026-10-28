@@ -102,9 +102,6 @@ internal static partial class Strings
     public static string LayerStack_ChildCountFormat => Get(nameof(LayerStack_ChildCountFormat));
     public static string LayerStack_PriorityFormat => Get(nameof(LayerStack_PriorityFormat));
     public static string LayerStack_LegendNameFormat => Get(nameof(LayerStack_LegendNameFormat));
-    public static string LayerStack_SubLayerVisibleNameFormat => Get(nameof(LayerStack_SubLayerVisibleNameFormat));
-    public static string LayerStack_SubLayerVisibleTooltip => Get(nameof(LayerStack_SubLayerVisibleTooltip));
-    public static string LayerStack_SubLayerVisibleLabel => Get(nameof(LayerStack_SubLayerVisibleLabel));
     public static string LayerStack_Plane_BaseChartUnder => Get(nameof(LayerStack_Plane_BaseChartUnder));
     public static string LayerStack_Plane_Bathymetry => Get(nameof(LayerStack_Plane_Bathymetry));
     public static string LayerStack_Plane_OnDemandSurface => Get(nameof(LayerStack_Plane_OnDemandSurface));
@@ -792,6 +789,13 @@ internal static partial class Strings
     public static string EcdisPanel_OverlaysHeader => Get(nameof(EcdisPanel_OverlaysHeader));
     public static string EcdisPanel_NavigationalWarnings => Get(nameof(EcdisPanel_NavigationalWarnings));
     public static string Tooltip_EcdisPanel_NavigationalWarnings => Get(nameof(Tooltip_EcdisPanel_NavigationalWarnings));
+    public static string EcdisPanel_WeatherHeader => Get(nameof(EcdisPanel_WeatherHeader));
+    public static string EcdisPanel_Weather_Isobars => Get(nameof(EcdisPanel_Weather_Isobars));
+    public static string Tooltip_EcdisPanel_Weather_Isobars => Get(nameof(Tooltip_EcdisPanel_Weather_Isobars));
+    public static string EcdisPanel_Weather_WindSpeedFill => Get(nameof(EcdisPanel_Weather_WindSpeedFill));
+    public static string Tooltip_EcdisPanel_Weather_WindSpeedFill => Get(nameof(Tooltip_EcdisPanel_Weather_WindSpeedFill));
+    public static string EcdisPanel_Weather_WaveArrows => Get(nameof(EcdisPanel_Weather_WaveArrows));
+    public static string Tooltip_EcdisPanel_Weather_WaveArrows => Get(nameof(Tooltip_EcdisPanel_Weather_WaveArrows));
 
     // Text group toolbar pill
     public static string Toolbar_Text => Get(nameof(Toolbar_Text));

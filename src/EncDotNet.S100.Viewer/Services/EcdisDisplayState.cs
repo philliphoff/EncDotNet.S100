@@ -18,6 +18,7 @@ internal sealed class EcdisDisplayState
     private readonly HashSet<DisplayPlane> _hiddenPlanes = new();
     private readonly Dictionary<string, string?> _displayModes =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, bool> _layerVisibility = new(StringComparer.Ordinal);
     private EcdisDisplayCategory _category = EcdisDisplayCategory.Standard;
     private bool _showNavigationalWarnings = true;
 
@@ -203,6 +204,41 @@ internal sealed class EcdisDisplayState
     }
 
     /// <summary>
+    /// The map-wide switch for an optional product layer, such as the
+    /// weather isobars (<c>"weather.pressure.isobars"</c>; #1072), or
+    /// <see langword="null"/> when it is unset and the layer follows its
+    /// producer's default.
+    /// </summary>
+    /// <param name="layerKey">The processor's stable sub-layer key.</param>
+    public bool? GetLayerVisible(string layerKey)
+    {
+        ArgumentNullException.ThrowIfNull(layerKey);
+        lock (_gate)
+        {
+            return _layerVisibility.TryGetValue(layerKey, out var visible) ? visible : null;
+        }
+    }
+
+    /// <summary>
+    /// Sets the map-wide switch for an optional product layer and raises
+    /// <see cref="Changed"/> when it differs, so every dataset of the
+    /// product re-renders with it (<see cref="EcdisDisplaySettings.LayerVisibility"/>).
+    /// </summary>
+    /// <param name="layerKey">The processor's stable sub-layer key.</param>
+    /// <param name="visible">Whether the layer is drawn.</param>
+    public void SetLayerVisible(string layerKey, bool visible)
+    {
+        ArgumentNullException.ThrowIfNull(layerKey);
+        bool changed;
+        lock (_gate)
+        {
+            changed = !_layerVisibility.TryGetValue(layerKey, out var current) || current != visible;
+            _layerVisibility[layerKey] = visible;
+        }
+        if (changed) Changed?.Invoke();
+    }
+
+    /// <summary>
     /// Clears every per-spec viewing-group override and raises
     /// <see cref="Changed"/> if anything was cleared.
     /// </summary>
@@ -268,6 +304,7 @@ internal sealed class EcdisDisplayState
                 HiddenDisplayPlanes = new HashSet<DisplayPlane>(_hiddenPlanes),
                 ActiveDisplayModes = new Dictionary<string, string?>(
                     _displayModes, StringComparer.OrdinalIgnoreCase),
+                LayerVisibility = new Dictionary<string, bool>(_layerVisibility, StringComparer.Ordinal),
             };
         }
     }
@@ -285,7 +322,8 @@ internal sealed class EcdisDisplayState
         IReadOnlyDictionary<string, IReadOnlySet<int>> hidden,
         IReadOnlySet<DisplayPlane>? hiddenPlanes = null,
         IReadOnlyDictionary<string, string?>? displayModes = null,
-        bool showNavigationalWarnings = true)
+        bool showNavigationalWarnings = true,
+        IReadOnlyDictionary<string, bool>? layerVisibility = null)
     {
         ArgumentNullException.ThrowIfNull(hidden);
         lock (_gate)
@@ -300,6 +338,12 @@ internal sealed class EcdisDisplayState
             {
                 foreach (var p in hiddenPlanes)
                     _hiddenPlanes.Add(p);
+            }
+            _layerVisibility.Clear();
+            if (layerVisibility is not null)
+            {
+                foreach (var kv in layerVisibility)
+                    _layerVisibility[kv.Key] = kv.Value;
             }
             _displayModes.Clear();
             if (displayModes is not null)

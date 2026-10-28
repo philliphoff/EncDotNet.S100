@@ -83,6 +83,42 @@
                     </Grid>
                 </StackPanel>
 
+                <!-- Weather (#1072): map-wide switches for the optional weather
+                     layers, applied to every GRIB2 and NetCDF dataset and kept
+                     between sessions. Shown while a weather dataset is loaded.
+                     The wave height fill and wind barbs are always drawn. -->
+                <StackPanel Spacing="4" IsVisible="{Binding HasWeatherData}">
+                    <TextBlock Text="{x:Static loc:Strings.EcdisPanel_WeatherHeader}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               LetterSpacing="0.5"
+                               Opacity="0.7" />
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Isobars}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_Isobars}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsIsobarsVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.Isobars"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_Isobars}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Isobars}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_WindSpeedFill}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_WindSpeedFill}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsWindSpeedFillVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.WindSpeedFill"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_WindSpeedFill}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_WindSpeedFill}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_WaveArrows}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_WaveArrows}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsWaveArrowsVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.WaveArrows"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_WaveArrows}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_WaveArrows}" />
+                    </Grid>
+                </StackPanel>
+
                 <!-- Global reset -->
                 <Button Content="{x:Static loc:Strings.Button_ResetAllOverrides}"
                         AutomationProperties.AutomationId="Ecdis.ResetAllOverrides"

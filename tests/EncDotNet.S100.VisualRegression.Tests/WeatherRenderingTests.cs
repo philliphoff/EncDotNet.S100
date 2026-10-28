@@ -346,8 +346,6 @@ public sealed class WeatherRenderingTests
                 Height = height,
                 Viewport = viewport,
                 Background = RgbaColor.FromHex($"#{Background(palette) & 0xFFFFFF:X6}"),
-                // Draw the style even when it's off by default (#1072).
-                ShownLayerKeys = [style.LayerKey],
             });
     }
 

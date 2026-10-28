@@ -148,13 +148,36 @@ public class WeatherCoverageStyleTests
     }
 
     [Fact]
-    public void Wave_height_and_barbs_are_on_by_default_and_the_others_off()
+    public void Wave_height_barbs_and_isobars_are_on_by_default_and_the_others_off()
     {
         Assert.True(new WaveHeightStyle().IsVisibleByDefault);
         Assert.True(new WindBarbStyle().IsVisibleByDefault);
         Assert.False(new WindSpeedStyle().IsVisibleByDefault);
         Assert.False(new WaveDirectionStyle().IsVisibleByDefault);
-        Assert.False(new PressureIsobarStyle().IsVisibleByDefault);
+        Assert.True(new PressureIsobarStyle().IsVisibleByDefault);
+    }
+
+    [Fact]
+    public void The_display_switches_override_the_defaults_and_unset_keys_follow_them()
+    {
+        var display = new EcdisDisplaySettings
+        {
+            LayerVisibility = new Dictionary<string, bool>
+            {
+                [PressureIsobarStyle.Key] = false,
+                [WindSpeedStyle.Key] = true,
+            },
+        };
+
+        Assert.False(new PressureIsobarStyle().IsDrawnWith(display));
+        Assert.True(new WindSpeedStyle().IsDrawnWith(display));
+        Assert.False(new WaveDirectionStyle().IsDrawnWith(display));
+        Assert.True(new WaveHeightStyle().IsDrawnWith(display));
+
+        // No display settings (headless rendering): the defaults.
+        Assert.True(new PressureIsobarStyle().IsDrawnWith(null));
+        Assert.False(new WindSpeedStyle().IsDrawnWith(null));
+        Assert.True(new WindBarbStyle().IsDrawnWith(new EcdisDisplaySettings()));
     }
 
     [Fact]
@@ -243,7 +266,6 @@ public class WeatherCoverageStyleTests
 
         var isobars = Assert.IsType<IsolineCoverageSubLayer>(Assert.Single(result.SubLayers));
         Assert.Equal(PressureIsobarStyle.Key, isobars.LayerKey);
-        Assert.False(isobars.IsVisibleByDefault);
         Assert.Equal(S98DisplayPlane.OtherChartOverlays, isobars.Plane);
         Assert.Equal(90, isobars.WithinPlanePriority);
         Assert.Empty(isobars.DashPattern);
@@ -267,8 +289,6 @@ public class WeatherCoverageStyleTests
         var wind = await WeatherPortrayal.BuildAsync(WindSource(), [new WindSpeedStyle()], "wind", cancellationToken: Ct);
 
         Assert.True(Assert.IsType<GridCoverageSubLayer>(Assert.Single(waves.SubLayers)).ClipToWater);
-        Assert.True(waves.SubLayers[0].IsVisibleByDefault);
-        Assert.False(wind.SubLayers[0].IsVisibleByDefault);
         Assert.False(Assert.IsType<GridCoverageSubLayer>(Assert.Single(wind.SubLayers)).ClipToWater);
     }
 

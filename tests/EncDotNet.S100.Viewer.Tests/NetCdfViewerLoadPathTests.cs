@@ -65,9 +65,7 @@ public sealed class NetCdfViewerLoadPathTests : IDisposable
         var id = new MapDatasetId("waves.nc");
         Assert.True(await s100.AddDatasetAsync(new MapDataset(id, "waves.nc", processor.Metadata), processor, cancellationToken: Ct));
 
-        // The wave arrows are listed too, hidden until turned on (#1072).
-        var entry = Assert.Single(s100.Session.GetLayerStackEntries(), e => e.Layer.Enabled);
-        Assert.False(Assert.Single(s100.Session.GetLayerStackEntries(), e => e.Item.SourceFeatureType == WaveDirectionStyle.Key).Layer.Enabled);
+        var entry = Assert.Single(s100.Session.GetLayerStackEntries());
         Assert.Equal(WaveHeightStyle.Key, entry.Item.SourceFeatureType);
         Assert.NotEmpty(map.Layers);
 

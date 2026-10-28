@@ -1,3 +1,4 @@
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
@@ -28,7 +29,7 @@ namespace EncDotNet.S100.Datasets.Weather;
 ///   <item><term><see cref="WindBarbStyle"/></term><description>WMO wind barbs from <c>wind.speed</c> and <c>wind.from_direction</c>. On by default.</description></item>
 ///   <item><term><see cref="WindSpeedStyle"/></term><description>A <c>wind.speed</c> fill in Beaufort bands. Off by default.</description></item>
 ///   <item><term><see cref="WaveDirectionStyle"/></term><description>Arrows along <c>wave.dir</c>, sized by <c>wave.hs</c>. Off by default.</description></item>
-///   <item><term><see cref="PressureIsobarStyle"/></term><description>Isobars every 4 hPa on <c>pressure.msl</c>, labelled. Off by default.</description></item>
+///   <item><term><see cref="PressureIsobarStyle"/></term><description>Isobars every 4 hPa on <c>pressure.msl</c>, labelled. On by default.</description></item>
 /// </list>
 /// <para>
 /// Layer order (design note §5): fills go on
@@ -136,8 +137,24 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// <summary>The field the symbols are rotated by, or <see langword="null"/> for a fill.</summary>
     public string? RotationFieldName { get; }
 
-    /// <summary>Whether the layer is shown until the mariner hides it.</summary>
+    /// <summary>
+    /// Whether the layer is drawn when nothing says otherwise: on for the
+    /// wave height fill, wind barbs and isobars; off for the wind speed fill
+    /// and wave arrows, which compete with the wave fill and the barbs
+    /// (design note §10.1).
+    /// </summary>
     public bool IsVisibleByDefault { get; }
+
+    /// <summary>
+    /// Whether the layer is drawn under <paramref name="display"/>: its
+    /// map-wide switch (<see cref="EcdisDisplaySettings.LayerVisibility"/>,
+    /// keyed by <see cref="LayerKey"/>; the viewer's Display controls Weather
+    /// section), or <see cref="IsVisibleByDefault"/> when the switch is unset
+    /// or there are no display settings (headless rendering).
+    /// </summary>
+    /// <param name="display">The display settings, or <see langword="null"/>.</param>
+    public bool IsDrawnWith(EcdisDisplaySettings? display) =>
+        display?.IsLayerVisible(LayerKey, IsVisibleByDefault) ?? IsVisibleByDefault;
 
     /// <summary>
     /// Whether the fill is clipped to water when an S-101 chart is loaded

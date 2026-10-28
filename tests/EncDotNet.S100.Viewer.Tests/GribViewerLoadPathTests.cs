@@ -71,14 +71,9 @@ public sealed class GribViewerLoadPathTests : IDisposable
         var id = new MapDatasetId("filter_gfswave.pl");
         Assert.True(await s100.AddDatasetAsync(new MapDataset(id, "filter_gfswave.pl", processor.Metadata), processor, cancellationToken: Ct));
 
-        // Drawn: the wave fill and the wind barbs. Listed but hidden until the
-        // user turns them on (#1072): the wind speed fill and wave arrows.
         Assert.Equal(
             [WaveHeightStyle.Key, WindBarbStyle.Key],
-            s100.Session.GetLayerStackEntries().Where(e => e.Layer.Enabled).Select(e => e.Item.SourceFeatureType).Order());
-        Assert.Equal(
-            [WaveDirectionStyle.Key, WindSpeedStyle.Key],
-            s100.Session.GetLayerStackEntries().Where(e => !e.Layer.Enabled).Select(e => e.Item.SourceFeatureType).Order());
+            s100.Session.GetLayerStackEntries().Select(e => e.Item.SourceFeatureType).Order());
         Assert.NotEmpty(map.Layers);
 
         // The timeline names the run from the processor, and stepping redraws.
