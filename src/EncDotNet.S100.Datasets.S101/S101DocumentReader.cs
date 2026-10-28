@@ -291,20 +291,20 @@ internal static class S101DocumentReader
         if (remaining.Length < LeaderLength)
         {
             throw new EndOfStreamException(
-                $"S-101 dataset ends part-way through the leader of record {recordNumber} " +
-                $"(byte {bytesRead}; {remaining.Length} of {LeaderLength} leader bytes present).");
+                $"S-101 dataset ends part-way through the leader of record {recordNumber}: " +
+                $"{remaining.Length} of {LeaderLength} leader bytes present at byte {bytesRead}");
         }
 
         if (TryParseRecordLength(remaining[..RecordLengthDigits], out var declaredLength)
             && declaredLength > remaining.Length)
         {
             throw new EndOfStreamException(
-                $"S-101 dataset ends part-way through record {recordNumber} " +
-                $"(byte {bytesRead}; {remaining.Length} of {declaredLength} record bytes present).");
+                $"S-101 dataset ends part-way through record {recordNumber}: " +
+                $"{remaining.Length} of {declaredLength} record bytes present at byte {bytesRead}");
         }
 
         throw new InvalidDataException(
-            $"S-101 dataset has {remaining.Length} unreadable bytes after record {recordCount} (byte {bytesRead}).");
+            $"S-101 dataset has {remaining.Length} unreadable bytes after record {recordCount}, at byte {bytesRead}");
     }
 
     private static bool TryParseRecordLength(ReadOnlySpan<byte> digits, out int length)
