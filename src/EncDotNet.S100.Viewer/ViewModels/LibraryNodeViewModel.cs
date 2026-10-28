@@ -179,6 +179,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
         null => _collection.IsSession ? Icon.History : Icon.Library,
         LocalManifestSource => Icon.DocumentBulletList,
         NoaaEncFeedSource or UsaceIencFeedSource or S100CatalogueFeedSource or S100ForecastFeedSource or SecomSource => Icon.Globe,
+        WeatherFeedSource => Icon.WeatherPartlyCloudyDay,
         S128CatalogueSource => Icon.BookOpen,
         ExchangeSetSource { Path: var p } when p.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) => Icon.FolderZip,
         _ => Icon.Folder,

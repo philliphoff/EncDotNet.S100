@@ -34,7 +34,7 @@ internal enum LibraryStateFilter
 /// filterable list, and the selected dataset's metadata — without loading any
 /// dataset.
 /// </summary>
-internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
+internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
 {
     private readonly CollectionLibrary _library;
     private readonly ILibraryImporter _importer;
@@ -155,6 +155,9 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
             () => _selectedItem?.CanLoadAfterDownload == true ? DownloadSelectedAsync(load: true) : LoadSelectedAsync(),
             () => _selectedItem is { } item && (item.CanLoad || item.CanLoadAfterDownload));
         OpenAsRouteCommand = new AsyncRelayCommand(OpenSelectedAsRouteAsync, () => CanOpenAsRoute);
+        LoadLatestRunCommand = new AsyncRelayCommand(LoadLatestRunAsync, () => _selectedItem?.CanLoadLatestRun == true);
+        PinRunCommand = new RelayCommand(PinSelectedRun, () => _selectedItem?.CanPinRun == true);
+        UnpinRunCommand = new RelayCommand(UnpinSelectedRun, () => _selectedItem?.IsPinnedRun == true);
         DownloadListedCommand = new AsyncRelayCommand(DownloadListedAsync, () => DownloadableCount > 0);
         CancelDownloadsCommand = new RelayCommand(() => _downloader.CancelAll(), () => IsBulkDownloading);
         ShowOnTimelineCommand = new RelayCommand(
@@ -259,6 +262,7 @@ internal sealed class LibraryPanelViewModel : ViewModelBase, IDisposable
                 ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
                 ((AsyncRelayCommand)OpenAsRouteCommand).NotifyCanExecuteChanged();
+                NotifyWeatherRunCommands();
                 ((RelayCommand)ShowOnTimelineCommand).NotifyCanExecuteChanged();
                 ((RelayCommand)GoToRunStartCommand).NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(HasValidWindow));

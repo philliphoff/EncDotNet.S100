@@ -87,6 +87,20 @@ public sealed class MarineZoneLayerTests
     }
 
     [Fact]
+    public void The_zones_in_an_area_are_those_whose_outline_reaches_into_it()
+    {
+        // Around the Potomac between Washington and Indian Head (issue #1075: alerts for the map view).
+        var codes = MarineZoneLayer.Default.CodesIn(38.6, -77.2, 38.8, -77.0);
+
+        Assert.Contains("ANZ535", codes);
+        Assert.DoesNotContain("PZZ560", codes);
+        Assert.Equal(codes.Order(StringComparer.Ordinal), codes);
+        Assert.Empty(MarineZoneLayer.Default.CodesIn(-10, 60, -5, 65));
+        // Across the antimeridian, the Aleutians' zones.
+        Assert.Contains(MarineZoneLayer.Default.CodesIn(50, 170, 56, -170), c => c.StartsWith("PKZ", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void A_layer_that_is_not_a_feature_collection_fails() =>
         Assert.Throws<CapFormatException>(() => MarineZoneLayer.Load(new MemoryStream("[1,2]"u8.ToArray())));
 }

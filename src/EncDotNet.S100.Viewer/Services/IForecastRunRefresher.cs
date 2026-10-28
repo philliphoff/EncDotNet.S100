@@ -35,6 +35,6 @@ internal sealed class LibraryForecastRunRefresher(CollectionLibrary library) : I
         _library.Collections
             .Where(c => !c.IsSession)
             .SelectMany(c => c.Sources
-                .Where(s => s.Definition is S100ForecastFeedSource)
+                .Where(s => s.Definition is S100ForecastFeedSource or WeatherFeedSource)
                 .Select(s => (c.Id, s.Id)));
 }

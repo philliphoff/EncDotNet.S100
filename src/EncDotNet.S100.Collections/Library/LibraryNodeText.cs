@@ -98,6 +98,9 @@ public static partial class LibraryNodeText
         S100ForecastFeedSource { ModelsUri.Host: var forecastHost }
             when forecastHost.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
         S100ForecastFeedSource => "WEB",
+        WeatherFeedSource { ServiceUri.Host: var weatherHost }
+            when weatherHost.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
+        WeatherFeedSource => "WEB",
         ChartCatalogsFeedSource => "LIST",
         S100FeedSource => "FEED",
         SecomSource => "SECOM",
@@ -156,6 +159,7 @@ public static partial class LibraryNodeText
         S100CatalogueFeedSource r => r.CatalogUri,
         S100ForecastFeedSource f => f.ModelsUri,
         SecomSource s => s.ServiceUri,
+        WeatherFeedSource w => w.ServiceUri,
         _ => null,
     };
 
@@ -185,6 +189,7 @@ public static partial class LibraryNodeText
         S100CatalogueFeedSource r => r.CatalogUri.Host,
         S100ForecastFeedSource f => f.ModelsUri.Host,
         SecomSource s => s.ServiceUri.Host,
+        WeatherFeedSource w => w.Service.ModelName ?? w.ServiceUri.Host,
         _ => source.GetType().Name,
     };
 
@@ -326,6 +331,8 @@ public static partial class LibraryNodeText
             return SyncStatus(attention, c);
         if (sources is [{ Definition: S100ForecastFeedSource forecast, Index: { } runs }] && problems == 0)
             return ForecastStatus(runs, input.Health?.Invoke(forecast), input.ForecastCounts, c, input.TimeFormat);
+        if (sources is [{ Definition: WeatherFeedSource, Index.PublishedAt: { } latestRun }] && problems == 0)
+            return (string.Format(c, LibraryText.Get("Weather_LatestRunFormat"), Weather.WeatherRequests.FormatRun(latestRun)), LibraryNodeStatusKind.Info);
         if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)
             return CatalogueStatus(catalogueIndex, input.Health?.Invoke(catalogue), input.CatalogueCounts, c);
         if (sync is { } synced && problems == 0)

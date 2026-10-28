@@ -42,8 +42,14 @@ public sealed record LibraryCatalogueReaders
     /// </summary>
     public Func<Uri, string?, string?, CancellationToken, Task<SecomServiceDescription>>? Secom { get; init; }
 
-    /// <summary>The map view a SECOM service can be narrowed to; it cannot be without.</summary>
+    /// <summary>The map view a SECOM service can be narrowed to (it cannot be without), and a weather source's area (the whole globe without).</summary>
     public Func<GeoBounds?>? CurrentMapView { get; init; }
+
+    /// <summary>Reads what a weather service has now: its latest run, the alerts in force or the datasets' titles (#1075).</summary>
+    public Func<WeatherFeedSource, CancellationToken, Task<Collections.Weather.WeatherServiceSummary>>? Weather { get; init; }
+
+    /// <summary>The NWS marine zone codes in an area, for an alerts source (#1075); every marine alert is asked for without.</summary>
+    public Func<GeoBounds, IReadOnlyList<string>>? MarineZones { get; init; }
 }
 
 /// <summary>
@@ -99,6 +105,8 @@ public sealed class LibrarySourceDraft
             LibrarySourceKind.S100Forecast when readers.ForecastModels is { } forecast && known.Models.Count > 0
                 => new S100ForecastScope(uri, known.Models, forecast, time),
             LibrarySourceKind.Secom when readers.Secom is { } secom => new SecomScope(uri, secom, readers.CurrentMapView),
+            LibrarySourceKind.Weather when readers.Weather is { } weather && known.Weather is not null
+                => new WeatherScope(known, weather, readers.CurrentMapView, readers.MarineZones),
             _ => null,
         };
         return scope is null ? null : new LibrarySourceDraft(kind, null, known, scope, time);

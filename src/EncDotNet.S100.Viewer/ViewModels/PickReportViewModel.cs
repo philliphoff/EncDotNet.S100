@@ -452,6 +452,14 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// <summary>True when <see cref="NavigationNotice"/> has a value to show.</summary>
     public bool HasNavigationNotice => NavigationNotice is not null;
 
+    /// <summary>"Data: NOAA/NCEP GFS-Wave · Public domain": the picked dataset's credit from its Library source (#1075), or null.</summary>
+    public string? DataCredit => _selectedHit?.Credit is { } credit
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_DataCreditFormat, credit)
+        : null;
+
+    /// <summary>True when <see cref="DataCredit"/> has a value to show.</summary>
+    public bool HasDataCredit => DataCredit is not null;
+
     /// <summary>
     /// Clipboard text for the copy-identity action: heading plus caption, after
     /// the <see cref="NavigationNotice"/> when there is one.
@@ -1286,6 +1294,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasPortrayalNote));
         OnPropertyChanged(nameof(NavigationNotice));
         OnPropertyChanged(nameof(HasNavigationNotice));
+        OnPropertyChanged(nameof(DataCredit));
+        OnPropertyChanged(nameof(HasDataCredit));
         OnPropertyChanged(nameof(IsExaminerAvailable));
         (CopyIdentityCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();

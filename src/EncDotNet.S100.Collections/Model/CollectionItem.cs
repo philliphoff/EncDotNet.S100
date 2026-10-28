@@ -189,7 +189,29 @@ public sealed record RemoteItemLocation(
     /// the publication date says it.
     /// </summary>
     public string? Revision { get; init; }
+
+    /// <summary>
+    /// For a dataset assembled from several requests (a weather model run,
+    /// #1075): each request in order, whose responses are appended into the one
+    /// file <see cref="Layout"/> names. <see cref="Uri"/> is then the first
+    /// part's. <see langword="null"/> when <see cref="Uri"/> alone is the download.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RemotePart>? Parts { get; init; }
+
+    /// <summary>The media type to ask for (<c>Accept</c>), e.g. <c>application/geo+json</c> for <c>api.weather.gov</c>; null for any.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Accept { get; init; }
 }
+
+/// <summary>One request of a download assembled from several (#1075).</summary>
+/// <param name="Uri">What to fetch.</param>
+/// <param name="GribFields">
+/// For a whole GRIB2 file with an <c>.idx</c> inventory beside it (NOAA's GFS
+/// on AWS): the fields to read, as <c>.idx</c> matches (<c>:UGRD:10 m above ground:</c>),
+/// fetched with HTTP byte ranges. <see langword="null"/> to fetch the whole response.
+/// </param>
+public sealed record RemotePart(Uri Uri, IReadOnlyList<string>? GribFields = null);
 
 /// <summary>How a <see cref="RemoteItemLocation"/>'s download wraps its data.</summary>
 public enum RemoteEnvelope

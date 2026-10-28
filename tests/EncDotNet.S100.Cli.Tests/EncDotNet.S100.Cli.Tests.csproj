@@ -28,6 +28,7 @@
     <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
     <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
     <Compile Include="..\_shared\CapFixtures.cs" Link="TestSupport\CapFixtures.cs" />
+    <Compile Include="..\_shared\WeatherFakeServer.cs" Link="TestSupport\WeatherFakeServer.cs" />
   </ItemGroup>
 
   <ItemGroup>

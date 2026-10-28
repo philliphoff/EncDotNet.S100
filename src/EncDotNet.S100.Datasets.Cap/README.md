@@ -71,6 +71,10 @@ public domain. `tools/cap` rebuilds it. A host with a newer release can load
 its own with `MarineZoneLayer.Load(stream)` and pass it to
 `CapWarningSet.Build`.
 
+`CodesIn(south, west, north, east)` lists the zones whose outline reaches into
+an area. The Library uses it to ask `api.weather.gov` for the alerts of the
+map view's zones.
+
 ## Drawing
 
 `CapStyle` builds the drawing instructions with the code-defined portrayal

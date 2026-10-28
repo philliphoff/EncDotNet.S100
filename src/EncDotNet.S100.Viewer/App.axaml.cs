@@ -28,6 +28,13 @@ public partial class App : Application
     internal const string SecomIdentityPasswordVariable = "SOUNDCHARTS_SECOM_IDENTITY_PASSWORD";
 
     /// <summary>
+    /// The User-Agent of the Library's weather requests and downloads (#1075): SoundCharts, its
+    /// version and the project's address, as the NWS API asks; no personal contact.
+    /// </summary>
+    internal static readonly string WeatherUserAgent =
+        EncDotNet.S100.Collections.Net.LibraryHttp.ProductUserAgent("SoundCharts", typeof(App).Assembly);
+
+    /// <summary>
     /// Checks the MCP identities for revocation now (the Keys &amp;
     /// certificates page repeats it daily), tells the user when one is
     /// revoked, with a way to the page (#845 C5, H4), and starts reading
@@ -482,6 +489,15 @@ public partial class App : Application
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer(
             new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromMinutes(2) },
             sp.GetRequiredService<ViewerDataPaths>().CollectionFeedCacheDirectory));
+        // Weather services (#1075): NOMADS, NOAA's GFS on AWS, api.weather.gov alerts and ERDDAP.
+        // The NWS API asks clients to identify themselves: SoundCharts and the project's address, no personal contact.
+        services.AddSingleton(sp =>
+        {
+            var http = new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromMinutes(2) };
+            http.DefaultRequestHeaders.UserAgent.TryParseAdd(WeatherUserAgent);
+            return new EncDotNet.S100.Collections.Weather.WeatherFeedIndexer(
+                http, sp.GetRequiredService<ViewerDataPaths>().DownloadsDirectory, sp.GetRequiredService<TimeProvider>());
+        });
         services.AddSingleton(sp =>
         {
             // Community lists index downloaded packages' cells from the downloads folder.
@@ -586,6 +602,7 @@ public partial class App : Application
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>(),
                     sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.SecomSourceIndexer>(),
+                    sp.GetRequiredService<EncDotNet.S100.Collections.Weather.WeatherFeedIndexer>(),
                 ]);
         });
         services.AddSingleton(sp =>
@@ -617,6 +634,7 @@ public partial class App : Application
             // the item names its own (community lists: one per list).
             var downloads = sp.GetRequiredService<ViewerDataPaths>().DownloadsDirectory;
             var http = new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromMinutes(10) };
+            http.DefaultRequestHeaders.UserAgent.TryParseAdd(WeatherUserAgent);
             var trust = sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>();
             var secom = new System.Net.Http.HttpClient(trust.CreateHandler())
             {
@@ -673,6 +691,7 @@ public partial class App : Application
             var s100Catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
             var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
             var secom = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.SecomSourceIndexer>();
+            var weather = sp.GetRequiredService<EncDotNet.S100.Collections.Weather.WeatherFeedIndexer>();
             return new EncDotNet.S100.Collections.Library.LibraryCatalogueReaders
             {
                 NoaaEnc = (uri, ct) => feeds.GetCatalogAsync(uri, cancellationToken: ct),
@@ -684,6 +703,8 @@ public partial class App : Application
                 ForecastModels = (uri, models, ct) => forecasts.GetModelsAsync(uri, models, ct),
                 Secom = (uri, area, identity, ct) => secom.DescribeAsync(uri, area, identity, ct),
                 CurrentMapView = () => MapViewOf(sp.GetService<IMapViewportNotifier>()?.Current),
+                Weather = (source, ct) => weather.DescribeAsync(source, ct),
+                MarineZones = area => EncDotNet.S100.Datasets.Cap.MarineZoneLayer.Default.CodesIn(area.South, area.West, area.North, area.East),
             };
         });
         services.AddTransient(sp => new AddToLibraryDialogViewModel(

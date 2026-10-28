@@ -687,6 +687,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         KnownCatalogueFormat.S100ExchangeCatalogue => Strings.Library_Format_S100Catalogue,
         KnownCatalogueFormat.S100ForecastModels => Strings.Library_Format_S100Forecast,
         KnownCatalogueFormat.Secom => Strings.Library_Format_Secom,
+        KnownCatalogueFormat.Weather => Strings.Library_Format_Weather,
         _ => Strings.Library_Format_NoaaEnc,
     };
 
@@ -742,7 +743,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     /// True for a forecast feed (#685): its chips say "Forecast" and "Latest run
     /// only" in place of the edition and size chips.
     /// </summary>
-    public bool IsForecast => Source.Format == KnownCatalogueFormat.S100ForecastModels;
+    public bool IsForecast => Source.Format is KnownCatalogueFormat.S100ForecastModels or KnownCatalogueFormat.Weather;
 
     /// <summary>True when the edition and size chips apply (anything but a forecast feed).</summary>
     public bool HasEditionChips => !IsForecast;

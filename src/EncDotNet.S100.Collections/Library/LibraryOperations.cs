@@ -181,6 +181,40 @@ public sealed class LibraryOperations
         return new LibraryDownloadOutcome(download, [], opened);
     }
 
+    /// <summary>
+    /// "Load latest run" for a weather source (#1075): re-reads the source, so
+    /// its latest published run is listed, downloads that run (replacing the
+    /// previous, unless it was pinned) and opens it. A run already downloaded
+    /// is just opened. Pinned runs are left alone.
+    /// </summary>
+    /// <param name="sourceId">The source.</param>
+    /// <param name="cancellationToken">Cancels the refresh, download and load.</param>
+    /// <returns>What the download and load did, or null when the source isn't in the Library or lists no run.</returns>
+    public async Task<LibraryDownloadOutcome?> LoadLatestRunAsync(Guid sourceId, CancellationToken cancellationToken = default)
+    {
+        using var scope = Activity.Begin(0);
+        Library.Refresh(sourceId: sourceId);
+        await Library.WhenIdle().WaitAsync(cancellationToken).ConfigureAwait(true);
+
+        var source = Library.Collections.SelectMany(c => c.Sources).FirstOrDefault(s => s.Id == sourceId);
+        if (source?.Index is not { } index)
+            return null;
+        var latest = index.Items
+            .Where(i => i.Location is RemoteItemLocation && !Weather.WeatherRuns.IsPinned(i))
+            .Select(i => (i, source))
+            .ToArray();
+        if (latest.Length == 0)
+            return null;
+
+        var missing = latest.Where(l => Downloads.Localize(l.i).Location is RemoteItemLocation || Downloads.IsOutdated(l.i)).ToArray();
+        if (missing.Length > 0)
+            return await DownloadAsync(latest, load: true, cancellationToken: cancellationToken).ConfigureAwait(true);
+
+        // Already the latest on disk: just open it.
+        var opened = await LoadAsync([.. latest.Select(l => l.i)], cancellationToken: cancellationToken).ConfigureAwait(true);
+        return new LibraryDownloadOutcome(new LibraryDownloadResult(0, 0, false), [], opened);
+    }
+
     /// <summary>The Library's activity now.</summary>
     public LibraryActivitySnapshot GetActivity() =>
         LibraryActivitySnapshot.Capture(Library, Downloads.Progress, Activity);

@@ -306,7 +306,7 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
         var added = new List<DatasetId>();
         foreach (var input in inputs)
         {
-            if (input is null || string.IsNullOrEmpty(input.Path) || !File.Exists(input.Path))
+            if (input is null || string.IsNullOrEmpty(input.Path) || (!File.Exists(input.Path) && !Directory.Exists(input.Path)))
             {
                 continue;
             }

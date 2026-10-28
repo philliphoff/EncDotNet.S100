@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EncDotNet.S100.Collections.Weather;
 
 namespace EncDotNet.S100.Collections.KnownSources;
 
@@ -36,6 +37,13 @@ public enum KnownCatalogueFormat
     /// catalogue URL is the service's endpoint. See <see cref="SecomSource"/>.
     /// </summary>
     Secom,
+
+    /// <summary>
+    /// A weather service (#1075): a NOMADS GRIB filter, NOAA's GFS files on
+    /// AWS, <c>api.weather.gov</c> alerts or ERDDAP; the entry's <c>weather</c>
+    /// block says which and what it offers. See <see cref="WeatherFeedSource"/>.
+    /// </summary>
+    Weather,
 }
 
 /// <summary>What coverage a catalogue publishes for its cells.</summary>
@@ -70,6 +78,9 @@ public enum KnownCatalogueCoverage
 /// <param name="NotForNavigation">True when the provider marks all of the catalogue's data as not for navigation.</param>
 /// <param name="Models">For a forecast feed, its models (curated: names, cadence and forecast horizon); otherwise empty.</param>
 /// <param name="Pilot">True for a pilot service, which may cover little and lapse (shown with a "Pilot" chip).</param>
+/// <param name="Weather">For a weather service, what it offers and how it is asked; otherwise null.</param>
+/// <param name="Licence">The data's licence ("Public domain", "CC BY 4.0"), if the list says.</param>
+/// <param name="Attribution">The attribution the provider asks for, if any; carried onto loaded layers and pick reports.</param>
 public sealed record KnownCatalogueSource(
     string Id,
     string Name,
@@ -85,7 +96,10 @@ public sealed record KnownCatalogueSource(
     string? Product = null,
     bool NotForNavigation = false,
     IReadOnlyList<ForecastModel>? Models = null,
-    bool Pilot = false)
+    bool Pilot = false,
+    WeatherService? Weather = null,
+    string? Licence = null,
+    string? Attribution = null)
 {
     /// <summary>For a forecast feed, its models; otherwise empty.</summary>
     public IReadOnlyList<ForecastModel> Models { get; init; } = Models ?? [];
@@ -157,8 +171,12 @@ public static partial class KnownCatalogueSources
                     .Select(m => new ForecastModel(m.Id!, m.Name!, m.CadenceHours, m.HorizonHours,
                         string.IsNullOrWhiteSpace(m.Catalogue) ? null : m.Catalogue.Trim()))
                     .ToArray(),
-                s.Pilot))
+                s.Pilot,
+                ToService(s.Weather),
+                string.IsNullOrWhiteSpace(s.Licence) ? null : s.Licence.Trim(),
+                string.IsNullOrWhiteSpace(s.Attribution) ? null : s.Attribution.Trim()))
             .Where(s => s.Format != KnownCatalogueFormat.S100ForecastModels || s.Models.Count > 0)
+            .Where(s => s.Format != KnownCatalogueFormat.Weather || s.Weather is { IsUsable: true })
             .ToArray();
     }
 
@@ -175,7 +193,10 @@ public static partial class KnownCatalogueSources
             s.Id, s.Name, s.Provider, s.Region, s.Format, s.CatalogUri, s.Homepage, s.Coverage, s.Editions, s.Sizes, s.Note,
             s.Product, s.NotForNavigation,
             s.Models.Count == 0 ? null : s.Models.Select(m => new ModelEntry(m.Id, m.Name, m.CadenceHours, m.HorizonHours, m.CataloguePath)).ToArray(),
-            s.Pilot))
+            s.Pilot,
+            FromService(s.Weather),
+            s.Licence,
+            s.Attribution))
             .ToArray());
         JsonSerializer.Serialize(stream, document, WriteJson.Document);
     }
@@ -283,7 +304,72 @@ public static partial class KnownCatalogueSources
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Product = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NotForNavigation = false,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ModelEntry>? Models = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Pilot = false);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Pilot = false,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WeatherEntry? Weather = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Licence = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Attribution = null);
+
+    private sealed record WeatherEntry(
+        string? Service,
+        string? Model,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ModelName = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Uri? DataRoot = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? File = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int CadenceHours = 0,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int StepHours = 0,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int MaxHours = 0,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int DefaultHours = 0,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] double GridDegrees = 0,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<WeatherParameterEntry>? Parameters = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<WeatherDatasetEntry>? Datasets = null);
+
+    private sealed record WeatherParameterEntry(
+        string? Id, string? Name, string? Level, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Default = false);
+
+    private sealed record WeatherDatasetEntry(
+        string? Id, string? Name, IReadOnlyList<string>? Variables, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Default = false);
+
+    private static WeatherService? ToService(WeatherEntry? entry)
+    {
+        if (entry is null || !Enum.TryParse<WeatherServiceKind>(entry.Service, ignoreCase: true, out var kind) || string.IsNullOrWhiteSpace(entry.Model))
+            return null;
+        return new WeatherService(
+            kind,
+            entry.Model.Trim(),
+            string.IsNullOrWhiteSpace(entry.ModelName) ? null : entry.ModelName.Trim(),
+            entry.DataRoot,
+            string.IsNullOrWhiteSpace(entry.File) ? null : entry.File.Trim(),
+            entry.CadenceHours,
+            entry.StepHours > 0 ? entry.StepHours : 3,
+            entry.MaxHours > 0 ? entry.MaxHours : 120,
+            entry.DefaultHours > 0 ? entry.DefaultHours : 48,
+            entry.GridDegrees,
+            (entry.Parameters ?? [])
+                .Where(p => p.Id is { Length: > 0 } && p.Level is { Length: > 0 })
+                .Select(p => new WeatherServiceParameter(p.Id!, p.Name is { Length: > 0 } n ? n : p.Id!, p.Level!, p.Default))
+                .ToArray(),
+            (entry.Datasets ?? [])
+                .Where(d => d.Id is { Length: > 0 } && d.Variables is { Count: > 0 })
+                .Select(d => new WeatherServiceDataset(d.Id!, d.Name is { Length: > 0 } n ? n : d.Id!,
+                    d.Variables!.Where(v => v is { Length: > 0 }).ToArray(), d.Default))
+                .ToArray());
+    }
+
+    private static WeatherEntry? FromService(WeatherService? service) => service is null
+        ? null
+        : new WeatherEntry(
+            JsonNamingPolicy.CamelCase.ConvertName(service.Kind.ToString()),
+            service.Model,
+            service.ModelName,
+            service.DataRoot,
+            service.File,
+            service.CadenceHours,
+            service.StepHours,
+            service.MaxHours,
+            service.DefaultHours,
+            service.GridDegrees,
+            service.Parameters.Count == 0 ? null : service.Parameters.Select(p => new WeatherParameterEntry(p.Id, p.Name, p.Level, p.Default)).ToArray(),
+            service.Datasets.Count == 0 ? null : service.Datasets.Select(d => new WeatherDatasetEntry(d.Id, d.Name, d.Variables, d.Default)).ToArray());
 
     private sealed record ModelEntry(
         string? Id,
