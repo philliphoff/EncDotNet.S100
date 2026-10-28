@@ -158,6 +158,8 @@ public sealed class WeatherMcpToolsTests : IDisposable
         var payload = Json(described);
         Assert.Equal("SoundCharts portrayal: CAP 1.2 defines no symbology", payload["portrayalNote"]!.GetValue<string>());
         var attributes = payload["attributes"]!["attributes"]!;
+        // MCP has no pick panel of its own, so the notice leads the attributes (#1096).
+        Assert.Equal("notice", attributes.AsObject().First().Key);
         Assert.Equal("Hazardous Seas Warning", attributes["event"]!.GetValue<string>());
         Assert.Equal("Extreme", attributes["severity"]!.GetValue<string>());
         Assert.Equal(

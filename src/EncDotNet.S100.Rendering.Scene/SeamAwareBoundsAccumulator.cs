@@ -111,14 +111,25 @@ public sealed class SeamAwareBoundsAccumulator
     /// corners to EPSG:3857 and marking every longitude bin it covers as
     /// occupied so a wide extent (e.g. a coverage grid) does not introduce a
     /// spurious interior gap. Boxes whose <paramref name="west"/> exceeds
-    /// <paramref name="east"/> are treated as crossing the ±180° seam.
+    /// <paramref name="east"/> are treated as crossing the ±180° seam, as are
+    /// boxes that run past +180° (a grid stored in 0°–360° longitudes) or
+    /// before −180°.
     /// </summary>
+    /// <remarks>
+    /// The occupancy bins are 0.5° wide, but the X extent recorded in each bin
+    /// is clipped to the box's own edges, so a sub-degree coverage resolves to
+    /// its true extent rather than to the enclosing bin edges (issue #1097).
+    /// </remarks>
     /// <param name="west">Western longitude edge, degrees.</param>
     /// <param name="east">Eastern longitude edge, degrees.</param>
     /// <param name="south">Southern latitude edge, degrees.</param>
     /// <param name="north">Northern latitude edge, degrees.</param>
     public void AddLonLatBox(double west, double east, double south, double north)
     {
+        if (!double.IsFinite(west) || !double.IsFinite(east)
+            || !double.IsFinite(south) || !double.IsFinite(north))
+            return;
+
         var (_, minY) = WebMercator.FromLonLat(0, Math.Min(south, north));
         var (_, maxY) = WebMercator.FromLonLat(0, Math.Max(south, north));
 
@@ -128,7 +139,26 @@ public sealed class SeamAwareBoundsAccumulator
 
         if (west <= east)
         {
-            MarkLonRange(west, east);
+            if (east - west >= 360.0)
+            {
+                MarkLonRange(-180.0, 180.0);
+                return;
+            }
+
+            // Bring the western edge into [−180°, +180°); the eastern edge
+            // moves with it and may then lie past +180°.
+            double shift = Math.Floor((west + 180.0) / 360.0) * 360.0;
+            west -= shift;
+            east -= shift;
+            if (east <= 180.0)
+            {
+                MarkLonRange(west, east);
+                return;
+            }
+
+            // Runs past +180°: [west, +180) ∪ [−180, east − 360].
+            MarkLonRange(west, 180.0);
+            MarkLonRange(-180.0, east - 360.0);
         }
         else
         {
@@ -275,16 +305,24 @@ public sealed class SeamAwareBoundsAccumulator
         if (x > _binMaxX[bin]) _binMaxX[bin] = x;
     }
 
+    // Marks every bin the range covers as occupied. Each bin's X extent is
+    // clipped to the range itself: the bins decide occupancy for the seam
+    // detection, while the resolved window follows the box's true edges.
     private void MarkLonRange(double westLon, double eastLon)
     {
+        westLon = Math.Clamp(westLon, -180.0, 180.0);
+        eastLon = Math.Clamp(eastLon, -180.0, 180.0);
+        double westX = westLon * DegToRad * WebMercator.EarthRadius;
+        double eastX = eastLon * DegToRad * WebMercator.EarthRadius;
+
         int startBin = BinOf(westLon);
         int endBin = BinOf(Math.Min(eastLon, 180.0 - 1e-9));
         for (int i = startBin; i <= endBin; i++)
         {
             double loLon = -180.0 + i * BinWidthDeg;
             double hiLon = loLon + BinWidthDeg;
-            double loX = loLon * DegToRad * WebMercator.EarthRadius;
-            double hiX = hiLon * DegToRad * WebMercator.EarthRadius;
+            double loX = Math.Max(loLon * DegToRad * WebMercator.EarthRadius, westX);
+            double hiX = Math.Min(hiLon * DegToRad * WebMercator.EarthRadius, eastX);
             _occupied[i] = true;
             if (loX < _binMinX[i]) _binMinX[i] = loX;
             if (hiX > _binMaxX[i]) _binMaxX[i] = hiX;

@@ -19,6 +19,12 @@ month. For package versions and release assets, see
   their errors. To open a file that omits the attribute, pass `open_dataset`'s
   `spec`. Every real S-102 file checked, including NOAA's published tiles,
   declares it (#1092).
+- **One not-for-navigation notice per pick.** SoundCharts' pick report on a
+  GRIB2 or NetCDF weather grid or a CAP warning no longer repeats the notice
+  it leads with as the first attribute row. The processors still put the
+  notice first in their feature info for other callers (MCP, the Mapsui pick
+  query), now marked by `PickAttribute.IsNavigationNotice`; build one with
+  `PickAttribute.NavigationNotice(text)`.
 - **Wind and waves in the CLI, MCP and docs.** A new guide,
   [Show wind and waves on the chart](weather.md), covers the GRIB2, NetCDF
   and CAP formats, where to get the data, NDBC buoys, own-ship wind and what
@@ -103,6 +109,14 @@ month. For package versions and release assets, see
   tiles are redrawn; `S98DefaultRules.Default` has a seventh rule; an
   `Isoline` with an empty label is drawn unlabelled. See the
   [Datasets.Weather README](../src/EncDotNet.S100.Datasets.Weather/README.md).
+- **Headless renders frame small coverages on their true extent.** With no
+  viewport or `--bbox`, `HeadlessCompositor` (and so `s100 render`) now fits
+  the view to each coverage layer's own extent plus its usual 10 % margin.
+  Before, `SeamAwareBoundsAccumulator.AddLonLatBox` widened a coverage's
+  longitudes out to its 0.5° occupancy bins, so a 0.2° grid composited with a
+  chart cell drew as a small patch. The bins still drive antimeridian
+  detection, and a box whose eastern edge runs past +180° (a 0°–360° grid) is
+  now split across the seam instead of clamped.
 - **NDBC buoy observations.** A new `EncDotNet.S100.DynamicSources.Ndbc`
   library shows NOAA National Data Buoy Center observations as a dynamic
   feature source. `NdbcObservationSource` reads the `activestations.xml`
