@@ -2,6 +2,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals.Application;
 using EncDotNet.S100.Quantities;
 
@@ -153,6 +154,132 @@ public class WeatherCoverageStyleTests
         Assert.True(new WindBarbStyle().IsVisibleByDefault);
         Assert.False(new WindSpeedStyle().IsVisibleByDefault);
         Assert.False(new WaveDirectionStyle().IsVisibleByDefault);
+        Assert.False(new PressureIsobarStyle().IsVisibleByDefault);
+    }
+
+    [Fact]
+    public void Only_the_wave_height_fill_is_clipped_to_water()
+    {
+        Assert.True(new WaveHeightStyle().ClipToWater);
+        Assert.All(
+            WeatherCoverageStyle.CreateAll().Where(s => s is not WaveHeightStyle),
+            style => Assert.False(style.ClipToWater, style.LayerKey));
+    }
+
+    [Fact]
+    public void Isobars_sit_on_other_chart_overlays_under_the_observations()
+    {
+        var style = new PressureIsobarStyle();
+
+        Assert.Equal(WeatherLayerKind.Isolines, style.Kind);
+        Assert.Equal(S98DisplayPlane.OtherChartOverlays, style.Plane);
+        Assert.Equal(90, style.WithinPlanePriority);
+        Assert.Equal(1.0, style.Opacity);
+        Assert.Equal(WeatherParameters.PressureMsl, style.ValueFieldName);
+        Assert.Null(style.ResolveColorScheme(MarinerSettings.Default));
+        Assert.Null(style.ResolveSymbolScheme(MarinerSettings.Default));
+    }
+
+    [Fact]
+    public void Isobars_are_every_4_hPa_in_pascals_and_labelled_in_hectopascals()
+    {
+        var style = new PressureIsobarStyle();
+        var contours = style.Contours;
+
+        Assert.Equal(61, contours.Count);
+        Assert.Equal(86_000, contours[0].Value);
+        Assert.Equal(110_000, contours[^1].Value);
+        Assert.All(contours.Zip(contours.Skip(1)), pair => Assert.Equal(400, pair.Second.Value - pair.First.Value));
+        Assert.All(contours, c =>
+        {
+            Assert.Equal("Pa", c.Unit);
+            Assert.True(c.ShowLabel);
+            Assert.Null(c.DashPattern);
+        });
+        Assert.Equal("1012", style.FormatContourLabel(contours.Single(c => c.Value == 101_200)));
+        Assert.Equal("1012", style.FormatContourLabel(new ContourStyle { Value = 101_199.99, Unit = "Pa", LineWidth = 1, Color = "#000000" }));
+    }
+
+    [Theory]
+    [InlineData(PaletteType.Day, "#4A5160")]
+    [InlineData(PaletteType.Night, "#555A63")]
+    public async Task Isobar_colour_follows_the_palette(PaletteType palette, string ink)
+    {
+        var style = new PressureIsobarStyle();
+        await style.SwitchPaletteAsync(palette, Ct);
+
+        Assert.All(style.Contours, c => Assert.Equal(ink, c.Color));
+    }
+
+    [Fact]
+    public void Fills_and_symbols_have_no_contours()
+    {
+        Assert.All(
+            WeatherCoverageStyle.CreateAll().Where(s => s.Kind != WeatherLayerKind.Isolines),
+            style => Assert.Empty(style.Contours));
+    }
+
+    [Fact]
+    public async Task Portrayal_traces_labelled_isobars_from_a_pressure_grid()
+    {
+        // Pressure rising 1 hPa per column eastward from 999.5 hPa over 13
+        // columns: isobars at 1000, 1004 and 1008 hPa, north–south lines half a
+        // column east of the 1000, 1004 and 1008 nodes.
+        const int rows = 5, columns = 13;
+        var values = new float[rows * columns];
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < columns; c++)
+                values[r * columns + c] = 99_950f + 100f * c;
+        }
+
+        var pressure = TestGrids.Parameter(WeatherParameters.PressureMsl, (0, values));
+        var set = new WeatherGridSet(TestGrids.Origin, new WeatherNativeGrid(rows, columns, -40, 10, 1, 1), [pressure]);
+        var source = new WeatherCoverageSource(set, WeatherParameters.PressureGroup, [pressure]);
+        Assert.Equal([PressureIsobarStyle.Key], WeatherCoverageStyle.CreateFor(source).Select(s => s.LayerKey));
+
+        var result = await WeatherPortrayal.BuildAsync(
+            source, [new PressureIsobarStyle()], "msl.grib2", new RenderContext { Palette = PaletteType.Dusk, TextScale = 2 }, cancellationToken: Ct);
+
+        var isobars = Assert.IsType<IsolineCoverageSubLayer>(Assert.Single(result.SubLayers));
+        Assert.Equal(PressureIsobarStyle.Key, isobars.LayerKey);
+        Assert.Equal(S98DisplayPlane.OtherChartOverlays, isobars.Plane);
+        Assert.Equal(90, isobars.WithinPlanePriority);
+        Assert.Empty(isobars.DashPattern);
+        Assert.Equal(20, isobars.LabelFontSize);
+        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.IsobarInkToken, PaletteType.Dusk), isobars.Ink);
+        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.IsobarHaloToken, PaletteType.Dusk), isobars.LabelHalo);
+        Assert.Equal(["1000", "1004", "1008"], isobars.Isolines.Select(l => l.Label).Distinct());
+        Assert.NotNull(isobars.Extent);
+
+        // The 1004 hPa isobar runs north–south along 14.5°E (column 4.5).
+        var line = isobars.Isolines.Single(l => l.Label == "1004");
+        double x = line.MercatorCoordinates[0];
+        Assert.All(Enumerable.Range(0, line.MercatorCoordinates.Length / 2), i => Assert.Equal(x, line.MercatorCoordinates[2 * i], 3));
+        Assert.Equal(6378137.0 * 14.5 * Math.PI / 180, x, 3);
+    }
+
+    [Fact]
+    public async Task Portrayal_flags_the_wave_fill_to_be_clipped_to_water_but_not_the_wind_fill()
+    {
+        var waves = await WeatherPortrayal.BuildAsync(WaveSource(withDirection: false), [new WaveHeightStyle()], "waves", cancellationToken: Ct);
+        var wind = await WeatherPortrayal.BuildAsync(WindSource(), [new WindSpeedStyle()], "wind", cancellationToken: Ct);
+
+        Assert.True(Assert.IsType<GridCoverageSubLayer>(Assert.Single(waves.SubLayers)).ClipToWater);
+        Assert.False(Assert.IsType<GridCoverageSubLayer>(Assert.Single(wind.SubLayers)).ClipToWater);
+    }
+
+    [Fact]
+    public async Task Fills_carry_their_band_legend_in_the_drawn_palette()
+    {
+        var waves = await WeatherPortrayal.BuildAsync(
+            WaveSource(withDirection: false), [new WaveHeightStyle()], "waves", new RenderContext { Palette = PaletteType.Night }, cancellationToken: Ct);
+
+        var legend = Assert.IsType<GridCoverageSubLayer>(Assert.Single(waves.SubLayers)).Legend;
+
+        Assert.NotNull(legend);
+        Assert.Equal(WaveHeightStyle.Bands.Select(b => b.Label), legend.Select(e => e.Label));
+        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.WaveHeightToken(1), PaletteType.Night).ToHex(), legend[0].Color);
     }
 
     [Theory]
@@ -182,7 +309,7 @@ public class WeatherCoverageStyleTests
     [Fact]
     public void Night_is_dimmer_than_dusk_for_every_symbol_ink()
     {
-        foreach (var token in new[] { WeatherPalette.BarbInkToken, WeatherPalette.WaveArrowToken })
+        foreach (var token in new[] { WeatherPalette.BarbInkToken, WeatherPalette.WaveArrowToken, WeatherPalette.IsobarInkToken })
         {
             var colors = WeatherPalette.Palette.Tokens[token];
             Assert.True(RelativeLuminance(colors.Night) < RelativeLuminance(colors.Dusk), token);
@@ -193,14 +320,14 @@ public class WeatherCoverageStyleTests
     public void Palette_tokens_are_prefixed_so_they_never_resolve_against_S101_colours()
     {
         Assert.All(WeatherPalette.Palette.Tokens.Keys, token => Assert.StartsWith("WX", token, StringComparison.Ordinal));
-        Assert.Equal(2 + 15 + 13, WeatherPalette.Palette.Tokens.Count);
+        Assert.Equal(4 + 15 + 13, WeatherPalette.Palette.Tokens.Count);
     }
 
     [Fact]
     public void Content_scope_carries_the_style_version()
     {
         Assert.Equal(ApplicationContentScope.For("Weather", WeatherCoverageStyle.StyleVersion), WeatherCoverageStyle.ContentScope);
-        Assert.StartsWith("app:Weather@1|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
+        Assert.StartsWith("app:Weather@2|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
     }
 
     [Fact]

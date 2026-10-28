@@ -73,7 +73,8 @@ public sealed partial class LiveAccessibleNameTests
         var loader = new LayerStackViewModelTests.ControllableLoader();
         loader.SetEntries(
             StackEntry("US5SEAFL.000", S98DisplayPlane.BaseChartUnder, 10),
-            StackEntry("102US00_BATHY.h5", S98DisplayPlane.Bathymetry, 20));
+            StackEntry("102US00_BATHY.h5", S98DisplayPlane.Bathymetry, 20),
+            LayerStackLegendTests.FillEntry("gfswave-20261025.grib2", [new("#F3EEFF", "0–0.5 m"), new("#E5DFFC", "0.5–1 m")]));
         var stack = new LayerStackViewModel(loader);
         using var host = ViewHost.Show(new LayerStackView { DataContext = stack }, width: 420, height: 700);
 

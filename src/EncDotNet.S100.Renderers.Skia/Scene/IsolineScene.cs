@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Renderers.Skia.Scene;
 /// <summary>
 /// One labelled isoline: a polyline in Web Mercator (EPSG:3857) metres.
 /// </summary>
-/// <param name="Label">The text placed along the line, e.g. <c>"0.5"</c>.</param>
+/// <param name="Label">The text placed along the line, e.g. <c>"0.5"</c>; empty for an unlabelled line.</param>
 /// <param name="MercatorCoordinates">Interleaved <c>x0, y0, x1, y1, …</c> vertices.</param>
 public sealed record IsolinePolyline(string Label, double[] MercatorCoordinates);
 
@@ -231,6 +231,10 @@ public sealed class IsolineScene : IDisposable
         bool canInvert = localToScreen.TryInvert(out var screenToLocal);
         foreach (var (label, path) in _lines)
         {
+            // An unlabelled line (empty label) carries no anchors.
+            if (label.Length == 0)
+                continue;
+
             using var screen = new SKPath();
             path.Transform(localToScreen, screen);
             using var measure = new SKPathMeasure(screen, forceClosed: false);

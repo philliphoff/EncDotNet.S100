@@ -6,6 +6,28 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Weather drawing polish.** Wind barbs south of the equator are now the
+  mirrored southern-hemisphere barbs (`WXBARBS005` to `WXBARBS200`), chosen
+  by each cell's latitude; `WindBarbSymbols.For(knots, latitude)` applies the
+  same rule to a single barb, and NDBC stations south of the equator use it.
+  The wave height fill is clipped to water when an S-101 chart is loaded, by
+  a new S-98 rule, `R-101-WX-B`, that shares its effect with the S-104
+  `R-101-104-B` clip and applies to any `GridCoverageSubLayer` with the new
+  `ClipToWater` flag; wind isn't clipped. A new `PressureIsobarStyle` draws
+  `pressure.msl` as isobars every 4 hPa, labelled in hPa, on
+  `OtherChartOverlays` at priority 90, off by default: `CoverageContours`
+  traces an `ICoverageStyle`'s value-based `ContourStyle`s into an
+  `IsolineCoverageSubLayer`, which both renderers already draw. In the
+  viewer, each weather fill in the **Layer stack** shows a colour legend of
+  its bands (`GridCoverageSubLayer.Legend`); the headless renderer doesn't
+  draw legends. Not for navigation. Breaking changes: `WeatherLayerKind`
+  gains `Isolines`; `WeatherCoverageStyle.CreateAll()` and, for a pressure
+  grid, `CreateFor` also return `PressureIsobarStyle`;
+  `WeatherCoverageStyle.Contours` is virtual; `WeatherPalette.Palette` has two
+  more tokens; `WeatherCoverageStyle.StyleVersion` is 2, so cached weather
+  tiles are redrawn; `S98DefaultRules.Default` has a seventh rule; an
+  `Isoline` with an empty label is drawn unlabelled. See the
+  [Datasets.Weather README](../src/EncDotNet.S100.Datasets.Weather/README.md).
 - **NDBC buoy observations.** A new `EncDotNet.S100.DynamicSources.Ndbc`
   library shows NOAA National Data Buoy Center observations as a dynamic
   feature source. `NdbcObservationSource` reads the `activestations.xml`

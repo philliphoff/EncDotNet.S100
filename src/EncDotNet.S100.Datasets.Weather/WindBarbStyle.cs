@@ -21,9 +21,12 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// </para>
 /// <para>
 /// <b>Feathers.</b> Pennants are 50 kn, full barbs 10 kn and half barbs 5 kn
-/// (<see cref="WindBarb"/>), on the clockwise side of the staff, as in the
-/// northern hemisphere. The scheme has no southern-hemisphere bands yet, so
-/// southern cells get northern barbs too (issue #1072).
+/// (<see cref="WindBarb"/>), on the clockwise side of the staff in the
+/// northern hemisphere (<see cref="Bands"/>) and on the anticlockwise side,
+/// the mirror image, in the southern hemisphere (<see cref="SouthernBands"/>).
+/// The scheme picks the set by each cell's latitude
+/// (<see cref="CoverageSymbolScheme.SouthernHemisphereBands"/>), the same rule
+/// as <see cref="WindBarbSymbols.For(double, double)"/>.
 /// </para>
 /// <para>
 /// <b>Units.</b> The bands are defined in knots and converted to metres per
@@ -42,14 +45,21 @@ public sealed class WindBarbStyle : WeatherCoverageStyle
     /// </summary>
     public const double NominalSymbolLengthMillimetres = 9.0;
 
-    /// <summary>The symbol bands, calm first, in metres per second.</summary>
-    public static IReadOnlyList<SymbolBand> Bands { get; } = BuildBands();
+    /// <summary>The northern-hemisphere symbol bands, calm first, in metres per second.</summary>
+    public static IReadOnlyList<SymbolBand> Bands { get; } = BuildBands(southern: false);
+
+    /// <summary>
+    /// The southern-hemisphere symbol bands: the same ranges as
+    /// <see cref="Bands"/>, with the mirrored <c>WXBARBS</c> symbols.
+    /// </summary>
+    public static IReadOnlyList<SymbolBand> SouthernBands { get; } = BuildBands(southern: true);
 
     private static readonly CoverageSymbolScheme Scheme = new()
     {
         ValueFieldName = WeatherParameters.WindSpeed,
         RotationFieldName = WeatherParameters.WindFromDirection,
         Bands = Bands,
+        SouthernHemisphereBands = SouthernBands,
         RotationOffsetDegrees = 0,
         NominalSymbolLengthMillimetres = NominalSymbolLengthMillimetres,
     };
@@ -65,7 +75,7 @@ public sealed class WindBarbStyle : WeatherCoverageStyle
     /// <remarks>The scheme is the same for every palette: the symbols' colours come from the sub-layer's palette.</remarks>
     public override CoverageSymbolScheme ResolveSymbolScheme(MarinerSettings settings) => Scheme;
 
-    private static SymbolBand[] BuildBands()
+    private static SymbolBand[] BuildBands(bool southern)
     {
         var barbs = WindBarb.All;
         var bands = new SymbolBand[barbs.Count];
@@ -80,7 +90,7 @@ public sealed class WindBarbStyle : WeatherCoverageStyle
                 MaxValue = barb.Knots == WindBarb.MaxKnots
                     ? float.PositiveInfinity
                     : (float)Speed.FromKnots(upperKnots).TotalMetresPerSecond,
-                SymbolRef = barb.SymbolName,
+                SymbolRef = southern ? barb.SouthernSymbolName : barb.SymbolName,
                 ScaleFactor = 1.0f,
                 Label = barb.IsCalm ? "Calm" : $"{barb.Knots} kn",
             };

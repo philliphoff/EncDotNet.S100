@@ -101,6 +101,7 @@ internal static partial class Strings
     public static string LayerStack_VisibilityVsActive_HelpText => Get(nameof(LayerStack_VisibilityVsActive_HelpText));
     public static string LayerStack_ChildCountFormat => Get(nameof(LayerStack_ChildCountFormat));
     public static string LayerStack_PriorityFormat => Get(nameof(LayerStack_PriorityFormat));
+    public static string LayerStack_LegendNameFormat => Get(nameof(LayerStack_LegendNameFormat));
     public static string LayerStack_Plane_BaseChartUnder => Get(nameof(LayerStack_Plane_BaseChartUnder));
     public static string LayerStack_Plane_Bathymetry => Get(nameof(LayerStack_Plane_Bathymetry));
     public static string LayerStack_Plane_OnDemandSurface => Get(nameof(LayerStack_Plane_OnDemandSurface));

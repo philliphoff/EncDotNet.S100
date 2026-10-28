@@ -324,6 +324,50 @@ Colour fills need a legend: band colours plus labels. `ColorBand.Label`
 already exists. The viewer shows legends next to the layer stack entry,
 not on the map. The headless renderer doesn't draw a legend.
 
+**As built (#1072).** The drawing polish for §4.2, §4.3 and §5:
+
+- **Southern barbs.** `tools/GenerateWeatherSymbols` also writes
+  `WXBARBS005` to `WXBARBS200`, the northern barbs mirrored about the staff
+  (feathers on the anticlockwise side); the northern SVGs are unchanged.
+  `WindBarbStyle` sets `SouthernHemisphereBands` to the same ranges with the
+  southern symbols, so `CoverageSymbolScheme.Resolve(value, latitude)` picks
+  them for cells below 0° (the equator is northern). The calm circle is
+  shared. `WindBarbSymbols.For(knots, latitude)` (and `WindBarb.SymbolNameAt`)
+  is the same rule for one barb; `NdbcStationPortrayal` uses it with the
+  station's latitude, and the NMEA own-ship barb (#1073) can too.
+- **Land clipping.** The S-104 rule wasn't copied. `S98DefaultRules` now has
+  one shared effect, `ClipSurfacesToWater`, that gathers the active S-101
+  `LandArea` surfaces and attaches them as `LandAreaMask`. `R-101-104-B` uses
+  it for S-104, and a new `R-101-WX-B` uses it for any active
+  `GridCoverageSubLayer` with `ClipToWater` set. A flag rather than a product
+  pair, because GRIB2 and NetCDF aren't S-100 products and only the wave
+  height fill should be clipped (`WeatherCoverageStyle.ClipToWater`). The
+  renderers' existing output-pixel clip does the rest.
+- **Legends.** `GridCoverageSubLayer.Legend` (a list of
+  `CoverageLegendEntry(Color, Label)`, from `CoverageLegendEntry.FromScheme`)
+  is set by `WeatherPortrayal` for the weather fills only, in the palette the
+  fill was drawn in. S-102, whose bands also have labels, gets no legend: it's
+  opt-in per sub-layer. The Layer stack entry shows it as a swatch and label
+  per band (`LayerStack.Entry.Legend`, `LayerStack.Entry.Legend.Band`).
+- **Isobars.** Neither renderer turned `ICoverageStyle.Contours` into lines;
+  both already drew `IsolineCoverageSubLayer` (from S-104) with labels. The
+  new `CoverageContours.Trace` (in Core) traces a style's value-based
+  `ContourStyle`s through the pipeline's sampled grid with the existing
+  marching-squares `IsolineTracer`, skipping levels outside the sample's
+  range. `PressureIsobarStyle` (`WeatherLayerKind.Isolines`) lists every
+  4 hPa from 860 to 1100 hPa in pascals, the stored unit, labelled in whole
+  hPa, solid, on `OtherChartOverlays` at priority 90, off by default, not
+  clipped. An `IsolineCoverageSubLayer` has one ink and width, so the
+  sub-layer takes them from the first contour; per-level styles (a heavier
+  1000 hPa line, say) would need per-line appearance.
+- **Off by default.** As for the wind speed fill and wave arrows, the
+  processors build only the styles that are on by default, so the viewer
+  doesn't draw isobars yet; turning layers on is for later work.
+- **Goldens.** New: southern barbs (Day, Night), the wave fill over the
+  S-101 test cell clipped to water, and isobars (Day, Night). The three
+  existing composites over that cell (32°S) were re-accepted: their barbs are
+  now southern and their wave fill no longer covers land.
+
 ## 5. Layer order
 
 `S98DisplayPlane` values are spaced 10 apart. Existing products:

@@ -579,6 +579,10 @@ Rows include:
   currents, which draws an arrow layer.
 - A row for each live overlay, such as **Own ship** (under **Dynamic
   arrows**) or **NDBC buoy observations** (under **Other chart overlays**).
+- A colour legend under each weather fill (wave height, wind speed): a swatch
+  and a label for each band, such as **2–2.5 m** or **Force 3, 7–10 kn**, in
+  the palette the map is drawn in. Legends appear only in this panel, not on
+  the map.
 
 Each dataset row has an **Active** toggle. When it's off, the dataset is taken
 out of the cross-product stack: it no longer takes part in S-98 rules or

@@ -1,8 +1,9 @@
 #:project ../../src/EncDotNet.S100.Datasets.Weather/EncDotNet.S100.Datasets.Weather.csproj
 
 // Generates the weather symbols embedded in EncDotNet.S100.Datasets.Weather
-// (issue #1068): the northern-hemisphere wind barbs WXBARBN005 to WXBARBN200,
-// the calm circle WXCALM and the wave direction arrow WXWAVE01.
+// (issues #1068 and #1072): the northern-hemisphere wind barbs WXBARBN005 to
+// WXBARBN200, their southern-hemisphere mirror images WXBARBS005 to
+// WXBARBS200, the calm circle WXCALM and the wave direction arrow WXWAVE01.
 //
 //   dotnet run tools/GenerateWeatherSymbols/GenerateWeatherSymbols.cs \
 //       src/EncDotNet.S100.Datasets.Weather/Symbols
@@ -20,8 +21,9 @@
 //
 // A barb's staff runs up (north) from the station at the origin, so a
 // renderer rotating it by the direction the wind blows from points the staff
-// into the wind. Feathers sit at the outer end on the clockwise (+x) side, as
-// in the northern hemisphere, slanting outward: pennants (50 kn) first, then
+// into the wind. Feathers sit at the outer end on the clockwise (+x) side in
+// the northern hemisphere and on the anticlockwise (-x) side in the southern
+// hemisphere (the mirror image), slanting outward: pennants (50 kn) first, then
 // full barbs (10 kn), then a half barb (5 kn), which on its own sits one
 // spacing in from the end. Each feather has an id (pennant1, barb1, half), so
 // tests can count them.
@@ -49,7 +51,7 @@ const double PennantWidth = 1.3;       // along the staff
 const double PennantGap = 0.4;         // between the pennants and the barbs
 const double StationDotRadius = 0.45;
 
-double featherX = FeatherLength * Math.Sin(FeatherAngle * Math.PI / 180);
+double featherOutX = FeatherLength * Math.Sin(FeatherAngle * Math.PI / 180);
 double featherY = FeatherLength * Math.Cos(FeatherAngle * Math.PI / 180);
 
 var barbs = WindBarb.All.Where(b => !b.IsCalm).ToArray();
@@ -58,12 +60,15 @@ double longestStaff = barbs.Max(StaffLength);
 double half = Math.Ceiling(longestStaff + featherY + StrokeWidth);
 
 foreach (var barb in barbs)
-    Write(barb.SymbolName, BarbSvg(barb));
+{
+    Write(barb.SymbolName, BarbSvg(barb, southern: false));
+    Write(barb.SouthernSymbolName, BarbSvg(barb, southern: true));
+}
 
 Write(WindBarb.CalmSymbol, CalmSvg());
 Write(WaveDirectionStyle.ArrowSymbol, WaveArrowSvg());
 
-Console.WriteLine($"Wrote {barbs.Length + 2} symbols to {output}.");
+Console.WriteLine($"Wrote {2 * barbs.Length + 2} symbols to {output}.");
 return 0;
 
 // The distance from the tip to the innermost feather's base.
@@ -82,9 +87,11 @@ double FeatherRun(WindBarb barb)
 
 double StaffLength(WindBarb barb) => Math.Max(MinimumStaff, FeatherRun(barb) + StationClearance);
 
-string BarbSvg(WindBarb barb)
+string BarbSvg(WindBarb barb, bool southern)
 {
     double staff = StaffLength(barb);
+    // The feathers' side of the staff: +x (clockwise) in the north, -x in the south.
+    double featherX = southern ? -featherOutX : featherOutX;
     var body = new StringBuilder();
     body.Append(Path("staff", "sl f0 sWXBARB", $"M 0 0 L 0 {N(-staff)}"));
 
@@ -120,8 +127,8 @@ string BarbSvg(WindBarb barb)
 
     body.Append($"<circle id=\"station\" class=\"fWXBARB\" cx=\"0\" cy=\"0\" r=\"{N(StationDotRadius)}\"/>");
     return Svg(
-        barb.SymbolName,
-        $"Wind barb, {barb.Knots} kn, northern hemisphere: {Count(barb.Pennants, "pennant")}, {Count(barb.FullBarbs, "full barb")}, {Count(barb.HalfBarbs, "half barb")}. The staff points up, into the wind.",
+        southern ? barb.SouthernSymbolName : barb.SymbolName,
+        $"Wind barb, {barb.Knots} kn, {(southern ? "southern" : "northern")} hemisphere: {Count(barb.Pennants, "pennant")}, {Count(barb.FullBarbs, "full barb")}, {Count(barb.HalfBarbs, "half barb")}. The staff points up, into the wind.",
         half,
         body.ToString());
 }

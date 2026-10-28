@@ -90,6 +90,7 @@
                                     <ItemsControl.DataTemplates>
                                         <DataTemplate DataType="vm:LayerStackEntryViewModel">
                                             <Grid ColumnDefinitions="Auto,*,Auto"
+                                                  RowDefinitions="Auto,Auto"
                                                   ColumnSpacing="8"
                                                   Margin="24,3,8,3">
                                                 <CheckBox Grid.Column="0"
@@ -117,6 +118,39 @@
                                                            Opacity="0.6"
                                                            VerticalAlignment="Center"
                                                            FontFamily="Consolas,Menlo,Monaco,monospace" />
+                                                <!-- #1072: the colour legend of a fill that carries one
+                                                     (the weather fills): a swatch and label per band. -->
+                                                <ItemsControl Grid.Row="1"
+                                                              Grid.Column="1"
+                                                              Grid.ColumnSpan="2"
+                                                              Margin="0,4,0,2"
+                                                              IsVisible="{Binding HasLegend}"
+                                                              ItemsSource="{Binding Legend}"
+                                                              AutomationProperties.AutomationId="LayerStack.Entry.Legend"
+                                                              AutomationProperties.Name="{Binding LegendName}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:LayerStackLegendItemViewModel">
+                                                            <StackPanel Orientation="Horizontal"
+                                                                        Spacing="6"
+                                                                        Margin="0,1"
+                                                                        AutomationProperties.AutomationId="LayerStack.Entry.Legend.Band"
+                                                                        AutomationProperties.Name="{Binding Label}">
+                                                                <Border Width="14"
+                                                                        Height="10"
+                                                                        CornerRadius="2"
+                                                                        BorderThickness="1"
+                                                                        BorderBrush="{DynamicResource BorderColor}"
+                                                                        Background="{Binding Swatch}"
+                                                                        VerticalAlignment="Center" />
+                                                                <TextBlock Text="{Binding Label}"
+                                                                           FontSize="10"
+                                                                           Opacity="0.8"
+                                                                           VerticalAlignment="Center"
+                                                                           TextTrimming="CharacterEllipsis" />
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
                                             </Grid>
                                         </DataTemplate>
                                         <!-- PR-D2.1: dynamic-feature-source row. Same chrome

@@ -46,16 +46,42 @@ public readonly record struct WindBarb(int Knots, int Pennants, int FullBarbs, i
     /// </summary>
     public const string NorthernSymbolPrefix = "WXBARBN";
 
+    /// <summary>
+    /// The symbol name prefix of the southern-hemisphere barbs, followed by the
+    /// speed in knots to three digits: <c>WXBARBS005</c> to <c>WXBARBS200</c>.
+    /// Each is the mirror image of its northern barb, with the feathers on the
+    /// anticlockwise side of the staff.
+    /// </summary>
+    public const string SouthernSymbolPrefix = "WXBARBS";
+
     /// <summary>Whether this is the calm symbol (0 kn): no staff and no feathers.</summary>
     public bool IsCalm => Knots == 0;
 
     /// <summary>
-    /// The symbol name: <see cref="CalmSymbol"/>, or
+    /// The northern-hemisphere symbol name: <see cref="CalmSymbol"/>, or
     /// <see cref="NorthernSymbolPrefix"/> and the speed, e.g. <c>WXBARBN065</c>.
     /// </summary>
     public string SymbolName => IsCalm
         ? CalmSymbol
         : NorthernSymbolPrefix + Knots.ToString("000", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The southern-hemisphere symbol name: <see cref="CalmSymbol"/> (calm has
+    /// no side), or <see cref="SouthernSymbolPrefix"/> and the speed, e.g.
+    /// <c>WXBARBS065</c>.
+    /// </summary>
+    public string SouthernSymbolName => IsCalm
+        ? CalmSymbol
+        : SouthernSymbolPrefix + Knots.ToString("000", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The symbol name for a station at <paramref name="latitude"/>:
+    /// <see cref="SouthernSymbolName"/> south of the equator
+    /// (<see cref="WindBarbSymbols.IsSouthern"/>), <see cref="SymbolName"/> otherwise.
+    /// </summary>
+    /// <param name="latitude">The station's latitude in degrees.</param>
+    public string SymbolNameAt(double latitude) =>
+        WindBarbSymbols.IsSouthern(latitude) ? SouthernSymbolName : SymbolName;
 
     /// <summary>
     /// Every barb from calm to <see cref="MaxKnots"/>, in steps of

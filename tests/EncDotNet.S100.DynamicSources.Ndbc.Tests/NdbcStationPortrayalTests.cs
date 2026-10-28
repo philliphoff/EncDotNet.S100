@@ -56,6 +56,18 @@ public sealed class NdbcStationPortrayalTests
         Assert.All(instructions, i => Assert.Equal("ndbc:44013", i.FeatureReference));
     }
 
+    [Theory]
+    [InlineData(-14.27, "WXBARBS015")] // American Samoa
+    [InlineData(0.0, "WXBARBN015")]    // the equator is northern
+    public void A_station_south_of_the_equator_gets_a_southern_barb(double latitude, string expected)
+    {
+        var instructions = Portrayal.Portray(Station(Windy(), latitude: latitude, longitude: -170.7));
+
+        var barb = Assert.IsType<PointInstruction>(instructions[1]);
+        Assert.Equal(expected, barb.SymbolReference);
+        Assert.NotNull(Portrayal.SymbolProvider(barb.SymbolReference!));
+    }
+
     [Fact]
     public void A_calm_wind_is_an_unrotated_circle()
     {

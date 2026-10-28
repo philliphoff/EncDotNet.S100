@@ -66,6 +66,24 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
     public double Opacity { get; init; } = 1.0;
 
     /// <summary>
+    /// Whether this surface asks to be clipped to water when an S-101 ENC is
+    /// loaded alongside it. The S-98 rule <c>R-101-WX-B</c> attaches the ENC's
+    /// land geometry as <see cref="LandAreaMask"/> to every sub-layer that sets
+    /// this, as <c>R-101-104-B</c> does for the S-104 surface. Set by the
+    /// weather wave height fill (issue #1072); defaults to
+    /// <see langword="false"/>, so other products are unaffected.
+    /// </summary>
+    public bool ClipToWater { get; init; }
+
+    /// <summary>
+    /// The fill's colour legend, band colours and labels lowest first, for a
+    /// viewer to show next to the layer stack entry; <see langword="null"/>
+    /// (the default) for no legend. Set by the weather fills (issue #1072,
+    /// design note weather-sources.md §4.3). Renderers ignore it.
+    /// </summary>
+    public IReadOnlyList<CoverageLegendEntry>? Legend { get; init; }
+
+    /// <summary>
     /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.
     /// Used by the S-98 water-area clip rule, which attaches the S-101 land
     /// geometry it discovers to the (processor-produced) S-104 surface sub-layer.
@@ -83,6 +101,8 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
             Viewport = Viewport,
             LandAreaMask = landAreaMask,
             Opacity = Opacity,
+            ClipToWater = ClipToWater,
+            Legend = Legend,
         };
 }
 
@@ -170,7 +190,7 @@ public sealed class Isoline
     /// <summary>The coverage value the line follows (metres, for S-104).</summary>
     public required double Level { get; init; }
 
-    /// <summary>The label drawn along the line, e.g. <c>"0.5"</c>.</summary>
+    /// <summary>The label drawn along the line, e.g. <c>"0.5"</c>; empty for an unlabelled line.</summary>
     public required string Label { get; init; }
 
     /// <summary>Interleaved EPSG:3857 vertices <c>x0, y0, x1, y1, …</c>.</summary>

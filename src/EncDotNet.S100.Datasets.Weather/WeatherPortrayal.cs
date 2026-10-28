@@ -16,10 +16,16 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <para>
 /// Each style runs through the ordinary <see cref="CoveragePipeline"/>. A fill
 /// becomes a <see cref="GridCoverageSubLayer"/> at the style's
-/// <see cref="WeatherCoverageStyle.Opacity"/>; symbols become an
-/// <see cref="ArrowCoverageSubLayer"/> served from
-/// <see cref="WeatherCoverageStyle.Symbols"/>. Styles whose fields the source
-/// lacks (<see cref="WeatherCoverageStyle.AppliesTo"/>) are skipped.
+/// <see cref="WeatherCoverageStyle.Opacity"/>, flagged
+/// <see cref="GridCoverageSubLayer.ClipToWater"/> when the style is (wave
+/// height) and carrying the band legend (<see cref="GridCoverageSubLayer.Legend"/>);
+/// symbols become an <see cref="ArrowCoverageSubLayer"/> served from
+/// <see cref="WeatherCoverageStyle.Symbols"/>, with southern-hemisphere barbs
+/// south of the equator; isolines (pressure) are traced from the style's
+/// <see cref="WeatherCoverageStyle.Contours"/> through the sampled grid
+/// (<see cref="CoverageContours"/>) into an <see cref="IsolineCoverageSubLayer"/>.
+/// Styles whose fields the source lacks
+/// (<see cref="WeatherCoverageStyle.AppliesTo"/>) are skipped.
 /// </para>
 /// <para>
 /// This is the part of a weather dataset processor that doesn't depend on a
@@ -105,7 +111,11 @@ public static class WeatherPortrayal
     /// <param name="sourceDatasetId">The dataset's stable id, used in the layer name.</param>
     /// <param name="context">The render context; see <see cref="BuildAsync"/>. Its time step isn't applied here.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A <see cref="GridCoverageSubLayer"/> for a fill, an <see cref="ArrowCoverageSubLayer"/> for symbols.</returns>
+    /// <returns>
+    /// A <see cref="GridCoverageSubLayer"/> for a fill, an
+    /// <see cref="ArrowCoverageSubLayer"/> for symbols, an
+    /// <see cref="IsolineCoverageSubLayer"/> for isolines.
+    /// </returns>
     /// <exception cref="ArgumentException">The source lacks a field the style reads.</exception>
     public static async Task<CoverageSubLayerBase> BuildSubLayerAsync(
         WeatherCoverageSource source,
@@ -148,6 +158,34 @@ public static class WeatherPortrayal
                 Coverage = layer,
                 Viewport = viewport,
                 Opacity = style.Opacity,
+                ClipToWater = style.ClipToWater,
+                Legend = layer.ColorScheme is { } scheme ? CoverageLegendEntry.FromScheme(scheme) : null,
+            };
+        }
+
+        if (style.Kind == WeatherLayerKind.Isolines)
+        {
+            var palette = style.ActivePalette;
+            var contours = style.Contours;
+            var isolines = CoverageContours.Trace(layer, style.ValueFieldName, contours, style.FormatContourLabel);
+            // Labels follow the mariner's text scale, as S-101 labels do.
+            double textScale = context?.TextScale ?? 1.0;
+            var first = contours.Count > 0 ? contours[0] : null;
+            return new IsolineCoverageSubLayer
+            {
+                LayerKey = style.LayerKey,
+                LayerName = layerName,
+                Plane = style.Plane,
+                WithinPlanePriority = style.WithinPlanePriority,
+                SourceFeatureType = style.LayerKey,
+                Isolines = isolines,
+                Extent = MercatorExtent(bounds),
+                Ink = RgbaColor.FromHex(first?.Color ?? palette.Resolve(WeatherPalette.IsobarInkToken)),
+                LabelHalo = RgbaColor.FromHex(palette.Resolve(WeatherPalette.IsobarHaloToken)),
+                LineWidth = first?.LineWidth ?? 1.2,
+                DashPattern = first?.DashPattern is { Length: >= 2 } dash ? dash.Select(d => (double)d).ToArray() : [],
+                LabelFontSize = 10 * textScale,
+                LabelHaloWidth = 3 * textScale,
             };
         }
 
@@ -178,6 +216,21 @@ public static class WeatherPortrayal
             Math.Min(grid.OriginLatitude, north),
             Math.Max(grid.OriginLongitude, east),
             Math.Max(grid.OriginLatitude, north));
+    }
+
+    // The EPSG:3857 extent of the grid's nodes.
+    private static MercatorBounds MercatorExtent(GeographicBounds bounds)
+    {
+        static (double X, double Y) ToMercator(double longitude, double latitude)
+        {
+            const double earthRadius = 6378137.0;
+            double lat = Math.Clamp(latitude, -85.05112878, 85.05112878) * Math.PI / 180.0;
+            return (earthRadius * longitude * Math.PI / 180.0, earthRadius * Math.Log(Math.Tan(Math.PI / 4.0 + lat / 2.0)));
+        }
+
+        var (minX, minY) = ToMercator(bounds.MinLongitude, bounds.MinLatitude);
+        var (maxX, maxY) = ToMercator(bounds.MaxLongitude, bounds.MaxLatitude);
+        return new MercatorBounds(minX, minY, maxX, maxY);
     }
 
     private static Viewport FullGridViewport(WeatherCoverageSource source, GeographicBounds bounds)

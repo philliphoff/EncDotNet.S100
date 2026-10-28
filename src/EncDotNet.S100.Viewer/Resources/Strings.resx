@@ -73,6 +73,10 @@
     <value>{0}</value>
     <comment>{0} = number of layer entries in this S-98 display plane.</comment>
   </data>
+  <data name="LayerStack_LegendNameFormat" xml:space="preserve">
+    <value>Legend of {0}, {1} bands</value>
+    <comment>Accessible name of a colour fill's legend in the Layer Stack (#1072). {0} is the layer name, e.g. "Wave height: gfswave.grib2"; {1} the number of colour bands.</comment>
+  </data>
   <data name="LayerStack_PriorityFormat" xml:space="preserve">
     <value>#{0}</value>
     <comment>{0} = within-plane priority (S-100 Part 9 §10 drawingPriority).</comment>
