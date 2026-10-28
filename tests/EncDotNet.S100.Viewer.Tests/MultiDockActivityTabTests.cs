@@ -281,6 +281,27 @@ public sealed class MultiDockActivityTabTests : IDisposable
         Assert.True(vm.IsBottomDockShown);
     }
 
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public async Task PanelState_ReportsBottomPanelNotShowingWhileTheWindowIsTooNarrow()
+    {
+        // list_panels said the Logs tab was showing while a narrow window hid the dock.
+        var logs = new FakeTab { Id = "Logs", Order = 30, Dock = TabDock.Bottom };
+        var vm = CreateViewModel(new IActivityTab[] { new FakeTab { Id = "Datasets", Dock = TabDock.Left }, logs });
+        vm.WindowWidth = 1200;
+        var controller = new ViewerUiController(vm);
+
+        var shown = await controller.SetPanelVisibilityAsync("Logs", visible: true);
+        Assert.True(shown.State!.Value.Showing);
+
+        vm.WindowWidth = 850;
+        var narrow = (await controller.GetPanelsAsync()).Single(p => p.Id == "Logs");
+        Assert.True(narrow.DockOpen);
+        Assert.False(narrow.Showing);
+
+        vm.WindowWidth = 1000;
+        Assert.True((await controller.GetPanelsAsync()).Single(p => p.Id == "Logs").Showing);
+    }
+
     [Fact]
     public void CloseDockCommand_ClosesTheTargetedDock()
     {
