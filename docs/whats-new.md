@@ -6,6 +6,19 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Why an HDF5 file wasn't opened.** An HDF5 file is detected only from its
+  root `productSpecification` attribute, which S-100 Part 10c requires, and
+  one that doesn't have it is no longer read as S-102. When no product
+  recognises an HDF5 file, SoundCharts' warning, `s100 info`, `validate`,
+  `render`, `tiles` and `identify`, and MCP's `open_dataset` now say why: the
+  file has no `productSpecification`, it names a product that isn't
+  supported, or it can't be read as HDF5 (for example an encrypted S-100
+  dataset opened outside its exchange set). The new
+  `DatasetPipelineFactory.DescribeUnrecognizedDataset` gives the same sentence
+  to library hosts, and `CreateProcessor` and `S100Dataset.Open` include it in
+  their errors. To open a file that omits the attribute, pass `open_dataset`'s
+  `spec`. Every real S-102 file checked, including NOAA's published tiles,
+  declares it (#1092).
 - **Wind and waves in the CLI, MCP and docs.** A new guide,
   [Show wind and waves on the chart](weather.md), covers the GRIB2, NetCDF
   and CAP formats, where to get the data, NDBC buoys, own-ship wind and what

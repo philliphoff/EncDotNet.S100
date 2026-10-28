@@ -1035,7 +1035,7 @@ command exits with code `1`.
 |---|---|
 | `0` | Success. |
 | `1` | Unexpected error. Run again with `--debug` for a stack trace. For `feed export`, some datasets couldn't be written. |
-| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. For `route check`: the route file can't be read. |
+| `2` | The product specification couldn't be detected, or no datasets could be resolved or loaded from the inputs. An HDF5 file is detected only from its root `productSpecification` attribute, which S-100 requires; when that's missing, names a product the CLI doesn't read, or the file can't be read as HDF5 (for example an encrypted S-100 dataset outside its exchange set), the message says so. For `tiles export`, also: the datasets have no geometry, or the tile set is over 100,000 tiles without `--yes`. For `tiles serve`: the path isn't a raster tile set it can read, or, as for `tiles export`, the datasets can't be read or have no geometry. For `route check`: the route file can't be read. |
 | `3` | The product specification doesn't support headless rendering or display-list output. |
 | `4` | The dataset is recognised, but its structure or encoding isn't supported, such as an unsupported data coding format. |
 | `5` | The dataset is recognised but doesn't conform: a required attribute, dataset or group is missing or malformed. |

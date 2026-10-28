@@ -89,6 +89,8 @@ public sealed class OpenDatasetTool
         {
             var reason = outcome.Kind switch
             {
+                // A file no product recognised says why in its problems.
+                DatasetSourceKind.File when problems.Count > 0 => "the file wasn't opened",
                 DatasetSourceKind.File => "the file loaded but produced no portrayable dataset",
                 DatasetSourceKind.Folder => "the folder contained no datasets the host can portray",
                 _ => "the exchange set contained no datasets the host can portray",

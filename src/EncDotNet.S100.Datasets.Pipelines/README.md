@@ -145,6 +145,18 @@ file is unknown (`null`). In particular an HDF5 file that declares no product
 is no longer treated as S-102. ISO 8211 update files (`.001`…) and XML
 catalogues aren't sniffed, so they're never mistaken for datasets.
 
+When detection returns `null`, `DescribeUnrecognizedDataset(path)` says why in
+one sentence a host can show, or returns `null` when there's nothing more to
+say. It tells apart an HDF5 file with no `productSpecification`, one naming a
+product the registry doesn't have, and a `.h5` file that can't be read as HDF5
+(possibly encrypted under S-100 Part 15, or damaged). `CreateProcessor`,
+`S100Dataset.Open`, the CLI, MCP's `open_dataset` and the viewer all use it.
+S-100 Part 10c makes the attribute mandatory, and every real S-102 file
+checked for #1092 carries it, so there's no S-102 shape probe (see
+[Wind and wave data](../../docs/design/weather-sources.md), §3.2.1).
+To open a file that omits it, name the product (`open_dataset`'s `spec`, or
+an exchange set's catalogue).
+
 To add a product, you add a registration; the factory doesn't change. The
 product identifiers `MapProductIdentifierToSpec` accepts also come from the
 registrations (`S100Products.All`).

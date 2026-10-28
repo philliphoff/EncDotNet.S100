@@ -26,8 +26,7 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             var spec = DatasetPipelineFactory.DetectProductSpec(settings.DatasetPath);
             if (spec is null)
             {
-                AnsiConsole.MarkupLineInterpolated(
-                    $"[red]Could not detect an S-100 product specification for:[/] {settings.DatasetPath}");
+                UnrecognizedDatasetMessage.Write(settings.DatasetPath);
                 return 2;
             }
 

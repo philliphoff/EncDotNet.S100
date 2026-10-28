@@ -49,6 +49,45 @@ public class ViewerMutableDatasetCatalogTests
         var outcome = await sut.LoadAsync("/tmp/mystery.dat", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(outcome.Added);
+        Assert.Equal("no supported product recognises mystery.dat", Assert.Single(outcome.Problems ?? []));
+    }
+
+    [Fact]
+    public async Task LoadAsync_undeclared_hdf5_file_says_it_declares_no_product()
+    {
+        // #1092: the same reason the toast and the CLI give.
+        var dir = Directory.CreateTempSubdirectory("viewer-hdf5-undeclared-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "undeclared.h5");
+            new PureHDF.H5File { Attributes = new() { ["horizontalCRS"] = 4326 } }.Write(path);
+            var gateway = new FakeDatasetLoadGateway
+            {
+                Kind = DatasetPathKind.File,
+                OnLoadFile = (_, _) => Task.FromResult(false),
+            };
+            var sut = Make(new FakeDatasetCatalog(), gateway);
+
+            var outcome = await sut.LoadAsync(path, cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Empty(outcome.Added);
+            Assert.Equal(
+                "This HDF5 file doesn't say which S-100 product it is (no productSpecification attribute).",
+                Assert.Single(outcome.Problems ?? []));
+            Assert.Equal(
+                "Couldn't open undeclared.h5. This HDF5 file doesn't say which S-100 product it is (no productSpecification attribute).",
+                UnrecognizedFileMessage.For(path));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void The_toast_for_a_file_that_isnt_hdf5_names_its_type()
+    {
+        Assert.Equal("Unrecognized file type: .xyz", UnrecognizedFileMessage.For("/tmp/something.xyz"));
     }
 
     [Fact]

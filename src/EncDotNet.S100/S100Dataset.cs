@@ -56,7 +56,9 @@ public sealed class S100Dataset : IDisposable
 
         var spec = DatasetPipelineFactory.DetectProductSpec(path)
             ?? throw new NotSupportedException(
-                $"Could not detect an S-100 product specification for: {Path.GetFileName(path)}");
+                DatasetPipelineFactory.DescribeUnrecognizedDataset(path) is { } reason
+                    ? $"Could not detect an S-100 product specification for: {Path.GetFileName(path)}. {reason}"
+                    : $"Could not detect an S-100 product specification for: {Path.GetFileName(path)}");
 
         return new S100Dataset(spec, host => host.CreateProcessor(path));
     }

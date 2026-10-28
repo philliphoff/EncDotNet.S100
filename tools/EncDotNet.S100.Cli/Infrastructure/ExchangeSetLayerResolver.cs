@@ -133,7 +133,7 @@ internal sealed class ExchangeSetLayerResolution : IDisposable
                     ?? DatasetPipelineFactory.DetectProductSpec(absolutePath);
                 if (spec is null)
                 {
-                    warnings.Add($"Skipped unsupported dataset (no known product specification): {relativePath}");
+                    warnings.Add(UnrecognizedDatasetMessage.Skipped(absolutePath, relativePath));
                     continue;
                 }
 

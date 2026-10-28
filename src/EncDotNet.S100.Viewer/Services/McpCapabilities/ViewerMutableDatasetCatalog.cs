@@ -109,8 +109,10 @@ internal sealed class ViewerMutableDatasetCatalog : IMutableDatasetCatalog
                 if (!recognised)
                 {
                     // Unrecognised file type: report nothing added so the
-                    // open tool surfaces a dataset_load_failed error.
-                    return new DatasetLoadOutcome(path, DatasetSourceKind.File, [], TimedOut: false);
+                    // open tool surfaces a dataset_load_failed error, saying
+                    // why when the factory can tell (#1092).
+                    return new DatasetLoadOutcome(
+                        path, DatasetSourceKind.File, [], TimedOut: false, UnrecognizedFileProblems(path));
                 }
                 // Single-file load updates the catalog synchronously during the
                 // awaited LoadAsync, so no quiescence wait is needed.
@@ -243,4 +245,13 @@ internal sealed class ViewerMutableDatasetCatalog : IMutableDatasetCatalog
             }
         }
     }
+
+    /// <summary>
+    /// Why no product recognised the file at <paramref name="path"/>, as the
+    /// load's problems: the factory's reason (the same text the viewer's toast
+    /// and the CLI show), or a generic one.
+    /// </summary>
+    private static IReadOnlyList<string> UnrecognizedFileProblems(string path) =>
+        [EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory.DescribeUnrecognizedDataset(path)
+            ?? $"no supported product recognises {Path.GetFileName(path)}"];
 }

@@ -41,13 +41,13 @@ public class DatasetsViewModelTests
     {
         var loader = new RecordingLoader();
         var vm = new DatasetsViewModel(loader);
-        string? observedExtension = null;
-        vm.UnrecognizedFileEncountered += ext => observedExtension = ext;
+        string? observedPath = null;
+        vm.UnrecognizedFileEncountered += path => observedPath = path;
 
         var result = await vm.LoadFromPathAsync("/tmp/something.xyz");
 
         Assert.Null(result);
-        Assert.Equal(".xyz", observedExtension);
+        Assert.Equal("/tmp/something.xyz", observedPath);
         Assert.Empty(vm.Entries);
         Assert.Empty(loader.LoadCalls);
     }

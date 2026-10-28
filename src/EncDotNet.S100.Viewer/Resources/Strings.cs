@@ -522,6 +522,7 @@ internal static partial class Strings
 
     // Status messages
     public static string Status_UnrecognizedFileType => Get(nameof(Status_UnrecognizedFileType));
+    public static string Status_UnrecognizedDataset => Get(nameof(Status_UnrecognizedDataset));
     public static string Status_SelectPortrayalCatalogue => Get(nameof(Status_SelectPortrayalCatalogue));
     public static string Status_LoadingFile => Get(nameof(Status_LoadingFile));
     public static string Status_RenderingTimeStep => Get(nameof(Status_RenderingTimeStep));

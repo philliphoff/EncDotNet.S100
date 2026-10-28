@@ -82,6 +82,26 @@ public class MutableCatalogToolsTests
     }
 
     [Fact]
+    public async Task OpenDataset_UnrecognisedFile_ReasonSaysWhy()
+    {
+        // #1092: a file no product recognised wasn't opened, and the host's
+        // problem (here the HDF5 no-productSpecification reason) says why.
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoad = [],
+            NextKind = DatasetSourceKind.File,
+            NextProblems = ["This HDF5 file doesn't say which S-100 product it is (no productSpecification attribute)."],
+        };
+        using var file = new TempFile();
+
+        var error = Assert.IsType<DatasetLoadFailed>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken)));
+        Assert.Equal(
+            "the file wasn't opened (This HDF5 file doesn't say which S-100 product it is (no productSpecification attribute))",
+            error.Reason);
+    }
+
+    [Fact]
     public async Task OpenDataset_ManyProblems_QuotesFirstFiveAndCountsTheRest()
     {
         var catalog = new FakeMutableDatasetCatalog
