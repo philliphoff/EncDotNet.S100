@@ -21,7 +21,7 @@ public sealed class SummariseCommand : Command<SummariseCommand.Settings>
         public string? OutputPath { get; set; }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         if (!System.IO.File.Exists(settings.File))
         {

@@ -28,7 +28,7 @@ public sealed class S57ConvertCommandTests : IDisposable
 
         var output = Path.Combine(_outputDir, "converted.000");
 
-        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, source]);
+        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, source], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
         Assert.True(File.Exists(output), "Expected the converted S-101 dataset to be written.");
@@ -40,7 +40,7 @@ public sealed class S57ConvertCommandTests : IDisposable
     {
         var output = Path.Combine(_outputDir, "converted.000");
 
-        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, "does-not-exist.000"]);
+        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, "does-not-exist.000"], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
@@ -52,7 +52,7 @@ public sealed class S57ConvertCommandTests : IDisposable
         var source = FixturePath("US5MA1BO.000");
         Assert.SkipUnless(File.Exists(source), $"Fixture not found: {source}");
 
-        int exit = CliApp.Build().Run(["s57", "convert", source]);
+        int exit = CliApp.Build().Run(["s57", "convert", source], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
     }
@@ -66,7 +66,7 @@ public sealed class S57ConvertCommandTests : IDisposable
         var missingDir = Path.Combine(_outputDir, "missing");
         var output = Path.Combine(missingDir, "converted.000");
 
-        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, source]);
+        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, source], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
         Assert.False(Directory.Exists(missingDir));
@@ -82,7 +82,7 @@ public sealed class S57ConvertCommandTests : IDisposable
         var output = Path.Combine(_outputDir, "converted.000");
         var report = Path.Combine(_outputDir, "report.json");
 
-        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, "--report", report, source]);
+        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, "--report", report, source], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
         Assert.True(File.Exists(report), "Expected the diagnostics report to be written.");
@@ -103,7 +103,7 @@ public sealed class S57ConvertCommandTests : IDisposable
         var output = Path.Combine(_outputDir, "converted.000");
         var report = Path.Combine(_outputDir, "missing", "report.json");
 
-        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, "--report", report, source]);
+        int exit = CliApp.Build().Run(["s57", "convert", "-o", output, "--report", report, source], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(report));
@@ -117,7 +117,7 @@ public sealed class S57ConvertCommandTests : IDisposable
 
         var output = Path.Combine(_outputDir, "converted.000");
 
-        int exit = CliApp.Build().Run(["s57", "convert", "--no-updates", "-o", output, source]);
+        int exit = CliApp.Build().Run(["s57", "convert", "--no-updates", "-o", output, source], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
         Assert.True(File.Exists(output));

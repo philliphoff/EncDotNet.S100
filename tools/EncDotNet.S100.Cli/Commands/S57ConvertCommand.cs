@@ -35,7 +35,7 @@ namespace EncDotNet.S100.Cli.Commands;
 /// </remarks>
 internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
 {
-    public override int Execute(CommandContext context, S57ConvertCommandSettings settings)
+    public override int Execute(CommandContext context, S57ConvertCommandSettings settings, CancellationToken cancellationToken)
     {
         try
         {

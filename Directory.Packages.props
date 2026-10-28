@@ -6,16 +6,16 @@
 
   <ItemGroup>
     <!-- Avalonia -->
-    <PackageVersion Include="Avalonia" Version="12.0.5" />
-    <PackageVersion Include="Avalonia.Desktop" Version="12.0.5" />
-    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.5" />
-    <PackageVersion Include="Avalonia.Headless" Version="12.0.5" />
-    <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.0.5" />
-    <PackageVersion Include="Avalonia.Skia" Version="12.0.5" />
-    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+    <PackageVersion Include="Avalonia" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Headless" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Skia" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.4" />
     <!-- Tmds.DBus.Protocol is deliberately not pinned: it is a 0.x package
          whose minor versions break API, so it must stay at the version
-         Avalonia.FreeDesktop was built against (0.92.0 for 12.0.5), or the
+         Avalonia.FreeDesktop was built against (0.94.1 for 12.1.4), or the
          viewer fails to start on Linux. The old pin answered CVE-2026-39959
          (GHSA-xrw6-gwf8-vvr9), patched in 0.92.0; NuGetAudit (mode 'all')
          fails the build if a vulnerable version ever comes in transitively.
@@ -24,26 +24,26 @@
     <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3" />
     <!-- MVVM / DI -->
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
     <!-- SQLite, for `s100 tiles export` MBTiles output -->
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
     <!-- Logging / observability -->
-    <PackageVersion Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.661903" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.9" />
-    <PackageVersion Include="OpenTelemetry" Version="1.16.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.16.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
+    <PackageVersion Include="Microsoft.Diagnostics.NETCore.Client" Version="0.2.750501" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.14" />
+    <PackageVersion Include="OpenTelemetry" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
     <!-- Model Context Protocol SDK (.NET) -->
-    <PackageVersion Include="ModelContextProtocol" Version="1.4.0" />
-    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="1.4.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
     <!-- EncDotNet -->
     <PackageVersion Include="EncDotNet.Iso8211" Version="0.8.0" />
     <PackageVersion Include="EncDotNet.S57" Version="0.8.0" />
     <!-- Mapping / rendering -->
-    <PackageVersion Include="FluentIcons.Avalonia" Version="2.1.330" />
+    <PackageVersion Include="FluentIcons.Avalonia" Version="2.1.344" />
     <PackageVersion Include="Mapsui" Version="5.1.0" />
     <PackageVersion Include="Mapsui.Avalonia12" Version="5.1.0" />
     <PackageVersion Include="Mapsui.Nts" Version="5.1.0" />
@@ -52,22 +52,22 @@
     <PackageVersion Include="MoonSharp" Version="2.0.0" />
     <PackageVersion Include="NetTopologySuite" Version="2.6.0" />
     <PackageVersion Include="ProjNet" Version="2.1.0" />
-    <PackageVersion Include="PureHDF" Version="2.1.2" />
+    <PackageVersion Include="PureHDF" Version="2.2.0" />
     <PackageVersion Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.1.0-dev-798" />
-    <PackageVersion Include="ShadUI" Version="0.2.3" />
+    <PackageVersion Include="ShadUI" Version="0.2.4" />
     <PackageVersion Include="SkiaSharp" Version="3.119.4" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
-    <PackageVersion Include="Spectre.Console.Cli" Version="0.50.0" />
+    <PackageVersion Include="Spectre.Console.Cli" Version="0.57.2" />
     <PackageVersion Include="Svg.Skia" Version="3.2.1" />
     <!-- Test -->
-    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
-    <PackageVersion Include="Verify.XunitV3" Version="31.12.5" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="Verify.XunitV3" Version="32.0.1" />
     <PackageVersion Include="PublicApiGenerator" Version="11.5.4" />
-    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.1.0" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.11.0" />
   </ItemGroup>
 
 </Project>

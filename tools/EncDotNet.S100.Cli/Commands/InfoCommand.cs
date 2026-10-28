@@ -18,7 +18,7 @@ namespace EncDotNet.S100.Cli.Commands;
 /// </summary>
 internal sealed class InfoCommand : Command<DatasetCommandSettings>
 {
-    public override int Execute(CommandContext context, DatasetCommandSettings settings)
+    public override int Execute(CommandContext context, DatasetCommandSettings settings, CancellationToken cancellationToken)
     {
         var (factory, catalogueManager) = ProcessorFactoryBuilder.Build();
         try

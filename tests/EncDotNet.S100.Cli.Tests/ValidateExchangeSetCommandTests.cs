@@ -29,7 +29,7 @@ public sealed class ValidateExchangeSetCommandTests : IDisposable
         WriteFile("data.000", "hello"u8.ToArray());
         WriteCatalogue(DatasetEntry("data.000"));
 
-        int exit = CliApp.Build().Run(["validate", _root]);
+        int exit = CliApp.Build().Run(["validate", _root], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
     }
@@ -40,7 +40,7 @@ public sealed class ValidateExchangeSetCommandTests : IDisposable
         WriteFile("data.000", "hello"u8.ToArray());
         WriteCatalogue(DatasetEntry("data.000"));
 
-        int exit = CliApp.Build().Run(["validate", Path.Combine(_root, "CATALOG.XML")]);
+        int exit = CliApp.Build().Run(["validate", Path.Combine(_root, "CATALOG.XML")], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
     }
@@ -104,7 +104,7 @@ public sealed class ValidateExchangeSetCommandTests : IDisposable
         WriteCatalogue(DatasetEntry("data.000"));
 
         // Strict treats unsigned / no-checksum files as failures.
-        int exit = CliApp.Build().Run(["validate", _root, "--strict"]);
+        int exit = CliApp.Build().Run(["validate", _root, "--strict"], TestContext.Current.CancellationToken);
 
         Assert.Equal(6, exit);
     }

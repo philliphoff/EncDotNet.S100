@@ -31,7 +31,7 @@ public sealed class SpecVersionWarningCliTests
             Console.SetError(stderr);
             Console.SetOut(new StringWriter());
 
-            int exit = CliApp.Build().Run(["info", dataset]);
+            int exit = CliApp.Build().Run(["info", dataset], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.DoesNotContain(WarningFragment, stderr.ToString());

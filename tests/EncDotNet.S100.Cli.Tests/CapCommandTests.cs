@@ -62,8 +62,8 @@ public sealed class CapCommandTests : IDisposable
         var after = Path.Combine(_dir, "after.png");
 
         // Step 0 is the onset; step 1 the tick after it expires.
-        Assert.Equal(0, CliApp.Build().Run(["render", dataset, during, "--width", "320", "--height", "320", "--time-step", "0"]));
-        Assert.Equal(0, CliApp.Build().Run(["render", dataset, after, "--width", "320", "--height", "320", "--time-step", "1"]));
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, during, "--width", "320", "--height", "320", "--time-step", "0"], TestContext.Current.CancellationToken));
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, after, "--width", "320", "--height", "320", "--time-step", "1"], TestContext.Current.CancellationToken));
 
         using var a = SKBitmap.Decode(during);
         using var b = SKBitmap.Decode(after);
@@ -78,7 +78,7 @@ public sealed class CapCommandTests : IDisposable
         var dataset = CapFixtures.CopyFixture(CapFixtures.MarineWeatherStatement, Path.Combine(_dir, "mws.cap"));
         var output = Path.Combine(_dir, "mws.png");
 
-        Assert.Equal(0, CliApp.Build().Run(["render", dataset, output, "--width", "320", "--height", "320"]));
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, output, "--width", "320", "--height", "320"], TestContext.Current.CancellationToken));
 
         using var bitmap = SKBitmap.Decode(output);
         Assert.True(InkFraction(bitmap) > 0.02);

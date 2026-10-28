@@ -44,7 +44,7 @@ public sealed class TileReportCommand : Command<TileReportCommand.Settings>
     }
 
     /// <inheritdoc />
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         if (!File.Exists(settings.File))
         {

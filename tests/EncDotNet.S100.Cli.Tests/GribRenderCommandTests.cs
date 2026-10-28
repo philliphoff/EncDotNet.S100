@@ -26,7 +26,7 @@ public sealed class GribRenderCommandTests : IDisposable
         var dataset = GribFixtures.CopyFixture(fixture, Path.Combine(_dir, name));
         var output = Path.Combine(_dir, "out.png");
 
-        int exit = CliApp.Build().Run(["render", dataset, output, "--width", "320", "--height", "320"]);
+        int exit = CliApp.Build().Run(["render", dataset, output, "--width", "320", "--height", "320"], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
         using var bitmap = SKBitmap.Decode(output);
@@ -42,8 +42,8 @@ public sealed class GribRenderCommandTests : IDisposable
         var first = Path.Combine(_dir, "t0.png");
         var last = Path.Combine(_dir, "t2.png");
 
-        Assert.Equal(0, CliApp.Build().Run(["render", dataset, first, "--width", "200", "--height", "200", "--time-step", "0"]));
-        Assert.Equal(0, CliApp.Build().Run(["render", dataset, last, "--width", "200", "--height", "200", "--time-step", "2"]));
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, first, "--width", "200", "--height", "200", "--time-step", "0"], TestContext.Current.CancellationToken));
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, last, "--width", "200", "--height", "200", "--time-step", "2"], TestContext.Current.CancellationToken));
 
         using var a = SKBitmap.Decode(first);
         using var b = SKBitmap.Decode(last);
@@ -69,7 +69,7 @@ public sealed class GribRenderCommandTests : IDisposable
 
         int exit = CliApp.Build().Run(
             ["render", "--layer", waves, "--layer", wind, output, "--width", "320", "--height", "320", "--time-step", "1",
-             "--bbox", "-76,32,-68,40"]);
+             "--bbox", "-76,32,-68,40"], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
         using var bitmap = SKBitmap.Decode(output);
@@ -83,7 +83,7 @@ public sealed class GribRenderCommandTests : IDisposable
         // ECMWF Open Data as served: CCSDS packing (template 5.42).
         var dataset = GribFixtures.Write(Path.Combine(_dir, "wave.grib2"), GribFixtures.CcsdsMessage());
 
-        int exit = CliApp.Build().Run(["render", dataset, Path.Combine(_dir, "wave.png")]);
+        int exit = CliApp.Build().Run(["render", dataset, Path.Combine(_dir, "wave.png")], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(Path.Combine(_dir, "wave.png")));
@@ -145,7 +145,7 @@ public sealed class GribRenderCommandTests : IDisposable
             ? ["render", dataset, output, "--width", "200", "--height", "200", "--bbox", "61.9,-32.3,62.3,-32.0"]
             : ["render", dataset, output, "--width", "200", "--height", "200"];
 
-        Assert.Equal(0, CliApp.Build().Run(args));
+        Assert.Equal(0, CliApp.Build().Run(args, TestContext.Current.CancellationToken));
 
         using var bitmap = SKBitmap.Decode(output);
         double ink = InkFraction(bitmap);
@@ -161,7 +161,7 @@ public sealed class GribRenderCommandTests : IDisposable
         var dataset = GribFixtures.Write(Path.Combine(_dir, "wind.grib2"), GribFixtures.ChartWind());
         var output = Path.Combine(_dir, "wind.png");
 
-        Assert.Equal(0, CliApp.Build().Run(["render", dataset, output, "--width", "200", "--height", "200"]));
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, output, "--width", "200", "--height", "200"], TestContext.Current.CancellationToken));
 
         using var bitmap = SKBitmap.Decode(output);
         double ink = InkFraction(bitmap);

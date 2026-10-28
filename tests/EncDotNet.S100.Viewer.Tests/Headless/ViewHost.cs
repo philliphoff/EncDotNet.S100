@@ -206,7 +206,7 @@ internal sealed class ViewHost : IDisposable
         using var frame = Window.CaptureRenderedFrame()
             ?? throw new InvalidOperationException("The headless window rendered no frame.");
         using var png = new MemoryStream();
-        frame.Save(png);
+        frame.Save(png, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default);
         return png.ToArray();
     }
 

@@ -29,7 +29,7 @@ internal sealed class ListSpecsCommand : Command<ListSpecsCommand.Settings>
     {
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("Spec");

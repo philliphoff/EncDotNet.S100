@@ -242,7 +242,7 @@ internal sealed class ViewerCommandSettings : CommandSettings
 
 internal sealed class ViewerCommand : Command<ViewerCommandSettings>
 {
-    public override int Execute(CommandContext context, ViewerCommandSettings settings)
+    public override int Execute(CommandContext context, ViewerCommandSettings settings, CancellationToken cancellationToken)
     {
         App.StartupOptions = settings;
 

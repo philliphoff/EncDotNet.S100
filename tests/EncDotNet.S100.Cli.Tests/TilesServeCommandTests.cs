@@ -159,7 +159,7 @@ public sealed class TilesServeCommandTests : IDisposable
         }
 
         Assert.Throws<NotSupportedException>(() => TileSource.Open(vector));
-        Assert.Equal(2, CliApp.Build().Run(["tiles", "serve", text]));
+        Assert.Equal(2, CliApp.Build().Run(["tiles", "serve", text], TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -260,7 +260,7 @@ public sealed class TilesServeCommandTests : IDisposable
         Assert.SkipUnless(File.Exists(s57), "S-57 fixture not present.");
 
         var path = Path.Combine(_root, "chart.mbtiles");
-        Assert.Equal(0, CliApp.Build().Run(["tiles", "export", s57, "-o", path, "--min-zoom", "13", "--max-zoom", "13", "--skip-empty"]));
+        Assert.Equal(0, CliApp.Build().Run(["tiles", "export", s57, "-o", path, "--min-zoom", "13", "--max-zoom", "13", "--skip-empty"], TestContext.Current.CancellationToken));
 
         var source = TileSource.Open(path);
         var json = source.ToTileJson();

@@ -113,7 +113,7 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         // stdout is the MCP protocol channel — never write human-readable text
         // to it here. All diagnostics go to stderr.

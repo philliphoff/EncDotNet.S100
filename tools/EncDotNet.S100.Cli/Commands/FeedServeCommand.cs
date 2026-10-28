@@ -69,7 +69,7 @@ internal sealed class FeedServeCommand : AsyncCommand<FeedServeCommand.Settings>
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var address = IPAddress.Parse(settings.Host);
         var token = ResolveToken(settings, address);

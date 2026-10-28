@@ -24,7 +24,7 @@ public sealed class RenderCompositeCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", "--layer", S124, "--layer", S125, output, "--width", "320", "--height", "240"]);
+                ["render", "--layer", S124, "--layer", S125, output, "--width", "320", "--height", "240"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -53,7 +53,7 @@ public sealed class RenderCompositeCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", "--layer", S124, "--layer", S125, "-o", output, "--width", "256", "--height", "256"]);
+                ["render", "--layer", S124, "--layer", S125, "-o", output, "--width", "256", "--height", "256"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -77,7 +77,7 @@ public sealed class RenderCompositeCommandTests
         {
             int exit = CliApp.Build().Run(
                 ["render", "--layer", S124, "--layer", S125, output,
-                 "--bbox", "-180,-85,180,85", "--width", "256", "--height", "256"]);
+                 "--bbox", "-180,-85,180,85", "--width", "256", "--height", "256"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -110,10 +110,10 @@ public sealed class RenderCompositeCommandTests
         {
             int exitNone = CliApp.Build().Run(
                 ["render", "--layer", S124, none, "--width", "256", "--height", "256",
-                 .. bbox, "--basemap", "none"]);
+                 .. bbox, "--basemap", "none"], TestContext.Current.CancellationToken);
             int exitOffline = CliApp.Build().Run(
                 ["render", "--layer", S124, offline, "--width", "256", "--height", "256",
-                 .. bbox, "--basemap", "offline"]);
+                 .. bbox, "--basemap", "offline"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exitNone);
             Assert.Equal(0, exitOffline);
@@ -142,7 +142,7 @@ public sealed class RenderCompositeCommandTests
     {
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-bm-{Guid.NewGuid():N}.png");
         int exit = CliApp.Build().Run(
-            ["render", "--layer", S124, output, "--basemap", "satellite"]);
+            ["render", "--layer", S124, output, "--basemap", "satellite"], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }
@@ -154,7 +154,7 @@ public sealed class RenderCompositeCommandTests
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-comp-{Guid.NewGuid():N}.png");
         int exit = CliApp.Build().Run(
-            ["render", "--layer", S124, "--layer", "does-not-exist.gml", output]);
+            ["render", "--layer", S124, "--layer", "does-not-exist.gml", output], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }
@@ -167,7 +167,7 @@ public sealed class RenderCompositeCommandTests
         // With --layer, only a single positional (the output) is allowed.
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-comp-{Guid.NewGuid():N}.png");
         int exit = CliApp.Build().Run(
-            ["render", "--layer", S124, "extra-arg", output]);
+            ["render", "--layer", S124, "extra-arg", output], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }
@@ -184,7 +184,7 @@ public sealed class RenderCompositeCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", dataset, output, "--bbox", "-1.5,50.0,-1.0,50.5"]);
+                ["render", dataset, output, "--bbox", "-1.5,50.0,-1.0,50.5"], TestContext.Current.CancellationToken);
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
         }
@@ -203,7 +203,7 @@ public sealed class RenderCompositeCommandTests
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
         int exit = CliApp.Build().Run(
-            ["render", "--layer", dataset, output, "--center", "-1.25,50.25"]);
+            ["render", "--layer", dataset, output, "--center", "-1.25,50.25"], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }

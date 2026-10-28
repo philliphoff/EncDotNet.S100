@@ -40,7 +40,7 @@ internal sealed class FeedExportCommand : AsyncCommand<FeedExportCommand.Setting
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var publisher = new FeedPublisher(settings.Path, settings.Title);
         AnsiConsole.MarkupLine($"Indexing [bold]{Markup.Escape(publisher.Path)}[/]…");

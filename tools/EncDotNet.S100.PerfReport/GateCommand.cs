@@ -91,7 +91,7 @@ public sealed class GateCommand : Command<GateCommand.Settings>
         Regressed,
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         if (!Directory.Exists(settings.BaselineDir))
         {

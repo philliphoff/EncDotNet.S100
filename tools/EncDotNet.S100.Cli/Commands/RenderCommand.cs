@@ -374,7 +374,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         if (settings.IsExchangeSetComposite)
             return ExecuteExchangeSetComposite(settings);

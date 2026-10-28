@@ -68,7 +68,7 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
         }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
         try

@@ -25,7 +25,7 @@ public sealed class RenderCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", dataset, output, "--width", "640", "--height", "480"]);
+                ["render", dataset, output, "--width", "640", "--height", "480"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -50,7 +50,7 @@ public sealed class RenderCommandTests
     public void Render_with_missing_dataset_returns_nonzero()
     {
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
-        int exit = CliApp.Build().Run(["render", "does-not-exist.gml", output]);
+        int exit = CliApp.Build().Run(["render", "does-not-exist.gml", output], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }
@@ -62,14 +62,14 @@ public sealed class RenderCommandTests
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
-        int exit = CliApp.Build().Run(["render", dataset, output, "--palette", "bogus"]);
+        int exit = CliApp.Build().Run(["render", dataset, output, "--palette", "bogus"], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
     }
 
     [Fact]
     public void ListSpecs_returns_success()
     {
-        int exit = CliApp.Build().Run(["list-specs"]);
+        int exit = CliApp.Build().Run(["list-specs"], TestContext.Current.CancellationToken);
         Assert.Equal(0, exit);
     }
 
@@ -85,7 +85,7 @@ public sealed class RenderCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", dataset, output, "--width", "320", "--height", "240"]);
+                ["render", dataset, output, "--width", "320", "--height", "240"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -118,7 +118,7 @@ public sealed class RenderCommandTests
         {
             int exit = CliApp.Build().Run(
                 ["render", dataset, output, "--format", "jpeg", "--quality", "75",
-                 "--width", "320", "--height", "240"]);
+                 "--width", "320", "--height", "240"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -140,7 +140,7 @@ public sealed class RenderCommandTests
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
-        int exit = CliApp.Build().Run(["render", dataset, output, "--format", "tiff"]);
+        int exit = CliApp.Build().Run(["render", dataset, output, "--format", "tiff"], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }
@@ -152,7 +152,7 @@ public sealed class RenderCommandTests
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
-        int exit = CliApp.Build().Run(["render", dataset, output, "--format", "jpeg"]);
+        int exit = CliApp.Build().Run(["render", dataset, output, "--format", "jpeg"], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }
@@ -164,7 +164,7 @@ public sealed class RenderCommandTests
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.jpg");
-        int exit = CliApp.Build().Run(["render", dataset, output, "--quality", "0"]);
+        int exit = CliApp.Build().Run(["render", dataset, output, "--quality", "0"], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }
@@ -179,7 +179,7 @@ public sealed class RenderCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", dataset, output, "--width", "320", "--height", "240"]);
+                ["render", dataset, output, "--width", "320", "--height", "240"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -213,7 +213,7 @@ public sealed class RenderCommandTests
             // The default (updates applied) and --no-updates paths must both
             // render successfully; updates are best-effort and never block.
             int exit = CliApp.Build().Run(
-                ["render", basePath!, output, "--width", "320", "--height", "240"]);
+                ["render", basePath!, output, "--width", "320", "--height", "240"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -238,7 +238,7 @@ public sealed class RenderCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", basePath!, output, "--no-updates", "--width", "320", "--height", "240"]);
+                ["render", basePath!, output, "--no-updates", "--width", "320", "--height", "240"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -259,7 +259,7 @@ public sealed class RenderCommandTests
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
         try
         {
-            int exit = CliApp.Build().Run(["render", dataset, output]);
+            int exit = CliApp.Build().Run(["render", dataset, output], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -301,8 +301,8 @@ public sealed class RenderCommandTests
         var second = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
         try
         {
-            Assert.Equal(0, CliApp.Build().Run(["render", dataset, first]));
-            Assert.Equal(0, CliApp.Build().Run(["render", dataset, second]));
+            Assert.Equal(0, CliApp.Build().Run(["render", dataset, first], TestContext.Current.CancellationToken));
+            Assert.Equal(0, CliApp.Build().Run(["render", dataset, second], TestContext.Current.CancellationToken));
 
             // Pure portrayal output: two runs over the same dataset and render
             // context must be byte-identical so the document is snapshot-testable.
@@ -324,7 +324,7 @@ public sealed class RenderCommandTests
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.txt");
         try
         {
-            int exit = CliApp.Build().Run(["render", dataset, output, "--format", "json"]);
+            int exit = CliApp.Build().Run(["render", dataset, output, "--format", "json"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             using var doc = JsonDocument.Parse(File.ReadAllText(output));
@@ -344,7 +344,7 @@ public sealed class RenderCommandTests
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.png");
-        int exit = CliApp.Build().Run(["render", dataset, output, "--format", "json"]);
+        int exit = CliApp.Build().Run(["render", dataset, output, "--format", "json"], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }
@@ -356,7 +356,7 @@ public sealed class RenderCommandTests
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
-        int exit = CliApp.Build().Run(["render", "--layer", dataset, output]);
+        int exit = CliApp.Build().Run(["render", "--layer", dataset, output], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }
@@ -371,7 +371,7 @@ public sealed class RenderCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", dataset, output, "--bbox", "-80,30,-60,45", "--width", "400", "--height", "300"]);
+                ["render", dataset, output, "--bbox", "-80,30,-60,45", "--width", "400", "--height", "300"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -399,7 +399,7 @@ public sealed class RenderCommandTests
         {
             int exit = CliApp.Build().Run(
                 ["render", dataset, output, "--center", "-70,38", "--scale", "20000000",
-                 "--width", "400", "--height", "300"]);
+                 "--width", "400", "--height", "300"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -418,7 +418,7 @@ public sealed class RenderCommandTests
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
         var output = Path.Combine(Path.GetTempPath(), $"s100-cli-{Guid.NewGuid():N}.json");
-        int exit = CliApp.Build().Run(["render", dataset, output, "--bbox", "-80,30,-60,45"]);
+        int exit = CliApp.Build().Run(["render", dataset, output, "--bbox", "-80,30,-60,45"], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
     }
@@ -436,7 +436,7 @@ public sealed class RenderCommandTests
                 ["render", dataset, output,
                  "--bbox", "-83.1620,42.2990,-83.1580,42.3030",
                  "--width", "300", "--height", "300",
-                 "--background", "#FF00FF"]);
+                 "--background", "#FF00FF"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             using var bitmap = SKBitmap.Decode(output);

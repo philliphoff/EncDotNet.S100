@@ -141,7 +141,7 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         TryParseCoordinate(settings.Latitude, out var latitude);
         TryParseCoordinate(settings.Longitude, out var longitude);

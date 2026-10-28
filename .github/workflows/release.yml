@@ -30,7 +30,7 @@ jobs:
       # dispatched against. Full history + tags are needed to determine the
       # latest released version. RELEASE_TOKEN (a PAT) is required so the tag
       # push triggers the tag-driven CI build/publish workflow.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0

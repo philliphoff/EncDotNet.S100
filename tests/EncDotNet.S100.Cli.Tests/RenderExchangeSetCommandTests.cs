@@ -47,7 +47,7 @@ public sealed class RenderExchangeSetCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", ExchangeSetDir, output, "--width", "320", "--height", "240"]);
+                ["render", ExchangeSetDir, output, "--width", "320", "--height", "240"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             AssertValidPng(output, 320, 240);
@@ -67,7 +67,7 @@ public sealed class RenderExchangeSetCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", CataloguePath, output, "--width", "256", "--height", "256"]);
+                ["render", CataloguePath, output, "--width", "256", "--height", "256"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             AssertValidPng(output, 256, 256);
@@ -87,7 +87,7 @@ public sealed class RenderExchangeSetCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", "--exchange-set", ExchangeSetDir, "-o", output, "--width", "256", "--height", "256"]);
+                ["render", "--exchange-set", ExchangeSetDir, "-o", output, "--width", "256", "--height", "256"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             AssertValidPng(output, 256, 256);
@@ -107,7 +107,7 @@ public sealed class RenderExchangeSetCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", "--from", ExchangeSetDir, output, "--width", "200", "--height", "200"]);
+                ["render", "--from", ExchangeSetDir, output, "--width", "200", "--height", "200"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             AssertValidPng(output, 200, 200);
@@ -127,7 +127,7 @@ public sealed class RenderExchangeSetCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["render", ExchangeSetDir, output, "--only", "S124", "--width", "128", "--height", "128"]);
+                ["render", ExchangeSetDir, output, "--only", "S124", "--width", "128", "--height", "128"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             AssertValidPng(output, 128, 128);
@@ -146,7 +146,7 @@ public sealed class RenderExchangeSetCommandTests
         // The set contains S-124 and S-125 only; S-101 matches nothing.
         var output = TempOutput();
         int exit = CliApp.Build().Run(
-            ["render", ExchangeSetDir, output, "--only", "S101"]);
+            ["render", ExchangeSetDir, output, "--only", "S101"], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
@@ -164,7 +164,7 @@ public sealed class RenderExchangeSetCommandTests
             ZipFile.CreateFromDirectory(ExchangeSetDir, zip);
 
             int exit = CliApp.Build().Run(
-                ["render", zip, output, "--width", "192", "--height", "192"]);
+                ["render", zip, output, "--width", "192", "--height", "192"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             AssertValidPng(output, 192, 192);
@@ -186,7 +186,7 @@ public sealed class RenderExchangeSetCommandTests
         {
             int exit = CliApp.Build().Run(
                 ["render", ExchangeSetDir, output,
-                 "--bbox", "-180,-85,180,85", "--width", "256", "--height", "256"]);
+                 "--bbox", "-180,-85,180,85", "--width", "256", "--height", "256"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             AssertValidPng(output, 256, 256);
@@ -205,7 +205,7 @@ public sealed class RenderExchangeSetCommandTests
         var layer = Path.Combine(ExchangeSetDir, "S124", "navwarn_surface.gml");
         var output = TempOutput();
         int exit = CliApp.Build().Run(
-            ["render", "--layer", layer, "--exchange-set", ExchangeSetDir, "-o", output]);
+            ["render", "--layer", layer, "--exchange-set", ExchangeSetDir, "-o", output], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
@@ -219,7 +219,7 @@ public sealed class RenderExchangeSetCommandTests
 
         var output = TempOutput();
         int exit = CliApp.Build().Run(
-            ["render", dataset, output, "--only", "S124"]);
+            ["render", dataset, output, "--only", "S124"], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(output));
@@ -235,7 +235,7 @@ public sealed class RenderExchangeSetCommandTests
         var output = TempOutput();
         try
         {
-            int exit = CliApp.Build().Run(["render", emptyDir, output]);
+            int exit = CliApp.Build().Run(["render", emptyDir, output], TestContext.Current.CancellationToken);
             Assert.NotEqual(0, exit);
             Assert.False(File.Exists(output));
         }
