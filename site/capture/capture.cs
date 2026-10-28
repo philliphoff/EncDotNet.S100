@@ -110,6 +110,10 @@ var rebellionBox = new Box(32.754, -79.890, 32.778, -79.864);
 // on every run. At 14.5 m the shoalest stretch of Hog Island Reach dips below the
 // 1 m required UKC for a few minutes; departing two hours earlier clears it.
 var checkDeparture = new DateTimeOffset(2025, 12, 18, 13, 30, 0, TimeSpan.Zero);
+// W1: the coast from Cape Lookout past Cape Hatteras to the Chesapeake Bay
+// entrance and the Gulf Stream offshore, where GFS-Wave's Atlantic grid has its
+// steepest gradients near the coast.
+var hatterasBox = new Box(33.4, -78.6, 37.6, -72.4);
 
 var shots = new List<Shot>
 {
@@ -268,6 +272,26 @@ var shots = new List<Shot>
         await v.Frame(new Box(-50, -170, 70, 170));
         await v.Call("ui_invoke", new() { ["id"] = "Library.Quick.Online" });
         await v.Call("ui_select", new() { ["ref"] = await CatalogueRow(v, "EuRIS") });
+        return await v.Window();
+    }, Themed: true),
+
+    // W1: wind and waves over the chart off Cape Hatteras: NOAA GFS-Wave
+    // significant wave height (the Atlantic 0.16° grid) and the GFS 10 m wind and
+    // sea level pressure, six hours into the latest run on AWS (public domain),
+    // over the NOAA coastal charts the Library downloads. Display controls is
+    // open on its Weather switches (isobars on, wind speed fill and wave arrows
+    // off, the defaults).
+    new("W1", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, "NC", hatterasBox);
+        const int hour = 6;
+        var run = await data.LatestGfsRun(hour);
+        await v.OpenAll([await data.GfsWave(run, "atlocn.0p16", hour, ["HTSGW:surface", "PERPW:surface", "DIRPW:surface"])]);
+        await v.OpenAll([await data.Gfs(run, hour, ["UGRD:10 m above ground", "VGRD:10 m above ground", "PRMSL:mean sea level"])]);
+        await v.Call("set_view_time", new() { ["time"] = run.AddHours(hour).ToString("O"), ["snap"] = "nearest" });
+        await v.Panel("EcdisDisplay");
+        await v.Frame(hatterasBox);
         return await v.Window();
     }, Themed: true),
 
@@ -688,6 +712,28 @@ async Task OpenRouteWarning(Viewer v)
         await v.Call("set_panel", new() { ["panel"] = panel, ["visible"] = false });
 }
 
+// The NOAA ENC cells of usage bands 2 and 3 (general and coastal) over a box,
+// downloaded and opened by the Library from its NOAA ENC source for one state.
+// Bands 4 and 5 add nothing at the scale of a weather view, so they're left out.
+async Task CoastalCharts(Viewer v, string state, Box box)
+{
+    await v.Call("add_library_source", new() { ["knownSourceId"] = "noaa-enc", ["choices"] = new[] { state } });
+    await v.Call("await_library_idle", new() { ["timeoutMs"] = 120000 });
+    var items = (await v.Call("query_library_items", new()
+    {
+        ["spec"] = "S-57", ["south"] = box.South, ["west"] = box.West, ["north"] = box.North, ["east"] = box.East, ["pageSize"] = 500,
+    }))?["items"]?.AsArray() ?? [];
+    var coastal = items
+        .Select(i => i!["id"]!.GetValue<string>())
+        .Where(id => Regex.IsMatch(id, @"US[23][A-Z0-9]{5,6}$"))
+        .ToArray();
+    if (coastal.Length == 0)
+        throw new InvalidOperationException($"no band 2 or 3 NOAA ENC cells over the box among {items.Count} Library items");
+    await v.Call("library_action", new() { ["action"] = "download", ["itemIds"] = coastal, ["maxBytes"] = 50_000_000L });
+    await v.Call("await_library_idle", new() { ["timeoutMs"] = 300000 });
+    await v.WaitForLoads();
+}
+
 static IEnumerable<string> Grid(string prefix, string rows, string cols) =>
     from r in rows from c in cols select $"{prefix}{r}{c}";
 
@@ -816,6 +862,74 @@ sealed class Data(string cacheDir)
         var fileName = tile.Groups[1].Value + ".h5";
         var url = $"{root}{tile.Groups[2].Value}/{encoding}/regional/{fileName}";
         return await DownloadAsync(url, Path.Combine("s111", model, encoding, fileName));
+    }
+
+    private const string GfsBucket = "https://noaa-gfs-bdp-pds.s3.amazonaws.com/";
+
+    /// <summary>
+    /// The newest GFS run on AWS (noaa-gfs-bdp-pds, public domain) whose GFS and
+    /// GFS-Wave files for forecast hour <paramref name="hour"/> are both published.
+    /// </summary>
+    public async Task<DateTime> LatestGfsRun(int hour)
+    {
+        for (var day = DateTime.UtcNow.Date; day > DateTime.UtcNow.Date.AddDays(-3); day = day.AddDays(-1))
+        {
+            foreach (var cycle in new[] { 18, 12, 6, 0 })
+            {
+                var run = day.AddHours(cycle);
+                if (run > DateTime.UtcNow) continue;
+                if (await Exists(GfsUrl(run, hour) + ".idx") && await Exists(GfsWaveUrl(run, "atlocn.0p16", hour) + ".idx"))
+                    return run;
+            }
+        }
+        throw new InvalidOperationException("no GFS run with both files in the last three days on noaa-gfs-bdp-pds");
+    }
+
+    /// <summary>Fields of a GFS 0.25° file (by their .idx names, e.g. "UGRD:10 m above ground"), cut by byte range.</summary>
+    public Task<string> Gfs(DateTime run, int hour, string[] fields) =>
+        Fields(GfsUrl(run, hour), $"gfs_{run:yyyyMMdd'T'HH'Z'}_f{hour:000}.grib2", fields);
+
+    /// <summary>Fields of a GFS-Wave file on one of its grids (e.g. atlocn.0p16), cut by byte range.</summary>
+    public Task<string> GfsWave(DateTime run, string grid, int hour, string[] fields) =>
+        Fields(GfsWaveUrl(run, grid, hour), $"gfswave_{run:yyyyMMdd'T'HH'Z'}_{grid}_f{hour:000}.grib2", fields);
+
+    private static string GfsUrl(DateTime run, int hour) =>
+        $"{GfsBucket}gfs.{run:yyyyMMdd}/{run:HH}/atmos/gfs.t{run:HH}z.pgrb2.0p25.f{hour:000}";
+
+    private static string GfsWaveUrl(DateTime run, string grid, int hour) =>
+        $"{GfsBucket}gfs.{run:yyyyMMdd}/{run:HH}/wave/gridded/gfswave.t{run:HH}z.{grid}.f{hour:000}.grib2";
+
+    // The messages of a GRIB2 file named in its .idx ("n:offset:d=…:VAR:LEVEL:…"),
+    // read with HTTP ranges and appended into one file, as a NOMADS GRIB
+    // filter request returns them.
+    private async Task<string> Fields(string url, string name, string[] fields)
+    {
+        var path = Path.Combine(cacheDir, "gfs", name);
+        if (File.Exists(path)) return path;
+        Console.WriteLine($"  downloading {string.Join(", ", fields)} from {url[GfsBucket.Length..]}");
+        var lines = (await Http.GetStringAsync(url + ".idx")).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var offsets = lines.Select(l => long.Parse(l.Split(':')[1], System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        using var output = new MemoryStream();
+        foreach (var field in fields)
+        {
+            var index = Array.FindIndex(lines, l => l.Split(':') is var parts && parts.Length > 4 && $"{parts[3]}:{parts[4]}" == field);
+            if (index < 0) throw new InvalidOperationException($"{url} has no {field}");
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(offsets[index], index + 1 < offsets.Length ? offsets[index + 1] - 1 : null);
+            using var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            await (await response.Content.ReadAsStreamAsync()).CopyToAsync(output);
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllBytesAsync(path + ".part", output.ToArray());
+        File.Move(path + ".part", path, overwrite: true);
+        return path;
+    }
+
+    private static async Task<bool> Exists(string url)
+    {
+        using var response = await Http.SendAsync(new HttpRequestMessage(HttpMethod.Head, url));
+        return response.IsSuccessStatusCode;
     }
 
     private async Task<Dictionary<string, string>> LoadS102IndexAsync()
@@ -1685,6 +1799,8 @@ static class ShotManifest
             _ when p.Contains("/.cache/enc/") => ("NOAA ENC (charts.noaa.gov)", "public domain (NOAA)"),
             _ when p.Contains("/.cache/s102/") => ("NOAA S-102 on AWS (noaa-s102-pds)", "public domain (NOAA)"),
             _ when p.Contains("/.cache/s111/") => ("NOAA S-111 on AWS (noaa-s111-pds)", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/gfs/gfswave_") => ("NOAA NCEP GFS-Wave (WAVEWATCH III) on AWS (noaa-gfs-bdp-pds), fields cut by byte range", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/gfs/gfs_") => ("NOAA NCEP GFS on AWS (noaa-gfs-bdp-pds), fields cut by byte range", "public domain (NOAA)"),
             _ when p.Contains("/.cache/s411/S411_NWS_") => ("US National Weather Service ice analysis, via the BSIS Ice Portal (bsis-ice.de)", "public domain (NOAA NWS)"),
             _ when p.Contains("Inland S-57 ENCs") => ("USACE inland ENC (IENC)", "public domain (USACE)"),
             _ when path is null && id.StartsWith("102US", StringComparison.Ordinal) => ("NOAA S-102 on AWS, downloaded by the Library", "public domain (NOAA)"),

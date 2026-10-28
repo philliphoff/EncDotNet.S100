@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// be currently loaded in the host catalog.
 /// </param>
 public sealed record ListTimeStepsRequest(
-    [property: Description("Identifier of a currently loaded time-varying coverage dataset (S-104 or S-111). The agent typically obtains this from list_datasets.")] DatasetId DatasetId);
+    [property: Description("Identifier of a currently loaded time-varying dataset (S-104, S-111, GRIB2, NetCDF or CAP). The agent typically obtains this from list_datasets.")] DatasetId DatasetId);
 
 /// <summary>Result of <see cref="ListTimeStepsTool"/>.</summary>
 /// <param name="DatasetId">The dataset that was introspected, echoed back.</param>
@@ -54,8 +54,10 @@ public sealed record ListTimeStepsResult(
 /// </para>
 /// <para>
 /// S-102 bathymetry is static (no time axis) and returns an empty
-/// <see cref="ListTimeStepsResult.Times"/> series. Non-coverage specs
-/// raise <see cref="NotSupportedYet"/>.
+/// <see cref="ListTimeStepsResult.Times"/> series. A product whose catalog
+/// payload is an <see cref="ITimeSteppedDatasetData"/> lists its own steps:
+/// a GRIB2 or NetCDF grid's valid times, or the times a CAP file's warnings
+/// start and end. Other specs raise <see cref="NotSupportedYet"/>.
 /// </para>
 /// </remarks>
 public sealed class ListTimeStepsTool
@@ -103,6 +105,11 @@ public sealed class ListTimeStepsTool
             S104StationSeriesData s104s => FromStations(match, ExtractStationTimes(s104s)),
             S111CoverageData s111g => FromGridded(match, ExtractSurfaceCurrentTimes(s111g)),
             S111StationSeriesData s111s => FromStations(match, ExtractStationTimes(s111s)),
+            // Any other product with its own steps: GRIB2 and NetCDF valid
+            // times, CAP warning starts and ends.
+            ITimeSteppedDatasetData stepped => FromGridded(
+                match,
+                stepped.TimeSteps.Select(t => new DateTimeOffset(DateTime.SpecifyKind(t, DateTimeKind.Utc)))),
             _ => ToolResult<ListTimeStepsResult>.Err(new NotSupportedYet(
                 match.Spec,
                 Name,

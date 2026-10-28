@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
@@ -56,13 +57,14 @@ public sealed record SpecSummary(
 /// </param>
 /// <param name="CanListTimeSteps">
 /// <c>true</c> when <see cref="ListTimeStepsTool"/> can enumerate time
-/// steps for this spec (i.e. it is a time-varying coverage product).
+/// steps for this spec: a time-varying coverage (S-104, S-111, GRIB2,
+/// NetCDF), or CAP warnings, whose steps are when warnings start and end.
 /// </param>
 public sealed record SpecCapabilities(
     [property: Description("True when query_features can enumerate features for this spec.")] bool CanQueryFeatures,
     [property: Description("True when describe_feature has a describer registered for this spec.")] bool CanDescribeFeature,
     [property: Description("True when sample_coverage can sample a scalar/vector value at a point for this spec.")] bool CanSampleCoverage,
-    [property: Description("True when list_time_steps can enumerate time steps for this spec (time-varying coverage products only).")] bool CanListTimeSteps);
+    [property: Description("True when list_time_steps can enumerate time steps for this spec: time-varying coverages (S-104, S-111, GRIB2, NetCDF) and CAP warnings.")] bool CanListTimeSteps);
 
 /// <summary>Result of <see cref="ListSpecsTool"/>.</summary>
 public sealed record ListSpecsResult([property: Description("Per-spec summaries in catalog order, one entry per known spec.")] IReadOnlyList<SpecSummary> Specs);
@@ -92,25 +94,28 @@ public sealed class ListSpecsTool
     // interface and addressable by QueryFeaturesTool. Must match the
     // switch arms in Spec.FeatureAccessor.GetFeatures. S-101 is
     // ISO 8211-encoded but its pipeline Feature records implement
-    // IS100Feature directly.
+    // IS100Feature directly; CAP warning areas are surface features.
     private static readonly HashSet<string> GmlVectorSpecs = new(StringComparer.Ordinal)
     {
         "S-101",
         "S-122", "S-124", "S-125", "S-127", "S-128",
         "S-129", "S-131", "S-201", "S-401", "S-411", "S-421",
+        SpecName.Cap,
     };
 
-    // Specs SampleCoverageTool routes to a sampler.
+    // Specs SampleCoverageTool routes to a sampler: the S-100 coverages and
+    // the weather grids, whose catalog payload is a sampler (issue #1063).
     private static readonly HashSet<string> CoverageSpecs = new(StringComparer.Ordinal)
     {
-        "S-102", "S-104", "S-111",
+        "S-102", "S-104", "S-111", SpecName.Grib2, SpecName.NetCdf,
     };
 
-    // Time-varying coverage specs (subset of CoverageSpecs) that
-    // ListTimeStepsTool can enumerate. S-102 is static.
-    private static readonly HashSet<string> TimeVaryingCoverageSpecs = new(StringComparer.Ordinal)
+    // Specs with a time axis that ListTimeStepsTool can enumerate. S-102 is
+    // static; CAP warnings have steps (when they start and end) but no
+    // coverage to sample.
+    private static readonly HashSet<string> TimeVaryingSpecs = new(StringComparer.Ordinal)
     {
-        "S-104", "S-111",
+        "S-104", "S-111", SpecName.Grib2, SpecName.NetCdf, SpecName.Cap,
     };
 
     // Specs with a registered describer.
@@ -119,6 +124,7 @@ public sealed class ListSpecsTool
         "S-101", "S-102", "S-104", "S-111", "S-124",
         "S-122", "S-125", "S-127", "S-128", "S-129",
         "S-131", "S-201", "S-401", "S-411", "S-421",
+        SpecName.Cap,
     };
 
     private readonly IDatasetCatalog _catalog;
@@ -164,7 +170,7 @@ public sealed class ListSpecsTool
                 CanQueryFeatures: GmlVectorSpecs.Contains(name),
                 CanDescribeFeature: DescribableSpecs.Contains(name),
                 CanSampleCoverage: CoverageSpecs.Contains(name),
-                CanListTimeSteps: TimeVaryingCoverageSpecs.Contains(name));
+                CanListTimeSteps: TimeVaryingSpecs.Contains(name));
             summaries.Add(new SpecSummary(
                 name,
                 loaded,

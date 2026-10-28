@@ -233,6 +233,8 @@ internal static partial class Strings
     public static string About_ProductSubtitle => Get(nameof(About_ProductSubtitle));
     public static string About_CopyrightFormat => Get(nameof(About_CopyrightFormat));
     public static string About_BuiltWith => Get(nameof(About_BuiltWith));
+    public static string About_DataCreditsTitle => Get(nameof(About_DataCreditsTitle));
+    public static string About_DataCredits => Get(nameof(About_DataCredits));
     public static string About_VersionFormat => Get(nameof(About_VersionFormat));
     public static string About_BuildFormat => Get(nameof(About_BuildFormat));
     public static string About_NightlyBadge => Get(nameof(About_NightlyBadge));
@@ -287,6 +289,7 @@ internal static partial class Strings
     // File picker
     public static string FilePicker_OpenDatasetTitle => Get(nameof(FilePicker_OpenDatasetTitle));
     public static string FilePicker_S100DatasetsType => Get(nameof(FilePicker_S100DatasetsType));
+    public static string FilePicker_WeatherDataType => Get(nameof(FilePicker_WeatherDataType));
     public static string FilePicker_ExchangeSetFolderTitle => Get(nameof(FilePicker_ExchangeSetFolderTitle));
     public static string FilePicker_ExchangeSetZipTitle => Get(nameof(FilePicker_ExchangeSetZipTitle));
     public static string FilePicker_ExchangeSetZipType => Get(nameof(FilePicker_ExchangeSetZipType));

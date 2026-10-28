@@ -67,6 +67,28 @@ public sealed class AboutDialogViewTests
         window.Close();
     }
 
+    [AvaloniaFact]
+    public void View_ShowsTheWeatherDataCredits()
+    {
+        var vm = CreateViewModel();
+        var view = new AboutDialogView { DataContext = vm };
+        var window = new Window { Content = view, Width = 480, Height = 800 };
+        window.Show();
+
+        var credits = view.GetVisualDescendants().OfType<Control>()
+            .Single(c => AutomationProperties.GetAutomationId(c) == "About.DataCredits");
+        Assert.Equal("Weather data credits", AutomationProperties.GetName(credits));
+        var text = view.GetVisualDescendants().OfType<SelectableTextBlock>()
+            .Single(c => AutomationProperties.GetAutomationId(c) == "About.DataCredits.Text");
+        Assert.Contains("ECMWF", text.Text);
+        Assert.Contains("CC BY 4.0", text.Text);
+        Assert.Contains("Copernicus Marine", text.Text);
+        Assert.Contains("Deutscher Wetterdienst", text.Text);
+        Assert.Contains("NOAA", text.Text);
+        Assert.Contains("public domain", text.Text);
+        window.Close();
+    }
+
     [Fact]
     public void ViewModel_FormatsVersionAndBuildLines()
     {
