@@ -25,6 +25,16 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 /// can be exceeded by one current file per other running instance.
 /// </para>
 /// <para>
+/// The newest file of a dead session that crashed and whose crash no launch
+/// has reported yet is kept too, so a busy instance can't delete it before
+/// the next launch reads its tail. A session counts as such while its
+/// unclean-shutdown marker remains (see
+/// <see cref="UncleanShutdownSentinel.ReadUnreportedSessions"/>); startup
+/// removes the marker right after reading the tail, and the file is then
+/// pruned like any other. At most <see cref="MaxCrashLogs"/> such files are
+/// kept, none last written more than <see cref="MaxCrashLogAge"/> ago.
+/// </para>
+/// <para>
 /// Log calls only format the line and enqueue it; a background thread
 /// writes and flushes, so the UI thread never waits on disk I/O. When the
 /// queue is full, new entries are dropped rather than blocking the caller.
@@ -39,6 +49,14 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
 
     /// <summary>Default number of log files kept in the directory.</summary>
     public const int DefaultMaxFiles = 5;
+
+    /// <summary>Maximum number of unreported crashed sessions whose newest
+    /// file is kept beyond the cap.</summary>
+    public const int MaxCrashLogs = 3;
+
+    /// <summary>Age after which an unread crashed session's file is no
+    /// longer kept beyond the cap.</summary>
+    public static readonly TimeSpan MaxCrashLogAge = TimeSpan.FromDays(7);
 
     private const string FilePrefix = "viewer-";
     private const string FileExtension = ".log";
@@ -60,6 +78,7 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
     private readonly DateTime _sessionStartUtc;
     private readonly int _processId;
     private readonly Func<int, DateTime, bool> _isSessionAlive;
+    private readonly Func<IEnumerable<PreviousSession>> _unreportedCrashes;
     private readonly string _sessionId;
     private readonly ConcurrentQueue<string> _queue = new();
     private readonly AutoResetEvent _signal = new(false);
@@ -86,6 +105,9 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
     /// its process id and start time (UTC), is still running; its files are
     /// then kept. Defaults to a process check that treats a reused process
     /// id as a dead session.</param>
+    /// <param name="unreportedCrashes">Returns the sessions whose crash no
+    /// launch has reported yet (their unclean-shutdown markers); the newest
+    /// file of each, when dead, is kept beyond the cap. Defaults to none.</param>
     public RollingFileLoggerProvider(
         string directory,
         LogLevel minLevel,
@@ -93,7 +115,8 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
         int maxFiles = DefaultMaxFiles,
         DateTime? sessionStartUtc = null,
         int? processId = null,
-        Func<int, DateTime, bool>? isSessionAlive = null)
+        Func<int, DateTime, bool>? isSessionAlive = null,
+        Func<IEnumerable<PreviousSession>>? unreportedCrashes = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxFileBytes, 1);
@@ -104,6 +127,7 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
         _maxFileBytes = maxFileBytes;
         _maxFiles = maxFiles;
         _isSessionAlive = isSessionAlive ?? IsSessionAlive;
+        _unreportedCrashes = unreportedCrashes ?? (() => []);
         _processId = processId ?? Environment.ProcessId;
         var start = (sessionStartUtc ?? DateTime.UtcNow).ToUniversalTime();
         var stamp = start.ToString(TimestampFormat, CultureInfo.InvariantCulture);
@@ -173,20 +197,14 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
                 return null;
             }
 
-            var started = DateTime.SpecifyKind(startedUtc, DateTimeKind.Utc);
-            var files = EnumerateLogFiles(directory)
-                .Where(f => f.ProcessId == processId)
-                .ToList();
-            if (files.Count == 0)
+            var files = EnumerateLogFiles(directory).ToList();
+            if (FindSession(files, processId, startedUtc) is not { } session)
             {
                 return null;
             }
 
-            var session = files
-                .MinBy(f => Math.Abs((f.SessionStartUtc - started).Ticks))
-                ?.SessionStartUtc;
             var sessionFiles = files
-                .Where(f => f.SessionStartUtc == session)
+                .Where(f => f.ProcessId == processId && f.SessionStartUtc == session)
                 .OrderByDescending(f => f.Sequence);
 
             // Read newest-first until enough text is collected.
@@ -309,10 +327,13 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
                 .Distinct()
                 .Where(s => _isSessionAlive(s.ProcessId, s.SessionStartUtc))
                 .ToHashSet();
-            var kept = others.Count(f => liveSessions.Contains((f.ProcessId, f.SessionStartUtc)));
+            var crashLogs = UnreadCrashLogs(others, liveSessions);
+            var kept = others.Count(f => liveSessions.Contains((f.ProcessId, f.SessionStartUtc)))
+                + crashLogs.Count;
 
             var stale = others
                 .Where(f => !liveSessions.Contains((f.ProcessId, f.SessionStartUtc)))
+                .Where(f => !crashLogs.Contains(f.Path))
                 .OrderByDescending(f => SafeLastWriteUtc(f.Path))
                 .ThenByDescending(f => f.SessionStartUtc)
                 .ThenByDescending(f => f.Sequence)
@@ -333,6 +354,58 @@ internal sealed partial class RollingFileLoggerProvider : ILoggerProvider
         {
             // Best-effort.
         }
+    }
+
+    /// <summary>
+    /// Paths of the newest file of each dead session whose crash no launch
+    /// has reported yet: the newest <see cref="MaxCrashLogs"/> crashes, and
+    /// only files written within <see cref="MaxCrashLogAge"/>.
+    /// </summary>
+    private HashSet<string> UnreadCrashLogs(
+        List<LogFile> others, HashSet<(int ProcessId, DateTime SessionStartUtc)> liveSessions)
+    {
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        var oldest = DateTime.UtcNow - MaxCrashLogAge;
+        foreach (var crash in _unreportedCrashes().OrderByDescending(c => c.StartedUtc))
+        {
+            if (paths.Count >= MaxCrashLogs)
+            {
+                break;
+            }
+
+            // Match the session the next launch's ReadSessionTail will read.
+            if (FindSession(others, crash.Pid, crash.StartedUtc) is not { } start
+                || liveSessions.Contains((crash.Pid, start))
+                || (crash.Pid == _processId && start == _sessionStartUtc))
+            {
+                continue;
+            }
+
+            var newest = others
+                .Where(f => f.ProcessId == crash.Pid && f.SessionStartUtc == start)
+                .MaxBy(f => f.Sequence);
+            if (newest is not null && SafeLastWriteUtc(newest.Path) >= oldest)
+            {
+                paths.Add(newest.Path);
+            }
+        }
+
+        return paths;
+    }
+
+    /// <summary>
+    /// The start of the session with <paramref name="processId"/> whose start
+    /// is closest to <paramref name="startedUtc"/>, or <see langword="null"/>
+    /// when no file has that process id. Picks the right session when a
+    /// process id was reused.
+    /// </summary>
+    private static DateTime? FindSession(IEnumerable<LogFile> files, int processId, DateTime startedUtc)
+    {
+        var started = DateTime.SpecifyKind(startedUtc, DateTimeKind.Utc);
+        return files
+            .Where(f => f.ProcessId == processId)
+            .MinBy(f => Math.Abs((f.SessionStartUtc - started).Ticks))
+            ?.SessionStartUtc;
     }
 
     private bool IsOwnSession(LogFile file) =>
