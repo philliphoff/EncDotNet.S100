@@ -451,7 +451,8 @@ public partial class App : Application
         services.AddS100Observability(
             logFilePath: StartupOptions?.LogFile,
             verbose: StartupOptions?.Verbose ?? false,
-            rollingLogDirectory: StartupOptions?.Ephemeral == true ? null : dataPaths.LogsDirectory);
+            rollingLogDirectory: StartupOptions?.Ephemeral == true ? null : dataPaths.LogsDirectory,
+            crashMarkerDirectory: dataPaths.CrashMarkersDirectory);
 
         // Persisted user settings, with any command-line overrides
         // (settings path / --ephemeral / MCP / palette / display
@@ -1597,17 +1598,28 @@ public partial class App : Application
         // isolated --data-dir instance keeps them self-contained.
         var markersDir = _services?.GetService<ViewerDataPaths>()?.CrashMarkersDirectory;
         EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.Configure(enabled, markersDir);
-        var crashed =
-            EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.BeginSession(version);
+        var crashed = EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.BeginSession(
+            version, CaptureCrashes);
         if (crashed.Count == 0)
             return;
 
         PreviousUncleanShutdowns = crashed;
+    }
 
-        // Capture every detected crash (with a tail of the crash log and of
-        // the most recent crashed session's rolling log) into the sticky
-        // crash history so the feedback report always includes it,
-        // independent of any runtime errors recorded later this session.
+    /// <summary>
+    /// Captures every detected crash (with a tail of the crash log and of
+    /// the most recent crashed session's rolling log) into the sticky crash
+    /// history so the feedback report always includes it, independent of
+    /// any runtime errors recorded later this session.
+    /// </summary>
+    /// <remarks>
+    /// Runs before the sentinel removes the crash markers: while they exist,
+    /// another running viewer's log cleanup keeps the crashed session's
+    /// newest log file, so the tail read here can't have been pruned.
+    /// </remarks>
+    private static void CaptureCrashes(
+        IReadOnlyList<EncDotNet.S100.Viewer.Diagnostics.PreviousSession> crashed)
+    {
         var tail = CrashLog.ReadTail(8000);
         var mostRecent = crashed[^1];
         var sessionLogTail = _services?.GetService<ViewerDataPaths>() is { } paths

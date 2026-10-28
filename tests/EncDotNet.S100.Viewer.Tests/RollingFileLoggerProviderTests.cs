@@ -6,8 +6,9 @@ namespace EncDotNet.S100.Viewer.Tests;
 /// <summary>
 /// Covers the always-on rolling file logger: per-session file naming, size
 /// rollover, the file-count cap, concurrent writers, keeping the files of
-/// other running instances, and reading the tail of a previous session's log
-/// for the crash prompt.
+/// other running instances, keeping an unreported crashed session's newest
+/// file, and reading the tail of a previous session's log for the crash
+/// prompt.
 /// </summary>
 public sealed class RollingFileLoggerProviderTests : IDisposable
 {
@@ -33,9 +34,25 @@ public sealed class RollingFileLoggerProviderTests : IDisposable
         int maxFiles = RollingFileLoggerProvider.DefaultMaxFiles,
         DateTime? start = null,
         int pid = 4242,
-        Func<int, DateTime, bool>? isSessionAlive = null) =>
+        Func<int, DateTime, bool>? isSessionAlive = null,
+        Func<IEnumerable<PreviousSession>>? unreportedCrashes = null) =>
         new(_directory, LogLevel.Information, maxFileBytes, maxFiles, start ?? SessionStart, pid,
-            isSessionAlive ?? ((_, _) => false));
+            isSessionAlive ?? ((_, _) => false), unreportedCrashes);
+
+    /// <summary>Writes a crashed session's log file, last written
+    /// <paramref name="age"/> ago, and returns its path.</summary>
+    private string WriteCrashedFile(int pid, DateTime start, int sequence, string text, TimeSpan age)
+    {
+        Directory.CreateDirectory(_directory);
+        var path = Path.Combine(_directory,
+            $"viewer-{start:yyyyMMdd'T'HHmmss}Z-{pid}-{sequence:D3}.log");
+        File.WriteAllText(path, text);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow - age);
+        return path;
+    }
+
+    /// <summary>The crash marker records a start slightly after the log's.</summary>
+    private static PreviousSession Crash(int pid, DateTime start) => new(start.AddSeconds(1), pid, "1.0.0");
 
     private static void WriteMany(RollingFileLoggerProvider provider, string prefix, int count)
     {
@@ -315,5 +332,134 @@ public sealed class RollingFileLoggerProviderTests : IDisposable
         }
 
         Assert.False(File.Exists(reused));
+    }
+
+    [Fact]
+    public void UnreportedCrashedSessionFileSurvivesBusyNeighbour()
+    {
+        var crashStart = SessionStart.AddHours(-1);
+        var older = WriteCrashedFile(300, crashStart, 0, "early lines", TimeSpan.FromHours(2));
+        var newest = WriteCrashedFile(300, crashStart, 1, "last words before the crash", TimeSpan.FromHours(1));
+        var crashes = new[] { Crash(300, crashStart) };
+
+        using (var busy = Create(maxFileBytes: 500, maxFiles: 3, unreportedCrashes: () => crashes))
+        {
+            WriteMany(busy, "Busy", 200);
+        }
+
+        // Only the crashed session's newest file is kept, and it counts
+        // towards the cap.
+        Assert.True(File.Exists(newest));
+        Assert.False(File.Exists(older));
+        Assert.Equal(3, LogFiles().Length);
+        Assert.Contains("Busy 199 ", string.Concat(LogFiles().Select(File.ReadAllText)));
+
+        var tail = RollingFileLoggerProvider.ReadSessionTail(_directory, 300, crashes[0].StartedUtc, 1_000);
+        Assert.Equal("last words before the crash", tail);
+    }
+
+    [Fact]
+    public void CrashedSessionFileIsPrunedOnceReported()
+    {
+        var crashStart = SessionStart.AddHours(-1);
+        var newest = WriteCrashedFile(300, crashStart, 0, "last words", TimeSpan.FromHours(1));
+        IEnumerable<PreviousSession> crashes = [Crash(300, crashStart)];
+
+        using (var busy = Create(maxFileBytes: 500, maxFiles: 3, unreportedCrashes: () => crashes))
+        {
+            WriteMany(busy, "Before", 100);
+        }
+
+        Assert.True(File.Exists(newest));
+
+        // The next launch read the tail and removed the marker.
+        crashes = [];
+        using (var busy = Create(maxFileBytes: 500, maxFiles: 3, start: SessionStart.AddMinutes(1), pid: 4243,
+                   unreportedCrashes: () => crashes))
+        {
+            WriteMany(busy, "After", 100);
+        }
+
+        Assert.False(File.Exists(newest));
+        Assert.Equal(3, LogFiles().Length);
+    }
+
+    [Fact]
+    public void KeepsAtMostMaxCrashLogsNewestFirst()
+    {
+        var crashes = new List<PreviousSession>();
+        var paths = new List<string>();
+        for (var i = 0; i < RollingFileLoggerProvider.MaxCrashLogs + 2; i++)
+        {
+            var start = SessionStart.AddHours(-10 + i);
+            paths.Add(WriteCrashedFile(300 + i, start, 0, $"crash {i}", TimeSpan.FromHours(10 - i)));
+            crashes.Add(Crash(300 + i, start));
+        }
+
+        using (var busy = Create(maxFileBytes: 500, maxFiles: 2, unreportedCrashes: () => crashes))
+        {
+            WriteMany(busy, "Busy", 200);
+        }
+
+        // The newest crashes are kept, beyond the cap; the oldest go.
+        var kept = paths.TakeLast(RollingFileLoggerProvider.MaxCrashLogs).ToArray();
+        Assert.All(kept, p => Assert.True(File.Exists(p)));
+        Assert.All(paths.Except(kept), p => Assert.False(File.Exists(p)));
+        Assert.Equal(RollingFileLoggerProvider.MaxCrashLogs + 1, LogFiles().Length);
+    }
+
+    [Fact]
+    public void DoesNotKeepCrashLogOlderThanMaxAge()
+    {
+        var crashStart = SessionStart.AddDays(-10);
+        var stale = WriteCrashedFile(300, crashStart, 0, "old crash",
+            RollingFileLoggerProvider.MaxCrashLogAge + TimeSpan.FromDays(1));
+        var crashes = new[] { Crash(300, crashStart) };
+
+        using (var busy = Create(maxFileBytes: 500, maxFiles: 3, unreportedCrashes: () => crashes))
+        {
+            WriteMany(busy, "Busy", 200);
+        }
+
+        Assert.False(File.Exists(stale));
+        Assert.Equal(3, LogFiles().Length);
+    }
+
+    [Fact]
+    public void CrashLogMatchesSessionClosestToMarkerForReusedPid()
+    {
+        var earlier = WriteCrashedFile(300, SessionStart.AddDays(-2), 0, "earlier", TimeSpan.FromDays(2));
+        var crashed = WriteCrashedFile(300, SessionStart.AddHours(-1), 0, "crashed", TimeSpan.FromHours(1));
+        var crashes = new[] { Crash(300, SessionStart.AddHours(-1)) };
+
+        using (var busy = Create(maxFileBytes: 500, maxFiles: 3, unreportedCrashes: () => crashes))
+        {
+            WriteMany(busy, "Busy", 200);
+        }
+
+        Assert.True(File.Exists(crashed));
+        Assert.False(File.Exists(earlier));
+    }
+
+    [Fact]
+    public void KeepsLiveSessionsAndUnreportedCrashTogether()
+    {
+        var live = WriteCrashedFile(100, SessionStart.AddDays(-5), 0, "live", TimeSpan.FromDays(5));
+        var dead = WriteCrashedFile(200, SessionStart.AddDays(-4), 0, "dead", TimeSpan.FromDays(4));
+        var crashed = WriteCrashedFile(300, SessionStart.AddHours(-1), 0, "crashed", TimeSpan.FromHours(1));
+        var crashes = new[] { Crash(300, SessionStart.AddHours(-1)) };
+
+        using (var busy = Create(maxFileBytes: 500, maxFiles: 3, isSessionAlive: (pid, _) => pid == 100,
+                   unreportedCrashes: () => crashes))
+        {
+            WriteMany(busy, "Busy", 200);
+        }
+
+        Assert.True(File.Exists(live));
+        Assert.True(File.Exists(crashed));
+        Assert.False(File.Exists(dead));
+
+        // The live file, the crash log and this session's current file.
+        Assert.Equal(3, LogFiles().Length);
     }
 }

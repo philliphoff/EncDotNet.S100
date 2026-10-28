@@ -1594,7 +1594,11 @@ Markers are per process, so this works when you run several copies of
 SoundCharts side by side: one copy's normal exit never removes another's crash
 evidence. SoundCharts checks whether a process is alive by its ID and start
 time, on Windows, macOS and Linux, so a reused process ID isn't mistaken for a
-running session. `--ephemeral` runs don't write markers or rolling logs.
+running session. Until a crash has been reported, another copy that keeps
+running and logging doesn't delete the crashed session's newest log file,
+even past the 5-file limit, so the next launch can still attach its end. At
+most 3 such files are kept, and none older than 7 days. `--ephemeral` runs
+don't write markers or rolling logs.
 
 ## Connect AI agents over MCP
 
