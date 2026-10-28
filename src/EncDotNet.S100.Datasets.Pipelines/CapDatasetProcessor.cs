@@ -359,7 +359,7 @@ public sealed class CapDatasetProcessor :
         var alert = area.Alert;
         var attributes = new List<PickAttribute>
         {
-            Text("notice", "Notice", NotForNavigationNotice),
+            PickAttribute.NavigationNotice(NotForNavigationNotice),
         };
 
         void Add(string code, string name, string? value)

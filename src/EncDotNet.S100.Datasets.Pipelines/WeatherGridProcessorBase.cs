@@ -334,7 +334,8 @@ public abstract class WeatherGridProcessorBase :
     /// <summary>
     /// Samples every parameter at the grid node nearest the point and the step
     /// nearest <paramref name="time"/> (the first step when <see langword="null"/>).
-    /// The first attribute is <see cref="NotForNavigationNotice"/>, then the
+    /// The first attribute is <see cref="NotForNavigationNotice"/> (a
+    /// <see cref="PickAttribute.NavigationNotice"/> row), then the
     /// model run and valid time, then each value with its unit: wave heights
     /// in metres, wind speed in knots (raw value in m/s), directions in
     /// degrees ("from"), periods in seconds.
@@ -356,7 +357,7 @@ public abstract class WeatherGridProcessorBase :
         var validTime = sample.SampleTime ?? AvailableTimes[step];
         var attributes = new List<PickAttribute>
         {
-            new() { Code = "notice", Name = "Notice", RawValue = NotForNavigationNotice, DisplayValue = NotForNavigationNotice },
+            PickAttribute.NavigationNotice(NotForNavigationNotice),
             new()
             {
                 Code = "model",
