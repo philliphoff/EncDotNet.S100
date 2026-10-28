@@ -396,6 +396,27 @@ internal static class GribFixtures
     }
 
     /// <summary>
+    /// GFS style mean sea level pressure (PRMSL, 0/3/1 at mean sea level)
+    /// over <see cref="ChartWindGrid"/> at 00Z: 1004 hPa in the south-west
+    /// rising 1.5 hPa a node to 1016 hPa in the north-east, so isobars at
+    /// 1008 and 1012 hPa cross the grid (#1072).
+    /// </summary>
+    public static byte[] ChartPressure()
+    {
+        var grid = ChartWindGrid;
+        return Encode(new Message
+        {
+            Category = 3,
+            Number = 1,
+            SurfaceType = 101,
+            Grid = grid,
+            DecimalScale = 0,
+            // Rows run north to south in the file: row 0 is the north edge.
+            Values = Field(grid, (row, column) => 100_400 + 150 * ((grid.Rows - 1 - row) + column)),
+        });
+    }
+
+    /// <summary>
     /// The U and V components (m/s) of a wind of <paramref name="wind"/> knots
     /// blowing from the given direction.
     /// </summary>

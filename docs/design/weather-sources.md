@@ -286,11 +286,11 @@ renderers need no weather-specific code.
 
 | Layer | Sub-layer | Value field | Rotation field | Style |
 |---|---|---|---|---|
-| Wind barbs | `ArrowCoverageSubLayer` | `wind.speed` (kn) | `wind.from_direction` | WMO barbs. One `SymbolBand` per 5 kn step, 0–200 kn; calm below 2.5 kn. |
-| Wind speed | `GridCoverageSubLayer` | `wind.speed` (kn) | — | Bands at Beaufort boundaries. Off by default. |
+| Wind barbs | `ArrowCoverageSubLayer` | `wind.speed` (kn) | `wind.from_direction` | WMO barbs. One `SymbolBand` per 5 kn step, 0–200 kn; calm below 2.5 kn. On by default. |
+| Wind speed | `GridCoverageSubLayer` | `wind.speed` (kn) | — | Bands at Beaufort boundaries. Off by default, switchable in Display controls. |
 | Wave height | `GridCoverageSubLayer` | `wave.hs` (m) | — | Bands at 0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9, 12, 14 m (the Douglas sea-state boundaries, made finer). On by default. |
-| Wave direction | `ArrowCoverageSubLayer` | `wave.hs` | `wave.dir` (offset 180°) | One arrow symbol scaled by height (`SymbolBand.ScaleByValue`). |
-| Pressure | `IsolineCoverageSubLayer` | `pressure.msl` (hPa) | — | 4 hPa isobars. Needs the contour generalisation below. |
+| Wave direction | `ArrowCoverageSubLayer` | `wave.hs` | `wave.dir` (offset 180°) | One arrow symbol scaled by height (`SymbolBand.ScaleByValue`). Off by default, switchable in Display controls. |
+| Pressure | `IsolineCoverageSubLayer` | `pressure.msl` (hPa) | — | 4 hPa isobars. Needs the contour generalisation below. On by default (decided in #1072; see §10.1). |
 
 Symbols:
 
@@ -323,6 +323,78 @@ isoline layer, so it comes with the drawing polish.
 Colour fills need a legend: band colours plus labels. `ColorBand.Label`
 already exists. The viewer shows legends next to the layer stack entry,
 not on the map. The headless renderer doesn't draw a legend.
+
+**As built (#1072).** The drawing polish for §4.2, §4.3 and §5:
+
+- **Southern barbs.** `tools/GenerateWeatherSymbols` also writes
+  `WXBARBS005` to `WXBARBS200`, the northern barbs mirrored about the staff
+  (feathers on the anticlockwise side); the northern SVGs are unchanged.
+  `WindBarbStyle` sets `SouthernHemisphereBands` to the same ranges with the
+  southern symbols, so `CoverageSymbolScheme.Resolve(value, latitude)` picks
+  them for cells below 0° (the equator is northern). The calm circle is
+  shared. `WindBarbSymbols.For(knots, latitude)` (and `WindBarb.SymbolNameAt`)
+  is the same rule for one barb; `NdbcStationPortrayal` uses it with the
+  station's latitude, and the NMEA own-ship barb (#1073) can too.
+- **Land clipping.** The S-104 rule wasn't copied. `S98DefaultRules` now has
+  one shared effect, `ClipSurfacesToWater`, that gathers the active S-101
+  `LandArea` surfaces and attaches them as `LandAreaMask`. `R-101-104-B` uses
+  it for S-104, and a new `R-101-WX-B` uses it for any active
+  `GridCoverageSubLayer` with `ClipToWater` set. A flag rather than a product
+  pair, because GRIB2 and NetCDF aren't S-100 products and only the wave
+  height fill should be clipped (`WeatherCoverageStyle.ClipToWater`). The
+  renderers' existing output-pixel clip does the rest.
+- **Legends.** `GridCoverageSubLayer.Legend` (a list of
+  `CoverageLegendEntry(Color, Label)`, from `CoverageLegendEntry.FromScheme`)
+  is set by `WeatherPortrayal` for the weather fills only, in the palette the
+  fill was drawn in. S-102, whose bands also have labels, gets no legend: it's
+  opt-in per sub-layer. The Layer stack entry shows it as a swatch and label
+  per band (`LayerStack.Entry.Legend`, `LayerStack.Entry.Legend.Band`).
+- **Isobars.** Neither renderer turned `ICoverageStyle.Contours` into lines;
+  both already drew `IsolineCoverageSubLayer` (from S-104) with labels. The
+  new `CoverageContours.Trace` (in Core) traces a style's value-based
+  `ContourStyle`s through the pipeline's sampled grid with the existing
+  marching-squares `IsolineTracer`, skipping levels outside the sample's
+  range. `PressureIsobarStyle` (`WeatherLayerKind.Isolines`) lists every
+  4 hPa from 860 to 1100 hPa in pascals, the stored unit, labelled in whole
+  hPa, solid, on `OtherChartOverlays` at priority 90, on by default, not
+  clipped. An `IsolineCoverageSubLayer` has one ink and width, so the
+  sub-layer takes them from the first contour; per-level styles (a heavier
+  1000 hPa line, say) would need per-line appearance.
+- **Defaults and the Weather switches.** The decision (§10.1): the wave
+  height fill, wind barbs and isobars are on; the wind speed fill and wave
+  arrows are off, because they compete with the wave fill and the barbs.
+  So `PressureIsobarStyle.IsVisibleByDefault` is true. The optional layers
+  are switched globally rather than per dataset:
+  - The switches are a new `EcdisDisplaySettings.LayerVisibility`
+    (layer key → on/off), so they reach every processor on the
+    `RenderContext`, as the S-411 display mode does. A missing key means the
+    style's default.
+  - `WeatherGridProcessorBase` offers every style that applies (`LayerKeys`)
+    and draws those for which `WeatherCoverageStyle.IsDrawnWith(display)` is
+    true. Its content scope names the drawn layers, so a tile cache doesn't
+    serve stale tiles after a switch.
+  - The viewer keeps them in `EcdisDisplayState` (`Get/SetLayerVisible`),
+    which raises `Changed`. `ViewerPresentationCoordinator` then re-renders
+    every dataset, as for a viewing-group change.
+    `EcdisDisplayStatePersistence` saves them as
+    `ViewerSettings.EcdisLayerVisibility`, beside
+    `EcdisShowNavigationalWarnings`.
+  - The Display controls panel gets a Weather section with Isobars, Wind
+    speed fill and Wave arrows (`EcdisDisplayPanel.Weather.*`). It's shown
+    while a GRIB2 or NetCDF dataset is loaded, as the per-spec sections show
+    for loaded specs. The always-on layers get no switch.
+  - A layer switched off isn't built, so the Layer stack doesn't list it; the
+    stack lists what is drawn. The S-124 switch differs here: it hides
+    features inside a layer, so its rows stay. A layer switched on is a
+    normal sub-layer, so the dataset's own sub-layer eye in the Datasets
+    panel can still hide it. It shows only when both are on.
+  - Headless rendering passes no switches, so `s100 render` draws the
+    defaults: isobars wherever the file has `pressure.msl`, and no wind speed
+    fill or wave arrows.
+- **Goldens.** New: southern barbs (Day, Night), the wave fill over the
+  S-101 test cell clipped to water, and isobars (Day, Night). The three
+  existing composites over that cell (32°S) were re-accepted: their barbs are
+  now southern and their wave fill no longer covers land.
 
 ## 5. Layer order
 
@@ -1198,6 +1270,15 @@ result is item 9: a NetCDF wave file drawn over a chart.
 
 1. **Which variables are on by default?** Proposal: wave height fill
    and wind barbs on; wind speed fill, wave arrows and isobars off.
+
+   **Decided (#1072):** the wave height fill, wind barbs and isobars are on;
+   the wind speed fill and wave arrows are off, because they compete with
+   the wave fill and the barbs. The three optional layers are set
+   globally, for every weather dataset, in the viewer's Display controls
+   (a Weather section shown while a weather dataset is loaded), like the
+   S-124 Navigational warnings switch, and kept between sessions. The wave
+   height fill and wind barbs have no switch; each dataset's sub-layer eye
+   can still hide them.
 2. **Where does a user choose variables?** Proposal: the layer stack
    shows one entry per drawn parameter group, so visibility toggles
    work as they do for S-101 sub-layers. No separate picker in v1.

@@ -50,7 +50,7 @@ Each feature is a point at the station with `Kind`
 | `NdbcObservationSourceOptions` | Base address, paths, poll interval, ageing, backoff, margin, span gate, per-poll and concurrency limits, and the HTTP `Range` size. |
 | `NdbcRealtimeParser` / `NdbcObservation` | The `realtime2` standard meteorological format: wind direction, speed and gust; wave height, dominant and average period and mean direction; pressure, air, water and dew-point temperature, visibility, pressure tendency and tide. `MM` is missing (`null`). `NdbcObservation.Combine` merges a station's newest rows, since buoys report waves hourly but wind every 10 minutes. |
 | `NdbcStationTable` / `NdbcStation` | The `activestations.xml` station table: ids, positions, types and whether a station reports meteorological data. |
-| `NdbcStationPortrayal` | The station-model glyph as drawing instructions: a station marker, the weather styles' WMO wind barb rotated into the wind, and the wave height as a label. Stale stations are grey. Implements `IDynamicFeaturePortrayal`. |
+| `NdbcStationPortrayal` | The station-model glyph as drawing instructions: a station marker, the weather styles' WMO wind barb rotated into the wind (the mirrored southern-hemisphere barb for a station south of the equator, through `WindBarbSymbols`), and the wave height as a label. Stale stations are grey. Implements `IDynamicFeaturePortrayal`. |
 | `NdbcObservationFormatter` | The pick-report rows for an observation. |
 
 ## Draw the stations

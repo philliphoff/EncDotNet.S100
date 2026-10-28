@@ -9,7 +9,8 @@ namespace EncDotNet.S100.Datasets.Weather.Tests;
 /// <summary>
 /// Tests for <see cref="WindBarb"/>, the <see cref="WindBarbStyle"/> bands and
 /// the generated barb symbols: feather counts, the 5 kn rounding, the calm
-/// threshold, and the staff pointing into the wind (#1068).
+/// threshold, and the staff pointing into the wind (#1068); the mirrored
+/// southern-hemisphere set and <see cref="WindBarbSymbols"/> (#1072).
 /// </summary>
 public class WindBarbTests
 {
@@ -210,7 +211,10 @@ public class WindBarbTests
     [Fact]
     public void Every_symbol_is_an_embedded_S100_svg_centred_on_its_pivot()
     {
-        var expected = WindBarb.All.Select(b => b.SymbolName).Append(WaveDirectionStyle.ArrowSymbol).Order(StringComparer.Ordinal);
+        var expected = WindBarb.All.Select(b => b.SymbolName)
+            .Concat(WindBarb.All.Where(b => !b.IsCalm).Select(b => b.SouthernSymbolName))
+            .Append(WaveDirectionStyle.ArrowSymbol)
+            .Order(StringComparer.Ordinal);
         Assert.Equal(expected, WeatherCoverageStyle.Symbols.Names.Order(StringComparer.Ordinal));
 
         Assert.All(WeatherCoverageStyle.Symbols.Names, name =>
@@ -225,6 +229,90 @@ public class WindBarbTests
             Assert.Equal(0, box[0] + box[2] / 2, 9);
             Assert.Equal(0, box[1] + box[3] / 2, 9);
         });
+    }
+
+    // ---------------------------------------------------------------
+    // Southern hemisphere (#1072)
+    // ---------------------------------------------------------------
+
+    [Theory]
+    [InlineData(0, -30.0, "WXCALM")]
+    [InlineData(25, -30.0, "WXBARBS025")]
+    [InlineData(65, -0.01, "WXBARBS065")]
+    [InlineData(65, 0.0, "WXBARBN065")]
+    [InlineData(65, 45.0, "WXBARBN065")]
+    [InlineData(250, -60.0, "WXBARBS200")]
+    public void The_symbol_helper_picks_the_hemisphere_by_latitude(double knots, double latitude, string expected)
+    {
+        Assert.Equal(expected, WindBarbSymbols.For(knots, latitude));
+        Assert.Equal(expected, WindBarbSymbols.For(Speed.FromKnots(knots), latitude));
+        Assert.NotNull(WeatherCoverageStyle.Symbols.GetSymbol(expected));
+    }
+
+    [Theory]
+    [InlineData(-33.9, "WXBARBS025")]
+    [InlineData(-0.5, "WXBARBS025")]
+    [InlineData(0.0, "WXBARBN025")]
+    [InlineData(51.5, "WXBARBN025")]
+    public void Style_resolves_a_cell_to_the_barb_of_its_hemisphere(double latitude, string expected)
+    {
+        var scheme = new WindBarbStyle().ResolveSymbolScheme(MarinerSettings.Default);
+        float metresPerSecond = (float)Speed.FromKnots(25).TotalMetresPerSecond;
+
+        Assert.Equal(expected, scheme.Resolve(metresPerSecond, latitude)?.SymbolRef);
+        // The helper and the style agree.
+        Assert.Equal(expected, WindBarbSymbols.For(25, latitude));
+    }
+
+    [Fact]
+    public void Southern_bands_mirror_the_northern_ranges()
+    {
+        var north = WindBarbStyle.Bands;
+        var south = WindBarbStyle.SouthernBands;
+
+        Assert.Equal(north.Count, south.Count);
+        for (int i = 0; i < north.Count; i++)
+        {
+            Assert.Equal(north[i].MinValue, south[i].MinValue);
+            Assert.Equal(north[i].MaxValue, south[i].MaxValue);
+            Assert.Equal(north[i].Label, south[i].Label);
+            Assert.Equal(north[i].SymbolRef.Replace(WindBarb.NorthernSymbolPrefix, WindBarb.SouthernSymbolPrefix, StringComparison.Ordinal), south[i].SymbolRef);
+        }
+
+        Assert.Equal(WindBarb.CalmSymbol, south[0].SymbolRef);
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(65)]
+    [InlineData(195)]
+    public void A_southern_barb_is_the_mirror_image_of_its_northern_barb(int knots)
+    {
+        var barb = WindBarb.FromKnots(knots);
+        var north = Svg(barb.SymbolName);
+        var south = Svg(barb.SouthernSymbolName);
+
+        var northPaths = north.Descendants().Where(e => e.Name.LocalName == "path").ToArray();
+        var southPaths = south.Descendants().Where(e => e.Name.LocalName == "path").ToArray();
+        Assert.Equal(northPaths.Select(e => (string?)e.Attribute("id")), southPaths.Select(e => (string?)e.Attribute("id")));
+
+        for (int i = 0; i < northPaths.Length; i++)
+        {
+            var n = Points((string)northPaths[i].Attribute("d")!);
+            var s = Points((string)southPaths[i].Attribute("d")!);
+            Assert.Equal(n.Length, s.Length);
+            for (int j = 0; j < n.Length; j++)
+            {
+                Assert.Equal(-n[j].X, s[j].X, 9);
+                Assert.Equal(n[j].Y, s[j].Y, 9);
+            }
+        }
+
+        // Feathers on the anticlockwise (-x) side.
+        Assert.All(
+            southPaths.Where(e => (string?)e.Attribute("id") != "staff"),
+            feather => Assert.All(Points((string)feather.Attribute("d")!), p => Assert.True(p.X <= 0)));
+        Assert.Contains("southern hemisphere", south.ToString(), StringComparison.Ordinal);
     }
 
     internal static XElement Svg(string name)

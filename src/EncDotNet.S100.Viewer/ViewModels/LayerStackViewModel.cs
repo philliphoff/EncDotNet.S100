@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using Avalonia.Media;
 using Avalonia.Threading;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.Resources;
@@ -334,11 +336,66 @@ internal sealed class LayerStackEntryViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// The colour legend of a fill that carries one
+    /// (<see cref="GridCoverageSubLayer.Legend"/>: the weather fills, #1072),
+    /// band by band, lowest first; empty otherwise. The colours are those of
+    /// the palette the fill was last drawn in.
+    /// </summary>
+    public IReadOnlyList<LayerStackLegendItemViewModel> Legend { get; }
+
+    /// <summary>Whether the entry shows a colour legend.</summary>
+    public bool HasLegend => Legend.Count > 0;
+
+    /// <summary>
+    /// The legend's accessible name, e.g. "Legend of Wave height: gfswave.grib2,
+    /// 15 bands", from the fill's layer name.
+    /// </summary>
+    public string LegendName => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture,
+        Strings.LayerStack_LegendNameFormat,
+        Entry.Item.Payload is CoverageStackPayload coverage ? coverage.SubLayer.LayerName : DatasetLabel,
+        Legend.Count);
+
     public LayerStackEntryViewModel(IDatasetLoaderService loader, LayerStackEntry entry)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(entry);
         _loader = loader;
         Entry = entry;
+        Legend = LegendOf(entry);
     }
+
+    private static IReadOnlyList<LayerStackLegendItemViewModel> LegendOf(LayerStackEntry entry) =>
+        entry.Item.Payload is CoverageStackPayload { SubLayer: GridCoverageSubLayer { Legend: { Count: > 0 } legend } }
+            ? legend.Select(e => new LayerStackLegendItemViewModel(e.Color, e.Label)).ToArray()
+            : [];
+}
+
+/// <summary>
+/// One band of a layer stack entry's colour legend: a swatch and its label.
+/// </summary>
+internal sealed class LayerStackLegendItemViewModel : ViewModelBase
+{
+    /// <summary>Creates a legend row.</summary>
+    /// <param name="color">The band colour as a hex string, e.g. <c>#BDB2E3</c>.</param>
+    /// <param name="label">The band label, e.g. <c>"2–2.5 m"</c>.</param>
+    public LayerStackLegendItemViewModel(string color, string label)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        Color = color;
+        Label = label;
+        Swatch = Avalonia.Media.Color.TryParse(color, out var parsed)
+            ? new Avalonia.Media.Immutable.ImmutableSolidColorBrush(parsed)
+            : Brushes.Transparent;
+    }
+
+    /// <summary>The band colour as a hex string.</summary>
+    public string Color { get; }
+
+    /// <summary>The band label; also the row's accessible name.</summary>
+    public string Label { get; }
+
+    /// <summary>The swatch brush.</summary>
+    public IBrush Swatch { get; }
 }

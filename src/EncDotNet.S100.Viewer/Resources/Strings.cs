@@ -101,6 +101,7 @@ internal static partial class Strings
     public static string LayerStack_VisibilityVsActive_HelpText => Get(nameof(LayerStack_VisibilityVsActive_HelpText));
     public static string LayerStack_ChildCountFormat => Get(nameof(LayerStack_ChildCountFormat));
     public static string LayerStack_PriorityFormat => Get(nameof(LayerStack_PriorityFormat));
+    public static string LayerStack_LegendNameFormat => Get(nameof(LayerStack_LegendNameFormat));
     public static string LayerStack_Plane_BaseChartUnder => Get(nameof(LayerStack_Plane_BaseChartUnder));
     public static string LayerStack_Plane_Bathymetry => Get(nameof(LayerStack_Plane_Bathymetry));
     public static string LayerStack_Plane_OnDemandSurface => Get(nameof(LayerStack_Plane_OnDemandSurface));
@@ -159,6 +160,11 @@ internal static partial class Strings
     public static string Menu_MoveDatasetUp => Get(nameof(Menu_MoveDatasetUp));
     public static string Menu_MoveDatasetDown => Get(nameof(Menu_MoveDatasetDown));
     public static string SubLayer_S111_Arrows => Get(nameof(SubLayer_S111_Arrows));
+    public static string SubLayer_Weather_WaveHeight => Get(nameof(SubLayer_Weather_WaveHeight));
+    public static string SubLayer_Weather_WindSpeed => Get(nameof(SubLayer_Weather_WindSpeed));
+    public static string SubLayer_Weather_WindBarbs => Get(nameof(SubLayer_Weather_WindBarbs));
+    public static string SubLayer_Weather_WaveDirection => Get(nameof(SubLayer_Weather_WaveDirection));
+    public static string SubLayer_Weather_Isobars => Get(nameof(SubLayer_Weather_Isobars));
     public static string Tooltip_ToggleSubLayerVisibility => Get(nameof(Tooltip_ToggleSubLayerVisibility));
     public static string Tooltip_SubLayerOpacity => Get(nameof(Tooltip_SubLayerOpacity));
     public static string Tooltip_ExpandSubLayers => Get(nameof(Tooltip_ExpandSubLayers));
@@ -783,6 +789,13 @@ internal static partial class Strings
     public static string EcdisPanel_OverlaysHeader => Get(nameof(EcdisPanel_OverlaysHeader));
     public static string EcdisPanel_NavigationalWarnings => Get(nameof(EcdisPanel_NavigationalWarnings));
     public static string Tooltip_EcdisPanel_NavigationalWarnings => Get(nameof(Tooltip_EcdisPanel_NavigationalWarnings));
+    public static string EcdisPanel_WeatherHeader => Get(nameof(EcdisPanel_WeatherHeader));
+    public static string EcdisPanel_Weather_Isobars => Get(nameof(EcdisPanel_Weather_Isobars));
+    public static string Tooltip_EcdisPanel_Weather_Isobars => Get(nameof(Tooltip_EcdisPanel_Weather_Isobars));
+    public static string EcdisPanel_Weather_WindSpeedFill => Get(nameof(EcdisPanel_Weather_WindSpeedFill));
+    public static string Tooltip_EcdisPanel_Weather_WindSpeedFill => Get(nameof(Tooltip_EcdisPanel_Weather_WindSpeedFill));
+    public static string EcdisPanel_Weather_WaveArrows => Get(nameof(EcdisPanel_Weather_WaveArrows));
+    public static string Tooltip_EcdisPanel_Weather_WaveArrows => Get(nameof(Tooltip_EcdisPanel_Weather_WaveArrows));
 
     // Text group toolbar pill
     public static string Toolbar_Text => Get(nameof(Toolbar_Text));
