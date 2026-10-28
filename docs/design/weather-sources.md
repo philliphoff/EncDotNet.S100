@@ -1392,6 +1392,42 @@ smaller.
 
     Depends on: 9 and 11 at least.
 
+    **As built (#1076).**
+    - *CLI.* There's no `s100 pick`; `s100 identify` is the headless pick.
+      It used to sample only S-102, S-104 and S-111 payloads by type; it now
+      samples every catalog payload that is an `ICoverageSampler`, so GRIB2
+      and NetCDF answer with their `CoverageFieldsSample`, and prints the
+      registrations' not-for-navigation notices (`notices` in JSON). `--spec`
+      goes through `SpecName.TryNormalize`, so `netcdf` finds `NetCDF`.
+      `s100 info` adds a **Notice** row for any non-S-100 product, the model,
+      run, grid, extent and layer keys of a weather grid, and a CAP file's
+      alert count. `s100 list-specs` lists `WeatherProducts.All`.
+    - *CAP as features.* `FeatureAccessor` returns a `CapDatasetData`'s areas
+      that aren't superseded or cancelled (what a render with no time step
+      draws), and `CapAreaFeature` carries the pick report's attributes by
+      code (`CapDatasetProcessor.DescribeArea`), so `identify_features`,
+      `query_features`, `count_features`, `nearest_features` and, through a
+      `GmlFeatureDescriber("CAP")`, `describe_feature` work on CAP warnings.
+      Identify has no time, so an area is listed whenever it is drawable.
+    - *Time steps.* `list_time_steps` switched on the S-104 and S-111 payload
+      types. A new `ITimeSteppedDatasetData` on the catalog payload
+      (`WeatherGridDatasetData`: the sampler's valid times;
+      `CapDatasetData`: `CapWarningSet.Changes`) lets any product list its
+      steps, the same steps its processor's `AvailableTimes` offers, so
+      `list_time_steps` and `set_time_step` agree. A CAP step at a warning's
+      end is the tick after it. `set_time_step` already went through
+      `ITimeAwareDatasetProcessor` in both hosts.
+    - *`list_specs` capabilities* were fixed sets of S-100 names; GRIB2 and
+      NetCDF are now `canSampleCoverage` and `canListTimeSteps`, CAP
+      `canListTimeSteps`, `canQueryFeatures` and `canDescribeFeature`.
+    - *Attribution.* Static credits in SoundCharts' About box
+      (`About.DataCredits`) and the site footer (`#weather-notice`): NOAA
+      public domain; ECMWF Open Data CC BY 4.0; Copernicus Marine; DWD. Per
+      source attribution in the layer stack and pick report belongs to #1075.
+    - *Capture.* `W1` in `site/capture/capture.cs`: GFS-Wave and GFS fields
+      cut from AWS by `.idx` byte range, over NOAA band 2 and 3 cells the
+      Library downloads.
+
 Items 1, 2, 4, 6 and 10 can start in parallel. The first end-to-end
 result is item 9: a NetCDF wave file drawn over a chart.
 

@@ -18,9 +18,9 @@ namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 /// file's bytes for that; one projected from a processor
 /// (<see cref="ILoadedDatasetProjection"/>) shares the processor's file.
 /// </remarks>
-public sealed record WeatherGridDatasetData : ProductDatasetData, ICoverageSampler
+public sealed record WeatherGridDatasetData : ProductDatasetData, ICoverageSampler, ITimeSteppedDatasetData
 {
-    private readonly ICoverageSampler _sampler;
+    private readonly Sampling.WeatherGridSampler _sampler;
 
     /// <summary>Creates the payload.</summary>
     /// <param name="gridSet">The grid set.</param>
@@ -31,7 +31,7 @@ public sealed record WeatherGridDatasetData : ProductDatasetData, ICoverageSampl
     {
     }
 
-    internal WeatherGridDatasetData(WeatherGridSet gridSet, DatasetMetadata metadata, ICoverageSampler sampler)
+    internal WeatherGridDatasetData(WeatherGridSet gridSet, DatasetMetadata metadata, Sampling.WeatherGridSampler sampler)
     {
         ArgumentNullException.ThrowIfNull(gridSet);
         ArgumentNullException.ThrowIfNull(metadata);
@@ -54,4 +54,8 @@ public sealed record WeatherGridDatasetData : ProductDatasetData, ICoverageSampl
     /// <c>deg</c> ("from"), periods in <c>s</c>.
     /// </remarks>
     public CoverageSiteSearch FindSites(CoverageSampleQuery query) => _sampler.FindSites(query);
+
+    /// <inheritdoc />
+    /// <remarks>The valid times of the grid set's steps, the steps the processor draws.</remarks>
+    public IReadOnlyList<DateTime> TimeSteps => _sampler.Times;
 }

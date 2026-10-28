@@ -773,6 +773,10 @@
   <data name="FilePicker_S100DatasetsType" xml:space="preserve">
     <value>S-100 Datasets</value>
   </data>
+  <data name="FilePicker_WeatherDataType" xml:space="preserve">
+    <value>Weather Data (GRIB2, NetCDF, CAP)</value>
+    <comment>Open Dataset file type for the weather formats (#1076). A GRIB2 file with no extension, such as a NOMADS GRIB filter download, needs the All files type.</comment>
+  </data>
   <data name="FilePicker_ExchangeSetFolderTitle" xml:space="preserve">
     <value>Open Exchange Set Folder</value>
   </data>
@@ -2690,6 +2694,12 @@
   </data>
   <data name="About_BuiltWith" xml:space="preserve">
     <value>Built with Avalonia, a cross-platform UI framework. Made possible by the generous support of its contributors and community.</value>
+  </data>
+  <data name="About_DataCreditsTitle" xml:space="preserve">
+    <value>Weather data credits</value>
+  </data>
+  <data name="About_DataCredits" xml:space="preserve">
+    <value>NOAA (NCEP GFS and GFS-Wave, NWS alerts and marine zones, NDBC buoys): public domain. ECMWF Open Data: © ECMWF, CC BY 4.0. Copernicus Marine Service: E.U. Copernicus Marine Service Information. DWD open data: Source: Deutscher Wetterdienst. Credit the provider of any data you load when you share what SoundCharts draws from it. Weather data isn't for navigation.</value>
   </data>
   <data name="About_VersionFormat" xml:space="preserve">
     <value>Version {0}</value>

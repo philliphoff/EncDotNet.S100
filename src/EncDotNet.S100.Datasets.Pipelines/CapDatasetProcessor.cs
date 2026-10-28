@@ -338,6 +338,24 @@ public sealed class CapDatasetProcessor :
             return null;
         var area = _features[ordinal].Area;
         var info = area.Info;
+        return new FeatureInfo
+        {
+            FeatureRef = area.Id,
+            FeatureType = FeatureType,
+            FeatureTypeName = string.IsNullOrWhiteSpace(info.Event) ? "Weather warning" : info.Event,
+            Attributes = DescribeArea(area),
+        };
+    }
+
+    /// <summary>
+    /// The pick attributes of one CAP area, in the order
+    /// <see cref="GetFeatureInfoAt"/> documents. Shared with the area's feature
+    /// (its <see cref="IS100Feature.Attributes"/>), so <c>s100 identify
+    /// --attributes</c> and <c>describe_feature</c> report the same values.
+    /// </summary>
+    internal static List<PickAttribute> DescribeArea(CapWarningArea area)
+    {
+        var info = area.Info;
         var alert = area.Alert;
         var attributes = new List<PickAttribute>
         {
@@ -389,14 +407,7 @@ public sealed class CapDatasetProcessor :
         Add("description", "Description", info.Description);
         Add("instruction", "Instruction", info.Instruction);
         Add("identifier", "Identifier", alert.Identifier);
-
-        return new FeatureInfo
-        {
-            FeatureRef = area.Id,
-            FeatureType = FeatureType,
-            FeatureTypeName = string.IsNullOrWhiteSpace(info.Event) ? "Weather warning" : info.Event,
-            Attributes = attributes,
-        };
+        return attributes;
     }
 
     /// <inheritdoc />
@@ -491,11 +502,11 @@ public sealed class CapDatasetProcessor :
 /// <summary>A CAP area as a feature: its outline, for drawing, picking and hit tests.</summary>
 internal sealed class CapAreaFeature : IS100Feature
 {
-    private static readonly IReadOnlyDictionary<string, string> NoAttributes = new Dictionary<string, string>();
-
     public CapAreaFeature(CapWarningArea area)
     {
         Area = area;
+        Attributes = CapDatasetProcessor.DescribeArea(area)
+            .ToDictionary(a => a.Code, a => a.RawValue, StringComparer.Ordinal);
         Surfaces = area.Surfaces;
         ExteriorRing = area.Surfaces.SelectMany(s => s.ExteriorRing).ToArray();
         InteriorRings = area.Surfaces.SelectMany(s => s.InteriorRings).ToArray();
@@ -519,7 +530,8 @@ internal sealed class CapAreaFeature : IS100Feature
 
     public IReadOnlyList<SurfacePart> Surfaces { get; }
 
-    public IReadOnlyDictionary<string, string> Attributes => NoAttributes;
+    /// <summary>The area's pick attributes by code, raw values (times in ISO 8601).</summary>
+    public IReadOnlyDictionary<string, string> Attributes { get; }
 
     public IReadOnlyList<IS100ComplexAttribute> ComplexAttributes => [];
 }

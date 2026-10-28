@@ -93,6 +93,27 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
 
             table.AddRow("Headless render", processor is IHeadlessImageRenderer ? "[green]yes[/]" : "[yellow]no[/]");
 
+            // Weather data (GRIB2, NetCDF, CAP) isn't S-100 and isn't for
+            // navigation (design note weather-sources.md §3.1).
+            if (!ProductRegistry.Default.IsS100(processor.Spec.Name))
+            {
+                var notice = ProductRegistry.Default.TryResolve(processor.Spec.Name, out var registration)
+                    && registration.PickReportNotice is { Length: > 0 } own
+                        ? own
+                        : WeatherGridProcessorBase.NotForNavigationNotice;
+                table.AddRow("Notice", $"[yellow]{Markup.Escape(notice)}[/]");
+            }
+
+            // Weather grids: the model and run, and the grid (issue #1076).
+            if (processor is WeatherGridProcessorBase grid)
+                AddWeatherGridRows(table, grid);
+            if (processor is CapDatasetProcessor capAlerts)
+            {
+                table.AddRow(
+                    "Alerts",
+                    $"{capAlerts.Warnings.Document.Alerts.Count} ({capAlerts.Warnings.Areas.Count} areas, {capAlerts.Warnings.Areas.Count(a => a.IsDrawable)} drawn)");
+            }
+
             if (processor is IDisplayModeAwareDatasetProcessor displayModeAware &&
                 displayModeAware.DeclaredDisplayModeIds.Count > 0)
             {
@@ -203,6 +224,33 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
         {
             catalogueManager.Dispose();
         }
+    }
+
+    private static void AddWeatherGridRows(Table table, WeatherGridProcessorBase weather)
+    {
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        table.AddRow("Model", Markup.Escape(string.IsNullOrWhiteSpace(weather.ForecastRun.Model) ? "(not given)" : weather.ForecastRun.Model));
+        table.AddRow(
+            "Run (UTC)",
+            weather.ReferenceTime is { } run
+                ? run.ToString("yyyy-MM-dd HH:mm", invariant)
+                : "none: the steps are analyses");
+        var g = weather.GridSet.Grid;
+        table.AddRow(
+            "Grid",
+            Markup.Escape(string.Create(
+                invariant,
+                $"regular latitude/longitude, {g.Columns} × {g.Rows} nodes, {g.SpacingLongitudinal:0.###}° × {g.SpacingLatitudinal:0.###}°")));
+        if (weather.Metadata.Extent is { } e)
+        {
+            table.AddRow(
+                "Extent",
+                Markup.Escape(string.Create(
+                    invariant,
+                    $"{e.WestLongitude:0.###},{e.SouthLatitude:0.###},{e.EastLongitude:0.###},{e.NorthLatitude:0.###} (minLon,minLat,maxLon,maxLat)")));
+        }
+
+        table.AddRow("Layers", Markup.Escape(string.Join(", ", weather.LayerKeys)));
     }
 
     private static void WriteCapWarnings(CapDatasetProcessor cap)

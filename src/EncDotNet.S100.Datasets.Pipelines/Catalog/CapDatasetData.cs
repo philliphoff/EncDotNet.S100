@@ -9,8 +9,15 @@ namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 /// </summary>
 /// <param name="Warnings">The file's areas.</param>
 /// <param name="DatasetMetadata">The spec (<c>CAP/1.2.0</c>), the areas' extent and the warnings' time coverage.</param>
-public sealed record CapDatasetData(CapWarningSet Warnings, DatasetMetadata DatasetMetadata) : ProductDatasetData
+public sealed record CapDatasetData(CapWarningSet Warnings, DatasetMetadata DatasetMetadata) : ProductDatasetData, ITimeSteppedDatasetData
 {
     /// <inheritdoc />
     public override DatasetMetadata Metadata => DatasetMetadata;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// When each warning starts and the tick after each ends
+    /// (<see cref="CapWarningSet.Changes"/>), the steps the processor offers.
+    /// </remarks>
+    public IReadOnlyList<DateTime> TimeSteps => Warnings.Changes;
 }

@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using Spectre.Console;
@@ -23,8 +24,9 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <para>
 /// The command builds a headless <see cref="FileDatasetCatalog"/> from the
 /// resolved layers and drives the shared pick services
-/// (<see cref="IdentifyFeaturesService"/> for vector features and
-/// <see cref="SampleCoverageService"/> for S-102 / S-104 / S-111 coverages),
+/// (<see cref="IdentifyFeaturesService"/> for vector features, including CAP
+/// warning areas, and <see cref="SampleCoverageService"/> for every coverage
+/// with a sampler: S-102, S-104, S-111 and the GRIB2 and NetCDF weather grids),
 /// so its output matches the MCP <c>identify_features</c> / <c>sample_coverage</c>
 /// tools exactly. Feature ranking follows ECDIS draw order (point before curve
 /// before area); see S-100 Edition 5.2.1 Part 9.
@@ -71,11 +73,11 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         public double RadiusMeters { get; init; } = 50.0;
 
         [CommandOption("--spec <SPEC>")]
-        [Description("Restrict the pick to a single product specification (e.g. --spec S-124; hyphenation and case are ignored).")]
+        [Description("Restrict the pick to a single product specification or format (e.g. --spec S-124, --spec grib2; hyphenation and case are ignored).")]
         public string? Spec { get; init; }
 
         [CommandOption("--time <ISO8601>")]
-        [Description("UTC ISO-8601 instant selecting a time step for time-varying coverages (S-104, S-111); ignored for S-102. When omitted the first available step is used.")]
+        [Description("UTC ISO-8601 instant selecting a time step for time-varying coverages (S-104, S-111, GRIB2, NetCDF); ignored for S-102. When omitted the first available step is used.")]
         public string? Time { get; init; }
 
         [CommandOption("--max-results <N>")]
@@ -208,13 +210,14 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
             var samples = SampleCoverages(catalog, latitude, longitude, time, specFilter);
             var describer = settings.Attributes ? new DescribeFeatureService(catalog) : null;
 
+            var notices = Notices(features, samples);
             if (string.Equals(settings.Format, "json", StringComparison.OrdinalIgnoreCase))
             {
-                WriteJson(features, samples, warnings, describer);
+                WriteJson(features, samples, warnings, notices, describer);
             }
             else
             {
-                WriteTable(features, samples, describer);
+                WriteTable(features, samples, notices, describer);
             }
 
             return 0;
@@ -233,25 +236,26 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
     }
 
     /// <summary>
-    /// Samples the coverage products (S-102 / S-104 / S-111) present in the
-    /// catalog at the pick point, honouring an optional spec filter. Coverage
-    /// datasets are grouped by specification and <see cref="SampleCoverageService"/>
-    /// is invoked once per spec, so the result holds at most one sample per
-    /// specification (the service selects the covering dataset for that spec).
+    /// Samples the coverage datasets in the catalog at the pick point (every
+    /// dataset whose payload is an <see cref="ICoverageSampler"/>: S-102,
+    /// S-104, S-111, GRIB2, NetCDF), honouring an optional spec filter.
+    /// Coverage datasets are grouped by specification and
+    /// <see cref="SampleCoverageService"/> is invoked once per spec, so the
+    /// result holds at most one sample per specification (the service selects
+    /// the covering dataset for that spec).
     /// </summary>
-    private static List<SampleCoverageResult> SampleCoverages(
+    private static List<CoverageSample> SampleCoverages(
         IDatasetCatalog catalog,
         double latitude,
         double longitude,
         DateTimeOffset? time,
         SpecRef? specFilter)
     {
-        var results = new List<SampleCoverageResult>();
+        var results = new List<CoverageSample>();
         var service = new SampleCoverageService(catalog, new ProjNetCrsTransformFactory());
 
         var coverageSpecs = catalog.Datasets
-            .Where(d => d.Data is S102CoverageData or S104CoverageData or S104StationSeriesData
-                or S111CoverageData or S111StationSeriesData)
+            .Where(d => d.Data is ICoverageSampler)
             .Select(d => d.Spec.Name)
             .Distinct(StringComparer.Ordinal)
             .Where(name => specFilter is null || string.Equals(name, specFilter.Value.Name, StringComparison.Ordinal))
@@ -264,19 +268,53 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
                 .GetAwaiter().GetResult();
 
             if (result.TryGetValue(out var sample))
-                results.Add(sample);
+                results.Add(new CoverageSample(specName, sample));
         }
 
         return results;
     }
 
+    /// <summary>A coverage sample and the specification it came from.</summary>
+    private sealed record CoverageSample(string Spec, SampleCoverageResult Result);
+
+    /// <summary>
+    /// The not-for-navigation notices of the products in the result that
+    /// aren't S-100 (weather grids and CAP warnings), each once, in the order
+    /// they appear: the registration's own notice, else the weather one.
+    /// </summary>
+    private static List<string> Notices(
+        IdentifyFeaturesResult features,
+        IReadOnlyList<CoverageSample> samples)
+    {
+        var registry = ProductRegistry.Default;
+        var specs = features.Features.Select(f => f.Spec.Name)
+            .Concat(samples.Select(s => s.Spec))
+            .Distinct(StringComparer.Ordinal);
+        var notices = new List<string>();
+        foreach (var spec in specs)
+        {
+            if (registry.IsS100(spec))
+                continue;
+            var notice = registry.TryResolve(spec, out var registration) && registration.PickReportNotice is { Length: > 0 } own
+                ? own
+                : WeatherGridProcessorBase.NotForNavigationNotice;
+            if (!notices.Contains(notice))
+                notices.Add(notice);
+        }
+
+        return notices;
+    }
+
     private static void WriteTable(
         IdentifyFeaturesResult features,
-        IReadOnlyList<SampleCoverageResult> samples,
+        IReadOnlyList<CoverageSample> samples,
+        IReadOnlyList<string> notices,
         DescribeFeatureService? describer)
     {
         AnsiConsole.MarkupLineInterpolated(
             $"[bold]Pick[/] lat {features.Point.Latitude.ToString("0.######", CultureInfo.InvariantCulture)}, lon {features.Point.Longitude.ToString("0.######", CultureInfo.InvariantCulture)}");
+        foreach (var notice in notices)
+            AnsiConsole.MarkupLineInterpolated($"[yellow]{notice}[/]");
 
         if (features.Features.Count == 0)
         {
@@ -350,10 +388,10 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         sampleTable.AddColumn("Spec");
         sampleTable.AddColumn("Dataset");
         sampleTable.AddColumn("Value");
-        foreach (var s in samples)
+        foreach (var (spec, s) in samples)
         {
             sampleTable.AddRow(
-                Markup.Escape(SpecOfSample(s)),
+                Markup.Escape(spec),
                 Markup.Escape(s.DatasetId.Value),
                 Markup.Escape(DescribeSample(s.Value)));
         }
@@ -363,8 +401,9 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
 
     private static void WriteJson(
         IdentifyFeaturesResult features,
-        IReadOnlyList<SampleCoverageResult> samples,
+        IReadOnlyList<CoverageSample> samples,
         IReadOnlyList<string> warnings,
+        IReadOnlyList<string> notices,
         DescribeFeatureService? describer)
     {
         var root = new JsonObject
@@ -419,11 +458,11 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         root["features"] = featureArray;
 
         var sampleArray = new JsonArray();
-        foreach (var s in samples)
+        foreach (var (spec, s) in samples)
         {
             sampleArray.Add((JsonNode)new JsonObject
             {
-                ["spec"] = SpecOfSample(s),
+                ["spec"] = spec,
                 ["datasetId"] = s.DatasetId.Value,
                 ["latitude"] = s.Latitude,
                 ["longitude"] = s.Longitude,
@@ -432,6 +471,14 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         }
 
         root["samples"] = sampleArray;
+
+        if (notices.Count > 0)
+        {
+            var noticeArray = new JsonArray();
+            foreach (var notice in notices)
+                noticeArray.Add((JsonNode)notice);
+            root["notices"] = noticeArray;
+        }
 
         if (warnings.Count > 0)
         {
@@ -500,8 +547,37 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
             ["directionDegreesTrue"] = c.DirectionDegreesTrue,
             ["sampleTime"] = c.SampleTime,
         },
+        CoverageFieldsSample f => FieldsToJson(f),
         _ => new JsonObject { ["kind"] = "unknown" },
     };
+
+    // The generic sample (GRIB2, NetCDF): each field with its quantity and
+    // unit, as sample_coverage returns it, under the "fields" kind.
+    private static JsonObject FieldsToJson(CoverageFieldsSample sample)
+    {
+        var fields = new JsonArray();
+        foreach (var field in sample.Fields)
+        {
+            fields.Add((JsonNode)new JsonObject
+            {
+                ["name"] = field.Name,
+                ["quantity"] = field.Quantity,
+                ["unit"] = field.Unit,
+                ["value"] = field.Value,
+                ["text"] = field.Text,
+            });
+        }
+
+        return new JsonObject
+        {
+            ["kind"] = "fields",
+            ["fields"] = fields,
+            ["sampleTime"] = sample.SampleTime,
+            ["cellCentreLatitude"] = sample.CellCentreLatitude,
+            ["cellCentreLongitude"] = sample.CellCentreLongitude,
+            ["stationId"] = sample.StationId,
+        };
+    }
 
     private static string DescribeSample(SampledValue value) => value switch
     {
@@ -511,16 +587,22 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
         WaterLevelStationSample w => $"water level {w.WaterLevelHeight.ToString("0.##", CultureInfo.InvariantCulture)} m ({w.Trend}) station {w.StationId} @ {w.SampleTime:yyyy-MM-dd HH:mm}Z",
         SurfaceCurrentSample c => $"current {c.SpeedKnots.ToString("0.##", CultureInfo.InvariantCulture)} kn @ {c.DirectionDegreesTrue.ToString("0.#", CultureInfo.InvariantCulture)}° @ {c.SampleTime:yyyy-MM-dd HH:mm}Z",
         SurfaceCurrentStationSample c => $"current {c.SpeedKnots.ToString("0.##", CultureInfo.InvariantCulture)} kn @ {c.DirectionDegreesTrue.ToString("0.#", CultureInfo.InvariantCulture)}° station {c.StationId} @ {c.SampleTime:yyyy-MM-dd HH:mm}Z",
+        CoverageFieldsSample f => DescribeFields(f),
         _ => "unknown",
     };
 
-    private static string SpecOfSample(SampleCoverageResult result) => result.Value switch
+    // "wave.hs 1.23 m, wind.speed.kn 14.2 kn, ... @ 2026-10-25 03:00Z": the
+    // fields that have a value, in the product's order.
+    private static string DescribeFields(CoverageFieldsSample sample)
     {
-        DepthSample => "S-102",
-        WaterLevelSample or WaterLevelStationSample => "S-104",
-        SurfaceCurrentSample or SurfaceCurrentStationSample => "S-111",
-        _ => "?",
-    };
+        var parts = sample.Fields
+            .Where(f => f.Value is not null || f.Text is not null)
+            .Select(f => f.Value is { } v
+                ? $"{f.Name} {v.ToString("0.##", CultureInfo.InvariantCulture)}{(f.Unit is { } u ? " " + u : string.Empty)}"
+                : $"{f.Name} {f.Text}");
+        var text = string.Join(", ", parts);
+        return sample.SampleTime is { } t ? $"{text} @ {t:yyyy-MM-dd HH:mm}Z" : text;
+    }
 
     private static string Truncate(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..maxLength] + "…";
@@ -530,11 +612,14 @@ internal sealed class IdentifyCommand : Command<IdentifyCommand.Settings>
             && double.IsFinite(result);
 
     /// <summary>
-    /// Normalises a spec token to the canonical <c>S-NNN</c> form used by
-    /// <see cref="SpecRef.Name"/> (e.g. <c>s124</c> / <c>S-124</c> → <c>S-124</c>).
+    /// Normalises a spec token to the canonical form used by
+    /// <see cref="SpecRef.Name"/> (e.g. <c>s124</c> / <c>S-124</c> → <c>S-124</c>,
+    /// <c>netcdf</c> → <c>NetCDF</c>).
     /// </summary>
     private static string NormalizeSpec(string spec)
     {
+        if (SpecName.TryNormalize(spec, out var canonical))
+            return canonical;
         var trimmed = spec.Trim().ToUpperInvariant();
         if (trimmed.StartsWith("S-", StringComparison.Ordinal))
             return trimmed;

@@ -276,6 +276,25 @@ as a desktop app.
   catalogue by URL. No data is downloaded.
 - **Light twin:** yes (`--theme light`).
 
+### W1 · Wind and waves over the chart (feature row)
+- **Recipe (2026-10-28), not yet captured.** Off Cape Hatteras
+  (33.4–37.6 N, 78.6–72.4 W), Display Base: the NOAA ENC cells of usage bands 2
+  and 3 over the box, downloaded and opened by the Library from its NOAA ENC
+  source for North Carolina; NOAA GFS-Wave HTSGW, PERPW and DIRPW on the
+  Atlantic 0.16° grid and GFS 10 m UGRD/VGRD and PRMSL, six hours into the
+  latest run on AWS (`noaa-gfs-bdp-pds`, public domain), cut by byte range from
+  each file's `.idx` into `.cache/gfs/`. The view time is that step. Display
+  controls is open on its **Weather** switches (isobars on, wind speed fill and
+  wave arrows off, the defaults). Window capture, with the Light twin.
+- **Status:** the weather half of the recipe was run on Linux under Xvfb
+  (wave fill, barbs, isobars and the Weather switches drew), but
+  charts.noaa.gov was unreachable there, so the shot still needs a run with
+  the chart: `dotnet run site/capture/capture.cs -- --only W1`, then again
+  with `--theme light`. The forecast run is live data, so pick a run with
+  some swell for the page; the manifest records which.
+- **Credit:** the footer's weather note (`#weather-notice`) covers NOAA and the
+  other weather providers.
+
 ---
 
 ## D: Developer section
@@ -297,7 +316,7 @@ as a desktop app.
 | B3 | Favicon set + `apple-touch-icon` | Done: taken from `Branding/` at build time. |
 | B4 | Open Graph card, 1200×630 | Done: `og/card.html` (H1 Day crop + wordmark + "S-100 marine charts on your desktop"), rendered to `public/og-card.png` by `og/render.sh [shot]`. Day rather than Night: the Night chart is too dark at feed-thumbnail size. Re-render after recapturing H1. |
 | B5 | Platform glyphs for the download buttons (macOS / Windows / Linux) | Optional. The button already picks the visitor's platform. |
-| B6 | Data attribution strip | Text only: NOAA, USACE, UKHO (if ⚖ is cleared), Natural Earth. |
+| B6 | Data attribution strip | Text only: NOAA, USACE, UKHO (if ⚖ is cleared), Natural Earth, and the weather providers (NOAA public domain; ECMWF CC BY 4.0, Copernicus Marine and DWD with attribution) in `#weather-notice`. |
 | B7 | "Not for navigation" disclaimer | The README doesn't currently say this. The page footer should, and the README probably should too. |
 
 ---

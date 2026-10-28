@@ -12,7 +12,8 @@ namespace EncDotNet.S100.Datasets.Pipelines.Spec;
 /// implemented in this codebase models its features as
 /// <see cref="IS100Feature"/> directly; the ISO 8211-encoded S-101 exposes
 /// the same shape through its pipeline <see cref="Feature"/> records (which
-/// implement <see cref="IS100Feature"/>). A single accessor — rather than
+/// implement <see cref="IS100Feature"/>), and CAP weather warnings expose
+/// each area as a surface feature. A single accessor — rather than
 /// per-spec strategies — therefore powers generic feature-query tools.
 /// </summary>
 /// <remarks>
@@ -72,6 +73,9 @@ public static class FeatureAccessor
             S201DatasetData s201 => FilterByExtent(s201.Model.Features, extent),
             S411DatasetData s411 => FilterByExtent(s411.Model.Features, extent),
             S421DatasetData s421 => FilterByExtent(s421.Model.Features, extent),
+            // CAP warnings: every area not superseded or cancelled, as a
+            // render without a time step draws them.
+            CapDatasetData cap => FilterByExtent(cap.Warnings.DrawnAt(null).Select(a => new CapAreaFeature(a)), extent),
             _ => null,
         };
     }

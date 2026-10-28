@@ -41,6 +41,7 @@
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\FakeDatasetCatalog.cs" Link="Fakes\FakeDatasetCatalog.cs" />
     <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
     <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
+    <Compile Include="..\_shared\CapFixtures.cs" Link="TestSupport\CapFixtures.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\LoadedDatasetFactory.cs" Link="Fakes\LoadedDatasetFactory.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S101Synth.cs" Link="Fakes\S101Synth.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S102Synth.cs" Link="Fakes\S102Synth.cs" />
@@ -54,6 +55,8 @@
   <ItemGroup>
     <!-- NOAA GFS and GFS-Wave subsets (issue #1074); see tests/datasets/GRIB2/README.md. -->
     <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\GRIB2\%(Filename)%(Extension)" />
+    <!-- NWS marine CAP alerts and a hand-written circle alert (issue #1069); see tests/datasets/CAP/README.md. -->
+    <Content Include="..\datasets\CAP\*.*" Exclude="..\datasets\CAP\*.md" CopyToOutputDirectory="PreserveNewest" Link="TestData\CAP\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
