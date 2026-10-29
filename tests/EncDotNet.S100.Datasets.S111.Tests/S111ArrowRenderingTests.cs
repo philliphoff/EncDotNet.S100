@@ -348,6 +348,37 @@ public sealed class S111ArrowRenderingTests : IDisposable
         Assert.True(common >= before.Count - 12, $"only {common} of {before.Count} arrows stayed put");
     }
 
+    [Fact]
+    public void Render_registers_every_symbol_with_Mapsui_before_any_feature_is_drawn()
+    {
+        // Mapsui only loads an image whose Image already exists when the map
+        // fetches data; the layer creates its features while a frame is drawn.
+        // One cell per band, and SVGs made unique to this test so that images
+        // other tests created can't satisfy the assertion.
+        var layer = BuildUniformLayer(rows: 1, cols: 9, spacingDegrees: 0.01, speed: 0f);
+        var speeds = layer.Coverage.Values["surfaceCurrentSpeed"];
+        var bandSpeeds = AllBands().Select(b => (float)b[1]).ToArray();
+        bandSpeeds.CopyTo(speeds, 0);
+        var marker = Guid.NewGuid().ToString("N");
+        var renderer = CreateRenderer();
+        renderer.SymbolProvider = name => _svgsByToken.TryGetValue(name, out var svg)
+            ? svg.Replace("<svg ", $"<svg data-test=\"{marker}\" ", StringComparison.Ordinal)
+            : null;
+
+        var thinned = Assert.IsType<ThinnedSymbolLayer>(renderer.Render(layer));
+
+        var registered = Image.SourceToSourceId.Keys.Where(k => k.Contains(marker, StringComparison.Ordinal)).ToList();
+        Assert.Equal(9, registered.Count);
+
+        // The features drawn later use those same images.
+        var drawn = thinned.GetFeatures(thinned.Extent!.Grow(1000), resolution: 1.0).OfType<PointFeature>()
+            .Select(f => Assert.IsType<ImageStyle>(f.Styles.Single()).Image!)
+            .ToList();
+        Assert.Equal(9, drawn.Count);
+        Assert.All(drawn, image => Assert.Contains(image.Source, registered));
+        Assert.Same(renderer.GetImage("SCAROW05"), renderer.GetImage("SCAROW05"));
+    }
+
     private MapsuiCoverageArrowRenderer CreateRenderer() =>
         new(new IdentityCrsTransformFactory())
         {

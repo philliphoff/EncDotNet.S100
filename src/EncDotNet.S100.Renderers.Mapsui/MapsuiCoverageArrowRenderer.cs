@@ -22,6 +22,14 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </summary>
 /// <remarks>
 /// <para>
+/// The layer creates its features lazily, while a frame is drawn, but Mapsui
+/// only loads the images whose <see cref="Image"/> exists when the map
+/// fetches data. So <see cref="Render"/> creates one <see cref="Image"/> per
+/// symbol the field uses up front, and every feature reuses it; otherwise a
+/// symbol first used after the last fetch (a stronger wind barb in a newly
+/// framed view, say) stays undrawn until the viewport changes.
+/// </para>
+/// <para>
 /// Per-feature symbols keep arrows at a stable on-screen size and sharp at
 /// every zoom — S-111 Ed 2.0.0 §9.2.4 sizes arrows in millimetres on the
 /// display, not in ground units.
@@ -52,6 +60,7 @@ public sealed class MapsuiCoverageArrowRenderer
     private readonly Dictionary<string, string?> _resolvedSvgCache =
         new(StringComparer.OrdinalIgnoreCase);
     private ColorPalette? _cachedFor;
+    private readonly Dictionary<string, Image?> _images = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Name assigned to the generated Mapsui layer.</summary>
     public string LayerName { get; set; } = "Coverage Arrows";
@@ -113,6 +122,14 @@ public sealed class MapsuiCoverageArrowRenderer
         var field = CoverageSymbolField.Build(
             layer, _transformFactory.Create(layer.Georeferencer.CRS, "EPSG:4326"));
 
+        // Register every symbol the field uses with Mapsui now, before the
+        // layer is added and the map fetches its images (see the remarks).
+        foreach (var band in field.Bands)
+        {
+            if (band is not null)
+                GetImage(band.SymbolRef);
+        }
+
         double lengthPixelsPerScale = symbolScheme.NominalSymbolLengthMillimetres
             * SymbolThinning.PixelsPerMillimetre * BaseSymbolScale;
 
@@ -140,14 +157,14 @@ public sealed class MapsuiCoverageArrowRenderer
         if (band is null)
             return null;
 
-        var svgSource = GetResolvedSvg(band.SymbolRef);
-        if (svgSource is null)
+        var image = GetImage(band.SymbolRef);
+        if (image is null)
             return null;
 
         var feature = new PointFeature(field.X[index], field.Y[index]);
         feature.Styles.Add(new ImageStyle
         {
-            Image = new Image { Source = svgSource, RasterizeSvg = true },
+            Image = image,
             SymbolScale = BaseSymbolScale * field.Scale[index],
             // SymbolRotation in Mapsui is degrees clockwise from map-up;
             // surfaceCurrentDirection is degrees true (0=N, 90=E), which is
@@ -158,6 +175,22 @@ public sealed class MapsuiCoverageArrowRenderer
             Opacity = (float)Opacity,
         });
         return feature;
+    }
+
+    /// <summary>
+    /// The Mapsui image for <paramref name="symbolRef"/>, created once per
+    /// symbol (and palette) so that constructing it registers its source for
+    /// Mapsui's image fetch; <see langword="null"/> when the symbol can't be resolved.
+    /// </summary>
+    internal Image? GetImage(string symbolRef)
+    {
+        var svgSource = GetResolvedSvg(symbolRef);
+        if (_images.TryGetValue(symbolRef, out var image) && image?.Source == svgSource)
+            return image;
+
+        image = svgSource is null ? null : new Image { Source = svgSource, RasterizeSvg = true };
+        _images[symbolRef] = image;
+        return image;
     }
 
     /// <summary>
