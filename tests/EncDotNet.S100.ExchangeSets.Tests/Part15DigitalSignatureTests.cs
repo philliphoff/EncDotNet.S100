@@ -260,6 +260,47 @@ public class Part15DigitalSignatureTests
     }
 
     [Fact]
+    public async Task VerifyAsync_VerifiesCompressedMultiFilePackageOverStoredBytes()
+    {
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP384);
+        using var certificate = CreateCertificate(ecdsa);
+        byte[] package;
+        using (var buffer = new MemoryStream())
+        {
+            using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                foreach (var name in new[] { "portrayal_catalogue.xml", "Rules/main.lua" })
+                {
+                    using var writer = new StreamWriter(archive.CreateEntry(name).Open());
+                    writer.Write(name);
+                }
+            }
+
+            package = buffer.ToArray();
+        }
+
+        // As in the S-164 v2.0.0 catalogues: compressionFlag set, signed as
+        // unencrypted, over the package as stored.
+        var signature = CreateDataSignature(
+            "package",
+            SignatureDataStatus.Unencrypted,
+            package,
+            ecdsa,
+            "cert");
+        var catalogue = CreateCatalogue([signature], certificate, "cert", compressionFlag: true);
+        using var source = new InMemoryAssetSource();
+        source.AddFile("test.bin", package);
+
+        var result = await new ExchangeSetVerifier().VerifyAsync(
+            source,
+            catalogue,
+            new TrustAnchorOptions { AllowUntrustedCertificates = true },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(VerificationOutcome.Ok, Assert.Single(result.FileResults).Outcome);
+    }
+
+    [Fact]
     public async Task VerifyAsync_RejectsNonP384KeyForPart15Algorithm()
     {
         using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
